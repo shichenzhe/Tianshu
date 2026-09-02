@@ -1,0 +1,48 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "{{APP_ID}}",
+  asar: true,
+  compression: "maximum",
+  electronLanguages: ["zh-CN", "en-US"],
+  afterPack: "electron/after-pack.cjs",
+  productName: "{{APP_NAME}}",
+  copyright: "Copyright © 2026 {{AUTHOR}}",
+  directories: {
+    output: "release/${version}"
+  },
+  files: ["dist", "dist-electron"],
+  // 留空则禁用自动更新；配置方法见 docs/update-server.md
+  publish: {
+    provider: "generic",
+    url: "{{UPDATE_SERVER_URL}}"
+  },
+  mac: {
+    target: ["dmg"],
+    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
+    icon: "public/pc_logo.png"
+  },
+  win: {
+    target: [
+      {
+        target: "nsis",
+        arch: ["x64"]
+      }
+    ],
+    artifactName: "${productName}-Windows-${version}-Setup.${ext}",
+    icon: "public/pc_logo.ico",
+    requestedExecutionLevel: "asInvoker"
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true
+  },
+  linux: {
+    target: ["AppImage"],
+    artifactName: "${productName}-Linux-${version}.${ext}"
+  }
+}

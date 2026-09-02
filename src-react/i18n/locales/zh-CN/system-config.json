@@ -1,0 +1,31 @@
+{
+  "pageTitle": "系统配置",
+  "addConfig": "新增配置",
+  "configName": "配置名称",
+  "configValue": "配置值",
+  "remark": "备注",
+  "addDialog": {
+    "title": "新增系统配置",
+    "namePlaceholder": "请输入配置名称",
+    "valuePlaceholder": "请输入配置值",
+    "remarkPlaceholder": "请输入备注（选填）",
+    "adding": "添加中..."
+  },
+  "editDialog": {
+    "title": "编辑系统配置",
+    "valuePlaceholder": "请输入配置值",
+    "remarkPlaceholder": "请输入备注（选填）",
+    "updating": "更新中..."
+  },
+  "deleteConfirm": "确定要删除配置 \"{{name}}\" 吗？此操作不可撤销。",
+  "emptyHint": "暂无系统配置",
+  "valueRequired": "选项值和名称不能为空",
+  "valueOnlyRequired": "选项值不能为空",
+  "addSuccess": "添加成功",
+  "addFailed": "添加配置失败",
+  "updateSuccess": "更新成功",
+  "updateFailed": "更新配置失败",
+  "deleteSuccess": "删除成功",
+  "deleteFailed": "删除配置失败",
+  "loadFailed": "加载系统配置失败"
+}

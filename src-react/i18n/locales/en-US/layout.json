@@ -1,0 +1,53 @@
+{
+  "sidebar": {
+    "welcome": "Welcome",
+    "ai": "AI Models",
+    "systemConfig": "System Config",
+    "collapse": "Collapse",
+    "expand": "Expand"
+  },
+  "userMenu": {
+    "defaultUser": "User",
+    "userInfo": "User Info",
+    "changePassword": "Change Password",
+    "help": "Help",
+    "checkUpdate": "Check Update",
+    "updateLog": "Update Log",
+    "logout": "Logout",
+    "logoutConfirmTitle": "Confirm Logout",
+    "logoutConfirmDesc": "Are you sure you want to logout?",
+    "logoutSuccess": "Logged out",
+    "updateOnlyDesktop": "Update is only available in desktop app",
+    "checkingUpdate": "Checking for updates...",
+    "alreadyLatest": "Already up to date",
+    "updateCheckFailed": "Update check failed: {{error}}",
+    "updateAvailableTitle": "Update Available",
+    "updateAvailableDesc": "A new version is available. Download now?",
+    "remindLater": "Later",
+    "downloadNow": "Download",
+    "downloading": "Downloading update...",
+    "installUpdateTitle": "Install Update",
+    "installUpdateDesc": "Update downloaded. Install and restart now?",
+    "installLater": "Later",
+    "installNow": "Install Now",
+    "installLaterHint": "Update will be installed on next launch",
+    "checkUpdateTitle": "Check Update",
+    "checkUpdateDesc": "Check for application updates?"
+  },
+  "theme": {
+    "blue": "Blue",
+    "red": "Red",
+    "green": "Green",
+    "orange": "Orange"
+  },
+  "updateLog": {
+    "title": "Update Log",
+    "currentVersion": "Version: {{version}}",
+    "defaultContent": "# Update Log"
+  },
+  "language": {
+    "label": "Language",
+    "zhCN": "简体中文",
+    "enUS": "English"
+  }
+}

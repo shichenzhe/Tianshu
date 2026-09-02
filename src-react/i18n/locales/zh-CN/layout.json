@@ -1,0 +1,53 @@
+{
+  "sidebar": {
+    "welcome": "欢迎",
+    "ai": "AI 模型配置",
+    "systemConfig": "系统配置",
+    "collapse": "收起侧栏",
+    "expand": "展开侧栏"
+  },
+  "userMenu": {
+    "defaultUser": "用户",
+    "userInfo": "用户信息",
+    "changePassword": "修改密码",
+    "help": "帮助",
+    "checkUpdate": "检查更新",
+    "updateLog": "更新日志",
+    "logout": "退出登录",
+    "logoutConfirmTitle": "确认退出",
+    "logoutConfirmDesc": "确定要退出登录吗？",
+    "logoutSuccess": "已退出登录",
+    "updateOnlyDesktop": "更新功能仅在桌面应用中可用",
+    "checkingUpdate": "正在检查更新...",
+    "alreadyLatest": "当前已是最新版本",
+    "updateCheckFailed": "更新检查失败: {{error}}",
+    "updateAvailableTitle": "更新提示",
+    "updateAvailableDesc": "发现新版本，是否立即下载？",
+    "remindLater": "稍后提醒",
+    "downloadNow": "立即下载",
+    "downloading": "正在下载更新...",
+    "installUpdateTitle": "安装更新",
+    "installUpdateDesc": "更新已下载完成，是否立即安装并重启应用？",
+    "installLater": "稍后安装",
+    "installNow": "立即安装",
+    "installLaterHint": "更新将在下次启动时安装",
+    "checkUpdateTitle": "检查更新",
+    "checkUpdateDesc": "是否检查应用更新？"
+  },
+  "theme": {
+    "blue": "蓝色主题",
+    "red": "红色主题",
+    "green": "绿色主题",
+    "orange": "橙色主题"
+  },
+  "updateLog": {
+    "title": "更新日志",
+    "currentVersion": "当前版本：{{version}}",
+    "defaultContent": "# 更新日志"
+  },
+  "language": {
+    "label": "语言",
+    "zhCN": "简体中文",
+    "enUS": "English"
+  }
+}

@@ -1,7 +1,7 @@
 /**
  * 占位符替换核心（纯函数，被 init.mjs 与单测共用）
  */
-import { readFile, writeFile, readdir, stat } from "node:fs/promises";
+import { readFile, writeFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 export const PLACEHOLDERS = [
@@ -17,7 +17,7 @@ const TARGET_EXT = new Set([
   ".json", ".json5", ".ts", ".tsx", ".md", ".html", ".mjs", ".cjs", ".css", ".svg", ".txt", ""
 ]);
 const IGNORE_DIRS = new Set([
-  "node_modules", ".git", "dist", "dist-electron", "release", "database", "logs", ".github"
+  "node_modules", ".git", "dist", "dist-electron", "release", "database", "logs", ".github", "scripts"
 ]);
 
 async function walkFiles(root) {
@@ -28,7 +28,8 @@ async function walkFiles(root) {
     if (entry.isDirectory()) {
       if (!IGNORE_DIRS.has(entry.name)) out.push(...(await walkFiles(full)));
     } else {
-      const ext = entry.name.slice(entry.name.lastIndexOf("."));
+      const dot = entry.name.lastIndexOf(".");
+      const ext = dot === -1 ? "" : entry.name.slice(dot);
       if (TARGET_EXT.has(ext)) out.push(full);
     }
   }

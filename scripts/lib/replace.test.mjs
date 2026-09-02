@@ -49,4 +49,20 @@ describe("applyPlaceholders", () => {
     const changed = await applyPlaceholders(dir, { APP_NAME: "x" });
     expect(changed).toContain(join(sub, "main.ts"));
   });
+
+  it("处理无扩展名文件（如 LICENSE）", async () => {
+    writeFileSync(join(dir, "LICENSE"), "Copyright (c) 2026 {{AUTHOR}}");
+    const changed = await applyPlaceholders(dir, { AUTHOR: "Tester" });
+    expect(changed).toContain(join(dir, "LICENSE"));
+    expect(readFileSync(join(dir, "LICENSE"), "utf8")).toBe("Copyright (c) 2026 Tester");
+  });
+
+  it("忽略 scripts 目录（脚本内占位符字面量不被替换）", async () => {
+    const sub = join(dir, "scripts");
+    mkdirSync(sub, { recursive: true });
+    writeFileSync(join(sub, "tool.mjs"), 'const t = "{{APP_NAME}}";');
+    const changed = await applyPlaceholders(dir, { APP_NAME: "x" });
+    expect(changed).not.toContain(join(sub, "tool.mjs"));
+    expect(readFileSync(join(sub, "tool.mjs"), "utf8")).toContain("{{APP_NAME}}");
+  });
 });

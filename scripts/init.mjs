@@ -27,8 +27,9 @@ async function main() {
 
   const appName = await ask("应用名称", { fallback: "my-app" });
 
+  const sanitized = appName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase() || "my-app";
   let appId = await ask("应用 ID（反域名，如 com.example.myapp）", {
-    fallback: `com.example.${appName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase()}`
+    fallback: `com.example.${sanitized}`
   });
   while (!validateAppId(appId)) {
     console.error("  ✗ 应用 ID 格式应为反域名（字母开头，至少一段点分）");

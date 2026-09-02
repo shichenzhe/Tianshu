@@ -29,9 +29,3 @@ export interface OptionUpdateParams {
   value: string;
   note?: string;
 }
-
-export interface TaskOptions {
-  types: OptionItem[];
-  products: OptionItem[];
-  projects: OptionItem[];
-}

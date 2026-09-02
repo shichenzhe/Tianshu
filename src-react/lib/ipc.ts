@@ -11,7 +11,6 @@ export type IPCChannel =
   | "user:login"
   | "user:verifyToken"
   | "user:modifyPassword"
-  | "user:createApiToken"
   // option 域
   | "option:listByType"
   | "option:create"

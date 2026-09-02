@@ -37,6 +37,7 @@ const IGNORE_DIRS = new Set([
   "logs",
   ".github",
   "scripts",
+  "electron/generated",
 ]);
 
 async function walkFiles(root) {

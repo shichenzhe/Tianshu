@@ -34,6 +34,11 @@
     "checkUpdateTitle": "检查更新",
     "checkUpdateDesc": "是否检查应用更新？"
   },
+  "auth": {
+    "loginRequired": "请先登录",
+    "loginExpired": "登录已过期，请重新登录",
+    "loginVerifyFailed": "登录验证失败，请重新登录"
+  },
   "theme": {
     "blue": "蓝色主题",
     "red": "红色主题",

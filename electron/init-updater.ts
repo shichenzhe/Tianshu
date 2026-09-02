@@ -5,14 +5,34 @@ import { Constants } from "./Constants";
 
 let mainWindow: BrowserWindow | null = null;
 
+const isUpdaterDisabled = () =>
+  !Constants.UPGRADE_URL || Constants.UPGRADE_URL.startsWith("{{");
+
 export const initUpdater = (win: BrowserWindow) => {
+  mainWindow = win;
+
+  // 检查更新（捕获异常，避免 electron-updater 的 Promise reject 时触发 Electron 原生错误对话框）
+  // 禁用态（未配置更新源）下直接回发 update-not-available，
+  // 保证渲染端"检查更新"菜单始终有响应
+  const checkForUpdates = () => {
+    if (isUpdaterDisabled()) {
+      mainWindow?.webContents.send("update-not-available");
+      return;
+    }
+    autoUpdater.checkForUpdates().catch((error) => {
+      Log.error("检查更新失败：", error?.message || String(error));
+    });
+  };
+
+  ipcMain.on("check-for-updates", () => {
+    checkForUpdates();
+  });
+
   // 未配置更新源时静默禁用自动更新
-  if (!Constants.UPGRADE_URL || Constants.UPGRADE_URL.startsWith("{{")) {
+  if (isUpdaterDisabled()) {
     Log.info("未配置更新服务器地址，跳过自动更新初始化");
     return;
   }
-
-  mainWindow = win;
 
   Log.info("初始化更新。。。");
 
@@ -29,18 +49,7 @@ export const initUpdater = (win: BrowserWindow) => {
   // 开启本地dev调试
   autoUpdater.forceDevUpdateConfig = true;
 
-  // 检查更新（捕获异常，避免 electron-updater 的 Promise reject 时触发 Electron 原生错误对话框）
-  const checkForUpdates = () => {
-    autoUpdater.checkForUpdates().catch((error) => {
-      Log.error("检查更新失败：", error?.message || String(error));
-    });
-  };
-
   checkForUpdates();
-
-  ipcMain.on("check-for-updates", () => {
-    checkForUpdates();
-  });
 
   autoUpdater.on("update-not-available", () => {
     Log.info("无新版本");

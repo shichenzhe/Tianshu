@@ -51,10 +51,6 @@ export default class UserRepository {
         return this.modifyPassword(params);
       },
     );
-
-    ipcMain.handle("user:createApiToken", async (_, username: string) => {
-      return this.createApiToken(username);
-    });
   }
 
   /**
@@ -280,31 +276,5 @@ export default class UserRepository {
       },
     });
     return true;
-  }
-
-  /**
-   * 创建api token
-   * @param username 用户名
-   * @returns api token
-   *
-   *
-   */
-  async createApiToken(username: string): Promise<string> {
-    const result = await prisma.user.findFirst({
-      where: {
-        username: username,
-      },
-      select: {
-        password: true,
-      },
-    });
-    if (!result) {
-      throw new Error("用户不存在" + username);
-    }
-    const basicAuth = Buffer.from(`${username}:${result.password}`).toString(
-      "base64",
-    );
-    console.info("createApiToken:", basicAuth);
-    return basicAuth;
   }
 }

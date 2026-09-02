@@ -22,45 +22,6 @@ function syncElectronAssets() {
     path.resolve(distElectronDir, "./script"),
   );
 
-  const prismaSourceDir = path.resolve(
-    __dirname,
-    "./electron/infrastructure/prisma",
-  );
-  const prismaTargetDir = path.resolve(distElectronDir, "./prisma");
-  fs.ensureDirSync(path.resolve(prismaTargetDir, "./runtime"));
-
-  const prismaFilesToCopy = [
-    ["package.json", "package.json"],
-    ["index.js", "index.js"],
-    ["schema.prisma", "schema.prisma"],
-    ["client.js", "client.js"],
-    ["default.js", "default.js"],
-    ["edge.js", "edge.js"],
-    ["wasm.js", "wasm.js"],
-    ["query_engine-windows.dll.node", "query_engine-windows.dll.node"],
-    ["libquery_engine-darwin.dylib", "libquery_engine-darwin.dylib"],
-    [
-      "libquery_engine-darwin-arm64.dylib",
-      "libquery_engine-darwin-arm64.dylib",
-    ],
-    [
-      "libquery_engine-debian-openssl-3.0.x.so.node",
-      "libquery_engine-debian-openssl-3.0.x.so.node",
-    ],
-    [
-      "libquery_engine-linux-musl-openssl-3.0.x.so.node",
-      "libquery_engine-linux-musl-openssl-3.0.x.so.node",
-    ],
-    ["runtime/library.js", "runtime/library.js"],
-  ] as const;
-
-  for (const [from, to] of prismaFilesToCopy) {
-    tryCopySync(
-      path.resolve(prismaSourceDir, from),
-      path.resolve(prismaTargetDir, to),
-    );
-  }
-
   tryCopySync(
     path.resolve(__dirname, "./docs/update-log.md"),
     path.resolve(distElectronDir, "./docs/update-log.md"),

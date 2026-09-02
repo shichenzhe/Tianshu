@@ -55,7 +55,7 @@ async function main() {
   console.log("\n正在替换占位符…");
   const changed = await applyPlaceholders(rootDir, values);
   console.log(
-    `已更新 ${changed.length} 个文件（清单见 shu-init.json 同目录提交记录）`,
+    `已更新 ${changed.length} 个文件（上次输入保存在 shu-init.json，重复运行可覆盖更新）`,
   );
 
   if (!updateServerUrl) {
@@ -65,7 +65,9 @@ async function main() {
     console.log("  配置方法见 docs/update-server.md");
   }
 
-  console.log("\n✓ 初始化完成！下一步：\n  npm install\n  npm run dev\n");
+  console.log(
+    "\n✓ 初始化完成！下一步：\n  cd <项目目录> && npm run dev\n  （如尚未安装依赖，请先执行 npm install）\n",
+  );
   rl.close();
 }
 

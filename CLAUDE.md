@@ -66,7 +66,7 @@ npm run typecheck
 
 - Prisma ORM + SQLite
 - Schema 定义：`prisma/schema.prisma`
-- Prisma Client 输出：`electron/infrastructure/prisma`
+- Prisma Client 输出：`electron/generated/prisma`
 - 当前数据库版本：1（`electron/Constants.ts`）
 
 主要数据表：`user`、`option`、`modelConfig`、`db_version`
@@ -197,7 +197,7 @@ npm run typecheck
 
 - 单实例模式（生产环境只允许一个窗口）
 - 硬件加速已禁用
-- 构建时自动复制 `script`、`prisma`、`docs/update-log.md` 到 `dist-electron`
+- 构建时自动复制 `script` 与 `docs/update-log.md` 到 `dist-electron`（Prisma 客户端随主进程打包内联）
 - 更新服务器地址由 `npm run init` 写入，未配置时自动更新禁用（见 docs/update-server.md）
 
 ## 脚手架专有

@@ -89,13 +89,6 @@ export class UserApi {
   static async modifyPassword(params: PasswordUpdateParams): Promise<boolean> {
     return invoke<boolean>("user:modifyPassword", params);
   }
-
-  /**
-   * 创建 API Token
-   */
-  static async createApiToken(username: string): Promise<string> {
-    return invoke<string>("user:createApiToken", username);
-  }
 }
 
 export default UserApi;

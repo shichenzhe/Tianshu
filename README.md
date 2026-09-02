@@ -68,6 +68,17 @@ npm run build
 - [如何添加业务域（以 user 域为例）](docs/guide.md)
 - [自建更新服务器](docs/update-server.md)
 
+## 安全说明（Security Notes）
+
+本模板沿用源工程的本地认证模式，适用于"防止路人直接打开应用"的本机场景：
+
+- **JWT 签名密钥为内置常量**：所有基于本模板构建的应用共享同一密钥。介意者应在
+  `electron/domains/user/user.repo.ts` 的 `JWT_SECRET` 处替换为自己的随机密钥。
+- **密码为本地 SQLite 明文存储**：数据库文件仅存在于本机用户目录。
+
+该模式**不适用于**多用户或联网威胁模型；如需在生产环境中处理敏感数据，请自行
+加强（密码哈希、密钥管理、传输加密等）。
+
 ## License
 
 [MIT](LICENSE)

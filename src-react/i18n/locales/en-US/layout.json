@@ -34,6 +34,11 @@
     "checkUpdateTitle": "Check Update",
     "checkUpdateDesc": "Check for application updates?"
   },
+  "auth": {
+    "loginRequired": "Please log in first",
+    "loginExpired": "Login expired, please log in again",
+    "loginVerifyFailed": "Login verification failed, please log in again"
+  },
   "theme": {
     "blue": "Blue",
     "red": "Red",

@@ -5,6 +5,7 @@
 
 import { useEffect } from "react";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { useUserStore } from "@/domains/user/store/user.store";
@@ -16,6 +17,7 @@ import Sidebar from "./Sidebar";
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation(["layout"]);
   const { user, isLoginValid, reset } = useUserStore();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
@@ -39,7 +41,7 @@ export default function MainLayout() {
       if (location.pathname === "/login") return;
 
       if (!isLoginValid()) {
-        toast.warning("请先登录");
+        toast.warning(t("auth.loginRequired"));
         navigate("/login");
         return;
       }
@@ -48,18 +50,18 @@ export default function MainLayout() {
         const decoded = await UserApi.verifyToken(user.token);
         if (!decoded) {
           reset();
-          toast.error("登录已过期，请重新登录");
+          toast.error(t("auth.loginExpired"));
           navigate("/login");
         }
       } catch {
         reset();
-        toast.error("登录验证失败，请重新登录");
+        toast.error(t("auth.loginVerifyFailed"));
         navigate("/login");
       }
     };
 
     checkAuth();
-  }, [location.pathname]);
+  }, [location.pathname, t]);
 
   return (
     <div className="app-container">

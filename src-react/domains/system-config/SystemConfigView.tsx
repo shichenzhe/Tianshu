@@ -1,6 +1,5 @@
 /**
- * 系统配置视图（占位符版本）
- * TODO: 完整实现需要迁移 system-config.vue 的所有功能
+ * 系统配置视图：选项（option）的新增、编辑、删除管理
  */
 
 import { useState, useEffect } from "react";

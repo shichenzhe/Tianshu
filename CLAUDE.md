@@ -104,12 +104,12 @@ npm run typecheck
 **编码规范：**
 
 - **禁止在 JSX 和 JS 逻辑中硬编码用户可见的中文或英文文本**，必须使用 `t()` 函数
-- 翻译 key 格式：`namespace:key`（如 `welcome:pageTitle`）、嵌套用 `.` 分隔
+- 翻译 key 格式：`namespace:key`（如 `welcome:getStarted`）、嵌套用 `.` 分隔
 - 带变量的翻译使用插值：`t("key", { variable })`
 - 组件中通过 `useTranslation` hook 获取 `t` 函数：`const { t } = useTranslation(["namespace1", "namespace2"])`
 - `useCallback`/`useMemo` 中使用 `t()` 时，必须将 `t` 加入依赖数组
-- 翻译 key 命名采用 `camelCase`，按功能模块分层嵌套（如 `monthView.pageTitle`）
-- **禁止顶层 key 与嵌套对象 key 重名**（如同时存在 `"monthView": "string"` 和 `"monthView": { ... }`），否则 JSON 后者会覆盖前者
+- 翻译 key 命名采用 `camelCase`，按功能模块分层嵌套（如 `ai:modelConfig.configName`）
+- **禁止顶层 key 与嵌套对象 key 重名**（如同一命名空间 JSON 中同时存在 `"pageTitle": "string"` 和 `"pageTitle": { ... }`），否则 JSON 后者会覆盖前者
 
 **新增文本的流程：**
 

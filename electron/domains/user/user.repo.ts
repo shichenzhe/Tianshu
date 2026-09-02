@@ -75,7 +75,7 @@ export default class UserRepository {
       },
     });
     console.info("user", result);
-    return result;
+    return this.toUserInfo(result!);
   }
 
   /**
@@ -183,7 +183,7 @@ export default class UserRepository {
    * @returns 验证结果
    */
   async login(params: UserLoginParams): Promise<UserAuth> {
-    const user: UserInfo = await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: {
         username: params.username,
         password: params.password,
@@ -199,10 +199,30 @@ export default class UserRepository {
     if (!user) {
       throw new Error("用户名或密码错误");
     }
+    const userInfo = this.toUserInfo(user);
     // 生成JWT token
-    const token = this.generateToken(user);
+    const token = this.generateToken(userInfo);
     console.info("login sucess:", token);
-    return { ...user, token };
+    return { ...userInfo, token };
+  }
+
+  /**
+   * Prisma 行转 UserInfo 契约（null→undefined）
+   * @param row Prisma 查询行
+   * @returns 用户信息
+   */
+  private toUserInfo(row: {
+    id: number;
+    username: string;
+    nickname: string | null;
+    email: string | null;
+  }): UserInfo {
+    return {
+      id: row.id,
+      username: row.username,
+      nickname: row.nickname ?? undefined,
+      email: row.email ?? undefined,
+    };
   }
 
   /**

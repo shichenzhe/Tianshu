@@ -118,7 +118,7 @@ function createWindow() {
     win?.show();
     if (!isDevelopment) {
       setTimeout(() => {
-        initUpdater(win);
+        if (win) initUpdater(win);
       }, 5000);
     }
   });

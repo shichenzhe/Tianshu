@@ -7,9 +7,29 @@ import type {
   ModelConfigUpdateParams,
 } from "../../../src-react/domains/ai/api/model-config.api";
 
+/**
+ * Prisma modelConfig 行类型
+ */
+type ModelConfigRow = NonNullable<
+  Awaited<ReturnType<typeof prisma.modelConfig.findFirst>>
+>;
+
 export class ModelConfigRepository {
   constructor() {
     this.registerIpcHandlers();
+  }
+
+  /**
+   * Prisma 行转 API 契约（null→undefined、DateTime→ISO 字符串）
+   */
+  private toRecord(row: ModelConfigRow): ModelConfigRecord {
+    return {
+      ...row,
+      maxTokens: row.maxTokens ?? undefined,
+      temperature: row.temperature ?? undefined,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    };
   }
 
   private registerIpcHandlers() {
@@ -37,7 +57,7 @@ export class ModelConfigRepository {
       const configs = await prisma.modelConfig.findMany({
         orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
       });
-      return configs;
+      return configs.map((config) => this.toRecord(config));
     } catch (error) {
       console.error("获取模型配置列表失败:", error);
       throw error;
@@ -52,7 +72,7 @@ export class ModelConfigRepository {
       const config = await prisma.modelConfig.findUnique({
         where: { id },
       });
-      return config;
+      return config ? this.toRecord(config) : null;
     } catch (error) {
       console.error("获取模型配置失败:", error);
       throw error;
@@ -76,13 +96,13 @@ export class ModelConfigRepository {
           name: params.name,
           modelName: params.modelName,
           apiKey: params.apiKey,
-          baseUrl: params.baseUrl,
+          baseUrl: params.baseUrl ?? "",
           maxTokens: params.maxTokens,
           temperature: params.temperature,
           isActive: params.isActive || false,
         },
       });
-      return config;
+      return this.toRecord(config);
     } catch (error) {
       console.error("创建模型配置失败:", error);
       throw error;
@@ -114,7 +134,7 @@ export class ModelConfigRepository {
           isActive: params.isActive,
         },
       });
-      return config;
+      return this.toRecord(config);
     } catch (error) {
       console.error("更新模型配置失败:", error);
       throw error;
@@ -164,7 +184,7 @@ export class ModelConfigRepository {
       const config = await prisma.modelConfig.findFirst({
         where: { isActive: true },
       });
-      return config;
+      return config ? this.toRecord(config) : null;
     } catch (error) {
       console.error("获取激活模型配置失败:", error);
       throw error;

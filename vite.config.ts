@@ -89,6 +89,19 @@ export default defineConfig(({ command }) => {
       electron({
         main: {
           entry: "electron/main.ts",
+          vite: {
+            build: {
+              rolldownOptions: {
+                // rolldown 对 CJS 依赖的互操作转换在 ESM 产物下有两处问题：
+                // 1. moment（winston-daily-rotate-file 依赖）被误转成命名空间对象，
+                //    运行时报 "moment is not a function"
+                // 2. better-sqlite3（原生模块，经 @prisma/adapter-better-sqlite3 引入）
+                //    内部的 bindings 依赖裸 __filename，ESM 作用域未定义
+                // 均外部化走 Node 原生 require（原生模块本就不应打包）
+                external: ["moment", "better-sqlite3"],
+              },
+            },
+          },
         },
         preload: {
           input: path.join(__dirname, "electron/preload.ts"),

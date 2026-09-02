@@ -10,7 +10,10 @@ import { applyPlaceholders } from "./lib/replace.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, "..");
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+});
 
 const ask = async (question, { fallback = "" } = {}) => {
   const suffix = fallback ? ` (${fallback})` : "";
@@ -27,9 +30,10 @@ async function main() {
 
   const appName = await ask("应用名称", { fallback: "my-app" });
 
-  const sanitized = appName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase() || "my-app";
+  const sanitized =
+    appName.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase() || "my-app";
   let appId = await ask("应用 ID（反域名，如 com.example.myapp）", {
-    fallback: `com.example.${sanitized}`
+    fallback: `com.example.${sanitized}`,
   });
   while (!validateAppId(appId)) {
     console.error("  ✗ 应用 ID 格式应为反域名（字母开头，至少一段点分）");
@@ -45,19 +49,23 @@ async function main() {
     APP_ID: appId,
     UPDATE_SERVER_URL: updateServerUrl,
     AUTHOR: author,
-    REPO_URL: repoUrl
+    REPO_URL: repoUrl,
   };
 
   console.log("\n正在替换占位符…");
   const changed = await applyPlaceholders(rootDir, values);
-  console.log(`已更新 ${changed.length} 个文件（清单见 shu-init.json 同目录提交记录）`);
+  console.log(
+    `已更新 ${changed.length} 个文件（清单见 shu-init.json 同目录提交记录）`,
+  );
 
   if (!updateServerUrl) {
-    console.log("ℹ 未配置更新服务器：自动更新已禁用（init-updater 会静默跳过）。");
+    console.log(
+      "ℹ 未配置更新服务器：自动更新已禁用（init-updater 会静默跳过）。",
+    );
     console.log("  配置方法见 docs/update-server.md");
   }
 
-  console.log(`\n✓ 初始化完成！下一步：\n  npm install\n  npm run dev\n`);
+  console.log("\n✓ 初始化完成！下一步：\n  npm install\n  npm run dev\n");
   rl.close();
 }
 

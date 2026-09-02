@@ -9,15 +9,34 @@ export const PLACEHOLDERS = [
   "APP_ID",
   "UPDATE_SERVER_URL",
   "AUTHOR",
-  "REPO_URL"
+  "REPO_URL",
 ];
 
 const CONFIG_FILE = "shu-init.json";
 const TARGET_EXT = new Set([
-  ".json", ".json5", ".ts", ".tsx", ".md", ".html", ".mjs", ".cjs", ".css", ".svg", ".txt", ""
+  ".json",
+  ".json5",
+  ".ts",
+  ".tsx",
+  ".md",
+  ".html",
+  ".mjs",
+  ".cjs",
+  ".css",
+  ".svg",
+  ".txt",
+  "",
 ]);
 const IGNORE_DIRS = new Set([
-  "node_modules", ".git", "dist", "dist-electron", "release", "database", "logs", ".github", "scripts"
+  "node_modules",
+  ".git",
+  "dist",
+  "dist-electron",
+  "release",
+  "database",
+  "logs",
+  ".github",
+  "scripts",
 ]);
 
 async function walkFiles(root) {

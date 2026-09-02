@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applyPlaceholders } from "./replace.mjs";
@@ -16,10 +22,15 @@ afterEach(() => {
 
 describe("applyPlaceholders", () => {
   it("替换文件中的占位符", async () => {
-    writeFileSync(join(dir, "package.json"), '{\n  "name": "{{APP_NAME}}"\n}\n');
+    writeFileSync(
+      join(dir, "package.json"),
+      '{\n  "name": "{{APP_NAME}}"\n}\n',
+    );
     const changed = await applyPlaceholders(dir, { APP_NAME: "my-app" });
     expect(changed).toContain(join(dir, "package.json"));
-    expect(readFileSync(join(dir, "package.json"), "utf8")).toContain('"my-app"');
+    expect(readFileSync(join(dir, "package.json"), "utf8")).toContain(
+      '"my-app"',
+    );
   });
 
   it("幂等：对已替换过的值再次运行会覆盖为新值", async () => {
@@ -54,7 +65,9 @@ describe("applyPlaceholders", () => {
     writeFileSync(join(dir, "LICENSE"), "Copyright (c) 2026 {{AUTHOR}}");
     const changed = await applyPlaceholders(dir, { AUTHOR: "Tester" });
     expect(changed).toContain(join(dir, "LICENSE"));
-    expect(readFileSync(join(dir, "LICENSE"), "utf8")).toBe("Copyright (c) 2026 Tester");
+    expect(readFileSync(join(dir, "LICENSE"), "utf8")).toBe(
+      "Copyright (c) 2026 Tester",
+    );
   });
 
   it("忽略 scripts 目录（脚本内占位符字面量不被替换）", async () => {
@@ -63,6 +76,8 @@ describe("applyPlaceholders", () => {
     writeFileSync(join(sub, "tool.mjs"), 'const t = "{{APP_NAME}}";');
     const changed = await applyPlaceholders(dir, { APP_NAME: "x" });
     expect(changed).not.toContain(join(sub, "tool.mjs"));
-    expect(readFileSync(join(sub, "tool.mjs"), "utf8")).toContain("{{APP_NAME}}");
+    expect(readFileSync(join(sub, "tool.mjs"), "utf8")).toContain(
+      "{{APP_NAME}}",
+    );
   });
 });

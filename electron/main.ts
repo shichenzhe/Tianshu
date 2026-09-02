@@ -148,12 +148,14 @@ function closeForMinize(app: BrowserWindow) {
   tray.setContextMenu(contextMenu);
   tray.on("click", () => {
     // 我们这里模拟桌面程序点击通知区图标实现打开关闭应用的功能
-    if (app?.isVisible()) {
+    // 以点击前的可见性为准（与源实现一致：隐藏时 setSkipTaskbar(true)，显示时 setSkipTaskbar(false)）
+    const wasVisible = app?.isVisible();
+    if (wasVisible) {
       app?.hide();
-      app?.setSkipTaskbar(false);
+      app?.setSkipTaskbar(true);
     } else {
       app?.show();
-      app?.setSkipTaskbar(true);
+      app?.setSkipTaskbar(false);
     }
   });
 }

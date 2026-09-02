@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../electron/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  relationMode = "prisma"
+}
+
+model user {
+  id       Int     @id @default(autoincrement())
+  username String  @unique(map: "user_username_index")
+  password String
+  email    String? @unique(map: "idx_user_email")
+  nickname String?
+}
+
+model db_version {
+  id      Int @id @default(autoincrement())
+  version Int
+}
+
+model option {
+  id    Int     @id @default(autoincrement())
+  type  String
+  name  String
+  value String
+  note  String?
+
+  @@unique([type, name], map: "idx_option_type_name")
+  @@index([type], map: "option_type_index")
+}
+
+model modelConfig {
+  id          Int       @id @default(autoincrement())
+  name        String
+  apiKey      String
+  modelName   String
+  baseUrl     String
+  maxTokens   Int?
+  temperature Float?
+  isActive    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([isActive], map: "idx_model_config_is_active")
+}

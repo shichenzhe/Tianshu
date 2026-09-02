@@ -22,7 +22,7 @@ console.info("db version:", process.env.DATABASE_URL);
 const adapter = new PrismaBetterSqlite3({ url: dbFilePath });
 const prisma = new PrismaClient({
   adapter,
-  log: ["info", "warn", "error"] // 输出日志到控制台,方便调试
+  log: ["info", "warn", "error"], // 输出日志到控制台,方便调试
 });
 
 export default prisma;

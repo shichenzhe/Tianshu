@@ -17,7 +17,7 @@ class SqlFileExecutor {
    * @param filePath SQL文件的完整路径
    * @returns 执行结果数组
    */
-  async executeFile(filePath: string): Promise<any[]> {
+  async executeFile(filePath: string): Promise<unknown[]> {
     try {
       // 检查文件是否存在
       if (!fs.existsSync(filePath)) {
@@ -35,7 +35,7 @@ class SqlFileExecutor {
       let currentSql = "";
       let currentDescription = "";
       let ignoreError = false;
-      const results: any[] = [];
+      const results: unknown[] = [];
 
       // 逐行处理SQL文件
       for (let line of lines) {
@@ -67,7 +67,7 @@ class SqlFileExecutor {
           // 执行当前SQL语句
           try {
             console.info(
-              `execute sql ${currentDescription ? ": " + currentDescription : ""}`
+              `execute sql ${currentDescription ? ": " + currentDescription : ""}`,
             );
             await prisma.$executeRawUnsafe(currentSql);
             results.push({
@@ -79,12 +79,12 @@ class SqlFileExecutor {
             if (ignoreError) {
               console.warn(
                 `sql execute failed(ignore): ${currentDescription || currentSql}`,
-                error
+                error,
               );
             } else {
               console.error(
                 `sql execute failed: ${currentDescription || currentSql}`,
-                error
+                error,
               );
               throw error;
             }
@@ -101,9 +101,9 @@ class SqlFileExecutor {
       if (currentSql.trim()) {
         try {
           console.info(
-            `sql execute ${currentDescription ? ": " + currentDescription : ""}`
+            `sql execute ${currentDescription ? ": " + currentDescription : ""}`,
           );
-          const result = await prisma.$executeRawUnsafe(currentSql);
+          await prisma.$executeRawUnsafe(currentSql);
           results.push({
             description: currentDescription,
             sql: currentSql,
@@ -113,12 +113,12 @@ class SqlFileExecutor {
           if (ignoreError) {
             console.warn(
               `sql execute failed(ignore):${currentDescription || currentSql}`,
-              error
+              error,
             );
           } else {
             console.error(
               `sql execute failed: ${currentDescription || currentSql}`,
-              error
+              error,
             );
             throw error;
           }
@@ -142,8 +142,8 @@ class SqlFileExecutor {
   async executeDirectory(
     dirPath: string,
     recursive: boolean = true,
-    filePattern: RegExp = /\.sql$/
-  ): Promise<any[]> {
+    filePattern: RegExp = /\.sql$/,
+  ): Promise<unknown[]> {
     try {
       // 检查目录是否存在
       if (!fs.existsSync(dirPath)) {
@@ -153,7 +153,7 @@ class SqlFileExecutor {
 
       // 获取目录下的所有文件
       const files = fs.readdirSync(dirPath);
-      const results: any[] = [];
+      const results: unknown[] = [];
 
       // 遍历所有文件
       for (const file of files) {
@@ -165,7 +165,7 @@ class SqlFileExecutor {
           const subResults = await this.executeDirectory(
             fullPath,
             recursive,
-            filePattern
+            filePattern,
           );
           results.push(...subResults);
         }
@@ -193,8 +193,8 @@ class SqlFileExecutor {
   async executeDirectoryInOrder(
     dirPath: string,
     recursive: boolean = true,
-    filePattern: RegExp = /\.sql$/
-  ): Promise<any[]> {
+    filePattern: RegExp = /\.sql$/,
+  ): Promise<unknown[]> {
     try {
       // 检查目录是否存在
       if (!fs.existsSync(dirPath)) {
@@ -203,12 +203,12 @@ class SqlFileExecutor {
       }
 
       // 获取目录下的所有文件
-      let files = fs.readdirSync(dirPath);
+      const files = fs.readdirSync(dirPath);
 
       // 按文件名排序
       files.sort();
 
-      const results: any[] = [];
+      const results: unknown[] = [];
 
       // 遍历所有文件
       for (const file of files) {
@@ -220,7 +220,7 @@ class SqlFileExecutor {
           const subResults = await this.executeDirectoryInOrder(
             fullPath,
             recursive,
-            filePattern
+            filePattern,
           );
           results.push(...subResults);
         }

@@ -3,10 +3,16 @@
 interface Window {
   platform: NodeJS.Platform;
   ipcRenderer: {
-    invoke(channel: string, ...args: any[]): Promise<any>;
-    send(channel: string, ...args: any[]): void;
-    on(channel: string, listener: (event: any, ...args: any[]) => void): () => void;
-    once(channel: string, listener: (event: any, ...args: any[]) => void): void;
+    invoke(channel: string, ...args: unknown[]): Promise<unknown>;
+    send(channel: string, ...args: unknown[]): void;
+    on(
+      channel: string,
+      listener: (event: unknown, ...args: unknown[]) => void,
+    ): () => void;
+    once(
+      channel: string,
+      listener: (event: unknown, ...args: unknown[]) => void,
+    ): void;
     removeAllListeners(channel: string): void;
   };
 }

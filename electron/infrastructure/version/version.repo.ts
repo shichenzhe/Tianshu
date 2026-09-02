@@ -1,4 +1,3 @@
-import Log from "../../commons/Log";
 import prisma from "../../commons/prisma-client";
 export default class VersionRepository {
   // 初始化数据库版本表
@@ -18,11 +17,11 @@ export default class VersionRepository {
     try {
       const result = await prisma.db_version.findFirst({
         orderBy: {
-          id: "desc"
+          id: "desc",
         },
         select: {
-          version: true
-        }
+          version: true,
+        },
       });
       return result?.version ?? 0;
       // const selectVersionQuery = `SELECT version FROM db_version ORDER BY id DESC LIMIT 1;`;
@@ -38,10 +37,10 @@ export default class VersionRepository {
   // 检查并更新数据库版本
   static async update(
     currentVersion: number,
-    targetVersion: number
+    targetVersion: number,
   ): Promise<void> {
     console.info(
-      `Updating database from db_version ${currentVersion} to ${targetVersion}`
+      `Updating database from db_version ${currentVersion} to ${targetVersion}`,
     );
 
     if (currentVersion === targetVersion) {
@@ -51,8 +50,8 @@ export default class VersionRepository {
     // 更新数据库版本记录
     await prisma.db_version.create({
       data: {
-        version: targetVersion
-      }
+        version: targetVersion,
+      },
     });
     console.info(`Database updated to version ${targetVersion}`);
   }

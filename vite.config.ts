@@ -8,7 +8,8 @@ import fs from "fs-extra";
 function tryCopySync(sourcePath: string, targetPath: string) {
   try {
     fs.copySync(sourcePath, targetPath, { overwrite: true });
-  } catch (_e) {
+  } catch {
+    // 拷贝失败不阻塞启动流程
   }
 }
 
@@ -18,12 +19,12 @@ function syncElectronAssets() {
 
   tryCopySync(
     path.resolve(__dirname, "./electron/infrastructure/script"),
-    path.resolve(distElectronDir, "./script")
+    path.resolve(distElectronDir, "./script"),
   );
 
   const prismaSourceDir = path.resolve(
     __dirname,
-    "./electron/infrastructure/prisma"
+    "./electron/infrastructure/prisma",
   );
   const prismaTargetDir = path.resolve(distElectronDir, "./prisma");
   fs.ensureDirSync(path.resolve(prismaTargetDir, "./runtime"));
@@ -38,22 +39,31 @@ function syncElectronAssets() {
     ["wasm.js", "wasm.js"],
     ["query_engine-windows.dll.node", "query_engine-windows.dll.node"],
     ["libquery_engine-darwin.dylib", "libquery_engine-darwin.dylib"],
-    ["libquery_engine-darwin-arm64.dylib", "libquery_engine-darwin-arm64.dylib"],
-    ["libquery_engine-debian-openssl-3.0.x.so.node", "libquery_engine-debian-openssl-3.0.x.so.node"],
-    ["libquery_engine-linux-musl-openssl-3.0.x.so.node", "libquery_engine-linux-musl-openssl-3.0.x.so.node"],
-    ["runtime/library.js", "runtime/library.js"]
+    [
+      "libquery_engine-darwin-arm64.dylib",
+      "libquery_engine-darwin-arm64.dylib",
+    ],
+    [
+      "libquery_engine-debian-openssl-3.0.x.so.node",
+      "libquery_engine-debian-openssl-3.0.x.so.node",
+    ],
+    [
+      "libquery_engine-linux-musl-openssl-3.0.x.so.node",
+      "libquery_engine-linux-musl-openssl-3.0.x.so.node",
+    ],
+    ["runtime/library.js", "runtime/library.js"],
   ] as const;
 
   for (const [from, to] of prismaFilesToCopy) {
     tryCopySync(
       path.resolve(prismaSourceDir, from),
-      path.resolve(prismaTargetDir, to)
+      path.resolve(prismaTargetDir, to),
     );
   }
 
   tryCopySync(
     path.resolve(__dirname, "./docs/update-log.md"),
-    path.resolve(distElectronDir, "./docs/update-log.md")
+    path.resolve(distElectronDir, "./docs/update-log.md"),
   );
 }
 
@@ -67,24 +77,24 @@ export default defineConfig(({ command }) => {
     base: "./",
     resolve: {
       alias: {
-        "@": path.resolve(__dirname, "src-react")
-      }
+        "@": path.resolve(__dirname, "src-react"),
+      },
     },
     esbuild: {
-      drop: ["console", "debugger"]
+      drop: ["console", "debugger"],
     },
     plugins: [
       react(),
       tailwindcss(),
       electron({
         main: {
-          entry: "electron/main.ts"
+          entry: "electron/main.ts",
         },
         preload: {
-          input: path.join(__dirname, "electron/preload.ts")
+          input: path.join(__dirname, "electron/preload.ts"),
         },
-        renderer: process.env.NODE_ENV === "test" ? undefined : {}
-      })
-    ]
+        renderer: process.env.NODE_ENV === "test" ? undefined : {},
+      }),
+    ],
   };
 });

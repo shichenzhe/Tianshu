@@ -15,7 +15,7 @@ const logFormat = winston.format.combine(
   winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }), // 时间戳格式
   winston.format.printf(({ timestamp, level, message }) => {
     return `${timestamp} [${level}]: ${message}`;
-  })
+  }),
 );
 
 const logTransport = new winston.transports.DailyRotateFile({
@@ -24,7 +24,7 @@ const logTransport = new winston.transports.DailyRotateFile({
   maxSize: Constants.LOG_MAX_SIZE, // 每个日志文件最大21MB
   zippedArchive: true, // 压缩归档
   maxFiles: Constants.LOG_KEEP_DAYS, // 最多保留7天的日志文件
-  format: logFormat // 使用自定义的日志格式
+  format: logFormat, // 使用自定义的日志格式
 });
 
 // 创建日志记录器
@@ -32,8 +32,8 @@ const logger = winston.createLogger({
   level: "info", // 默认日志级别为 'info'
   transports: [
     logTransport,
-    new winston.transports.Console({ format: logFormat }) // 控制台输出
-  ]
+    new winston.transports.Console({ format: logFormat }), // 控制台输出
+  ],
 });
 
 export default class Log {
@@ -41,29 +41,29 @@ export default class Log {
     this.registerHandlers();
   }
 
-  static info(...args: any[]): void {
+  static info(...args: unknown[]): void {
     const message = args
-      .map((a) => (typeof a === "object" ? JSON.stringify(a) : a))
+      .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
       .join(" ");
     logger.info(message);
   }
 
-  static error(...args: any[]): void {
+  static error(...args: unknown[]): void {
     const message = args
       .map((a) => {
         if (a instanceof Error) {
           // 特殊处理 Error 对象
           return `${a.name}: ${a.message}\n${a.stack || ""}`;
         }
-        return typeof a === "object" ? JSON.stringify(a, null, 2) : a;
+        return typeof a === "object" ? JSON.stringify(a, null, 2) : String(a);
       })
       .join(" ");
     logger.error(message);
   }
 
-  static warn(...args: any[]): void {
+  static warn(...args: unknown[]): void {
     const message = args
-      .map((a) => (typeof a === "object" ? JSON.stringify(a) : a))
+      .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
       .join(" ");
     logger.warn(message);
   }

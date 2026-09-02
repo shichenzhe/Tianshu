@@ -10,7 +10,7 @@ export default class ConsoleLogProxy {
     // 覆盖 console.info
     console.info = function (...args) {
       if (isDevelopment) {
-        originalInfo.apply(console, [``].concat(args));
+        originalInfo.apply(console, [""].concat(args));
       } else {
         Log.info(args);
       }
@@ -19,7 +19,7 @@ export default class ConsoleLogProxy {
     // 覆盖 console.warn
     console.warn = function (...args) {
       if (isDevelopment) {
-        originalWarn.apply(console, [``].concat(args));
+        originalWarn.apply(console, [""].concat(args));
       } else {
         Log.warn(args);
       }
@@ -28,7 +28,7 @@ export default class ConsoleLogProxy {
     // 覆盖 console.error
     console.error = function (...args) {
       if (isDevelopment) {
-        originalError.apply(console, [``].concat(args));
+        originalError.apply(console, [""].concat(args));
       } else {
         Log.error(args);
       }

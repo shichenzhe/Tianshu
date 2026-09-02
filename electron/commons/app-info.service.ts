@@ -44,11 +44,11 @@ export default class AppInfoService {
     // 获取package.json信息
     const packageJsonPath = path.join(app.getAppPath(), "package.json");
     const packageJson = require(packageJsonPath);
-    
+
     return {
       name: packageJson.name,
       version: packageJson.version,
-      productName: app.getName() || packageJson.name
+      productName: app.getName() || packageJson.name,
     };
   }
 

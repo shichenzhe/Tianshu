@@ -2,9 +2,8 @@
  * 更新日志服务
  * 提供从指定文件读取更新日志的功能
  */
-import { ipcMain, app } from "electron";
+import { ipcMain } from "electron";
 import fs from "fs";
-import path from "path";
 
 export interface UpdateLogConfig {
   logFilePath?: string;
@@ -15,7 +14,7 @@ export default class UpdateLogService {
 
   constructor(config: UpdateLogConfig = {}) {
     this.config = {
-      logFilePath: config.logFilePath
+      logFilePath: config.logFilePath,
     };
     this.registerHandlers();
   }
@@ -30,7 +29,7 @@ export default class UpdateLogService {
 
     ipcMain.handle("update-log:getConfig", async () => {
       return {
-        logFilePath: this.config.logFilePath
+        logFilePath: this.config.logFilePath,
       };
     });
   }

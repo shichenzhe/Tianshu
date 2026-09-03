@@ -10,7 +10,17 @@ vi.mock("../../electron/commons/prisma-client", () => ({
 }));
 
 import { MockLanguageModelV3 } from "ai/test";
-import { runChatStream } from "../../electron/domains/ai/chat/chat.service";
+import ChatService, {
+  runChatStream,
+} from "../../electron/domains/ai/chat/chat.service";
+import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
+
+const userHistory = [
+  {
+    role: "user" as const,
+    blocks: JSON.stringify([{ type: "text", text: "hi" }]),
+  },
+];
 
 interface StreamModelOptions {
   error?: Error;
@@ -76,12 +86,7 @@ describe("runChatStream", () => {
     const received: string[] = [];
     const result = await runChatStream({
       model: streamModel(["你", "好"]),
-      history: [
-        {
-          role: "user",
-          blocks: JSON.stringify([{ type: "text", text: "hi" }]),
-        },
-      ],
+      history: userHistory,
       params: {},
       onChunk: (chunk) => {
         if (chunk.type === "text-delta") {
@@ -102,12 +107,7 @@ describe("runChatStream", () => {
       model: streamModel(["部分"], {
         error: Object.assign(new Error("Unauthorized"), { statusCode: 401 }),
       }),
-      history: [
-        {
-          role: "user",
-          blocks: JSON.stringify([{ type: "text", text: "hi" }]),
-        },
-      ],
+      history: userHistory,
       params: {},
     });
     expect(result.errorCode).toBe("AUTH_FAILED");
@@ -116,18 +116,41 @@ describe("runChatStream", () => {
     expect(result.blocks).toEqual([{ type: "text", text: "部分" }]);
   });
 
+  it("模型流中途抛出等价于错误路径：保留已生成文本并分类", async () => {
+    // ReadableStream 中途 error 会让消费端迭代直接抛出（statusCode 保留）；
+    // 先让出事件循环一拍，保证已入队 delta 先行送达消费端
+    const model = new MockLanguageModelV3({
+      doStream: async () => ({
+        stream: new ReadableStream({
+          async start(controller) {
+            controller.enqueue({ type: "stream-start", warnings: [] });
+            controller.enqueue({ type: "text-start", id: "t1" });
+            controller.enqueue({ type: "text-delta", id: "t1", delta: "部分" });
+            controller.enqueue({ type: "text-end", id: "t1" });
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            controller.error(
+              Object.assign(new Error("Unauthorized"), { statusCode: 401 }),
+            );
+          },
+        }),
+      }),
+    });
+    const result = await runChatStream({
+      model,
+      history: userHistory,
+      params: {},
+    });
+    expect(result.errorCode).toBe("AUTH_FAILED");
+    expect(result.errorMessage).toBe("Unauthorized");
+    expect(result.blocks).toEqual([{ type: "text", text: "部分" }]);
+  });
+
   it("用户中止不是错误：无 errorCode，已生成内容保留", async () => {
     // 中途中止：首个 delta 后停止，部分文本照常返回
     const abort = new AbortController();
-    const history = [
-      {
-        role: "user" as const,
-        blocks: JSON.stringify([{ type: "text", text: "hi" }]),
-      },
-    ];
     const midResult = await runChatStream({
       model: streamModel(["你", "好"], { holdForAbort: abort.signal }),
-      history,
+      history: userHistory,
       params: {},
       abortSignal: abort.signal,
       onChunk: (chunk) => {
@@ -145,11 +168,40 @@ describe("runChatStream", () => {
     preAbort.abort();
     const preResult = await runChatStream({
       model: streamModel(["你", "好"]),
-      history,
+      history: userHistory,
       params: {},
       abortSignal: preAbort.signal,
     });
     expect(preResult.errorCode).toBeUndefined();
     expect(preResult.blocks).toEqual([]);
+  });
+});
+
+describe("ChatService 并发防护", () => {
+  it("并发 send 在首个 await 前注册：第二次调用立即拒绝，用户消息不重复且失败后无泄漏", async () => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({ id: 1, assistantId: null }),
+      setSessionModel: vi.fn().mockResolvedValue(undefined),
+      appendMessage: vi.fn().mockResolvedValue({}),
+      autotitleIfDefault: vi.fn().mockResolvedValue(undefined),
+      // 返回 null 迫使首个请求在模型解析处失败（不触网、不依赖 prisma）
+      getEffectiveModelId: vi.fn().mockResolvedValue(null),
+    };
+    const service = new ChatService(sessions as unknown as SessionRepository);
+
+    // 未 await：首个请求同步完成注册后才轮到第二次调用
+    const first = service.send({ sessionId: 1, content: "hi" });
+    await expect(service.send({ sessionId: 1, content: "hi" })).rejects.toThrow(
+      "该会话已有进行中的请求",
+    );
+
+    // 首个请求完整走完只落库一条用户消息，被拒的并发请求未重复落库
+    await expect(first).rejects.toThrow("未选择模型");
+    expect(sessions.appendMessage).toHaveBeenCalledTimes(1);
+
+    // 早期失败已清理注册：后续请求不再报并发错误
+    await expect(
+      service.send({ sessionId: 1, content: "again" }),
+    ).rejects.toThrow("未选择模型");
   });
 });

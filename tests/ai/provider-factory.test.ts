@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createLanguageModel,
   parseExtraHeaders,
 } from "../../electron/domains/ai/provider/provider-factory";
 
 describe("provider-factory", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("parseExtraHeaders 容错", () => {
     expect(parseExtraHeaders(null)).toEqual({});
     expect(parseExtraHeaders("{bad")).toEqual({});
@@ -38,5 +42,92 @@ describe("provider-factory", () => {
         "m",
       ),
     ).not.toThrow();
+  });
+
+  it("gemini 分支透传 extraHeaders 与 apiKey", async () => {
+    const captured: { url: string; headers: HeadersInit | undefined }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (url: unknown, init?: { headers?: HeadersInit }) => {
+        captured.push({ url: String(url), headers: init?.headers });
+        return new Response(
+          JSON.stringify({
+            candidates: [
+              { content: { parts: [{ text: "ok" }] }, finishReason: "STOP" },
+            ],
+            usageMetadata: {
+              promptTokenCount: 1,
+              candidatesTokenCount: 1,
+              totalTokenCount: 2,
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      },
+    );
+
+    const model = createLanguageModel(
+      {
+        type: "gemini",
+        baseUrl: "",
+        apiKey: "k",
+        extraHeaders: '{"X-A":"1"}',
+      },
+      "test-model",
+    );
+    const callable = model as unknown as {
+      doGenerate: (options: { prompt: unknown }) => Promise<unknown>;
+    };
+    await callable.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    });
+
+    expect(captured).toHaveLength(1);
+    const reqHeaders = new Headers(captured[0].headers);
+    expect(reqHeaders.get("x-a")).toBe("1");
+    expect(reqHeaders.get("x-goog-api-key")).toBe("k");
+  });
+
+  it("ollama 分支透传 extraHeaders 与 apiKey", async () => {
+    const captured: { url: string; headers: HeadersInit | undefined }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      async (url: unknown, init?: { headers?: HeadersInit }) => {
+        captured.push({ url: String(url), headers: init?.headers });
+        return new Response(
+          JSON.stringify({
+            model: "test-model",
+            created_at: new Date().toISOString(),
+            message: { role: "assistant", content: "ok" },
+            done: true,
+            done_reason: "stop",
+            prompt_eval_count: 1,
+            eval_count: 1,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      },
+    );
+
+    const model = createLanguageModel(
+      {
+        type: "ollama",
+        baseUrl: "http://localhost:11434",
+        apiKey: "k",
+        extraHeaders: '{"X-A":"1"}',
+      },
+      "test-model",
+    );
+    const callable = model as unknown as {
+      doGenerate: (options: { prompt: unknown }) => Promise<unknown>;
+    };
+    await callable.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+    });
+
+    expect(captured).toHaveLength(1);
+    const reqHeaders = new Headers(captured[0].headers);
+    expect(reqHeaders.get("x-a")).toBe("1");
+    expect(reqHeaders.get("authorization")).toBe("Bearer k");
   });
 });

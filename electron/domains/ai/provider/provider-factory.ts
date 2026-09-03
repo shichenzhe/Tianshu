@@ -52,10 +52,15 @@ export function createLanguageModel(
     case "gemini":
       return createGoogleGenerativeAI({
         apiKey: provider.apiKey ?? "",
+        headers,
         ...(provider.baseUrl ? { baseURL: provider.baseUrl } : {}),
       })(modelId);
     case "ollama":
-      return createOllama({ baseURL: provider.baseUrl })(modelId);
+      return createOllama({
+        baseURL: provider.baseUrl,
+        apiKey: provider.apiKey,
+        headers,
+      })(modelId);
     case "openai-compatible":
     default:
       return createOpenAICompatible({

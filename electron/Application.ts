@@ -4,6 +4,7 @@ import VersionRepository from "./infrastructure/version/version.repo";
 import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
 import { ProviderRepository } from "./domains/ai/provider/provider.repo";
+import { ModelRepository } from "./domains/ai/provider/model.repo";
 import { AssistantRepository } from "./domains/ai/chat/assistant.repo";
 import { SessionRepository } from "./domains/ai/chat/session.repo";
 import SqlFileExecutor from "./commons/sql-file-executor";
@@ -92,7 +93,8 @@ export default class Application {
     new UserRepository();
     new OptionRepository();
     // 可选 AI 模块：不需要时删除本块与 electron/domains/ai
-    new ProviderRepository();
+    const providerRepo = new ProviderRepository();
+    new ModelRepository(providerRepo);
     new AssistantRepository();
     new SessionRepository();
     // 基础设施

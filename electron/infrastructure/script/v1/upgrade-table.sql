@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS model (
     temperature REAL NULL,
     topP REAL NULL,
     maxTokens INTEGER NULL,
-    contextWindow INTEGER NULL
+    contextWindow INTEGER NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL
 );
 
 --/ignore

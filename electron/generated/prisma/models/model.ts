@@ -54,6 +54,8 @@ export type ModelMinAggregateOutputType = {
   topP: number | null
   maxTokens: number | null
   contextWindow: number | null
+  createdAt: Date | null
+  updatedAt: Date | null
 }
 
 export type ModelMaxAggregateOutputType = {
@@ -66,6 +68,8 @@ export type ModelMaxAggregateOutputType = {
   topP: number | null
   maxTokens: number | null
   contextWindow: number | null
+  createdAt: Date | null
+  updatedAt: Date | null
 }
 
 export type ModelCountAggregateOutputType = {
@@ -78,6 +82,8 @@ export type ModelCountAggregateOutputType = {
   topP: number
   maxTokens: number
   contextWindow: number
+  createdAt: number
+  updatedAt: number
   _all: number
 }
 
@@ -110,6 +116,8 @@ export type ModelMinAggregateInputType = {
   topP?: true
   maxTokens?: true
   contextWindow?: true
+  createdAt?: true
+  updatedAt?: true
 }
 
 export type ModelMaxAggregateInputType = {
@@ -122,6 +130,8 @@ export type ModelMaxAggregateInputType = {
   topP?: true
   maxTokens?: true
   contextWindow?: true
+  createdAt?: true
+  updatedAt?: true
 }
 
 export type ModelCountAggregateInputType = {
@@ -134,6 +144,8 @@ export type ModelCountAggregateInputType = {
   topP?: true
   maxTokens?: true
   contextWindow?: true
+  createdAt?: true
+  updatedAt?: true
   _all?: true
 }
 
@@ -233,6 +245,8 @@ export type ModelGroupByOutputType = {
   topP: number | null
   maxTokens: number | null
   contextWindow: number | null
+  createdAt: Date
+  updatedAt: Date
   _count: ModelCountAggregateOutputType | null
   _avg: ModelAvgAggregateOutputType | null
   _sum: ModelSumAggregateOutputType | null
@@ -268,6 +282,8 @@ export type modelWhereInput = {
   topP?: Prisma.FloatNullableFilter<"model"> | number | null
   maxTokens?: Prisma.IntNullableFilter<"model"> | number | null
   contextWindow?: Prisma.IntNullableFilter<"model"> | number | null
+  createdAt?: Prisma.DateTimeFilter<"model"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"model"> | Date | string
 }
 
 export type modelOrderByWithRelationInput = {
@@ -280,6 +296,8 @@ export type modelOrderByWithRelationInput = {
   topP?: Prisma.SortOrderInput | Prisma.SortOrder
   maxTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   contextWindow?: Prisma.SortOrderInput | Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+  updatedAt?: Prisma.SortOrder
 }
 
 export type modelWhereUniqueInput = Prisma.AtLeast<{
@@ -295,6 +313,8 @@ export type modelWhereUniqueInput = Prisma.AtLeast<{
   topP?: Prisma.FloatNullableFilter<"model"> | number | null
   maxTokens?: Prisma.IntNullableFilter<"model"> | number | null
   contextWindow?: Prisma.IntNullableFilter<"model"> | number | null
+  createdAt?: Prisma.DateTimeFilter<"model"> | Date | string
+  updatedAt?: Prisma.DateTimeFilter<"model"> | Date | string
 }, "id">
 
 export type modelOrderByWithAggregationInput = {
@@ -307,6 +327,8 @@ export type modelOrderByWithAggregationInput = {
   topP?: Prisma.SortOrderInput | Prisma.SortOrder
   maxTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   contextWindow?: Prisma.SortOrderInput | Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+  updatedAt?: Prisma.SortOrder
   _count?: Prisma.modelCountOrderByAggregateInput
   _avg?: Prisma.modelAvgOrderByAggregateInput
   _max?: Prisma.modelMaxOrderByAggregateInput
@@ -327,6 +349,8 @@ export type modelScalarWhereWithAggregatesInput = {
   topP?: Prisma.FloatNullableWithAggregatesFilter<"model"> | number | null
   maxTokens?: Prisma.IntNullableWithAggregatesFilter<"model"> | number | null
   contextWindow?: Prisma.IntNullableWithAggregatesFilter<"model"> | number | null
+  createdAt?: Prisma.DateTimeWithAggregatesFilter<"model"> | Date | string
+  updatedAt?: Prisma.DateTimeWithAggregatesFilter<"model"> | Date | string
 }
 
 export type modelCreateInput = {
@@ -338,6 +362,8 @@ export type modelCreateInput = {
   topP?: number | null
   maxTokens?: number | null
   contextWindow?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
 }
 
 export type modelUncheckedCreateInput = {
@@ -350,6 +376,8 @@ export type modelUncheckedCreateInput = {
   topP?: number | null
   maxTokens?: number | null
   contextWindow?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
 }
 
 export type modelUpdateInput = {
@@ -361,6 +389,8 @@ export type modelUpdateInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type modelUncheckedUpdateInput = {
@@ -373,6 +403,8 @@ export type modelUncheckedUpdateInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type modelCreateManyInput = {
@@ -385,6 +417,8 @@ export type modelCreateManyInput = {
   topP?: number | null
   maxTokens?: number | null
   contextWindow?: number | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
 }
 
 export type modelUpdateManyMutationInput = {
@@ -396,6 +430,8 @@ export type modelUpdateManyMutationInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type modelUncheckedUpdateManyInput = {
@@ -408,6 +444,8 @@ export type modelUncheckedUpdateManyInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type modelCountOrderByAggregateInput = {
@@ -420,6 +458,8 @@ export type modelCountOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   contextWindow?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+  updatedAt?: Prisma.SortOrder
 }
 
 export type modelAvgOrderByAggregateInput = {
@@ -441,6 +481,8 @@ export type modelMaxOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   contextWindow?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+  updatedAt?: Prisma.SortOrder
 }
 
 export type modelMinOrderByAggregateInput = {
@@ -453,6 +495,8 @@ export type modelMinOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   contextWindow?: Prisma.SortOrder
+  createdAt?: Prisma.SortOrder
+  updatedAt?: Prisma.SortOrder
 }
 
 export type modelSumOrderByAggregateInput = {
@@ -492,6 +536,8 @@ export type modelSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   topP?: boolean
   maxTokens?: boolean
   contextWindow?: boolean
+  createdAt?: boolean
+  updatedAt?: boolean
 }, ExtArgs["result"]["model"]>
 
 export type modelSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -504,6 +550,8 @@ export type modelSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   topP?: boolean
   maxTokens?: boolean
   contextWindow?: boolean
+  createdAt?: boolean
+  updatedAt?: boolean
 }, ExtArgs["result"]["model"]>
 
 export type modelSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -516,6 +564,8 @@ export type modelSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   topP?: boolean
   maxTokens?: boolean
   contextWindow?: boolean
+  createdAt?: boolean
+  updatedAt?: boolean
 }, ExtArgs["result"]["model"]>
 
 export type modelSelectScalar = {
@@ -528,9 +578,11 @@ export type modelSelectScalar = {
   topP?: boolean
   maxTokens?: boolean
   contextWindow?: boolean
+  createdAt?: boolean
+  updatedAt?: boolean
 }
 
-export type modelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "providerId" | "modelId" | "name" | "enabled" | "temperature" | "topP" | "maxTokens" | "contextWindow", ExtArgs["result"]["model"]>
+export type modelOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "providerId" | "modelId" | "name" | "enabled" | "temperature" | "topP" | "maxTokens" | "contextWindow" | "createdAt" | "updatedAt", ExtArgs["result"]["model"]>
 
 export type $modelPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "model"
@@ -545,6 +597,8 @@ export type $modelPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
     topP: number | null
     maxTokens: number | null
     contextWindow: number | null
+    createdAt: Date
+    updatedAt: Date
   }, ExtArgs["result"]["model"]>
   composites: {}
 }
@@ -977,6 +1031,8 @@ export interface modelFieldRefs {
   readonly topP: Prisma.FieldRef<"model", 'Float'>
   readonly maxTokens: Prisma.FieldRef<"model", 'Int'>
   readonly contextWindow: Prisma.FieldRef<"model", 'Int'>
+  readonly createdAt: Prisma.FieldRef<"model", 'DateTime'>
+  readonly updatedAt: Prisma.FieldRef<"model", 'DateTime'>
 }
     
 

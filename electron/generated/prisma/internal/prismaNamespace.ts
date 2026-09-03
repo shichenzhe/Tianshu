@@ -1256,7 +1256,9 @@ export const ModelScalarFieldEnum = {
   temperature: 'temperature',
   topP: 'topP',
   maxTokens: 'maxTokens',
-  contextWindow: 'contextWindow'
+  contextWindow: 'contextWindow',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 } as const
 
 export type ModelScalarFieldEnum = (typeof ModelScalarFieldEnum)[keyof typeof ModelScalarFieldEnum]

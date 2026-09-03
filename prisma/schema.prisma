@@ -45,15 +45,17 @@ model provider {
 }
 
 model model {
-  id            Int     @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   providerId    Int
   modelId       String
   name          String?
-  enabled       Boolean @default(true)
+  enabled       Boolean  @default(true)
   temperature   Float?
   topP          Float?
   maxTokens     Int?
   contextWindow Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([providerId])
 }

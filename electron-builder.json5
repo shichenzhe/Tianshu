@@ -1,13 +1,13 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  appId: "{{APP_ID}}",
+  appId: "com.xmf.mirror",
   asar: true,
   compression: "maximum",
   electronLanguages: ["zh-CN", "en-US"],
   afterPack: "electron/after-pack.cjs",
-  productName: "{{APP_NAME}}",
-  copyright: "Copyright © 2026 {{AUTHOR}}",
+  productName: "mirror",
+  copyright: "Copyright © 2026 hjx",
   directories: {
     output: "release/${version}"
   },
@@ -15,7 +15,7 @@
   // 留空则禁用自动更新；配置方法见 docs/update-server.md
   publish: {
     provider: "generic",
-    url: "{{UPDATE_SERVER_URL}}"
+    url: ""
   },
   mac: {
     target: ["dmg"],

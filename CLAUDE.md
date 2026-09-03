@@ -98,7 +98,7 @@ npm run typecheck
 - 配置入口：`src-react/i18n/index.ts`
 - 翻译文件目录：`src-react/i18n/locales/{zh-CN,en-US}/`
 - 命名空间：`common`、`layout`、`user`、`welcome`、`system-config`、`ai`
-- 语言持久化：localStorage key `{{APP_NAME}}-locale`（由 `npm run init` 一并替换）
+- 语言持久化：localStorage key `mirror-locale`（由 `npm run init` 一并替换）
 - 语言切换组件：`src-react/components/common/LanguageSelector.tsx`
 
 **编码规范：**
@@ -204,11 +204,11 @@ npm run typecheck
 
 本仓库是脚手架模板，源码中内置 5 个占位符，由 `npm run init` 交互式替换（幂等，可重复运行，写入记录在 `shu-init.json`）：
 
-- `{{APP_NAME}}` - 应用名（package.json `name`、窗口标题、i18n localStorage key 前缀等）
-- `{{APP_ID}}` - 应用 ID（electron-builder `appId`）
-- `{{UPDATE_SERVER_URL}}` - 更新服务器地址（`electron/Constants.ts` 的 `UPGRADE_URL` 与 `electron-builder.json5` 的 `publish.url`）
-- `{{AUTHOR}}` - 作者（打包元信息）
-- `{{REPO_URL}}` - 仓库地址
+- `mirror` - 应用名（package.json `name`、窗口标题、i18n localStorage key 前缀等）
+- `com.xmf.mirror` - 应用 ID（electron-builder `appId`）
+- `` - 更新服务器地址（`electron/Constants.ts` 的 `UPGRADE_URL` 与 `electron-builder.json5` 的 `publish.url`）
+- `hjx` - 作者（打包元信息）
+- `` - 仓库地址
 
 注意：`npm run init` 是 `npm run build` 的硬性前置（占位符 name 会导致 electron-builder 校验失败）；替换逻辑见 `scripts/lib/replace.mjs`，配套单测用 `npm run test` 运行。
 

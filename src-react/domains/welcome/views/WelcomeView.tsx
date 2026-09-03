@@ -30,10 +30,10 @@ export default function WelcomeView() {
   return (
     <div className="p-6">
       <div className="flex flex-col items-center justify-center py-16 gap-3">
-        <img src="./pc_logo.svg" alt="{{APP_NAME}}" className="w-16 h-16" />
+        <img src="./pc_logo.svg" alt="mirror" className="w-16 h-16" />
         <h1 className="text-2xl font-bold text-foreground">
           {t("welcome:greeting", {
-            appName: appInfo?.productName || "{{APP_NAME}}",
+            appName: appInfo?.productName || "mirror",
           })}
         </h1>
         <p className="text-sm text-muted-foreground">

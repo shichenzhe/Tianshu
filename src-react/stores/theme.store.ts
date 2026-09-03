@@ -24,7 +24,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: "{{APP_NAME}}-theme",
+      name: "mirror-theme",
     },
   ),
 );
@@ -41,7 +41,7 @@ export function applyTheme(theme: ThemeType): void {
  */
 export function initTheme(): void {
   // 从 localStorage 读取（因为 persist 中间件可能在组件初始化前未完成）
-  const stored = localStorage.getItem("{{APP_NAME}}-theme");
+  const stored = localStorage.getItem("mirror-theme");
   if (stored) {
     try {
       const parsed = JSON.parse(stored);

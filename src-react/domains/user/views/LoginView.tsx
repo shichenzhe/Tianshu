@@ -244,9 +244,9 @@ export default function LoginView() {
     <div className="flex justify-center items-center h-screen bg-gradient-to-br from-primary-subtle via-white to-primary-subtle relative">
       {/* Logo 区域 */}
       <div className="absolute top-6 left-6 flex items-center gap-3">
-        <img src="./pc_logo.svg" alt="{{APP_NAME}}" className="w-8 h-8" />
+        <img src="./pc_logo.svg" alt="mirror" className="w-8 h-8" />
         <span className="text-xl font-bold text-primary tracking-tight select-none">
-          {"{{APP_NAME}}"}
+          {"mirror"}
         </span>
       </div>
 

@@ -30,7 +30,7 @@ export default function UpdateLogDialog({
 }: UpdateLogDialogProps) {
   const { t } = useTranslation(["layout", "common"]);
   const [appInfo, setAppInfo] = useState<AppInfo>({
-    name: "{{APP_NAME}}",
+    name: "mirror",
     version: "unknown",
   });
   const [updateLog, setUpdateLog] = useState<string>(
@@ -47,12 +47,12 @@ export default function UpdateLogDialog({
     try {
       const info = await invoke<AppInfo>("app:getInfo");
       setAppInfo({
-        name: info.name || "{{APP_NAME}}",
+        name: info.name || "mirror",
         version: info.version || "unknown",
       });
     } catch (error) {
       console.error("获取应用信息失败:", error);
-      setAppInfo({ name: "{{APP_NAME}}", version: "unknown" });
+      setAppInfo({ name: "mirror", version: "unknown" });
     }
   };
 

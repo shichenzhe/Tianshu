@@ -68,7 +68,7 @@ if (!isDevelopment) {
 import { initUpdater } from "./init-updater.js";
 function createWindow() {
   win = new BrowserWindow({
-    title: "{{APP_NAME}}",
+    title: "mirror",
     width: 910,
     height: 700,
     icon: process.env.VITE_PUBLIC
@@ -144,7 +144,7 @@ function closeForMinize(app: BrowserWindow) {
       },
     },
   ]);
-  tray.setToolTip("{{APP_NAME}}");
+  tray.setToolTip("mirror");
   tray.setContextMenu(contextMenu);
   tray.on("click", () => {
     // 我们这里模拟桌面程序点击通知区图标实现打开关闭应用的功能
@@ -194,7 +194,7 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.error("Application execute failed:", e);
     dialog.showErrorBox(
-      "{{APP_NAME}} 启动失败",
+      "mirror 启动失败",
       e instanceof Error ? e.stack || e.message : String(e),
     );
     app.quit();

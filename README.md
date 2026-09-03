@@ -45,7 +45,7 @@ npm run build
 ```
 
 > ⚠️ `npm run init` 是 `npm run build` 的硬性前置——electron-builder 会校验
-> package.json 的 `name`，未 init 前的 `{{APP_NAME}}` 占位符会导致打包直接失败；
+> package.json 的 `name`，未 init 前的 `mirror` 占位符会导致打包直接失败；
 > `npm run dev` 不受影响。另外若在 init 之前执行 `npm install`，会看到 name 无效的警告，无害。
 
 首次启动会自动创建本地 SQLite 并执行 v1 建表脚本；在登录页**注册第一个账号**即可使用。

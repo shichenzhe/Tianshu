@@ -28,9 +28,9 @@ export default function TopBar() {
       {/* 左侧 Logo + 应用名：仅 Windows（macOS 标题移至 Sidebar，TopBar 左侧留给红绿灯浮层） */}
       {!isMac && (
         <div className="flex items-center gap-2">
-          <img src="./pc_logo.svg" alt="{{APP_NAME}}" className="w-5 h-5" />
+          <img src="./pc_logo.svg" alt="mirror" className="w-5 h-5" />
           <span className="text-sm font-semibold text-foreground tracking-tight select-none">
-            {"{{APP_NAME}}"}
+            {"mirror"}
           </span>
         </div>
       )}

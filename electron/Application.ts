@@ -3,6 +3,7 @@ import path from "path";
 import VersionRepository from "./infrastructure/version/version.repo";
 import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
+import { ProviderRepository } from "./domains/ai/provider/provider.repo";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -88,6 +89,8 @@ export default class Application {
   private registerServices(): void {
     new UserRepository();
     new OptionRepository();
+    // 可选 AI 模块：不需要时删除本块与 electron/domains/ai
+    new ProviderRepository();
     // 基础设施
     new Log();
     new AppInfoService();

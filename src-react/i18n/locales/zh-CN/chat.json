@@ -14,6 +14,15 @@
   "setupProvidersTip": "还没有可用的模型，先添加一个服务商",
   "goSetup": "去配置",
   "sending": "发送中…",
+  "input": {
+    "placeholder": "输入消息，Enter 发送，Shift+Enter 换行",
+    "send": "发送",
+    "stop": "停止",
+    "selectModel": "选择模型",
+    "selectAssistant": "选择助手",
+    "noAssistant": "不使用助手",
+    "modelRequired": "请先选择模型"
+  },
   "message": {
     "thinking": "思考过程",
     "usage": "{{input}} 输入 / {{output}} 输出 tokens",

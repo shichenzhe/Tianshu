@@ -14,6 +14,15 @@
   "setupProvidersTip": "No available models yet. Add a provider first.",
   "goSetup": "Set Up",
   "sending": "Sending…",
+  "input": {
+    "placeholder": "Type a message. Enter to send, Shift+Enter for a new line",
+    "send": "Send",
+    "stop": "Stop",
+    "selectModel": "Select Model",
+    "selectAssistant": "Select Assistant",
+    "noAssistant": "No Assistant",
+    "modelRequired": "Select a model first"
+  },
   "message": {
     "thinking": "Thinking",
     "usage": "{{input}} input / {{output}} output tokens",

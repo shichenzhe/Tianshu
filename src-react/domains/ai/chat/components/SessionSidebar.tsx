@@ -1,7 +1,7 @@
 /**
  * 会话侧边栏：工作空间切换/管理 + 会话列表（选中态由 ChatView 提升）
  */
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -50,6 +50,9 @@ import SessionApi, { type SessionRecord } from "../../api/session.api";
 const WORKSPACES_KEY = ["workspaces"] as const;
 
 interface SessionSidebarProps {
+  /** 工作空间选中态由 ChatView 提升（输入区需据此解析会话生效模型） */
+  activeWorkspaceId: number | null;
+  onSelectWorkspace: (workspaceId: number | null) => void;
   selectedSessionId: number | null;
   onSelectSession: (sessionId: number | null) => void;
 }
@@ -60,6 +63,8 @@ interface WorkspaceDialogState {
 }
 
 export default function SessionSidebar({
+  activeWorkspaceId,
+  onSelectWorkspace,
   selectedSessionId,
   onSelectSession,
 }: SessionSidebarProps) {
@@ -72,9 +77,6 @@ export default function SessionSidebar({
   });
   const workspaces = workspacesQuery.data ?? [];
 
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(
-    null,
-  );
   const [workspaceDialog, setWorkspaceDialog] =
     useState<WorkspaceDialogState | null>(null);
   const [deletingWorkspace, setDeletingWorkspace] =
@@ -87,13 +89,6 @@ export default function SessionSidebar({
     null,
   );
   const [submitting, setSubmitting] = useState(false);
-
-  // 后端保证至少有一个默认工作空间，首次加载后自动选中
-  useEffect(() => {
-    if (activeWorkspaceId === null && workspaces.length > 0) {
-      setActiveWorkspaceId(workspaces[0].id);
-    }
-  }, [activeWorkspaceId, workspaces]);
 
   const sessionsQuery = useQuery({
     queryKey: ["sessions", activeWorkspaceId],
@@ -112,9 +107,9 @@ export default function SessionSidebar({
     await queryClient.invalidateQueries({ queryKey: ["sessions"] });
   };
 
+  // 切换工作空间时由 ChatView 同步清空会话选中态
   const handleSwitchWorkspace = (id: string) => {
-    setActiveWorkspaceId(Number(id));
-    onSelectSession(null);
+    onSelectWorkspace(Number(id));
   };
 
   const handleWorkspaceDialogSubmit = async () => {
@@ -127,8 +122,7 @@ export default function SessionSidebar({
       if (workspaceDialog.mode === "create") {
         const created = await WorkspaceApi.create({ name });
         await queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
-        setActiveWorkspaceId(created.id);
-        onSelectSession(null);
+        onSelectWorkspace(created.id);
       } else if (activeWorkspaceId !== null) {
         await WorkspaceApi.update({ id: activeWorkspaceId, name });
         await queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
@@ -152,8 +146,7 @@ export default function SessionSidebar({
       await invalidateSessions();
       if (deletingWorkspace.id === activeWorkspaceId) {
         const rest = workspaces.filter((w) => w.id !== deletingWorkspace.id);
-        setActiveWorkspaceId(rest[0]?.id ?? null);
-        onSelectSession(null);
+        onSelectWorkspace(rest[0]?.id ?? null);
       }
       setDeletingWorkspace(null);
     } catch (e) {

@@ -54,7 +54,13 @@ export const ModelName = {
   user: 'user',
   db_version: 'db_version',
   option: 'option',
-  modelConfig: 'modelConfig'
+  provider: 'provider',
+  model: 'model',
+  assistant: 'assistant',
+  workspace: 'workspace',
+  session: 'session',
+  message: 'message',
+  mcpServer: 'mcpServer'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -100,20 +106,110 @@ export const OptionScalarFieldEnum = {
 export type OptionScalarFieldEnum = (typeof OptionScalarFieldEnum)[keyof typeof OptionScalarFieldEnum]
 
 
-export const ModelConfigScalarFieldEnum = {
+export const ProviderScalarFieldEnum = {
   id: 'id',
   name: 'name',
-  apiKey: 'apiKey',
-  modelName: 'modelName',
+  type: 'type',
   baseUrl: 'baseUrl',
-  maxTokens: 'maxTokens',
-  temperature: 'temperature',
-  isActive: 'isActive',
+  apiKey: 'apiKey',
+  extraHeaders: 'extraHeaders',
+  enabled: 'enabled',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
-export type ModelConfigScalarFieldEnum = (typeof ModelConfigScalarFieldEnum)[keyof typeof ModelConfigScalarFieldEnum]
+export type ProviderScalarFieldEnum = (typeof ProviderScalarFieldEnum)[keyof typeof ProviderScalarFieldEnum]
+
+
+export const ModelScalarFieldEnum = {
+  id: 'id',
+  providerId: 'providerId',
+  modelId: 'modelId',
+  name: 'name',
+  enabled: 'enabled',
+  temperature: 'temperature',
+  topP: 'topP',
+  maxTokens: 'maxTokens',
+  contextWindow: 'contextWindow',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ModelScalarFieldEnum = (typeof ModelScalarFieldEnum)[keyof typeof ModelScalarFieldEnum]
+
+
+export const AssistantScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  icon: 'icon',
+  systemPrompt: 'systemPrompt',
+  temperature: 'temperature',
+  topP: 'topP',
+  maxTokens: 'maxTokens',
+  builtin: 'builtin',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AssistantScalarFieldEnum = (typeof AssistantScalarFieldEnum)[keyof typeof AssistantScalarFieldEnum]
+
+
+export const WorkspaceScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  icon: 'icon',
+  directoryPath: 'directoryPath',
+  defaultModelId: 'defaultModelId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WorkspaceScalarFieldEnum = (typeof WorkspaceScalarFieldEnum)[keyof typeof WorkspaceScalarFieldEnum]
+
+
+export const SessionScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  assistantId: 'assistantId',
+  currentModelId: 'currentModelId',
+  title: 'title',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  lastMessageAt: 'lastMessageAt'
+} as const
+
+export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
+
+
+export const MessageScalarFieldEnum = {
+  id: 'id',
+  sessionId: 'sessionId',
+  role: 'role',
+  blocks: 'blocks',
+  modelId: 'modelId',
+  assistantId: 'assistantId',
+  error: 'error',
+  createdAt: 'createdAt'
+} as const
+
+export type MessageScalarFieldEnum = (typeof MessageScalarFieldEnum)[keyof typeof MessageScalarFieldEnum]
+
+
+export const McpServerScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  transport: 'transport',
+  command: 'command',
+  args: 'args',
+  env: 'env',
+  url: 'url',
+  headers: 'headers',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type McpServerScalarFieldEnum = (typeof McpServerScalarFieldEnum)[keyof typeof McpServerScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -3,8 +3,11 @@ import path from "path";
 import VersionRepository from "./infrastructure/version/version.repo";
 import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
-import { ModelConfigRepository } from "./domains/ai/model-config.repo";
-import AIService from "./domains/ai/ai.service";
+import { ProviderRepository } from "./domains/ai/provider/provider.repo";
+import { ModelRepository } from "./domains/ai/provider/model.repo";
+import { AssistantRepository } from "./domains/ai/chat/assistant.repo";
+import { SessionRepository } from "./domains/ai/chat/session.repo";
+import ChatService from "./domains/ai/chat/chat.service";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -91,8 +94,11 @@ export default class Application {
     new UserRepository();
     new OptionRepository();
     // 可选 AI 模块：不需要时删除本块与 electron/domains/ai
-    const modelConfigRepo = new ModelConfigRepository();
-    new AIService(modelConfigRepo);
+    const providerRepo = new ProviderRepository();
+    new ModelRepository(providerRepo);
+    new AssistantRepository();
+    const sessionRepo = new SessionRepository();
+    new ChatService(sessionRepo);
     // 基础设施
     new Log();
     new AppInfoService();

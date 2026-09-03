@@ -1,0 +1,55 @@
+{
+  "newSession": "New Session",
+  "newWorkspace": "New Workspace",
+  "renameWorkspace": "Rename Workspace",
+  "deleteWorkspace": "Delete Workspace",
+  "deleteWorkspaceDesc": "All sessions and messages under this workspace will be deleted. This cannot be undone.",
+  "defaultWorkspaceName": "Default Workspace",
+  "sessionCount": "{{count}} sessions",
+  "renameSession": "Rename Session",
+  "deleteSession": "Delete Session",
+  "deleteSessionDesc": "All messages in this session will be deleted. This cannot be undone.",
+  "noSession": "Select or create a session",
+  "setupProviders": "Configure AI Providers",
+  "setupProvidersTip": "No available models yet. Add a provider first.",
+  "goSetup": "Set Up",
+  "input": {
+    "placeholder": "Type a message. Enter to send, Shift+Enter for a new line",
+    "send": "Send",
+    "stop": "Stop",
+    "selectModel": "Select Model",
+    "selectAssistant": "Select Assistant",
+    "noAssistant": "No Assistant",
+    "modelRequired": "Select a model first",
+    "paramOverrides": "Parameter Overrides",
+    "temp": "Temperature",
+    "topP": "Top P",
+    "maxTokens": "Max Output Tokens"
+  },
+  "search": {
+    "placeholder": "Search messages",
+    "noResults": "No results"
+  },
+  "message": {
+    "thinking": "Thinking",
+    "usage": "{{input}} input / {{output}} output tokens",
+    "failed": "Generation failed",
+    "regenerate": "Regenerate"
+  },
+  "errors": {
+    "AUTH_FAILED": "Authentication failed, please check the API Key",
+    "RATE_LIMITED": "Too many requests, please try again later",
+    "MODEL_NOT_FOUND": "Model not found, please check the model ID",
+    "TIMEOUT": "Request timed out",
+    "NETWORK": "Network error, please check the base URL and your network",
+    "CONCURRENT_REQUEST": "This session already has a request in progress",
+    "SESSION_NOT_FOUND": "Session not found",
+    "NO_MODEL": "No model selected. Pick one in the input bar or set a workspace default model",
+    "MODEL_OR_PROVIDER_MISSING": "Model or provider not found",
+    "NOTHING_TO_REGENERATE": "Nothing to regenerate",
+    "MODEL_MISSING": "Model not found",
+    "PROVIDER_MISSING": "Provider not found",
+    "ASSISTANT_BUILTIN": "Built-in assistants cannot be deleted",
+    "UNKNOWN": "Unknown error"
+  }
+}

@@ -10,12 +10,19 @@ import LoginView from "@/domains/user/views/LoginView";
 
 // 懒加载其他模块
 const WelcomeView = lazy(() => import("@/domains/welcome/views/WelcomeView"));
-const ModelConfigView = lazy(
-  () => import("@/domains/ai/views/ModelConfigView"),
-);
 const SystemConfigView = lazy(
   () => import("@/domains/system-config/SystemConfigView"),
 );
+// AI 服务商/模型管理
+const ProviderSettingsView = lazy(
+  () => import("@/domains/ai/provider/views/ProviderSettingsView"),
+);
+// AI 助手预设管理
+const AssistantSettingsView = lazy(
+  () => import("@/domains/ai/assistant/views/AssistantSettingsView"),
+);
+// AI 对话主界面
+const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -64,7 +71,23 @@ export const router = createHashRouter([
         path: "ai",
         element: (
           <LazyWrapper>
-            <ModelConfigView />
+            <ChatView />
+          </LazyWrapper>
+        ),
+      },
+      {
+        path: "ai/providers",
+        element: (
+          <LazyWrapper>
+            <ProviderSettingsView />
+          </LazyWrapper>
+        ),
+      },
+      {
+        path: "ai/assistants",
+        element: (
+          <LazyWrapper>
+            <AssistantSettingsView />
           </LazyWrapper>
         ),
       },

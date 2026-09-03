@@ -1,9 +1,11 @@
 /**
  * 发送链路：invoke chat:send → 订阅 chat:stream → StreamBuffer 节流写 store
- * → finish/error 后 invalidate messages 并清空缓冲
+ * → finish/error 后 invalidate messages 并清空缓冲；error 附错误码映射的 i18n 提示
  */
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import ChatApi, { onChatStream } from "../../api/chat.api";
 import { useChatStore } from "../store/chat.store";
@@ -11,6 +13,7 @@ import { StreamBuffer } from "../store/stream-buffer";
 
 export function useChatSend(sessionId: number) {
   const queryClient = useQueryClient();
+  const { t } = useTranslation(["chat"]);
   // 逐个选择器取 action（引用稳定），避免整库订阅导致每次 delta 重渲染
   const startStream = useChatStore((state) => state.startStream);
   const appendDelta = useChatStore((state) => state.appendDelta);
@@ -21,6 +24,14 @@ export function useChatSend(sessionId: number) {
   });
 
   useEffect(() => {
+    // finish/error 公共收尾：尾部不足 30ms 的缓冲不补吐，invalidate 重取已含完整持久化内容
+    const endStream = () => {
+      finishStream(sessionId);
+      void queryClient.invalidateQueries({
+        queryKey: ["messages", sessionId],
+      });
+    };
+
     const off = onChatStream(sessionId, (chunk) => {
       if (chunk.type === "text-delta") {
         const flushed = buffers.current.text.push(chunk.text);
@@ -32,12 +43,14 @@ export function useChatSend(sessionId: number) {
         if (flushed) {
           appendDelta(sessionId, "thinking", flushed);
         }
-      } else {
-        // finish/error：尾部不足 30ms 的缓冲不补吐，invalidate 重取已含完整持久化内容
-        finishStream(sessionId);
-        void queryClient.invalidateQueries({
-          queryKey: ["messages", sessionId],
+      } else if (chunk.type === "error") {
+        // 主文案用错误码映射的 i18n 文案，原始 upstream 信息作详情
+        endStream();
+        toast.error(t(`chat:errors.${chunk.errorCode ?? "UNKNOWN"}`), {
+          description: chunk.message,
         });
+      } else {
+        endStream();
       }
     });
     // 卸载/换绑时除了解绑监听，还要清流状态：否则流在无监听期间结束时，
@@ -47,7 +60,7 @@ export function useChatSend(sessionId: number) {
       off();
       finishStream(sessionId);
     };
-  }, [sessionId, appendDelta, finishStream, queryClient]);
+  }, [sessionId, appendDelta, finishStream, queryClient, t]);
 
   const sending = useChatStore(
     (state) => state.isStreaming[sessionId] ?? false,

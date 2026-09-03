@@ -19,13 +19,13 @@ import { Button } from "@/components/ui/button";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionSidebar from "../components/SessionSidebar";
+import MessageList from "../components/MessageList";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
 
 export default function ChatView() {
-  const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
     null,
@@ -60,17 +60,8 @@ export default function ChatView() {
           <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
         ) : (
           <>
-            {/* 消息区占位：Task 16 替换为消息列表 */}
-            <div
-              data-testid="message-area"
-              className="flex flex-1 items-center justify-center overflow-y-auto"
-            >
-              {selectedSessionId === null && (
-                <p className="text-sm text-muted-foreground">
-                  {t("chat:noSession")}
-                </p>
-              )}
-            </div>
+            {/* 消息区：历史 + 流式渲染（重新生成按钮待 Task 17 接线 onRegenerate） */}
+            <MessageList sessionId={selectedSessionId} />
             {/* 输入区占位：Task 17 替换为输入组件 */}
             <div
               data-testid="chat-input"

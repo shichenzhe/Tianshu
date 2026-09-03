@@ -14,6 +14,12 @@
   "setupProvidersTip": "还没有可用的模型，先添加一个服务商",
   "goSetup": "去配置",
   "sending": "发送中…",
+  "message": {
+    "thinking": "思考过程",
+    "usage": "{{input}} 输入 / {{output}} 输出 tokens",
+    "failed": "生成失败",
+    "regenerate": "重新生成"
+  },
   "errors": {
     "AUTH_FAILED": "认证失败，请检查 API Key",
     "RATE_LIMITED": "请求过于频繁，请稍后重试",

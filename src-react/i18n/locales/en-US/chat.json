@@ -14,6 +14,12 @@
   "setupProvidersTip": "No available models yet. Add a provider first.",
   "goSetup": "Set Up",
   "sending": "Sending…",
+  "message": {
+    "thinking": "Thinking",
+    "usage": "{{input}} input / {{output}} output tokens",
+    "failed": "Generation failed",
+    "regenerate": "Regenerate"
+  },
   "errors": {
     "AUTH_FAILED": "Authentication failed, please check the API Key",
     "RATE_LIMITED": "Too many requests, please try again later",

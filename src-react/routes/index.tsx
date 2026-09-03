@@ -13,6 +13,10 @@ const WelcomeView = lazy(() => import("@/domains/welcome/views/WelcomeView"));
 const SystemConfigView = lazy(
   () => import("@/domains/system-config/SystemConfigView"),
 );
+// AI 服务商/模型管理
+const ProviderSettingsView = lazy(
+  () => import("@/domains/ai/provider/views/ProviderSettingsView"),
+);
 
 // 加载中组件
 function LoadingFallback() {
@@ -60,6 +64,14 @@ export const router = createHashRouter([
       {
         path: "ai",
         element: <Navigate to="/module/welcome" replace />,
+      },
+      {
+        path: "ai/providers",
+        element: (
+          <LazyWrapper>
+            <ProviderSettingsView />
+          </LazyWrapper>
+        ),
       },
       {
         path: "system-config",

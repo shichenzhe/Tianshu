@@ -1,5 +1,5 @@
 /**
- * 模型编辑对话框（创建/编辑）
+ * 助手编辑对话框（创建/编辑）
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,36 +16,36 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
-import ModelApi, { type ModelRecord } from "../../api/model.api";
+import AssistantApi, { type AssistantRecord } from "../../api/assistant.api";
 
-interface ModelDialogProps {
+interface AssistantDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  providerId: number;
-  editing?: ModelRecord;
+  editing?: AssistantRecord;
 }
 
-export default function ModelDialog({
+export default function AssistantDialog({
   open,
   onOpenChange,
-  providerId,
   editing,
-}: ModelDialogProps) {
+}: AssistantDialogProps) {
   const { t } = useTranslation(["ai"]);
   const queryClient = useQueryClient();
-  const [modelId, setModelId] = useState("");
   const [name, setName] = useState("");
+  const [icon, setIcon] = useState("");
+  const [systemPrompt, setSystemPrompt] = useState("");
   const [temperature, setTemperature] = useState("");
   const [topP, setTopP] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
-  const [contextWindow, setContextWindow] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setModelId(editing?.modelId ?? "");
       setName(editing?.name ?? "");
+      setIcon(editing?.icon ?? "");
+      setSystemPrompt(editing?.systemPrompt ?? "");
       setTemperature(
         editing?.temperature === undefined ? "" : String(editing.temperature),
       );
@@ -53,27 +53,22 @@ export default function ModelDialog({
       setMaxTokens(
         editing?.maxTokens === undefined ? "" : String(editing.maxTokens),
       );
-      setContextWindow(
-        editing?.contextWindow === undefined
-          ? ""
-          : String(editing.contextWindow),
-      );
     }
   }, [open, editing]);
 
   const handleSubmit = async () => {
-    if (!modelId.trim() || submitting) {
+    if (!name.trim() || !systemPrompt.trim() || submitting) {
       return;
     }
     let params;
     try {
       params = {
-        modelId: modelId.trim(),
-        name: name.trim() || undefined,
+        name: name.trim(),
+        icon: icon.trim() || undefined,
+        systemPrompt: systemPrompt.trim(),
         temperature: parseOptionalNumber(temperature),
         topP: parseOptionalNumber(topP),
         maxTokens: parseOptionalInt(maxTokens),
-        contextWindow: parseOptionalInt(contextWindow),
       };
     } catch {
       toast.error(t("ai:model.invalidNumber"));
@@ -82,11 +77,11 @@ export default function ModelDialog({
     setSubmitting(true);
     try {
       if (editing) {
-        await ModelApi.update({ id: editing.id, ...params });
+        await AssistantApi.update({ id: editing.id, ...params });
       } else {
-        await ModelApi.create({ providerId, ...params });
+        await AssistantApi.create(params);
       }
-      await queryClient.invalidateQueries({ queryKey: ["models"] });
+      await queryClient.invalidateQueries({ queryKey: ["assistants"] });
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -100,26 +95,36 @@ export default function ModelDialog({
       <DialogContent className="border border-border/50 rounded-lg shadow-lg sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {editing ? editing.modelId : t("ai:model.add")}
+            {editing ? editing.name : t("ai:assistant.add")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <Label>{t("ai:model.modelId")}</Label>
-            <Input
-              value={modelId}
-              onChange={(e) => setModelId(e.target.value)}
-              className="font-mono"
-            />
+          <div className="grid grid-cols-[1fr_100px] gap-3">
+            <div className="space-y-1.5">
+              <Label>{t("ai:assistant.name")}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>{t("ai:assistant.icon")}</Label>
+              <Input
+                value={icon}
+                onChange={(e) => setIcon(e.target.value)}
+                className="text-center"
+              />
+            </div>
           </div>
           <div className="space-y-1.5">
-            <Label>{t("ai:model.displayName")}</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
+            <Label>{t("ai:assistant.systemPrompt")}</Label>
+            <Textarea
+              rows={5}
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+            />
           </div>
           <p className="text-xs text-muted-foreground">
             {t("ai:model.optionalHint")}
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label>{t("ai:model.temperature")}</Label>
               <Input
@@ -146,16 +151,6 @@ export default function ModelDialog({
                 min="1"
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t("ai:model.contextWindow")}</Label>
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                value={contextWindow}
-                onChange={(e) => setContextWindow(e.target.value)}
               />
             </div>
           </div>

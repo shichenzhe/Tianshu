@@ -17,6 +17,10 @@ const SystemConfigView = lazy(
 const ProviderSettingsView = lazy(
   () => import("@/domains/ai/provider/views/ProviderSettingsView"),
 );
+// AI 助手预设管理
+const AssistantSettingsView = lazy(
+  () => import("@/domains/ai/assistant/views/AssistantSettingsView"),
+);
 // AI 对话主界面
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 
@@ -76,6 +80,14 @@ export const router = createHashRouter([
         element: (
           <LazyWrapper>
             <ProviderSettingsView />
+          </LazyWrapper>
+        ),
+      },
+      {
+        path: "ai/assistants",
+        element: (
+          <LazyWrapper>
+            <AssistantSettingsView />
           </LazyWrapper>
         ),
       },

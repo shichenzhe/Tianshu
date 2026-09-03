@@ -41,6 +41,19 @@
     "importSelected": "Import Selected",
     "importSuccess": "Import finished"
   },
+  "assistant": {
+    "pageTitle": "Assistants",
+    "pageDesc": "Assistants define each session's system prompt and default parameters, and can be switched anytime within a session.",
+    "add": "New Assistant",
+    "empty": "No assistants yet",
+    "emptyTip": "Add your first assistant to use it in chats",
+    "name": "Name",
+    "icon": "Icon (emoji)",
+    "systemPrompt": "System Prompt",
+    "builtin": "Built-in",
+    "deleteConfirmTitle": "Delete Assistant",
+    "deleteConfirmDesc": "Deleting an assistant does not affect the history of existing sessions."
+  },
   "errors": {
     "AUTH_FAILED": "Authentication failed, please check the API Key",
     "RATE_LIMITED": "Too many requests, please try again later",

@@ -18,6 +18,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
@@ -33,6 +39,7 @@ const WORKSPACES_KEY = ["workspaces"] as const;
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
+const ASSISTANTS_ROUTE = "/module/ai/assistants";
 
 export default function ChatView() {
   const navigate = useNavigate();
@@ -108,6 +115,7 @@ export default function ChatView() {
             hasModel={Boolean(
               selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
             )}
+            onOpenAssistants={() => navigate(ASSISTANTS_ROUTE)}
           />
         ) : (
           <MessageList sessionId={null} />
@@ -120,13 +128,15 @@ export default function ChatView() {
 interface ChatPaneProps {
   session: SessionRecord;
   hasModel: boolean;
+  onOpenAssistants: () => void;
 }
 
 /**
  * 单会话面板：useChatSend 唯一实例在此，输入框与消息列表共享 sending
  * 状态；key 取会话 id，切换会话时重建（流监听与节流缓冲随之隔离）
  */
-function ChatPane({ session, hasModel }: ChatPaneProps) {
+function ChatPane({ session, hasModel, onOpenAssistants }: ChatPaneProps) {
+  const { t } = useTranslation(["chat", "ai"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
 
   const handleSend = async (content: string) => {
@@ -158,6 +168,22 @@ function ChatPane({ session, hasModel }: ChatPaneProps) {
             sessionId={session.id}
             currentAssistantId={session.assistantId}
           />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
+                  onClick={onOpenAssistants}
+                  aria-label={t("ai:assistant.pageTitle")}
+                >
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("ai:assistant.pageTitle")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <ChatInput
             hasModel={hasModel}
             sending={sending}

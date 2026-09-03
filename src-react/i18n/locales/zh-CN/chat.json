@@ -13,7 +13,6 @@
   "setupProviders": "配置 AI 服务商",
   "setupProvidersTip": "还没有可用的模型，先添加一个服务商",
   "goSetup": "去配置",
-  "sending": "发送中…",
   "input": {
     "placeholder": "输入消息，Enter 发送，Shift+Enter 换行",
     "send": "发送",

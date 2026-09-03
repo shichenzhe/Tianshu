@@ -57,7 +57,37 @@ export type db_version = Prisma.db_versionModel
  */
 export type option = Prisma.optionModel
 /**
- * Model modelConfig
+ * Model provider
  * 
  */
-export type modelConfig = Prisma.modelConfigModel
+export type provider = Prisma.providerModel
+/**
+ * Model model
+ * 
+ */
+export type model = Prisma.modelModel
+/**
+ * Model assistant
+ * 
+ */
+export type assistant = Prisma.assistantModel
+/**
+ * Model workspace
+ * 
+ */
+export type workspace = Prisma.workspaceModel
+/**
+ * Model session
+ * 
+ */
+export type session = Prisma.sessionModel
+/**
+ * Model message
+ * 
+ */
+export type message = Prisma.messageModel
+/**
+ * Model mcpServer
+ * 
+ */
+export type mcpServer = Prisma.mcpServerModel

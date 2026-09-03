@@ -32,17 +32,89 @@ model option {
   @@index([type], map: "option_type_index")
 }
 
-model modelConfig {
-  id          Int       @id @default(autoincrement())
-  name        String
-  apiKey      String
-  modelName   String
-  baseUrl     String
-  maxTokens   Int?
-  temperature Float?
-  isActive    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+model provider {
+  id           Int      @id @default(autoincrement())
+  name         String
+  type         String
+  baseUrl      String
+  apiKey       String?
+  extraHeaders String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
 
-  @@index([isActive], map: "idx_model_config_is_active")
+model model {
+  id            Int     @id @default(autoincrement())
+  providerId    Int
+  modelId       String
+  name          String?
+  enabled       Boolean @default(true)
+  temperature   Float?
+  topP          Float?
+  maxTokens     Int?
+  contextWindow Int?
+
+  @@index([providerId])
+}
+
+model assistant {
+  id           Int      @id @default(autoincrement())
+  name         String
+  icon         String?
+  systemPrompt String
+  temperature  Float?
+  topP         Float?
+  maxTokens    Int?
+  builtin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model workspace {
+  id             Int      @id @default(autoincrement())
+  name           String
+  icon           String?
+  directoryPath  String?
+  defaultModelId Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model session {
+  id             Int       @id @default(autoincrement())
+  workspaceId    Int
+  assistantId    Int?
+  currentModelId Int?
+  title          String    @default("新会话")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastMessageAt  DateTime?
+}
+
+model message {
+  id          Int      @id @default(autoincrement())
+  sessionId   Int
+  role        String
+  blocks      String
+  modelId     Int?
+  assistantId Int?
+  error       String?
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+}
+
+model mcpServer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  transport String
+  command   String?
+  args      String?
+  env       String?
+  url       String?
+  headers   String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

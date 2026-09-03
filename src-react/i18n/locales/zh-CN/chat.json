@@ -1,0 +1,25 @@
+{
+  "newSession": "新会话",
+  "newWorkspace": "新建工作空间",
+  "renameWorkspace": "重命名工作空间",
+  "deleteWorkspace": "删除工作空间",
+  "deleteWorkspaceDesc": "将删除该工作空间下的全部会话与消息，无法恢复。",
+  "defaultWorkspaceName": "默认工作空间",
+  "sessionCount": "{{count}} 个会话",
+  "renameSession": "重命名会话",
+  "deleteSession": "删除会话",
+  "deleteSessionDesc": "将删除该会话的全部消息，无法恢复。",
+  "noSession": "选择或新建一个会话",
+  "setupProviders": "配置 AI 服务商",
+  "setupProvidersTip": "还没有可用的模型，先添加一个服务商",
+  "goSetup": "去配置",
+  "sending": "发送中…",
+  "errors": {
+    "AUTH_FAILED": "认证失败，请检查 API Key",
+    "RATE_LIMITED": "请求过于频繁，请稍后重试",
+    "MODEL_NOT_FOUND": "模型不存在，请检查模型 ID",
+    "TIMEOUT": "请求超时",
+    "NETWORK": "网络错误，请检查接口地址与网络",
+    "UNKNOWN": "未知错误"
+  }
+}

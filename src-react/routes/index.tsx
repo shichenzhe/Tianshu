@@ -17,6 +17,8 @@ const SystemConfigView = lazy(
 const ProviderSettingsView = lazy(
   () => import("@/domains/ai/provider/views/ProviderSettingsView"),
 );
+// AI 对话主界面
+const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -63,7 +65,11 @@ export const router = createHashRouter([
       },
       {
         path: "ai",
-        element: <Navigate to="/module/welcome" replace />,
+        element: (
+          <LazyWrapper>
+            <ChatView />
+          </LazyWrapper>
+        ),
       },
       {
         path: "ai/providers",

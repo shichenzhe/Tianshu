@@ -1,0 +1,25 @@
+{
+  "newSession": "New Session",
+  "newWorkspace": "New Workspace",
+  "renameWorkspace": "Rename Workspace",
+  "deleteWorkspace": "Delete Workspace",
+  "deleteWorkspaceDesc": "All sessions and messages under this workspace will be deleted. This cannot be undone.",
+  "defaultWorkspaceName": "Default Workspace",
+  "sessionCount": "{{count}} sessions",
+  "renameSession": "Rename Session",
+  "deleteSession": "Delete Session",
+  "deleteSessionDesc": "All messages in this session will be deleted. This cannot be undone.",
+  "noSession": "Select or create a session",
+  "setupProviders": "Configure AI Providers",
+  "setupProvidersTip": "No available models yet. Add a provider first.",
+  "goSetup": "Set Up",
+  "sending": "Sending…",
+  "errors": {
+    "AUTH_FAILED": "Authentication failed, please check the API Key",
+    "RATE_LIMITED": "Too many requests, please try again later",
+    "MODEL_NOT_FOUND": "Model not found, please check the model ID",
+    "TIMEOUT": "Request timed out",
+    "NETWORK": "Network error, please check the base URL and your network",
+    "UNKNOWN": "Unknown error"
+  }
+}

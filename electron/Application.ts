@@ -7,6 +7,7 @@ import { ProviderRepository } from "./domains/ai/provider/provider.repo";
 import { ModelRepository } from "./domains/ai/provider/model.repo";
 import { AssistantRepository } from "./domains/ai/chat/assistant.repo";
 import { SessionRepository } from "./domains/ai/chat/session.repo";
+import ChatService from "./domains/ai/chat/chat.service";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -96,7 +97,8 @@ export default class Application {
     const providerRepo = new ProviderRepository();
     new ModelRepository(providerRepo);
     new AssistantRepository();
-    new SessionRepository();
+    const sessionRepo = new SessionRepository();
+    new ChatService(sessionRepo);
     // 基础设施
     new Log();
     new AppInfoService();

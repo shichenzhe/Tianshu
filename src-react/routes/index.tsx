@@ -10,9 +10,6 @@ import LoginView from "@/domains/user/views/LoginView";
 
 // 懒加载其他模块
 const WelcomeView = lazy(() => import("@/domains/welcome/views/WelcomeView"));
-const ModelConfigView = lazy(
-  () => import("@/domains/ai/views/ModelConfigView"),
-);
 const SystemConfigView = lazy(
   () => import("@/domains/system-config/SystemConfigView"),
 );
@@ -62,11 +59,7 @@ export const router = createHashRouter([
       },
       {
         path: "ai",
-        element: (
-          <LazyWrapper>
-            <ModelConfigView />
-          </LazyWrapper>
-        ),
+        element: <Navigate to="/module/welcome" replace />,
       },
       {
         path: "system-config",

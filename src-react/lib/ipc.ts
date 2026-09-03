@@ -17,15 +17,37 @@ export type IPCChannel =
   | "option:delete"
   | "option:update"
   // AI 模块（可选）
-  | "modelConfig:list"
-  | "modelConfig:getById"
-  | "modelConfig:create"
-  | "modelConfig:update"
-  | "modelConfig:delete"
-  | "modelConfig:setActive"
-  | "modelConfig:test"
-  | "modelConfig:getActive"
-  | "ai:chat"
+  | "provider:list"
+  | "provider:getById"
+  | "provider:create"
+  | "provider:update"
+  | "provider:delete"
+  | "model:listByProvider"
+  | "model:listAll"
+  | "model:create"
+  | "model:update"
+  | "model:delete"
+  | "model:test"
+  | "model:listOllama"
+  | "workspace:list"
+  | "workspace:create"
+  | "workspace:update"
+  | "workspace:delete"
+  | "session:listByWorkspace"
+  | "session:create"
+  | "session:rename"
+  | "session:delete"
+  | "session:setModel"
+  | "session:setAssistant"
+  | "message:listBySession"
+  | "message:search"
+  | "assistant:list"
+  | "assistant:create"
+  | "assistant:update"
+  | "assistant:delete"
+  | "chat:send"
+  | "chat:regenerate"
+  | "chat:stop"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"
@@ -67,11 +89,11 @@ export function send(channel: string, ...args: unknown[]): void {
 export function on(
   channel: string,
   listener: (event: unknown, ...args: unknown[]) => void,
-): void {
+): () => void {
   if (!window.ipcRenderer) {
     throw new Error("IPC Renderer not available");
   }
-  window.ipcRenderer.on(channel, listener);
+  return window.ipcRenderer.on(channel, listener);
 }
 
 /**

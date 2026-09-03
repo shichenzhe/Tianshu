@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/card";
 import AssistantApi, { type AssistantRecord } from "../../api/assistant.api";
 import AssistantDialog from "../components/AssistantDialog";
+import { mapIpcError } from "../../chat/lib/error-message";
 
 const ASSISTANTS_KEY = ["assistants"] as const;
 
@@ -65,7 +66,7 @@ export default function AssistantSettingsView() {
       await AssistantApi.delete(deleting.id);
       await queryClient.invalidateQueries({ queryKey: ASSISTANTS_KEY });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     } finally {
       setDeleting(null);
     }

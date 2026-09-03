@@ -90,6 +90,8 @@ export default class NoteRepository {
 AI 是可选模块，分两个子域：`provider/`（服务商与模型管理）和 `chat/`（对话、会话、助手预设）。
 支持两种裁剪粒度：整体移除，或只保留 provider 层。每步做完建议跑 `npm run typecheck`
 和 `npm run test` 验证无残留引用。
+注意：本分支把 AI 建表并入 v1 脚本（只对全新库执行），已有开发数据库不会自动补建，
+升级后请删除旧库文件（开发环境为仓库下 `database/local.db`）重启应用重新生成。
 
 ### 完整移除
 

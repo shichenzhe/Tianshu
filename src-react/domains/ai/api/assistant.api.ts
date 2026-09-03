@@ -30,10 +30,11 @@ export interface AssistantUpdateParams {
   id: number;
   name?: string;
   systemPrompt?: string;
-  icon?: string;
-  temperature?: number;
-  topP?: number;
-  maxTokens?: number;
+  /** 可空字段：null 表示清空（undefined = 不修改） */
+  icon?: string | null;
+  temperature?: number | null;
+  topP?: number | null;
+  maxTokens?: number | null;
 }
 
 export class AssistantApi {

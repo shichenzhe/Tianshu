@@ -7,7 +7,10 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import ChatApi, { onChatStream } from "../../api/chat.api";
+import ChatApi, {
+  onChatStream,
+  type ChatModelParams,
+} from "../../api/chat.api";
 import { useChatStore } from "../store/chat.store";
 import { StreamBuffer } from "../store/stream-buffer";
 
@@ -66,10 +69,15 @@ export function useChatSend(sessionId: number) {
     (state) => state.isStreaming[sessionId] ?? false,
   );
 
-  const send = async (content: string, modelId?: number) => {
+  /** 单次请求参数覆盖（spec §4.2 第三优先级）；regenerate 不支持（沿用原请求参数） */
+  const send = async (
+    content: string,
+    modelId?: number,
+    overrides?: ChatModelParams,
+  ) => {
     startStream(sessionId);
     try {
-      await ChatApi.send({ sessionId, content, modelId });
+      await ChatApi.send({ sessionId, content, modelId, overrides });
     } catch (e) {
       // 早期失败（会话不存在/并发请求/未选模型）时用户消息可能已落库，失效重取
       finishStream(sessionId);

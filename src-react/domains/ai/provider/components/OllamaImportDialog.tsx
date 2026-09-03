@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import ModelApi from "../../api/model.api";
+import { mapIpcError } from "../../chat/lib/error-message";
 
 interface OllamaImportDialogProps {
   open: boolean;
@@ -75,7 +76,7 @@ export default function OllamaImportDialog({
       toast.success(t("ai:model.importSuccess"));
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     } finally {
       setImporting(false);
     }

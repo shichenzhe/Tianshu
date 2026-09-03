@@ -41,6 +41,7 @@ import ModelApi, { type ModelRecord } from "../../api/model.api";
 import ProviderDialog from "../components/ProviderDialog";
 import ModelDialog from "../components/ModelDialog";
 import OllamaImportDialog from "../components/OllamaImportDialog";
+import { mapIpcError } from "../../chat/lib/error-message";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
@@ -97,7 +98,7 @@ export default function ProviderSettingsView() {
   };
 
   const handleError = (e: unknown) => {
-    toast.error(e instanceof Error ? e.message : String(e));
+    toast.error(mapIpcError(e));
   };
 
   const toggleEnabled = async (provider: ProviderRecord, enabled: boolean) => {

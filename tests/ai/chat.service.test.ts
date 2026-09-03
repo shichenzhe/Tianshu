@@ -192,16 +192,16 @@ describe("ChatService 并发防护", () => {
     // 未 await：首个请求同步完成注册后才轮到第二次调用
     const first = service.send({ sessionId: 1, content: "hi" });
     await expect(service.send({ sessionId: 1, content: "hi" })).rejects.toThrow(
-      "该会话已有进行中的请求",
+      "CONCURRENT_REQUEST",
     );
 
     // 首个请求完整走完只落库一条用户消息，被拒的并发请求未重复落库
-    await expect(first).rejects.toThrow("未选择模型");
+    await expect(first).rejects.toThrow("NO_MODEL");
     expect(sessions.appendMessage).toHaveBeenCalledTimes(1);
 
     // 早期失败已清理注册：后续请求不再报并发错误
     await expect(
       service.send({ sessionId: 1, content: "again" }),
-    ).rejects.toThrow("未选择模型");
+    ).rejects.toThrow("NO_MODEL");
   });
 });

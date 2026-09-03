@@ -146,15 +146,16 @@ export default class ChatService {
 
   async send(params: ChatSendParams, sender?: WebContents): Promise<void> {
     // 并发检查必须是首条语句；AbortController 在首个 await 前注册，消除 TOCTOU 窗口
+    // 业务错误 message 只传错误码（Electron invoke 拒绝时仅保留 message），渲染端映射 i18n
     if (this.aborts.has(params.sessionId)) {
-      throw new Error("该会话已有进行中的请求");
+      throw new Error("CONCURRENT_REQUEST");
     }
     const abort = new AbortController();
     this.aborts.set(params.sessionId, abort);
     try {
       const session = await this.sessions.getSession(params.sessionId);
       if (!session) {
-        throw new Error("会话不存在");
+        throw new Error("SESSION_NOT_FOUND");
       }
 
       // 请求级模型选择写入会话当前值（会话记住上次选择，spec §4.2）
@@ -190,14 +191,14 @@ export default class ChatService {
    */
   async regenerate(sessionId: number, sender?: WebContents): Promise<void> {
     if (this.aborts.has(sessionId)) {
-      throw new Error("该会话已有进行中的请求");
+      throw new Error("CONCURRENT_REQUEST");
     }
     const abort = new AbortController();
     this.aborts.set(sessionId, abort);
     try {
       const session = await this.sessions.getSession(sessionId);
       if (!session) {
-        throw new Error("会话不存在");
+        throw new Error("SESSION_NOT_FOUND");
       }
       const rows = await prisma.message.findMany({
         where: { sessionId },
@@ -211,7 +212,7 @@ export default class ChatService {
         }
       }
       if (lastUserIdx === -1) {
-        throw new Error("没有可重新生成的消息");
+        throw new Error("NOTHING_TO_REGENERATE");
       }
       const tailIds = rows.slice(lastUserIdx + 1).map((row) => row.id);
       if (tailIds.length > 0) {
@@ -236,11 +237,11 @@ export default class ChatService {
   ): Promise<void> {
     const session = await this.sessions.getSession(sessionId);
     if (!session) {
-      throw new Error("会话不存在");
+      throw new Error("SESSION_NOT_FOUND");
     }
     const modelId = await this.sessions.getEffectiveModelId(sessionId);
     if (!modelId) {
-      throw new Error("未选择模型，请先在输入框选择或设置工作空间默认模型");
+      throw new Error("NO_MODEL");
     }
     const modelRow = await prisma.model.findUnique({ where: { id: modelId } });
     const providerRow = modelRow
@@ -249,7 +250,7 @@ export default class ChatService {
         })
       : null;
     if (!modelRow || !providerRow) {
-      throw new Error("模型或服务商不存在");
+      throw new Error("MODEL_OR_PROVIDER_MISSING");
     }
     const assistantRow: AssistantRow | null = session.assistantId
       ? await prisma.assistant.findUnique({

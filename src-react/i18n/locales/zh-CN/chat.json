@@ -20,7 +20,15 @@
     "selectModel": "选择模型",
     "selectAssistant": "选择助手",
     "noAssistant": "不使用助手",
-    "modelRequired": "请先选择模型"
+    "modelRequired": "请先选择模型",
+    "paramOverrides": "参数覆盖",
+    "temp": "温度",
+    "topP": "Top P",
+    "maxTokens": "最大输出 Tokens"
+  },
+  "search": {
+    "placeholder": "搜索消息",
+    "noResults": "无匹配结果"
   },
   "message": {
     "thinking": "思考过程",
@@ -34,6 +42,14 @@
     "MODEL_NOT_FOUND": "模型不存在，请检查模型 ID",
     "TIMEOUT": "请求超时",
     "NETWORK": "网络错误，请检查接口地址与网络",
+    "CONCURRENT_REQUEST": "该会话已有进行中的请求",
+    "SESSION_NOT_FOUND": "会话不存在",
+    "NO_MODEL": "未选择模型，请先在输入框选择或设置工作空间默认模型",
+    "MODEL_OR_PROVIDER_MISSING": "模型或服务商不存在",
+    "NOTHING_TO_REGENERATE": "没有可重新生成的消息",
+    "MODEL_MISSING": "模型不存在",
+    "PROVIDER_MISSING": "服务商不存在",
+    "ASSISTANT_BUILTIN": "内置助手不可删除",
     "UNKNOWN": "未知错误"
   }
 }

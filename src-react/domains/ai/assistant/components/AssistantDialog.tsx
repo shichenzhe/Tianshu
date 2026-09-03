@@ -19,6 +19,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
 import AssistantApi, { type AssistantRecord } from "../../api/assistant.api";
+import { mapIpcError } from "../../chat/lib/error-message";
+import { diffOptionalString, diffOptionalValue } from "../../lib/update-diff";
 
 interface AssistantDialogProps {
   open: boolean;
@@ -77,14 +79,26 @@ export default function AssistantDialog({
     setSubmitting(true);
     try {
       if (editing) {
-        await AssistantApi.update({ id: editing.id, ...params });
+        // 编辑态差量提交：可空字段清除时传 null（undefined 会被 Prisma 跳过，旧值残留）
+        await AssistantApi.update({
+          id: editing.id,
+          name: params.name,
+          systemPrompt: params.systemPrompt,
+          icon: diffOptionalString(icon, editing.icon),
+          temperature: diffOptionalValue(
+            params.temperature,
+            editing.temperature,
+          ),
+          topP: diffOptionalValue(params.topP, editing.topP),
+          maxTokens: diffOptionalValue(params.maxTokens, editing.maxTokens),
+        });
       } else {
         await AssistantApi.create(params);
       }
       await queryClient.invalidateQueries({ queryKey: ["assistants"] });
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     } finally {
       setSubmitting(false);
     }

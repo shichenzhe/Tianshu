@@ -2,6 +2,7 @@ import { ipcMain } from "electron";
 import prisma from "../../../commons/prisma-client";
 import type {
   MessageRecord,
+  SearchMessageResult,
   SessionCreateParams,
   SessionRecord,
 } from "../../../../src-react/domains/ai/api/session.api";
@@ -212,15 +213,27 @@ export class SessionRepository {
     ).map((row) => this.toMessage(row));
   }
 
-  /** P0 历史搜索：LIKE 查询（spec §4.2） */
-  async searchMessages(keyword: string): Promise<MessageRecord[]> {
-    return (
+  /** P0 历史搜索：LIKE 查询（spec §4.2），附带所属会话信息供搜索结果跳转 */
+  async searchMessages(keyword: string): Promise<SearchMessageResult[]> {
+    const rows = (
       await prisma.message.findMany({
         where: { blocks: { contains: keyword } },
         orderBy: { createdAt: "desc" },
         take: 100,
       })
     ).map((row) => this.toMessage(row));
+    // 批量取关联会话（标题 + 工作空间），消息必属已有会话，缺失时兜底空值
+    const sessionIds = [...new Set(rows.map((row) => row.sessionId))];
+    const sessions = await prisma.session.findMany({
+      where: { id: { in: sessionIds } },
+      select: { id: true, workspaceId: true, title: true },
+    });
+    const byId = new Map(sessions.map((session) => [session.id, session]));
+    return rows.map((row) => ({
+      ...row,
+      workspaceId: byId.get(row.sessionId)?.workspaceId ?? 0,
+      sessionTitle: byId.get(row.sessionId)?.title ?? "",
+    }));
   }
 
   /** 解析生效模型：会话当前 > 工作空间默认（spec §4.2） */

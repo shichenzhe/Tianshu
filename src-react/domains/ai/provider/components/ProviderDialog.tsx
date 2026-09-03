@@ -30,6 +30,8 @@ import ProviderApi, {
   type ProviderRecord,
   type ProviderType,
 } from "../../api/provider.api";
+import { mapIpcError } from "../../chat/lib/error-message";
+import { diffOptionalString } from "../../lib/update-diff";
 
 interface ProviderDialogProps {
   open: boolean;
@@ -81,19 +83,27 @@ export default function ProviderDialog({
         name: name.trim(),
         type,
         baseUrl: baseUrl.trim(),
-        apiKey: apiKey.trim() || undefined,
-        extraHeaders: extraHeaders.trim() || undefined,
         enabled,
       };
       if (editing) {
-        await ProviderApi.update({ id: editing.id, ...shared });
+        // 编辑态差量提交：可空字段清除时传 null（undefined 会被 Prisma 跳过，旧值残留）
+        await ProviderApi.update({
+          id: editing.id,
+          ...shared,
+          apiKey: diffOptionalString(apiKey, editing.apiKey),
+          extraHeaders: diffOptionalString(extraHeaders, editing.extraHeaders),
+        });
       } else {
-        await ProviderApi.create(shared);
+        await ProviderApi.create({
+          ...shared,
+          apiKey: apiKey.trim() || undefined,
+          extraHeaders: extraHeaders.trim() || undefined,
+        });
       }
       await queryClient.invalidateQueries({ queryKey: ["providers"] });
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     } finally {
       setSubmitting(false);
     }

@@ -113,7 +113,8 @@ export class AssistantRepository {
   async delete(id: number): Promise<void> {
     const row = await prisma.assistant.findUnique({ where: { id } });
     if (row?.builtin) {
-      throw new Error("内置助手不可删除");
+      // 错误码由渲染端 mapIpcError 映射 i18n 文案
+      throw new Error("ASSISTANT_BUILTIN");
     }
     await prisma.assistant.delete({ where: { id } });
   }

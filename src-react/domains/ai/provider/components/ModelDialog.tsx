@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
 import ModelApi, { type ModelRecord } from "../../api/model.api";
+import { mapIpcError } from "../../chat/lib/error-message";
+import { diffOptionalString, diffOptionalValue } from "../../lib/update-diff";
 
 interface ModelDialogProps {
   open: boolean;
@@ -82,14 +84,29 @@ export default function ModelDialog({
     setSubmitting(true);
     try {
       if (editing) {
-        await ModelApi.update({ id: editing.id, ...params });
+        // 编辑态差量提交：可空字段清除时传 null（undefined 会被 Prisma 跳过，旧值残留）
+        await ModelApi.update({
+          id: editing.id,
+          modelId: params.modelId,
+          name: diffOptionalString(name, editing.name),
+          temperature: diffOptionalValue(
+            params.temperature,
+            editing.temperature,
+          ),
+          topP: diffOptionalValue(params.topP, editing.topP),
+          maxTokens: diffOptionalValue(params.maxTokens, editing.maxTokens),
+          contextWindow: diffOptionalValue(
+            params.contextWindow,
+            editing.contextWindow,
+          ),
+        });
       } else {
         await ModelApi.create({ providerId, ...params });
       }
       await queryClient.invalidateQueries({ queryKey: ["models"] });
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     } finally {
       setSubmitting(false);
     }

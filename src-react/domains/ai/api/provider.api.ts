@@ -39,8 +39,9 @@ export interface ProviderUpdateParams {
   name?: string;
   type?: ProviderType;
   baseUrl?: string;
-  apiKey?: string;
-  extraHeaders?: string;
+  /** 可空字段：null 表示清空（undefined = 不修改） */
+  apiKey?: string | null;
+  extraHeaders?: string | null;
   enabled?: boolean;
 }
 

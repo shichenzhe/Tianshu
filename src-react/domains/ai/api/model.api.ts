@@ -31,12 +31,13 @@ export interface ModelCreateParams {
 export interface ModelUpdateParams {
   id: number;
   modelId?: string;
-  name?: string;
+  /** 可空字段：null 表示清空（undefined = 不修改） */
+  name?: string | null;
   enabled?: boolean;
-  temperature?: number;
-  topP?: number;
-  maxTokens?: number;
-  contextWindow?: number;
+  temperature?: number | null;
+  topP?: number | null;
+  maxTokens?: number | null;
+  contextWindow?: number | null;
 }
 
 export interface TestConnectionResult {

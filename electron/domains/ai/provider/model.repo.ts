@@ -100,13 +100,15 @@ export class ModelRepository {
   }
 
   async test(id: number) {
+    // 前置校验缺失属业务错误：抛错误码（渲染端 mapIpcError 映射 i18n），
+    // 连通性结果（含上游 errorCode）仍按 TestConnectionResult 返回
     const model = await this.getById(id);
     if (!model) {
-      return { success: false, message: "模型不存在" };
+      throw new Error("MODEL_MISSING");
     }
     const provider = await this.providerRepo.getRuntimeInfo(model.providerId);
     if (!provider) {
-      return { success: false, message: "服务商不存在" };
+      throw new Error("PROVIDER_MISSING");
     }
     return testConnection(provider, model.modelId);
   }
@@ -114,7 +116,7 @@ export class ModelRepository {
   async listOllama(providerId: number) {
     const provider = await this.providerRepo.getRuntimeInfo(providerId);
     if (!provider) {
-      throw new Error("服务商不存在");
+      throw new Error("PROVIDER_MISSING");
     }
     return listOllamaModels(provider.baseUrl);
   }

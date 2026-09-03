@@ -27,6 +27,7 @@ import {
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
+import type { ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi } from "../../api/workspace.api";
 import SessionSidebar from "../components/SessionSidebar";
 import MessageList from "../components/MessageList";
@@ -34,6 +35,7 @@ import ChatInput from "../components/ChatInput";
 import ModelPicker from "../components/ModelPicker";
 import AssistantPicker from "../components/AssistantPicker";
 import { useChatSend } from "../hooks/use-chat-send";
+import { mapIpcError } from "../lib/error-message";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 const PROVIDERS_KEY = ["providers"] as const;
@@ -139,11 +141,11 @@ function ChatPane({ session, hasModel, onOpenAssistants }: ChatPaneProps) {
   const { t } = useTranslation(["chat", "ai"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
 
-  const handleSend = async (content: string) => {
+  const handleSend = async (content: string, overrides?: ChatModelParams) => {
     try {
-      await send(content);
+      await send(content, undefined, overrides);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     }
   };
 
@@ -151,7 +153,7 @@ function ChatPane({ session, hasModel, onOpenAssistants }: ChatPaneProps) {
     try {
       await regenerate();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     }
   };
 

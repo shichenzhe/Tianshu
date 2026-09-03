@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import AssistantApi from "../../api/assistant.api";
 import SessionApi from "../../api/session.api";
+import { mapIpcError } from "../lib/error-message";
 
 const ASSISTANTS_KEY = ["assistants"] as const;
 const SESSIONS_KEY = ["sessions"] as const;
@@ -45,7 +46,7 @@ export default function AssistantPicker({
       );
       await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     }
   };
 

@@ -19,6 +19,7 @@ import {
 import { ProviderApi } from "../../api/provider.api";
 import ModelApi from "../../api/model.api";
 import SessionApi from "../../api/session.api";
+import { mapIpcError } from "../lib/error-message";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
@@ -68,7 +69,7 @@ export default function ModelPicker({
       await SessionApi.setModel(sessionId, modelId);
       await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(mapIpcError(e));
     }
   };
 

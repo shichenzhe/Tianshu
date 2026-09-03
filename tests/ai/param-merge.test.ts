@@ -11,9 +11,9 @@ describe("三级参数合并", () => {
   });
 
   it("assistant 覆盖 model", () => {
-    expect(
-      mergeParams([{ temperature: 0.3 }, { temperature: 0.9 }]),
-    ).toEqual({ temperature: 0.9 });
+    expect(mergeParams([{ temperature: 0.3 }, { temperature: 0.9 }])).toEqual({
+      temperature: 0.9,
+    });
   });
 
   it("request 覆盖 assistant，未覆盖字段保留", () => {

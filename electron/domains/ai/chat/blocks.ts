@@ -28,16 +28,34 @@ export interface ToolCallBlock {
 }
 
 export type MessageBlock =
-  | TextBlock
-  | ThinkingBlock
-  | UsageBlock
-  | ToolCallBlock;
+  TextBlock | ThinkingBlock | UsageBlock | ToolCallBlock;
 
 /**
  * blocks 序列化为 message.blocks 列文本
  */
 export function serializeBlocks(blocks: MessageBlock[]): string {
   return JSON.stringify(blocks);
+}
+
+/**
+ * 按 type 校验块形状，缺必备字段的畸形块丢弃（历史数据容错）
+ */
+function isValidBlock(block: unknown): block is MessageBlock {
+  if (typeof block !== "object" || block === null) {
+    return false;
+  }
+  const b = block as Record<string, unknown>;
+  switch (b.type) {
+    case "text":
+    case "thinking":
+      return typeof b.text === "string";
+    case "usage":
+      return typeof b.input === "number" && typeof b.output === "number";
+    case "tool_call":
+      return typeof b.toolCallId === "string" && typeof b.toolName === "string";
+    default:
+      return false;
+  }
 }
 
 /**
@@ -49,12 +67,7 @@ export function parseBlocks(json: string): MessageBlock[] {
     if (!Array.isArray(parsed)) {
       return [];
     }
-    return parsed.filter(
-      (block): block is MessageBlock =>
-        typeof block === "object" &&
-        block !== null &&
-        typeof (block as MessageBlock).type === "string",
-    );
+    return parsed.filter(isValidBlock);
   } catch {
     return [];
   }

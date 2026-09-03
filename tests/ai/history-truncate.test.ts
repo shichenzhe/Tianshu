@@ -4,7 +4,9 @@ import {
   truncateHistory,
 } from "../../electron/domains/ai/chat/history-truncate";
 
-const msg = (text: string) => ({ blocks: JSON.stringify([{ type: "text", text }]) });
+const msg = (text: string) => ({
+  blocks: JSON.stringify([{ type: "text", text }]),
+});
 
 describe("历史截断", () => {
   it("estimateTokens 中文按长度一半向上取整", () => {

@@ -618,7 +618,11 @@ export default class ChatService {
     ipcMain.handle("skill:openDir", async (): Promise<string> => {
       const skillsDir = path.join(app.getPath("userData"), "skills");
       await fs.mkdir(skillsDir, { recursive: true });
-      await shell.openPath(skillsDir);
+      // openPath 失败时 resolve 而非 reject（返回错误串）——转 reject 让渲染层 toast
+      const openError = await shell.openPath(skillsDir);
+      if (openError) {
+        throw new Error(openError);
+      }
       return skillsDir;
     });
   }

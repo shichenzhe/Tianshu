@@ -268,7 +268,8 @@ describe("MCP 工具 execute", () => {
   });
 });
 
-describe("McpManager.reconnect", () => {  it("清旧工具后按新工具集重新注册", async () => {
+describe("McpManager.reconnect", () => {
+  it("清旧工具后按新工具集重新注册", async () => {
     const first = fakeClient([{ name: "old_tool" }]);
     const second = fakeClient([{ name: "new_a" }, { name: "new_b" }]);
     const { manager, createCalls } = makeManager([first.client, second.client]);

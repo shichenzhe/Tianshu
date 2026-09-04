@@ -170,7 +170,7 @@ function ChatPane({
   hasModel,
   onOpenSettings,
 }: ChatPaneProps) {
-  const { t } = useTranslation(["chat", "ai"]);
+  const { t } = useTranslation(["chat"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
 
   // 技能目录一键打开（P2 skill 无管理界面，以此保证发现性）
@@ -260,8 +260,10 @@ function ChatPane({
           />
           <TooltipProvider>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenu>
+              {/* 层级：DropdownMenu 最外（Trigger 依赖其 context）；TooltipTrigger 包在
+                  forwardRef 的 DropdownMenuTrigger 上（直接包 Root 会静默丢失锚定） */}
+              <DropdownMenu>
+                <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
@@ -272,31 +274,29 @@ function ChatPane({
                       <Settings2 className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="border border-border/50 rounded-lg shadow-lg"
+                </TooltipTrigger>
+                <TooltipContent>{t("chat:settings.title")}</TooltipContent>
+                <DropdownMenuContent
+                  align="start"
+                  className="border border-border/50 rounded-lg shadow-lg"
+                >
+                  <DropdownMenuItem onClick={() => onOpenSettings("providers")}>
+                    {t("chat:settings.providers")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => onOpenSettings("assistants")}
                   >
-                    <DropdownMenuItem
-                      onClick={() => onOpenSettings("providers")}
-                    >
-                      {t("chat:settings.providers")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => onOpenSettings("assistants")}
-                    >
-                      {t("chat:settings.assistants")}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onOpenSettings("mcp")}>
-                      {t("chat:settings.mcp")}
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={openSkillDir}>
-                      {t("chat:settings.skills")}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </TooltipTrigger>
-              <TooltipContent>{t("chat:settings.title")}</TooltipContent>
+                    {t("chat:settings.assistants")}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onOpenSettings("mcp")}>
+                    {t("chat:settings.mcp")}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={openSkillDir}>
+                    {t("chat:settings.skills")}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </Tooltip>
           </TooltipProvider>
           <ChatInput

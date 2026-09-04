@@ -16,6 +16,9 @@
     "manageModels": "Manage Models",
     "deleteConfirmTitle": "Delete Provider",
     "deleteConfirmDesc": "All model configs under this provider will be deleted as well. This cannot be undone.",
+    "presetLabel": "Quick start",
+    "presetPlaceholder": "Pick a provider template…",
+    "presetHint": "Fills name, protocol and base URL; API key still required",
     "typePlaceholders": {
       "openai-compatible": "https://api.deepseek.com/v1",
       "anthropic": "https://api.anthropic.com",

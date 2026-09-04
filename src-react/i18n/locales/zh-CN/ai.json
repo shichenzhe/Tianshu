@@ -16,6 +16,9 @@
     "manageModels": "管理模型",
     "deleteConfirmTitle": "删除服务商",
     "deleteConfirmDesc": "将同时删除该服务商下的全部模型配置，无法恢复。",
+    "presetLabel": "快速开始",
+    "presetPlaceholder": "从模板选择服务商…",
+    "presetHint": "选择后自动填入名称、协议与接口地址，API Key 仍需自行填写",
     "typePlaceholders": {
       "openai-compatible": "https://api.deepseek.com/v1",
       "anthropic": "https://api.anthropic.com",

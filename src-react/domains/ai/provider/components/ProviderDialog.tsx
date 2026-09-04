@@ -30,6 +30,7 @@ import ProviderApi, {
   type ProviderRecord,
   type ProviderType,
 } from "../../api/provider.api";
+import { PROVIDER_PRESETS } from "../model/presets";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { diffOptionalString } from "../../lib/update-diff";
 
@@ -52,6 +53,7 @@ export default function ProviderDialog({
   const [apiKey, setApiKey] = useState("");
   const [extraHeaders, setExtraHeaders] = useState("");
   const [enabled, setEnabled] = useState(true);
+  const [preset, setPreset] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -62,6 +64,7 @@ export default function ProviderDialog({
       setApiKey(editing?.apiKey ?? "");
       setExtraHeaders(editing?.extraHeaders ?? "");
       setEnabled(editing?.enabled ?? true);
+      setPreset(null);
     }
   }, [open, editing]);
 
@@ -118,6 +121,39 @@ export default function ProviderDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {!editing && (
+            <div className="space-y-1.5">
+              <Label>{t("ai:provider.presetLabel")}</Label>
+              <Select
+                value={preset ?? undefined}
+                onValueChange={(value) => {
+                  const found = PROVIDER_PRESETS.find((p) => p.label === value);
+                  if (found) {
+                    setName(found.label);
+                    setType(found.type);
+                    setBaseUrl(found.baseUrl);
+                  }
+                  setPreset(null);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={t("ai:provider.presetPlaceholder")}
+                  />
+                </SelectTrigger>
+                <SelectContent className="border border-border/50 rounded-lg shadow-lg">
+                  {PROVIDER_PRESETS.map((p) => (
+                    <SelectItem key={p.label} value={p.label}>
+                      {p.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t("ai:provider.presetHint")}
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>{t("ai:provider.name")}</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />

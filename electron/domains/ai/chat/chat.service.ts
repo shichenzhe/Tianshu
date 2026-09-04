@@ -1,7 +1,15 @@
 import { app, dialog, ipcMain, type WebContents } from "electron";
 import path from "node:path";
-import { generateText, streamText, stepCountIs } from "ai";
-import type { FlexibleSchema, LanguageModel, ToolSet } from "ai";
+import { z } from "zod";
+import {
+  generateText,
+  jsonSchema,
+  streamText,
+  stepCountIs,
+  type FlexibleSchema,
+  type LanguageModel,
+  type ToolSet,
+} from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import {
@@ -19,8 +27,9 @@ import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
 import { registry } from "../agent/tool-registry";
-import { loadSkills } from "../agent/skill-loader";
+import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
+import { makeReadSkillTool } from "../agent/read-skill";
 import type { ToolDefinition } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
 import type {
@@ -53,8 +62,11 @@ const TOOL_OUTPUT_SLICE = 2000;
 export interface AgentStreamOptions {
   sessionId: number;
   sessionWorkspaceId: number;
-  /** 规范化后的工作空间绝对路径（无尾部分隔符） */
-  workspacePath: string;
+  /**
+   * 绑定目录的规范化绝对路径（无尾部分隔符）；未绑定目录时为 undefined——
+   * 文件四件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
+   */
+  workspacePath?: string;
   /** write 授权实时判定（每次写入前查询，撤销立即生效，spec §1） */
   isWriteApproved: () => Promise<boolean>;
   /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
@@ -70,7 +82,10 @@ export interface ChatStreamOptions {
   contextWindow?: number;
   abortSignal?: AbortSignal;
   onChunk?: (chunk: ChatStreamChunk) => void;
-  /** 注入的工具定义（工作空间已绑定时由 service 传入注册表） */
+  /**
+   * 注入的工具定义（P2：service 组装——read_skill 常驻 + registry 注册工具，
+   * 未绑定目录时不含文件四件；runChatStream 侧要求与 agent 同时在场才启用工具）
+   */
   toolDefinitions?: ToolDefinition[];
   /** 工具执行/审批上下文；缺省时不注入工具（纯对话） */
   agent?: AgentStreamOptions;
@@ -175,7 +190,8 @@ async function executeToolSafe(
 ): Promise<string> {
   try {
     return await def.execute(
-      { workspacePath: agent.workspacePath, sessionId: agent.sessionId },
+      // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）
+      { workspacePath: agent.workspacePath ?? "", sessionId: agent.sessionId },
       input,
     );
   } catch (e) {
@@ -210,7 +226,8 @@ async function awaitApproval(
 
 /**
  * 工具调用全流程（包装注册表工具的 execute）：
- * write 未授权先挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
+ * write 未授权先挂起审批（mcp__ 写类不吃工作空间授权，始终挂起，spec 决策 #1）；
+ * 拒绝以文案回喂（循环继续）；中止竞速防流悬挂
  */
 async function runToolCall(
   def: ToolDefinition,
@@ -221,7 +238,10 @@ async function runToolCall(
   onChunk?: (chunk: ChatStreamChunk) => void,
   finalStates?: Map<string, ToolCallBlock["state"]>,
 ): Promise<string> {
-  if (def.kind === "write" && !(await agent.isWriteApproved())) {
+  if (
+    def.kind === "write" &&
+    (def.name.startsWith("mcp__") || !(await agent.isWriteApproved()))
+  ) {
     const decision = await awaitApproval(
       def,
       toolCallId,
@@ -273,7 +293,21 @@ async function runToolCall(
   return output;
 }
 
-/** 组装 SDK ToolSet：SDK 按 zod schema 自动校验 input，无需手动校验
+/**
+ * SDK inputSchema 分流（P2 硬 carry M4）：内置工具为 zod schema 原样注入；
+ * MCP 工具 parameters 是 JSON Schema 裸对象——SDK asSchema 会将其误当
+ * lazy schema 调用而崩溃，必须先经 jsonSchema() 包装
+ */
+function toInputSchema(
+  parameters: ToolDefinition["parameters"],
+): FlexibleSchema {
+  if (parameters instanceof z.ZodType) {
+    return parameters;
+  }
+  return jsonSchema(parameters as Parameters<typeof jsonSchema>[0]);
+}
+
+/** 组装 SDK ToolSet：SDK 按 inputSchema 自动校验 input，无需手动校验
  * （v7 事实核正：工具 schema 属性名为 inputSchema，非 parameters） */
 function buildToolSet(
   defs: ToolDefinition[],
@@ -285,9 +319,7 @@ function buildToolSet(
   for (const def of defs) {
     set[def.name] = {
       description: def.description,
-      // P2 T5 适配点：MCP 工具 parameters 为 JSON Schema 对象，SDK 运行时
-      // 需经 jsonSchema() 包装后再注入；此处先断言放宽让宽化类型通过编译
-      inputSchema: def.parameters as FlexibleSchema,
+      inputSchema: toInputSchema(def.parameters),
       // execute 第二参 options 携带 toolCallId 与 abortSignal（v7 ToolExecutionOptions）
       execute: (input, options) =>
         runToolCall(
@@ -677,28 +709,29 @@ export default class ChatService {
   }
 
   /**
-   * 工具注入决策（spec 决策 #9）：会话工作空间绑定目录 → 装配 agent 上下文；
-   * 未绑定/空目录 → 返回 undefined（纯对话，P0 体验零回归）
+   * agent 上下文装配（P2）：所有会话都具备——read_skill 与 mcp__ 工具不依赖
+   * 工作空间（spec 决策 #3 常驻注入），mcp__ 写类审批也始终可用（决策 #1）。
+   * workspacePath 仅在绑定目录后有值；isWriteApproved 实时查询（撤销立即生效）
    */
   private async resolveAgentOptions(
     session: { workspaceId: number },
     sessionId: number,
-  ): Promise<AgentStreamOptions | undefined> {
-    if (!session.workspaceId) {
-      return undefined;
-    }
-    const workspace = await this.sessions.getWorkspace(session.workspaceId);
-    const directoryPath = workspace?.directoryPath?.trim() || null;
-    if (!directoryPath) {
-      return undefined;
-    }
+  ): Promise<AgentStreamOptions> {
     const sessionWorkspaceId = session.workspaceId;
+    const workspace = sessionWorkspaceId
+      ? await this.sessions.getWorkspace(sessionWorkspaceId)
+      : null;
+    const directoryPath = workspace?.directoryPath?.trim() || null;
     return {
       sessionId,
       sessionWorkspaceId,
-      workspacePath: normalizeWorkspacePath(directoryPath),
+      workspacePath: directoryPath
+        ? normalizeWorkspacePath(directoryPath)
+        : undefined,
       isWriteApproved: async () => {
-        // 实时查询（非流开始快照）：撤销授权对流中后续写入立即生效（spec §1）
+        if (!directoryPath) {
+          return false;
+        }
         const ws = await prisma.workspace.findUnique({
           where: { id: sessionWorkspaceId },
         });
@@ -707,6 +740,22 @@ export default class ChatService {
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
     };
+  }
+
+  /**
+   * 注入工具集（P2 spec 决策 #3）：read_skill 常驻（未绑定目录也注入，与
+   * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 全量透传；
+   * 文件四件依赖工作空间路径，仅绑定目录后注入
+   */
+  private collectToolDefinitions(
+    agent: AgentStreamOptions,
+    skills: SkillInfo[],
+  ): ToolDefinition[] {
+    const registered = registry.getDefinitions();
+    const injected = agent.workspacePath
+      ? registered
+      : registered.filter((def) => def.name.startsWith("mcp__"));
+    return [makeReadSkillTool(skills), ...injected];
   }
 
   /**
@@ -787,7 +836,8 @@ export default class ChatService {
       }));
 
     const agent = await this.resolveAgentOptions(session, sessionId);
-    const skills = this.collectSkills(agent?.workspacePath);
+    // 同一次扫描喂两处：system prompt 技能清单 + read_skill 工具查表
+    const skills = this.collectSkills(agent.workspacePath);
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -804,7 +854,7 @@ export default class ChatService {
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,
         abortSignal: abort.signal,
-        toolDefinitions: agent ? registry.getDefinitions() : undefined,
+        toolDefinitions: this.collectToolDefinitions(agent, skills),
         agent,
         maxSteps,
         onChunk: (chunk) => {

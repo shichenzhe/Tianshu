@@ -72,6 +72,11 @@ interface ServerRecord {
   client?: McpClientLike;
   toolCount: number;
   error?: string;
+  /**
+   * 连接代际：connect 开始与 setEnabled(false) 各自递增；挂起的 connect 在
+   * await 恢复后核对代际，不符即整体丢弃结果（I1 竞态守卫）
+   */
+  generation: number;
 }
 
 /** 服务器内工具的统一前缀 */
@@ -126,6 +131,15 @@ export async function createDefaultClient(
   return client as McpClientLike;
 }
 
+/** 尽力关闭：close 失败静默——清理路径不得打断状态机与主流程 */
+async function closeQuietly(client: McpClientLike): Promise<void> {
+  try {
+    await client.close();
+  } catch {
+    // 断开失败不影响本地状态
+  }
+}
+
 export class McpManager {
   private readonly deps: McpManagerDeps;
   private readonly records = new Map<number, ServerRecord>();
@@ -140,21 +154,39 @@ export class McpManager {
     for (const row of rows) await this.connect(row);
   }
 
-  /** 连接并注册工具；重连前先注销旧工具；失败记 error 状态，不抛出 */
+  /**
+   * 连接并注册工具；重连前注销旧工具并尽力关闭旧连接（I2 泄漏修复）；
+   * 失败记 error 状态，不抛出。挂起期间发生重连/停用（代际失效）则整体丢弃
+   * 本次结果——不注册、不改状态，并尽力关闭新建的 client（I1 竞态守卫）
+   */
   async connect(row: McpServerConfig): Promise<void> {
     const record = this.ensureRecord(row);
+    const myGeneration = ++record.generation;
     record.state = "connecting";
     record.error = undefined;
+    const previousClient = record.client;
+    record.client = undefined;
     unregisterTools(toolPrefix(row.name));
+    if (previousClient) {
+      await closeQuietly(previousClient);
+    }
     try {
       const client = await this.deps.createClient(row);
       const tools = (await client.listTools()).tools ?? [];
+      if (this.isSuperseded(record, myGeneration)) {
+        await closeQuietly(client);
+        return;
+      }
       const defs = tools.map((tool) => this.toDefinition(row, client, tool));
       registerTools(defs);
       record.client = client;
       record.state = "connected";
       record.toolCount = defs.length;
     } catch (e) {
+      // 过期连接的失败不得覆盖接管者（新一轮 connect/停用）已写入的状态
+      if (this.isSuperseded(record, myGeneration)) {
+        return;
+      }
       record.client = undefined;
       record.state = "error";
       record.toolCount = 0;
@@ -162,27 +194,31 @@ export class McpManager {
     }
   }
 
+  /** 本次连接已过期：期间发生新一轮 connect（代际前移）或已停用 */
+  private isSuperseded(record: ServerRecord, myGeneration: number): boolean {
+    return record.generation !== myGeneration || record.state === "disabled";
+  }
+
   /** connect 的别名（语义：先清旧再连） */
   async reconnect(row: McpServerConfig): Promise<void> {
     return this.connect(row);
   }
 
-  /** 停用：注销工具并断开（close 失败忽略）；启用：重新连接 */
+  /**
+   * 停用：代际前移使挂起中的 connect 结果作废，注销工具并断开；启用：重新连接
+   */
   async setEnabled(row: McpServerConfig, enabled: boolean): Promise<void> {
     if (enabled) return this.connect(row);
-    unregisterTools(toolPrefix(row.name));
     const record = this.ensureRecord(row);
+    record.generation++;
+    unregisterTools(toolPrefix(row.name));
     const client = record.client;
     record.client = undefined;
     record.state = "disabled";
     record.toolCount = 0;
     record.error = undefined;
     if (client) {
-      try {
-        await client.close();
-      } catch {
-        // 断开失败不影响本地禁用状态
-      }
+      await closeQuietly(client);
     }
   }
 
@@ -199,7 +235,7 @@ export class McpManager {
   private ensureRecord(row: McpServerConfig): ServerRecord {
     let record = this.records.get(row.id);
     if (!record) {
-      record = { row, state: "connecting", toolCount: 0 };
+      record = { row, state: "connecting", toolCount: 0, generation: 0 };
       this.records.set(row.id, record);
     }
     record.row = row;

@@ -40,6 +40,20 @@ function fakeClient(tools: object[] = [], opts?: { throwOnCall?: boolean }) {
   return { client, closeCount: () => closeCount };
 }
 
+/** listTools 挂起直至 gate resolve 的 fake client（connect 竞态守卫用） */
+function gatedClient(tools: object[], gate: Promise<void>) {
+  let closeCount = 0;
+  const client: McpClientLike = {
+    listTools: () =>
+      gate.then(() => ({ tools }) as ReturnType<McpClientLike["listTools"]>),
+    callTool: async () => ({ content: [{ type: "text", text: "ok" }] }),
+    close: async () => {
+      closeCount++;
+    },
+  };
+  return { client, closeCount: () => closeCount };
+}
+
 function makeManager(
   clients: McpClientLike[],
   rows: McpServerConfig[] = [],
@@ -269,6 +283,110 @@ describe("McpManager.reconnect", () => {
     ]);
     expect(createCalls()).toBe(2);
     expect(manager.getStatuses()[0].toolCount).toBe(2);
+  });
+});
+
+describe("McpManager 连接竞态守卫与旧连接释放", () => {
+  it("connect 挂起中停用 → 恢复后结果作废：不注册、状态保持 disabled、新 client 被 close", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const late = gatedClient([{ name: "late_tool" }], gate);
+    const { manager } = makeManager([late.client]);
+
+    const connecting = manager.connect(server);
+    // listTools 挂起中停用：代际前移 + 置 disabled
+    await manager.setEnabled(server, false);
+    release();
+    await connecting;
+
+    expect(mcpDefs()).toEqual([]);
+    expect(manager.getStatuses()[0]).toEqual({
+      id: 1,
+      name: "srv",
+      state: "disabled",
+      toolCount: 0,
+      error: undefined,
+    });
+    expect(late.closeCount()).toBe(1);
+  });
+
+  it("connect 挂起中重连 → 旧代际结果作废（其 client 被 close），新代际正常注册", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const stale = gatedClient([{ name: "stale_tool" }], gate);
+    const fresh = fakeClient([{ name: "fresh_tool" }]);
+    const { manager } = makeManager([stale.client, fresh.client]);
+
+    const first = manager.connect(server);
+    // 第二次 connect 立即代际前移并完成注册（其 listTools 不挂起）
+    await manager.reconnect(server);
+    release();
+    await first;
+
+    expect(mcpDefs().map((d) => d.name)).toEqual(["mcp__srv__fresh_tool"]);
+    expect(stale.closeCount()).toBe(1);
+    expect(fresh.closeCount()).toBe(0);
+    expect(manager.getStatuses()[0]).toMatchObject({
+      state: "connected",
+      toolCount: 1,
+    });
+  });
+
+  it("reconnect 成功路径：旧 client 尽力关闭且旧工具清空、新工具注册", async () => {
+    const first = fakeClient([{ name: "old_tool" }]);
+    const second = fakeClient([{ name: "new_tool" }]);
+    const { manager } = makeManager([first.client, second.client]);
+    await manager.connect(server);
+    expect(first.closeCount()).toBe(0);
+
+    await manager.reconnect(server);
+
+    expect(first.closeCount()).toBe(1);
+    expect(second.closeCount()).toBe(0);
+    expect(mcpDefs().map((d) => d.name)).toEqual(["mcp__srv__new_tool"]);
+    expect(manager.getStatuses()[0].toolCount).toBe(1);
+  });
+
+  it("挂起中停用后 createClient 才失败 → 不以 error 覆盖 disabled 状态", async () => {
+    let rejectClient!: (e: Error) => void;
+    // 首个 createClient 永不成功：停用后才拒绝，命中「过期 connect 的 catch」路径
+    const failLater = new Promise<never>((_, reject) => {
+      rejectClient = reject;
+    });
+    let calls = 0;
+    const manager = new McpManager({
+      createClient: async () => {
+        calls++;
+        if (calls === 1) return failLater;
+        return {
+          listTools: async () => ({ tools: [{ name: "t2" }] }),
+          callTool: async () => ({ content: [] }),
+          close: async () => {},
+        };
+      },
+      prisma: { mcpServer: { findMany: async () => [] } },
+    });
+
+    const first = manager.connect(server);
+    await manager.setEnabled(server, false);
+    rejectClient(new Error("spawn failed"));
+    await first;
+
+    // 过期 connect 的失败不覆盖 disabled 状态
+    expect(manager.getStatuses()[0].state).toBe("disabled");
+    expect(mcpDefs()).toEqual([]);
+
+    // 状态未被污染：后续重连照常成功
+    await manager.reconnect(server);
+    expect(manager.getStatuses()[0]).toMatchObject({
+      state: "connected",
+      toolCount: 1,
+    });
+    expect(mcpDefs().map((d) => d.name)).toEqual(["mcp__srv__t2"]);
   });
 });
 

@@ -54,6 +54,13 @@ export type IPCChannel =
   | "chat:regenerate"
   | "chat:stop"
   | "agent:approve"
+  | "mcpServer:list"
+  | "mcpServer:create"
+  | "mcpServer:update"
+  | "mcpServer:delete"
+  | "mcpServer:reconnect"
+  | "mcpServer:setEnabled"
+  | "mcpServer:statuses"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"

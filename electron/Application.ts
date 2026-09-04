@@ -13,6 +13,7 @@ import {
   createDefaultClient,
   parseMcpRow,
 } from "./domains/ai/agent/mcp-manager";
+import { McpRepository } from "./domains/ai/mcp/mcp.repo";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -104,8 +105,9 @@ export default class Application {
     new AssistantRepository();
     const sessionRepo = new SessionRepository();
     new ChatService(sessionRepo);
-    // MCP 工具接入：fire-and-forget 启动连接，失败不影响应用启动
-    // （T6 将以 mcp repo 替换此处的临时行解析）
+    // MCP 工具接入：manager 负责连接生命周期与工具注册；repo 负责 CRUD IPC 并联动
+    // manager（create/update/delete/setEnabled/reconnect）。启动连接为 fire-and-forget，
+    // 失败不影响应用启动（此处 wrapper 过滤 enabled 行，仅启动路径使用）
     const mcpManager = new McpManager({
       createClient: createDefaultClient,
       prisma: {
@@ -119,6 +121,7 @@ export default class Application {
         },
       },
     });
+    new McpRepository(prisma, mcpManager);
     void mcpManager
       .startupConnectAll()
       .catch((e) => Log.error("MCP 启动连接失败", e));

@@ -24,6 +24,10 @@ interface MessageListProps {
   onRegenerate?: () => void;
 }
 
+/** ApprovalBanner 接口必需的决议回调；可见性纯 store 态门控，本地无需记标记。
+ *  置于模块级保持引用稳定，避免每次渲染创建新回调击穿 ApprovalBanner 的 memo */
+const noopOnDecided = () => {};
+
 export default function MessageList({
   sessionId,
   workspaceId = null,
@@ -177,7 +181,7 @@ export default function MessageList({
                       toolName={tool.toolName}
                       argSummary={argSummary}
                       rememberAvailable={rememberAvailable}
-                      onDecided={() => {}}
+                      onDecided={noopOnDecided}
                     />
                   )}
                 </div>

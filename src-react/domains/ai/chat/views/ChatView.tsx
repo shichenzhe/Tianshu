@@ -151,26 +151,43 @@ function ChatPane({
   const { t } = useTranslation(["chat", "ai"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
 
-  // Agent 进度数据：选择器只返回原始值（条数/工具名字符串），流式 delta
+  // Agent 进度数据：选择器只返回原始值（活跃工具 id/名、步数），流式 delta
   // 不触发本面板重渲染，仅轮次切换或活跃工具变化时更新
-  const agentStepCount = useChatStore(
-    (state) => state.streams[session.id]?.tools.order.length ?? 0,
-  );
-  const activeTool = useChatStore((state) => {
+  const activeToolId = useChatStore((state) => {
     const tools = state.streams[session.id]?.tools;
     if (!tools) {
       return undefined;
     }
     for (let i = tools.order.length - 1; i >= 0; i -= 1) {
-      const entry = tools.map[tools.order[i]];
+      const id = tools.order[i];
+      const entry = tools.map[id];
       if (
         entry &&
         (entry.state === "running" || entry.state === "awaiting-approval")
       ) {
-        return entry.toolName;
+        return id;
       }
     }
     return undefined;
+  });
+  const activeTool = useChatStore((state) => {
+    if (!activeToolId) {
+      return undefined;
+    }
+    return state.streams[session.id]?.tools.map[activeToolId]?.toolName;
+  });
+  // 工具执行中：步数 = 该工具在调用序中的位置（从 1 计）；
+  // 纯文本生成轮：步数 = 下一轮 = 已有工具条数 + 1
+  const stepCount = useChatStore((state) => {
+    const tools = state.streams[session.id]?.tools;
+    if (!tools) {
+      return 1;
+    }
+    if (activeToolId) {
+      const index = tools.order.indexOf(activeToolId);
+      return (index === -1 ? tools.order.length : index) + 1;
+    }
+    return tools.order.length + 1;
   });
 
   const handleSend = async (content: string, overrides?: ChatModelParams) => {
@@ -198,7 +215,7 @@ function ChatPane({
         onRegenerate={handleRegenerate}
       />
       {sending && (
-        <AgentProgress stepCount={agentStepCount + 1} activeTool={activeTool} />
+        <AgentProgress stepCount={stepCount} activeTool={activeTool} />
       )}
       <div className="border-t border-border/50 p-4">
         <div className="flex items-end gap-2">

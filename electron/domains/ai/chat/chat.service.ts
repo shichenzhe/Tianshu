@@ -1,4 +1,4 @@
-import { dialog, ipcMain, type WebContents } from "electron";
+import { app, dialog, ipcMain, type WebContents } from "electron";
 import path from "node:path";
 import { generateText, streamText, stepCountIs } from "ai";
 import type { LanguageModel, ToolSet } from "ai";
@@ -19,6 +19,8 @@ import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
 import { registry } from "../agent/tool-registry";
+import { loadSkills } from "../agent/skill-loader";
+import { buildSystemPrompt } from "../agent/skill-prompt";
 import type { ToolDefinition } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
 import type {
@@ -706,6 +708,23 @@ export default class ChatService {
   }
 
   /**
+   * 技能清单即时扫描（设计 spec §2）：每次 send 现算、无缓存——增删技能免重启生效；
+   * 用户级目录始终加载，工作空间级仅在绑定目录时追加（数组序即优先级，同名用户级胜）
+   */
+  private collectSkills(workspaceDir?: string) {
+    const dirs: Array<{ dir: string; source: "user" | "workspace" }> = [
+      { dir: path.join(app.getPath("userData"), "skills"), source: "user" },
+    ];
+    if (workspaceDir) {
+      dirs.push({
+        dir: path.join(workspaceDir, ".mirror", "skills"),
+        source: "workspace",
+      });
+    }
+    return loadSkills(dirs);
+  }
+
+  /**
    * 通用编排：解析模型/助手 → 合并参数 → 截断历史 → agent 流式执行 → 持久化
    * （AbortController 由调用方在首个 await 前注册并传入，此处负责 finally 清理）
    */
@@ -766,6 +785,7 @@ export default class ChatService {
       }));
 
     const agent = await this.resolveAgentOptions(session, sessionId);
+    const skills = this.collectSkills(agent?.workspacePath);
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -777,7 +797,7 @@ export default class ChatService {
           },
           modelRow.modelId,
         ),
-        system: assistantRow?.systemPrompt,
+        system: buildSystemPrompt(assistantRow?.systemPrompt, skills),
         history,
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,

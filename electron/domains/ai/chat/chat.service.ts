@@ -1,16 +1,29 @@
 import { ipcMain, type WebContents } from "electron";
-import { generateText, streamText } from "ai";
-import type { LanguageModel } from "ai";
+import path from "node:path";
+import { generateText, streamText, stepCountIs } from "ai";
+import type { LanguageModel, ToolSet } from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
-import { parseBlocks, serializeBlocks, type MessageBlock } from "./blocks";
+import {
+  blocksToModelMessages,
+  parseBlocks,
+  serializeBlocks,
+  type MessageBlock,
+  type TextBlock,
+  type ThinkingBlock,
+  type ToolCallBlock,
+} from "./blocks";
 import { mergeParams, type ChatModelParams } from "./param-merge";
 import { truncateHistory } from "./history-truncate";
 import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
+import { registry } from "../agent/tool-registry";
+import type { ToolDefinition } from "../agent/file-tools";
+import { ApprovalCoordinator } from "../agent/approval";
 import type {
   ChatSendParams,
+  ChatStatusResult,
   ChatStreamChunk,
 } from "../../../../src-react/domains/ai/api/chat.api";
 
@@ -18,15 +31,48 @@ type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
 >;
 
+/** 步数上限保险丝（spec 决策 #3：宽上限，上下文截断为自然限界） */
+const DEFAULT_MAX_STEPS = 50;
+
+/** write 工具被用户拒绝时的回喂文案（spec 决策 #4：拒绝后循环继续） */
+const TOOL_DENIED_OUTPUT = "用户拒绝了此操作";
+
+/** 工具执行被中止时的回喂文案 */
+const TOOL_ABORTED_OUTPUT = "已中断";
+
+/** 工具输出 chunk / 落库截断上限，防止超长输出撑爆渲染层与 DB */
+const TOOL_OUTPUT_SLICE = 2000;
+
+/**
+ * agent 上下文（P1）：工具执行与审批所需的最小注入集，
+ * 由 ChatService 装配（prisma / ApprovalCoordinator），runChatStream 保持纯函数可测
+ */
+export interface AgentStreamOptions {
+  sessionId: number;
+  sessionWorkspaceId: number;
+  /** 规范化后的工作空间绝对路径（无尾部分隔符） */
+  workspacePath: string;
+  /** write 授权实时判定（每次写入前查询，撤销立即生效，spec §1） */
+  isWriteApproved: () => Promise<boolean>;
+  /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
+  requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
+}
+
 export interface ChatStreamOptions {
   model: LanguageModel;
   system?: string;
-  /** 历史消息（含本次用户消息；函数内部截断并抽取 text 为 content） */
+  /** 历史消息（含本次用户消息；函数内部截断并转换为 ModelMessage） */
   history: Array<{ role: "user" | "assistant"; blocks: string }>;
   params: ChatModelParams;
   contextWindow?: number;
   abortSignal?: AbortSignal;
   onChunk?: (chunk: ChatStreamChunk) => void;
+  /** 注入的工具定义（工作空间已绑定时由 service 传入注册表） */
+  toolDefinitions?: ToolDefinition[];
+  /** 工具执行/审批上下文；缺省时不注入工具（纯对话） */
+  agent?: AgentStreamOptions;
+  /** SDK 多步循环步数上限（保险丝），默认 50 */
+  maxSteps?: number;
 }
 
 export interface ChatStreamResult {
@@ -35,29 +81,335 @@ export interface ChatStreamResult {
   errorMessage?: string;
 }
 
+/** 审批横幅直显的参数摘要：优先路径，否则 JSON 截断 */
+function summarizeArgs(toolName: string, input: unknown): string {
+  const record = (
+    typeof input === "object" && input !== null ? input : {}
+  ) as Record<string, unknown>;
+  if (typeof record.path === "string" && record.path) {
+    return `${toolName} → ${record.path}`;
+  }
+  try {
+    return JSON.stringify(input).slice(0, 100);
+  } catch {
+    return toolName;
+  }
+}
+
+/** 工作空间路径规范化：resolve 绝对化并去尾部分隔符（T2 review carry） */
+export function normalizeWorkspacePath(directoryPath: string): string {
+  const resolved = path.resolve(directoryPath);
+  return resolved.length > 1 && resolved.endsWith(path.sep)
+    ? resolved.slice(0, -1)
+    : resolved;
+}
+
 /**
- * 流式执行核心（可注入 model，供单测）
+ * promise 与中止信号竞速：SDK 流迭代会等待 execute settle，用户中止时
+ * 必须主动了结（审批挂起/长执行场景），否则整条流永久悬挂
+ */
+function raceWithAbort<T>(
+  promise: Promise<T>,
+  abortSignal: AbortSignal | undefined,
+  onAbort: () => T,
+): Promise<T> {
+  if (!abortSignal) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const detach = () => abortSignal.removeEventListener("abort", onAbortEvent);
+    const onAbortEvent = () => {
+      detach();
+      resolve(onAbort());
+    };
+    if (abortSignal.aborted) {
+      onAbortEvent();
+      return;
+    }
+    abortSignal.addEventListener("abort", onAbortEvent, { once: true });
+    promise.then(
+      (value) => {
+        detach();
+        resolve(value);
+      },
+      (error) => {
+        detach();
+        reject(error);
+      },
+    );
+  });
+}
+
+/** 挂起等待审批：推 awaiting-approval 与 approval-request 两 chunk 后等待决议 */
+async function requestToolApproval(
+  def: ToolDefinition,
+  toolCallId: string,
+  input: unknown,
+  agent: AgentStreamOptions,
+  onChunk?: (chunk: ChatStreamChunk) => void,
+): Promise<boolean> {
+  const argSummary = summarizeArgs(def.name, input);
+  onChunk?.({
+    type: "tool-update",
+    toolCallId,
+    toolName: def.name,
+    state: "awaiting-approval",
+  });
+  onChunk?.({
+    type: "approval-request",
+    toolCallId,
+    toolName: def.name,
+    argSummary,
+  });
+  return agent.requestApproval(toolCallId, argSummary);
+}
+
+/** 工具执行异常兜底：转「错误:」文案回喂，避免 tool-error 打断流 */
+async function executeToolSafe(
+  def: ToolDefinition,
+  agent: AgentStreamOptions,
+  input: unknown,
+): Promise<string> {
+  try {
+    return await def.execute(
+      { workspacePath: agent.workspacePath, sessionId: agent.sessionId },
+      input,
+    );
+  } catch (e) {
+    return `错误: ${e instanceof Error ? e.message : String(e)}`;
+  }
+}
+
+/** 审批决议类型：aborted 与用户拒绝区分（前者落 error 终态） */
+type ApprovalDecision = "approved" | "denied" | "aborted";
+
+function toApprovalDecision(approved: boolean): ApprovalDecision {
+  return approved ? "approved" : "denied";
+}
+
+/** 审批决议（含中止竞速）：等待用户决议或中止信号先到 */
+async function awaitApproval(
+  def: ToolDefinition,
+  toolCallId: string,
+  input: unknown,
+  agent: AgentStreamOptions,
+  abortSignal: AbortSignal | undefined,
+  onChunk?: (chunk: ChatStreamChunk) => void,
+): Promise<ApprovalDecision> {
+  return raceWithAbort(
+    requestToolApproval(def, toolCallId, input, agent, onChunk).then(
+      toApprovalDecision,
+    ),
+    abortSignal,
+    () => "aborted",
+  );
+}
+
+/**
+ * 工具调用全流程（包装注册表工具的 execute）：
+ * write 未授权先挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
+ */
+async function runToolCall(
+  def: ToolDefinition,
+  agent: AgentStreamOptions,
+  toolCallId: string,
+  input: unknown,
+  abortSignal: AbortSignal | undefined,
+  onChunk?: (chunk: ChatStreamChunk) => void,
+  finalStates?: Map<string, ToolCallBlock["state"]>,
+): Promise<string> {
+  if (def.kind === "write" && !(await agent.isWriteApproved())) {
+    const decision = await awaitApproval(
+      def,
+      toolCallId,
+      input,
+      agent,
+      abortSignal,
+      onChunk,
+    );
+    if (decision === "aborted") {
+      finalStates?.set(toolCallId, "error");
+      return TOOL_ABORTED_OUTPUT;
+    }
+    if (decision === "denied") {
+      finalStates?.set(toolCallId, "denied");
+      onChunk?.({
+        type: "tool-update",
+        toolCallId,
+        toolName: def.name,
+        state: "denied",
+        output: TOOL_DENIED_OUTPUT,
+      });
+      return TOOL_DENIED_OUTPUT;
+    }
+  }
+  onChunk?.({
+    type: "tool-update",
+    toolCallId,
+    toolName: def.name,
+    state: "running",
+  });
+  const output = await raceWithAbort(
+    executeToolSafe(def, agent, input),
+    abortSignal,
+    () => {
+      finalStates?.set(toolCallId, "error");
+      return TOOL_ABORTED_OUTPUT;
+    },
+  );
+  if (abortSignal?.aborted) {
+    return output;
+  }
+  onChunk?.({
+    type: "tool-update",
+    toolCallId,
+    toolName: def.name,
+    state: output.startsWith("错误:") ? "error" : "done",
+    output: output.slice(0, TOOL_OUTPUT_SLICE),
+  });
+  return output;
+}
+
+/** 组装 SDK ToolSet：SDK 按 zod schema 自动校验 input，无需手动校验
+ * （v7 事实核正：工具 schema 属性名为 inputSchema，非 parameters） */
+function buildToolSet(
+  defs: ToolDefinition[],
+  agent: AgentStreamOptions,
+  onChunk?: (chunk: ChatStreamChunk) => void,
+  finalStates?: Map<string, ToolCallBlock["state"]>,
+): ToolSet {
+  const set: ToolSet = {};
+  for (const def of defs) {
+    set[def.name] = {
+      description: def.description,
+      inputSchema: def.parameters,
+      // execute 第二参 options 携带 toolCallId 与 abortSignal（v7 ToolExecutionOptions）
+      execute: (input, options) =>
+        runToolCall(
+          def,
+          agent,
+          options.toolCallId,
+          input,
+          options.abortSignal,
+          onChunk,
+          finalStates,
+        ),
+    };
+  }
+  return set;
+}
+
+/** text/thinking 增量：无开放块则新起一块（工具调用后的文本另起新块，保序） */
+function appendDelta<T extends TextBlock | ThinkingBlock>(
+  blocks: MessageBlock[],
+  open: T | null,
+  type: T["type"],
+  delta: string,
+  onChunk?: (chunk: ChatStreamChunk) => void,
+): T {
+  if (!open) {
+    open = { type, text: "" } as T;
+    blocks.push(open);
+  }
+  open.text += delta;
+  onChunk?.(
+    type === "text"
+      ? { type: "text-delta", text: delta }
+      : { type: "reasoning-delta", text: delta },
+  );
+  return open;
+}
+
+function asArgs(input: unknown): Record<string, unknown> {
+  return input && typeof input === "object" && !Array.isArray(input)
+    ? (input as Record<string, unknown>)
+    : {};
+}
+
+/** tool-call part：关闭开放块语义由调用方处理，此处落块并推 ready chunk */
+function handleToolCallPart(
+  blocks: MessageBlock[],
+  toolBlocks: Map<string, ToolCallBlock>,
+  part: { toolCallId: string; toolName: string; input: unknown },
+  onChunk?: (chunk: ChatStreamChunk) => void,
+): void {
+  const block: ToolCallBlock = {
+    type: "tool_call",
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    args: asArgs(part.input),
+    state: "ready",
+  };
+  blocks.push(block);
+  toolBlocks.set(block.toolCallId, block);
+  onChunk?.({
+    type: "tool-update",
+    toolCallId: block.toolCallId,
+    toolName: block.toolName,
+    args: block.args,
+    state: "ready",
+  });
+}
+
+/** tool-result part：按拒绝/错误/成功落终态（拒绝/中止由 execute 包装器标记） */
+function finalizeToolBlock(
+  block: ToolCallBlock | undefined,
+  output: string,
+  finalStates: Map<string, ToolCallBlock["state"]>,
+): void {
+  if (!block) {
+    return;
+  }
+  block.output = output;
+  block.state =
+    finalStates.get(block.toolCallId) ??
+    (output.startsWith("错误:") ? "error" : "done");
+}
+
+function markToolError(block: ToolCallBlock | undefined, error: unknown): void {
+  if (!block) {
+    return;
+  }
+  block.state = "error";
+  block.output = `错误: ${error instanceof Error ? error.message : String(error)}`;
+}
+
+/** 中断/异常时未到达终态的工具块记 error("已中断")（spec §1 持久化决策） */
+function finalizeInterruptedToolBlocks(
+  toolBlocks: Map<string, ToolCallBlock>,
+): void {
+  const nonTerminal = new Set(["ready", "awaiting-approval", "running"]);
+  for (const block of toolBlocks.values()) {
+    if (nonTerminal.has(block.state)) {
+      block.state = "error";
+      block.output = "已中断";
+    }
+  }
+}
+
+/**
+ * 流式执行核心（可注入 model 与工具，供单测）。
+ * 传入 toolDefinitions + agent 时启用 SDK 内建多步工具循环
+ * （stopWhen 保险丝），tool-result 自动回喂下一步；否则与 P0 行为一致
  */
 export async function runChatStream(
   options: ChatStreamOptions,
 ): Promise<ChatStreamResult> {
-  let text = "";
-  let thinking = "";
+  const blocks: MessageBlock[] = [];
+  const toolBlocks = new Map<string, ToolCallBlock>();
+  const finalStates = new Map<string, ToolCallBlock["state"]>();
+  let openText: TextBlock | null = null;
+  let openThinking: ThinkingBlock | null = null;
   let usage: { input: number; output: number } | undefined;
   let errorCode: string | undefined;
   let errorMessage: string | undefined;
 
-  const messages = truncateHistory(options.history, options.contextWindow).map(
-    (m) => ({
-      role: m.role,
-      content: parseBlocks(m.blocks)
-        .filter((b) => b.type === "text")
-        .map((b) => (b as { text: string }).text)
-        .join("\n"),
-    }),
-  );
+  const messages = truncateHistory(
+    options.history,
+    options.contextWindow,
+  ).flatMap((m) => blocksToModelMessages(parseBlocks(m.blocks), m.role));
 
-  const result = streamText({
+  const streamOptions = {
     model: options.model,
     system: options.system,
     messages,
@@ -65,17 +417,58 @@ export async function runChatStream(
     topP: options.params.topP,
     maxOutputTokens: options.params.maxTokens,
     abortSignal: options.abortSignal,
-  });
+  };
+  const tools =
+    options.agent && options.toolDefinitions?.length
+      ? buildToolSet(
+          options.toolDefinitions,
+          options.agent,
+          options.onChunk,
+          finalStates,
+        )
+      : undefined;
+  const result = tools
+    ? streamText({
+        ...streamOptions,
+        tools,
+        stopWhen: stepCountIs(options.maxSteps ?? DEFAULT_MAX_STEPS),
+      })
+    : streamText(streamOptions);
 
   try {
     for await (const part of result.stream) {
       if (part.type === "text-delta") {
-        text += part.text;
-        options.onChunk?.({ type: "text-delta", text: part.text });
+        openText = appendDelta(
+          blocks,
+          openText,
+          "text",
+          part.text,
+          options.onChunk,
+        );
       } else if (part.type === "reasoning-delta") {
-        thinking += part.text;
-        options.onChunk?.({ type: "reasoning-delta", text: part.text });
+        openThinking = appendDelta(
+          blocks,
+          openThinking,
+          "thinking",
+          part.text,
+          options.onChunk,
+        );
+      } else if (part.type === "tool-call") {
+        // 工具调用打断文本流：关闭开放块，后续文本另起新块
+        openText = null;
+        openThinking = null;
+        handleToolCallPart(blocks, toolBlocks, part, options.onChunk);
+      } else if (part.type === "tool-result") {
+        finalizeToolBlock(
+          toolBlocks.get(part.toolCallId),
+          String(part.output ?? ""),
+          finalStates,
+        );
+      } else if (part.type === "tool-error") {
+        markToolError(toolBlocks.get(part.toolCallId), part.error);
       } else if (part.type === "finish") {
+        openText = null;
+        openThinking = null;
         // 错误路径的 finish 无真实 token 数（undefined），不产出 usage
         const { inputTokens, outputTokens } = part.totalUsage;
         if (inputTokens !== undefined || outputTokens !== undefined) {
@@ -102,23 +495,42 @@ export async function runChatStream(
       errorMessage = error instanceof Error ? error.message : String(error);
     }
   }
+  finalizeInterruptedToolBlocks(toolBlocks);
 
-  const blocks: MessageBlock[] = [];
-  if (thinking) {
-    blocks.push({ type: "thinking", text: thinking });
-  }
-  if (text) {
-    blocks.push({ type: "text", text });
-  }
   if (usage) {
     blocks.push({ type: "usage", input: usage.input, output: usage.output });
   }
   return { blocks, errorCode, errorMessage };
 }
 
+/** 流式工具态快照（chat:status 恢复渲染层 agent 态用，与 T6 store 同构） */
+export interface ToolSnapshotState {
+  toolName: string;
+  args?: unknown;
+  state: string;
+  output?: string;
+  argSummary?: string;
+}
+
+interface StreamSnapshot {
+  text: string;
+  thinking: string;
+  tools: { order: string[]; map: Record<string, ToolSnapshotState> };
+}
+
+function emptySnapshot(): StreamSnapshot {
+  return { text: "", thinking: "", tools: { order: [], map: {} } };
+}
+
+type ToolStreamChunk = Extract<
+  ChatStreamChunk,
+  { type: "tool-update" | "approval-request" }
+>;
+
 export default class ChatService {
   private aborts = new Map<number, AbortController>();
-  private snapshots = new Map<number, { text: string; thinking: string }>();
+  private snapshots = new Map<number, StreamSnapshot>();
+  private approvals = new ApprovalCoordinator();
 
   constructor(private sessions: SessionRepository) {
     this.registerHandlers();
@@ -134,6 +546,12 @@ export default class ChatService {
     ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
     ipcMain.handle("chat:status", (_, sessionId: number) =>
       this.status(sessionId),
+    );
+    // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具
+    ipcMain.handle(
+      "agent:approve",
+      (_, toolCallId: string, approved: boolean) =>
+        this.approvals.respond(toolCallId, approved),
     );
   }
 
@@ -231,7 +649,40 @@ export default class ChatService {
   }
 
   /**
-   * 通用编排：解析模型/助手 → 合并参数 → 截断历史 → 流式执行 → 持久化
+   * 工具注入决策（spec 决策 #9）：会话工作空间绑定目录 → 装配 agent 上下文；
+   * 未绑定/空目录 → 返回 undefined（纯对话，P0 体验零回归）
+   */
+  private async resolveAgentOptions(
+    session: { workspaceId: number },
+    sessionId: number,
+  ): Promise<AgentStreamOptions | undefined> {
+    if (!session.workspaceId) {
+      return undefined;
+    }
+    const workspace = await this.sessions.getWorkspace(session.workspaceId);
+    const directoryPath = workspace?.directoryPath?.trim() || null;
+    if (!directoryPath) {
+      return undefined;
+    }
+    const sessionWorkspaceId = session.workspaceId;
+    return {
+      sessionId,
+      sessionWorkspaceId,
+      workspacePath: normalizeWorkspacePath(directoryPath),
+      isWriteApproved: async () => {
+        // 实时查询（非流开始快照）：撤销授权对流中后续写入立即生效（spec §1）
+        const ws = await prisma.workspace.findUnique({
+          where: { id: sessionWorkspaceId },
+        });
+        return ws?.writeApprovedAt != null;
+      },
+      requestApproval: (toolCallId, argSummary) =>
+        this.approvals.request(toolCallId, argSummary),
+    };
+  }
+
+  /**
+   * 通用编排：解析模型/助手 → 合并参数 → 截断历史 → agent 流式执行 → 持久化
    * （AbortController 由调用方在首个 await 前注册并传入，此处负责 finally 清理）
    */
   private async streamAndPersist(
@@ -239,6 +690,7 @@ export default class ChatService {
     abort: AbortController,
     sender?: WebContents,
     overrides?: ChatModelParams,
+    maxSteps: number = DEFAULT_MAX_STEPS,
   ): Promise<void> {
     const session = await this.sessions.getSession(sessionId);
     if (!session) {
@@ -289,6 +741,7 @@ export default class ChatService {
         blocks: row.blocks,
       }));
 
+    const agent = await this.resolveAgentOptions(session, sessionId);
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -305,19 +758,14 @@ export default class ChatService {
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,
         abortSignal: abort.signal,
+        toolDefinitions: agent ? registry.getDefinitions() : undefined,
+        agent,
+        maxSteps,
         onChunk: (chunk) => {
-          // 先累积主进程快照（供切回会话恢复），再照常推送渲染层
-          if (chunk.type === "text-delta" || chunk.type === "reasoning-delta") {
-            const snap = this.snapshots.get(sessionId) ?? {
-              text: "",
-              thinking: "",
-            };
-            if (chunk.type === "text-delta") {
-              snap.text += chunk.text;
-            } else {
-              snap.thinking += chunk.text;
-            }
-            this.snapshots.set(sessionId, snap);
+          // 先累积主进程快照（供切回会话恢复），再照常推送渲染层；
+          // 流收尾（finally 清理后）到达的迟到工具事件只转发不落快照
+          if (this.aborts.has(sessionId)) {
+            this.accumulateSnapshot(sessionId, chunk);
           }
           this.emit(sender, sessionId, chunk);
         },
@@ -354,22 +802,59 @@ export default class ChatService {
     } finally {
       this.aborts.delete(sessionId);
       this.snapshots.delete(sessionId);
+      // 中断/收尾：作废全部未决审批（resolve false），释放挂起的 execute（spec 决策 #5）
+      this.approvals.voidAll();
     }
   }
 
+  /** chunk 累积进主进程快照（text/thinking 追加，工具事件保序合入） */
+  private accumulateSnapshot(sessionId: number, chunk: ChatStreamChunk): void {
+    const snap = this.snapshots.get(sessionId) ?? emptySnapshot();
+    if (chunk.type === "text-delta") {
+      snap.text += chunk.text;
+    } else if (chunk.type === "reasoning-delta") {
+      snap.thinking += chunk.text;
+    } else if (
+      chunk.type === "tool-update" ||
+      chunk.type === "approval-request"
+    ) {
+      this.applyToolChunk(snap, chunk);
+    }
+    this.snapshots.set(sessionId, snap);
+  }
+
+  /** 工具 chunk 合入快照：新 toolCallId 追加 order，浅合并状态字段 */
+  private applyToolChunk(snap: StreamSnapshot, chunk: ToolStreamChunk): void {
+    const existing = snap.tools.map[chunk.toolCallId];
+    if (!existing) {
+      snap.tools.order.push(chunk.toolCallId);
+    }
+    const state = existing ?? { toolName: chunk.toolName, state: "" };
+    state.toolName = chunk.toolName;
+    if (chunk.type === "tool-update") {
+      state.state = chunk.state;
+      if (chunk.args !== undefined) {
+        state.args = chunk.args;
+      }
+      if (chunk.output !== undefined) {
+        state.output = chunk.output;
+      }
+    } else {
+      state.argSummary = chunk.argSummary;
+    }
+    snap.tools.map[chunk.toolCallId] = state;
+  }
+
   /**
-   * 查询会话流状态（切回会话时恢复 UI 用，spec §4）
+   * 查询会话流状态（切回会话时恢复 UI 用，spec §4；P1 增含 tools 态）
    */
-  status(sessionId: number): {
-    streaming: boolean;
-    text: string;
-    thinking: string;
-  } {
+  status(sessionId: number): ChatStatusResult {
     const snap = this.snapshots.get(sessionId);
     return {
       streaming: this.aborts.has(sessionId),
       text: snap?.text ?? "",
       thinking: snap?.thinking ?? "",
+      tools: snap?.tools ?? { order: [], map: {} },
     };
   }
 

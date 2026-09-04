@@ -1,7 +1,10 @@
 /**
  * 消息 blocks（对齐 UIMessage 形态）
- * tool_call 块由 P1 agent loop 写入，此处仅定义类型
+ * tool_call 块由 P1 agent loop 写入；状态词表与 ChatStreamChunk 的
+ * tool-update.state 一致（六值），落库块恒为终态（done / denied / error）
  */
+import type { ModelMessage } from "ai";
+
 export interface TextBlock {
   type: "text";
   text: string;
@@ -23,7 +26,8 @@ export interface ToolCallBlock {
   toolCallId: string;
   toolName: string;
   args: Record<string, unknown>;
-  state: "input" | "output" | "error";
+  state:
+    "ready" | "awaiting-approval" | "running" | "done" | "denied" | "error";
   output?: unknown;
 }
 
@@ -71,4 +75,70 @@ export function parseBlocks(json: string): MessageBlock[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * 历史回喂转换（P1）：blocks → SDK ModelMessage 序列。
+ * - text 块归并为字符串 content（P0 行为不变；thinking/usage 不回喂）
+ * - tool_call 块 → assistant content 内 tool-call 部分，紧随一条
+ *   role:"tool" 消息携带 tool-result（续聊时模型可见自己上轮工具使用）
+ * 纯函数，供 chat.service 与单测直接使用。
+ */
+export function blocksToModelMessages(
+  blocks: MessageBlock[],
+  role: "user" | "assistant" = "assistant",
+): ModelMessage[] {
+  const messages: ModelMessage[] = [];
+  let parts: Array<
+    | { type: "text"; text: string }
+    | {
+        type: "tool-call";
+        toolCallId: string;
+        toolName: string;
+        input: unknown;
+      }
+  > = [];
+
+  const flush = () => {
+    if (parts.length === 0) {
+      return;
+    }
+    const onlyText = parts.every((part) => part.type === "text");
+    const content = onlyText
+      ? parts.map((part) => (part as { text: string }).text).join("\n")
+      : parts;
+    messages.push({ role, content } as ModelMessage);
+    parts = [];
+  };
+
+  for (const block of blocks) {
+    if (block.type === "text") {
+      parts.push({ type: "text", text: block.text });
+    } else if (block.type === "tool_call") {
+      parts.push({
+        type: "tool-call",
+        toolCallId: block.toolCallId,
+        toolName: block.toolName,
+        input: block.args,
+      });
+      // tool-call 终结当前 assistant 消息，随后单独回喂 tool-result
+      flush();
+      messages.push({
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: block.toolCallId,
+            toolName: block.toolName,
+            output: {
+              type: "text",
+              value: typeof block.output === "string" ? block.output : "",
+            },
+          },
+        ],
+      });
+    }
+  }
+  flush();
+  return messages;
 }

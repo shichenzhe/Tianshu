@@ -1,7 +1,8 @@
 /**
  * 消息 blocks（对齐 UIMessage 形态）——渲染端本地实现
  * 与 electron/domains/ai/chat/blocks.ts 结构一致但独立维护，渲染进程不 import 主进程代码
- * tool_call 块由 P1 agent loop 写入，此处仅定义类型
+ * tool_call 块由 P1 agent loop 写入；状态词表与 ChatStreamChunk 的
+ * tool-update.state 一致（六值），落库块恒为终态（done / denied / error）
  */
 export interface TextBlock {
   type: "text";
@@ -24,7 +25,8 @@ export interface ToolCallBlock {
   toolCallId: string;
   toolName: string;
   args: Record<string, unknown>;
-  state: "input" | "output" | "error";
+  state:
+    "ready" | "awaiting-approval" | "running" | "done" | "denied" | "error";
   output?: unknown;
 }
 

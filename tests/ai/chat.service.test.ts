@@ -231,6 +231,7 @@ describe("ChatService.status（流中切回恢复）", () => {
       streaming: false,
       text: "",
       thinking: "",
+      tools: { order: [], map: {} },
     });
   });
 
@@ -238,14 +239,22 @@ describe("ChatService.status（流中切回恢复）", () => {
     const svc = new ChatService({} as never);
     const internal = svc as unknown as {
       aborts: Map<number, AbortController>;
-      snapshots: Map<number, { text: string; thinking: string }>;
+      snapshots: Map<
+        number,
+        { text: string; thinking: string; tools: unknown }
+      >;
     };
     internal.aborts.set(7, new AbortController());
-    internal.snapshots.set(7, { text: "半截", thinking: "" });
+    internal.snapshots.set(7, {
+      text: "半截",
+      thinking: "",
+      tools: { order: [], map: {} },
+    });
     expect(svc.status(7)).toEqual({
       streaming: true,
       text: "半截",
       thinking: "",
+      tools: { order: [], map: {} },
     });
   });
 
@@ -253,10 +262,17 @@ describe("ChatService.status（流中切回恢复）", () => {
     const svc = new ChatService({} as never);
     const internal = svc as unknown as {
       aborts: Map<number, AbortController>;
-      snapshots: Map<number, { text: string; thinking: string }>;
+      snapshots: Map<
+        number,
+        { text: string; thinking: string; tools: unknown }
+      >;
     };
     internal.aborts.set(7, new AbortController());
-    internal.snapshots.set(7, { text: "半截", thinking: "" });
+    internal.snapshots.set(7, {
+      text: "半截",
+      thinking: "",
+      tools: { order: [], map: {} },
+    });
     // 模拟 streamAndPersist 的 finally：删除注册与快照
     internal.aborts.delete(7);
     internal.snapshots.delete(7);
@@ -264,6 +280,7 @@ describe("ChatService.status（流中切回恢复）", () => {
       streaming: false,
       text: "",
       thinking: "",
+      tools: { order: [], map: {} },
     });
   });
 });

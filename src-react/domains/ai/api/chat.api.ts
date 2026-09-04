@@ -43,6 +43,20 @@ export interface ChatStatusResult {
   streaming: boolean;
   text: string;
   thinking: string;
+  /** P1：流式工具态（保序），切回会话恢复 agent 进度用 */
+  tools: {
+    order: string[];
+    map: Record<
+      string,
+      {
+        toolName: string;
+        args?: unknown;
+        state: string;
+        output?: string;
+        argSummary?: string;
+      }
+    >;
+  };
 }
 
 export default class ChatApi {

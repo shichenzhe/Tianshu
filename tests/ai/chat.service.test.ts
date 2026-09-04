@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
+  // Log 模块顶层读取 app.getPath("userData") 计算日志目录
+  app: { getPath: vi.fn(() => "/tmp/mirror-test-user-data") },
 }));
 
 // runChatStream 为纯函数；屏蔽 prisma-client 模块初始化对 electron app 路径的依赖。
@@ -246,6 +248,24 @@ describe("ChatService.status（流中切回恢复）", () => {
       thinking: "",
     });
   });
+
+  it("流结束后 finally 清理注册与快照：status 恢复空闲态", () => {
+    const svc = new ChatService({} as never);
+    const internal = svc as unknown as {
+      aborts: Map<number, AbortController>;
+      snapshots: Map<number, { text: string; thinking: string }>;
+    };
+    internal.aborts.set(7, new AbortController());
+    internal.snapshots.set(7, { text: "半截", thinking: "" });
+    // 模拟 streamAndPersist 的 finally：删除注册与快照
+    internal.aborts.delete(7);
+    internal.snapshots.delete(7);
+    expect(svc.status(7)).toEqual({
+      streaming: false,
+      text: "",
+      thinking: "",
+    });
+  });
 });
 
 describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
@@ -259,38 +279,30 @@ describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
     modelId: "m",
   };
 
-  it("恰好一轮问答且标题为默认 → 调用 renameSession", async () => {
-    prismaStub.messages = [
-      {
-        id: 1,
-        sessionId: 1,
-        role: "user",
-        blocks: JSON.stringify([{ type: "text", text: "你好" }]),
-        error: null,
-      },
-      {
-        id: 2,
-        sessionId: 1,
-        role: "assistant",
-        blocks: JSON.stringify([
-          { type: "text", text: "你好！有什么可以帮你" },
-        ]),
-        error: null,
-      },
-    ];
-    prismaStub.sessionTitle = "新会话";
-    const renamed: string[] = [];
-    const svc = makeSvc({
-      getSession: async () => ({ id: 1, title: prismaStub.sessionTitle }),
-      renameSession: async (_id: number, title: string) => {
-        renamed.push(title);
-      },
-    });
-    // 注入假模型：直接测守卫与 rename 调用；标题文本固定
-    const internal = svc as unknown as {
-      titleModelText: (ctx2: unknown) => Promise<string>;
-    };
-    internal.titleModelText = async () => "  今天的天气  ";
+  /** 恰好一轮问答（user 文本 "你好"，autotitle 截断态即 "你好"） */
+  const twoMessages = () => [
+    {
+      id: 1,
+      sessionId: 1,
+      role: "user",
+      blocks: JSON.stringify([{ type: "text", text: "你好" }]),
+      error: null,
+    },
+    {
+      id: 2,
+      sessionId: 1,
+      role: "assistant",
+      blocks: JSON.stringify([{ type: "text", text: "你好！有什么可以帮你" }]),
+      error: null,
+    },
+  ];
+
+  /** 注入标题模型（可断言调用情况）并执行守卫 */
+  const runGuard = async (
+    svc: ChatService,
+    titleModel: () => Promise<string>,
+  ) => {
+    (svc as unknown as { titleModelText: unknown }).titleModelText = titleModel;
     await (
       svc as unknown as {
         generateTitleIfFirstExchange: (
@@ -300,27 +312,69 @@ describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
         ) => Promise<void>;
       }
     ).generateTitleIfFirstExchange(1, undefined, ctx);
+  };
+
+  it("默认标题（新会话）→ 调用 renameSession", async () => {
+    prismaStub.messages = twoMessages();
+    prismaStub.sessionTitle = "新会话";
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: prismaStub.sessionTitle }),
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
+      },
+    });
+    // 注入假模型：直接测守卫与 rename 调用；标题文本固定
+    await runGuard(svc, async () => "  今天的天气  ");
     expect(renamed).toEqual(["今天的天气"]);
   });
 
-  it("多轮消息（3 条）不触发", async () => {
+  it("P0 autotitle 截断态（title=首条消息前 20 字）→ 仍调用 renameSession", async () => {
+    prismaStub.messages = twoMessages();
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: "你好" }),
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
+      },
+    });
+    await runGuard(svc, async () => "  今天的天气  ");
+    expect(renamed).toEqual(["今天的天气"]);
+  });
+
+  it("手动改名过的会话（两个哨兵均不匹配）→ 不触发且不调模型", async () => {
+    prismaStub.messages = twoMessages();
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: "我的会话" }),
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
+      },
+    });
+    const titleModel = vi.fn(async () => {
+      throw new Error("标题模型不应被调用");
+    });
+    await runGuard(svc, titleModel);
+    expect(renamed).toEqual([]);
+    expect(titleModel).not.toHaveBeenCalled();
+  });
+
+  it("标题模型返回空白 → 不起名", async () => {
+    prismaStub.messages = twoMessages();
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: "你好" }),
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
+      },
+    });
+    await runGuard(svc, async () => "   ");
+    expect(renamed).toEqual([]);
+  });
+
+  it("多轮消息（3 条）不触发且不调模型", async () => {
     prismaStub.messages = [
-      {
-        id: 1,
-        sessionId: 1,
-        role: "user",
-        blocks: JSON.stringify([{ type: "text", text: "你好" }]),
-        error: null,
-      },
-      {
-        id: 2,
-        sessionId: 1,
-        role: "assistant",
-        blocks: JSON.stringify([
-          { type: "text", text: "你好！有什么可以帮你" },
-        ]),
-        error: null,
-      },
+      ...twoMessages(),
       {
         id: 3,
         sessionId: 1,
@@ -332,19 +386,16 @@ describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
     const renamed: string[] = [];
     const svc = makeSvc({
       getSession: async () => ({ id: 1, title: "新会话" }),
-      renameSession: async (_i: number, t: string) => {
-        renamed.push(t);
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
       },
     });
-    await (
-      svc as unknown as {
-        generateTitleIfFirstExchange: (
-          s: number,
-          sender: undefined,
-          c: unknown,
-        ) => Promise<void>;
-      }
-    ).generateTitleIfFirstExchange(1, undefined, ctx);
+    // 若守卫长度检查失效而走到模型调用，此 stub 显式抛错（响亮失败）
+    const titleModel = vi.fn(async () => {
+      throw new Error("标题模型不应被调用");
+    });
+    await runGuard(svc, titleModel);
     expect(renamed).toEqual([]);
+    expect(titleModel).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { ipcMain, type WebContents } from "electron";
 import { generateText, streamText } from "ai";
 import type { LanguageModel } from "ai";
 import prisma from "../../../commons/prisma-client";
+import Log from "../../../commons/Log";
 import { parseBlocks, serializeBlocks, type MessageBlock } from "./blocks";
 import { mergeParams, type ChatModelParams } from "./param-merge";
 import { truncateHistory } from "./history-truncate";
@@ -395,7 +396,7 @@ export default class ChatService {
   }
 
   /**
-   * 首轮问答完成后 AI 起标题（fire-and-forget；失败静默，spec §6）
+   * 首轮问答完成后 AI 起标题（fire-and-forget；失败静默降级仅记日志，spec §6）
    */
   private async generateTitleIfFirstExchange(
     sessionId: number,
@@ -418,7 +419,7 @@ export default class ChatService {
         return;
       }
       const session = await this.sessions.getSession(sessionId);
-      if (!session || session.title !== "新会话") {
+      if (!session) {
         return;
       }
       const truncate = (blocksJson: string) => {
@@ -428,6 +429,12 @@ export default class ChatService {
           .join("\n");
         return text.slice(0, 200);
       };
+      // P0 的 autotitleIfDefault 在流式开始前已把默认标题改写为首条消息前 20 字，
+      // 故两个哨兵态（默认标题 / autotitle 截断态）都视为未命名；手动改名两者皆不匹配 → 保护
+      const firstUserTitle = truncate(visible[0].blocks).slice(0, 20);
+      if (session.title !== "新会话" && session.title !== firstUserTitle) {
+        return;
+      }
       const title = (
         await this.titleModelText({
           ...ctx,
@@ -442,8 +449,9 @@ export default class ChatService {
       }
       await this.sessions.renameSession(sessionId, title);
       this.emit(sender, sessionId, { type: "title-updated", title });
-    } catch {
-      // 标题失败静默降级：保留既有截断标题
+    } catch (e) {
+      // 标题失败静默降级（对用户无感知）：仅记录日志保留可观测性
+      Log.warn("AI 标题生成失败", e instanceof Error ? e.message : e);
     }
   }
 

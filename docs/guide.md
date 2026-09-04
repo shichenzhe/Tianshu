@@ -85,9 +85,23 @@ export default class NoteRepository {
 
 完成。前后端各目录一一对应，删域 = 反向删除这七步产物。
 
+## AI 模块 P1 能力（Agent 模式）
+
+P1 在对话之上叠加了受限的文件工具能力（`electron/domains/ai/agent/` 子域），要点：
+
+- **进入条件**：会话绑定工作空间目录后，AI 自动获得 4 个文件工具——`read_file`/`write_file`/
+  `list_dir`/`search_files`，路径全部限定在该目录内；未绑定即为纯对话，行为与 P0 一致。
+- **审批机制**：读类工具免审直接执行；写类（`write_file`）默认每次审批，消息流内出现内联按钮
+  （允许 / 拒绝 / 允许并记住）。「允许并记住」= 对该工作空间的持久授权，可随时在会话侧边栏的
+  工作空间菜单撤销，撤销即恢复逐次审批。拒绝不终止循环，会作为结果回喂给模型自行调整。
+- **数据库 v2**：`DATABASE_VERSION` 升为 2，`electron/infrastructure/script/v2/upgrade-table.sql`
+  给 `workspace` 表补 `writeApprovedAt` 列（写入授权的时间戳）；旧库首次启动自动升级，脚本带
+  `--/ignore` 幂等，无感。
+
 ## 移除 AI 模块
 
-AI 是可选模块，分两个子域：`provider/`（服务商与模型管理）和 `chat/`（对话、会话、助手预设）。
+AI 是可选模块，分三个子域：`provider/`（服务商与模型管理）、`chat/`（对话、会话、助手预设）和
+`agent/`（P1 工具调用循环与文件工具，仅被 chat 消费）。
 支持两种裁剪粒度：整体移除，或只保留 provider 层。每步做完建议跑 `npm run typecheck`
 和 `npm run test` 验证无残留引用。
 注意：本分支把 AI 建表并入 v1 脚本（只对全新库执行），已有开发数据库不会自动补建，
@@ -107,16 +121,18 @@ AI 是可选模块，分两个子域：`provider/`（服务商与模型管理）
 7. `prisma/schema.prisma`：删除 7 个 model——`provider`、`model`、`assistant`、`workspace`、
    `session`、`message`、`mcpServer`，然后执行 `npx prisma generate` 重新生成客户端。
 8. `electron/infrastructure/script/v1/upgrade-table.sql`：删除从「新建服务商表（AI 模块）」到
-   文件末尾的建表段。只影响新数据库；老库里多出的表不读写、不影响运行。
-9. 删除 `tests/ai/`（8 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
+   文件末尾的建表段。只影响新数据库；老库里多出的表不读写、不影响运行。同时删除
+   `electron/infrastructure/script/v2/` 整个目录（P1 工作空间授权列），并把 `electron/Constants.ts`
+   的 `DATABASE_VERSION` 回到 `1`。
+9. 删除 `tests/ai/`（12 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
 
 ### 裁剪到仅 provider 层
 
 保留服务商/模型管理与连通性测试，去掉对话能力：
 
-1. 删除 `electron/domains/ai/chat/`、`src-react/domains/ai/chat/`、`src-react/domains/ai/assistant/`
-   三个目录，以及 `src-react/domains/ai/api/` 下的 `chat.api.ts`、`session.api.ts`、
-   `workspace.api.ts`、`assistant.api.ts`（保留 `provider.api.ts`、`model.api.ts`）。
+1. 删除 `electron/domains/ai/chat/`、`electron/domains/ai/agent/`、`src-react/domains/ai/chat/`、
+   `src-react/domains/ai/assistant/` 四个目录，以及 `src-react/domains/ai/api/` 下的 `chat.api.ts`、
+   `session.api.ts`、`workspace.api.ts`、`assistant.api.ts`（保留 `provider.api.ts`、`model.api.ts`）。
 2. `provider/connectivity.ts` 引用了 `chat/error-classify.ts` 的 `classifyError`：把该文件移到
    `provider/` 下并同步修改 import（其单测 `tests/ai/error-classify.test.ts` 的路径一并改），
    或暂时保留原位置。
@@ -126,7 +142,7 @@ AI 是可选模块，分两个子域：`provider/`（服务商与模型管理）
 5. i18n：移除 `chat` namespace（`chat.json` 与 `index.ts` 注册）；`ai.json` 的 `assistant.*`
    键随之不再使用，可一并删除。
 6. 同步删除 `tests/ai/` 下的 `chat.service`、`blocks`、`param-merge`、`history-truncate`、
-   `stream-buffer`、`error-classify`（未按第 2 步移动时）测试，保留 `connectivity` 与
-   `provider-factory`。
+   `stream-buffer`、`error-classify`（未按第 2 步移动时）、`agent-loop`、`approval`、`file-tools`、
+   `workspace-path-chip` 测试，保留 `connectivity` 与 `provider-factory`。
 7. 数据库（可选）：`assistant`、`workspace`、`session`、`message` 与预留的 `mcpServer` 表不再被
    读写，可连同 schema model 与 v1 脚本对应段一并删除（记得 `npx prisma generate`）；保留不影响运行。

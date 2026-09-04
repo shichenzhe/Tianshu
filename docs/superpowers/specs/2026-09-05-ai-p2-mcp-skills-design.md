@@ -94,7 +94,7 @@ electron/domains/ai/agent/
 4. 停用 server（UI 开关）→ 工具即刻从下一轮消失；重连后恢复
 5. `userData/skills/greeting/SKILL.md`（name: greeting）→ 新会话 system 含其描述；模型说「用 greeting 技能打个招呼」→ 调 read_skill → 按正文行事
 6. workspace 级 `.mirror/skills/` 在绑定目录的会话生效；与用户级同名时用户级生效
-7. 未配置任何 MCP/skill 时行为与 P1 完全一致（零回归）
+7. 未配置任何 MCP/skill 时纯对话流式与 P1 一致（新增预期行为：read_skill 工具常驻注入、技能清单为空时不注入任何提示文本）
 8. test/lint/typecheck 全绿；GUI 手测清单转交人工
 
 ## 7. 明确不做（YAGNI）

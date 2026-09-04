@@ -157,7 +157,8 @@ export class McpManager {
   /**
    * 连接并注册工具；重连前注销旧工具并尽力关闭旧连接（I2 泄漏修复）；
    * 失败记 error 状态，不抛出。挂起期间发生重连/停用（代际失效）则整体丢弃
-   * 本次结果——不注册、不改状态，并尽力关闭新建的 client（I1 竞态守卫）
+   * 本次结果——不注册、不改状态，并尽力关闭新建的 client（I1 竞态守卫）；
+   * catch 路径对已创建的半成品 client（listTools 等后续步骤失败）同样尽力关闭
    */
   async connect(row: McpServerConfig): Promise<void> {
     const record = this.ensureRecord(row);
@@ -170,19 +171,26 @@ export class McpManager {
     if (previousClient) {
       await closeQuietly(previousClient);
     }
+    let client: McpClientLike | undefined;
     try {
-      const client = await this.deps.createClient(row);
+      client = await this.deps.createClient(row);
       const tools = (await client.listTools()).tools ?? [];
       if (this.isSuperseded(record, myGeneration)) {
         await closeQuietly(client);
         return;
       }
-      const defs = tools.map((tool) => this.toDefinition(row, client, tool));
+      // const 快照：let 在 map 回调闭包中收窄失效，以窄化后的 const 传入注册
+      const connected = client;
+      const defs = tools.map((tool) => this.toDefinition(row, connected, tool));
       registerTools(defs);
-      record.client = client;
+      record.client = connected;
       record.state = "connected";
       record.toolCount = defs.length;
     } catch (e) {
+      // 半成品 client（createClient 成功但后续失败）不留活连接
+      if (client) {
+        await closeQuietly(client);
+      }
       // 过期连接的失败不得覆盖接管者（新一轮 connect/停用）已写入的状态
       if (this.isSuperseded(record, myGeneration)) {
         return;

@@ -98,10 +98,29 @@ P1 在对话之上叠加了受限的文件工具能力（`electron/domains/ai/ag
   给 `workspace` 表补 `writeApprovedAt` 列（写入授权的时间戳）；旧库首次启动自动升级，脚本带
   `--/ignore` 幂等，无感。
 
+## AI 模块 P2 能力（MCP 与技能）
+
+P2 在 Agent 模式之上叠加外部工具生态：MCP 服务接入（`agent/mcp-manager.ts` + `mcp/mcp.repo.ts`）
+与 SKILL.md 技能加载（`agent/` 下 skill-loader / read-skill / skill-prompt），要点：
+
+- **MCP 服务**：设置页 `/module/ai/mcp` 管理（入口在服务商设置页顶部导航）。传输支持 stdio
+  （command/args/env）与 streamable HTTP（url + headers，可配 Bearer 认证）；应用启动时自动
+  连接全部启用项（失败标记 error 状态，不阻塞启动），页面提供连接状态徽标与启停/重连。
+  服务的工具以 `mcp__服务名__工具名` 进入模型可用集；标注 readOnlyHint 的只读工具免审直接
+  执行，其余每次审批——**不适用工作空间写授权**（MCP 的审批卡不出现「允许并记住」）。
+- **技能（skills）**：用户级放 `<userData>/skills/<名称>/SKILL.md`（frontmatter 需 name 与
+  description 两字段），始终加载；工作空间级放 `<工作空间目录>/.mirror/skills/`，会话绑定
+  目录后加载，同名时用户级优先。全部技能的清单（name+description）注入 system prompt，
+  模型按需调用内置工具 `read_skill` 读取正文（超过 256KB 截断）。无管理界面——文件系统即
+  配置，放目录即生效（每次发消息时扫描，免重启增删）。
+- **依赖**：新增运行时依赖 `@modelcontextprotocol/sdk`（官方 MCP SDK），移除 AI 模块时随
+  package.json 的 dependencies 一并删除。
+
 ## 移除 AI 模块
 
-AI 是可选模块，分三个子域：`provider/`（服务商与模型管理）、`chat/`（对话、会话、助手预设）和
-`agent/`（P1 工具调用循环与文件工具，仅被 chat 消费）。
+AI 是可选模块，分四个子域：`provider/`（服务商与模型管理）、`chat/`（对话、会话、助手预设）、
+`agent/`（P1 工具调用循环与文件工具，P2 又加入 MCP 连接管理与技能加载，仅被 chat 消费）和
+`mcp/`（P2 MCP 服务 CRUD 与状态 IPC，联动 `agent/mcp-manager`）。
 支持两种裁剪粒度：整体移除，或只保留 provider 层。每步做完建议跑 `npm run typecheck`
 和 `npm run test` 验证无残留引用。
 注意：本分支把 AI 建表并入 v1 脚本（只对全新库执行），已有开发数据库不会自动补建，
@@ -111,9 +130,10 @@ AI 是可选模块，分三个子域：`provider/`（服务商与模型管理）
 
 1. 删除 `electron/domains/ai/` 与 `src-react/domains/ai/` 两个目录。
 2. `electron/Application.ts`：删除 `registerServices()` 中的 AI 接线块（`ProviderRepository`/
-   `ModelRepository`/`AssistantRepository`/`SessionRepository`/`ChatService` 五行及注释）与对应 import。
-3. `src-react/routes/index.tsx`：删除 `ai`、`ai/providers`、`ai/assistants` 三条路由及对应的
-   lazy import。
+   `ModelRepository`/`AssistantRepository`/`SessionRepository`/`ChatService` 五行，及 P2 的
+   `McpManager`/`McpRepository` 接线块与 `startupConnectAll()` 调用，均含注释）与对应 import。
+3. `src-react/routes/index.tsx`：删除 `ai`、`ai/providers`、`ai/assistants`、`ai/mcp` 四条路由
+   及对应的 lazy import。
 4. `src-react/components/layout/Sidebar.tsx`：删除 `AI 模型配置` 项（`layout:sidebar.ai`）。
 5. i18n：删除 `src-react/i18n/locales/{zh-CN,en-US}/ai.json` 与 `chat.json`，并移除
    `src-react/i18n/index.ts` 中的注册（import、`resources`、`ns` 数组）。
@@ -124,25 +144,32 @@ AI 是可选模块，分三个子域：`provider/`（服务商与模型管理）
    文件末尾的建表段。只影响新数据库；老库里多出的表不读写、不影响运行。同时删除
    `electron/infrastructure/script/v2/` 整个目录（P1 工作空间授权列），并把 `electron/Constants.ts`
    的 `DATABASE_VERSION` 回到 `1`。
-9. 删除 `tests/ai/`（12 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
+9. 删除 `tests/ai/`（18 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
+10. `package.json`：删除 dependencies 中的 `@modelcontextprotocol/sdk`（P2 MCP SDK，唯一新增
+    运行时依赖），重新 `npm install`。
 
 ### 裁剪到仅 provider 层
 
 保留服务商/模型管理与连通性测试，去掉对话能力：
 
-1. 删除 `electron/domains/ai/chat/`、`electron/domains/ai/agent/`、`src-react/domains/ai/chat/`、
-   `src-react/domains/ai/assistant/` 四个目录，以及 `src-react/domains/ai/api/` 下的 `chat.api.ts`、
-   `session.api.ts`、`workspace.api.ts`、`assistant.api.ts`（保留 `provider.api.ts`、`model.api.ts`）。
+1. 删除 `electron/domains/ai/chat/`、`electron/domains/ai/agent/`、`electron/domains/ai/mcp/`、
+   `src-react/domains/ai/chat/`、`src-react/domains/ai/assistant/`、`src-react/domains/ai/mcp/`
+   六个目录，以及 `src-react/domains/ai/api/` 下的 `chat.api.ts`、`session.api.ts`、
+   `workspace.api.ts`、`assistant.api.ts`、`mcp.api.ts`（保留 `provider.api.ts`、`model.api.ts`）。
+   `@modelcontextprotocol/sdk` 仅被 `agent/mcp-manager.ts` 引用，此处删除后即无使用方，可顺手
+   从 package.json dependencies 移除。
 2. `provider/connectivity.ts` 引用了 `chat/error-classify.ts` 的 `classifyError`：把该文件移到
    `provider/` 下并同步修改 import（其单测 `tests/ai/error-classify.test.ts` 的路径一并改），
    或暂时保留原位置。
-3. `electron/Application.ts`：AI 接线块只保留 `ProviderRepository`/`ModelRepository` 两行。
-4. `src-react/routes/index.tsx`：删除 `ai`（ChatView）与 `ai/assistants` 两条路由；
+3. `electron/Application.ts`：AI 接线块只保留 `ProviderRepository`/`ModelRepository` 两行
+   （P2 的 `McpManager`/`McpRepository` 块与 `startupConnectAll()` 调用一并删除）。
+4. `src-react/routes/index.tsx`：删除 `ai`（ChatView）、`ai/assistants`、`ai/mcp` 三条路由；
    `src-react/components/layout/Sidebar.tsx` 的 AI 项改指 `/module/ai/providers`。
 5. i18n：移除 `chat` namespace（`chat.json` 与 `index.ts` 注册）；`ai.json` 的 `assistant.*`
-   键随之不再使用，可一并删除。
+   与 `mcp.*` 键随之不再使用，可一并删除。
 6. 同步删除 `tests/ai/` 下的 `chat.service`、`blocks`、`param-merge`、`history-truncate`、
-   `stream-buffer`、`error-classify`（未按第 2 步移动时）、`agent-loop`、`approval`、`file-tools`、
-   `workspace-path-chip` 测试，保留 `connectivity` 与 `provider-factory`。
-7. 数据库（可选）：`assistant`、`workspace`、`session`、`message` 与预留的 `mcpServer` 表不再被
+   `stream-buffer`、`error-classify`（未按第 2 步移动时）、`agent-loop`、`approval`、
+   `file-tools`、`workspace-path-chip`、`mcp-manager`、`mcp-integration`、`skill-loader`、
+   `read-skill`、`skill-prompt` 测试，保留 `connectivity`、`provider-factory` 与 `v2-migration`。
+7. 数据库（可选）：`assistant`、`workspace`、`session`、`message` 与 `mcpServer` 表不再被
    读写，可连同 schema model 与 v1 脚本对应段一并删除（记得 `npx prisma generate`）；保留不影响运行。

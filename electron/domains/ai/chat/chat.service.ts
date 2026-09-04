@@ -1,4 +1,5 @@
-import { app, dialog, ipcMain, type WebContents } from "electron";
+import { app, dialog, ipcMain, shell, type WebContents } from "electron";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import {
@@ -613,6 +614,13 @@ export default class ChatService {
       async (_, workspaceId: number): Promise<WorkspaceRecord | null> =>
         this.sessions.updateWorkspaceBoundDirectory(workspaceId, null),
     );
+    // 技能目录一键打开（P2 skill 无管理界面，文件系统即配置——保证发现性）
+    ipcMain.handle("skill:openDir", async (): Promise<string> => {
+      const skillsDir = path.join(app.getPath("userData"), "skills");
+      await fs.mkdir(skillsDir, { recursive: true });
+      await shell.openPath(skillsDir);
+      return skillsDir;
+    });
   }
 
   private emit(

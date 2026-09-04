@@ -54,6 +54,7 @@ export type IPCChannel =
   | "chat:regenerate"
   | "chat:stop"
   | "agent:approve"
+  | "skill:openDir"
   | "mcpServer:list"
   | "mcpServer:create"
   | "mcpServer:update"

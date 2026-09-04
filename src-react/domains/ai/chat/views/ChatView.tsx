@@ -19,11 +19,19 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { invoke } from "@/lib/ipc";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
@@ -45,6 +53,7 @@ const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
 const ASSISTANTS_ROUTE = "/module/ai/assistants";
+const MCP_ROUTE = "/module/ai/mcp";
 
 export default function ChatView() {
   const navigate = useNavigate();
@@ -125,7 +134,15 @@ export default function ChatView() {
             hasModel={Boolean(
               selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
             )}
-            onOpenAssistants={() => navigate(ASSISTANTS_ROUTE)}
+            onOpenSettings={(target) =>
+              navigate(
+                target === "providers"
+                  ? PROVIDERS_ROUTE
+                  : target === "assistants"
+                    ? ASSISTANTS_ROUTE
+                    : MCP_ROUTE,
+              )
+            }
           />
         ) : (
           <MessageList sessionId={null} />
@@ -140,7 +157,7 @@ interface ChatPaneProps {
   /** 会话所属工作空间（即当前选中项），供审批横幅取 id 与写授权态 */
   workspace: WorkspaceRecord | null;
   hasModel: boolean;
-  onOpenAssistants: () => void;
+  onOpenSettings: (target: "providers" | "assistants" | "mcp") => void;
 }
 
 /**
@@ -151,10 +168,19 @@ function ChatPane({
   session,
   workspace,
   hasModel,
-  onOpenAssistants,
+  onOpenSettings,
 }: ChatPaneProps) {
   const { t } = useTranslation(["chat", "ai"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
+
+  // 技能目录一键打开（P2 skill 无管理界面，以此保证发现性）
+  const openSkillDir = async () => {
+    try {
+      await invoke("skill:openDir");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   // Agent 进度数据：选择器只返回原始值（活跃工具 id/名、步数），流式 delta
   // 不触发本面板重渲染，仅轮次切换或活跃工具变化时更新
@@ -235,17 +261,42 @@ function ChatPane({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
-                  onClick={onOpenAssistants}
-                  aria-label={t("ai:assistant.pageTitle")}
-                >
-                  <Settings2 className="h-4 w-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
+                      aria-label={t("chat:settings.title")}
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="border border-border/50 rounded-lg shadow-lg"
+                  >
+                    <DropdownMenuItem
+                      onClick={() => onOpenSettings("providers")}
+                    >
+                      {t("chat:settings.providers")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onOpenSettings("assistants")}
+                    >
+                      {t("chat:settings.assistants")}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onOpenSettings("mcp")}>
+                      {t("chat:settings.mcp")}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={openSkillDir}>
+                      {t("chat:settings.skills")}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </TooltipTrigger>
-              <TooltipContent>{t("ai:assistant.pageTitle")}</TooltipContent>
+              <TooltipContent>{t("chat:settings.title")}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <ChatInput

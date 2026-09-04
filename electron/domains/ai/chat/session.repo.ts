@@ -206,10 +206,17 @@ export class SessionRepository {
   }
 
   async createSession(p: SessionCreateParams): Promise<SessionRecord> {
+    // 新会话继承同工作空间最近一次选择的模型（用户反馈：默认丢失上次选择）
+    const latest = await prisma.session.findFirst({
+      where: { workspaceId: p.workspaceId, currentModelId: { not: null } },
+      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+      select: { currentModelId: true },
+    });
     const row = await prisma.session.create({
       data: {
         workspaceId: p.workspaceId,
         assistantId: p.assistantId,
+        currentModelId: latest?.currentModelId ?? undefined,
         title: "新会话",
       },
     });

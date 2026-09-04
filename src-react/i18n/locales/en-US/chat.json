@@ -81,5 +81,12 @@
     "PROVIDER_MISSING": "Provider not found",
     "ASSISTANT_BUILTIN": "Built-in assistants cannot be deleted",
     "UNKNOWN": "Unknown error"
+  },
+  "settings": {
+    "title": "AI Settings",
+    "providers": "Model Providers",
+    "assistants": "Assistants",
+    "mcp": "MCP Services",
+    "skills": "Open Skills Folder"
   }
 }

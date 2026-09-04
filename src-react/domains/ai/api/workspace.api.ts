@@ -10,6 +10,7 @@ export interface WorkspaceRecord {
   icon?: string;
   directoryPath?: string;
   defaultModelId?: number;
+  writeApprovedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +43,14 @@ export class WorkspaceApi {
 
   static async delete(id: number): Promise<void> {
     return invoke<void>("workspace:delete", id);
+  }
+
+  static async approveWrite(id: number): Promise<void> {
+    return invoke<void>("workspace:approveWrite", id);
+  }
+
+  static async revokeWrite(id: number): Promise<void> {
+    return invoke<void>("workspace:revokeWrite", id);
   }
 }
 

@@ -1286,6 +1286,7 @@ export const WorkspaceScalarFieldEnum = {
   icon: 'icon',
   directoryPath: 'directoryPath',
   defaultModelId: 'defaultModelId',
+  writeApprovedAt: 'writeApprovedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

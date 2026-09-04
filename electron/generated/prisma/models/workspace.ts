@@ -42,6 +42,7 @@ export type WorkspaceMinAggregateOutputType = {
   icon: string | null
   directoryPath: string | null
   defaultModelId: number | null
+  writeApprovedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -52,6 +53,7 @@ export type WorkspaceMaxAggregateOutputType = {
   icon: string | null
   directoryPath: string | null
   defaultModelId: number | null
+  writeApprovedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -62,6 +64,7 @@ export type WorkspaceCountAggregateOutputType = {
   icon: number
   directoryPath: number
   defaultModelId: number
+  writeApprovedAt: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -84,6 +87,7 @@ export type WorkspaceMinAggregateInputType = {
   icon?: true
   directoryPath?: true
   defaultModelId?: true
+  writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -94,6 +98,7 @@ export type WorkspaceMaxAggregateInputType = {
   icon?: true
   directoryPath?: true
   defaultModelId?: true
+  writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -104,6 +109,7 @@ export type WorkspaceCountAggregateInputType = {
   icon?: true
   directoryPath?: true
   defaultModelId?: true
+  writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -201,6 +207,7 @@ export type WorkspaceGroupByOutputType = {
   icon: string | null
   directoryPath: string | null
   defaultModelId: number | null
+  writeApprovedAt: Date | null
   createdAt: Date
   updatedAt: Date
   _count: WorkspaceCountAggregateOutputType | null
@@ -234,6 +241,7 @@ export type workspaceWhereInput = {
   icon?: Prisma.StringNullableFilter<"workspace"> | string | null
   directoryPath?: Prisma.StringNullableFilter<"workspace"> | string | null
   defaultModelId?: Prisma.IntNullableFilter<"workspace"> | number | null
+  writeApprovedAt?: Prisma.DateTimeNullableFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
 }
@@ -244,6 +252,7 @@ export type workspaceOrderByWithRelationInput = {
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
   directoryPath?: Prisma.SortOrderInput | Prisma.SortOrder
   defaultModelId?: Prisma.SortOrderInput | Prisma.SortOrder
+  writeApprovedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -257,6 +266,7 @@ export type workspaceWhereUniqueInput = Prisma.AtLeast<{
   icon?: Prisma.StringNullableFilter<"workspace"> | string | null
   directoryPath?: Prisma.StringNullableFilter<"workspace"> | string | null
   defaultModelId?: Prisma.IntNullableFilter<"workspace"> | number | null
+  writeApprovedAt?: Prisma.DateTimeNullableFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
 }, "id">
@@ -267,6 +277,7 @@ export type workspaceOrderByWithAggregationInput = {
   icon?: Prisma.SortOrderInput | Prisma.SortOrder
   directoryPath?: Prisma.SortOrderInput | Prisma.SortOrder
   defaultModelId?: Prisma.SortOrderInput | Prisma.SortOrder
+  writeApprovedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.workspaceCountOrderByAggregateInput
@@ -285,6 +296,7 @@ export type workspaceScalarWhereWithAggregatesInput = {
   icon?: Prisma.StringNullableWithAggregatesFilter<"workspace"> | string | null
   directoryPath?: Prisma.StringNullableWithAggregatesFilter<"workspace"> | string | null
   defaultModelId?: Prisma.IntNullableWithAggregatesFilter<"workspace"> | number | null
+  writeApprovedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
 }
@@ -294,6 +306,7 @@ export type workspaceCreateInput = {
   icon?: string | null
   directoryPath?: string | null
   defaultModelId?: number | null
+  writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -304,6 +317,7 @@ export type workspaceUncheckedCreateInput = {
   icon?: string | null
   directoryPath?: string | null
   defaultModelId?: number | null
+  writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -313,6 +327,7 @@ export type workspaceUpdateInput = {
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   directoryPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   defaultModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -323,6 +338,7 @@ export type workspaceUncheckedUpdateInput = {
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   directoryPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   defaultModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -333,6 +349,7 @@ export type workspaceCreateManyInput = {
   icon?: string | null
   directoryPath?: string | null
   defaultModelId?: number | null
+  writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -342,6 +359,7 @@ export type workspaceUpdateManyMutationInput = {
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   directoryPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   defaultModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -352,6 +370,7 @@ export type workspaceUncheckedUpdateManyInput = {
   icon?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   directoryPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   defaultModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -362,6 +381,7 @@ export type workspaceCountOrderByAggregateInput = {
   icon?: Prisma.SortOrder
   directoryPath?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+  writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -377,6 +397,7 @@ export type workspaceMaxOrderByAggregateInput = {
   icon?: Prisma.SortOrder
   directoryPath?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+  writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -387,6 +408,7 @@ export type workspaceMinOrderByAggregateInput = {
   icon?: Prisma.SortOrder
   directoryPath?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+  writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -394,6 +416,10 @@ export type workspaceMinOrderByAggregateInput = {
 export type workspaceSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+}
+
+export type NullableDateTimeFieldUpdateOperationsInput = {
+  set?: Date | string | null
 }
 
 
@@ -404,6 +430,7 @@ export type workspaceSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   icon?: boolean
   directoryPath?: boolean
   defaultModelId?: boolean
+  writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["workspace"]>
@@ -414,6 +441,7 @@ export type workspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   icon?: boolean
   directoryPath?: boolean
   defaultModelId?: boolean
+  writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["workspace"]>
@@ -424,6 +452,7 @@ export type workspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   icon?: boolean
   directoryPath?: boolean
   defaultModelId?: boolean
+  writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["workspace"]>
@@ -434,11 +463,12 @@ export type workspaceSelectScalar = {
   icon?: boolean
   directoryPath?: boolean
   defaultModelId?: boolean
+  writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "createdAt" | "updatedAt", ExtArgs["result"]["workspace"]>
+export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "writeApprovedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["workspace"]>
 
 export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "workspace"
@@ -449,6 +479,7 @@ export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalA
     icon: string | null
     directoryPath: string | null
     defaultModelId: number | null
+    writeApprovedAt: Date | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["workspace"]>
@@ -879,6 +910,7 @@ export interface workspaceFieldRefs {
   readonly icon: Prisma.FieldRef<"workspace", 'String'>
   readonly directoryPath: Prisma.FieldRef<"workspace", 'String'>
   readonly defaultModelId: Prisma.FieldRef<"workspace", 'Int'>
+  readonly writeApprovedAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"workspace", 'DateTime'>
 }

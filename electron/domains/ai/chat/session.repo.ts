@@ -43,6 +43,7 @@ export class SessionRepository {
       icon: row.icon ?? undefined,
       directoryPath: row.directoryPath ?? undefined,
       defaultModelId: row.defaultModelId ?? undefined,
+      writeApprovedAt: row.writeApprovedAt?.toISOString() ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -80,6 +81,12 @@ export class SessionRepository {
     );
     ipcMain.handle("workspace:delete", (_, id: number) =>
       this.deleteWorkspace(id),
+    );
+    ipcMain.handle("workspace:approveWrite", (_, id: number) =>
+      this.approveWrite(id),
+    );
+    ipcMain.handle("workspace:revokeWrite", (_, id: number) =>
+      this.revokeWrite(id),
     );
     ipcMain.handle("session:listByWorkspace", (_, workspaceId: number) =>
       this.listSessions(workspaceId),
@@ -152,6 +159,22 @@ export class SessionRepository {
     });
     await prisma.session.deleteMany({ where: { workspaceId: id } });
     await prisma.workspace.delete({ where: { id } });
+  }
+
+  /** P1 agent 审批：记录工作空间写入授权时间 */
+  async approveWrite(id: number): Promise<void> {
+    await prisma.workspace.update({
+      where: { id },
+      data: { writeApprovedAt: new Date() },
+    });
+  }
+
+  /** P1 agent 审批：撤销写入授权（置空） */
+  async revokeWrite(id: number): Promise<void> {
+    await prisma.workspace.update({
+      where: { id },
+      data: { writeApprovedAt: null },
+    });
   }
 
   async listSessions(workspaceId: number): Promise<SessionRecord[]> {

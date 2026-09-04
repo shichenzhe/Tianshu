@@ -65,6 +65,9 @@ export function useChatSend(sessionId: number) {
     void ChatApi.status(sessionId)
       .then((status) => {
         if (!ended && status.streaming) {
+          // FIFO 下快照已含未 flush 的缓冲增量，先清空缓冲避免重复渲染
+          buffers.current.text.flush();
+          buffers.current.thinking.flush();
           setStreamContent(sessionId, {
             text: status.text,
             thinking: status.thinking,

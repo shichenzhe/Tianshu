@@ -4,6 +4,17 @@
   "renameWorkspace": "重命名工作空间",
   "deleteWorkspace": "删除工作空间",
   "deleteWorkspaceDesc": "将删除该工作空间下的全部会话与消息，无法恢复。",
+  "workspace": {
+    "bindDirectory": "绑定目录…",
+    "rebindDirectory": "重新绑定目录…",
+    "unbindDirectory": "解绑目录",
+    "unbindConfirmTitle": "解绑工作空间目录",
+    "unbindConfirmDesc": "解绑后 AI 将无法访问该目录中的文件，历史消息保留。",
+    "authorizeWrite": "授权写入",
+    "authorizeWriteHint": "允许 AI 未经确认写入文件",
+    "revokeWrite": "撤销写入授权（{{date}}）",
+    "boundPathLabel": "工作空间目录"
+  },
   "defaultWorkspaceName": "默认工作空间",
   "sessionCount": "{{count}} 个会话",
   "renameSession": "重命名会话",

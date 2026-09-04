@@ -4,6 +4,17 @@
   "renameWorkspace": "Rename Workspace",
   "deleteWorkspace": "Delete Workspace",
   "deleteWorkspaceDesc": "All sessions and messages under this workspace will be deleted. This cannot be undone.",
+  "workspace": {
+    "bindDirectory": "Bind Directory…",
+    "rebindDirectory": "Rebind Directory…",
+    "unbindDirectory": "Unbind Directory",
+    "unbindConfirmTitle": "Unbind Workspace Directory",
+    "unbindConfirmDesc": "Once unbound, the AI can no longer access files in this directory. Message history is preserved.",
+    "authorizeWrite": "Authorize Writing",
+    "authorizeWriteHint": "Allow the AI to write files without confirmation",
+    "revokeWrite": "Revoke write approval ({{date}})",
+    "boundPathLabel": "Workspace Directory"
+  },
   "defaultWorkspaceName": "Default Workspace",
   "sessionCount": "{{count}} sessions",
   "renameSession": "Rename Session",

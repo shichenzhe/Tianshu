@@ -52,6 +52,16 @@ export class WorkspaceApi {
   static async revokeWrite(id: number): Promise<void> {
     return invoke<void>("workspace:revokeWrite", id);
   }
+
+  /** P1：弹系统目录选择框绑定工作空间目录；用户取消返回 null */
+  static async bindDirectory(id: number): Promise<WorkspaceRecord | null> {
+    return invoke<WorkspaceRecord | null>("workspace:bindDirectory", id);
+  }
+
+  /** P1：解绑工作空间目录（历史消息保留，仅收回 AI 的文件访问入口） */
+  static async unbindDirectory(id: number): Promise<WorkspaceRecord | null> {
+    return invoke<WorkspaceRecord | null>("workspace:unbindDirectory", id);
+  }
 }
 
 export default WorkspaceApi;

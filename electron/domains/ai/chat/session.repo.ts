@@ -149,6 +149,21 @@ export class SessionRepository {
     return this.toWorkspace(row);
   }
 
+  /**
+   * P1 工作空间目录绑定/解绑：null 为解绑（历史消息保留，仅收回 AI 文件入口）。
+   * directoryPath 已由调用方（ChatService）归一化；独立于 workspace:update 通道
+   */
+  async updateWorkspaceBoundDirectory(
+    id: number,
+    directoryPath: string | null,
+  ): Promise<WorkspaceRecord> {
+    const row = await prisma.workspace.update({
+      where: { id },
+      data: { directoryPath },
+    });
+    return this.toWorkspace(row);
+  }
+
   async deleteWorkspace(id: number): Promise<void> {
     const sessions = await prisma.session.findMany({
       where: { workspaceId: id },

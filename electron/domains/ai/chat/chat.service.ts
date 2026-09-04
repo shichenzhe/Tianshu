@@ -1,4 +1,4 @@
-import { ipcMain, type WebContents } from "electron";
+import { dialog, ipcMain, type WebContents } from "electron";
 import path from "node:path";
 import { generateText, streamText, stepCountIs } from "ai";
 import type { LanguageModel, ToolSet } from "ai";
@@ -26,6 +26,7 @@ import type {
   ChatStatusResult,
   ChatStreamChunk,
 } from "../../../../src-react/domains/ai/api/chat.api";
+import type { WorkspaceRecord } from "../../../../src-react/domains/ai/api/workspace.api";
 
 type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
@@ -552,6 +553,29 @@ export default class ChatService {
       "agent:approve",
       (_, toolCallId: string, approved: boolean) =>
         this.approvals.respond(toolCallId, approved),
+    );
+    // P1 工作空间目录绑定：目录选择弹窗在主进程（dialog 属 GUI，repo 不引 electron）。
+    // 用户取消返回 null，渲染层静默处理；存入前归一化（resolve + 去尾分隔符）
+    ipcMain.handle(
+      "workspace:bindDirectory",
+      async (_, workspaceId: number): Promise<WorkspaceRecord | null> => {
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+        });
+        if (result.canceled || !result.filePaths[0]) {
+          return null;
+        }
+        return this.sessions.updateWorkspaceBoundDirectory(
+          workspaceId,
+          normalizeWorkspacePath(result.filePaths[0]),
+        );
+      },
+    );
+    // 解绑走同一写通道（null = 解绑），独立于 workspace:update 参数类型
+    ipcMain.handle(
+      "workspace:unbindDirectory",
+      async (_, workspaceId: number): Promise<WorkspaceRecord | null> =>
+        this.sessions.updateWorkspaceBoundDirectory(workspaceId, null),
     );
   }
 

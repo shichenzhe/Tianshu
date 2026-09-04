@@ -35,6 +35,7 @@ import ChatInput from "../components/ChatInput";
 import ModelPicker from "../components/ModelPicker";
 import AssistantPicker from "../components/AssistantPicker";
 import AgentProgress from "../components/AgentProgress";
+import WorkspacePathChip from "../components/WorkspacePathChip";
 import { useChatSend } from "../hooks/use-chat-send";
 import { useChatStore } from "../store/chat.store";
 import { mapIpcError } from "../lib/error-message";
@@ -110,6 +111,10 @@ export default function ChatView() {
         onSelectSession={setSelectedSessionId}
       />
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* 顶栏：已绑定工作空间目录时展示路径 chip（重绑/解绑入口） */}
+        {activeWorkspace?.directoryPath && (
+          <WorkspacePathChip workspace={activeWorkspace} />
+        )}
         {needsSetup ? (
           <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
         ) : selectedSession ? (

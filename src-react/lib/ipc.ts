@@ -35,6 +35,8 @@ export type IPCChannel =
   | "workspace:delete"
   | "workspace:approveWrite"
   | "workspace:revokeWrite"
+  | "workspace:bindDirectory"
+  | "workspace:unbindDirectory"
   | "session:listByWorkspace"
   | "session:create"
   | "session:rename"

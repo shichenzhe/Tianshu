@@ -53,13 +53,23 @@ export default defineConfig(({ command }) => {
           vite: {
             build: {
               rolldownOptions: {
-                // rolldown 对 CJS 依赖的互操作转换在 ESM 产物下有两处问题：
+                // rolldown 对 CJS 依赖的互操作转换在 ESM 产物下有问题，均外部化走 Node 原生 require：
                 // 1. moment（winston-daily-rotate-file 依赖）被误转成命名空间对象，
                 //    运行时报 "moment is not a function"
                 // 2. better-sqlite3（原生模块，经 @prisma/adapter-better-sqlite3 引入）
                 //    内部的 bindings 依赖裸 __filename，ESM 作用域未定义
-                // 均外部化走 Node 原生 require（原生模块本就不应打包）
-                external: ["moment", "better-sqlite3"],
+                // 3. ai 系列（Vercel AI SDK）：内联后破坏 node 环境清理钩子状态，
+                //    流式调用时 better_sqlite3.node 析构断言崩溃（env != nullptr），
+                //    原生 require 直载经并发实验验证无此问题
+                external: [
+                  "moment",
+                  "better-sqlite3",
+                  "ai",
+                  "@ai-sdk/anthropic",
+                  "@ai-sdk/google",
+                  "@ai-sdk/openai-compatible",
+                  "ai-sdk-ollama",
+                ],
               },
             },
           },

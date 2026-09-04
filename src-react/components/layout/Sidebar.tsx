@@ -73,11 +73,7 @@ export default function Sidebar({
             collapsed ? "justify-center" : "px-3"
           }`}
         >
-          <img
-            src="./pc_logo.svg"
-            alt="mirror"
-            className="w-5 h-5 shrink-0"
-          />
+          <img src="./pc_logo.svg" alt="mirror" className="w-5 h-5 shrink-0" />
           {!collapsed && (
             <span className="text-sm font-semibold text-foreground tracking-tight select-none truncate">
               {"mirror"}

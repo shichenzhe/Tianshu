@@ -12,6 +12,8 @@
   "back": "返回",
   "preview": "预览",
   "copy": "复制",
+  "copied": "已复制",
+  "copyFailed": "复制失败",
   "execute": "执行",
   "run": "运行",
   "create": "创建",

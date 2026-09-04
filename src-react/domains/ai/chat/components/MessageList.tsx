@@ -71,10 +71,30 @@ export default function MessageList({
   }, [isStreaming, stream, sessionId]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  // 用户是否处于底部附近（ref 不触发渲染）；上滑查看历史时暂停自动跟随
+  const isNearBottomRef = useRef(true);
 
-  // 新历史消息或流式增量到达时滚动到底部（即时模式，避免流式期间动画堆积）
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) {
+      return;
+    }
+    isNearBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  // 切换会话：重置为跟随态并立即滚到底（历史随后到达时守卫放行）
   useEffect(() => {
+    isNearBottomRef.current = true;
     bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [sessionId]);
+
+  // 新内容到达仅在「底部附近」时跟随（spec §1）
+  useEffect(() => {
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ block: "end" });
+    }
   }, [messages.length, isStreaming, stream?.text, stream?.thinking]);
 
   if (sessionId === null) {
@@ -91,6 +111,8 @@ export default function MessageList({
   return (
     <div
       data-testid="message-area"
+      ref={containerRef}
+      onScroll={handleScroll}
       className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4"
     >
       {messagesQuery.isPending ? (

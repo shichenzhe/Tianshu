@@ -2,10 +2,11 @@
  * 单条消息渲染：blocks 分发（text/thinking/usage）+ 错误横幅 + 重新生成按钮
  * user 消息右侧主色气泡，assistant 消息左侧全宽
  */
-import { isValidElement, memo, type ReactNode } from "react";
+import { isValidElement, memo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown, { type Components } from "react-markdown";
-import { RotateCcw } from "lucide-react";
+import { Check, Copy, RotateCcw } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { parseBlocks, type MessageBlock } from "../model/blocks";
@@ -122,7 +123,8 @@ function MessageItemImpl({
   isLastAssistant = false,
   onRegenerate,
 }: MessageItemProps) {
-  const { t } = useTranslation(["chat"]);
+  const { t } = useTranslation(["chat", "common"]);
+  const [copied, setCopied] = useState(false);
 
   if (message.role === "user") {
     const text = parseBlocks(message.blocks)
@@ -142,6 +144,21 @@ function MessageItemImpl({
   const blocks = parseBlocks(message.blocks);
   const showRegenerate = isLastAssistant && Boolean(onRegenerate);
 
+  const handleCopy = async () => {
+    const text = blocks
+      .filter((block) => block.type === "text")
+      .map((block) => (block.type === "text" ? block.text : ""))
+      .join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success(t("common:copied"));
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error(t("common:copyFailed"));
+    }
+  };
+
   return (
     <div className="group min-w-0">
       {message.error && (
@@ -157,17 +174,32 @@ function MessageItemImpl({
       {blocks.map((block, index) => (
         <BlockView key={`${index}-${block.type}`} block={block} />
       ))}
-      {showRegenerate && (
+      <div className="mt-1 flex items-center gap-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
         <Button
           variant="ghost"
           size="sm"
-          onClick={onRegenerate}
-          className="mt-1 h-7 px-2 text-xs text-muted-foreground opacity-0 focus:opacity-100 group-hover:opacity-100 hover:bg-primary-subtle hover:text-primary"
+          onClick={handleCopy}
+          aria-label={t("common:copy")}
+          className="h-7 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
         >
-          <RotateCcw className="mr-1 h-3.5 w-3.5" />
-          {t("chat:message.regenerate")}
+          {copied ? (
+            <Check className="h-3.5 w-3.5" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
         </Button>
-      )}
+        {showRegenerate && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRegenerate}
+            className="h-7 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+          >
+            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+            {t("chat:message.regenerate")}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

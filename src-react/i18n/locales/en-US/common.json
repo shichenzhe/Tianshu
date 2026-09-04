@@ -12,6 +12,8 @@
   "back": "Back",
   "preview": "Preview",
   "copy": "Copy",
+  "copied": "Copied",
+  "copyFailed": "Copy failed",
   "execute": "Execute",
   "run": "Run",
   "create": "Create",

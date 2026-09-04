@@ -95,7 +95,7 @@ export default function ChatInput({
         placeholder={t(
           hasModel ? "chat:input.placeholder" : "chat:input.modelRequired",
         )}
-        className="max-h-40 min-h-0 flex-1 resize-none overflow-y-auto"
+        className="field-sizing-content max-h-40 min-h-0 flex-1 resize-none overflow-y-auto"
       />
       <Popover>
         <PopoverTrigger asChild>

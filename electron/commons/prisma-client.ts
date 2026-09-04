@@ -3,6 +3,9 @@ import path from "node:path";
 import { app } from "electron"; // 用于 Electron 应用的全局功能
 import { PrismaClient } from "../generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+// 副作用导入：statement 缓存补丁须在 adapter 创建 Database 实例前生效
+// （Node 24 代运行时 Statement GC finalizer 竞态崩溃，详见补丁文件头注释）
+import "./sqlite-stmt-cache";
 
 // 判断当前环境是否是开发环境
 const isDevelopment = !app.isPackaged;

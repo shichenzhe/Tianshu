@@ -8,42 +8,101 @@
  * 崩溃（SIGABRT）。@prisma/adapter-better-sqlite3 每次查询 prepare(sql) 后不保留
  * 引用（statement 全部交予 GC），正中此竞态。
  *
- * 修复：按 SQL 缓存 statement 复用（不进 GC → finalizer 竞态在数学上不可达）。
- * 已验证：Electron 完整模式压测（异步循环 + fetch 并发），未缓存 <1k 次即崩，
- * 缓存版 5 分钟零断言。上游修复（better-sqlite3 13.x 线）落地后可移除本补丁。
+ * 修复：按 SQL 缓存底层 statement 复用；prepare 返回轻量 JS facade 适配
+ * adapter 的「bind(args) 后执行」用法（原生 bind() 每个 statement 仅允许一次，
+ * 故 facade 记录参数、执行时以临时参数调用）。原生 statement 永不进 GC →
+ * finalizer 竞态不可达；facade 为纯 JS 对象，可安全被回收。
+ * 上游修复（better-sqlite3 13.x 线）落地后可移除本补丁。
  */
 // better-sqlite3 自带类型缺失（项目不直接依赖其类型；运行时经 external 原生加载）
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
 const Database: any = require("better-sqlite3");
 
-type PreparedStatement = {
+interface NativeStatement {
   run: (...params: unknown[]) => unknown;
   get: (...params: unknown[]) => unknown;
   all: (...params: unknown[]) => unknown[];
-};
+  iterate: (...params: unknown[]) => IterableIterator<unknown>;
+  columns: () => Array<{ name: string; type: string }>;
+  raw: () => {
+    run: (...params: unknown[]) => unknown;
+    get: (...params: unknown[]) => unknown;
+    all: (...params: unknown[]) => unknown[];
+  };
+  reader: boolean;
+}
 
-const cacheByDb = new WeakMap<object, Map<string, PreparedStatement>>();
+/** 一次性外观：把「bind 后执行」翻译为「带临时参数执行」 */
+class StatementFacade {
+  private boundArgs: unknown[] = [];
+
+  constructor(private readonly native: NativeStatement) {}
+
+  bind(args: unknown[]): this {
+    this.boundArgs = args;
+    return this;
+  }
+
+  private params(extra: unknown[]): unknown[] {
+    return extra.length > 0 ? extra : this.boundArgs;
+  }
+
+  run(...extra: unknown[]): unknown {
+    return this.native.run(...this.params(extra));
+  }
+
+  get(...extra: unknown[]): unknown {
+    return this.native.get(...this.params(extra));
+  }
+
+  all(...extra: unknown[]): unknown[] {
+    return this.native.all(...this.params(extra));
+  }
+
+  iterate(...extra: unknown[]): IterableIterator<unknown> {
+    return this.native.iterate(...this.params(extra));
+  }
+
+  columns(): Array<{ name: string; type: string }> {
+    return this.native.columns();
+  }
+
+  raw(): { all: (...extra: unknown[]) => unknown[] } {
+    const rawStmt = this.native.raw();
+    return {
+      all: (...extra: unknown[]) => rawStmt.all(...this.params(extra)),
+    };
+  }
+
+  get reader(): boolean {
+    return this.native.reader;
+  }
+}
+
+const cacheByDb = new WeakMap<object, Map<string, NativeStatement>>();
 const originalPrepare = Database.prototype.prepare;
 
 Database.prototype.prepare = function patchedPrepare(
   this: object,
   sql: string,
   ...options: unknown[]
-): PreparedStatement {
-  // 带 options 的调用不缓存（本项目内无此用法，透传保真）
+): StatementFacade {
+  // 带 options 的调用不缓存（本项目内无此用法，直接透传原 statement）
   if (options.length > 0) {
-    return originalPrepare.apply(this, [sql, ...options]);
+    return new StatementFacade(
+      originalPrepare.apply(this, [sql, ...options]) as NativeStatement,
+    );
   }
   let cache = cacheByDb.get(this);
   if (!cache) {
-    cache = new Map<string, PreparedStatement>();
+    cache = new Map<string, NativeStatement>();
     cacheByDb.set(this, cache);
   }
   const cached = cache.get(sql);
   if (cached) {
-    return cached;
+    return new StatementFacade(cached);
   }
-  const stmt = originalPrepare.call(this, sql) as PreparedStatement;
+  const stmt = originalPrepare.call(this, sql) as NativeStatement;
   cache.set(sql, stmt);
-  return stmt;
+  return new StatementFacade(stmt);
 };

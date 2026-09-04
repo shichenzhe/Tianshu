@@ -21,6 +21,10 @@ const ProviderSettingsView = lazy(
 const AssistantSettingsView = lazy(
   () => import("@/domains/ai/assistant/views/AssistantSettingsView"),
 );
+// AI MCP 服务管理
+const McpSettingsView = lazy(
+  () => import("@/domains/ai/mcp/views/McpSettingsView"),
+);
 // AI 对话主界面
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 
@@ -88,6 +92,14 @@ export const router = createHashRouter([
         element: (
           <LazyWrapper>
             <AssistantSettingsView />
+          </LazyWrapper>
+        ),
+      },
+      {
+        path: "ai/mcp",
+        element: (
+          <LazyWrapper>
+            <McpSettingsView />
           </LazyWrapper>
         ),
       },

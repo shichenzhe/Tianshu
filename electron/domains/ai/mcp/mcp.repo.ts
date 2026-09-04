@@ -82,9 +82,10 @@ export class McpRepository {
         enabled: p.enabled,
       },
     });
-    // 新建即启用：立即连接并注册工具（连接失败由 manager 记 error 状态，不阻塞创建）
+    // 新建即启用：立即连接并注册工具（连接失败由 manager 记 error 状态，不阻塞创建）；
+    // fire-and-forget——connect 内部不抛错，catch 仅为类型完备
     if (this.manager && row.enabled) {
-      await this.manager.connect(parseMcpRow(row));
+      void this.manager.connect(parseMcpRow(row)).catch(() => {});
     }
     return this.toRecord(row);
   }
@@ -122,11 +123,15 @@ export class McpRepository {
   }
 
   async setEnabled(id: number, enabled: boolean): Promise<void> {
+    const before = await this.prismaClient.mcpServer.findUnique({
+      where: { id },
+    });
     const row = await this.prismaClient.mcpServer.update({
       where: { id },
       data: { enabled },
     });
-    if (this.manager) {
+    // 冗余启停短路：目标状态与当前一致时不联动（重复 enable 会经 connect 重注册工具）
+    if (this.manager && before && before.enabled !== enabled) {
       await this.manager.setEnabled(parseMcpRow(row), enabled);
     }
   }

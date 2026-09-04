@@ -3,9 +3,10 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Edit, FolderOpen, Play, Plus, Trash2 } from "lucide-react";
+import { Edit, FolderOpen, Play, Plus, Server, Trash2 } from "lucide-react";
 
 import PageTitle from "@/components/layout/PageTitle";
 import {
@@ -45,9 +46,11 @@ import { mapIpcError } from "../../chat/lib/error-message";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
+const MCP_ROUTE = "/module/ai/mcp";
 
 export default function ProviderSettingsView() {
   const { t } = useTranslation(["ai", "common"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const providersQuery = useQuery({
     queryKey: PROVIDERS_KEY,
@@ -162,7 +165,17 @@ export default function ProviderSettingsView() {
 
   return (
     <div className="p-6">
-      <PageTitle title={t("ai:pageTitle")} />
+      <PageTitle title={t("ai:pageTitle")}>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 border-white/40 bg-transparent text-white hover:bg-white/15 hover:text-white"
+          onClick={() => navigate(MCP_ROUTE)}
+        >
+          <Server className="mr-1 h-3.5 w-3.5" />
+          {t("ai:mcp.manageLink")}
+        </Button>
+      </PageTitle>
       <p className="mb-4 text-sm text-muted-foreground">{t("ai:pageDesc")}</p>
 
       {providersQuery.isPending ? (

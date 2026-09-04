@@ -36,6 +36,21 @@
     "failed": "Generation failed",
     "regenerate": "Regenerate"
   },
+  "tool": {
+    "state": {
+      "ready": "Pending",
+      "awaitingApproval": "Awaiting Approval",
+      "running": "Running",
+      "done": "Done",
+      "denied": "Denied",
+      "error": "Failed"
+    },
+    "outputTruncated": "Output too long, showing first {{count}} lines",
+    "approve": "Allow",
+    "deny": "Deny",
+    "approveRemember": "Allow and remember",
+    "argSummaryFallback": "This tool requests to modify workspace files"
+  },
   "errors": {
     "AUTH_FAILED": "Authentication failed, please check the API Key",
     "RATE_LIMITED": "Too many requests, please try again later",

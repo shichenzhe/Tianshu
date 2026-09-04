@@ -22,6 +22,7 @@ export function useChatSend(sessionId: number) {
   const appendDelta = useChatStore((state) => state.appendDelta);
   const finishStream = useChatStore((state) => state.finishStream);
   const setStreamContent = useChatStore((state) => state.setStreamContent);
+  const updateTool = useChatStore((state) => state.updateTool);
   const buffers = useRef({
     text: new StreamBuffer(),
     thinking: new StreamBuffer(),
@@ -61,6 +62,20 @@ export function useChatSend(sessionId: number) {
       } else if (chunk.type === "title-updated") {
         // AI 起名完成 → 刷新侧边栏会话列表（spec §6）
         void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      } else if (chunk.type === "tool-update") {
+        // P1：工具流式状态进 store 缓冲（args/output 缺省由 updateTool 跳过合并）
+        updateTool(sessionId, chunk.toolCallId, {
+          toolName: chunk.toolName,
+          args: chunk.args,
+          state: chunk.state,
+          output: chunk.output,
+        });
+      } else if (chunk.type === "approval-request") {
+        // P1：审批请求仅补 argSummary，待渲染层弹审批 UI（后续任务接线）
+        updateTool(sessionId, chunk.toolCallId, {
+          toolName: chunk.toolName,
+          argSummary: chunk.argSummary,
+        });
       }
     });
     // 切回会话：先订阅再查询，streaming 则以主进程快照恢复（spec §4）；
@@ -74,6 +89,8 @@ export function useChatSend(sessionId: number) {
           setStreamContent(sessionId, {
             text: status.text,
             thinking: status.thinking,
+            // P1：主进程快照已含工具态，整体透传恢复 agent 进度
+            tools: status.tools,
           });
         }
       })
@@ -89,7 +106,15 @@ export function useChatSend(sessionId: number) {
       off();
       finishStream(sessionId);
     };
-  }, [sessionId, appendDelta, finishStream, setStreamContent, queryClient, t]);
+  }, [
+    sessionId,
+    appendDelta,
+    finishStream,
+    setStreamContent,
+    updateTool,
+    queryClient,
+    t,
+  ]);
 
   const sending = useChatStore(
     (state) => state.isStreaming[sessionId] ?? false,

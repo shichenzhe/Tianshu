@@ -1,7 +1,7 @@
 import { app, dialog, ipcMain, type WebContents } from "electron";
 import path from "node:path";
 import { generateText, streamText, stepCountIs } from "ai";
-import type { LanguageModel, ToolSet } from "ai";
+import type { FlexibleSchema, LanguageModel, ToolSet } from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import {
@@ -285,7 +285,9 @@ function buildToolSet(
   for (const def of defs) {
     set[def.name] = {
       description: def.description,
-      inputSchema: def.parameters,
+      // P2 T5 适配点：MCP 工具 parameters 为 JSON Schema 对象，SDK 运行时
+      // 需经 jsonSchema() 包装后再注入；此处先断言放宽让宽化类型通过编译
+      inputSchema: def.parameters as FlexibleSchema,
       // execute 第二参 options 携带 toolCallId 与 abortSignal（v7 ToolExecutionOptions）
       execute: (input, options) =>
         runToolCall(

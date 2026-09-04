@@ -69,6 +69,8 @@ export default defineConfig(({ command }) => {
                   "@ai-sdk/google",
                   "@ai-sdk/openai-compatible",
                   "ai-sdk-ollama",
+                  // MCP SDK（P2）：与 ai 系列同样外部化走 Node 原生 require
+                  "@modelcontextprotocol/sdk",
                 ],
               },
             },

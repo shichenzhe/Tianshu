@@ -15,7 +15,13 @@ export interface ToolContext {
 export interface ToolDefinition<TArgs = unknown> {
   name: string;
   description: string;
-  parameters: z.ZodType<TArgs>;
+  /**
+   * zod schema（内置工具）或 JSON Schema 对象（MCP 工具，inputSchema 透传）。
+   * 注意：AI SDK 运行时并不直接接受裸 JSON Schema 对象（asSchema 会把它当
+   * lazy schema 调用而崩溃），chat.service 注入侧在 T5 按类型分流——非 zod
+   * 的 parameters 须经 jsonSchema() 包装后再传给 SDK。
+   */
+  parameters: z.ZodType<TArgs> | object;
   kind: "read" | "write";
   /** 方法签名（非属性）以保持 ToolDefinition<T> 到 ToolDefinition<unknown> 的可赋值性 */
   execute(ctx: ToolContext, args: TArgs): Promise<string>;

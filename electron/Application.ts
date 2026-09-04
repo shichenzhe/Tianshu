@@ -8,6 +8,11 @@ import { ModelRepository } from "./domains/ai/provider/model.repo";
 import { AssistantRepository } from "./domains/ai/chat/assistant.repo";
 import { SessionRepository } from "./domains/ai/chat/session.repo";
 import ChatService from "./domains/ai/chat/chat.service";
+import {
+  McpManager,
+  createDefaultClient,
+  parseMcpRow,
+} from "./domains/ai/agent/mcp-manager";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -99,6 +104,24 @@ export default class Application {
     new AssistantRepository();
     const sessionRepo = new SessionRepository();
     new ChatService(sessionRepo);
+    // MCP 工具接入：fire-and-forget 启动连接，失败不影响应用启动
+    // （T6 将以 mcp repo 替换此处的临时行解析）
+    const mcpManager = new McpManager({
+      createClient: createDefaultClient,
+      prisma: {
+        mcpServer: {
+          findMany: async () => {
+            const rows = await prisma.mcpServer.findMany({
+              where: { enabled: true },
+            });
+            return rows.map(parseMcpRow);
+          },
+        },
+      },
+    });
+    void mcpManager
+      .startupConnectAll()
+      .catch((e) => Log.error("MCP 启动连接失败", e));
     // 基础设施
     new Log();
     new AppInfoService();

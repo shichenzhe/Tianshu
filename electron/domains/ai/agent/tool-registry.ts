@@ -14,3 +14,15 @@ export const registry = {
 export function registerTools(defs: ToolDefinition[]): void {
   definitions.push(...defs);
 }
+
+/**
+ * 按 name 前缀批量注销工具（MCP 重连/停用时清旧注册），就地过滤以保持
+ * getDefinitions 返回的活数组引用有效。返回移除数量。
+ */
+export function unregisterTools(prefix: string): number {
+  const before = definitions.length;
+  for (let i = definitions.length - 1; i >= 0; i--) {
+    if (definitions[i].name.startsWith(prefix)) definitions.splice(i, 1);
+  }
+  return before - definitions.length;
+}

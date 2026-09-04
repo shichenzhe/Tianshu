@@ -3,7 +3,7 @@
  * 流式工具区简化实现：统一追加在 text/thinking 之后（流式期间顺序弱化，
  * 历史回读经 tool_call 块还原真实穿插序）
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 
@@ -85,14 +85,6 @@ export default function MessageList({
   // 用户是否处于底部附近（ref 不触发渲染）；上滑查看历史时暂停自动跟随
   const isNearBottomRef = useRef(true);
 
-  // 审批横幅双闸之二：本地已决议标记（store awaiting 态为第一闸）。
-  // onDecided 只记此标记做乐观隐藏，store 态变更（running/denied）自然卸下；
-  // 换会话时组件随 ChatPane key 重建，标记清零，store 仍 awaiting 的横幅可重现
-  const [localDecided, setLocalDecided] = useState<Record<string, boolean>>({});
-  const handleDecided = (toolCallId: string) => {
-    setLocalDecided((prev) => ({ ...prev, [toolCallId]: true }));
-  };
-
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) {
@@ -158,8 +150,10 @@ export default function MessageList({
             />
           ))}
           {liveMessage && <MessageItem message={liveMessage} />}
-          {/* 流式工具区：按 order 遍历当前流工具；awaiting-approval 且有
-              argSummary 时其下挂审批横幅（store 态 + 本地已决议双闸） */}
+          {/* 流式工具区：按 order 遍历当前流工具；条目 awaiting-approval 且有
+              argSummary 时其下挂审批横幅。可见性纯 store 态门控：决议成功后
+              主进程推 running/denied chunk 自然卸下；invoke 失败 store 态未变，
+              横幅保持可见可重试 */}
           {isStreaming &&
             stream &&
             stream.tools.order.map((toolCallId) => {
@@ -171,8 +165,7 @@ export default function MessageList({
               const showBanner =
                 tool.state === "awaiting-approval" &&
                 argSummary !== undefined &&
-                argSummary.length > 0 &&
-                !localDecided[toolCallId];
+                argSummary.length > 0;
               return (
                 <div key={toolCallId}>
                   <ToolCallCard {...tool} />
@@ -184,7 +177,7 @@ export default function MessageList({
                       toolName={tool.toolName}
                       argSummary={argSummary}
                       rememberAvailable={rememberAvailable}
-                      onDecided={() => handleDecided(toolCallId)}
+                      onDecided={() => {}}
                     />
                   )}
                 </div>

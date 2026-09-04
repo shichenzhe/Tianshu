@@ -17,7 +17,7 @@ function AgentProgressImpl({ stepCount, activeTool }: AgentProgressProps) {
   const { t } = useTranslation(["chat"]);
 
   return (
-    <div className="flex h-7 items-center gap-2 border-b border-border/50 px-4 text-xs text-muted-foreground">
+    <div className="flex h-7 items-center gap-2 px-4 text-xs text-muted-foreground">
       {activeTool
         ? t("chat:agent.step", { n: stepCount, tool: activeTool })
         : t("chat:agent.working")}

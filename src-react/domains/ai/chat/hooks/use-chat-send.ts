@@ -21,14 +21,18 @@ export function useChatSend(sessionId: number) {
   const startStream = useChatStore((state) => state.startStream);
   const appendDelta = useChatStore((state) => state.appendDelta);
   const finishStream = useChatStore((state) => state.finishStream);
+  const setStreamContent = useChatStore((state) => state.setStreamContent);
   const buffers = useRef({
     text: new StreamBuffer(),
     thinking: new StreamBuffer(),
   });
 
   useEffect(() => {
+    // 流结束标记：迟到的 status 响应不得复活已结束的流状态（spec §4）
+    let ended = false;
     // finish/error 公共收尾：尾部不足 30ms 的缓冲不补吐，invalidate 重取已含完整持久化内容
     const endStream = () => {
+      ended = true;
       finishStream(sessionId);
       void queryClient.invalidateQueries({
         queryKey: ["messages", sessionId],
@@ -56,6 +60,20 @@ export function useChatSend(sessionId: number) {
         endStream();
       }
     });
+    // 切回会话：先订阅再查询，streaming 则以主进程快照恢复（spec §4）；
+    // 响应迟到于流结束时忽略，避免复活已结束的流状态
+    void ChatApi.status(sessionId)
+      .then((status) => {
+        if (!ended && status.streaming) {
+          setStreamContent(sessionId, {
+            text: status.text,
+            thinking: status.thinking,
+          });
+        }
+      })
+      .catch(() => {
+        /* 查询失败按非流式处理，不阻塞挂载 */
+      });
     // 卸载/换绑时除了解绑监听，还要清流状态：否则流在无监听期间结束时，
     // isStreaming[sessionId] 永远为 true（发送按钮卡在「停止」且无法再发送）。
     // 若此时流仍在进行，主进程会照常持久化，重新进入会话时由 query 重取补齐。
@@ -63,7 +81,7 @@ export function useChatSend(sessionId: number) {
       off();
       finishStream(sessionId);
     };
-  }, [sessionId, appendDelta, finishStream, queryClient, t]);
+  }, [sessionId, appendDelta, finishStream, setStreamContent, queryClient, t]);
 
   const sending = useChatStore(
     (state) => state.isStreaming[sessionId] ?? false,

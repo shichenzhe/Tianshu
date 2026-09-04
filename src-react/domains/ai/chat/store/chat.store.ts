@@ -13,6 +13,7 @@ interface ChatStore {
   streams: Record<number, StreamContent>;
   isStreaming: Record<number, boolean>;
   startStream: (sessionId: number) => void;
+  setStreamContent: (sessionId: number, content: StreamContent) => void;
   appendDelta: (
     sessionId: number,
     kind: "text" | "thinking",
@@ -28,6 +29,12 @@ export const useChatStore = create<ChatStore>((set) => ({
     set((state) => ({
       isStreaming: { ...state.isStreaming, [sessionId]: true },
       streams: { ...state.streams, [sessionId]: { text: "", thinking: "" } },
+    })),
+  // 以主进程快照整体覆盖（切回会话恢复半截内容），并标记为流式中
+  setStreamContent: (sessionId, content) =>
+    set((state) => ({
+      streams: { ...state.streams, [sessionId]: content },
+      isStreaming: { ...state.isStreaming, [sessionId]: true },
     })),
   appendDelta: (sessionId, kind, delta) =>
     set((state) => {

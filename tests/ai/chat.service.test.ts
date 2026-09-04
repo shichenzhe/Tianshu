@@ -205,3 +205,29 @@ describe("ChatService 并发防护", () => {
     ).rejects.toThrow("NO_MODEL");
   });
 });
+
+describe("ChatService.status（流中切回恢复）", () => {
+  it("无进行中流：streaming=false 空内容", () => {
+    const svc = new ChatService({} as never);
+    expect(svc.status(99)).toEqual({
+      streaming: false,
+      text: "",
+      thinking: "",
+    });
+  });
+
+  it("有进行中流：返回累积快照", () => {
+    const svc = new ChatService({} as never);
+    const internal = svc as unknown as {
+      aborts: Map<number, AbortController>;
+      snapshots: Map<number, { text: string; thinking: string }>;
+    };
+    internal.aborts.set(7, new AbortController());
+    internal.snapshots.set(7, { text: "半截", thinking: "" });
+    expect(svc.status(7)).toEqual({
+      streaming: true,
+      text: "半截",
+      thinking: "",
+    });
+  });
+});

@@ -117,6 +117,7 @@ export async function runChatStream(
 
 export default class ChatService {
   private aborts = new Map<number, AbortController>();
+  private snapshots = new Map<number, { text: string; thinking: string }>();
 
   constructor(private sessions: SessionRepository) {
     this.registerHandlers();
@@ -130,6 +131,9 @@ export default class ChatService {
       this.regenerate(sessionId, event.sender),
     );
     ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
+    ipcMain.handle("chat:status", (_, sessionId: number) =>
+      this.status(sessionId),
+    );
   }
 
   private emit(
@@ -300,7 +304,22 @@ export default class ChatService {
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,
         abortSignal: abort.signal,
-        onChunk: (chunk) => this.emit(sender, sessionId, chunk),
+        onChunk: (chunk) => {
+          // 先累积主进程快照（供切回会话恢复），再照常推送渲染层
+          if (chunk.type === "text-delta" || chunk.type === "reasoning-delta") {
+            const snap = this.snapshots.get(sessionId) ?? {
+              text: "",
+              thinking: "",
+            };
+            if (chunk.type === "text-delta") {
+              snap.text += chunk.text;
+            } else {
+              snap.thinking += chunk.text;
+            }
+            this.snapshots.set(sessionId, snap);
+          }
+          this.emit(sender, sessionId, chunk);
+        },
       });
 
       // 持久化 assistant 消息（中断也保留已生成部分）
@@ -325,7 +344,24 @@ export default class ChatService {
       }
     } finally {
       this.aborts.delete(sessionId);
+      this.snapshots.delete(sessionId);
     }
+  }
+
+  /**
+   * 查询会话流状态（切回会话时恢复 UI 用，spec §4）
+   */
+  status(sessionId: number): {
+    streaming: boolean;
+    text: string;
+    thinking: string;
+  } {
+    const snap = this.snapshots.get(sessionId);
+    return {
+      streaming: this.aborts.has(sessionId),
+      text: snap?.text ?? "",
+      thinking: snap?.thinking ?? "",
+    };
   }
 
   stop(sessionId: number): void {

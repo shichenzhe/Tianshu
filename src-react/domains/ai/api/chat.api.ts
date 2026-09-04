@@ -23,7 +23,20 @@ export type ChatStreamChunk =
   | { type: "finish" }
   | { type: "error"; errorCode: string; message: string };
 
+export interface ChatStatusResult {
+  streaming: boolean;
+  text: string;
+  thinking: string;
+}
+
 export default class ChatApi {
+  /**
+   * 查询会话流状态（切回会话恢复 UI，spec §4）
+   */
+  static async status(sessionId: number): Promise<ChatStatusResult> {
+    return invoke<ChatStatusResult>("chat:status", sessionId);
+  }
+
   /**
    * 发送消息（结果经 chat:stream:{sessionId} 事件推送，无返回值）
    */

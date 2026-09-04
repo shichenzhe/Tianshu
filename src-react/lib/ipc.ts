@@ -45,6 +45,7 @@ export type IPCChannel =
   | "assistant:create"
   | "assistant:update"
   | "assistant:delete"
+  | "chat:status"
   | "chat:send"
   | "chat:regenerate"
   | "chat:stop"

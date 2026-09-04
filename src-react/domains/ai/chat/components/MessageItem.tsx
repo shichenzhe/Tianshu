@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { parseBlocks, type MessageBlock } from "../model/blocks";
 import type { MessageRecord } from "../../api/session.api";
 import CodeBlock from "./CodeBlock";
+import ToolCallCard from "./ToolCallCard";
 
 interface MessageItemProps {
   message: MessageRecord;
@@ -112,8 +113,17 @@ function BlockView({ block }: { block: MessageBlock }) {
       return <ThinkingBlockView text={block.text} />;
     case "usage":
       return <UsageBlockView input={block.input} output={block.output} />;
+    case "tool_call":
+      // 落库块 output 恒为主进程写入的字符串（done/denied/error 终态），兜底非字符串不展示
+      return (
+        <ToolCallCard
+          toolName={block.toolName}
+          args={block.args}
+          state={block.state}
+          output={typeof block.output === "string" ? block.output : undefined}
+        />
+      );
     default:
-      // tool_call 块由 P1 agent loop 补充渲染
       return null;
   }
 }

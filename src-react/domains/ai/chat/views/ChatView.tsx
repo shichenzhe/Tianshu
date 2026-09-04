@@ -28,13 +28,15 @@ import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
 import type { ChatModelParams } from "../../api/chat.api";
-import { WorkspaceApi } from "../../api/workspace.api";
+import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import SessionSidebar from "../components/SessionSidebar";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 import ModelPicker from "../components/ModelPicker";
 import AssistantPicker from "../components/AssistantPicker";
+import AgentProgress from "../components/AgentProgress";
 import { useChatSend } from "../hooks/use-chat-send";
+import { useChatStore } from "../store/chat.store";
 import { mapIpcError } from "../lib/error-message";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
@@ -114,6 +116,7 @@ export default function ChatView() {
           <ChatPane
             key={selectedSession.id}
             session={selectedSession}
+            workspace={activeWorkspace}
             hasModel={Boolean(
               selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
             )}
@@ -129,6 +132,8 @@ export default function ChatView() {
 
 interface ChatPaneProps {
   session: SessionRecord;
+  /** 会话所属工作空间（即当前选中项），供审批横幅取 id 与写授权态 */
+  workspace: WorkspaceRecord | null;
   hasModel: boolean;
   onOpenAssistants: () => void;
 }
@@ -137,9 +142,36 @@ interface ChatPaneProps {
  * 单会话面板：useChatSend 唯一实例在此，输入框与消息列表共享 sending
  * 状态；key 取会话 id，切换会话时重建（流监听与节流缓冲随之隔离）
  */
-function ChatPane({ session, hasModel, onOpenAssistants }: ChatPaneProps) {
+function ChatPane({
+  session,
+  workspace,
+  hasModel,
+  onOpenAssistants,
+}: ChatPaneProps) {
   const { t } = useTranslation(["chat", "ai"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
+
+  // Agent 进度数据：选择器只返回原始值（条数/工具名字符串），流式 delta
+  // 不触发本面板重渲染，仅轮次切换或活跃工具变化时更新
+  const agentStepCount = useChatStore(
+    (state) => state.streams[session.id]?.tools.order.length ?? 0,
+  );
+  const activeTool = useChatStore((state) => {
+    const tools = state.streams[session.id]?.tools;
+    if (!tools) {
+      return undefined;
+    }
+    for (let i = tools.order.length - 1; i >= 0; i -= 1) {
+      const entry = tools.map[tools.order[i]];
+      if (
+        entry &&
+        (entry.state === "running" || entry.state === "awaiting-approval")
+      ) {
+        return entry.toolName;
+      }
+    }
+    return undefined;
+  });
 
   const handleSend = async (content: string, overrides?: ChatModelParams) => {
     try {
@@ -159,7 +191,15 @@ function ChatPane({ session, hasModel, onOpenAssistants }: ChatPaneProps) {
 
   return (
     <>
-      <MessageList sessionId={session.id} onRegenerate={handleRegenerate} />
+      <MessageList
+        sessionId={session.id}
+        workspaceId={workspace?.id ?? null}
+        rememberAvailable={workspace ? !workspace.writeApprovedAt : false}
+        onRegenerate={handleRegenerate}
+      />
+      {sending && (
+        <AgentProgress stepCount={agentStepCount + 1} activeTool={activeTool} />
+      )}
       <div className="border-t border-border/50 p-4">
         <div className="flex items-end gap-2">
           <ModelPicker

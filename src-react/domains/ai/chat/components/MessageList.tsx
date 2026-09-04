@@ -1,7 +1,9 @@
 /**
  * 消息列表：历史消息（React Query）+ 流式中的实时气泡 + 新内容自动滚动到底
+ * 流式工具区简化实现：统一追加在 text/thinking 之后（流式期间顺序弱化，
+ * 历史回读经 tool_call 块还原真实穿插序）
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 
@@ -9,15 +11,23 @@ import SessionApi, { type MessageRecord } from "../../api/session.api";
 import { serializeBlocks, type MessageBlock } from "../model/blocks";
 import { useChatStore } from "../store/chat.store";
 import MessageItem from "./MessageItem";
+import ToolCallCard from "./ToolCallCard";
+import ApprovalBanner from "./ApprovalBanner";
 
 interface MessageListProps {
   sessionId: number | null;
+  /** 当前工作空间 id（审批横幅「允许并记住」需要）；null 时不挂横幅 */
+  workspaceId?: number | null;
+  /** 当前工作空间是否可「允许并记住」（尚未授权过写入时为 true） */
+  rememberAvailable?: boolean;
   /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
   onRegenerate?: () => void;
 }
 
 export default function MessageList({
   sessionId,
+  workspaceId = null,
+  rememberAvailable = false,
   onRegenerate,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
@@ -75,6 +85,14 @@ export default function MessageList({
   // 用户是否处于底部附近（ref 不触发渲染）；上滑查看历史时暂停自动跟随
   const isNearBottomRef = useRef(true);
 
+  // 审批横幅双闸之二：本地已决议标记（store awaiting 态为第一闸）。
+  // onDecided 只记此标记做乐观隐藏，store 态变更（running/denied）自然卸下；
+  // 换会话时组件随 ChatPane key 重建，标记清零，store 仍 awaiting 的横幅可重现
+  const [localDecided, setLocalDecided] = useState<Record<string, boolean>>({});
+  const handleDecided = (toolCallId: string) => {
+    setLocalDecided((prev) => ({ ...prev, [toolCallId]: true }));
+  };
+
   const handleScroll = () => {
     const el = containerRef.current;
     if (!el) {
@@ -90,12 +108,18 @@ export default function MessageList({
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [sessionId]);
 
-  // 新内容到达仅在「底部附近」时跟随（spec §1）
+  // 新内容到达仅在「底部附近」时跟随（spec §1）；工具卡/审批横幅到达同样跟随
   useEffect(() => {
     if (isNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ block: "end" });
     }
-  }, [messages.length, isStreaming, stream?.text, stream?.thinking]);
+  }, [
+    messages.length,
+    isStreaming,
+    stream?.text,
+    stream?.thinking,
+    stream?.tools,
+  ]);
 
   if (sessionId === null) {
     return (
@@ -134,6 +158,38 @@ export default function MessageList({
             />
           ))}
           {liveMessage && <MessageItem message={liveMessage} />}
+          {/* 流式工具区：按 order 遍历当前流工具；awaiting-approval 且有
+              argSummary 时其下挂审批横幅（store 态 + 本地已决议双闸） */}
+          {isStreaming &&
+            stream &&
+            stream.tools.order.map((toolCallId) => {
+              const tool = stream.tools.map[toolCallId];
+              if (!tool) {
+                return null;
+              }
+              const argSummary = tool.argSummary;
+              const showBanner =
+                tool.state === "awaiting-approval" &&
+                argSummary !== undefined &&
+                argSummary.length > 0 &&
+                !localDecided[toolCallId];
+              return (
+                <div key={toolCallId}>
+                  <ToolCallCard {...tool} />
+                  {showBanner && workspaceId !== null && (
+                    <ApprovalBanner
+                      sessionId={sessionId}
+                      workspaceId={workspaceId}
+                      toolCallId={toolCallId}
+                      toolName={tool.toolName}
+                      argSummary={argSummary}
+                      rememberAvailable={rememberAvailable}
+                      onDecided={() => handleDecided(toolCallId)}
+                    />
+                  )}
+                </div>
+              );
+            })}
         </>
       )}
       <div ref={bottomRef} />

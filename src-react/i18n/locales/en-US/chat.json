@@ -51,6 +51,10 @@
     "approveRemember": "Allow and remember",
     "argSummaryFallback": "This tool requests to modify workspace files"
   },
+  "agent": {
+    "step": "Step {{n}} · {{tool}}",
+    "working": "Thinking…"
+  },
   "errors": {
     "AUTH_FAILED": "Authentication failed, please check the API Key",
     "RATE_LIMITED": "Too many requests, please try again later",

@@ -77,7 +77,9 @@ export function useChatSend(sessionId: number) {
     // 卸载/换绑时除了解绑监听，还要清流状态：否则流在无监听期间结束时，
     // isStreaming[sessionId] 永远为 true（发送按钮卡在「停止」且无法再发送）。
     // 若此时流仍在进行，主进程会照常持久化，重新进入会话时由 query 重取补齐。
+    // 卸载后迟到的 status 响应同样不得复活流状态，置位结束标记
     return () => {
+      ended = true;
       off();
       finishStream(sessionId);
     };

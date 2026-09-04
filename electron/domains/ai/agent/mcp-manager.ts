@@ -214,15 +214,22 @@ export class McpManager {
 
   /**
    * 按旧名清理：server 改名时旧前缀工具不再被 connect/setEnabled 触达，
-   * 由 repo.update 改名钩子显式调用（注销旧前缀 + 尽力关闭旧 client）
+   * 由 repo.update 改名钩子显式调用（注销旧前缀 + 尽力关闭旧 client）。
+   * 代际同步前移：挂起中的旧 connect 恢复后经 isSuperseded 作废，
+   * 不复活刚清理的旧前缀（同 setEnabled(false) 的守卫语义）
    */
   unregisterByName(serverName: string): void {
     unregisterTools(toolPrefix(serverName));
     for (const record of this.records.values()) {
-      if (record.row.name === serverName && record.client) {
+      if (record.row.name === serverName) {
+        record.generation++;
         const client = record.client;
         record.client = undefined;
-        void closeQuietly(client);
+        record.toolCount = 0;
+        record.state = client ? "error" : record.state;
+        if (client) {
+          void closeQuietly(client);
+        }
       }
     }
   }

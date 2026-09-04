@@ -56,8 +56,11 @@ export function useChatSend(sessionId: number) {
         toast.error(t(`chat:errors.${chunk.errorCode ?? "UNKNOWN"}`), {
           description: chunk.message,
         });
-      } else {
+      } else if (chunk.type === "finish") {
         endStream();
+      } else if (chunk.type === "title-updated") {
+        // AI 起名完成 → 刷新侧边栏会话列表（spec §6）
+        void queryClient.invalidateQueries({ queryKey: ["sessions"] });
       }
     });
     // 切回会话：先订阅再查询，streaming 则以主进程快照恢复（spec §4）；

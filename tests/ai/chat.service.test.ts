@@ -4,9 +4,25 @@ vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
 }));
 
-// runChatStream 为纯函数；屏蔽 prisma-client 模块初始化对 electron app 路径的依赖
+// runChatStream 为纯函数；屏蔽 prisma-client 模块初始化对 electron app 路径的依赖。
+// prismaStub 供自动标题守卫测试注入 message.findMany 结果（既有 runChatStream 测试不触 prisma 方法）
+const prismaStub = {
+  messages: [] as Array<{
+    id: number;
+    sessionId: number;
+    role: string;
+    blocks: string;
+    error: string | null;
+  }>,
+  sessionTitle: "新会话" as string,
+};
+
 vi.mock("../../electron/commons/prisma-client", () => ({
-  default: {},
+  default: {
+    message: {
+      findMany: async () => prismaStub.messages,
+    },
+  },
 }));
 
 import { MockLanguageModelV3 } from "ai/test";
@@ -229,5 +245,106 @@ describe("ChatService.status（流中切回恢复）", () => {
       text: "半截",
       thinking: "",
     });
+  });
+});
+
+describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
+  const makeSvc = (sessions: Record<string, unknown>) =>
+    new ChatService(sessions as never);
+
+  const ctx = {
+    type: "openai-compatible",
+    baseUrl: "https://x.example/v1",
+    apiKey: "k",
+    modelId: "m",
+  };
+
+  it("恰好一轮问答且标题为默认 → 调用 renameSession", async () => {
+    prismaStub.messages = [
+      {
+        id: 1,
+        sessionId: 1,
+        role: "user",
+        blocks: JSON.stringify([{ type: "text", text: "你好" }]),
+        error: null,
+      },
+      {
+        id: 2,
+        sessionId: 1,
+        role: "assistant",
+        blocks: JSON.stringify([
+          { type: "text", text: "你好！有什么可以帮你" },
+        ]),
+        error: null,
+      },
+    ];
+    prismaStub.sessionTitle = "新会话";
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: prismaStub.sessionTitle }),
+      renameSession: async (_id: number, title: string) => {
+        renamed.push(title);
+      },
+    });
+    // 注入假模型：直接测守卫与 rename 调用；标题文本固定
+    const internal = svc as unknown as {
+      titleModelText: (ctx2: unknown) => Promise<string>;
+    };
+    internal.titleModelText = async () => "  今天的天气  ";
+    await (
+      svc as unknown as {
+        generateTitleIfFirstExchange: (
+          sessionId: number,
+          sender: undefined,
+          ctx2: unknown,
+        ) => Promise<void>;
+      }
+    ).generateTitleIfFirstExchange(1, undefined, ctx);
+    expect(renamed).toEqual(["今天的天气"]);
+  });
+
+  it("多轮消息（3 条）不触发", async () => {
+    prismaStub.messages = [
+      {
+        id: 1,
+        sessionId: 1,
+        role: "user",
+        blocks: JSON.stringify([{ type: "text", text: "你好" }]),
+        error: null,
+      },
+      {
+        id: 2,
+        sessionId: 1,
+        role: "assistant",
+        blocks: JSON.stringify([
+          { type: "text", text: "你好！有什么可以帮你" },
+        ]),
+        error: null,
+      },
+      {
+        id: 3,
+        sessionId: 1,
+        role: "user",
+        blocks: JSON.stringify([{ type: "text", text: "再问" }]),
+        error: null,
+      },
+    ];
+    const renamed: string[] = [];
+    const svc = makeSvc({
+      getSession: async () => ({ id: 1, title: "新会话" }),
+      renameSession: async (_i: number, t: string) => {
+        renamed.push(t);
+      },
+    });
+    await (
+      svc as unknown as {
+        generateTitleIfFirstExchange: (
+          s: number,
+          sender: undefined,
+          c: unknown,
+        ) => Promise<void>;
+      }
+    ).generateTitleIfFirstExchange(1, undefined, ctx);
+    expect(renamed).toEqual([]);
   });
 });

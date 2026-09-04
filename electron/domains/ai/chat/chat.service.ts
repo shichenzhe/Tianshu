@@ -1,5 +1,5 @@
 import { ipcMain, type WebContents } from "electron";
-import { streamText } from "ai";
+import { generateText, streamText } from "ai";
 import type { LanguageModel } from "ai";
 import prisma from "../../../commons/prisma-client";
 import { parseBlocks, serializeBlocks, type MessageBlock } from "./blocks";
@@ -341,6 +341,14 @@ export default class ChatService {
         });
       } else {
         this.emit(sender, sessionId, { type: "finish" });
+        // 首轮问答完成 → AI 起标题（不阻塞、失败静默，spec §6）
+        void this.generateTitleIfFirstExchange(sessionId, sender, {
+          type: providerRow.type,
+          baseUrl: providerRow.baseUrl,
+          apiKey: providerRow.apiKey ?? undefined,
+          extraHeaders: providerRow.extraHeaders,
+          modelId: modelRow.modelId,
+        });
       }
     } finally {
       this.aborts.delete(sessionId);
@@ -362,6 +370,81 @@ export default class ChatService {
       text: snap?.text ?? "",
       thinking: snap?.thinking ?? "",
     };
+  }
+
+  /**
+   * 标题模型调用（独立可注入点，测试覆写；默认真实调用当前会话模型）
+   */
+  async titleModelText(ctx: {
+    type: string;
+    baseUrl: string;
+    apiKey?: string;
+    extraHeaders?: string | null;
+    modelId: string;
+    userText: string;
+    assistantText: string;
+  }): Promise<string> {
+    const result = await generateText({
+      model: createLanguageModel(ctx, ctx.modelId),
+      system:
+        "你是对话标题生成器。为以下对话生成一个不超过 12 字的中文标题，只输出标题本身。",
+      prompt: `用户：${ctx.userText}\n助手：${ctx.assistantText}`,
+      maxOutputTokens: 30,
+    });
+    return result.text;
+  }
+
+  /**
+   * 首轮问答完成后 AI 起标题（fire-and-forget；失败静默，spec §6）
+   */
+  private async generateTitleIfFirstExchange(
+    sessionId: number,
+    sender: WebContents | undefined,
+    ctx: {
+      type: string;
+      baseUrl: string;
+      apiKey?: string;
+      extraHeaders?: string | null;
+      modelId: string;
+    },
+  ): Promise<void> {
+    try {
+      const rows = (await prisma.message.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: "asc" },
+      })) as Array<{ role: string; blocks: string; error: string | null }>;
+      const visible = rows.filter((row) => row.role !== "system" && !row.error);
+      if (visible.length !== 2) {
+        return;
+      }
+      const session = await this.sessions.getSession(sessionId);
+      if (!session || session.title !== "新会话") {
+        return;
+      }
+      const truncate = (blocksJson: string) => {
+        const text = parseBlocks(blocksJson)
+          .filter((block) => block.type === "text")
+          .map((block) => (block.type === "text" ? block.text : ""))
+          .join("\n");
+        return text.slice(0, 200);
+      };
+      const title = (
+        await this.titleModelText({
+          ...ctx,
+          userText: truncate(visible[0].blocks),
+          assistantText: truncate(visible[1].blocks),
+        })
+      )
+        .trim()
+        .slice(0, 20);
+      if (!title) {
+        return;
+      }
+      await this.sessions.renameSession(sessionId, title);
+      this.emit(sender, sessionId, { type: "title-updated", title });
+    } catch {
+      // 标题失败静默降级：保留既有截断标题
+    }
   }
 
   stop(sessionId: number): void {

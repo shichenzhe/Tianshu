@@ -21,7 +21,8 @@ export type ChatStreamChunk =
   | { type: "text-delta"; text: string }
   | { type: "reasoning-delta"; text: string }
   | { type: "finish" }
-  | { type: "error"; errorCode: string; message: string };
+  | { type: "error"; errorCode: string; message: string }
+  | { type: "title-updated"; title: string };
 
 export interface ChatStatusResult {
   streaming: boolean;

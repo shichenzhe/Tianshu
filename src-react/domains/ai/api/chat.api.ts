@@ -22,7 +22,22 @@ export type ChatStreamChunk =
   | { type: "reasoning-delta"; text: string }
   | { type: "finish" }
   | { type: "error"; errorCode: string; message: string }
-  | { type: "title-updated"; title: string };
+  | { type: "title-updated"; title: string }
+  | {
+      type: "tool-update";
+      toolCallId: string;
+      toolName: string;
+      args?: unknown;
+      state:
+        "ready" | "awaiting-approval" | "running" | "done" | "denied" | "error";
+      output?: string;
+    }
+  | {
+      type: "approval-request";
+      toolCallId: string;
+      toolName: string;
+      argSummary: string;
+    };
 
 export interface ChatStatusResult {
   streaming: boolean;
@@ -57,6 +72,16 @@ export default class ChatApi {
    */
   static async stop(sessionId: number): Promise<void> {
     return invoke<void>("chat:stop", sessionId);
+  }
+
+  /**
+   * 审批决议（P1：渲染层 → 主进程，resolve 挂起的 write 工具）
+   */
+  static async approveToolCall(
+    toolCallId: string,
+    approved: boolean,
+  ): Promise<void> {
+    return invoke<void>("agent:approve", toolCallId, approved);
   }
 }
 

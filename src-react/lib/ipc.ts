@@ -51,6 +51,7 @@ export type IPCChannel =
   | "chat:send"
   | "chat:regenerate"
   | "chat:stop"
+  | "agent:approve"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"

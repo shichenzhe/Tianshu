@@ -88,7 +88,8 @@
     "manageLink": "MCP Servers",
     "argsPlaceholder": "e.g. [\"--port\", \"8080\"]",
     "envPlaceholder": "e.g. {\"KEY\": \"value\"}",
-    "headersPlaceholder": "e.g. {\"Authorization\": \"Bearer xxx\"}"
+    "headersPlaceholder": "e.g. {\"Authorization\": \"Bearer xxx\"}",
+    "invalidName": "Name must not contain \"__\""
   },
   "errors": {
     "AUTH_FAILED": "Authentication failed, please check the API Key",

@@ -268,8 +268,7 @@ describe("MCP 工具 execute", () => {
   });
 });
 
-describe("McpManager.reconnect", () => {
-  it("清旧工具后按新工具集重新注册", async () => {
+describe("McpManager.reconnect", () => {  it("清旧工具后按新工具集重新注册", async () => {
     const first = fakeClient([{ name: "old_tool" }]);
     const second = fakeClient([{ name: "new_a" }, { name: "new_b" }]);
     const { manager, createCalls } = makeManager([first.client, second.client]);
@@ -283,6 +282,24 @@ describe("McpManager.reconnect", () => {
     ]);
     expect(createCalls()).toBe(2);
     expect(manager.getStatuses()[0].toolCount).toBe(2);
+  });
+});
+
+describe("McpManager.unregisterByName（改名孤儿清理）", () => {
+  it("改名后旧前缀清理、旧 client 关闭、新前缀注册", async () => {
+    const oldClient = fakeClient([{ name: "t1" }]);
+    const newClient = fakeClient([{ name: "t2" }]);
+    const { manager } = makeManager([oldClient.client, newClient.client]);
+    await manager.connect(server);
+
+    // repo.update 改名钩子路径：先按旧名清理，再按新名重连
+    manager.unregisterByName("srv");
+    await manager.connect({ ...server, name: "renamed" });
+
+    const names = mcpDefs().map((d) => d.name);
+    expect(names).toEqual(["mcp__renamed__t2"]);
+    expect(names.some((n) => n.startsWith("mcp__srv__"))).toBe(false);
+    expect(oldClient.closeCount()).toBeGreaterThanOrEqual(1);
   });
 });
 

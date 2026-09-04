@@ -111,6 +111,10 @@ export class McpRepository {
     if (this.manager && before && before.enabled !== row.enabled) {
       await this.manager.setEnabled(parseMcpRow(row), row.enabled);
     }
+    // 改名后旧前缀工具不再被 connect/setEnabled 触达，显式清理防孤儿注册
+    if (this.manager && before && before.name !== row.name) {
+      this.manager.unregisterByName(before.name);
+    }
     return this.toRecord(row);
   }
 

@@ -102,6 +102,11 @@ export default function McpServerDialog({
     if (!name.trim() || submitting) {
       return;
     }
+    // 连续下划线会与 mcp__<server>__<tool> 前缀命名空间冲突（unregister 按前缀清理）
+    if (name.includes("__")) {
+      toast.error(t("ai:mcp.invalidName"));
+      return;
+    }
     if (transport === "stdio" && !command.trim()) {
       return;
     }

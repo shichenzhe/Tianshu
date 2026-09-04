@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import SessionApi, { type MessageRecord } from "../../api/session.api";
 import { serializeBlocks, type MessageBlock } from "../model/blocks";
 import { useChatStore } from "../store/chat.store";
+import { canRemember } from "../../lib/can-remember";
 import MessageItem from "./MessageItem";
 import ToolCallCard from "./ToolCallCard";
 import ApprovalBanner from "./ApprovalBanner";
@@ -180,7 +181,9 @@ export default function MessageList({
                       toolCallId={toolCallId}
                       toolName={tool.toolName}
                       argSummary={argSummary}
-                      rememberAvailable={rememberAvailable}
+                      rememberAvailable={
+                        rememberAvailable && canRemember(tool.toolName)
+                      }
                       onDecided={noopOnDecided}
                     />
                   )}

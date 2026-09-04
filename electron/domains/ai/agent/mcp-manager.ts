@@ -213,6 +213,21 @@ export class McpManager {
   }
 
   /**
+   * 按旧名清理：server 改名时旧前缀工具不再被 connect/setEnabled 触达，
+   * 由 repo.update 改名钩子显式调用（注销旧前缀 + 尽力关闭旧 client）
+   */
+  unregisterByName(serverName: string): void {
+    unregisterTools(toolPrefix(serverName));
+    for (const record of this.records.values()) {
+      if (record.row.name === serverName && record.client) {
+        const client = record.client;
+        record.client = undefined;
+        void closeQuietly(client);
+      }
+    }
+  }
+
+  /**
    * 停用：代际前移使挂起中的 connect 结果作废，注销工具并断开；启用：重新连接
    */
   async setEnabled(row: McpServerConfig, enabled: boolean): Promise<void> {

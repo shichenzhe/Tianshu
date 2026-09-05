@@ -62,7 +62,8 @@ export const ModelName = {
   message: 'message',
   mcpServer: 'mcpServer',
   toolPermission: 'toolPermission',
-  skillRecord: 'skillRecord'
+  skillRecord: 'skillRecord',
+  skillStat: 'skillStat'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -242,6 +243,16 @@ export const SkillRecordScalarFieldEnum = {
 } as const
 
 export type SkillRecordScalarFieldEnum = (typeof SkillRecordScalarFieldEnum)[keyof typeof SkillRecordScalarFieldEnum]
+
+
+export const SkillStatScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  event: 'event',
+  createdAt: 'createdAt'
+} as const
+
+export type SkillStatScalarFieldEnum = (typeof SkillStatScalarFieldEnum)[keyof typeof SkillStatScalarFieldEnum]
 
 
 export const SortOrder = {

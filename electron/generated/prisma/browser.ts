@@ -77,3 +77,8 @@ export type toolPermission = Prisma.toolPermissionModel
  * 
  */
 export type skillRecord = Prisma.skillRecordModel
+/**
+ * Model skillStat
+ * 
+ */
+export type skillStat = Prisma.skillStatModel

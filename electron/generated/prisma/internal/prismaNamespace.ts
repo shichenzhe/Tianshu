@@ -408,7 +408,8 @@ export const ModelName = {
   message: 'message',
   mcpServer: 'mcpServer',
   toolPermission: 'toolPermission',
-  skillRecord: 'skillRecord'
+  skillRecord: 'skillRecord',
+  skillStat: 'skillStat'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -424,7 +425,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1316,6 +1317,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    skillStat: {
+      payload: Prisma.$skillStatPayload<ExtArgs>
+      fields: Prisma.skillStatFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.skillStatFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.skillStatFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        findFirst: {
+          args: Prisma.skillStatFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.skillStatFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        findMany: {
+          args: Prisma.skillStatFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>[]
+        }
+        create: {
+          args: Prisma.skillStatCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        createMany: {
+          args: Prisma.skillStatCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.skillStatCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>[]
+        }
+        delete: {
+          args: Prisma.skillStatDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        update: {
+          args: Prisma.skillStatUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        deleteMany: {
+          args: Prisma.skillStatDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.skillStatUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.skillStatUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>[]
+        }
+        upsert: {
+          args: Prisma.skillStatUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$skillStatPayload>
+        }
+        aggregate: {
+          args: Prisma.SkillStatAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSkillStat>
+        }
+        groupBy: {
+          args: Prisma.skillStatGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SkillStatGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.skillStatCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SkillStatCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1516,6 +1591,16 @@ export const SkillRecordScalarFieldEnum = {
 } as const
 
 export type SkillRecordScalarFieldEnum = (typeof SkillRecordScalarFieldEnum)[keyof typeof SkillRecordScalarFieldEnum]
+
+
+export const SkillStatScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  event: 'event',
+  createdAt: 'createdAt'
+} as const
+
+export type SkillStatScalarFieldEnum = (typeof SkillStatScalarFieldEnum)[keyof typeof SkillStatScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1737,6 +1822,7 @@ export type GlobalOmitConfig = {
   mcpServer?: Prisma.mcpServerOmit
   toolPermission?: Prisma.toolPermissionOmit
   skillRecord?: Prisma.skillRecordOmit
+  skillStat?: Prisma.skillStatOmit
 }
 
 /* Types for Logging */

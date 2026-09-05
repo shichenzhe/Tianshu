@@ -12,9 +12,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { parseBlocks } from "../model/blocks";
 import { groupBlocks } from "../lib/group-blocks";
+import { detectPseudoToolCallText } from "../lib/pseudo-tool-call";
 import type { MessageRecord } from "../../api/session.api";
 import CodeBlock from "./CodeBlock";
 import ThinkingPanel from "./ThinkingPanel";
+import PseudoToolCallNotice from "./PseudoToolCallNotice";
 
 interface MessageItemProps {
   message: MessageRecord;
@@ -155,9 +157,14 @@ function MessageItemImpl({
           defaultOpen={streaming}
         />
       )}
-      {grouped.texts.map((block, index) => (
-        <MarkdownBlock key={`text-${index}`} text={block.text} />
-      ))}
+      {grouped.texts.map((block, index) =>
+        // 伪工具调用碎片（本地服务未实现结构化 tool_calls）：警示折叠替代正文渲染
+        detectPseudoToolCallText(block.text) ? (
+          <PseudoToolCallNotice key={`text-${index}`} rawText={block.text} />
+        ) : (
+          <MarkdownBlock key={`text-${index}`} text={block.text} />
+        ),
+      )}
       {grouped.usage && (
         <UsageBlockView
           input={grouped.usage.input}

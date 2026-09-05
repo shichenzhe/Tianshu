@@ -164,5 +164,8 @@
     "thinkingStatus": "思考中",
     "doneStatus": "已完成",
     "thinkingLabel": "深度思考"
+  },
+  "pseudoToolCall": {
+    "notice": "当前模型服务未正确返回工具调用，模型原始输出已折叠（建议检查推理服务的工具调用支持）"
   }
 }

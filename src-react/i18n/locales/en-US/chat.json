@@ -164,5 +164,8 @@
     "thinkingStatus": "Thinking",
     "doneStatus": "Completed",
     "thinkingLabel": "Deep thinking"
+  },
+  "pseudoToolCall": {
+    "notice": "The model service did not return tool calls properly; raw model output is collapsed (check your inference server's tool-call support)"
   }
 }

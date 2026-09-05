@@ -44,6 +44,7 @@ model skillRecord {
   version     String?
   source      String            // "local" | "market" | "builtin"("suite" 预留)
   dir         String            // 条目目录绝对路径
+  description String?           // 一句话描述(对账时取自 frontmatter,卡片渲染/搜索用)
   enabled     Boolean  @default(true)
   installedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt

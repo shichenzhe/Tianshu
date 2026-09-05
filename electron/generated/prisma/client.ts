@@ -96,3 +96,8 @@ export type mcpServer = Prisma.mcpServerModel
  * 
  */
 export type toolPermission = Prisma.toolPermissionModel
+/**
+ * Model skillRecord
+ * 
+ */
+export type skillRecord = Prisma.skillRecordModel

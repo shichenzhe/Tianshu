@@ -8,6 +8,7 @@
 import { ipcMain, app, dialog } from "electron";
 import { rmSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import prisma from "../../../commons/prisma-client";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import { loadSkills } from "../agent/skill-loader";
@@ -30,6 +31,11 @@ import type {
   InstallResult,
   InspectResult,
 } from "../../../../src-react/domains/ai/skills/api/skillhub-types";
+
+// 与 Application.ts 同款 __dirname 推导:主进程产物全部内联进
+// dist-electron/main.js(无嵌套 chunk),故本模块 __dirname 即 main.js 所在目录
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class SkillRepository {
   private readonly hub = new SkillHubClient();
@@ -104,13 +110,14 @@ export class SkillRepository {
 
   /**
    * 启动自愈安装内置技能(skill-creator):缺失时从应用资源复制并落库
-   * (source builtin),存在即跳过(幂等)。资源定位参照 prisma-client.ts:
-   * dev 读源码 resources(prod 的包内路径由 syncElectronAssets 构建时
-   * 复制到 dist-electron/builtin-skills,main.js 即在该目录下)
+   * (source builtin),存在即跳过(幂等)。资源定位沿用 Application.ts 的
+   * __dirname 先例(与 script/docs 同构,asar 内读取 Electron 已 patch):
+   * prod 取 main.js 同级的 builtin-skills(syncElectronAssets 复制),
+   * dev 直读源码 resources
    */
   async ensureBuiltinSkills(): Promise<void> {
     const builtinRoot = app.isPackaged
-      ? path.join(app.getAppPath(), "dist-electron", "builtin-skills")
+      ? path.join(__dirname, "builtin-skills")
       : path.join(app.getAppPath(), "electron", "resources", "builtin-skills");
     await ensureBuiltinSkillsImpl({
       builtinRoot,

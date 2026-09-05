@@ -26,11 +26,7 @@
     "send": "Send",
     "stop": "Stop",
     "selectModel": "Select Model",
-    "modelRequired": "Select a model first",
-    "paramOverrides": "Parameter Overrides",
-    "temp": "Temperature",
-    "topP": "Top P",
-    "maxTokens": "Max Output Tokens"
+    "modelRequired": "Select a model first"
   },
   "attach": {
     "remove": "Remove attached file",
@@ -112,5 +108,9 @@
     "assistants": "Assistants",
     "mcp": "MCP Services",
     "skills": "Open Skills Folder"
+  },
+  "mention": {
+    "noFiles": "No matching files",
+    "needBind": "Bind a workspace directory to reference files with @"
   }
 }

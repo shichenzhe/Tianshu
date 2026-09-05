@@ -1,33 +1,33 @@
 /**
  * 卡片式输入框（P3 spec §1）：上行 ＋扩展菜单 + 权限胶囊 + 模式徽标，
- * 中行 textarea（field-sizing 自适应），引用文件 chips 暂存，
- * 下行右 参数覆盖 + 模型选择 + 发送/停止
+ * 中行 textarea（field-sizing 自适应，@ 触发工作空间文件联想），
+ * 引用文件 chips 暂存，下行右 模型选择 + 发送/停止
  * Enter 发送 / Shift+Enter 换行（IME 组合中的 Enter 不触发发送）
  * 发送中切换为停止按钮；未选模型时禁用发送并以占位符提示
  * 发送失败（onSend reject）时输入与 chips 保留可重试，成功后才清空
- * 参数覆盖（spec §4.2 单次请求级）：Popover 内留空 = 不覆盖，随会话生命周期保留
+ * @ 联想：光标前最近的 @token（[\w\-./]*）触发；↑↓ 移动、Enter 选中、Esc 关闭
  */
-import { useCallback, useState, type KeyboardEvent } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Send, SlidersHorizontal, Square, X } from "lucide-react";
+import { Send, Square, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { invoke } from "@/lib/ipc";
 import type { ChatModelParams } from "../../api/chat.api";
 import type { SessionMode } from "../../api/session.api";
-import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
 import ModelPicker from "./ModelPicker";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
 import PlusMenu from "./PlusMenu";
 
-/** 待引用文件：＋菜单选取暂存于此，发送时随 onSend 带出（渲染层拼注入块） */
+/** 待引用文件：＋菜单/@ 联想选取暂存于此，发送时随 onSend 带出（渲染层拼注入块） */
 export interface PendingFile {
   path: string;
   content: string;
@@ -38,6 +38,10 @@ function pathBasename(filePath: string): string {
   const segments = filePath.split(/[\\/]/).filter(Boolean);
   return segments.length > 0 ? segments[segments.length - 1] : filePath;
 }
+
+/** @token 允许字符（@ 后连续输入的部分） */
+const MENTION_TOKEN_RE = /[\w\-./]/;
+const MENTION_LIMIT = 8;
 
 interface FileChipProps {
   path: string;
@@ -65,6 +69,31 @@ function FileChip({ path, onRemove }: FileChipProps) {
   );
 }
 
+/** 光标前最近的 @token：返回 @ 起始下标与 token 文本；无有效 token 返回 null */
+function detectMention(
+  value: string,
+  caret: number,
+): { startIndex: number; query: string } | null {
+  const upto = value.slice(0, caret);
+  const at = upto.lastIndexOf("@");
+  if (at === -1) {
+    return null;
+  }
+  const token = upto.slice(at + 1);
+  if (
+    token.length > 0 &&
+    ![...token].every((ch) => MENTION_TOKEN_RE.test(ch))
+  ) {
+    return null;
+  }
+  // @ 前必须是行首或空白（避免邮箱等误触）
+  const prev = at > 0 ? upto[at - 1] : "";
+  if (prev && !/\s/.test(prev)) {
+    return null;
+  }
+  return { startIndex: at, query: token };
+}
+
 interface ChatInputProps {
   /** 会话是否有生效模型（会话当前模型 → 工作空间默认），决定禁用与提示 */
   hasModel: boolean;
@@ -77,7 +106,9 @@ interface ChatInputProps {
   currentMode: SessionMode;
   currentAssistantId?: number;
   currentModelId?: number;
-  /** 打开技能目录（ChatPane 复用齿轮菜单同款 handler） */
+  /** 工作空间（@ 联想数据源与文件读取）；未绑定为 null */
+  workspaceId: number | null;
+  /** 打开技能目录（ChatPane 复用同款 handler） */
   onOpenSkills: () => void;
   /** 跳转连接器（MCP）管理页 */
   onOpenMcp: () => void;
@@ -99,31 +130,49 @@ export default function ChatInput({
   currentMode,
   currentAssistantId,
   currentModelId,
+  workspaceId,
   onOpenSkills,
   onOpenMcp,
   onSend,
   onStop,
 }: ChatInputProps) {
-  const { t } = useTranslation(["chat", "ai"]);
+  const { t } = useTranslation(["chat"]);
   const [content, setContent] = useState("");
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [temperature, setTemperature] = useState("");
-  const [topP, setTopP] = useState("");
-  const [maxTokens, setMaxTokens] = useState("");
+  const [mention, setMention] = useState<{
+    startIndex: number;
+    query: string;
+  } | null>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  /** 解析三个可选字段；全空返回 undefined（该请求不携带覆盖） */
-  const buildOverrides = useCallback((): ChatModelParams | undefined => {
-    const overrides: ChatModelParams = {
-      temperature: parseOptionalNumber(temperature),
-      topP: parseOptionalNumber(topP),
-      maxTokens: parseOptionalInt(maxTokens),
-    };
-    const hasAny =
-      overrides.temperature !== undefined ||
-      overrides.topP !== undefined ||
-      overrides.maxTokens !== undefined;
-    return hasAny ? overrides : undefined;
-  }, [temperature, topP, maxTokens]);
+  // 工作空间文件清单（@ 联想数据源；5 分钟内复用缓存）
+  const workspaceFilesQuery = useQuery({
+    queryKey: ["workspace-files", workspaceId],
+    queryFn: () =>
+      invoke<string[] | null>("file:listWorkspaceFiles", workspaceId),
+    enabled: workspaceId !== null && mention !== null,
+    staleTime: 300_000,
+  });
+
+  // 联想候选：空 query 取最短路径在前；非空大小写不敏感 substring 匹配
+  const mentionCandidates = useMemo(() => {
+    const files = workspaceFilesQuery.data;
+    if (!mention || !files) {
+      return [];
+    }
+    const query = mention.query.toLowerCase();
+    const matched = query
+      ? files.filter((file) => file.toLowerCase().includes(query))
+      : [...files].sort((a, b) => a.length - b.length);
+    return matched.slice(0, MENTION_LIMIT);
+  }, [mention, workspaceFilesQuery.data]);
+
+  // mention 或候选变化时收敛高亮越界
+  const activeIndex = Math.min(
+    highlightIndex,
+    Math.max(mentionCandidates.length - 1, 0),
+  );
 
   /** ＋菜单选中的文件并入 chips（同路径去重，避免 chip key 冲突） */
   const handlePickFiles = useCallback((files: PendingFile[]) => {
@@ -139,27 +188,110 @@ export default function ChatInput({
     if (!trimmed || !hasModel || sending) {
       return;
     }
-    let overrides: ChatModelParams | undefined;
     try {
-      overrides = buildOverrides();
-    } catch {
-      toast.error(t("ai:model.invalidNumber"));
-      return;
-    }
-    try {
-      await onSend(trimmed, pendingFiles, overrides);
+      await onSend(trimmed, pendingFiles);
       setContent("");
       setPendingFiles([]);
+      setMention(null);
     } catch {
       /* 失败保留输入与 chips；错误提示由 onSend 链路（toast+rethrow）负责 */
     }
-  }, [content, hasModel, sending, pendingFiles, onSend, buildOverrides, t]);
+  }, [content, hasModel, sending, pendingFiles, onSend]);
 
   const removeFile = useCallback((path: string) => {
     setPendingFiles((prev) => prev.filter((file) => file.path !== path));
   }, []);
 
+  /** @ 选中：删除 token 文本 → 读文件入 chips；读取失败 toast 且保留 @ 文本 */
+  const selectMention = useCallback(
+    async (relPath: string) => {
+      if (!mention) {
+        return;
+      }
+      const textarea = textareaRef.current;
+      const caret =
+        textarea?.selectionStart ??
+        mention.startIndex + 1 + mention.query.length;
+      const next =
+        content.slice(0, mention.startIndex) +
+        content.slice(
+          Math.min(caret, mention.startIndex + 1 + mention.query.length),
+        );
+      try {
+        const result = await invoke<{ content: string } | { error: string }>(
+          "file:readWorkspaceFile",
+          workspaceId,
+          relPath,
+        );
+        if ("error" in result) {
+          toast.error(
+            t("chat:attach.readFailed", {
+              path: relPath,
+              reason: result.error,
+            }),
+          );
+          return;
+        }
+        handlePickFiles([{ path: relPath, content: result.content }]);
+        setContent(next);
+        setMention(null);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [mention, content, workspaceId, handlePickFiles, t],
+  );
+
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    setContent(value);
+    const next = detectMention(value, event.target.selectionStart);
+    setMention(next);
+    if (next) {
+      setHighlightIndex(0);
+    }
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // @ 联想激活时优先消费导航键
+    if (mention) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightIndex(
+          (activeIndex + 1) % Math.max(mentionCandidates.length, 1),
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightIndex(
+          (activeIndex - 1 + Math.max(mentionCandidates.length, 1)) %
+            Math.max(mentionCandidates.length, 1),
+        );
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setMention(null);
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.nativeEvent.isComposing
+      ) {
+        const candidate = mentionCandidates[activeIndex];
+        if (candidate) {
+          event.preventDefault();
+          void selectMention(candidate);
+          return;
+        }
+        // 无候选时 Enter 不发送，交由用户删掉 @ 或继续输入
+        event.preventDefault();
+        return;
+      }
+    }
     if (
       event.key === "Enter" &&
       !event.shiftKey &&
@@ -170,11 +302,51 @@ export default function ChatInput({
     }
   };
 
+  const showMentionList = mention !== null;
+  const noCandidates = mention !== null && mentionCandidates.length === 0;
+
   return (
     <div
       data-testid="chat-input"
-      className="flex min-w-0 flex-1 flex-col rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
+      className="relative flex min-w-0 flex-1 flex-col rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
     >
+      {/* @ 联想下拉（向上弹出；未绑定工作空间/无匹配给出提示文案） */}
+      {showMentionList && (
+        <div className="absolute bottom-full left-3 z-10 mb-1 w-72 overflow-hidden rounded-lg border border-border/50 bg-card shadow-lg">
+          {workspaceId === null ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t("chat:mention.needBind")}
+            </p>
+          ) : noCandidates ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t("chat:mention.noFiles")}
+            </p>
+          ) : (
+            <ul className="max-h-56 overflow-y-auto py-1">
+              {mentionCandidates.map((file, index) => (
+                <li key={file}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      // mousedown 先于 blur/发送键处理，阻止默认避免失焦
+                      event.preventDefault();
+                      void selectMention(file);
+                    }}
+                    onMouseEnter={() => setHighlightIndex(index)}
+                    className={`w-full truncate px-2 py-1.5 text-left text-xs ${
+                      index === activeIndex
+                        ? "bg-primary-subtle text-primary"
+                        : "text-foreground"
+                    }`}
+                  >
+                    {file}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {/* 上行：＋扩展菜单 + 权限胶囊 + 模式徽标（非默认模式时） */}
       <div className="flex items-center gap-2">
         <PlusMenu
@@ -198,8 +370,9 @@ export default function ChatInput({
       </div>
       {/* 中行：输入区（field-sizing 自适应，封顶 10 行左右） */}
       <textarea
+        ref={textareaRef}
         value={content}
-        onChange={(event) => setContent(event.target.value)}
+        onChange={handleChange}
         onKeyDown={handleKeyDown}
         rows={1}
         autoFocus
@@ -220,68 +393,8 @@ export default function ChatInput({
           ))}
         </div>
       )}
-      {/* 下行右：参数覆盖 + 模型 + 发送/停止 */}
+      {/* 下行右：模型 + 发送/停止 */}
       <div className="flex items-center justify-end gap-2 pt-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-              aria-label={t("chat:input.paramOverrides")}
-              title={t("chat:input.paramOverrides")}
-            >
-              <SlidersHorizontal className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-64 border border-border/50 rounded-lg shadow-lg"
-          >
-            <p className="mb-2 text-sm font-medium">
-              {t("chat:input.paramOverrides")}
-            </p>
-            <div className="space-y-2">
-              <div className="space-y-1">
-                <Label htmlFor="chat-override-temperature">
-                  {t("chat:input.temp")}
-                </Label>
-                <Input
-                  id="chat-override-temperature"
-                  type="number"
-                  step="0.1"
-                  value={temperature}
-                  onChange={(event) => setTemperature(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="chat-override-top-p">
-                  {t("chat:input.topP")}
-                </Label>
-                <Input
-                  id="chat-override-top-p"
-                  type="number"
-                  step="0.1"
-                  value={topP}
-                  onChange={(event) => setTopP(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="chat-override-max-tokens">
-                  {t("chat:input.maxTokens")}
-                </Label>
-                <Input
-                  id="chat-override-max-tokens"
-                  type="number"
-                  step="1"
-                  min="1"
-                  value={maxTokens}
-                  onChange={(event) => setMaxTokens(event.target.value)}
-                />
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
         <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
         {sending ? (
           <Button

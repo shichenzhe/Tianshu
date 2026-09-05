@@ -32,6 +32,7 @@ import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import type { ToolDefinition } from "../agent/file-tools";
+import { resolveSafePath } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
 import { PermissionStore } from "../agent/permission-mode";
 import type {
@@ -710,6 +711,84 @@ export default class ChatService {
             }
           }),
         );
+      },
+    );
+    // @ 联想数据源：工作空间内文件清单（相对路径，posix 分隔符）；
+    // 排除 node_modules/.git/dist 与隐藏项，上限 2000；未绑定目录返回 null
+    ipcMain.handle(
+      "file:listWorkspaceFiles",
+      async (_, workspaceId: number): Promise<string[] | null> => {
+        const workspace = await this.sessions.getWorkspace(workspaceId);
+        const root = workspace?.directoryPath?.trim();
+        if (!root) {
+          return null;
+        }
+        const EXCLUDED = new Set(["node_modules", ".git", "dist"]);
+        const files: string[] = [];
+        const walk = async (dir: string, prefix: string): Promise<void> => {
+          if (files.length >= 2000) {
+            return;
+          }
+          const entries = await fs.readdir(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (files.length >= 2000) {
+              return;
+            }
+            if (entry.name.startsWith(".")) {
+              continue;
+            }
+            const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+            if (entry.isDirectory()) {
+              if (EXCLUDED.has(entry.name)) {
+                continue;
+              }
+              await walk(entry.parentPath ?? dir, rel);
+            } else if (entry.isFile()) {
+              files.push(rel);
+            }
+          }
+        };
+        try {
+          await walk(root, "");
+        } catch {
+          return files;
+        }
+        return files;
+      },
+    );
+    // @ 选中后读取工作空间内单个文件；resolveSafePath 校验 + 同 pickAndRead 的
+    // 大小/二进制规则
+    ipcMain.handle(
+      "file:readWorkspaceFile",
+      async (
+        _,
+        workspaceId: number,
+        relPath: string,
+      ): Promise<{ content: string } | { error: string }> => {
+        const workspace = await this.sessions.getWorkspace(workspaceId);
+        const root = workspace?.directoryPath?.trim();
+        if (!root) {
+          return { error: "未绑定工作空间目录" };
+        }
+        let absolute: string;
+        try {
+          absolute = resolveSafePath(root, relPath);
+        } catch {
+          return { error: "路径超出工作空间范围" };
+        }
+        try {
+          const stat = await fs.stat(absolute);
+          if (stat.size > 512 * 1024) {
+            return { error: "超过 512KB 上限" };
+          }
+          const buf = await fs.readFile(absolute);
+          if (buf.includes(0)) {
+            return { error: "二进制文件不支持" };
+          }
+          return { content: buf.toString("utf8") };
+        } catch {
+          return { error: "读取失败" };
+        }
       },
     );
   }

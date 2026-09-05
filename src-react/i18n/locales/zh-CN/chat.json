@@ -26,11 +26,7 @@
     "send": "发送",
     "stop": "停止",
     "selectModel": "选择模型",
-    "modelRequired": "请先选择模型",
-    "paramOverrides": "参数覆盖",
-    "temp": "温度",
-    "topP": "Top P",
-    "maxTokens": "最大输出 Tokens"
+    "modelRequired": "请先选择模型"
   },
   "attach": {
     "remove": "移除引用文件",
@@ -112,5 +108,9 @@
     "assistants": "助手预设管理",
     "mcp": "MCP 服务管理",
     "skills": "打开技能目录"
+  },
+  "mention": {
+    "noFiles": "没有匹配的文件",
+    "needBind": "绑定工作空间目录后可用 @ 引用文件"
   }
 }

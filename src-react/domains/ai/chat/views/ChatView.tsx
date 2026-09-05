@@ -18,19 +18,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { invoke } from "@/lib/ipc";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
@@ -169,7 +156,6 @@ function ChatPane({
   hasModel,
   onOpenSettings,
 }: ChatPaneProps) {
-  const { t } = useTranslation(["chat"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
 
@@ -289,64 +275,21 @@ function ChatPane({
         <AgentProgress stepCount={stepCount} activeTool={activeTool} />
       )}
       <div className="border-t border-border/50 p-4">
-        <div className="flex items-end gap-2">
-          {/* 齿轮设置菜单保留输入行外原位（spec §1：不进 ＋ 菜单，职责分离） */}
-          <TooltipProvider>
-            <Tooltip>
-              {/* 层级：DropdownMenu 最外（Trigger 依赖其 context）；TooltipTrigger 包在
-                  forwardRef 的 DropdownMenuTrigger 上（直接包 Root 会静默丢失锚定） */}
-              <DropdownMenu>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
-                      aria-label={t("chat:settings.title")}
-                    >
-                      <Settings2 className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>{t("chat:settings.title")}</TooltipContent>
-                <DropdownMenuContent
-                  align="start"
-                  className="border border-border/50 rounded-lg shadow-lg"
-                >
-                  <DropdownMenuItem onClick={() => onOpenSettings("providers")}>
-                    {t("chat:settings.providers")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => onOpenSettings("assistants")}
-                  >
-                    {t("chat:settings.assistants")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onOpenSettings("mcp")}>
-                    {t("chat:settings.mcp")}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={openSkillDir}>
-                    {t("chat:settings.skills")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </Tooltip>
-          </TooltipProvider>
-          <ChatInput
-            hasModel={hasModel}
-            sending={sending}
-            sessionId={session.id}
-            accessMode={accessMode}
-            currentMode={session.mode}
-            currentAssistantId={session.assistantId}
-            currentModelId={session.currentModelId}
-            onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
-            onOpenSkills={openSkillDir}
-            onOpenMcp={() => onOpenSettings("mcp")}
-            onSend={handleSend}
-            onStop={stop}
-          />
-        </div>
+        <ChatInput
+          hasModel={hasModel}
+          sending={sending}
+          sessionId={session.id}
+          accessMode={accessMode}
+          currentMode={session.mode}
+          currentAssistantId={session.assistantId}
+          currentModelId={session.currentModelId}
+          workspaceId={workspace?.id ?? null}
+          onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
+          onOpenSkills={openSkillDir}
+          onOpenMcp={() => onOpenSettings("mcp")}
+          onSend={handleSend}
+          onStop={stop}
+        />
       </div>
     </>
   );

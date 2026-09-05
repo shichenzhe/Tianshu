@@ -252,6 +252,34 @@ export default function ChatInput({
     }
   };
 
+  // 光标移动（←→/Home/End/点击）不触发 onChange——在 keyup/select 上重算 mention，
+  // 光标离开 @token 即关闭弹窗，避免 Enter 被残留弹窗劫持
+  const syncMentionFromCaret = (target: HTMLTextAreaElement) => {
+    setMention(detectMention(target.value, target.selectionStart));
+  };
+
+  const handleSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (mention !== null) {
+      syncMentionFromCaret(event.currentTarget);
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // 导航键由 onKeyDown 消费并 preventDefault，不会到达这里；
+    // 其余可移动光标的键（Home/End 等）在此重算
+    if (
+      mention !== null &&
+      ["Home", "End", "PageUp", "PageDown"].includes(event.key)
+    ) {
+      syncMentionFromCaret(event.currentTarget);
+    }
+  };
+
+  const handleBlur = () => {
+    // 点击弹窗外失焦：关闭（点击候选项的 mousedown 已 preventDefault 不触发）
+    setMention(null);
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     // @ 联想激活时优先消费导航键
     if (mention) {
@@ -303,6 +331,8 @@ export default function ChatInput({
   };
 
   const showMentionList = mention !== null;
+  const workspaceUnbound =
+    workspaceId === null || workspaceFilesQuery.data === null;
   const noCandidates = mention !== null && mentionCandidates.length === 0;
 
   return (
@@ -313,7 +343,7 @@ export default function ChatInput({
       {/* @ 联想下拉（向上弹出；未绑定工作空间/无匹配给出提示文案） */}
       {showMentionList && (
         <div className="absolute bottom-full left-3 z-10 mb-1 w-72 overflow-hidden rounded-lg border border-border/50 bg-card shadow-lg">
-          {workspaceId === null ? (
+          {workspaceUnbound ? (
             <p className="px-2 py-1.5 text-xs text-muted-foreground">
               {t("chat:mention.needBind")}
             </p>
@@ -374,6 +404,9 @@ export default function ChatInput({
         value={content}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        onSelect={handleSelect}
+        onBlur={handleBlur}
         rows={1}
         autoFocus
         placeholder={t(

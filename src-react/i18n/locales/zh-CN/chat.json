@@ -103,10 +103,8 @@
     "UNKNOWN": "未知错误"
   },
   "settings": {
-    "title": "AI 设置",
     "providers": "模型服务管理",
     "assistants": "助手预设管理",
-    "mcp": "MCP 服务管理",
     "skills": "打开技能目录"
   },
   "mention": {

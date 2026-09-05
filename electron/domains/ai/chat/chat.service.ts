@@ -742,7 +742,7 @@ export default class ChatService {
               if (EXCLUDED.has(entry.name)) {
                 continue;
               }
-              await walk(entry.parentPath ?? dir, rel);
+              await walk(path.join(dir, entry.name), rel);
             } else if (entry.isFile()) {
               files.push(rel);
             }

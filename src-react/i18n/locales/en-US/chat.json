@@ -103,10 +103,8 @@
     "UNKNOWN": "Unknown error"
   },
   "settings": {
-    "title": "AI Settings",
     "providers": "Model Providers",
     "assistants": "Assistants",
-    "mcp": "MCP Services",
     "skills": "Open Skills Folder"
   },
   "mention": {

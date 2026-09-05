@@ -38,7 +38,7 @@ import { mapIpcError } from "../lib/error-message";
 
 const ASSISTANTS_KEY = ["assistants"] as const;
 const SESSIONS_KEY = ["sessions"] as const;
-const ASSISTANTS_ROUTE = "/module/ai/assistants";
+const ASSISTANTS_ROUTE = "/module/ai/experts";
 
 /** file:pickAndRead 单项：成功带 content，失败带 error（渲染层 toast 并丢弃） */
 interface PickedFile {

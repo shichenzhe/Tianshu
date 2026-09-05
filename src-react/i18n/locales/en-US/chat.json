@@ -140,5 +140,26 @@
   "mention": {
     "noFiles": "No matching files",
     "needBind": "Bind a workspace directory to reference files with @"
+  },
+  "experts": {
+    "tabAssistants": "Experts",
+    "tabSkills": "Skills",
+    "tabConnectors": "Connectors",
+    "skillsDesc": "Skills live in the local skill directory as editable Markdown files",
+    "openSkillDir": "Open skill directory"
+  },
+  "library": {
+    "title": "Library",
+    "searchPlaceholder": "Search",
+    "recent": "Recent",
+    "localOutputs": "Local outputs",
+    "mine": "My files",
+    "team": "Team spaces",
+    "empty": "No files yet",
+    "add": "Add file",
+    "export": "Export & share"
+  },
+  "automation": {
+    "title": "Automation"
   }
 }

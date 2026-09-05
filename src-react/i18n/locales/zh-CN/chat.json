@@ -140,5 +140,26 @@
   "mention": {
     "noFiles": "没有匹配的文件",
     "needBind": "绑定工作空间目录后可用 @ 引用文件"
+  },
+  "experts": {
+    "tabAssistants": "专家",
+    "tabSkills": "技能",
+    "tabConnectors": "连接器",
+    "skillsDesc": "技能存放在本地技能目录中，可编辑 Markdown 技能文件",
+    "openSkillDir": "打开技能目录"
+  },
+  "library": {
+    "title": "资料库",
+    "searchPlaceholder": "搜索",
+    "recent": "最近",
+    "localOutputs": "本地产物",
+    "mine": "我的资料",
+    "team": "团队空间",
+    "empty": "还没有资料",
+    "add": "新增资料",
+    "export": "导出/分享"
+  },
+  "automation": {
+    "title": "自动化"
   }
 }

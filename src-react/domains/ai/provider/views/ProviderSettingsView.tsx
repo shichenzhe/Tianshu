@@ -46,7 +46,7 @@ import { mapIpcError } from "../../chat/lib/error-message";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
-const MCP_ROUTE = "/module/ai/mcp";
+const MCP_ROUTE = "/module/ai/experts";
 
 export default function ProviderSettingsView() {
   const { t } = useTranslation(["ai", "common"]);

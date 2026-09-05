@@ -17,6 +17,18 @@ const ProviderSettingsView = lazy(
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 // AI 标准侧边栏布局
 const AiLayout = lazy(() => import("@/domains/ai/layout/views/AiLayout"));
+// 专家·技能·连接器统一管理
+const ExpertsView = lazy(
+  () => import("@/domains/ai/experts/views/ExpertsView"),
+);
+// 资料库（占位骨架）
+const LibraryView = lazy(
+  () => import("@/domains/ai/library/views/LibraryView"),
+);
+// 自动化（占位）
+const AutomationView = lazy(
+  () => import("@/domains/ai/automation/views/AutomationView"),
+);
 
 // 加载中组件
 function LoadingFallback() {
@@ -70,6 +82,30 @@ export const router = createHashRouter([
             element: (
               <LazyWrapper>
                 <ProviderSettingsView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "experts",
+            element: (
+              <LazyWrapper>
+                <ExpertsView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "library",
+            element: (
+              <LazyWrapper>
+                <LibraryView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "automation",
+            element: (
+              <LazyWrapper>
+                <AutomationView />
               </LazyWrapper>
             ),
           },

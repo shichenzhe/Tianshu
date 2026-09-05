@@ -11,7 +11,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// skill-stats recorder 静态 import commons/Log(winston/electron 副作用),
+// 模块级 mock 隔离(参照 chat.service.test.ts 的 mock 边界先例)
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
 import {
   makeCreateSkillTool,
   validateCreateSkillParams,
@@ -20,6 +26,7 @@ import type {
   SkillRecordDbRow,
   SkillRecordPrismaLike,
 } from "../../electron/domains/ai/skill/skill-installer";
+import type { SkillStatPrismaLike } from "../../electron/domains/ai/skill/skill-stats";
 
 const KB = 1024;
 
@@ -311,5 +318,47 @@ describe("makeCreateSkillTool", () => {
     expect(out.startsWith("错误:")).toBe(true);
     expect(existsSync(path.join(skillsRoot, "demo-skill"))).toBe(false);
     expect(upsertCalls.length).toBe(0);
+  });
+});
+
+describe("P-E 埋点(create 事件)", () => {
+  it("创建成功 → 记 {name, create};埋点抛错不影响工具结果", async () => {
+    const create = vi.fn().mockResolvedValue({});
+    const { prisma } = createPrismaStub();
+    const tool = makeCreateSkillTool({
+      skillsRoot,
+      prisma,
+      statRecord: { create } as SkillStatPrismaLike,
+    });
+    const out = await tool.execute(
+      { workspacePath: skillsRoot, sessionId: 1 },
+      validArgs(),
+    );
+    expect(out).toContain("已创建技能 demo-skill");
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        data: { name: "demo-skill", event: "create" },
+      }),
+    );
+
+    // swallow:埋点失败(表锁)不改变 create_skill 成功语义(换新目录防同名冲突)
+    const failing = vi.fn().mockRejectedValue(new Error("table locked"));
+    const ok = await makeCreateSkillTool({
+      skillsRoot: mkdtempSync(path.join(tmpdir(), "create-skill-2")),
+      prisma: createPrismaStub().prisma,
+      statRecord: { create: failing } as SkillStatPrismaLike,
+    }).execute({ workspacePath: skillsRoot, sessionId: 1 }, validArgs());
+    expect(ok).toContain("已创建技能 demo-skill");
+  });
+
+  it("statRecord 缺席(既有测试形态)→ 不记录也不报错", async () => {
+    const { prisma, upsertCalls } = createPrismaStub();
+    const tool = makeCreateSkillTool({ skillsRoot, prisma });
+    const out = await tool.execute(
+      { workspacePath: skillsRoot, sessionId: 1 },
+      validArgs(),
+    );
+    expect(out).toContain("已创建技能 demo-skill");
+    expect(upsertCalls.length).toBe(1);
   });
 });

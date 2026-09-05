@@ -25,6 +25,25 @@ export interface BatchUninstallResult {
 export type PickImportResult =
   { canceled: true } | { canceled: false; path: string };
 
+/**
+ * 技能埋点聚合项(与 electron/domains/ai/skill/skill-stats.ts 的
+ * SkillStatItem 保持同步;独立声明避免渲染进程 import 主进程模块)
+ */
+export interface SkillStatItem {
+  name: string;
+  installs: number;
+  creates: number;
+  enables: number;
+  disables: number;
+  uninstalls: number;
+  batchOps: number;
+  lastActiveAt: string;
+}
+
+export interface SkillStatsResult {
+  items: SkillStatItem[];
+}
+
 const SkillApi = {
   list: () => invoke<SkillRecord[]>("skill:list"),
   setEnabled: (name: string, enabled: boolean) =>
@@ -42,6 +61,8 @@ const SkillApi = {
   }) => invoke<InstallResult | InspectResult>("skill:import", params),
   /** 拉起系统文件选择器选 zip 文件或目录 */
   pickImport: () => invoke<PickImportResult>("skill:pickImport"),
+  /** 埋点聚合查询(P-E:name 升序;暂无 UI 消费,api 层备好) */
+  stats: () => invoke<SkillStatsResult>("skill:stats"),
 };
 
 export default SkillApi;

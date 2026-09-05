@@ -25,6 +25,7 @@ import {
   validateSkillMd,
 } from "./skill-archive";
 import { isInsideDir } from "./skill-sync";
+import { recordSkillEvent, type SkillStatPrismaLike } from "./skill-stats";
 
 export type InstallResult =
   | {
@@ -119,6 +120,8 @@ export class SkillInstaller {
   private readonly limits: { maxFileBytes: number; maxTotalBytes: number };
   private readonly download?: (slug: string) => Promise<ArrayBuffer>;
   private readonly getVersion?: (slug: string) => Promise<string>;
+  /** 埋点 delegate(P-E):缺席(纯函数测试形态)静默跳过 */
+  private readonly statRecord?: SkillStatPrismaLike;
 
   constructor(deps: {
     skillsRoot: string;
@@ -130,6 +133,8 @@ export class SkillInstaller {
     download?: (slug: string) => Promise<ArrayBuffer>;
     /** 版本查询注入(优先于内部 fetch):SkillHubClient.getDetail → latestVersion.version */
     getVersion?: (slug: string) => Promise<string>;
+    /** 埋点写入 delegate(P-E):repo 装配 prisma.skillStat;缺席不记录 */
+    statRecord?: SkillStatPrismaLike;
   }) {
     this.skillsRoot = deps.skillsRoot;
     this.prisma = deps.prisma;
@@ -142,6 +147,7 @@ export class SkillInstaller {
     };
     this.download = deps.download;
     this.getVersion = deps.getVersion;
+    this.statRecord = deps.statRecord;
   }
 
   async installFromBuffer(
@@ -357,6 +363,9 @@ export class SkillInstaller {
           description,
         },
       });
+      // P-E 埋点:成功尾部记 install(market/local 同事件,source 已在
+      // skillRecord;fire-and-forget,失败由 recorder 吞不影响安装结果)
+      void recordSkillEvent(this.statRecord, name, "install");
       return {
         status: "installed",
         record: {

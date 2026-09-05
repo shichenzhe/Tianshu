@@ -14,13 +14,20 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// skill-stats recorder 静态 import commons/Log(winston/electron 副作用),
+// 模块级 mock 隔离(参照 chat.service.test.ts 的 mock 边界先例)
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
 
 import {
   SkillInstaller,
   type SkillRecordDbRow,
   type SkillRecordPrismaLike,
 } from "../../electron/domains/ai/skill/skill-installer";
+import type { SkillStatPrismaLike } from "../../electron/domains/ai/skill/skill-stats";
 
 const MB = 1024 * 1024;
 
@@ -143,6 +150,7 @@ function makeInstaller(
     fetchImpl?: typeof fetch;
     download?: (slug: string) => Promise<ArrayBuffer>;
     getVersion?: (slug: string) => Promise<string>;
+    statRecord?: SkillStatPrismaLike;
   } = {},
 ) {
   const root = makeTmpDir();
@@ -154,6 +162,7 @@ function makeInstaller(
     ...(options.limits ? { limits: options.limits } : {}),
     ...(options.download ? { download: options.download } : {}),
     ...(options.getVersion ? { getVersion: options.getVersion } : {}),
+    ...(options.statRecord ? { statRecord: options.statRecord } : {}),
   });
   return { root, installer, ...stub };
 }
@@ -713,5 +722,63 @@ describe("inspectFromPath(dryRun:不落盘不写库)", () => {
     );
     expect(readdirSync(root)).toEqual([]);
     expect(upsertCalls).toHaveLength(0);
+  });
+});
+
+describe("P-E 埋点(install 事件)", () => {
+  function statStub() {
+    const create = vi.fn().mockResolvedValue({});
+    return { statRecord: { create } as SkillStatPrismaLike, create };
+  }
+
+  it("安装成功(市场/本地同流 installItems)→ 记 {name, install}", async () => {
+    const { statRecord, create } = statStub();
+    const { installer } = makeInstaller({ statRecord });
+    await installer.installFromBuffer(
+      makeZip({ "SKILL.md": SKILL_MD("demo") }),
+      "local",
+    );
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        data: { name: "demo", event: "install" },
+      }),
+    );
+  });
+
+  it("目录导入成功 → 同样记 install", async () => {
+    const { statRecord, create } = statStub();
+    const src = makeTmpDir();
+    writeFileSync(path.join(src, "SKILL.md"), SKILL_MD("from-dir"));
+    const { installer } = makeInstaller({ statRecord });
+    await installer.importDirectory(src);
+    await vi.waitFor(() =>
+      expect(create).toHaveBeenCalledWith({
+        data: { name: "from-dir", event: "install" },
+      }),
+    );
+  });
+
+  it("冲突 → 不记;埋点 delegate 抛错 → 安装仍成功(DoD 主流程不受影响)", async () => {
+    const conflictStat = statStub();
+    const { root, installer } = makeInstaller({
+      statRecord: conflictStat.statRecord,
+    });
+    mkdirSync(path.join(root, "demo"));
+    await expect(
+      installer.installFromBuffer(
+        makeZip({ "SKILL.md": SKILL_MD("demo") }),
+        "local",
+      ),
+    ).resolves.toEqual({ status: "conflict", name: "demo" });
+    expect(conflictStat.create).not.toHaveBeenCalled();
+
+    const failingCreate = vi.fn().mockRejectedValue(new Error("table locked"));
+    const ok = await makeInstaller({
+      statRecord: { create: failingCreate } as SkillStatPrismaLike,
+    }).installer.installFromBuffer(
+      makeZip({ "SKILL.md": SKILL_MD("demo2") }),
+      "local",
+    );
+    expect(ok).toMatchObject({ status: "installed" });
   });
 });

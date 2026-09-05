@@ -3,7 +3,8 @@
  * 启停/批量/卸载。卸载仅允许 userData/skills 内路径(防越界)。
  * 安装三通道(P-C Task 3):市场下载安装 / 本地导入(zip 或目录,
  * dryRun 走预检)/ 系统文件选择器,编排委托 SkillInstaller。
- * 另含内置技能启动自愈安装(P-D Task 1,ensureBuiltinSkills)。
+ * 另含内置技能启动自愈安装(P-D Task 1,ensureBuiltinSkills)与
+ * 技能埋点采集/聚合查询(P-E,skill:stats)。
  */
 import { ipcMain, app, dialog } from "electron";
 import { rmSync } from "node:fs";
@@ -18,6 +19,11 @@ import {
   type SkillRecordRow,
 } from "./skill-sync";
 import { SkillInstaller } from "./skill-installer";
+import {
+  aggregateSkillStats,
+  recordSkillEvent,
+  type SkillStatItem,
+} from "./skill-stats";
 import { registerTools } from "../agent/tool-registry";
 import { makeCreateSkillTool } from "../agent/create-skill";
 import { ensureBuiltinSkills as ensureBuiltinSkillsImpl } from "./builtin-skills";
@@ -42,10 +48,12 @@ export class SkillRepository {
   private readonly installer: SkillInstaller;
 
   constructor(private readonly prismaClient: PrismaClient = prisma) {
-    // prisma 传 skillRecord 仓储子集(SkillRecordPrismaLike 结构接口)
+    // prisma 传 skillRecord 仓储子集(SkillRecordPrismaLike 结构接口);
+    // statRecord 传 skillStat delegate(P-E 埋点,写入失败由 recorder 吞)
     this.installer = new SkillInstaller({
       skillsRoot: this.skillsRoot(),
       prisma: this.prismaClient.skillRecord,
+      statRecord: this.prismaClient.skillStat,
       // 市场请求全走 SkillHubClient(spec §2.2):X-API-Key 鉴权 +
       // 退避重试 + 下载量计入团队 Key 归因
       download: (slug) => this.hub.downloadZip(slug),
@@ -58,6 +66,7 @@ export class SkillRepository {
       makeCreateSkillTool({
         skillsRoot: this.skillsRoot(),
         prisma: this.prismaClient.skillRecord,
+        statRecord: this.prismaClient.skillStat,
       }),
     ]);
     this.registerHandlers();
@@ -92,6 +101,7 @@ export class SkillRepository {
           : this.installer.importFromPath(p.path, p.overwrite ?? false),
     );
     ipcMain.handle("skill:pickImport", () => this.pickImport());
+    ipcMain.handle("skill:stats", () => this.stats());
     ipcMain.handle("skillhub:list", (_e, p: SkillHubListParams) =>
       this.hub.listSkills(p ?? {}),
     );
@@ -161,6 +171,12 @@ export class SkillRepository {
       where: { name },
       data: { enabled },
     });
+    // P-E 埋点:fire-and-forget,失败由 recorder 吞
+    void recordSkillEvent(
+      this.prismaClient.skillStat,
+      name,
+      enabled ? "enable" : "disable",
+    );
     return null;
   }
 
@@ -170,6 +186,15 @@ export class SkillRepository {
         where: { name: { in: names } },
         data: { enabled },
       });
+    }
+    // P-E 埋点:批量操作逐选中技能记一条 batch_*(每技能活跃度与
+    // 批量使用率一表两得);fire-and-forget
+    for (const name of names) {
+      void recordSkillEvent(
+        this.prismaClient.skillStat,
+        name,
+        enabled ? "batch_enable" : "batch_disable",
+      );
     }
     return null;
   }
@@ -185,26 +210,39 @@ export class SkillRepository {
 
   /** 卸载 = 删目录 + 删记录;路径越界拒绝;目录删除失败时记录保留(可重试) */
   async uninstall(name: string): Promise<null> {
+    await this.uninstallCore(name);
+    // P-E 埋点:单个卸载记 uninstall(批量走 batchUninstall 记 batch_*)
+    void recordSkillEvent(this.prismaClient.skillStat, name, "uninstall");
+    return null;
+  }
+
+  /** 卸载主流程(埋点除外):uninstall/batchUninstall 共用,避免批量双记 */
+  private async uninstallCore(name: string): Promise<void> {
     const row = await this.prismaClient.skillRecord.findUnique({
       where: { name },
     });
     if (!row) {
-      return null;
+      return;
     }
     if (!isInsideDir(row.dir, this.skillsRoot())) {
       throw new Error(`技能目录不在管理范围内: ${row.dir}`);
     }
     rmSync(row.dir, { recursive: true, force: true });
     await this.prismaClient.skillRecord.delete({ where: { id: row.id } });
-    return null;
   }
 
   async batchUninstall(names: string[]): Promise<BatchUninstallResult> {
     const result: BatchUninstallResult = { succeeded: [], failed: [] };
     for (const name of names) {
       try {
-        await this.uninstall(name);
+        await this.uninstallCore(name);
         result.succeeded.push(name);
+        // P-E 埋点:批量逐成功技能记 batch_uninstall(不是 uninstall,防双计)
+        void recordSkillEvent(
+          this.prismaClient.skillStat,
+          name,
+          "batch_uninstall",
+        );
       } catch (e) {
         result.failed.push({
           name,
@@ -213,6 +251,12 @@ export class SkillRepository {
       }
     }
     return result;
+  }
+
+  /** 埋点聚合查询(P-E):全量行内存聚合(本地单机事件量级千级,决策 4) */
+  async stats(): Promise<{ items: SkillStatItem[] }> {
+    const rows = await this.prismaClient.skillStat.findMany();
+    return { items: aggregateSkillStats(rows) };
   }
 
   /** 系统文件选择器(zip 文件或技能目录);取消/未选返回 canceled:true */

@@ -11,6 +11,10 @@ import { z } from "zod";
 import { validateSkillMd } from "../skill/skill-archive";
 import { isInsideDir } from "../skill/skill-sync";
 import type { SkillRecordPrismaLike } from "../skill/skill-installer";
+import {
+  recordSkillEvent,
+  type SkillStatPrismaLike,
+} from "../skill/skill-stats";
 import type { ToolDefinition } from "./file-tools";
 
 /** 数值约束与 skill-creator SKILL.md 第四步一致（改动须两处同步） */
@@ -154,6 +158,8 @@ export function validateCreateSkillParams(args: unknown): CreateSkillCheck {
 export function makeCreateSkillTool(deps: {
   skillsRoot: string;
   prisma: SkillRecordPrismaLike;
+  /** 埋点写入 delegate(P-E):repo 装配 prisma.skillStat;缺席(测试)不记录 */
+  statRecord?: SkillStatPrismaLike;
 }): ToolDefinition<CreateSkillParams> {
   return {
     name: "create_skill",
@@ -200,6 +206,9 @@ export function makeCreateSkillTool(deps: {
         create: { name: check.name, ...data },
         update: data,
       });
+      // P-E 埋点:成功尾部记 create(区分 AI 创建与市场/本地安装;
+      // fire-and-forget,失败由 recorder 吞不影响工具结果)
+      void recordSkillEvent(deps.statRecord, check.name, "create");
       return `已创建技能 ${check.name},可在技能页管理,下次对话即可使用`;
     },
   };

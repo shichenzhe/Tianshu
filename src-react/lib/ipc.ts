@@ -71,6 +71,7 @@ export type IPCChannel =
   | "skill:batchUninstall"
   | "skill:import"
   | "skill:pickImport"
+  | "skill:stats"
   | "skillhub:list"
   | "skillhub:top"
   | "skillhub:categories"

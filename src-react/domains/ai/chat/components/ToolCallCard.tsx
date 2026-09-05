@@ -76,9 +76,13 @@ function ToolCallCardImpl({
   const stateColor = STATE_COLORS[stateKey] ?? "";
   const path = extractPath(args);
   const shownOutput = output ? truncateOutput(output) : null;
+  // error 态加左侧橙色竖线（PRD §2.3.B「插曲」语义色，同流式绿点先例）
+  const containerClass = `my-1 rounded-md border border-border/50 bg-muted/30${
+    stateKey === "error" ? " border-l-2 border-l-orange-400/80" : ""
+  }`;
 
   return (
-    <details className="my-1 rounded-md border border-border/50 bg-muted/30">
+    <details className={containerClass}>
       <summary className="cursor-pointer select-none px-3 py-1.5 text-xs text-muted-foreground">
         <span className="inline-flex max-w-full items-center gap-1.5">
           <span className="shrink-0">🔧 {toolName}</span>

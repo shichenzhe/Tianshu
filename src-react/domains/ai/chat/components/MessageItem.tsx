@@ -1,6 +1,7 @@
 /**
- * 单条消息渲染：blocks 分发（text/thinking/usage）+ 错误横幅 + 重新生成按钮
- * user 消息右侧主色气泡，assistant 消息左侧全宽
+ * 单条消息渲染：过程块（thinking/tool_call）收进深度思考面板 + 答案正文
+ * （text/usage）+ 错误横幅 + 重新生成按钮。user 消息右侧主色气泡，
+ * assistant 消息左侧全宽；流式态由 MessageList 以伪消息 + streaming 传入
  */
 import { isValidElement, memo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,13 +10,16 @@ import { Check, Copy, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { parseBlocks, type MessageBlock } from "../model/blocks";
+import { parseBlocks } from "../model/blocks";
+import { groupBlocks } from "../lib/group-blocks";
 import type { MessageRecord } from "../../api/session.api";
 import CodeBlock from "./CodeBlock";
-import ToolCallCard from "./ToolCallCard";
+import ThinkingPanel from "./ThinkingPanel";
 
 interface MessageItemProps {
   message: MessageRecord;
+  /** 流式中的实时气泡：面板显示「思考中」并默认展开 */
+  streaming?: boolean;
   /** 仅最后一条助手消息为 true（配合 onRegenerate 显示重新生成） */
   isLastAssistant?: boolean;
   /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
@@ -80,21 +84,6 @@ const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
   );
 });
 
-function ThinkingBlockView({ text }: { text: string }) {
-  const { t } = useTranslation(["chat"]);
-
-  return (
-    <details className="my-1 rounded-md border border-border/50 bg-muted/30">
-      <summary className="cursor-pointer select-none px-3 py-1.5 text-xs text-muted-foreground">
-        {t("chat:message.thinking")}
-      </summary>
-      <div className="whitespace-pre-wrap break-words px-3 pb-2 text-xs leading-relaxed text-muted-foreground">
-        {text}
-      </div>
-    </details>
-  );
-}
-
 function UsageBlockView({ input, output }: { input: number; output: number }) {
   const { t } = useTranslation(["chat"]);
 
@@ -105,31 +94,9 @@ function UsageBlockView({ input, output }: { input: number; output: number }) {
   );
 }
 
-function BlockView({ block }: { block: MessageBlock }) {
-  switch (block.type) {
-    case "text":
-      return <MarkdownBlock text={block.text} />;
-    case "thinking":
-      return <ThinkingBlockView text={block.text} />;
-    case "usage":
-      return <UsageBlockView input={block.input} output={block.output} />;
-    case "tool_call":
-      // 落库块 output 恒为主进程写入的字符串（done/denied/error 终态），兜底非字符串不展示
-      return (
-        <ToolCallCard
-          toolName={block.toolName}
-          args={block.args}
-          state={block.state}
-          output={typeof block.output === "string" ? block.output : undefined}
-        />
-      );
-    default:
-      return null;
-  }
-}
-
 function MessageItemImpl({
   message,
+  streaming = false,
   isLastAssistant = false,
   onRegenerate,
 }: MessageItemProps) {
@@ -152,13 +119,11 @@ function MessageItemImpl({
   }
 
   const blocks = parseBlocks(message.blocks);
+  const grouped = groupBlocks(blocks);
   const showRegenerate = isLastAssistant && Boolean(onRegenerate);
 
   const handleCopy = async () => {
-    const text = blocks
-      .filter((block) => block.type === "text")
-      .map((block) => (block.type === "text" ? block.text : ""))
-      .join("\n");
+    const text = grouped.texts.map((block) => block.text).join("\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -181,9 +146,24 @@ function MessageItemImpl({
           </p>
         </div>
       )}
-      {blocks.map((block, index) => (
-        <BlockView key={`${index}-${block.type}`} block={block} />
+      {/* 深度思考面板（答案上方，PRD §2.2）：流式展开实时过程，落库默认折叠 */}
+      {grouped.hasProcess && (
+        <ThinkingPanel
+          status={streaming ? "streaming" : "done"}
+          thinking={grouped.thinkingText}
+          tools={grouped.tools}
+          defaultOpen={streaming}
+        />
+      )}
+      {grouped.texts.map((block, index) => (
+        <MarkdownBlock key={`text-${index}`} text={block.text} />
       ))}
+      {grouped.usage && (
+        <UsageBlockView
+          input={grouped.usage.input}
+          output={grouped.usage.output}
+        />
+      )}
       <div className="mt-1 flex items-center gap-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
         <Button
           variant="ghost"

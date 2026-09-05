@@ -4,11 +4,7 @@
  * text（答案正文）与 usage 留在消息主流保序渲染
  */
 
-import type {
-  MessageBlock,
-  TextBlock,
-  UsageBlock,
-} from "../model/blocks";
+import type { MessageBlock, TextBlock, UsageBlock } from "../model/blocks";
 
 /** 面板内工具条目（平铺 ToolCallCard props，与流式 ToolStreamState 同构） */
 export interface ToolPanelItem {
@@ -38,7 +34,9 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
   for (const block of blocks) {
     switch (block.type) {
       case "thinking":
-        thinkingText = thinkingText ? `${thinkingText}\n\n${block.text}` : block.text;
+        thinkingText = thinkingText
+          ? `${thinkingText}\n\n${block.text}`
+          : block.text;
         break;
       case "tool_call":
         tools.push({

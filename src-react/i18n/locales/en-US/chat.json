@@ -78,7 +78,6 @@
     "connector": "Connectors"
   },
   "message": {
-    "thinking": "Thinking",
     "usage": "{{input}} input / {{output}} output tokens",
     "failed": "Generation failed",
     "regenerate": "Regenerate"
@@ -160,5 +159,10 @@
   },
   "automation": {
     "title": "Automation"
+  },
+  "panel": {
+    "thinkingStatus": "Thinking",
+    "doneStatus": "Completed",
+    "thinkingLabel": "Deep thinking"
   }
 }

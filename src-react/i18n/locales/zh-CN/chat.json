@@ -78,7 +78,6 @@
     "connector": "连接器"
   },
   "message": {
-    "thinking": "思考过程",
     "usage": "{{input}} 输入 / {{output}} 输出 tokens",
     "failed": "生成失败",
     "regenerate": "重新生成"
@@ -160,5 +159,10 @@
   },
   "automation": {
     "title": "自动化"
+  },
+  "panel": {
+    "thinkingStatus": "思考中",
+    "doneStatus": "已完成",
+    "thinkingLabel": "深度思考"
   }
 }

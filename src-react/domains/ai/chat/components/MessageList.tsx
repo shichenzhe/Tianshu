@@ -1,17 +1,20 @@
 /**
- * 消息列表：历史消息（React Query）+ 流式中的实时气泡 + 新内容自动滚动到底
- * 流式工具区简化实现：统一追加在 text/thinking 之后（流式期间顺序弱化，
- * 历史回读经 tool_call 块还原真实穿插序）
+ * 消息列表：历史消息（React Query）+ 流式实时气泡 + 新内容自动滚动到底
+ * 流式期间 thinking/工具/text 拼成完整 blocks，与历史消息同走
+ * 「深度思考面板 + 正文」管道；审批横幅留在面板外逐条渲染
  */
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 
 import SessionApi, { type MessageRecord } from "../../api/session.api";
-import { serializeBlocks, type MessageBlock } from "../model/blocks";
+import {
+  serializeBlocks,
+  type MessageBlock,
+  type ToolCallBlock,
+} from "../model/blocks";
 import { useChatStore } from "../store/chat.store";
 import MessageItem from "./MessageItem";
-import ToolCallCard from "./ToolCallCard";
 import ApprovalBanner from "./ApprovalBanner";
 
 interface MessageListProps {
@@ -60,14 +63,32 @@ export default function MessageList({
     return null;
   }, [messages]);
 
-  // 流式中的实时气泡：复用 MessageItem 的 blocks 分发逻辑
+  // 流式中的实时气泡：thinking + 工具调用 + text 拼成完整 blocks，
+  // 经 MessageItem 与历史消息走同一「深度思考面板 + 正文」管道
   const liveMessage = useMemo<MessageRecord | null>(() => {
-    if (!isStreaming || !stream || (!stream.text && !stream.thinking)) {
+    if (
+      !isStreaming ||
+      !stream ||
+      (!stream.text && !stream.thinking && stream.tools.order.length === 0)
+    ) {
       return null;
     }
     const blocks: MessageBlock[] = [];
     if (stream.thinking) {
       blocks.push({ type: "thinking", text: stream.thinking });
+    }
+    for (const toolCallId of stream.tools.order) {
+      const tool = stream.tools.map[toolCallId];
+      if (tool) {
+        blocks.push({
+          type: "tool_call",
+          toolCallId,
+          toolName: tool.toolName,
+          args: (tool.args ?? {}) as Record<string, unknown>,
+          state: tool.state as ToolCallBlock["state"],
+          output: tool.output,
+        });
+      }
     }
     if (stream.text) {
       blocks.push({ type: "text", text: stream.text });
@@ -150,37 +171,30 @@ export default function MessageList({
               onRegenerate={onRegenerate}
             />
           ))}
-          {liveMessage && <MessageItem message={liveMessage} />}
-          {/* 流式工具区：按 order 遍历当前流工具；条目 awaiting-approval 且有
-              argSummary 时其下挂审批横幅。可见性纯 store 态门控：决议成功后
-              主进程推 running/denied chunk 自然卸下；invoke 失败 store 态未变，
-              横幅保持可见可重试 */}
+          {liveMessage && <MessageItem message={liveMessage} streaming />}
+          {/* 审批横幅保持在面板外（关键交互不埋进折叠区）：
+              工具卡已在深度思考面板内实时展示，此处仅渲染待决议横幅。
+              可见性纯 store 态门控：决议成功后主进程推 running/denied chunk
+              自然卸下；invoke 失败 store 态未变，横幅保持可见可重试 */}
           {isStreaming &&
             stream &&
             stream.tools.order.map((toolCallId) => {
               const tool = stream.tools.map[toolCallId];
-              if (!tool) {
-                return null;
-              }
-              const argSummary = tool.argSummary;
+              const argSummary = tool?.argSummary;
               const showBanner =
-                tool.state === "awaiting-approval" &&
+                tool?.state === "awaiting-approval" &&
                 argSummary !== undefined &&
                 argSummary.length > 0;
-              return (
-                <div key={toolCallId}>
-                  <ToolCallCard {...tool} />
-                  {showBanner && workspaceId !== null && (
-                    <ApprovalBanner
-                      toolCallId={toolCallId}
-                      toolName={tool.toolName}
-                      argSummary={argSummary}
-                      workspaceId={workspaceId ?? null}
-                      onDecided={noopOnDecided}
-                    />
-                  )}
-                </div>
-              );
+              return showBanner && workspaceId !== null ? (
+                <ApprovalBanner
+                  key={toolCallId}
+                  toolCallId={toolCallId}
+                  toolName={tool.toolName}
+                  argSummary={argSummary}
+                  workspaceId={workspaceId}
+                  onDecided={noopOnDecided}
+                />
+              ) : null;
             })}
         </>
       )}

@@ -52,9 +52,9 @@ describe("groupBlocks 过程/结论分组", () => {
   });
 
   it("含过程块时 hasProcess 为 true", () => {
-    expect(
-      groupBlocks([{ type: "thinking", text: "想一想" }]).hasProcess,
-    ).toBe(true);
+    expect(groupBlocks([{ type: "thinking", text: "想一想" }]).hasProcess).toBe(
+      true,
+    );
     expect(
       groupBlocks([
         {
@@ -71,9 +71,7 @@ describe("groupBlocks 过程/结论分组", () => {
 
 describe("summarizeThinking 折叠摘要", () => {
   it("短文本原样返回", () => {
-    expect(summarizeThinking("我来梳理一下思路。")).toBe(
-      "我来梳理一下思路。",
-    );
+    expect(summarizeThinking("我来梳理一下思路。")).toBe("我来梳理一下思路。");
   });
 
   it("按首个句末标点截断(。!?英文句号)", () => {

@@ -12,7 +12,7 @@ const DANGEROUS_EXT = new Set([
   ".msi",
   ".scr",
 ]);
-const DEFAULTS = {
+export const DEFAULTS = {
   maxFileBytes: 10 * 1024 * 1024,
   maxTotalBytes: 50 * 1024 * 1024,
   maxCount: 500,

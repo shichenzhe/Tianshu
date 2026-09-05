@@ -22,7 +22,7 @@
   "setupProvidersTip": "还没有可用的模型，先添加一个服务商",
   "goSetup": "去配置",
   "input": {
-    "placeholder": "输入消息，Enter 发送，Shift+Enter 换行",
+    "placeholder": "今天帮你做些什么？@ 引用资产文件... / 调用技能与指令",
     "send": "发送",
     "stop": "停止",
     "selectModel": "选择模型",
@@ -33,6 +33,10 @@
     "temp": "温度",
     "topP": "Top P",
     "maxTokens": "最大输出 Tokens"
+  },
+  "attach": {
+    "remove": "移除引用文件",
+    "readFailed": "读取失败：{{path}}（{{reason}}）"
   },
   "search": {
     "placeholder": "搜索消息",

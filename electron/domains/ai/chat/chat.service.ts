@@ -679,6 +679,40 @@ export default class ChatService {
       }
       return skillsDir;
     });
+    // P3 文件引用：多选弹窗 + 逐文件读取文本（≤512KB、NUL 视为二进制拒绝）。
+    // 单文件失败不影响其余（带 error 返回，渲染层 toast 后丢弃）；取消返回空数组
+    ipcMain.handle(
+      "file:pickAndRead",
+      async (): Promise<
+        Array<
+          { path: string; content: string } | { path: string; error: string }
+        >
+      > => {
+        const result = await dialog.showOpenDialog({
+          properties: ["openFile", "multiSelections"],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+          return [];
+        }
+        return Promise.all(
+          result.filePaths.map(async (filePath) => {
+            try {
+              const stat = await fs.stat(filePath);
+              if (stat.size > 512 * 1024) {
+                return { path: filePath, error: "超过 512KB 上限" };
+              }
+              const buf = await fs.readFile(filePath);
+              if (buf.includes(0)) {
+                return { path: filePath, error: "二进制文件不支持" };
+              }
+              return { path: filePath, content: buf.toString("utf8") };
+            } catch {
+              return { path: filePath, error: "读取失败" };
+            }
+          }),
+        );
+      },
+    );
   }
 
   private emit(

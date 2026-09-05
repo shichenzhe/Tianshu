@@ -39,12 +39,8 @@ import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import SessionSidebar from "../components/SessionSidebar";
 import MessageList from "../components/MessageList";
-import ChatInput from "../components/ChatInput";
-import ModelPicker from "../components/ModelPicker";
-import AssistantPicker from "../components/AssistantPicker";
-import PermissionCapsule, {
-  type AccessMode,
-} from "../components/PermissionCapsule";
+import ChatInput, { type PendingFile } from "../components/ChatInput";
+import type { AccessMode } from "../components/PermissionCapsule";
 import AgentProgress from "../components/AgentProgress";
 import WorkspacePathChip from "../components/WorkspacePathChip";
 import { useChatSend } from "../hooks/use-chat-send";
@@ -253,9 +249,20 @@ function ChatPane({
     return tools.order.length + 1;
   });
 
-  const handleSend = async (content: string, overrides?: ChatModelParams) => {
+  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动 */
+  const handleSend = async (
+    content: string,
+    files: PendingFile[],
+    overrides?: ChatModelParams,
+  ) => {
+    const injected =
+      files.length > 0
+        ? `${files
+            .map((file) => `[引用文件 ${file.path}]\n${file.content}`)
+            .join("\n\n")}\n\n${content}`
+        : content;
     try {
-      await send(content, undefined, overrides);
+      await send(injected, undefined, overrides);
     } catch (e) {
       toast.error(mapIpcError(e));
     }
@@ -281,19 +288,7 @@ function ChatPane({
       )}
       <div className="border-t border-border/50 p-4">
         <div className="flex items-end gap-2">
-          <PermissionCapsule
-            sessionId={session.id}
-            accessMode={accessMode}
-            onChange={(mode) => void handleAccessModeChange(mode)}
-          />
-          <ModelPicker
-            sessionId={session.id}
-            currentModelId={session.currentModelId}
-          />
-          <AssistantPicker
-            sessionId={session.id}
-            currentAssistantId={session.assistantId}
-          />
+          {/* 齿轮设置菜单保留输入行外原位（spec §1：不进 ＋ 菜单，职责分离） */}
           <TooltipProvider>
             <Tooltip>
               {/* 层级：DropdownMenu 最外（Trigger 依赖其 context）；TooltipTrigger 包在
@@ -338,6 +333,10 @@ function ChatPane({
           <ChatInput
             hasModel={hasModel}
             sending={sending}
+            sessionId={session.id}
+            accessMode={accessMode}
+            currentModelId={session.currentModelId}
+            onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
             onSend={handleSend}
             onStop={stop}
           />

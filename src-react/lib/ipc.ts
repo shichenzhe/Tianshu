@@ -58,6 +58,7 @@ export type IPCChannel =
   | "permission:get"
   | "permission:set"
   | "skill:openDir"
+  | "file:pickAndRead"
   | "mcpServer:list"
   | "mcpServer:create"
   | "mcpServer:update"

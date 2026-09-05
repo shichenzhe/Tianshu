@@ -22,7 +22,7 @@
   "setupProvidersTip": "No available models yet. Add a provider first.",
   "goSetup": "Set Up",
   "input": {
-    "placeholder": "Type a message. Enter to send, Shift+Enter for a new line",
+    "placeholder": "What can I help you with today? @ reference files... / use skills & commands",
     "send": "Send",
     "stop": "Stop",
     "selectModel": "Select Model",
@@ -33,6 +33,10 @@
     "temp": "Temperature",
     "topP": "Top P",
     "maxTokens": "Max Output Tokens"
+  },
+  "attach": {
+    "remove": "Remove attached file",
+    "readFailed": "Failed to read: {{path}} ({{reason}})"
   },
   "search": {
     "placeholder": "Search messages",

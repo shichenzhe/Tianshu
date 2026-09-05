@@ -97,6 +97,19 @@ export default class ChatApi {
   ): Promise<void> {
     return invoke<void>("agent:approve", toolCallId, approved);
   }
+
+  /** 查询会话工具权限模式（P3）：default 询问 / full 放行 */
+  static async getPermission(sessionId: number): Promise<"default" | "full"> {
+    return invoke<"default" | "full">("permission:get", sessionId);
+  }
+
+  /** 设置会话工具权限模式（P3；主进程内存态，无会话校验） */
+  static async setPermission(
+    sessionId: number,
+    mode: "default" | "full",
+  ): Promise<void> {
+    return invoke<void>("permission:set", sessionId, mode);
+  }
 }
 
 /**

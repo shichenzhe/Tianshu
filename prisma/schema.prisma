@@ -90,6 +90,7 @@ model session {
   assistantId    Int?
   currentModelId Int?
   title          String    @default("新会话")
+  mode           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   lastMessageAt  DateTime?

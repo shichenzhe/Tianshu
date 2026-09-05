@@ -4,12 +4,16 @@
 
 import { invoke } from "@/lib/ipc";
 
+/** 会话模式（P3）：agent 默认 / ask 仅问答 / plan 计划 */
+export type SessionMode = "agent" | "ask" | "plan";
+
 export interface SessionRecord {
   id: number;
   workspaceId: number;
   assistantId?: number;
   currentModelId?: number;
   title: string;
+  mode: SessionMode;
   createdAt: string;
   updatedAt: string;
   lastMessageAt?: string;
@@ -63,6 +67,11 @@ export class SessionApi {
     assistantId: number | null,
   ): Promise<void> {
     return invoke<void>("session:setAssistant", id, assistantId);
+  }
+
+  /** 切换会话模式（P3）：agent 时主进程落 null，保持 DB 干净 */
+  static async setMode(id: number, mode: SessionMode): Promise<void> {
+    return invoke<void>("session:setMode", id, mode);
   }
 
   static async listMessages(sessionId: number): Promise<MessageRecord[]> {

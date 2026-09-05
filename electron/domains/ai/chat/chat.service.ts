@@ -33,6 +33,7 @@ import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import type { ToolDefinition } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
+import { PermissionStore } from "../agent/permission-mode";
 import type {
   ChatSendParams,
   ChatStatusResult,
@@ -569,6 +570,8 @@ export default class ChatService {
   private aborts = new Map<number, AbortController>();
   private snapshots = new Map<number, StreamSnapshot>();
   private approvals = new ApprovalCoordinator();
+  /** P3：会话工具权限模式（内存态，spec §8：无会话校验静默收） */
+  private permissions = new PermissionStore();
 
   constructor(private sessions: SessionRepository) {
     this.registerHandlers();
@@ -590,6 +593,15 @@ export default class ChatService {
       "agent:approve",
       (_, toolCallId: string, approved: boolean) =>
         this.approvals.respond(toolCallId, approved),
+    );
+    // P3 会话工具权限：default 询问 / full 放行（spec §8：无会话校验静默收）
+    ipcMain.handle("permission:get", (_, sessionId: number) =>
+      this.permissions.get(sessionId),
+    );
+    ipcMain.handle(
+      "permission:set",
+      (_, sessionId: number, mode: "default" | "full") =>
+        this.permissions.set(sessionId, mode),
     );
     // P1 工作空间目录绑定：目录选择弹窗在主进程（dialog 属 GUI，repo 不引 electron）。
     // 用户取消返回 null，渲染层静默处理；存入前归一化（resolve + 去尾分隔符）

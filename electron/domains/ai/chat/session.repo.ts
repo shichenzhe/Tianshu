@@ -4,6 +4,7 @@ import type {
   MessageRecord,
   SearchMessageResult,
   SessionCreateParams,
+  SessionMode,
   SessionRecord,
 } from "../../../../src-react/domains/ai/api/session.api";
 import type {
@@ -54,6 +55,8 @@ export class SessionRepository {
       ...row,
       assistantId: row.assistantId ?? undefined,
       currentModelId: row.currentModelId ?? undefined,
+      // P3：DB null（agent 缺省不落盘）归一为显式 "agent"
+      mode: (row.mode as SessionMode | null) ?? "agent",
       lastMessageAt: row.lastMessageAt?.toISOString() ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -107,6 +110,9 @@ export class SessionRepository {
       "session:setAssistant",
       (_, id: number, assistantId: number | null) =>
         this.setSessionAssistant(id, assistantId),
+    );
+    ipcMain.handle("session:setMode", (_, id: number, mode: SessionMode) =>
+      this.setSessionMode(id, mode),
     );
     ipcMain.handle("message:listBySession", (_, sessionId: number) =>
       this.listMessages(sessionId),
@@ -246,6 +252,14 @@ export class SessionRepository {
     await prisma.session.update({
       where: { id },
       data: { assistantId },
+    });
+  }
+
+  /** P3 会话模式："agent" 写 null（缺省不落盘，保持 DB 干净） */
+  async setSessionMode(id: number, mode: SessionMode): Promise<void> {
+    await prisma.session.update({
+      where: { id },
+      data: { mode: mode === "agent" ? null : mode },
     });
   }
 

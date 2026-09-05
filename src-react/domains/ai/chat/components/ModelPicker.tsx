@@ -83,7 +83,6 @@ export default function ModelPicker({
         <Button
           variant="outline"
           size="sm"
-          disabled={groups.length === 0}
           className="max-w-44 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
           title={currentModel?.modelId}
         >
@@ -95,6 +94,9 @@ export default function ModelPicker({
         align="start"
         className="max-h-72 w-56 overflow-y-auto border border-border/50 rounded-lg shadow-lg"
       >
+        {groups.length === 0 && (
+          <DropdownMenuLabel>{t("chat:input.modelRequired")}</DropdownMenuLabel>
+        )}
         {groups.map((group, index) => (
           <div key={group.provider.id}>
             {index > 0 && <DropdownMenuSeparator />}

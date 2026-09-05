@@ -380,6 +380,45 @@ describe("installFromBuffer", () => {
     expectNoStaging(root);
   });
 
+  it("zip-slip 兜底:pkg/../evil.txt 组合段逃逸 staging → 拒绝且不落 skillsRoot 任何位置", async () => {
+    const { root, installer, upsertCalls } = makeInstaller();
+    await expect(
+      installer.installFromBuffer(
+        makeZipWithEntryName("payload.txt", "pkg/../evil.txt", {
+          "pkg/SKILL.md": SKILL_MD("demo"),
+          "payload.txt": "evil",
+        }),
+        "local",
+      ),
+    ).rejects.toThrow("不安全路径");
+    // evil.txt 恰会落在 skillsRoot 顶层(root 为空目录,空清单即"任何位置都没有")
+    expect(readdirSync(root)).toEqual([]);
+    expect(upsertCalls).toHaveLength(0);
+    expectNoStaging(root);
+  });
+
+  it("zip-slip 兜底:pkg/../demo/SKILL.md 不得覆盖已安装技能", async () => {
+    const { root, installer } = makeInstaller();
+    await installer.installFromBuffer(
+      makeZip({ "SKILL.md": SKILL_MD("demo", "原版") }),
+      "local",
+    );
+    await expect(
+      installer.installFromBuffer(
+        makeZipWithEntryName("payload.md", "pkg/../demo/SKILL.md", {
+          "pkg/SKILL.md": SKILL_MD("evil"),
+          "payload.md": "hacked",
+        }),
+        "local",
+      ),
+    ).rejects.toThrow("不安全路径");
+    expect(readFileSync(path.join(root, "demo", "SKILL.md"), "utf8")).toBe(
+      SKILL_MD("demo", "原版"),
+    );
+    expect(existsSync(path.join(root, "evil"))).toBe(false);
+    expectNoStaging(root);
+  });
+
   it("zip-slip 兜底:Windows 盘符条目 C:/evil.txt 在落盘前被拒", async () => {
     const { root, installer, upsertCalls } = makeInstaller();
     await expect(

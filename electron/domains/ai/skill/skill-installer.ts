@@ -2,14 +2,15 @@
  * 技能安装编排(P-C spec §2.2):解压/校验/冲突覆盖/落盘/入库。
  * 纯 Node fs + adm-zip(禁 import electron),skillsRoot/prisma/fetch 注入可测。
  * 安全模型双层:T1 纯函数层(validateArchiveEntries)先查路径与数量;
- * 落盘前逐条 isInsideDir(resolve 型)复核 + Windows 盘符原语拒绝,
- * 解压后按实际字节数复验单文件/总量上限(纯函数层拿不到大小)。
+ * 落盘前逐条 isInsideDir(resolve 型,以 staging 目录为界)复核 +
+ * Windows 盘符原语拒绝,解压后按实际字节数复验单文件/总量上限(纯函数层拿不到大小)。
  */
 import AdmZip from "adm-zip";
 import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -312,7 +313,9 @@ export class SkillInstaller {
     if (!overwrite && (await this.detectConflict(name, targetDir))) {
       return { status: "conflict", name };
     }
-    const stagingDir = path.join(this.skillsRoot, `.staging-${Date.now()}`);
+    // 随机后缀防并发 IPC 同毫秒共享 staging 互相覆盖/误清
+    mkdirSync(this.skillsRoot, { recursive: true });
+    const stagingDir = mkdtempSync(path.join(this.skillsRoot, ".staging-"));
     try {
       this.writeStaging(stagingDir, entries, rootPrefix);
       if (overwrite) {
@@ -353,13 +356,17 @@ export class SkillInstaller {
     }
   }
 
-  /** staging 中转落盘:每条目 isInsideDir(resolve)复核 + 实际字节限额 */
+  /**
+   * staging 中转落盘:每条目 isInsideDir(resolve,以 stagingDir 为界)复核 +
+   * 实际字节限额。边界必须是 stagingDir:若以 skillsRoot 为界,组合段
+   * `pkg/../evil.txt`(T1 normalize 后通过、root=pkg)会落到 skillsRoot
+   * 顶层 —— 逃出 staging,finally 清理不掉,可覆盖已安装技能
+   */
   private writeStaging(
     stagingDir: string,
     entries: ArchiveItem[],
     rootPrefix: string,
   ): void {
-    mkdirSync(stagingDir, { recursive: true });
     let totalBytes = 0;
     for (const entry of entries) {
       // 只落技能根下的条目:子目录根定位时,压缩包顶层的散落条目不属技能内容
@@ -367,8 +374,8 @@ export class SkillInstaller {
       const rel = entry.name.slice(rootPrefix.length);
       if (!rel || rel === "/") continue; // 技能根目录条目本身
       const dest = path.join(stagingDir, rel);
-      // resolve 型兜底:堵 T1 normalize 后仍放行的 ".." 与 Windows 盘符原语
-      if (!isInsideDir(dest, this.skillsRoot) || DRIVE_LETTER_RE.test(rel)) {
+      // resolve 型兜底:堵 T1 normalize 后仍放行的 ".."(单级组合段)与 Windows 盘符原语
+      if (!isInsideDir(dest, stagingDir) || DRIVE_LETTER_RE.test(rel)) {
         throw new Error(`存在不安全路径:${entry.name}`);
       }
       if (entry.isDirectory) {

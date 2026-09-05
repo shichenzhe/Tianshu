@@ -1,11 +1,13 @@
 /**
- * 模型选择器：按服务商分组的下拉菜单，选中即写入会话当前模型
+ * 模型选择器：按服务商分组的下拉菜单，选中即写入会话当前模型；
+ * 面板底部固定「配置模型」入口（跳服务提供商管理页）
  */
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, Server } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -24,6 +26,7 @@ import { mapIpcError } from "../lib/error-message";
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const SESSIONS_KEY = ["sessions"] as const;
+const PROVIDERS_ROUTE = "/module/ai/providers";
 
 interface ModelPickerProps {
   sessionId: number;
@@ -35,6 +38,7 @@ export default function ModelPicker({
   currentModelId,
 }: ModelPickerProps) {
   const { t } = useTranslation(["chat"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const providersQuery = useQuery({
@@ -110,6 +114,11 @@ export default function ModelPicker({
             ))}
           </div>
         ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate(PROVIDERS_ROUTE)}>
+          <Server />
+          {t("chat:settings.configureModels")}
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

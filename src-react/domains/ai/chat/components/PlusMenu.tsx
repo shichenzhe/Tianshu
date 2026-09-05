@@ -1,8 +1,9 @@
 /**
  * ＋扩展菜单（P3 spec §4）：添加文件 / 模式 / 专家 / 技能 / 连接器 五项
  * 模式与专家为二级子菜单（✓ 当前项），选中即写会话并失效 sessions 缓存，
- * 徽标展示由 ChatInput 按 currentMode 渲染（数据经 sessions query 刷新）
- * 底部管理入口（原齿轮菜单并入）：模型服务 / 助手预设 / MCP 管理
+ * 徽标展示由 ChatInput 按 currentMode 渲染（数据经 sessions query 刷新）。
+ * 管理入口就近收纳（原齿轮菜单）：专家预设 → 专家子菜单底部；
+ * 配置模型 → ModelPicker 面板底部；MCP → 连接器项
  */
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -14,7 +15,6 @@ import {
   FilePlus,
   Plug,
   Plus,
-  Server,
   Sparkles,
   Users,
   Zap,
@@ -38,6 +38,7 @@ import { mapIpcError } from "../lib/error-message";
 
 const ASSISTANTS_KEY = ["assistants"] as const;
 const SESSIONS_KEY = ["sessions"] as const;
+const ASSISTANTS_ROUTE = "/module/ai/assistants";
 
 /** file:pickAndRead 单项：成功带 content，失败带 error（渲染层 toast 并丢弃） */
 interface PickedFile {
@@ -199,6 +200,12 @@ export default function PlusMenu({
                 )}
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            {/* 专家预设管理入口（原底部齿轮项并入） */}
+            <DropdownMenuItem onClick={() => navigate(ASSISTANTS_ROUTE)}>
+              <Users />
+              {t("chat:settings.expertPresets")}
+            </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
         <DropdownMenuSub>
@@ -222,16 +229,6 @@ export default function PlusMenu({
         <DropdownMenuItem onClick={onOpenMcp}>
           <Plug />
           {t("chat:plus.connector")}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {/* 原输入区齿轮菜单的设置入口并入（齿轮已移除） */}
-        <DropdownMenuItem onClick={() => navigate("/module/ai/providers")}>
-          <Server />
-          {t("chat:settings.providers")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/module/ai/assistants")}>
-          <Users />
-          {t("chat:settings.assistants")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

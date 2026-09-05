@@ -104,9 +104,9 @@
     "UNKNOWN": "未知错误"
   },
   "settings": {
-    "providers": "模型服务管理",
-    "assistants": "助手预设管理",
-    "skills": "打开技能目录"
+    "skills": "打开技能目录",
+    "expertPresets": "专家预设",
+    "configureModels": "配置模型"
   },
   "mention": {
     "noFiles": "没有匹配的文件",

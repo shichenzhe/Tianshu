@@ -104,9 +104,9 @@
     "UNKNOWN": "Unknown error"
   },
   "settings": {
-    "providers": "Model Providers",
-    "assistants": "Assistants",
-    "skills": "Open Skills Folder"
+    "skills": "Open Skills Folder",
+    "expertPresets": "Expert Presets",
+    "configureModels": "Configure Models"
   },
   "mention": {
     "noFiles": "No matching files",

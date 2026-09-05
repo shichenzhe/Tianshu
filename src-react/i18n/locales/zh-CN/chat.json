@@ -172,5 +172,28 @@
     "label": "搜索会话内容",
     "placeholder": "搜索当前会话…",
     "noResults": "无匹配"
+  },
+  "skills": {
+    "searchPlaceholder": "搜索技能",
+    "batchManage": "批量管理",
+    "selected": "已选 {{count}} 项",
+    "selectAll": "全选",
+    "clear": "清空",
+    "enable": "开启",
+    "disable": "关闭",
+    "uninstall": "卸载",
+    "cancelBatch": "取消",
+    "uninstallTitle": "卸载技能",
+    "uninstallDesc": "将删除 {{names}} 的技能文件与记录,该操作不可恢复。",
+    "empty": "还没有技能",
+    "emptyTip": "将含 SKILL.md 的技能文件夹放入技能目录即可自动识别",
+    "openDir": "打开技能目录",
+    "batchDone": "已处理 {{count}} 项",
+    "batchFailed": "失败:{{names}}",
+    "source": {
+      "builtin": "内置",
+      "market": "市场",
+      "local": "本地"
+    }
   }
 }

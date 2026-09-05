@@ -1,24 +1,15 @@
 /**
- * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=本地技能目录 / 连接器=MCP）
- * 专家与连接器 Tab 复用既有设置视图（区块标题由本页 Tab 承担，子视图不带头部）
+ * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=技能管理 / 连接器=MCP）
+ * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillManagerView（P-A）
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { toast } from "sonner";
 import { Bot, Plug, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { invoke } from "@/lib/ipc";
 import AssistantSettingsView from "../../assistant/views/AssistantSettingsView";
 import McpSettingsView from "../../mcp/views/McpSettingsView";
+import SkillManagerView from "../../skills/views/SkillManagerView";
 
 type ExpertTab = "assistants" | "skills" | "connectors";
 
@@ -48,14 +39,6 @@ export default function ExpertsView() {
     },
   ];
 
-  const openSkillDir = async () => {
-    try {
-      await invoke("skill:openDir");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    }
-  };
-
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
       <div className="mb-3 flex items-center gap-1 border-b border-border/50">
@@ -77,22 +60,7 @@ export default function ExpertsView() {
         ))}
       </div>
       {tab === "assistants" && <AssistantSettingsView />}
-      {tab === "skills" && (
-        <Card className="rounded-lg border-border/50 shadow-sm">
-          <CardHeader>
-            <CardTitle>{t("chat:experts.tabSkills")}</CardTitle>
-            <CardDescription>{t("chat:experts.skillsDesc")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              onClick={() => void openSkillDir()}
-              className="hover:bg-primary-hover"
-            >
-              {t("chat:experts.openSkillDir")}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      {tab === "skills" && <SkillManagerView />}
       {tab === "connectors" && <McpSettingsView />}
     </div>
   );

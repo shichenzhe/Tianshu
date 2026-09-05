@@ -172,5 +172,28 @@
     "label": "Search in conversation",
     "placeholder": "Search this conversation...",
     "noResults": "No matches"
+  },
+  "skills": {
+    "searchPlaceholder": "Search skills",
+    "batchManage": "Batch manage",
+    "selected": "{{count}} selected",
+    "selectAll": "Select all",
+    "clear": "Clear",
+    "enable": "Enable",
+    "disable": "Disable",
+    "uninstall": "Uninstall",
+    "cancelBatch": "Cancel",
+    "uninstallTitle": "Uninstall skills",
+    "uninstallDesc": "This will delete skill files and records of {{names}}. This cannot be undone.",
+    "empty": "No skills yet",
+    "emptyTip": "Put a skill folder containing SKILL.md into the skills directory",
+    "openDir": "Open skills directory",
+    "batchDone": "{{count}} processed",
+    "batchFailed": "Failed: {{names}}",
+    "source": {
+      "builtin": "Built-in",
+      "market": "Market",
+      "local": "Local"
+    }
   }
 }

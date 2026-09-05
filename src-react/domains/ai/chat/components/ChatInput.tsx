@@ -1,10 +1,10 @@
 /**
- * 卡片式输入框（P3 spec §1）：上行 ＋扩展菜单 + 权限胶囊 + 模式徽标，
- * 中行 textarea（field-sizing 自适应，@ 触发工作空间文件联想），
- * 引用文件 chips 暂存，下行右 模型选择 + 发送/停止
+ * 卡片式输入框（P3 spec §1，P4 布局下移）：textarea 居首（@ 触发工作空间
+ * 文件联想），引用文件 chips 暂存，下行左 ＋菜单/权限胶囊/模式徽标、
+ * 右 模型选择 + 发送/停止
  * Enter 发送 / Shift+Enter 换行（IME 组合中的 Enter 不触发发送）
  * 发送中切换为停止按钮；未选模型时禁用发送并以占位符提示
- * 发送失败（onSend reject）时输入与 chips 保留可重试，成功后才清空
+ * 发送即清空（乐观），失败由 onSend 链路 toast 与消息流错误块兜底
  * @ 联想：光标前最近的 @token（[\w\-./]*）触发；↑↓ 移动、Enter 选中、Esc 关闭
  */
 import {
@@ -112,7 +112,7 @@ interface ChatInputProps {
   onOpenSkills: () => void;
   /** 跳转连接器（MCP）管理页 */
   onOpenMcp: () => void;
-  /** reject 即发送失败：输入与 chips 保留可重试（错误 toast 由调用链负责） */
+  /** 发送链路（错误 toast 由 ChatView toast+rethrow 负责，此处静默防双弹） */
   onSend: (
     content: string,
     files: PendingFile[],

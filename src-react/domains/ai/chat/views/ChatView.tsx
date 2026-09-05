@@ -251,7 +251,7 @@ function ChatPane({
       await send(injected, undefined, overrides);
     } catch (e) {
       toast.error(mapIpcError(e));
-      // rethrow：ChatInput 据此保留输入与 chips 可重试（失败不清空）
+      // rethrow：保持调用链 Promise 拒绝语义（ChatInput 已乐观清空，此处静默防双弹由其 catch 处理）
       throw e;
     }
   };

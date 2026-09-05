@@ -9,16 +9,22 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
+  Archive,
   Bot,
   ChevronDown,
   ChevronRight,
   Clock,
   FileText,
+  FolderInput,
+  ListChecks,
   MoreVertical,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
+  Pin,
+  PinOff,
   Plus,
+  Share2,
   Trash2,
 } from "lucide-react";
 
@@ -46,6 +52,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -64,6 +71,7 @@ import {
 } from "../../chat/lib/session-list";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { bindWorkspaceDirectory } from "../../chat/lib/workspace-actions";
+import { useChatStore } from "../../chat/store/chat.store";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import UnbindDirectoryDialog from "../../chat/components/UnbindDirectoryDialog";
 import WorkspaceMenu from "./WorkspaceMenu";
@@ -242,6 +250,52 @@ export default function AiSidebar() {
     }
   };
 
+  const handlePin = async (session: SessionRecord) => {
+    try {
+      await SessionApi.pin(session.id, !session.pinnedAt);
+      await invalidateSessions();
+    } catch (e) {
+      handleError(e);
+    }
+  };
+
+  const handleUnarchive = async (sessionId: number) => {
+    try {
+      await SessionApi.archive(sessionId, false);
+      await invalidateSessions();
+    } catch (e) {
+      handleError(e);
+    }
+  };
+
+  /** 归档后 5s 内可撤销（sonner action）；归档当前任务同步清空选中 */
+  const handleArchive = async (session: SessionRecord) => {
+    try {
+      await SessionApi.archive(session.id, true);
+      await invalidateSessions();
+      if (session.id === selectedSessionId) {
+        selectSession(null);
+      }
+      toast.success(t("chat:task.archived"), {
+        duration: 5000,
+        action: {
+          label: t("chat:task.undo"),
+          onClick: () => void handleUnarchive(session.id),
+        },
+      });
+    } catch (e) {
+      handleError(e);
+    }
+  };
+
+  const handleOpenFolder = async (workspaceId: number) => {
+    try {
+      await WorkspaceApi.openDirectory(workspaceId);
+    } catch (e) {
+      handleError(e);
+    }
+  };
+
   const navEntries = [
     {
       icon: <Bot size={16} />,
@@ -346,6 +400,9 @@ export default function AiSidebar() {
                 setRenamingSession(session);
               }}
               onSessionDelete={(session) => setDeletingSession(session)}
+              onSessionPin={(s) => void handlePin(s)}
+              onSessionArchive={(s) => void handleArchive(s)}
+              onOpenFolder={() => void handleOpenFolder(workspace.id)}
             />
           ))}
       </div>
@@ -571,6 +628,9 @@ interface WorkspaceGroupProps {
   onManageUnbind: () => void;
   onSessionRename: (session: SessionRecord) => void;
   onSessionDelete: (session: SessionRecord) => void;
+  onSessionPin: (session: SessionRecord) => void;
+  onSessionArchive: (session: SessionRecord) => void;
+  onOpenFolder: () => void;
 }
 
 /** 单空间分组：标题行（折叠钮 + 空间名 + 悬停 +/...）+ 任务列表 */
@@ -589,6 +649,9 @@ function WorkspaceGroup({
   onManageUnbind,
   onSessionRename,
   onSessionDelete,
+  onSessionPin,
+  onSessionArchive,
+  onOpenFolder,
 }: WorkspaceGroupProps) {
   const { t } = useTranslation(["chat", "common"]);
 
@@ -648,10 +711,14 @@ function WorkspaceGroup({
               <TaskTreeItem
                 key={session.id}
                 session={session}
+                workspaceDirectoryPath={workspace.directoryPath}
                 selected={session.id === selectedSessionId}
                 onSelect={() => onSelect(session.id)}
                 onRename={() => onSessionRename(session)}
                 onDelete={() => onSessionDelete(session)}
+                onPin={() => onSessionPin(session)}
+                onArchive={() => onSessionArchive(session)}
+                onOpenFolder={onOpenFolder}
               />
             ))
           )}
@@ -663,25 +730,120 @@ function WorkspaceGroup({
 
 interface TaskTreeItemProps {
   session: SessionRecord;
+  workspaceDirectoryPath?: string;
   selected: boolean;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onPin: () => void;
+  onArchive: () => void;
+  onOpenFolder: () => void;
 }
 
-/** 任务项（基础版）：标题 + 相对时间 + 选中态；悬停菜单/绿点/置顶在 Task 6 强化 */
+/** 任务项：标题+相对时间；悬停出 .../归档/置顶 快捷钮；流式中显示绿点 */
 function TaskTreeItem({
   session,
+  workspaceDirectoryPath,
   selected,
   onSelect,
   onRename,
   onDelete,
+  onPin,
+  onArchive,
+  onOpenFolder,
 }: TaskTreeItemProps) {
   const { t } = useTranslation(["chat", "common"]);
   const locale = getDateFnsLocale();
   const timeText = formatDistanceToNow(
     new Date(session.lastMessageAt ?? session.updatedAt),
     { addSuffix: true, locale },
+  );
+  // 绿点：该任务流式进行中（chat.store 前端派生）
+  const streaming = useChatStore((s) => Boolean(s.isStreaming[session.id]));
+  const pinned = Boolean(session.pinnedAt);
+
+  const quickActions = (
+    <div className="absolute right-1 top-1.5 flex items-center opacity-0 transition-opacity group-hover/task:opacity-100">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 focus:opacity-100"
+            aria-label={t("common:operation")}
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="rounded-lg border border-border/50 shadow-lg"
+        >
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil className="mr-2 h-4 w-4" />
+            {t("chat:renameSession")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onPin}>
+            <Pin className="mr-2 h-4 w-4" />
+            {pinned ? t("chat:task.unpin") : t("chat:task.pin")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onArchive}>
+            <Archive className="mr-2 h-4 w-4" />
+            {t("chat:task.archive")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={onOpenFolder}
+            disabled={!workspaceDirectoryPath}
+          >
+            <FolderInput className="mr-2 h-4 w-4" />
+            {t("chat:task.openFolder")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => toast.info(t("chat:task.comingSoon"))}
+          >
+            <Share2 className="mr-2 h-4 w-4" />
+            {t("chat:task.share")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => toast.info(t("chat:task.comingSoon"))}
+          >
+            <ListChecks className="mr-2 h-4 w-4" />
+            {t("chat:task.batchOps")}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={onDelete}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            {t("chat:deleteSession")}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+        onClick={onArchive}
+        aria-label={t("chat:task.archive")}
+      >
+        <Archive className="h-3.5 w-3.5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+        onClick={onPin}
+        aria-label={pinned ? t("chat:task.unpin") : t("chat:task.pin")}
+      >
+        {pinned ? (
+          <PinOff className="h-3.5 w-3.5" />
+        ) : (
+          <Pin className="h-3.5 w-3.5" />
+        )}
+      </Button>
+    </div>
   );
 
   return (
@@ -695,44 +857,21 @@ function TaskTreeItem({
     >
       <button
         type="button"
-        className="block w-full py-1.5 pl-2 pr-8 text-left"
+        className="block w-full py-1.5 pl-2 pr-24 text-left"
         onClick={onSelect}
       >
-        <span className="block truncate text-sm" title={session.title}>
-          {session.title}
+        <span className="flex items-center gap-1">
+          {pinned && <Pin className="h-3 w-3 shrink-0" />}
+          <span className="truncate text-sm" title={session.title}>
+            {session.title}
+          </span>
+          {streaming && (
+            <span className="ml-auto mr-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+          )}
         </span>
         <span className="block text-xs text-muted-foreground">{timeText}</span>
       </button>
-      <div className="absolute right-1 top-1.5 opacity-0 transition-opacity group-hover/task:opacity-100">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 focus:opacity-100"
-              aria-label={t("common:operation")}
-            >
-              <MoreVertical className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="rounded-lg border border-border/50 shadow-lg"
-          >
-            <DropdownMenuItem onClick={onRename}>
-              <Pencil className="mr-2 h-4 w-4" />
-              {t("chat:renameSession")}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={onDelete}
-              className="text-destructive focus:text-destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              {t("chat:deleteSession")}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+      {quickActions}
     </div>
   );
 }

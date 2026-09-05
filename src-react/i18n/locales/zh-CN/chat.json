@@ -21,6 +21,17 @@
     "newTaskInWorkspace": "在此空间新建任务",
     "emptyTask": "暂无任务"
   },
+  "task": {
+    "pin": "置顶",
+    "unpin": "取消置顶",
+    "archive": "归档",
+    "archived": "已归档",
+    "undo": "撤销",
+    "openFolder": "打开文件夹",
+    "share": "分享任务",
+    "batchOps": "批量操作",
+    "comingSoon": "功能开发中"
+  },
   "defaultWorkspaceName": "默认工作空间",
   "sessionCount": "{{count}} 个会话",
   "renameSession": "重命名会话",

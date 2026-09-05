@@ -54,6 +54,11 @@ export class WorkspaceApi {
   static async unbindDirectory(id: number): Promise<WorkspaceRecord | null> {
     return invoke<WorkspaceRecord | null>("workspace:unbindDirectory", id);
   }
+
+  /** 打开空间绑定目录（任务上下文菜单「打开文件夹」） */
+  static async openDirectory(workspaceId: number): Promise<void> {
+    await invoke<void>("workspace:openDirectory", workspaceId);
+  }
 }
 
 export default WorkspaceApi;

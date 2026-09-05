@@ -21,6 +21,17 @@
     "newTaskInWorkspace": "New task in this space",
     "emptyTask": "No tasks yet"
   },
+  "task": {
+    "pin": "Pin to top",
+    "unpin": "Unpin",
+    "archive": "Archive",
+    "archived": "Archived",
+    "undo": "Undo",
+    "openFolder": "Open Folder",
+    "share": "Share Task",
+    "batchOps": "Batch Actions",
+    "comingSoon": "Coming soon"
+  },
   "defaultWorkspaceName": "Default Workspace",
   "sessionCount": "{{count}} sessions",
   "renameSession": "Rename Session",

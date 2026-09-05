@@ -36,6 +36,11 @@ export class SkillRepository {
     this.installer = new SkillInstaller({
       skillsRoot: this.skillsRoot(),
       prisma: this.prismaClient.skillRecord,
+      // 市场请求全走 SkillHubClient(spec §2.2):X-API-Key 鉴权 +
+      // 退避重试 + 下载量计入团队 Key 归因
+      download: (slug) => this.hub.downloadZip(slug),
+      getVersion: (slug) =>
+        this.hub.getDetail(slug).then((d) => d.latestVersion.version),
     });
     this.registerHandlers();
   }

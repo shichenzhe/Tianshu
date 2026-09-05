@@ -117,6 +117,8 @@ export class SkillInstaller {
   private readonly fetchImpl: typeof fetch;
   private readonly baseUrl: string;
   private readonly limits: { maxFileBytes: number; maxTotalBytes: number };
+  private readonly download?: (slug: string) => Promise<ArrayBuffer>;
+  private readonly getVersion?: (slug: string) => Promise<string>;
 
   constructor(deps: {
     skillsRoot: string;
@@ -124,6 +126,10 @@ export class SkillInstaller {
     fetchImpl?: typeof fetch;
     baseUrl?: string;
     limits?: Partial<{ maxFileBytes: number; maxTotalBytes: number }>;
+    /** 市场下载注入(优先于内部 fetch):SkillHubClient.downloadZip,带鉴权与重试 */
+    download?: (slug: string) => Promise<ArrayBuffer>;
+    /** 版本查询注入(优先于内部 fetch):SkillHubClient.getDetail → latestVersion.version */
+    getVersion?: (slug: string) => Promise<string>;
   }) {
     this.skillsRoot = deps.skillsRoot;
     this.prisma = deps.prisma;
@@ -134,6 +140,8 @@ export class SkillInstaller {
       maxTotalBytes: DEFAULTS.maxTotalBytes,
       ...deps.limits,
     };
+    this.download = deps.download;
+    this.getVersion = deps.getVersion;
   }
 
   async installFromBuffer(
@@ -186,13 +194,21 @@ export class SkillInstaller {
         );
   }
 
-  /** 市场安装:详情接口取 version 一次 + 下载 zip(spec §8 决策 5) */
+  /**
+   * 市场安装:详情接口取 version 一次 + 下载 zip(spec §8 决策 5)。
+   * 注入 download/getVersion(repo 装配 SkillHubClient)时优先使用,
+   * 否则回退内部 fetch(测试/独立使用形态)
+   */
   async downloadAndInstall(
     slug: string,
     overwrite = false,
   ): Promise<InstallResult> {
-    const version = await this.fetchLatestVersion(slug);
-    const buf = await this.fetchZip(slug);
+    const version = this.getVersion
+      ? await this.getVersion(slug)
+      : await this.fetchLatestVersion(slug);
+    const buf = this.download
+      ? Buffer.from(await this.download(slug))
+      : await this.fetchZip(slug);
     return this.installFromBuffer(
       buf,
       "market",

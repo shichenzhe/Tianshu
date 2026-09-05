@@ -141,6 +141,8 @@ function makeInstaller(
     seed?: Seed[];
     limits?: Partial<{ maxFileBytes: number; maxTotalBytes: number }>;
     fetchImpl?: typeof fetch;
+    download?: (slug: string) => Promise<ArrayBuffer>;
+    getVersion?: (slug: string) => Promise<string>;
   } = {},
 ) {
   const root = makeTmpDir();
@@ -150,6 +152,8 @@ function makeInstaller(
     prisma: stub.prisma,
     ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
     ...(options.limits ? { limits: options.limits } : {}),
+    ...(options.download ? { download: options.download } : {}),
+    ...(options.getVersion ? { getVersion: options.getVersion } : {}),
   });
   return { root, installer, ...stub };
 }
@@ -607,6 +611,45 @@ describe("downloadAndInstall", () => {
     await expect(installer.downloadAndInstall("demo")).rejects.toThrow(
       "download failed",
     );
+  });
+
+  it("注入 download/getVersion 时优先使用,内部 fetch 不被调用", async () => {
+    const zipBuf = makeZip({ "SKILL.md": SKILL_MD("injected") });
+    const downloadCalls: string[] = [];
+    const versionCalls: string[] = [];
+    const fetchImpl = (async () => {
+      throw new Error("内部 fetch 不应被调用");
+    }) as unknown as typeof fetch;
+    const { root, installer, upsertCalls } = makeInstaller({
+      fetchImpl,
+      download: async (slug) => {
+        downloadCalls.push(slug);
+        return Uint8Array.from(zipBuf).buffer;
+      },
+      getVersion: async (slug) => {
+        versionCalls.push(slug);
+        return "2.0.0";
+      },
+    });
+    const result = await installer.downloadAndInstall("injected");
+    expect(result).toEqual({
+      status: "installed",
+      record: {
+        id: 1,
+        name: "injected",
+        source: "market",
+        slug: "injected",
+        version: "2.0.0",
+      },
+    });
+    expect(versionCalls).toEqual(["injected"]);
+    expect(downloadCalls).toEqual(["injected"]);
+    expect(upsertCalls[0]!.create).toMatchObject({
+      source: "market",
+      slug: "injected",
+      version: "2.0.0",
+    });
+    expect(existsSync(path.join(root, "injected", "SKILL.md"))).toBe(true);
   });
 });
 

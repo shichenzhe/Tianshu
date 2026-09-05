@@ -71,7 +71,7 @@ npm run typecheck
 - Prisma Client 输出：`electron/generated/prisma`
 - 当前数据库版本：7（`electron/Constants.ts`）
 
-主要数据表：`user`、`option`、`modelConfig`、`db_version`
+主要数据表：`user`、`option`、`modelConfig`、`db_version`、`skillRecord`、`skillStat`
 
 ## 开发规范
 

@@ -58,9 +58,11 @@ npm run typecheck
 所有 `/module/*` 路由都需要认证。主要路由：
 
 - `/login` - 登录页（无需认证）
-- `/module/welcome` - 欢迎页
-- `/module/ai` - AI 模型配置
-- `/module/system-config` - 系统配置
+- `/module/ai` - AI 模块（标准侧边栏布局，默认进入对话视图）
+  - `/module/ai/providers` - AI 服务商/模型配置
+  - `/module/ai/experts` - 专家·技能·连接器管理
+  - `/module/ai/library` - 资料库
+  - `/module/ai/automation` - 自动化
 
 ### 数据库
 
@@ -97,14 +99,14 @@ npm run typecheck
 
 - 配置入口：`src-react/i18n/index.ts`
 - 翻译文件目录：`src-react/i18n/locales/{zh-CN,en-US}/`
-- 命名空间：`common`、`layout`、`user`、`welcome`、`system-config`、`ai`
+- 命名空间：`common`、`layout`、`user`、`ai`、`chat`
 - 语言持久化：localStorage key `mirror-locale`（由 `npm run init` 一并替换）
 - 语言切换组件：`src-react/components/common/LanguageSelector.tsx`
 
 **编码规范：**
 
 - **禁止在 JSX 和 JS 逻辑中硬编码用户可见的中文或英文文本**，必须使用 `t()` 函数
-- 翻译 key 格式：`namespace:key`（如 `welcome:getStarted`）、嵌套用 `.` 分隔
+- 翻译 key 格式：`namespace:key`（如 `chat:newWorkspace`）、嵌套用 `.` 分隔
 - 带变量的翻译使用插值：`t("key", { variable })`
 - 组件中通过 `useTranslation` hook 获取 `t` 函数：`const { t } = useTranslation(["namespace1", "namespace2"])`
 - `useCallback`/`useMemo` 中使用 `t()` 时，必须将 `t` 加入依赖数组

@@ -34,6 +34,14 @@ describe("sortSessions 置顶在前", () => {
     sortSessions(input);
     expect(input[0].id).toBe(1);
   });
+
+  it("无消息任务沉底：updatedAt 更新也排在有更早 lastMessageAt 的任务之后", () => {
+    const sorted = sortSessions([
+      item({ id: 1, updatedAt: "2026-09-04T23:00:00.000Z" }), // 无 lastMessageAt
+      item({ id: 2, lastMessageAt: "2026-09-01T00:00:00.000Z" }), // 有消息但更早
+    ]);
+    expect(sorted.map((s) => s.id)).toEqual([2, 1]);
+  });
 });
 
 describe("filterSessionsByTime 时间筛选", () => {

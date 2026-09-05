@@ -46,7 +46,6 @@
     "comingSoon": "Coming soon"
   },
   "defaultWorkspaceName": "Default Workspace",
-  "sessionCount": "{{count}} sessions",
   "renameSession": "Rename Session",
   "deleteSession": "Delete Session",
   "deleteSessionDesc": "All messages in this session will be deleted. This cannot be undone.",

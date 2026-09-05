@@ -78,10 +78,10 @@ import WorkspaceMenu from "./WorkspaceMenu";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 
-interface WorkspaceDialogState {
-  mode: "create" | "rename";
-  name: string;
-}
+/** rename 携带目标空间 id（来源行，非当前选中空间）；create 建新后自动进入 */
+type WorkspaceDialogState =
+  | { mode: "create"; name: string }
+  | { mode: "rename"; name: string; workspaceId: number };
 
 export default function AiSidebar() {
   const { t } = useTranslation(["chat", "common", "layout"]);
@@ -123,6 +123,7 @@ export default function AiSidebar() {
     queryFn: () => SessionApi.listAll(),
   });
   const workspaces = workspacesQuery.data ?? [];
+  // 渲染列表 = 时间筛选 + 排序（仅用于渲染，不参与空间派生）
   const sessions = useMemo(
     () =>
       sortSessions(filterSessionsByTime(sessionsQuery.data ?? [], timeFilter)),
@@ -143,9 +144,10 @@ export default function AiSidebar() {
     });
   };
 
-  // 当前空间 = 选中任务所属空间，无选中取第一个（spec §2.3）
+  // 当前空间 = 选中任务所属空间，无选中取第一个（spec §2.3）。
+  // 派生用原始数据：时间筛选只影响渲染，不得改变新建任务的目标空间
   const selectedSession =
-    sessions.find((s) => s.id === selectedSessionId) ?? null;
+    (sessionsQuery.data ?? []).find((s) => s.id === selectedSessionId) ?? null;
   const currentWorkspaceId =
     selectedSession?.workspaceId ?? workspaces[0]?.id ?? null;
 
@@ -173,8 +175,11 @@ export default function AiSidebar() {
         const created = await WorkspaceApi.create({ name });
         await queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
         handleCreateSession(created.id);
-      } else if (currentWorkspaceId !== null) {
-        await WorkspaceApi.update({ id: currentWorkspaceId, name });
+      } else {
+        await WorkspaceApi.update({
+          id: workspaceDialog.workspaceId,
+          name,
+        });
         await queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
       }
       setWorkspaceDialog(null);
@@ -388,9 +393,19 @@ export default function AiSidebar() {
                 }))
               }
               onSelect={selectSession}
-              onCreate={() => handleCreateSession(workspace.id)}
+              onCreateTask={() => handleCreateSession(workspace.id)}
+              onCreateWorkspace={() =>
+                setWorkspaceDialog({
+                  mode: "create",
+                  name: t("chat:defaultWorkspaceName"),
+                })
+              }
               onManageRename={() =>
-                setWorkspaceDialog({ mode: "rename", name: workspace.name })
+                setWorkspaceDialog({
+                  mode: "rename",
+                  name: workspace.name,
+                  workspaceId: workspace.id,
+                })
               }
               onManageDelete={() => setDeletingWorkspace(workspace)}
               onManageBind={() => handleBindDirectory(workspace.id)}
@@ -621,7 +636,10 @@ interface WorkspaceGroupProps {
   selectedSessionId: number | null;
   onToggleGroup: () => void;
   onSelect: (sessionId: number) => void;
-  onCreate: () => void;
+  /** 行内 + ：在本空间新建任务 */
+  onCreateTask: () => void;
+  /** 管理菜单：新建工作空间（打开对话框） */
+  onCreateWorkspace: () => void;
   onManageRename: () => void;
   onManageDelete: () => void;
   onManageBind: () => void;
@@ -642,7 +660,8 @@ function WorkspaceGroup({
   selectedSessionId,
   onToggleGroup,
   onSelect,
-  onCreate,
+  onCreateTask,
+  onCreateWorkspace,
   onManageRename,
   onManageDelete,
   onManageBind,
@@ -683,7 +702,7 @@ function WorkspaceGroup({
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
-              onClick={onCreate}
+              onClick={onCreateTask}
               aria-label={t("chat:sidebar.newTaskInWorkspace")}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -691,7 +710,7 @@ function WorkspaceGroup({
             <WorkspaceMenu
               disabled={false}
               workspace={workspace}
-              onCreate={onCreate}
+              onCreateWorkspace={onCreateWorkspace}
               onRename={onManageRename}
               onDelete={onManageDelete}
               onBindDirectory={onManageBind}

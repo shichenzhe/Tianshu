@@ -24,7 +24,8 @@ interface WorkspaceMenuProps {
   disabled: boolean;
   /** 当前激活工作空间；null（未选中）时隐藏目录管理项 */
   workspace: WorkspaceRecord | null;
-  onCreate: () => void;
+  /** 新建工作空间：打开对话框（区别于行内 + 的"新建任务"） */
+  onCreateWorkspace: () => void;
   onRename: () => void;
   onDelete: () => void;
   onBindDirectory: () => void;
@@ -34,7 +35,7 @@ interface WorkspaceMenuProps {
 export default function WorkspaceMenu({
   disabled,
   workspace,
-  onCreate,
+  onCreateWorkspace,
   onRename,
   onDelete,
   onBindDirectory,
@@ -58,7 +59,7 @@ export default function WorkspaceMenu({
         align="end"
         className="border border-border/50 rounded-lg shadow-lg"
       >
-        <DropdownMenuItem onClick={onCreate}>
+        <DropdownMenuItem onClick={onCreateWorkspace}>
           <FolderPlus className="mr-2 h-4 w-4" />
           {t("chat:newWorkspace")}
         </DropdownMenuItem>

@@ -37,17 +37,13 @@ export interface MessageRecord {
   createdAt: string;
 }
 
-/** 搜索结果：消息附带所属会话信息（跳转定位用） */
+/** 搜索结果：消息附带所属会话信息（message:search 由后端 repo 使用，前端入口已移除） */
 export interface SearchMessageResult extends MessageRecord {
   workspaceId: number;
   sessionTitle: string;
 }
 
 export class SessionApi {
-  static async listByWorkspace(workspaceId: number): Promise<SessionRecord[]> {
-    return invoke<SessionRecord[]>("session:listByWorkspace", workspaceId);
-  }
-
   static async create(params: SessionCreateParams): Promise<SessionRecord> {
     return invoke<SessionRecord>("session:create", params);
   }
@@ -96,10 +92,6 @@ export class SessionApi {
 
   static async listMessages(sessionId: number): Promise<MessageRecord[]> {
     return invoke<MessageRecord[]>("message:listBySession", sessionId);
-  }
-
-  static async searchMessages(keyword: string): Promise<SearchMessageResult[]> {
-    return invoke<SearchMessageResult[]>("message:search", keyword);
   }
 }
 

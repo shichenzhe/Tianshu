@@ -46,7 +46,6 @@
     "comingSoon": "功能开发中"
   },
   "defaultWorkspaceName": "默认工作空间",
-  "sessionCount": "{{count}} 个会话",
   "renameSession": "重命名会话",
   "deleteSession": "删除会话",
   "deleteSessionDesc": "将删除该会话的全部消息，无法恢复。",

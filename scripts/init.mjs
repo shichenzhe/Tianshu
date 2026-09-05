@@ -43,6 +43,7 @@ async function main() {
   const updateServerUrl = await ask("更新服务器 URL（可留空 = 禁用自动更新）");
   const author = await ask("作者");
   const repoUrl = await ask("仓库地址（可留空）");
+  const skillhubApiKey = await ask("SkillHub API Key（可留空）");
 
   const values = {
     APP_NAME: appName,
@@ -50,6 +51,7 @@ async function main() {
     UPDATE_SERVER_URL: updateServerUrl,
     AUTHOR: author,
     REPO_URL: repoUrl,
+    SKILLHUB_API_KEY: skillhubApiKey,
   };
 
   console.log("\n正在替换占位符…");

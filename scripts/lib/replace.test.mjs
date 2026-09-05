@@ -80,4 +80,24 @@ describe("applyPlaceholders", () => {
       "{{APP_NAME}}",
     );
   });
+
+  it("字面量占位符（非 {{}} 模板）替换且幂等", async () => {
+    const file = join(dir, "Constants.ts");
+    writeFileSync(file, 'key = "skh-your-api-key";\n');
+    await applyPlaceholders(dir, { SKILLHUB_API_KEY: "skh-real-abc" });
+    expect(readFileSync(file, "utf8")).toBe('key = "skh-real-abc";\n');
+    // 重复运行：旧值（上次写入的真实 Key）被新值覆盖
+    const changed = await applyPlaceholders(dir, {
+      SKILLHUB_API_KEY: "skh-real-xyz",
+    });
+    expect(changed).toContain(file);
+    expect(readFileSync(file, "utf8")).toBe('key = "skh-real-xyz";\n');
+  });
+
+  it("字面量占位符留空替换为空串（不带 Key）", async () => {
+    const file = join(dir, "Constants.ts");
+    writeFileSync(file, 'key = "skh-your-api-key";\n');
+    await applyPlaceholders(dir, { SKILLHUB_API_KEY: "" });
+    expect(readFileSync(file, "utf8")).toBe('key = "";\n');
+  });
 });

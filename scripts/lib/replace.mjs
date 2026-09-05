@@ -12,6 +12,14 @@ export const PLACEHOLDERS = [
   "REPO_URL",
 ];
 
+/**
+ * 字面量占位符：非 {{KEY}} 模板，默认值本身即占位形态
+ * （如 electron/Constants.ts 的 SkillHub API Key 默认值），init 以真实值整串替换
+ */
+export const LITERAL_PLACEHOLDERS = [
+  { placeholder: "skh-your-api-key", key: "SKILLHUB_API_KEY" },
+];
+
 const CONFIG_FILE = "shu-init.json";
 const TARGET_EXT = new Set([
   ".json",
@@ -57,6 +65,15 @@ async function walkFiles(root) {
 }
 
 /**
+ * 统一替换对：[搜索串, values 键]。
+ * 模板占位符搜 {{KEY}} 字面量；字面量占位符搜其默认值原样。
+ */
+const SEARCH_PAIRS = [
+  ...PLACEHOLDERS.map((key) => [`{{${key}}}`, key]),
+  ...LITERAL_PLACEHOLDERS.map(({ placeholder, key }) => [placeholder, key]),
+];
+
+/**
  * 将 values 中每个键的占位符（与上次 init 写入的旧值）替换为新值。
  * @param {string} rootDir 项目根目录
  * @param {Record<string,string>} values 占位符键 → 新值（可为空字符串）
@@ -77,9 +94,9 @@ export async function applyPlaceholders(rootDir, values) {
   for (const file of files) {
     let content = await readFile(file, "utf8");
     const original = content;
-    for (const key of PLACEHOLDERS) {
+    for (const [search, key] of SEARCH_PAIRS) {
       const next = values[key] ?? "";
-      content = content.split(`{{${key}}}`).join(next);
+      content = content.split(search).join(next);
       const old = oldValues[key];
       if (old && old !== next) {
         content = content.split(old).join(next);

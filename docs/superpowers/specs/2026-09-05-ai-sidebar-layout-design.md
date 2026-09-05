@@ -98,7 +98,7 @@ TopBar 保持全局组件（登录页也渲染），不加 AI 专属按钮；Mai
 - 「重置筛选条件」一键清空
 - 作用于侧边栏任务列表：按 `lastMessageAt ?? updatedAt` 前端过滤；纯内存态不进 URL
 
-## 5. 数据模型与后端（DB v1 → v2）
+## 5. 数据模型与后端（DB v4 → v5）
 
 ```prisma
 model session {
@@ -107,7 +107,7 @@ model session {
 }
 ```
 
-- 升级脚本：SQLite `ALTER TABLE ADD COLUMN`，沿用 `db_version` 机制；`electron/Constants.ts` 版本号 1 → 2
+- 升级脚本：SQLite `ALTER TABLE ADD COLUMN`，沿用 `db_version` 机制；`electron/Constants.ts` 版本号 4 → 5
 
 新增 IPC（session 域，沿用 entity + repo 模式）：
 
@@ -136,7 +136,7 @@ model session {
 ## 8. 测试
 
 - 后端：session repo/IPC 单测——pin/archive/searchByTitle/listAll（含「归档任务不出现在列表与搜索」断言）
-- 迁移：升级脚本 v1→v2 单测（旧库升级后字段存在、默认 null）
+- 迁移：升级脚本 v4→v5 单测（旧库升级后字段存在、默认 null）
 - 前端：时间筛选纯函数（今天/7 天/30 天边界）、搜索结果截断逻辑单测
 - 收尾：`npm run test` + `lint` + `typecheck` 全绿
 

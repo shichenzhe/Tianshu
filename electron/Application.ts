@@ -109,6 +109,11 @@ export default class Application {
     // 禁用名单供 chat 组装过滤（P-A §4.2），须先于 ChatService 实例化传入
     const skillRepo = new SkillRepository(prisma);
     new ChatService(sessionRepo, skillRepo);
+    // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
+    // fire-and-forget，失败仅日志不阻塞启动（P-D §2）
+    void skillRepo
+      .ensureBuiltinSkills()
+      .catch((e) => Log.error("内置技能自愈安装失败", e));
     // MCP 工具接入：manager 负责连接生命周期与工具注册；repo 负责 CRUD IPC 并联动
     // manager（create/update/delete/setEnabled/reconnect）。启动连接为 fire-and-forget，
     // 失败不影响应用启动（此处 wrapper 过滤 enabled 行，仅启动路径使用）

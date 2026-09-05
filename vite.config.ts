@@ -26,6 +26,11 @@ function syncElectronAssets() {
     path.resolve(__dirname, "./docs/update-log.md"),
     path.resolve(distElectronDir, "./docs/update-log.md"),
   );
+
+  tryCopySync(
+    path.resolve(__dirname, "./electron/resources/builtin-skills"),
+    path.resolve(distElectronDir, "./builtin-skills"),
+  );
 }
 
 export default defineConfig(({ command }) => {

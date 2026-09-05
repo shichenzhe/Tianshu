@@ -3,6 +3,7 @@
  * 启停/批量/卸载。卸载仅允许 userData/skills 内路径(防越界)。
  * 安装三通道(P-C Task 3):市场下载安装 / 本地导入(zip 或目录,
  * dryRun 走预检)/ 系统文件选择器,编排委托 SkillInstaller。
+ * 另含内置技能启动自愈安装(P-D Task 1,ensureBuiltinSkills)。
  */
 import { ipcMain, app, dialog } from "electron";
 import { rmSync } from "node:fs";
@@ -16,6 +17,7 @@ import {
   type SkillRecordRow,
 } from "./skill-sync";
 import { SkillInstaller } from "./skill-installer";
+import { ensureBuiltinSkills as ensureBuiltinSkillsImpl } from "./builtin-skills";
 import { SkillHubClient, type SkillHubListParams } from "./skillhub-client";
 import type {
   BatchUninstallResult,
@@ -88,6 +90,23 @@ export class SkillRepository {
 
   private skillsRoot(): string {
     return path.join(app.getPath("userData"), "skills");
+  }
+
+  /**
+   * 启动自愈安装内置技能(skill-creator):缺失时从应用资源复制并落库
+   * (source builtin),存在即跳过(幂等)。资源定位参照 prisma-client.ts:
+   * dev 读源码 resources(prod 的包内路径由 syncElectronAssets 构建时
+   * 复制到 dist-electron/builtin-skills,main.js 即在该目录下)
+   */
+  async ensureBuiltinSkills(): Promise<void> {
+    const builtinRoot = app.isPackaged
+      ? path.join(app.getAppPath(), "dist-electron", "builtin-skills")
+      : path.join(app.getAppPath(), "electron", "resources", "builtin-skills");
+    await ensureBuiltinSkillsImpl({
+      builtinRoot,
+      skillsRoot: this.skillsRoot(),
+      prisma: this.prismaClient.skillRecord,
+    });
   }
 
   /** 扫描→对账→落库→返回全量记录(name 升序) */

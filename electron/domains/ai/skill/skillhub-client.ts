@@ -43,6 +43,12 @@ export interface SkillHubPage {
   skills: SkillHubSkill[];
 }
 
+/** 详情接口裸对象(/api/v1/skills/{slug});只声明消费字段 */
+export interface SkillHubSkillDetail {
+  skill: { slug: string; version?: string };
+  latestVersion: { version: string };
+}
+
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 1000;
 const TIMEOUT_MS = 10_000;
@@ -85,44 +91,53 @@ export class SkillHubClient {
           .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
           .join("&")
       : "";
+    const res = await this.fetchWithRetry(`${this.baseUrl}${path}${qs}`);
+    const body = (await res.json().catch(() => null)) as
+      | { error?: string }
+      | { code?: number; message?: string; data?: unknown }
+      | null;
+    // 信封(code/message/data)接口与裸对象接口区分:有 code 字段视为信封
+    if (body && typeof body === "object" && "code" in body) {
+      const envelope = body as {
+        code: number;
+        message?: string;
+        data: unknown;
+      };
+      if (envelope.code !== 0) {
+        throw new SkillHubApiError(envelope.message || `code ${envelope.code}`);
+      }
+      return envelope.data as T;
+    }
+    return body as T;
+  }
+
+  /**
+   * GET + 鉴权头 + 超时 + 重试(429/5xx/网络异常),返回 2xx 原始 Response。
+   * JSON 与二进制下载共用;非 2xx 耗尽重试或不可重试时抛 {error} 文案
+   */
+  private async fetchWithRetry(url: string): Promise<Response> {
     let lastError: Error = new Error("未发起请求");
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
       if (attempt > 1) {
         await sleep(RETRY_BASE_MS * 2 ** (attempt - 2));
       }
       try {
-        const res = await this.fetchImpl(`${this.baseUrl}${path}${qs}`, {
+        const res = await this.fetchImpl(url, {
           headers: skillhubHeaders(),
           signal: AbortSignal.timeout(TIMEOUT_MS),
         });
-        const body = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | { code?: number; message?: string; data?: unknown }
-          | null;
         if (!res.ok) {
-          const message =
-            (body && "error" in body && body.error) || `HTTP ${res.status}`;
+          const body = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          const message = (body && body.error) || `HTTP ${res.status}`;
           if (retryable(res.status) && attempt < MAX_ATTEMPTS) {
             lastError = new Error(message);
             continue;
           }
           throw new SkillHubApiError(message);
         }
-        // 信封(code/message/data)接口与裸对象接口区分:有 code 字段视为信封
-        if (body && typeof body === "object" && "code" in body) {
-          const envelope = body as {
-            code: number;
-            message?: string;
-            data: unknown;
-          };
-          if (envelope.code !== 0) {
-            throw new SkillHubApiError(
-              envelope.message || `code ${envelope.code}`,
-            );
-          }
-          return envelope.data as T;
-        }
-        return body as T;
+        return res;
       } catch (e) {
         if (e instanceof SkillHubApiError) {
           throw e;
@@ -165,6 +180,24 @@ export class SkillHubClient {
     return data.items
       .filter((c) => c.active !== false)
       .sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  /** 技能详情(裸对象;安装/详情页消费 latestVersion) */
+  async getDetail(slug: string): Promise<SkillHubSkillDetail> {
+    return this.request<SkillHubSkillDetail>(
+      `/api/v1/skills/${encodeURIComponent(slug)}`,
+    );
+  }
+
+  /**
+   * 二进制 zip 下载:不走 request(其 JSON 解析/信封解包对 zip 不适用),
+   * 复用鉴权头与重试策略;fetch 默认跟随 302
+   */
+  async downloadZip(slug: string): Promise<ArrayBuffer> {
+    const res = await this.fetchWithRetry(
+      `${this.baseUrl}/api/v1/download?slug=${encodeURIComponent(slug)}`,
+    );
+    return res.arrayBuffer();
   }
 }
 

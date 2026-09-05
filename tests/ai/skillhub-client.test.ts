@@ -122,6 +122,63 @@ describe("SkillHubClient", () => {
   });
 });
 
+describe("SkillHubClient.getDetail / downloadZip(P-C Task 3)", () => {
+  it("getDetail:裸对象接口直接返回,URL 指向详情路径", async () => {
+    const detail = {
+      skill: { slug: "doc-writer", version: "1.0.0" },
+      latestVersion: { version: "1.1.0" },
+    };
+    const { fn, calls } = fakeFetch([json(detail)]);
+    const client = new SkillHubClient(fn as unknown as typeof fetch);
+    await expect(client.getDetail("doc-writer")).resolves.toEqual(detail);
+    expect(calls[0]!.url).toContain("/api/v1/skills/doc-writer");
+  });
+
+  it("downloadZip:200 返回 zip 二进制,URL 含下载查询串且带鉴权头", async () => {
+    const bytes = [0x50, 0x4b, 0x05, 0x06]; // PK\x05\x06:空 zip EOCD
+    const { fn, calls } = fakeFetch([
+      new Response(new Uint8Array(bytes), {
+        status: 200,
+        headers: { "content-type": "application/zip" },
+      }),
+    ]);
+    const client = new SkillHubClient(fn as unknown as typeof fetch);
+    const buf = await client.downloadZip("hello-world");
+    expect(new Uint8Array(buf)).toEqual(new Uint8Array(bytes));
+    expect(calls[0]!.url).toContain("/api/v1/download?slug=hello-world");
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    expect(headers["X-API-Key"]).toBe("test-key");
+    expect(headers["X-Client-User-Id"]).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("downloadZip:非 2xx 抛 {error} 文案", async () => {
+    const { fn } = fakeFetch([json({ error: "skill not found" }, 404)]);
+    const client = new SkillHubClient(fn as unknown as typeof fetch);
+    await expect(client.downloadZip("gone")).rejects.toThrow("skill not found");
+  });
+
+  it("downloadZip:5xx 按同策略退避重试,第二次成功", async () => {
+    vi.useFakeTimers();
+    try {
+      const { fn } = fakeFetch([
+        new Response(new Uint8Array([1]), { status: 502 }),
+        new Response(new Uint8Array([9]), { status: 200 }),
+      ]);
+      const client = new SkillHubClient(fn as unknown as typeof fetch);
+      const promise = client.downloadZip("retry-me");
+      const settled = Promise.race([
+        promise,
+        vi.advanceTimersByTimeAsync(4000),
+      ]);
+      const buf = await settled;
+      expect(new Uint8Array(buf)).toEqual(new Uint8Array([9]));
+      expect(fn).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("shuffleTop 洗牌", () => {
   it("集合不变、顺序受随机源影响", () => {
     const input = [1, 2, 3, 4, 5, 6, 7, 8];

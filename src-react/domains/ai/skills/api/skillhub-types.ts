@@ -36,3 +36,28 @@ export interface SkillHubPage {
   total: number;
   skills: SkillHubSkill[];
 }
+
+/**
+ * 安装结果(与 electron/domains/ai/skill/skill-installer.ts 的 InstallResult
+ * 保持同步;独立声明避免渲染进程 import 主进程模块)
+ */
+export type InstallResult =
+  | {
+      status: "installed";
+      record: {
+        id: number;
+        name: string;
+        source: string;
+        slug: string | null;
+        version: string | null;
+      };
+    }
+  | { status: "conflict"; name: string };
+
+/**
+ * dryRun 预检结果(与 electron/domains/ai/skill/skill-installer.ts 的
+ * InspectResult 保持同步;独立声明避免渲染进程 import 主进程模块)
+ */
+export type InspectResult =
+  | { status: "ok"; name: string; description: string }
+  | { status: "conflict"; name: string };

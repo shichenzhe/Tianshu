@@ -31,6 +31,7 @@ import { registry } from "../agent/tool-registry";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
+import { filterDisabledSkills } from "../skill/skill-sync";
 import type { ToolDefinition } from "../agent/file-tools";
 import { resolveSafePath } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
@@ -614,6 +615,9 @@ type ToolStreamChunk = Extract<
   { type: "tool-update" | "approval-request" }
 >;
 
+/** 最小依赖接口：仅用到禁用名单（测试可注入 stub） */
+type SkillDisabledLookup = { getDisabledNames(): Promise<Set<string>> };
+
 export default class ChatService {
   private aborts = new Map<number, AbortController>();
   private snapshots = new Map<number, StreamSnapshot>();
@@ -621,7 +625,10 @@ export default class ChatService {
   /** P3：会话工具权限模式（内存态，spec §8：无会话校验静默收） */
   private permissions = new PermissionStore();
 
-  constructor(private sessions: SessionRepository) {
+  constructor(
+    private sessions: SessionRepository,
+    private skillRepo?: SkillDisabledLookup,
+  ) {
     this.registerHandlers();
   }
 
@@ -994,6 +1001,19 @@ export default class ChatService {
   }
 
   /**
+   * 禁用即时生效（P-A spec §4.2）：user 级按 DB 启用态过滤（禁用对模型=
+   * 不存在）；repo 缺席（测试）时不过滤，行为与 P2 一致
+   */
+  private async collectEnabledSkills(workspaceDir?: string) {
+    const all = this.collectSkills(workspaceDir);
+    if (!this.skillRepo) {
+      return all;
+    }
+    const disabled = await this.skillRepo.getDisabledNames();
+    return filterDisabledSkills(all, disabled);
+  }
+
+  /**
    * 通用编排：解析模型/助手 → 合并参数 → 截断历史 → agent 流式执行 → 持久化
    * （AbortController 由调用方在首个 await 前注册并传入，此处负责 finally 清理）
    */
@@ -1061,7 +1081,9 @@ export default class ChatService {
         ? session.mode
         : "agent";
     const skills =
-      mode === "ask" ? [] : this.collectSkills(agent.workspacePath);
+      mode === "ask"
+        ? []
+        : await this.collectEnabledSkills(agent.workspacePath);
     try {
       const result = await runChatStream({
         model: createLanguageModel(

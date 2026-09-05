@@ -105,7 +105,10 @@ export default class Application {
     new ModelRepository(providerRepo);
     new AssistantRepository();
     const sessionRepo = new SessionRepository();
-    new ChatService(sessionRepo);
+    // 技能管理：list 自愈对账（扫描→对账→落库）+启停/批量/卸载 IPC；
+    // 禁用名单供 chat 组装过滤（P-A §4.2），须先于 ChatService 实例化传入
+    const skillRepo = new SkillRepository(prisma);
+    new ChatService(sessionRepo, skillRepo);
     // MCP 工具接入：manager 负责连接生命周期与工具注册；repo 负责 CRUD IPC 并联动
     // manager（create/update/delete/setEnabled/reconnect）。启动连接为 fire-and-forget，
     // 失败不影响应用启动（此处 wrapper 过滤 enabled 行，仅启动路径使用）
@@ -126,8 +129,6 @@ export default class Application {
     void mcpManager
       .startupConnectAll()
       .catch((e) => Log.error("MCP 启动连接失败", e));
-    // 技能管理:list 自愈对账(扫描→对账→落库)+启停/批量/卸载 IPC
-    new SkillRepository(prisma);
     // 基础设施
     new Log();
     new AppInfoService();

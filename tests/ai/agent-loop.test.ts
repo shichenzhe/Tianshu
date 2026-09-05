@@ -15,16 +15,11 @@ const prismaStub = {
     blocks: string;
     error: string | null;
   }>,
-  workspace: null as {
-    directoryPath: string | null;
-    writeApprovedAt: Date | null;
-  } | null,
 };
 
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     message: { findMany: async () => prismaStub.messages },
-    workspace: { findUnique: async () => prismaStub.workspace },
   },
 }));
 
@@ -173,12 +168,12 @@ const makeWriteTool = (
 
 const makeAgent = (
   approvals: ApprovalCoordinator,
-  writeApproved = false,
+  fullAccess = false,
 ): AgentStreamOptions => ({
   sessionId: 1,
   sessionWorkspaceId: 5,
   workspacePath: "/tmp/ws",
-  isWriteApproved: async () => writeApproved,
+  fullAccess: () => fullAccess,
   requestApproval: (toolCallId, argSummary) =>
     approvals.request(toolCallId, argSummary),
 });

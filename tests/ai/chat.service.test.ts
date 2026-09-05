@@ -229,6 +229,7 @@ describe("ChatService.status（流中切回恢复）", () => {
     const svc = new ChatService({} as never);
     expect(svc.status(99)).toEqual({
       streaming: false,
+      accessMode: "default",
       text: "",
       thinking: "",
       tools: { order: [], map: {} },
@@ -252,6 +253,7 @@ describe("ChatService.status（流中切回恢复）", () => {
     });
     expect(svc.status(7)).toEqual({
       streaming: true,
+      accessMode: "default",
       text: "半截",
       thinking: "",
       tools: { order: [], map: {} },
@@ -278,6 +280,7 @@ describe("ChatService.status（流中切回恢复）", () => {
     internal.snapshots.delete(7);
     expect(svc.status(7)).toEqual({
       streaming: false,
+      accessMode: "default",
       text: "",
       thinking: "",
       tools: { order: [], map: {} },

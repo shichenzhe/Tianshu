@@ -51,6 +51,10 @@ const DEFAULT_MAX_STEPS = 50;
 /** write 工具被用户拒绝时的回喂文案（spec 决策 #4：拒绝后循环继续） */
 const TOOL_DENIED_OUTPUT = "用户拒绝了此操作";
 
+/** P3 计划模式指令段（设计 spec §4 逐字） */
+const PLAN_MODE_INSTRUCTION =
+  "当前处于计划模式：请先分析任务并输出完整可执行的计划（步骤/涉及文件/命令），在我明确确认之前不要调用任何工具执行操作。";
+
 /** 工具执行被中止时的回喂文案 */
 const TOOL_ABORTED_OUTPUT = "已中断";
 
@@ -69,8 +73,11 @@ export interface AgentStreamOptions {
    * 文件四件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
    */
   workspacePath?: string;
-  /** write 授权实时判定（每次写入前查询，撤销立即生效，spec §1） */
-  isWriteApproved: () => Promise<boolean>;
+  /**
+   * 完全访问实时判定（P3 spec §2）：每次 write 工具判定与执行前查询，
+   * 撤回立即生效；mcp__ 写工具不受其豁免（R7）
+   */
+  fullAccess: () => boolean;
   /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
 }
@@ -101,11 +108,19 @@ export interface ChatStreamResult {
   errorMessage?: string;
 }
 
-/** 审批横幅直显的参数摘要：优先路径，否则 JSON 截断 */
+/** 审批横幅直显的参数摘要：run_command 取命令前 60 字符（spec §6），
+ * 其余优先路径，否则 JSON 截断 */
 function summarizeArgs(toolName: string, input: unknown): string {
   const record = (
     typeof input === "object" && input !== null ? input : {}
   ) as Record<string, unknown>;
+  if (
+    toolName === "run_command" &&
+    typeof record.command === "string" &&
+    record.command
+  ) {
+    return `${toolName} → ${record.command.slice(0, 60)}`;
+  }
   if (typeof record.path === "string" && record.path) {
     return `${toolName} → ${record.path}`;
   }
@@ -122,6 +137,27 @@ export function normalizeWorkspacePath(directoryPath: string): string {
   return resolved.length > 1 && resolved.endsWith(path.sep)
     ? resolved.slice(0, -1)
     : resolved;
+}
+
+/**
+ * 按会话模式组装 system（P3 spec R5）：ask 仅助手原文（技能清单不注入）；
+ * plan 在技能组装结果之后以空行追加计划指令段；agent 现状
+ */
+function buildModeSystem(
+  mode: "agent" | "ask" | "plan",
+  base: string | undefined,
+  skills: SkillInfo[],
+): string | undefined {
+  if (mode === "ask") {
+    return base;
+  }
+  const withSkills = buildSystemPrompt(base, skills);
+  if (mode !== "plan") {
+    return withSkills;
+  }
+  return withSkills
+    ? `${withSkills}\n\n${PLAN_MODE_INSTRUCTION}`
+    : PLAN_MODE_INSTRUCTION;
 }
 
 /**
@@ -192,8 +228,13 @@ async function executeToolSafe(
 ): Promise<string> {
   try {
     return await def.execute(
-      // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）
-      { workspacePath: agent.workspacePath ?? "", sessionId: agent.sessionId },
+      // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）；
+      // fullAccess 供文件四件边界放开与 run_command cwd 放开（P3 spec §6）
+      {
+        workspacePath: agent.workspacePath ?? "",
+        sessionId: agent.sessionId,
+        fullAccess: agent.fullAccess(),
+      },
       input,
     );
   } catch (e) {
@@ -228,7 +269,8 @@ async function awaitApproval(
 
 /**
  * 工具调用全流程（包装注册表工具的 execute）：
- * write 未授权先挂起审批（mcp__ 写类不吃工作空间授权，始终挂起，spec 决策 #1）；
+ * write 审批两级判定（P3 spec R2/R7）——mcp__ 写类恒审批（完全访问不豁免）；
+ * 其余 write（文件/命令）完全访问下直执行、默认态挂起审批；
  * 拒绝以文案回喂（循环继续）；中止竞速防流悬挂
  */
 async function runToolCall(
@@ -242,7 +284,7 @@ async function runToolCall(
 ): Promise<string> {
   if (
     def.kind === "write" &&
-    (def.name.startsWith("mcp__") || !(await agent.isWriteApproved()))
+    (def.name.startsWith("mcp__") || !agent.fullAccess())
   ) {
     const decision = await awaitApproval(
       def,
@@ -735,7 +777,8 @@ export default class ChatService {
   /**
    * agent 上下文装配（P2）：所有会话都具备——read_skill 与 mcp__ 工具不依赖
    * 工作空间（spec 决策 #3 常驻注入），mcp__ 写类审批也始终可用（决策 #1）。
-   * workspacePath 仅在绑定目录后有值；isWriteApproved 实时查询（撤销立即生效）
+   * workspacePath 仅在绑定目录后有值；fullAccess 实时查 PermissionStore
+   * （P3 两级审批：workspace.writeApprovedAt 读取路径已废弃，spec R2）
    */
   private async resolveAgentOptions(
     session: { workspaceId: number },
@@ -752,15 +795,7 @@ export default class ChatService {
       workspacePath: directoryPath
         ? normalizeWorkspacePath(directoryPath)
         : undefined,
-      isWriteApproved: async () => {
-        if (!directoryPath) {
-          return false;
-        }
-        const ws = await prisma.workspace.findUnique({
-          where: { id: sessionWorkspaceId },
-        });
-        return ws?.writeApprovedAt != null;
-      },
+      fullAccess: () => this.permissions.get(sessionId) === "full",
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
     };
@@ -860,8 +895,14 @@ export default class ChatService {
       }));
 
     const agent = await this.resolveAgentOptions(session, sessionId);
-    // 同一次扫描喂两处：system prompt 技能清单 + read_skill 工具查表
-    const skills = this.collectSkills(agent.workspacePath);
+    // P3 模式组装（spec R5）：DB null/未识别值归一 agent；ask 零工具零技能
+    // （扫描整个跳过：技能清单与 read_skill 均不注入），plan 仅追加指令段
+    const mode: "agent" | "ask" | "plan" =
+      session.mode === "ask" || session.mode === "plan"
+        ? session.mode
+        : "agent";
+    const skills =
+      mode === "ask" ? [] : this.collectSkills(agent.workspacePath);
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -873,12 +914,13 @@ export default class ChatService {
           },
           modelRow.modelId,
         ),
-        system: buildSystemPrompt(assistantRow?.systemPrompt, skills),
+        system: buildModeSystem(mode, assistantRow?.systemPrompt, skills),
         history,
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,
         abortSignal: abort.signal,
-        toolDefinitions: this.collectToolDefinitions(agent, skills),
+        toolDefinitions:
+          mode === "ask" ? [] : this.collectToolDefinitions(agent, skills),
         agent,
         maxSteps,
         onChunk: (chunk) => {
@@ -966,12 +1008,14 @@ export default class ChatService {
   }
 
   /**
-   * 查询会话流状态（切回会话时恢复 UI 用，spec §4；P1 增含 tools 态）
+   * 查询会话流状态（切回会话时恢复 UI 用，spec §4；P1 增含 tools 态，
+   * P3 增含 accessMode 供权限胶囊恢复）
    */
   status(sessionId: number): ChatStatusResult {
     const snap = this.snapshots.get(sessionId);
     return {
       streaming: this.aborts.has(sessionId),
+      accessMode: this.permissions.get(sessionId),
       text: snap?.text ?? "",
       thinking: snap?.thinking ?? "",
       tools: snap?.tools ?? { order: [], map: {} },

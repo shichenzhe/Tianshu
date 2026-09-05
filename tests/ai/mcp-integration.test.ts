@@ -34,7 +34,6 @@ const prismaStub = {
     apiKey: null,
     extraHeaders: null,
   } as unknown,
-  workspace: null as { writeApprovedAt: Date | null } | null,
 };
 
 vi.mock("../../electron/commons/prisma-client", () => ({
@@ -42,7 +41,6 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     message: { findMany: async () => prismaStub.messages },
     model: { findUnique: async () => prismaStub.modelRow },
     provider: { findUnique: async () => prismaStub.providerRow },
-    workspace: { findUnique: async () => prismaStub.workspace },
   },
 }));
 
@@ -218,12 +216,12 @@ const sessionsStub = (directoryPath: string | null): SessionRepository =>
 
 const makeAgent = (
   approvals: ApprovalCoordinator,
-  writeApproved = false,
+  fullAccess = false,
 ): AgentStreamOptions => ({
   sessionId: 1,
   sessionWorkspaceId: 5,
   workspacePath: "/tmp/ws",
-  isWriteApproved: async () => writeApproved,
+  fullAccess: () => fullAccess,
   requestApproval: (toolCallId, argSummary) =>
     approvals.request(toolCallId, argSummary),
 });
@@ -260,20 +258,22 @@ describe("ToolSet 组装（send 级集成）", () => {
     await service.send({ sessionId: 1, content: "hi" });
 
     const names = capturedToolNames[0] ?? [];
-    // registry 顺序：read_skill 在前，其后为文件四件（read/write/list/search）
+    // registry 顺序：read_skill 在前，其后为文件四件（read/write/list/search）+
+    // run_command（P3 注册），mcp__ 注册序殿后
     expect(names.filter((name) => !name.startsWith("mcp__"))).toEqual([
       "read_skill",
       "read_file",
       "write_file",
       "list_dir",
       "search_files",
+      "run_command",
     ]);
     expect(names).toContain("mcp__srv__echo");
   });
 });
 
 describe("MCP 审批与 jsonSchema 适配（runChatStream 级）", () => {
-  it("MCP 写工具不吃工作空间授权：已授权工作空间仍挂起审批，批准后才执行", async () => {
+  it("MCP 写工具不受完全访问豁免：full 下仍挂起审批，批准后才执行（R7）", async () => {
     const approvals = new ApprovalCoordinator();
     const executed: string[] = [];
     const mcpPublish: ToolDefinition = {
@@ -310,11 +310,11 @@ describe("MCP 审批与 jsonSchema 适配（runChatStream 级）", () => {
       history: userHistory,
       params: {},
       toolDefinitions: [mcpPublish],
-      agent: makeAgent(approvals, true), // 工作空间已授权
+      agent: makeAgent(approvals, true), // 完全访问已开启
       onChunk: (chunk) => chunks.push(chunk),
     });
 
-    // 关键断言：isWriteApproved=true 仍走 awaiting-approval，且执行先于决议挂起
+    // 关键断言：fullAccess=true 仍走 awaiting-approval，且执行先于决议挂起
     await vi.waitFor(() => expect(approvals.pendingCount).toBe(1));
     expect(chunks).toContainEqual(
       expect.objectContaining({

@@ -41,6 +41,8 @@ export type ChatStreamChunk =
 
 export interface ChatStatusResult {
   streaming: boolean;
+  /** P3：会话工具权限模式（default 询问 / full 放行），切回会话恢复胶囊状态用 */
+  accessMode: "default" | "full";
   text: string;
   thinking: string;
   /** P1：流式工具态（保序），切回会话恢复 agent 进度用 */

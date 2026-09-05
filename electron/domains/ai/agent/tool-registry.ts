@@ -1,10 +1,12 @@
 /**
- * 工具注册表：P2 MCP 工具聚合进同一注册表（spec 决策 #10）
+ * 工具注册表：P2 MCP 工具聚合进同一注册表（spec 决策 #10）。
+ * 初始集 = 内置文件四件 + run_command 终端工具（P3 spec §3）；mcp__ 动态注册
  */
 import type { ToolDefinition } from "./file-tools";
 import { FILE_TOOLS } from "./file-tools";
+import { makeRunCommandTool } from "./command-tool";
 
-const definitions: ToolDefinition[] = [...FILE_TOOLS];
+const definitions: ToolDefinition[] = [...FILE_TOOLS, makeRunCommandTool()];
 
 export const registry = {
   getDefinitions: () => definitions,

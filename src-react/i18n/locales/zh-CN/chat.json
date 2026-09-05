@@ -26,8 +26,6 @@
     "send": "发送",
     "stop": "停止",
     "selectModel": "选择模型",
-    "selectAssistant": "选择助手",
-    "noAssistant": "不使用助手",
     "modelRequired": "请先选择模型",
     "paramOverrides": "参数覆盖",
     "temp": "温度",
@@ -37,6 +35,19 @@
   "attach": {
     "remove": "移除引用文件",
     "readFailed": "读取失败：{{path}}（{{reason}}）"
+  },
+  "plus": {
+    "title": "扩展菜单",
+    "addFile": "添加文件",
+    "mode": "模式",
+    "modeAgent": "默认",
+    "modeAsk": "仅问答",
+    "modePlan": "计划",
+    "expert": "专家",
+    "noAssistant": "不使用助手",
+    "skill": "技能",
+    "skillHint": "输入 @ 技能名可调用",
+    "connector": "连接器"
   },
   "search": {
     "placeholder": "搜索消息",

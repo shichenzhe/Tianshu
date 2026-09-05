@@ -1,15 +1,16 @@
 /**
- * 卡片式输入框（P3 spec §1）：上行 ＋扩展菜单占位（T7 填）+ 权限胶囊，
+ * 卡片式输入框（P3 spec §1）：上行 ＋扩展菜单 + 权限胶囊 + 模式徽标，
  * 中行 textarea（field-sizing 自适应），引用文件 chips 暂存，
  * 下行右 参数覆盖 + 模型选择 + 发送/停止
  * Enter 发送 / Shift+Enter 换行（IME 组合中的 Enter 不触发发送）
  * 发送中切换为停止按钮；未选模型时禁用发送并以占位符提示
+ * 发送失败（onSend reject）时输入与 chips 保留可重试，成功后才清空
  * 参数覆盖（spec §4.2 单次请求级）：Popover 内留空 = 不覆盖，随会话生命周期保留
  */
 import { useCallback, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import { Plus, Send, SlidersHorizontal, Square, X } from "lucide-react";
+import { Send, SlidersHorizontal, Square, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +21,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { ChatModelParams } from "../../api/chat.api";
+import type { SessionMode } from "../../api/session.api";
 import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
 import ModelPicker from "./ModelPicker";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
+import PlusMenu from "./PlusMenu";
 
 /** 待引用文件：＋菜单选取暂存于此，发送时随 onSend 带出（渲染层拼注入块） */
 export interface PendingFile {
@@ -70,13 +73,20 @@ interface ChatInputProps {
   sessionId: number;
   accessMode: AccessMode;
   onAccessModeChange: (mode: AccessMode) => void;
-  /** 模型选择器：写入会话当前模型 */
+  /** ＋扩展菜单（T7）：模式徽标数据源 + 专家/技能/连接器接线 */
+  currentMode: SessionMode;
+  currentAssistantId?: number;
   currentModelId?: number;
+  /** 打开技能目录（ChatPane 复用齿轮菜单同款 handler） */
+  onOpenSkills: () => void;
+  /** 跳转连接器（MCP）管理页 */
+  onOpenMcp: () => void;
+  /** reject 即发送失败：输入与 chips 保留可重试（错误 toast 由调用链负责） */
   onSend: (
     content: string,
     files: PendingFile[],
     overrides?: ChatModelParams,
-  ) => void;
+  ) => Promise<void>;
   onStop: () => void;
 }
 
@@ -86,7 +96,11 @@ export default function ChatInput({
   sessionId,
   accessMode,
   onAccessModeChange,
+  currentMode,
+  currentAssistantId,
   currentModelId,
+  onOpenSkills,
+  onOpenMcp,
   onSend,
   onStop,
 }: ChatInputProps) {
@@ -111,7 +125,16 @@ export default function ChatInput({
     return hasAny ? overrides : undefined;
   }, [temperature, topP, maxTokens]);
 
-  const submit = useCallback(() => {
+  /** ＋菜单选中的文件并入 chips（同路径去重，避免 chip key 冲突） */
+  const handlePickFiles = useCallback((files: PendingFile[]) => {
+    setPendingFiles((prev) => {
+      const knownPaths = new Set(prev.map((file) => file.path));
+      return [...prev, ...files.filter((file) => !knownPaths.has(file.path))];
+    });
+  }, []);
+
+  /** 成功后才清空输入与 chips；失败（reject）保留可重试 */
+  const submit = useCallback(async () => {
     const trimmed = content.trim();
     if (!trimmed || !hasModel || sending) {
       return;
@@ -123,9 +146,13 @@ export default function ChatInput({
       toast.error(t("ai:model.invalidNumber"));
       return;
     }
-    onSend(trimmed, pendingFiles, overrides);
-    setContent("");
-    setPendingFiles([]);
+    try {
+      await onSend(trimmed, pendingFiles, overrides);
+      setContent("");
+      setPendingFiles([]);
+    } catch {
+      /* 失败保留输入与 chips；错误提示由 onSend 链路（toast+rethrow）负责 */
+    }
   }, [content, hasModel, sending, pendingFiles, onSend, buildOverrides, t]);
 
   const removeFile = useCallback((path: string) => {
@@ -139,7 +166,7 @@ export default function ChatInput({
       !event.nativeEvent.isComposing
     ) {
       event.preventDefault();
-      submit();
+      void submit();
     }
   };
 
@@ -148,25 +175,28 @@ export default function ChatInput({
       data-testid="chat-input"
       className="flex min-w-0 flex-1 flex-col rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
     >
-      {/* 上行：＋扩展菜单占位（T7 填充，当前纯装饰）+ 权限胶囊 */}
+      {/* 上行：＋扩展菜单 + 权限胶囊 + 模式徽标（非默认模式时） */}
       <div className="flex items-center gap-2">
         <div data-plus-slot>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled
-            aria-hidden="true"
-            tabIndex={-1}
-            className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <PlusMenu
+            sessionId={sessionId}
+            currentMode={currentMode}
+            currentAssistantId={currentAssistantId}
+            onPickFiles={handlePickFiles}
+            onOpenSkills={onOpenSkills}
+            onOpenMcp={onOpenMcp}
+          />
         </div>
         <PermissionCapsule
           sessionId={sessionId}
           accessMode={accessMode}
           onChange={onAccessModeChange}
         />
+        {currentMode !== "agent" && (
+          <span className="text-xs text-muted-foreground">
+            {currentMode === "ask" ? "ASK" : "PLAN"}
+          </span>
+        )}
       </div>
       {/* 中行：输入区（field-sizing 自适应，封顶 10 行左右） */}
       <textarea
@@ -178,7 +208,7 @@ export default function ChatInput({
         placeholder={t(
           hasModel ? "chat:input.placeholder" : "chat:input.modelRequired",
         )}
-        className="mt-2 min-h-6 w-full flex-1 resize-none overflow-y-auto bg-transparent text-sm field-sizing-content max-h-40 outline-none placeholder:text-muted-foreground"
+        className="mt-2 min-h-6 w-full resize-none overflow-y-auto bg-transparent text-sm field-sizing-content max-h-40 outline-none placeholder:text-muted-foreground"
       />
       {/* 引用文件 chips（有待引用时展示，可逐个移除） */}
       {pendingFiles.length > 0 && (
@@ -266,7 +296,7 @@ export default function ChatInput({
           </Button>
         ) : (
           <Button
-            onClick={submit}
+            onClick={() => void submit()}
             disabled={!hasModel || content.trim() === ""}
           >
             <Send className="mr-1 h-4 w-4" />

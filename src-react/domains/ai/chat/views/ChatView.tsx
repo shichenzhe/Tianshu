@@ -1,7 +1,7 @@
 /**
  * AI 对话主界面：左侧会话侧边栏 + 右侧消息区/输入区
  * 工作空间选中态在此提升（输入区需解析会话生效模型），会话数据经共享
- * React Query 缓存派生，setModel/setAssistant 失效后即为最新值
+ * React Query 缓存派生，setModel/setAssistant/setMode 失效后即为最新值
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -265,6 +265,8 @@ function ChatPane({
       await send(injected, undefined, overrides);
     } catch (e) {
       toast.error(mapIpcError(e));
+      // rethrow：ChatInput 据此保留输入与 chips 可重试（失败不清空）
+      throw e;
     }
   };
 
@@ -335,8 +337,12 @@ function ChatPane({
             sending={sending}
             sessionId={session.id}
             accessMode={accessMode}
+            currentMode={session.mode}
+            currentAssistantId={session.assistantId}
             currentModelId={session.currentModelId}
             onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
+            onOpenSkills={openSkillDir}
+            onOpenMcp={() => onOpenSettings("mcp")}
             onSend={handleSend}
             onStop={stop}
           />

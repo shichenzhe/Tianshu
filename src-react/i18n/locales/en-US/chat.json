@@ -26,8 +26,6 @@
     "send": "Send",
     "stop": "Stop",
     "selectModel": "Select Model",
-    "selectAssistant": "Select Assistant",
-    "noAssistant": "No Assistant",
     "modelRequired": "Select a model first",
     "paramOverrides": "Parameter Overrides",
     "temp": "Temperature",
@@ -37,6 +35,19 @@
   "attach": {
     "remove": "Remove attached file",
     "readFailed": "Failed to read: {{path}} ({{reason}})"
+  },
+  "plus": {
+    "title": "Extension menu",
+    "addFile": "Add File",
+    "mode": "Mode",
+    "modeAgent": "Default",
+    "modeAsk": "Ask Only",
+    "modePlan": "Plan",
+    "expert": "Expert",
+    "noAssistant": "No Assistant",
+    "skill": "Skills",
+    "skillHint": "Type @ skill-name to invoke",
+    "connector": "Connectors"
   },
   "search": {
     "placeholder": "Search messages",

@@ -1,6 +1,6 @@
 /**
  * 主布局组件
- * 包含顶部栏、左侧导航栏和主内容区
+ * 包含顶部栏和主内容区（模块内布局由各模块自带，如 AI 标准侧边栏）
  */
 
 import { useEffect } from "react";
@@ -10,9 +10,7 @@ import { toast } from "sonner";
 
 import { useUserStore } from "@/domains/user/store/user.store";
 import { UserApi } from "@/domains/user/api/user.api";
-import { useLocalStorage } from "@/lib/hooks";
 import TopBar from "./TopBar";
-import Sidebar from "./Sidebar";
 
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -20,20 +18,9 @@ export default function MainLayout() {
   const { t } = useTranslation(["layout"]);
   const { user, isLoginValid, reset } = useUserStore();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorage(
-    "sidebar-collapsed",
-    false,
-  );
-
   // 判断是否显示导航布局
   const shouldShowNav =
     location.pathname !== "/" && !location.pathname.includes("/login");
-
-  // Sidebar 宽度
-  const sidebarWidth = sidebarCollapsed ? 40 : 140;
-
-  // 主内容区左边距
-  const marginLeft = shouldShowNav ? sidebarWidth : 0;
 
   // 验证登录状态
   useEffect(() => {
@@ -65,22 +52,13 @@ export default function MainLayout() {
 
   return (
     <div className="app-container">
-      {shouldShowNav && (
-        <>
-          <TopBar />
-          <Sidebar
-            collapsed={sidebarCollapsed}
-            onCollapsedChange={setSidebarCollapsed}
-          />
-        </>
-      )}
+      {shouldShowNav && <TopBar />}
 
       <div
         className="main-content bg-muted/40"
         style={{
           marginTop: shouldShowNav ? 36 : 0,
-          marginLeft,
-          transition: "margin-left 0.2s",
+          transition: "margin-top 0.2s",
         }}
       >
         <Outlet />

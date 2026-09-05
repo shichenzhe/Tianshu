@@ -12,6 +12,15 @@
     "unbindConfirmDesc": "解绑后 AI 将无法访问该目录中的文件，历史消息保留。",
     "boundPathLabel": "工作空间目录"
   },
+  "sidebar": {
+    "newTask": "新建任务",
+    "experts": "专家·技能·连接器",
+    "automation": "自动化",
+    "library": "资料库",
+    "spaces": "空间",
+    "newTaskInWorkspace": "在此空间新建任务",
+    "emptyTask": "暂无任务"
+  },
   "defaultWorkspaceName": "默认工作空间",
   "sessionCount": "{{count}} 个会话",
   "renameSession": "重命名会话",
@@ -44,10 +53,6 @@
     "skill": "技能",
     "skillHint": "输入 @ 技能名可调用",
     "connector": "连接器"
-  },
-  "search": {
-    "placeholder": "搜索消息",
-    "noResults": "无匹配结果"
   },
   "message": {
     "thinking": "思考过程",

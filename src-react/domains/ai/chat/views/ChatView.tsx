@@ -1,6 +1,6 @@
 /**
- * AI 对话主界面：左侧会话侧边栏 + 右侧消息区/输入区
- * 工作空间选中态在此提升（输入区需解析会话生效模型），会话数据经共享
+ * AI 对话主界面：消息区/输入区（标准侧边栏由 AiLayout 提供）
+ * 当前空间由选中任务派生（侧边栏分组树已展示全部空间），会话数据经共享
  * React Query 缓存派生，setModel/setAssistant/setMode 失效后即为最新值
  */
 import { useEffect, useState } from "react";
@@ -24,7 +24,6 @@ import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
 import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
-import SessionSidebar from "../components/SessionSidebar";
 import MessageList from "../components/MessageList";
 import ChatInput, { type PendingFile } from "../components/ChatInput";
 import type { AccessMode } from "../components/PermissionCapsule";
@@ -38,15 +37,12 @@ const WORKSPACES_KEY = ["workspaces"] as const;
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
-const ASSISTANTS_ROUTE = "/module/ai/assistants";
-const MCP_ROUTE = "/module/ai/mcp";
+const ASSISTANTS_ROUTE = "/module/ai/experts";
+const MCP_ROUTE = "/module/ai/experts";
 
 export default function ChatView() {
   const navigate = useNavigate();
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(
-    null,
-  );
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   // 选中任务进 URL（?session=）：刷新可恢复、全局搜索有跳转落点
   const selectedSessionId = Number(searchParams.get("session")) || null;
 
@@ -63,9 +59,8 @@ export default function ChatView() {
     queryFn: () => WorkspaceApi.list(),
   });
   const sessionsQuery = useQuery({
-    queryKey: ["sessions", activeWorkspaceId],
-    queryFn: () => SessionApi.listByWorkspace(activeWorkspaceId as number),
-    enabled: activeWorkspaceId !== null,
+    queryKey: ["sessions", "all"],
+    queryFn: () => SessionApi.listAll(),
   });
 
   const providers = providersQuery.data ?? [];
@@ -79,63 +74,46 @@ export default function ChatView() {
     providers.length === 0 &&
     models.length === 0;
 
-  // 后端保证至少有一个默认工作空间，首次加载后自动选中
-  useEffect(() => {
-    if (activeWorkspaceId === null && workspaces.length > 0) {
-      setActiveWorkspaceId(workspaces[0].id);
-    }
-  }, [activeWorkspaceId, workspaces]);
-
-  const activeWorkspace =
-    workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null;
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? null;
 
-  // 切换工作空间时同步清空会话选中态
-  const handleSelectWorkspace = (workspaceId: number | null) => {
-    setActiveWorkspaceId(workspaceId);
-    setSearchParams({}, { replace: true });
-  };
+  // 当前空间 = 选中任务所属空间，无选中取第一个（侧边栏分组树已展示全部空间）
+  const activeWorkspace =
+    workspaces.find(
+      (workspace) => workspace.id === selectedSession?.workspaceId,
+    ) ??
+    workspaces[0] ??
+    null;
 
   return (
-    <div className="flex h-full">
-      <SessionSidebar
-        activeWorkspaceId={activeWorkspaceId}
-        onSelectWorkspace={handleSelectWorkspace}
-        selectedSessionId={selectedSessionId}
-        onSelectSession={(id) =>
-          setSearchParams(id ? { session: String(id) } : {}, { replace: true })
-        }
-      />
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* 顶栏：已绑定工作空间目录时展示路径 chip（重绑/解绑入口） */}
-        {activeWorkspace?.directoryPath && (
-          <WorkspacePathChip workspace={activeWorkspace} />
-        )}
-        {needsSetup ? (
-          <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
-        ) : selectedSession ? (
-          <ChatPane
-            key={selectedSession.id}
-            session={selectedSession}
-            workspace={activeWorkspace}
-            hasModel={Boolean(
-              selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
-            )}
-            onOpenSettings={(target) =>
-              navigate(
-                target === "providers"
-                  ? PROVIDERS_ROUTE
-                  : target === "assistants"
-                    ? ASSISTANTS_ROUTE
-                    : MCP_ROUTE,
-              )
-            }
-          />
-        ) : (
-          <MessageList sessionId={null} />
-        )}
-      </div>
+    <div className="flex h-full flex-col">
+      {/* 顶栏：已绑定工作空间目录时展示路径 chip（重绑/解绑入口） */}
+      {activeWorkspace?.directoryPath && (
+        <WorkspacePathChip workspace={activeWorkspace} />
+      )}
+      {needsSetup ? (
+        <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
+      ) : selectedSession ? (
+        <ChatPane
+          key={selectedSession.id}
+          session={selectedSession}
+          workspace={activeWorkspace}
+          hasModel={Boolean(
+            selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
+          )}
+          onOpenSettings={(target) =>
+            navigate(
+              target === "providers"
+                ? PROVIDERS_ROUTE
+                : target === "assistants"
+                  ? ASSISTANTS_ROUTE
+                  : MCP_ROUTE,
+            )
+          }
+        />
+      ) : (
+        <MessageList sessionId={null} />
+      )}
     </div>
   );
 }

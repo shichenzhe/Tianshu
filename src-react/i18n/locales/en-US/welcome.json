@@ -1,6 +1,0 @@
-{
-  "greeting": "Welcome to {{appName}}",
-  "version": "Version {{version}}",
-  "getStarted": "Start from the sidebar navigation, or read docs/guide.md to add your first business module.",
-  "viewUpdateLog": "View Update Log"
-}

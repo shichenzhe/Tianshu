@@ -12,6 +12,15 @@
     "unbindConfirmDesc": "Once unbound, the AI can no longer access files in this directory. Message history is preserved.",
     "boundPathLabel": "Workspace Directory"
   },
+  "sidebar": {
+    "newTask": "New Task",
+    "experts": "Experts·Skills·Connectors",
+    "automation": "Automation",
+    "library": "Library",
+    "spaces": "Spaces",
+    "newTaskInWorkspace": "New task in this space",
+    "emptyTask": "No tasks yet"
+  },
   "defaultWorkspaceName": "Default Workspace",
   "sessionCount": "{{count}} sessions",
   "renameSession": "Rename Session",
@@ -44,10 +53,6 @@
     "skill": "Skills",
     "skillHint": "Type @ skill-name to invoke",
     "connector": "Connectors"
-  },
-  "search": {
-    "placeholder": "Search messages",
-    "noResults": "No results"
   },
   "message": {
     "thinking": "Thinking",

@@ -1,6 +1,0 @@
-{
-  "greeting": "欢迎使用 {{appName}}",
-  "version": "版本 {{version}}",
-  "getStarted": "从左侧导航开始，或阅读 docs/guide.md 添加你的第一个业务模块。",
-  "viewUpdateLog": "查看更新日志"
-}

@@ -1,5 +1,5 @@
 /**
- * 工作空间目录绑定/解绑动作（SessionSidebar 菜单与路径 chip 共用）：
+ * 工作空间目录绑定/解绑动作（AiSidebar 空间菜单与路径 chip 共用）：
  * 成功绑定后失效工作空间缓存；用户取消（后端返回 null）时静默返回
  */
 import type { QueryClient } from "@tanstack/react-query";

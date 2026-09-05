@@ -1,5 +1,5 @@
 /**
- * 路由配置
+ * 路由配置：登录 + AI 模块（标准侧边栏布局）
  */
 
 import { lazy, Suspense } from "react";
@@ -9,24 +9,14 @@ import MainLayout from "@/components/layout/MainLayout";
 import LoginView from "@/domains/user/views/LoginView";
 
 // 懒加载其他模块
-const WelcomeView = lazy(() => import("@/domains/welcome/views/WelcomeView"));
-const SystemConfigView = lazy(
-  () => import("@/domains/system-config/SystemConfigView"),
-);
 // AI 服务商/模型管理
 const ProviderSettingsView = lazy(
   () => import("@/domains/ai/provider/views/ProviderSettingsView"),
 );
-// AI 助手预设管理
-const AssistantSettingsView = lazy(
-  () => import("@/domains/ai/assistant/views/AssistantSettingsView"),
-);
-// AI MCP 服务管理
-const McpSettingsView = lazy(
-  () => import("@/domains/ai/mcp/views/McpSettingsView"),
-);
 // AI 对话主界面
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
+// AI 标准侧边栏布局
+const AiLayout = lazy(() => import("@/domains/ai/layout/views/AiLayout"));
 
 // 加载中组件
 function LoadingFallback() {
@@ -45,7 +35,7 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 export const router = createHashRouter([
   {
     path: "/",
-    element: <Navigate to="/login" replace />,
+    element: <Navigate to="/module/ai" replace />,
   },
   {
     path: "/login",
@@ -57,59 +47,33 @@ export const router = createHashRouter([
     children: [
       {
         index: true,
-        element: (
-          <LazyWrapper>
-            <WelcomeView />
-          </LazyWrapper>
-        ),
-      },
-      {
-        path: "welcome",
-        element: (
-          <LazyWrapper>
-            <WelcomeView />
-          </LazyWrapper>
-        ),
+        element: <Navigate to="/module/ai" replace />,
       },
       {
         path: "ai",
         element: (
           <LazyWrapper>
-            <ChatView />
+            <AiLayout />
           </LazyWrapper>
         ),
-      },
-      {
-        path: "ai/providers",
-        element: (
-          <LazyWrapper>
-            <ProviderSettingsView />
-          </LazyWrapper>
-        ),
-      },
-      {
-        path: "ai/assistants",
-        element: (
-          <LazyWrapper>
-            <AssistantSettingsView />
-          </LazyWrapper>
-        ),
-      },
-      {
-        path: "ai/mcp",
-        element: (
-          <LazyWrapper>
-            <McpSettingsView />
-          </LazyWrapper>
-        ),
-      },
-      {
-        path: "system-config",
-        element: (
-          <LazyWrapper>
-            <SystemConfigView />
-          </LazyWrapper>
-        ),
+        children: [
+          {
+            index: true,
+            element: (
+              <LazyWrapper>
+                <ChatView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "providers",
+            element: (
+              <LazyWrapper>
+                <ProviderSettingsView />
+              </LazyWrapper>
+            ),
+          },
+        ],
       },
     ],
   },

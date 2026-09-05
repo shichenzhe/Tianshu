@@ -1,8 +1,5 @@
 {
   "sidebar": {
-    "welcome": "Welcome",
-    "ai": "AI Models",
-    "systemConfig": "System Config",
     "collapse": "Collapse",
     "expand": "Expand"
   },

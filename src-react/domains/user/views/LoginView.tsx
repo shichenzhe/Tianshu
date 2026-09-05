@@ -82,7 +82,7 @@ export default function LoginView() {
   // 初始化：检查是否已登录
   useEffect(() => {
     if (isLoginValid()) {
-      navigate("/module/welcome", { replace: true });
+      navigate("/module/ai", { replace: true });
       return;
     }
 
@@ -177,7 +177,7 @@ export default function LoginView() {
       }
 
       toast.success(t("user:login.loginSuccess"));
-      navigate("/module/welcome");
+      navigate("/module/ai");
     } catch (error) {
       console.error("登录失败:", error);
       toast.error(t("user:login.loginFailed"));

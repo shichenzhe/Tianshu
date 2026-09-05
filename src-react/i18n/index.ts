@@ -11,38 +11,30 @@ import { zhCN, enUS } from "date-fns/locale";
 import zhCommon from "./locales/zh-CN/common.json";
 import zhLayout from "./locales/zh-CN/layout.json";
 import zhUser from "./locales/zh-CN/user.json";
-import zhSystemConfig from "./locales/zh-CN/system-config.json";
 import zhAI from "./locales/zh-CN/ai.json";
 import zhChat from "./locales/zh-CN/chat.json";
-import zhWelcome from "./locales/zh-CN/welcome.json";
 
 // en-US
 import enCommon from "./locales/en-US/common.json";
 import enLayout from "./locales/en-US/layout.json";
 import enUser from "./locales/en-US/user.json";
-import enSystemConfig from "./locales/en-US/system-config.json";
 import enAI from "./locales/en-US/ai.json";
 import enChat from "./locales/en-US/chat.json";
-import enWelcome from "./locales/en-US/welcome.json";
 
 const resources = {
   "zh-CN": {
     common: zhCommon,
     layout: zhLayout,
     user: zhUser,
-    "system-config": zhSystemConfig,
     ai: zhAI,
     chat: zhChat,
-    welcome: zhWelcome,
   },
   "en-US": {
     common: enCommon,
     layout: enLayout,
     user: enUser,
-    "system-config": enSystemConfig,
     ai: enAI,
     chat: enChat,
-    welcome: enWelcome,
   },
 };
 
@@ -53,7 +45,7 @@ i18n
     resources,
     fallbackLng: "zh-CN",
     defaultNS: "common",
-    ns: ["common", "layout", "user", "system-config", "ai", "chat", "welcome"],
+    ns: ["common", "layout", "user", "ai", "chat"],
     interpolation: {
       escapeValue: false,
     },

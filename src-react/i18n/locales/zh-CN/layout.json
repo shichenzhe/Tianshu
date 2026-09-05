@@ -1,8 +1,5 @@
 {
   "sidebar": {
-    "welcome": "欢迎",
-    "ai": "AI 模型配置",
-    "systemConfig": "系统配置",
     "collapse": "收起侧栏",
     "expand": "展开侧栏"
   },

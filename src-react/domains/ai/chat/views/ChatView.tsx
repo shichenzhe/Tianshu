@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Settings2 } from "lucide-react";
 
@@ -46,9 +46,9 @@ export default function ChatView() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<number | null>(
     null,
   );
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(
-    null,
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  // 选中任务进 URL（?session=）：刷新可恢复、全局搜索有跳转落点
+  const selectedSessionId = Number(searchParams.get("session")) || null;
 
   const providersQuery = useQuery({
     queryKey: PROVIDERS_KEY,
@@ -94,7 +94,7 @@ export default function ChatView() {
   // 切换工作空间时同步清空会话选中态
   const handleSelectWorkspace = (workspaceId: number | null) => {
     setActiveWorkspaceId(workspaceId);
-    setSelectedSessionId(null);
+    setSearchParams({}, { replace: true });
   };
 
   return (
@@ -103,7 +103,9 @@ export default function ChatView() {
         activeWorkspaceId={activeWorkspaceId}
         onSelectWorkspace={handleSelectWorkspace}
         selectedSessionId={selectedSessionId}
-        onSelectSession={setSelectedSessionId}
+        onSelectSession={(id) =>
+          setSearchParams(id ? { session: String(id) } : {}, { replace: true })
+        }
       />
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 顶栏：已绑定工作空间目录时展示路径 chip（重绑/解绑入口） */}

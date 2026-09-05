@@ -3,11 +3,12 @@
  * 精选区(top 洗牌取 8,换一换)+ 分类 Tab(categories 动态)+
  * 推荐网格(搜索态切 keyword 查询;加载更多 = pageSize 增量,单查询)
  * 安装流:installingSlug 单飞态;冲突 → AlertDialog 覆盖确认(overwrite 重装)
+ * 添加下拉「上传技能」→ 导入弹窗(SkillImportDialog);「创建技能」仍占位 toast
  */
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Search } from "lucide-react";
+import { RefreshCw, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ import SkillHubApi from "../api/skillhub.api";
 import type { SkillHubSkill } from "../api/skillhub-types";
 import { shuffle } from "../lib/shuffle";
 import SkillHubCard from "../components/SkillHubCard";
+import SkillImportDialog from "../components/SkillImportDialog";
 
 const PAGE_SIZE = 24;
 
@@ -57,6 +59,7 @@ export default function SkillDiscoverView({
   const [conflictSkill, setConflictSkill] = useState<SkillHubSkill | null>(
     null,
   );
+  const [importOpen, setImportOpen] = useState(false);
   const searchTimerRef = useRef<number | undefined>(undefined);
 
   const topQuery = useQuery({
@@ -164,9 +167,8 @@ export default function SkillDiscoverView({
               <Search className="mr-2 h-4 w-4" />
               {t("chat:skills.findSkill")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => toast.info(t("chat:skills.comingSoon"))}
-            >
+            <DropdownMenuItem onClick={() => setImportOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
               {t("chat:skills.uploadSkill")}
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -288,6 +290,9 @@ export default function SkillDiscoverView({
             )}
         </>
       )}
+
+      {/* 导入技能弹窗(上传技能) */}
+      <SkillImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       {/* 冲突覆盖确认 */}
       <AlertDialog

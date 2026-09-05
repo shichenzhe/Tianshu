@@ -211,6 +211,13 @@
     "marketFailed": "Market failed to load",
     "retry": "Retry",
     "downloads": "{{count}} downloads",
+    "importTitle": "Import skill",
+    "importDrop": "Drop a zip or folder here, or click to browse",
+    "requirement": "Requirements: must contain SKILL.md with name and description in the YAML frontmatter",
+    "autoInstall": "Auto-install non-risky skills",
+    "install": "Install",
+    "importFailed": "Import failed",
+    "checking": "Checking…",
     "source": {
       "builtin": "Built-in",
       "market": "Market",

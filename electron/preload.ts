@@ -1,4 +1,4 @@
-import { ipcRenderer, contextBridge } from "electron";
+import { ipcRenderer, contextBridge, webUtils } from "electron";
 
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld("ipcRenderer", {
@@ -37,6 +37,12 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 
 // 暴露当前操作系统平台，供渲染进程做平台分支（如 macOS 红绿灯布局）
 contextBridge.exposeInMainWorld("platform", process.platform);
+
+// 拖拽文件取本地绝对路径：File.path 属性已在 Electron 32 移除，
+// webUtils.getPathForFile 是官方替代且仅能在 preload 调用（见 SkillImportDialog）
+contextBridge.exposeInMainWorld("filePath", {
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+});
 
 // const api = {};
 

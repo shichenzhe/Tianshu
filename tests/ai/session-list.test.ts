@@ -37,7 +37,9 @@ describe("sortSessions 置顶在前", () => {
 });
 
 describe("filterSessionsByTime 时间筛选", () => {
-  const now = new Date("2026-09-05T15:00:00.000Z");
+  const now = new Date(2026, 8, 5, 15, 0, 0); // 本地 2026-09-05 15:00
+  const localMidnight = new Date(2026, 8, 5, 0, 0, 0).getTime();
+  const iso = (d: Date) => d.toISOString();
 
   it("all 全部通过", () => {
     const sessions = [
@@ -47,32 +49,37 @@ describe("filterSessionsByTime 时间筛选", () => {
     expect(filterSessionsByTime(sessions, "all", now)).toHaveLength(2);
   });
 
-  it("today 仅保留当日 00:00 起的活动", () => {
+  it("today 仅保留本地当日 00:00 起的活动（含整点边界）", () => {
     const sessions = [
-      item({ id: 1, lastMessageAt: "2026-09-04T23:59:59.000Z" }),
-      item({ id: 2, lastMessageAt: "2026-09-05T00:00:00.000Z" }),
-      item({ id: 3, lastMessageAt: "2026-09-05T08:00:00.000Z" }),
+      item({
+        id: 1,
+        lastMessageAt: iso(new Date(2026, 8, 4, 23, 59, 59, 999)),
+      }), // 界外
+      item({ id: 2, lastMessageAt: iso(new Date(2026, 8, 5, 0, 0, 0)) }), // 界内
+      item({ id: 3, lastMessageAt: iso(new Date(2026, 8, 5, 8, 0, 0)) }),
     ];
     expect(
       filterSessionsByTime(sessions, "today", now).map((s) => s.id),
     ).toEqual([2, 3]);
   });
 
-  it("week 以当日 00:00 回溯 7 天为界，lastMessageAt 缺省回退 updatedAt", () => {
+  it("week 以本地当日 00:00 回溯 7 天为界，lastMessageAt 缺省回退 updatedAt", () => {
+    const threshold = localMidnight - 7 * 86400000;
     const sessions = [
-      item({ id: 1, lastMessageAt: "2026-08-29T00:00:00.000Z" }), // 界外
-      item({ id: 2, lastMessageAt: "2026-08-29T00:00:01.000Z" }), // 界内
-      item({ id: 3, updatedAt: "2026-09-01T00:00:00.000Z" }), // 无 lastMessageAt
+      item({ id: 1, lastMessageAt: iso(new Date(threshold - 1)) }), // 界外
+      item({ id: 2, lastMessageAt: iso(new Date(threshold)) }), // 界内
+      item({ id: 3, updatedAt: iso(new Date(2026, 8, 1, 12, 0, 0)) }), // 无 lastMessageAt
     ];
     expect(
       filterSessionsByTime(sessions, "week", now).map((s) => s.id),
     ).toEqual([2, 3]);
   });
 
-  it("month 以当日 00:00 回溯 30 天为界", () => {
+  it("month 以本地当日 00:00 回溯 30 天为界", () => {
+    const threshold = localMidnight - 30 * 86400000;
     const sessions = [
-      item({ id: 1, lastMessageAt: "2026-08-06T00:00:00.000Z" }), // 界外
-      item({ id: 2, lastMessageAt: "2026-08-06T00:00:01.000Z" }), // 界内
+      item({ id: 1, lastMessageAt: iso(new Date(threshold - 1)) }), // 界外
+      item({ id: 2, lastMessageAt: iso(new Date(threshold)) }), // 界内
     ];
     expect(
       filterSessionsByTime(sessions, "month", now).map((s) => s.id),

@@ -27,12 +27,12 @@ export function sortSessions<T extends SessionTimeFields>(sessions: T[]): T[] {
   });
 }
 
-/** 当日 00:00（UTC）时间戳（筛选阈值基准，跨时区结果稳定） */
+/** 当日 00:00（本地时区）时间戳（筛选阈值基准） */
 function startOfDay(now: Date): number {
-  return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 }
 
-/** 时间筛选：today 含当日 00:00 整；week/month 不含第 N 天前 00:00 整的边界 */
+/** 时间筛选：活动时间（lastMessageAt ?? updatedAt）不早于阈值（含边界） */
 export function filterSessionsByTime<T extends SessionTimeFields>(
   sessions: T[],
   filter: TimeFilter,
@@ -43,8 +43,9 @@ export function filterSessionsByTime<T extends SessionTimeFields>(
   }
   const days = filter === "today" ? 0 : filter === "week" ? 7 : 30;
   const threshold = startOfDay(now) - days * 86400000;
-  return sessions.filter((session) => {
-    const time = new Date(session.lastMessageAt ?? session.updatedAt).getTime();
-    return filter === "today" ? time >= threshold : time > threshold;
-  });
+  return sessions.filter(
+    (session) =>
+      new Date(session.lastMessageAt ?? session.updatedAt).getTime() >=
+      threshold,
+  );
 }

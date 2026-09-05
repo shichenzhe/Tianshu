@@ -1,6 +1,6 @@
 /**
  * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=技能管理 / 连接器=MCP）
- * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillManagerView（P-A）
+ * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillsView（P-B 双视图）
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,7 +9,7 @@ import { Bot, Plug, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import AssistantSettingsView from "../../assistant/views/AssistantSettingsView";
 import McpSettingsView from "../../mcp/views/McpSettingsView";
-import SkillManagerView from "../../skills/views/SkillManagerView";
+import SkillsView from "../../skills/views/SkillsView";
 
 type ExpertTab = "assistants" | "skills" | "connectors";
 
@@ -60,7 +60,7 @@ export default function ExpertsView() {
         ))}
       </div>
       {tab === "assistants" && <AssistantSettingsView />}
-      {tab === "skills" && <SkillManagerView />}
+      {tab === "skills" && <SkillsView />}
       {tab === "connectors" && <McpSettingsView />}
     </div>
   );

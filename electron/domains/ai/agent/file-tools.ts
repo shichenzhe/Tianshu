@@ -10,6 +10,8 @@ import { z } from "zod";
 export interface ToolContext {
   workspacePath: string;
   sessionId: number;
+  /** 完全访问（P3）：true 时文件工具跳过工作空间边界校验（缺省 false=现状） */
+  fullAccess?: boolean;
 }
 
 export interface ToolDefinition<TArgs = unknown> {
@@ -65,11 +67,19 @@ function realPathLenient(target: string): string {
  * 解析并校验工作空间内路径：resolve 前缀校验 + realpath（symlink 跟随后）再校验。
  * 对尚不存在的新路径，缺失段沿最近存在祖先解析后再校验（防 symlink 目录逃逸）。
  * 越界抛 Error("PATH_OUTSIDE_WORKSPACE")；返回值为工作空间内的绝对路径。
+ * fullAccess=true（完全访问）时跳过全部校验（含 realpath 双检）：
+ * 绝对路径直接 resolve 返回；相对路径仍以 workspacePath 为基（语义不变）。
  */
 export function resolveSafePath(
   workspacePath: string,
   relative: string,
+  fullAccess = false,
 ): string {
+  if (fullAccess) {
+    return path.isAbsolute(relative)
+      ? path.resolve(relative)
+      : path.resolve(workspacePath, relative);
+  }
   const resolved = path.resolve(workspacePath, relative);
   if (
     resolved !== workspacePath &&
@@ -98,7 +108,11 @@ const readFileTool: ToolDefinition<z.infer<typeof readFileSchema>> = {
   kind: "read",
   execute: async (ctx, args) => {
     try {
-      const target = resolveSafePath(ctx.workspacePath, args.path);
+      const target = resolveSafePath(
+        ctx.workspacePath,
+        args.path,
+        ctx.fullAccess,
+      );
       const stat = await fs.stat(target);
       if (stat.size > READ_LIMIT) return fail("文件超过 512KB 读取上限");
       const buf = await fs.readFile(target);
@@ -131,7 +145,11 @@ const writeFileTool: ToolDefinition<z.infer<typeof writeFileSchema>> = {
       if (!args.path.trim()) return fail("路径不能为空");
       const byteLength = Buffer.byteLength(args.content, "utf8");
       if (byteLength > WRITE_LIMIT) return fail("内容超过 1MB 写入上限");
-      const target = resolveSafePath(ctx.workspacePath, args.path);
+      const target = resolveSafePath(
+        ctx.workspacePath,
+        args.path,
+        ctx.fullAccess,
+      );
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, args.content, "utf8");
       return `已写入 ${args.path}（${byteLength} 字节）`;
@@ -154,7 +172,12 @@ const listDirTool: ToolDefinition<z.infer<typeof listDirSchema>> = {
   kind: "read",
   execute: async (ctx, args) => {
     try {
-      const target = resolveSafePath(ctx.workspacePath, args.path ?? "");
+      // full 态接受绝对路径根（args.path 绝对 → 以它为基），相对路径仍基于工作空间
+      const target = resolveSafePath(
+        ctx.workspacePath,
+        args.path ?? "",
+        ctx.fullAccess,
+      );
       const entries = await fs.readdir(target, { withFileTypes: true });
       const visible = entries.filter((entry) => !entry.name.startsWith("."));
       visible.sort(
@@ -243,6 +266,8 @@ const searchFilesTool: ToolDefinition<z.infer<typeof searchFilesSchema>> = {
         (args.output_mode ?? "files_with_matches") === "files_with_matches";
       const limit = args.head_limit ?? SEARCH_RESULT_LIMIT;
       const files: string[] = [];
+      // 搜索根：schema 无 path 参数，根恒为 workspacePath（绝对路径直接用，
+      // full/default 同）——full 态本就不做边界校验，无需额外放开
       await collectFiles(ctx.workspacePath, files);
       const matchedFiles = new Set<string>();
       const contentLines: string[] = [];

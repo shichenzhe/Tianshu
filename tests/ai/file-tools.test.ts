@@ -167,3 +167,64 @@ describe("search_files", () => {
     expect(out).toMatch(/^错误: /);
   });
 });
+
+describe("fullAccess 完全访问边界", () => {
+  const fullCtx = () => ({ workspacePath: ws, sessionId: 1, fullAccess: true });
+
+  it("full 态读工作空间外文件成功（绝对路径）", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      writeFileSync(path.join(outside, "secret.txt"), "topsecret");
+      expect(resolveSafePath(ws, path.join(outside, "secret.txt"), true)).toBe(
+        path.join(outside, "secret.txt"),
+      );
+      const out = await tool("read_file").execute(fullCtx(), {
+        path: path.join(outside, "secret.txt"),
+      });
+      expect(out).toContain("topsecret");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("full 态写入工作空间外路径成功", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      const out = await tool("write_file").execute(fullCtx(), {
+        path: path.join(outside, "deep", "new.txt"),
+        content: "free",
+      });
+      expect(out).toContain("已写入");
+      expect(readFileSync(path.join(outside, "deep", "new.txt"), "utf8")).toBe(
+        "free",
+      );
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("default 态越界仍拒（回归锚）", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      const outsideFile = path.join(outside, "secret.txt");
+      writeFileSync(outsideFile, "topsecret");
+      const read = await tool("read_file").execute(ctx(), {
+        path: outsideFile,
+      });
+      expect(read).toBe("错误: 路径超出工作空间范围");
+      const write = await tool("write_file").execute(ctx(), {
+        path: outsideFile,
+        content: "x",
+      });
+      expect(write).toBe("错误: 路径超出工作空间范围");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("full 态相对路径仍基于工作空间", async () => {
+    const out = await tool("read_file").execute(fullCtx(), { path: "a.txt" });
+    expect(out).toContain("   1| line1");
+    expect(out).toContain("  100| line100");
+  });
+});

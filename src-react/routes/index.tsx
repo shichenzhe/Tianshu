@@ -4,6 +4,7 @@
 
 import { lazy, Suspense } from "react";
 import { createHashRouter, Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 import MainLayout from "@/components/layout/MainLayout";
 import LoginView from "@/domains/user/views/LoginView";
@@ -32,9 +33,10 @@ const AutomationView = lazy(
 
 // 加载中组件
 function LoadingFallback() {
+  const { t } = useTranslation(["common"]);
   return (
     <div className="flex items-center justify-center h-screen">
-      <div className="text-gray-500">加载中...</div>
+      <div className="text-muted-foreground">{t("common:loading")}</div>
     </div>
   );
 }

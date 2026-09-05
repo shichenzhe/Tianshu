@@ -11,9 +11,9 @@ import {
   makeRunCommandTool,
 } from "../../electron/domains/ai/agent/command-tool";
 
-/** exec 回调签名（放宽 code 为 number | null 以模拟超时态） */
+/** exec 回调签名（code 放宽为 number/string/null：数值退出码、错误码串、超时 null） */
 type ExecCallback = (
-  error: (Error & { code?: number | null; killed?: boolean }) | null,
+  error: (Error & { code?: number | string | null; killed?: boolean }) | null,
   stdout: string,
   stderr: string,
 ) => void;
@@ -24,7 +24,7 @@ const mockExec = vi.mocked(exec);
 
 /** 注入可控的 exec 假实现：同步回调吐出预设结果 */
 function fakeExec(result: {
-  error?: Error & { code?: number | null; killed?: boolean };
+  error?: Error & { code?: number | string | null; killed?: boolean };
   stdout?: string;
   stderr?: string;
 }): void {
@@ -52,12 +52,20 @@ const DANGEROUS: string[] = [
   "rm -rf /Users",
   "rm -fr /",
   "sudo rm -r /tmp/../",
+  'rm -rf "/Users/foo/bar"',
+  "rm -rf '/Users'",
+  "rm -rf ~",
+  "rm -rf ~/*",
+  "rm -rf $HOME",
+  'rm -rf "$HOME/lib"',
   "mkfs.ext4 /dev/sda1",
   "mkfs /anything",
   "dd if=x of=/dev/disk0",
   ":(){ :|: & };:",
   ":(){:|:&};:",
   "chmod -R 777 /",
+  "chmod -R 777 /Users",
+  "chmod -R 777 '~/x'",
 ];
 
 const SAFE: string[] = [
@@ -124,6 +132,37 @@ describe("run_command execute", () => {
     fakeExec({ error, stdout: "", stderr: "terminated" });
     const out = await tool.execute(defaultCtx(), { command: "sleep 999" });
     expect(out).toBe("错误: 命令失败（退出码 -/超时）\nterminated");
+  });
+
+  it("maxBuffer 溢出 → 标注输出超限且保留已捕获输出（经 8KB 截断）", async () => {
+    // 真实 Node 中溢出错误 killed 亦为 true——验证 maxBuffer 判定优先于超时
+    const byCode = Object.assign(new Error("stdout maxBuffer exceeded"), {
+      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
+      killed: true,
+    });
+    fakeExec({ error: byCode, stdout: "y".repeat(1024 * 1024 + 1) });
+    const out = await tool.execute(defaultCtx(), { command: "npm install" });
+    expect(out.startsWith("错误: 命令失败（退出码 -/输出超限）\n")).toBe(true);
+    expect(out.endsWith("…（已截断）")).toBe(true);
+    // 旧版 Node 无错误码，仅 message 含 maxBuffer
+    const byMessage = Object.assign(
+      new Error("stdout maxBuffer length exceeded"),
+      {
+        killed: true,
+      },
+    );
+    fakeExec({ error: byMessage, stdout: "captured tail" });
+    const out2 = await tool.execute(defaultCtx(), { command: "npm install" });
+    expect(out2).toBe("错误: 命令失败（退出码 -/输出超限）\ncaptured tail");
+  });
+
+  it("spawn 级失败（字符串错误码）→ 命令启动失败且不带输出", async () => {
+    const error = Object.assign(new Error("spawn npm ENOMEM"), {
+      code: "ENOMEM",
+    });
+    fakeExec({ error, stdout: "leak", stderr: "leak" });
+    const out = await tool.execute(defaultCtx(), { command: "npm install" });
+    expect(out).toBe("错误: 命令启动失败（spawn npm ENOMEM）");
   });
 
   it("输出超 8KB 截断并追加标记", async () => {

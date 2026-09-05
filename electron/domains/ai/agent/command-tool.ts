@@ -21,17 +21,27 @@ const OUTPUT_LIMIT = 8192;
 
 // ---------- 危险命令拦截（spec §3 五类形态，常开） ----------
 
-/** rm 带递归/强制旗标且目标含以 / 开头的词元（绝对路径目标一律拦：/ 与 /Users 等同） */
-const RM_ABSOLUTE_TARGET =
-  /\brm\s+(?:-\w+\s+)*-\w*[rf]\w*(?:\s+-\w+)*(?:\s+[^\s|;&]+)*\s+\/[^\s|;&]*/;
+/**
+ * 绝对路径词元：`/` 开头（可带引号）、`~` 或 `$HOME` 前缀——
+ * shell 展开后均可能指向工作空间外，统一视为界外目标（fail-closed）
+ */
+const ABSOLUTE_PATH_TOKEN = /["']?(?:\/|\$HOME|~)[^\s|;&]*/.source;
+
+/** rm 带递归/强制旗标且目标含绝对路径词元（含引号/波浪号/环境变量形态） */
+const RM_ABSOLUTE_TARGET = new RegExp(
+  /\brm\s+(?:-\w+\s+)*-\w*[rf]\w*(?:\s+-\w+)*(?:\s+[^\s|;&]+)*\s+/.source +
+    ABSOLUTE_PATH_TOKEN,
+);
 /** mkfs 系列格式化（任意形态） */
 const MKFS_ANY = /\bmkfs/;
 /** dd 写入设备（of=/dev/...） */
 const DD_TO_DEVICE = /\bdd\b[^;|&]*\bof=\/dev\//;
 /** fork 炸弹字面（含空格变体，判 :(){ 前缀即可） */
 const FORK_BOMB = /:\(\)\{/;
-/** chmod 递归 777 到 / 根 */
-const CHMOD_ROOT = /\bchmod\s+(?:-\w+\s+)*\d{3,4}\s+\/(?:\s|$)/;
+/** chmod 递归改权限到绝对路径（词元类与 rm 对齐） */
+const CHMOD_ROOT = new RegExp(
+  /\bchmod\s+(?:-\w+\s+)*\d{3,4}\s+/.source + ABSOLUTE_PATH_TOKEN,
+);
 
 /** 高危破坏性命令拦截：命中即拒（与权限无关常开，spec §3） */
 export function isDangerousCommand(command: string): boolean {
@@ -56,9 +66,18 @@ const runCommandSchema = z.object({
 
 interface ExecOutcome {
   code: number | null;
-  killed: boolean;
+  /** 失败原因标签（空串=普通退出码失败）：超时 / 输出超限 */
+  label: "" | "超时" | "输出超限";
   stdout: string;
   stderr: string;
+}
+
+/** maxBuffer 溢出（输出超 1MB）：新版 Node 有专用错误码，旧版仅在 message 提及 */
+function isMaxBufferError(error: Error & { code?: unknown }): boolean {
+  return (
+    error.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ||
+    /maxBuffer/i.test(error.message)
+  );
 }
 
 /** cwd 解析：完全访问态直传不限定；默认态限定工作空间内，越界回退工作空间根 */
@@ -71,7 +90,10 @@ function resolveCwd(ctx: CommandContext, rel?: string): string | undefined {
   return inBounds ? resolved : ctx.workspacePath;
 }
 
-/** callback 风格 exec → Promise：超时 killed 与数值退出码归一，其余异常走启动失败 */
+/**
+ * callback 风格 exec → Promise：输出溢出/超时/数值退出码归一为带标签结果
+ * （溢出时回调仍带回已捕获的 stdout/stderr，不丢弃）；其余异常走启动失败
+ */
 function runExec(
   command: string,
   cwd: string | undefined,
@@ -82,11 +104,14 @@ function runExec(
       { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER },
       (error, stdout, stderr) => {
         if (!error) {
-          resolve({ code: 0, killed: false, stdout, stderr });
+          resolve({ code: 0, label: "", stdout, stderr });
+        } else if (isMaxBufferError(error)) {
+          // 溢出错误 killed 亦为 true，须先于超时判定
+          resolve({ code: null, label: "输出超限", stdout, stderr });
         } else if (error.killed) {
-          resolve({ code: null, killed: true, stdout, stderr });
+          resolve({ code: null, label: "超时", stdout, stderr });
         } else if (typeof error.code === "number") {
-          resolve({ code: error.code, killed: false, stdout, stderr });
+          resolve({ code: error.code, label: "", stdout, stderr });
         } else {
           reject(error);
         }
@@ -114,13 +139,14 @@ const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
       return "错误: 该命令被安全策略拦截（高风险破坏性操作）";
     }
     try {
-      const { code, killed, stdout, stderr } = await runExec(
+      const { code, label, stdout, stderr } = await runExec(
         args.command,
         resolveCwd(ctx, args.cwd),
       );
       const out = mergeOutput(stdout, stderr);
       if (code === 0) return `退出码 0\n${out}`;
-      return `错误: 命令失败（退出码 ${code ?? "-"}${killed ? "/超时" : ""}）\n${out}`;
+      const suffix = label ? `/${label}` : "";
+      return `错误: 命令失败（退出码 ${code ?? "-"}${suffix}）\n${out}`;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return `错误: 命令启动失败（${msg}）`;

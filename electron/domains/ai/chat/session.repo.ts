@@ -111,13 +111,11 @@ export class SessionRepository {
       this.setSessionMode(id, mode),
     );
     ipcMain.handle("session:listAll", () => this.listAllSessions());
-    ipcMain.handle(
-      "session:pin",
-      (_, id: number, pinned: boolean) => this.pinSession(id, pinned),
+    ipcMain.handle("session:pin", (_, id: number, pinned: boolean) =>
+      this.pinSession(id, pinned),
     );
-    ipcMain.handle(
-      "session:archive",
-      (_, id: number, archived: boolean) => this.archiveSession(id, archived),
+    ipcMain.handle("session:archive", (_, id: number, archived: boolean) =>
+      this.archiveSession(id, archived),
     );
     ipcMain.handle("session:searchByTitle", (_, keyword: string) =>
       this.searchSessionsByTitle(keyword),

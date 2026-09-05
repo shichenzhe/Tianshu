@@ -17,6 +17,8 @@ export interface SessionRecord {
   createdAt: string;
   updatedAt: string;
   lastMessageAt?: string;
+  pinnedAt?: string;
+  archivedAt?: string;
 }
 
 export interface SessionCreateParams {
@@ -56,6 +58,24 @@ export class SessionApi {
 
   static async delete(id: number): Promise<void> {
     return invoke<void>("session:delete", id);
+  }
+
+  /** v5：全部未归档任务（标准侧边栏分组树） */
+  static async listAll(): Promise<SessionRecord[]> {
+    return invoke<SessionRecord[]>("session:listAll");
+  }
+
+  static async pin(id: number, pinned: boolean): Promise<void> {
+    return invoke<void>("session:pin", id, pinned);
+  }
+
+  static async archive(id: number, archived: boolean): Promise<void> {
+    return invoke<void>("session:archive", id, archived);
+  }
+
+  /** 空关键词返回最近 20 条（最近任务模式） */
+  static async searchByTitle(keyword: string): Promise<SessionRecord[]> {
+    return invoke<SessionRecord[]>("session:searchByTitle", keyword);
   }
 
   static async setModel(id: number, modelId: number | null): Promise<void> {

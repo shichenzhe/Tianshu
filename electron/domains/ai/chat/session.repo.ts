@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { ipcMain, shell } from "electron";
 import prisma from "../../../commons/prisma-client";
 import type {
   MessageRecord,
@@ -16,7 +16,7 @@ import type {
 type WorkspaceRow = NonNullable<
   Awaited<ReturnType<typeof prisma.workspace.findFirst>>
 >;
-type SessionRow = NonNullable<
+export type SessionRow = NonNullable<
   Awaited<ReturnType<typeof prisma.session.findFirst>>
 >;
 type MessageRow = NonNullable<
@@ -58,6 +58,8 @@ export class SessionRepository {
       // P3：DB null（agent 缺省不落盘）归一为显式 "agent"
       mode: (row.mode as SessionMode | null) ?? "agent",
       lastMessageAt: row.lastMessageAt?.toISOString() ?? undefined,
+      pinnedAt: row.pinnedAt?.toISOString() ?? undefined,
+      archivedAt: row.archivedAt?.toISOString() ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -107,6 +109,21 @@ export class SessionRepository {
     );
     ipcMain.handle("session:setMode", (_, id: number, mode: SessionMode) =>
       this.setSessionMode(id, mode),
+    );
+    ipcMain.handle("session:listAll", () => this.listAllSessions());
+    ipcMain.handle(
+      "session:pin",
+      (_, id: number, pinned: boolean) => this.pinSession(id, pinned),
+    );
+    ipcMain.handle(
+      "session:archive",
+      (_, id: number, archived: boolean) => this.archiveSession(id, archived),
+    );
+    ipcMain.handle("session:searchByTitle", (_, keyword: string) =>
+      this.searchSessionsByTitle(keyword),
+    );
+    ipcMain.handle("workspace:openDirectory", (_, workspaceId: number) =>
+      this.openWorkspaceDirectory(workspaceId),
     );
     ipcMain.handle("message:listBySession", (_, sessionId: number) =>
       this.listMessages(sessionId),
@@ -179,7 +196,7 @@ export class SessionRepository {
   async listSessions(workspaceId: number): Promise<SessionRecord[]> {
     return (
       await prisma.session.findMany({
-        where: { workspaceId },
+        where: { workspaceId, archivedAt: null },
         orderBy: { lastMessageAt: "desc" },
       })
     ).map((row) => this.toSession(row));
@@ -205,6 +222,55 @@ export class SessionRepository {
       },
     });
     return this.toSession(row);
+  }
+
+  /** v5：全部未归档任务（标准侧边栏分组树数据源） */
+  async listAllSessions(): Promise<SessionRecord[]> {
+    return (
+      await prisma.session.findMany({
+        where: { archivedAt: null },
+        orderBy: { lastMessageAt: "desc" },
+      })
+    ).map((row) => this.toSession(row));
+  }
+
+  /** v5 置顶：置 true 记时间戳（前端按其倒序排列），false 清空 */
+  async pinSession(id: number, pinned: boolean): Promise<void> {
+    await prisma.session.update({
+      where: { id },
+      data: { pinnedAt: pinned ? new Date() : null },
+    });
+  }
+
+  /** v5 归档：归档任务从列表/搜索消失，撤销即清空 */
+  async archiveSession(id: number, archived: boolean): Promise<void> {
+    await prisma.session.update({
+      where: { id },
+      data: { archivedAt: archived ? new Date() : null },
+    });
+  }
+
+  /** v5 任务标题搜索：空关键词退化为最近任务（spec §4.1） */
+  async searchSessionsByTitle(keyword: string): Promise<SessionRecord[]> {
+    const trimmed = keyword.trim();
+    const where = trimmed
+      ? { title: { contains: trimmed }, archivedAt: null }
+      : { archivedAt: null };
+    return (
+      await prisma.session.findMany({
+        where,
+        orderBy: { updatedAt: "desc" },
+        take: 20,
+      })
+    ).map((row) => this.toSession(row));
+  }
+
+  /** v5 打开空间绑定目录（上下文菜单「打开文件夹」） */
+  async openWorkspaceDirectory(workspaceId: number): Promise<void> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (workspace?.directoryPath) {
+      await shell.openPath(workspace.directoryPath);
+    }
   }
 
   async renameSession(id: number, title: string): Promise<void> {

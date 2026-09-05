@@ -2,10 +2,11 @@
  * 技能发现页:顶部导航(市场搜索/我安装的[n]/添加技能下拉)+
  * 精选区(top 洗牌取 8,换一换)+ 分类 Tab(categories 动态)+
  * 推荐网格(搜索态切 keyword 查询;加载更多 = pageSize 增量,单查询)
+ * 安装流:installingSlug 单飞态;冲突 → AlertDialog 覆盖确认(overwrite 重装)
  */
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -13,12 +14,24 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { mapIpcError } from "../../chat/lib/error-message";
 import SkillHubApi from "../api/skillhub.api";
+import type { SkillHubSkill } from "../api/skillhub-types";
 import { shuffle } from "../lib/shuffle";
 import SkillHubCard from "../components/SkillHubCard";
 
@@ -27,16 +40,23 @@ const PAGE_SIZE = 24;
 export default function SkillDiscoverView({
   onOpenInstalled,
   installedCount,
+  installedSlugs,
 }: {
   onOpenInstalled: () => void;
   installedCount: number;
+  installedSlugs: Set<string>;
 }) {
   const { t } = useTranslation(["chat", "common"]);
+  const queryClient = useQueryClient();
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [pages, setPages] = useState(1);
   const [featuredSeed, setFeaturedSeed] = useState(0);
+  const [installingSlug, setInstallingSlug] = useState<string | null>(null);
+  const [conflictSkill, setConflictSkill] = useState<SkillHubSkill | null>(
+    null,
+  );
   const searchTimerRef = useRef<number | undefined>(undefined);
 
   const topQuery = useQuery({
@@ -73,6 +93,34 @@ export default function SkillDiscoverView({
       setKeyword(value.trim());
       setPages(1);
     }, 300);
+  };
+
+  /** 市场安装:成功 invalidate 记录;冲突弹覆盖确认;异常 toast 原因 */
+  const handleInstall = async (skill: SkillHubSkill, overwrite = false) => {
+    setInstallingSlug(skill.slug);
+    try {
+      const result = await SkillHubApi.install({
+        slug: skill.slug,
+        overwrite,
+      });
+      if (result.status === "conflict") {
+        setConflictSkill(skill);
+        return;
+      }
+      toast.success(t("chat:skills.installSuccess", { name: skill.name }));
+      await queryClient.invalidateQueries({ queryKey: ["skillRecords"] });
+    } catch (e) {
+      toast.error(`${t("chat:skills.installFailed")}: ${mapIpcError(e)}`);
+    } finally {
+      setInstallingSlug(null);
+    }
+  };
+
+  /** 冲突弹窗确认:关闭并以 overwrite 重装 */
+  const handleOverwriteInstall = () => {
+    const skill = conflictSkill;
+    setConflictSkill(null);
+    if (skill) void handleInstall(skill, true);
   };
 
   return (
@@ -155,7 +203,12 @@ export default function SkillDiscoverView({
             ) : (
               featured.map((skill) => (
                 <div key={skill.slug} className="w-64 shrink-0">
-                  <SkillHubCard skill={skill} />
+                  <SkillHubCard
+                    skill={skill}
+                    installed={installedSlugs.has(skill.slug)}
+                    installing={installingSlug === skill.slug}
+                    onInstall={() => void handleInstall(skill)}
+                  />
                 </div>
               ))
             )}
@@ -210,7 +263,13 @@ export default function SkillDiscoverView({
         <>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {(listQuery.data?.skills ?? []).map((skill) => (
-              <SkillHubCard key={skill.slug} skill={skill} />
+              <SkillHubCard
+                key={skill.slug}
+                skill={skill}
+                installed={installedSlugs.has(skill.slug)}
+                installing={installingSlug === skill.slug}
+                onInstall={() => void handleInstall(skill)}
+              />
             ))}
           </div>
           {(listQuery.data?.total ?? 0) >
@@ -229,6 +288,33 @@ export default function SkillDiscoverView({
             )}
         </>
       )}
+
+      {/* 冲突覆盖确认 */}
+      <AlertDialog
+        open={conflictSkill !== null}
+        onOpenChange={(open) => {
+          if (!open) setConflictSkill(null);
+        }}
+      >
+        <AlertDialogContent className="rounded-lg border border-border/50 shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("chat:skills.conflictTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat:skills.conflictDesc", {
+                name: conflictSkill?.name ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleOverwriteInstall}>
+              {t("chat:skills.overwrite")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

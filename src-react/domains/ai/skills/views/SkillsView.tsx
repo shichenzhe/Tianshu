@@ -3,7 +3,7 @@
  * 市场搜索(远端 keyword)与本地搜索语义分置 —— discover 态显示市场搜索框,
  * installed 态沿用 SkillManagerView 自带搜索条(P-A 交互不变)
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft } from "lucide-react";
@@ -24,6 +24,16 @@ export default function SkillsView() {
     queryFn: () => SkillApi.list(),
   });
   const installedCount = recordsQuery.data?.length ?? 0;
+  /** 已安装 slug 集(过滤 null slug),发现页据此渲染已安装态 */
+  const installedSlugs = useMemo(
+    () =>
+      new Set(
+        (recordsQuery.data ?? [])
+          .map((r) => r.slug)
+          .filter((s): s is string => Boolean(s)),
+      ),
+    [recordsQuery.data],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -31,6 +41,7 @@ export default function SkillsView() {
         <SkillDiscoverView
           onOpenInstalled={() => setView("installed")}
           installedCount={installedCount}
+          installedSlugs={installedSlugs}
         />
       ) : (
         <>

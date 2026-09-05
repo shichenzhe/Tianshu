@@ -40,6 +40,8 @@ const prismaStub = {
     extraHeaders: null,
   } as unknown,
   assistantRow: null as { systemPrompt: string } | null,
+  // P4 工作空间记忆：命中表内的工具名免审
+  toolPermissions: [] as string[],
 };
 
 vi.mock("../../electron/commons/prisma-client", () => ({
@@ -48,6 +50,16 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     model: { findUnique: async () => prismaStub.modelRow },
     provider: { findUnique: async () => prismaStub.providerRow },
     assistant: { findUnique: async () => prismaStub.assistantRow },
+    toolPermission: {
+      findUnique: async (args: {
+        where: { workspaceId_toolName: { toolName: string } };
+      }) =>
+        prismaStub.toolPermissions.includes(
+          args.where.workspaceId_toolName.toolName,
+        )
+          ? { id: 1 }
+          : null,
+    },
   },
 }));
 
@@ -205,7 +217,7 @@ const sessionsStub = (
       },
     ),
     autotitleIfDefault: vi.fn(async () => undefined),
-    getWorkspace: vi.fn(async () => ({ directoryPath })),
+    getWorkspace: vi.fn(async () => ({ id: 1, directoryPath })),
   }) as unknown as SessionRepository;
 
 /** send 的 sender 替身：捕获 emit 推送的流式 chunk（窗口未销毁） */
@@ -262,16 +274,39 @@ const mcpPublish: ToolDefinition = {
   },
 };
 
+/** 文件假写工具：供工作空间记忆用例（名字避开真实 FILE_TOOLS 前缀，防 afterEach 误清） */
+const fakeWriteExecuted: string[] = [];
+const fakeWrite: ToolDefinition = {
+  name: "test_write",
+  description: "测试写",
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string" },
+      content: { type: "string" },
+    },
+    required: ["path"],
+  },
+  kind: "write",
+  execute: async () => {
+    fakeWriteExecuted.push("hit");
+    return "已写入";
+  },
+};
+
 beforeEach(() => {
   // Vitest 4 陷阱（T2 记录）：回调必须带块体，隐式返回值会被当 cleanup hook
   prismaStub.messages = [];
   prismaStub.assistantRow = null;
+  prismaStub.toolPermissions = [];
   mcpExecuted.length = 0;
+  fakeWriteExecuted.length = 0;
 });
 
 afterEach(() => {
   mockFactory.current = null;
   unregisterTools("mcp__");
+  unregisterTools("test_");
 });
 
 describe("两级审批判定（send 级集成）", () => {
@@ -368,7 +403,7 @@ describe("两级审批判定（send 级集成）", () => {
     }
   });
 
-  it("完全访问不豁免 MCP 写工具：mcp__ 前缀 write 恒挂起审批（R7）", async () => {
+  it("完全访问豁免 MCP 写工具（P4 反馈 2.1 推翻 R7）：直执行不挂审批", async () => {
     registerTools([mcpPublish]);
     const { model } = scriptedModel([
       {
@@ -387,20 +422,84 @@ describe("两级审批判定（send 级集成）", () => {
     const service = new ChatService(sessionsStub(null));
     internals(service).permissions.set(1, "full");
     const chunks: ChatStreamChunk[] = [];
+    await service.send({ sessionId: 1, content: "hi" }, captureSender(chunks));
+
+    expect(hasApprovalChunk(chunks)).toBe(false);
+    expect(mcpExecuted).toEqual(["hi"]);
+  });
+
+  it("工作空间记忆（P4 allowed-tools）：命中 toolPermission 表免审直执行", async () => {
+    prismaStub.toolPermissions = ["test_write"];
+    registerTools([fakeWrite]);
+    const ws = mkdtempSync(path.join(os.tmpdir(), "p4-remember-"));
+    const { model } = scriptedModel([
+      {
+        steps: [
+          {
+            kind: "tool",
+            toolCallId: "t1",
+            toolName: "test_write",
+            input: { path: "remembered.txt", content: "hi" },
+          },
+        ],
+      },
+      { steps: [{ kind: "text", delta: "完成" }] },
+    ]);
+    mockFactory.current = () => model;
+    const service = new ChatService(sessionsStub(ws));
+    const chunks: ChatStreamChunk[] = [];
+    try {
+      await service.send(
+        { sessionId: 1, content: "hi" },
+        captureSender(chunks),
+      );
+
+      expect(hasApprovalChunk(chunks)).toBe(false);
+      // 工具真执行（非「未注入」的空过）
+      expect(fakeWriteExecuted).toEqual(["hit"]);
+      expect(
+        chunks.some((c) => c.type === "tool-update" && c.state === "done"),
+      ).toBe(true);
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it("工作空间未记忆的工具默认态仍挂起审批", async () => {
+    prismaStub.toolPermissions = [];
+    registerTools([fakeWrite]);
+    const ws = mkdtempSync(path.join(os.tmpdir(), "p4-fresh-"));
+    const { model } = scriptedModel([
+      {
+        steps: [
+          {
+            kind: "tool",
+            toolCallId: "t1",
+            toolName: "test_write",
+            input: { path: "fresh.txt", content: "hi" },
+          },
+        ],
+      },
+      { steps: [{ kind: "text", delta: "完成" }] },
+    ]);
+    mockFactory.current = () => model;
+    const service = new ChatService(sessionsStub(ws));
+    const chunks: ChatStreamChunk[] = [];
     const pending = service.send(
       { sessionId: 1, content: "hi" },
       captureSender(chunks),
     );
 
-    await vi.waitFor(() =>
-      expect(internals(service).approvals.pendingCount).toBe(1),
-    );
-    expect(hasApprovalChunk(chunks)).toBe(true);
-    expect(mcpExecuted).toEqual([]);
-
-    await internals(service).approvals.respond("t1", true);
-    await pending;
-    expect(mcpExecuted).toEqual(["hi"]);
+    try {
+      await vi.waitFor(() =>
+        expect(internals(service).approvals.pendingCount).toBe(1),
+      );
+      expect(hasApprovalChunk(chunks)).toBe(true);
+      await internals(service).approvals.respond("t1", false);
+      await pending;
+    } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
   });
 });
 

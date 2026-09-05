@@ -173,7 +173,9 @@ export default function MessageList({
                   {showBanner && workspaceId !== null && (
                     <ApprovalBanner
                       toolCallId={toolCallId}
+                      toolName={tool.toolName}
                       argSummary={argSummary}
+                      workspaceId={workspaceId ?? null}
                       onDecided={noopOnDecided}
                     />
                   )}

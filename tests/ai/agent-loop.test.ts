@@ -169,10 +169,12 @@ const makeWriteTool = (
 const makeAgent = (
   approvals: ApprovalCoordinator,
   fullAccess = false,
+  allowedTools: string[] = [],
 ): AgentStreamOptions => ({
   sessionId: 1,
   workspacePath: "/tmp/ws",
   fullAccess: () => fullAccess,
+  isToolAllowed: async (toolName: string) => allowedTools.includes(toolName),
   requestApproval: (toolCallId, argSummary) =>
     approvals.request(toolCallId, argSummary),
 });

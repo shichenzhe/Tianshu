@@ -67,7 +67,8 @@
     "outputTruncated": "输出过长，仅显示前 {{count}} 行",
     "approve": "允许",
     "deny": "拒绝",
-    "argSummaryFallback": "该工具请求修改工作空间文件"
+    "argSummaryFallback": "该工具请求修改工作空间文件",
+    "approveRemember": "允许并记住"
   },
   "permission": {
     "default": "默认权限",

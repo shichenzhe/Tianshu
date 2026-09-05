@@ -67,7 +67,8 @@
     "outputTruncated": "Output too long, showing first {{count}} lines",
     "approve": "Allow",
     "deny": "Deny",
-    "argSummaryFallback": "This tool requests to modify workspace files"
+    "argSummaryFallback": "This tool requests to modify workspace files",
+    "approveRemember": "Allow & Remember"
   },
   "permission": {
     "default": "Default Access",

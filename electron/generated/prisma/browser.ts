@@ -67,3 +67,8 @@ export type message = Prisma.messageModel
  * 
  */
 export type mcpServer = Prisma.mcpServerModel
+/**
+ * Model toolPermission
+ * 
+ */
+export type toolPermission = Prisma.toolPermissionModel

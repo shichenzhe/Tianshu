@@ -60,7 +60,8 @@ export const ModelName = {
   workspace: 'workspace',
   session: 'session',
   message: 'message',
-  mcpServer: 'mcpServer'
+  mcpServer: 'mcpServer',
+  toolPermission: 'toolPermission'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -212,6 +213,16 @@ export const McpServerScalarFieldEnum = {
 } as const
 
 export type McpServerScalarFieldEnum = (typeof McpServerScalarFieldEnum)[keyof typeof McpServerScalarFieldEnum]
+
+
+export const ToolPermissionScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  toolName: 'toolName',
+  createdAt: 'createdAt'
+} as const
+
+export type ToolPermissionScalarFieldEnum = (typeof ToolPermissionScalarFieldEnum)[keyof typeof ToolPermissionScalarFieldEnum]
 
 
 export const SortOrder = {

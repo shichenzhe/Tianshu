@@ -217,10 +217,12 @@ const sessionsStub = (directoryPath: string | null): SessionRepository =>
 const makeAgent = (
   approvals: ApprovalCoordinator,
   fullAccess = false,
+  allowedTools: string[] = [],
 ): AgentStreamOptions => ({
   sessionId: 1,
   workspacePath: "/tmp/ws",
   fullAccess: () => fullAccess,
+  isToolAllowed: async (toolName: string) => allowedTools.includes(toolName),
   requestApproval: (toolCallId, argSummary) =>
     approvals.request(toolCallId, argSummary),
 });
@@ -272,7 +274,7 @@ describe("ToolSet 组装（send 级集成）", () => {
 });
 
 describe("MCP 审批与 jsonSchema 适配（runChatStream 级）", () => {
-  it("MCP 写工具不受完全访问豁免：full 下仍挂起审批，批准后才执行（R7）", async () => {
+  it("完全访问豁免 MCP 写工具（P4 反馈 2.1 推翻 R7）：直执行不挂审批", async () => {
     const approvals = new ApprovalCoordinator();
     const executed: string[] = [];
     const mcpPublish: ToolDefinition = {
@@ -304,7 +306,7 @@ describe("MCP 审批与 jsonSchema 适配（runChatStream 级）", () => {
     ]);
     const chunks: ChatStreamChunk[] = [];
 
-    const pending = runChatStream({
+    const result = await runChatStream({
       model,
       history: userHistory,
       params: {},
@@ -313,19 +315,11 @@ describe("MCP 审批与 jsonSchema 适配（runChatStream 级）", () => {
       onChunk: (chunk) => chunks.push(chunk),
     });
 
-    // 关键断言：fullAccess=true 仍走 awaiting-approval，且执行先于决议挂起
-    await vi.waitFor(() => expect(approvals.pendingCount).toBe(1));
-    expect(chunks).toContainEqual(
-      expect.objectContaining({
-        type: "approval-request",
-        toolName: "mcp__srv__publish",
-      }),
+    // 新语义：full 下 MCP 直执行——无挂起、无审批 chunk、工具已跑
+    expect(approvals.pendingCount).toBe(0);
+    expect(chunks).not.toContainEqual(
+      expect.objectContaining({ type: "approval-request" }),
     );
-    expect(executed).toEqual([]);
-
-    await approvals.respond("t1", true);
-    const result = await pending;
-
     expect(executed).toEqual(["hi"]);
     expect(result.blocks[0]).toMatchObject({
       type: "tool_call",

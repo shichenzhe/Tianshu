@@ -122,3 +122,12 @@ model mcpServer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model toolPermission {
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
+  toolName    String
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+}

@@ -75,9 +75,14 @@ export interface AgentStreamOptions {
   workspacePath?: string;
   /**
    * 完全访问实时判定（P3 spec §2）：每次 write 工具判定与执行前查询，
-   * 撤回立即生效；mcp__ 写工具不受其豁免（R7）
+   * 撤回立即生效；P4 反馈 2.1：完全访问同时豁免 MCP 写工具
    */
   fullAccess: () => boolean;
+  /**
+   * 工作空间级工具记忆（P4 反馈 2，参照 Claude Code allowed-tools）：
+   * 命中 toolPermission 表 → 跳过审批直执行；每次 write 判定前查询
+   */
+  isToolAllowed: (toolName: string) => Promise<boolean>;
   /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
 }
@@ -269,9 +274,9 @@ async function awaitApproval(
 
 /**
  * 工具调用全流程（包装注册表工具的 execute）：
- * write 审批两级判定（P3 spec R2/R7）——mcp__ 写类恒审批（完全访问不豁免）；
- * 其余 write（文件/命令）完全访问下直执行、默认态挂起审批；
- * 拒绝以文案回喂（循环继续）；中止竞速防流悬挂
+ * write 审批判定（P4 反馈）——完全访问直执行（含 MCP）；
+ * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行；
+ * 默认态且未记忆 → 挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
  */
 async function runToolCall(
   def: ToolDefinition,
@@ -284,7 +289,8 @@ async function runToolCall(
 ): Promise<string> {
   if (
     def.kind === "write" &&
-    (def.name.startsWith("mcp__") || !agent.fullAccess())
+    !agent.fullAccess() &&
+    !(await agent.isToolAllowed(def.name))
   ) {
     const decision = await awaitApproval(
       def,
@@ -645,6 +651,37 @@ export default class ChatService {
       (_, sessionId: number, mode: "default" | "full") =>
         this.permissions.set(sessionId, mode),
     );
+    // P4 工作空间级工具记忆（参照 Claude Code allowed-tools）：
+    // 「允许并记住」写表 → 该工具在本工作空间后续免审
+    ipcMain.handle(
+      "permission:rememberTool",
+      async (_, workspaceId: number, toolName: string): Promise<void> => {
+        await prisma.toolPermission.upsert({
+          where: { workspaceId_toolName: { workspaceId, toolName } },
+          update: {},
+          create: { workspaceId, toolName },
+        });
+      },
+    );
+    ipcMain.handle(
+      "permission:listAllowedTools",
+      (_, workspaceId: number): Promise<string[]> =>
+        prisma.toolPermission
+          .findMany({
+            where: { workspaceId },
+            orderBy: { createdAt: "desc" },
+            select: { toolName: true },
+          })
+          .then((rows) => rows.map((row) => row.toolName)),
+    );
+    ipcMain.handle(
+      "permission:forgetTool",
+      async (_, workspaceId: number, toolName: string): Promise<void> => {
+        await prisma.toolPermission.deleteMany({
+          where: { workspaceId, toolName },
+        });
+      },
+    );
     // P1 工作空间目录绑定：目录选择弹窗在主进程（dialog 属 GUI，repo 不引 electron）。
     // 用户取消返回 null，渲染层静默处理；存入前归一化（resolve + 去尾分隔符）
     ipcMain.handle(
@@ -890,7 +927,8 @@ export default class ChatService {
    * agent 上下文装配（P2）：所有会话都具备——read_skill 与 mcp__ 工具不依赖
    * 工作空间（spec 决策 #3 常驻注入），mcp__ 写类审批也始终可用（决策 #1）。
    * workspacePath 仅在绑定目录后有值；fullAccess 实时查 PermissionStore
-   * （P3 两级审批：workspace.writeApprovedAt 读取路径已废弃，spec R2）
+   * （P3 两级审批：workspace.writeApprovedAt 读取路径已废弃，spec R2）。
+   * P4 反馈 2：isToolAllowed 查 toolPermission 表（工作空间级 allowed-tools）
    */
   private async resolveAgentOptions(
     session: { workspaceId: number },
@@ -900,12 +938,23 @@ export default class ChatService {
       ? await this.sessions.getWorkspace(session.workspaceId)
       : null;
     const directoryPath = workspace?.directoryPath?.trim() || null;
+    const workspaceId = workspace?.id ?? null;
     return {
       sessionId,
       workspacePath: directoryPath
         ? normalizeWorkspacePath(directoryPath)
         : undefined,
       fullAccess: () => this.permissions.get(sessionId) === "full",
+      isToolAllowed: async (toolName: string) => {
+        if (workspaceId === null) {
+          return false;
+        }
+        const row = await prisma.toolPermission.findUnique({
+          where: { workspaceId_toolName: { workspaceId, toolName } },
+          select: { id: true },
+        });
+        return row !== null;
+      },
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
     };

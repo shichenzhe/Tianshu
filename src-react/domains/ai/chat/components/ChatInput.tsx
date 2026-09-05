@@ -182,20 +182,23 @@ export default function ChatInput({
     });
   }, []);
 
-  /** 成功后才清空输入与 chips；失败（reject）保留可重试 */
-  const submit = useCallback(async () => {
+  /**
+   * 乐观清空：发送即清输入与 chips（Claude Code 同款行为）。
+   * onSend 在整个流结束后才 resolve（chat:send invoke 的既有语义），
+   * 若挂 await 后清空会导致生成期间输入一直残留。
+   * 早期失败（会话不存在等）由 onSend 链路 toast + 消息流错误块兜底
+   */
+  const submit = useCallback(() => {
     const trimmed = content.trim();
     if (!trimmed || !hasModel || sending) {
       return;
     }
-    try {
-      await onSend(trimmed, pendingFiles);
-      setContent("");
-      setPendingFiles([]);
-      setMention(null);
-    } catch {
-      /* 失败保留输入与 chips；错误提示由 onSend 链路（toast+rethrow）负责 */
-    }
+    setContent("");
+    setPendingFiles([]);
+    setMention(null);
+    void onSend(trimmed, pendingFiles).catch(() => {
+      /* 错误提示由 onSend 链路（toast+rethrow）与持久化错误块负责 */
+    });
   }, [content, hasModel, sending, pendingFiles, onSend]);
 
   const removeFile = useCallback((path: string) => {
@@ -377,28 +380,7 @@ export default function ChatInput({
           )}
         </div>
       )}
-      {/* 上行：＋扩展菜单 + 权限胶囊 + 模式徽标（非默认模式时） */}
-      <div className="flex items-center gap-2">
-        <PlusMenu
-          sessionId={sessionId}
-          currentMode={currentMode}
-          currentAssistantId={currentAssistantId}
-          onPickFiles={handlePickFiles}
-          onOpenSkills={onOpenSkills}
-          onOpenMcp={onOpenMcp}
-        />
-        <PermissionCapsule
-          sessionId={sessionId}
-          accessMode={accessMode}
-          onChange={onAccessModeChange}
-        />
-        {currentMode !== "agent" && (
-          <span className="text-xs text-muted-foreground">
-            {currentMode === "ask" ? "ASK" : "PLAN"}
-          </span>
-        )}
-      </div>
-      {/* 中行：输入区（field-sizing 自适应，封顶 10 行左右） */}
+      {/* 输入区（field-sizing 自适应，封顶 10 行左右） */}
       <textarea
         ref={textareaRef}
         value={content}
@@ -426,27 +408,49 @@ export default function ChatInput({
           ))}
         </div>
       )}
-      {/* 下行右：模型 + 发送/停止 */}
-      <div className="flex items-center justify-end gap-2 pt-2">
-        <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
-        {sending ? (
-          <Button
-            variant="outline"
-            onClick={onStop}
-            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-          >
-            <Square className="mr-1 h-4 w-4" />
-            {t("chat:input.stop")}
-          </Button>
-        ) : (
-          <Button
-            onClick={() => void submit()}
-            disabled={!hasModel || content.trim() === ""}
-          >
-            <Send className="mr-1 h-4 w-4" />
-            {t("chat:input.send")}
-          </Button>
-        )}
+      {/* 下行：左 ＋菜单 + 权限胶囊 + 模式徽标，右 模型 + 发送/停止 */}
+      <div className="flex items-center pt-2">
+        <div className="flex items-center gap-2">
+          <PlusMenu
+            sessionId={sessionId}
+            currentMode={currentMode}
+            currentAssistantId={currentAssistantId}
+            onPickFiles={handlePickFiles}
+            onOpenSkills={onOpenSkills}
+            onOpenMcp={onOpenMcp}
+          />
+          <PermissionCapsule
+            sessionId={sessionId}
+            accessMode={accessMode}
+            onChange={onAccessModeChange}
+          />
+          {currentMode !== "agent" && (
+            <span className="text-xs text-muted-foreground">
+              {currentMode === "ask" ? "ASK" : "PLAN"}
+            </span>
+          )}
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
+          {sending ? (
+            <Button
+              variant="outline"
+              onClick={onStop}
+              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            >
+              <Square className="mr-1 h-4 w-4" />
+              {t("chat:input.stop")}
+            </Button>
+          ) : (
+            <Button
+              onClick={submit}
+              disabled={!hasModel || content.trim() === ""}
+            >
+              <Send className="mr-1 h-4 w-4" />
+              {t("chat:input.send")}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

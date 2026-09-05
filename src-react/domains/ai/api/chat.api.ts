@@ -112,6 +112,27 @@ export default class ChatApi {
   ): Promise<void> {
     return invoke<void>("permission:set", sessionId, mode);
   }
+
+  /** 工作空间级工具记忆（P4，参照 Claude Code allowed-tools）：记住后免审 */
+  static async rememberTool(
+    workspaceId: number,
+    toolName: string,
+  ): Promise<void> {
+    return invoke<void>("permission:rememberTool", workspaceId, toolName);
+  }
+
+  /** 已记忆工具清单（工作空间级） */
+  static async listAllowedTools(workspaceId: number): Promise<string[]> {
+    return invoke<string[]>("permission:listAllowedTools", workspaceId);
+  }
+
+  /** 撤销某工具的工作空间记忆 */
+  static async forgetTool(
+    workspaceId: number,
+    toolName: string,
+  ): Promise<void> {
+    return invoke<void>("permission:forgetTool", workspaceId, toolName);
+  }
 }
 
 /**

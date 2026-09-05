@@ -406,7 +406,8 @@ export const ModelName = {
   workspace: 'workspace',
   session: 'session',
   message: 'message',
-  mcpServer: 'mcpServer'
+  mcpServer: 'mcpServer',
+  toolPermission: 'toolPermission'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -422,7 +423,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1166,6 +1167,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    toolPermission: {
+      payload: Prisma.$toolPermissionPayload<ExtArgs>
+      fields: Prisma.toolPermissionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.toolPermissionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.toolPermissionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        findFirst: {
+          args: Prisma.toolPermissionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.toolPermissionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        findMany: {
+          args: Prisma.toolPermissionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>[]
+        }
+        create: {
+          args: Prisma.toolPermissionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        createMany: {
+          args: Prisma.toolPermissionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.toolPermissionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>[]
+        }
+        delete: {
+          args: Prisma.toolPermissionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        update: {
+          args: Prisma.toolPermissionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        deleteMany: {
+          args: Prisma.toolPermissionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.toolPermissionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.toolPermissionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>[]
+        }
+        upsert: {
+          args: Prisma.toolPermissionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$toolPermissionPayload>
+        }
+        aggregate: {
+          args: Prisma.ToolPermissionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateToolPermission>
+        }
+        groupBy: {
+          args: Prisma.toolPermissionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ToolPermissionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.toolPermissionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ToolPermissionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1338,6 +1413,16 @@ export const McpServerScalarFieldEnum = {
 } as const
 
 export type McpServerScalarFieldEnum = (typeof McpServerScalarFieldEnum)[keyof typeof McpServerScalarFieldEnum]
+
+
+export const ToolPermissionScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  toolName: 'toolName',
+  createdAt: 'createdAt'
+} as const
+
+export type ToolPermissionScalarFieldEnum = (typeof ToolPermissionScalarFieldEnum)[keyof typeof ToolPermissionScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1557,6 +1642,7 @@ export type GlobalOmitConfig = {
   session?: Prisma.sessionOmit
   message?: Prisma.messageOmit
   mcpServer?: Prisma.mcpServerOmit
+  toolPermission?: Prisma.toolPermissionOmit
 }
 
 /* Types for Logging */

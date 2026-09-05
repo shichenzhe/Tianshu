@@ -171,7 +171,6 @@ const makeAgent = (
   fullAccess = false,
 ): AgentStreamOptions => ({
   sessionId: 1,
-  sessionWorkspaceId: 5,
   workspacePath: "/tmp/ws",
   fullAccess: () => fullAccess,
   requestApproval: (toolCallId, argSummary) =>

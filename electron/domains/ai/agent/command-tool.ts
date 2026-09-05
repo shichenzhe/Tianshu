@@ -23,18 +23,23 @@ const OUTPUT_LIMIT = 8192;
 
 /**
  * 绝对路径词元：`/` 开头（可带引号/反斜杠转义）、`~`、`$HOME`、`${HOME}` 前缀——
- * shell 展开后均可能指向工作空间外，统一视为界外目标（fail-closed）
+ * shell 展开后均可能指向工作空间外，统一视为界外目标（fail-closed）。
+ * 命令替换混淆（$(pwd) 等）是静态正则的固有极限，由审批层兜底
  */
 const ABSOLUTE_PATH_TOKEN = /["']?(?:\\?\/|\$\{?HOME\}?|~)[^\s|;&]*/.source;
 
-/** 递归/强制旗标：短旗标（-rf）或长旗标（--recursive/--force） */
-const RF_FLAGS = /(?:-\w*[rf]\w*|--recursive|--force)/.source;
+/** 递归/强制旗标：短旗标（-rf/-R）或长旗标（--recursive/--force） */
+const RF_FLAGS = /(?:-\w*[rfRF]\w*|--recursive|--force)/.source;
+
+/** rm 前导旗标（含 --no-preserve-root 等带连字符长旗标） */
+const RM_LEADING_FLAGS = /(?:-\w+\s+|--[\w-]+\s+)*/.source;
 
 /** rm 带递归/强制旗标且目标含绝对路径词元（含引号/波浪号/环境变量形态） */
 const RM_ABSOLUTE_TARGET = new RegExp(
-  /\brm\s+(?:-\w+\s+|--\w+\s+)*/.source +
+  /\brm\s+/.source +
+    RM_LEADING_FLAGS +
     RF_FLAGS +
-    /(?:\s+(?:-\w+|--\w+))*(?:\s+[^\s|;&]+)*\s+/.source +
+    /(?:\s+(?:-\w+|--[\w-]+))*(?:\s+[^\s|;&]+)*\s+/.source +
     ABSOLUTE_PATH_TOKEN,
 );
 /** mkfs 系列格式化（任意形态） */
@@ -45,8 +50,7 @@ const DD_TO_DEVICE = /\bdd\b[^;|&]*\bof=\/dev\//;
 const FORK_BOMB = /:\(\)\{/;
 /** chmod 递归改权限到绝对路径（旗标与词元类与 rm 对齐） */
 const CHMOD_ROOT = new RegExp(
-  /\bchmod\s+(?:(?:-\w+|--\w+|--recursive)\s+)*\d{3,4}\s+/.source +
-    ABSOLUTE_PATH_TOKEN,
+  /\bchmod\s+(?:(?:-\w+|--[\w-]+)\s+)*\d{3,4}\s+/.source + ABSOLUTE_PATH_TOKEN,
 );
 
 /** 高危破坏性命令拦截：命中即拒（与权限无关常开，spec §3） */

@@ -65,6 +65,10 @@ const DANGEROUS: string[] = [
   "rm --recursive /",
   'rm -rf "${HOME}/x"',
   "chmod --recursive 777 /",
+  // 同族补刀：大写 R 与前置带连字符长旗标
+  "rm -R /",
+  "rm -Rf /Users",
+  "rm --no-preserve-root -rf /",
   "mkfs.ext4 /dev/sda1",
   "mkfs /anything",
   "dd if=x of=/dev/disk0",

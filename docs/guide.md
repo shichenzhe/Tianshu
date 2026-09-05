@@ -91,9 +91,9 @@ P1 在对话之上叠加了受限的文件工具能力（`electron/domains/ai/ag
 
 - **进入条件**：会话绑定工作空间目录后，AI 自动获得 4 个文件工具——`read_file`/`write_file`/
   `list_dir`/`search_files`，路径全部限定在该目录内；未绑定即为纯对话，行为与 P0 一致。
-- **审批机制**：读类工具免审直接执行；写类（`write_file`）默认每次审批，消息流内出现内联按钮
-  （允许 / 拒绝 / 允许并记住）。「允许并记住」= 对该工作空间的持久授权，可随时在会话侧边栏的
-  工作空间菜单撤销，撤销即恢复逐次审批。拒绝不终止循环，会作为结果回喂给模型自行调整。
+- **审批机制**：读类工具免审直接执行；写类默认每次审批，消息流内出现内联按钮（允许 / 拒绝；
+  P1 时期的跨会话「允许并记住」授权已被 P3 的两级权限取代，见下文 P3 段）。拒绝不终止循环，
+  会作为结果回喂给模型自行调整。
 - **数据库 v2**：`DATABASE_VERSION` 升为 2，`electron/infrastructure/script/v2/upgrade-table.sql`
   给 `workspace` 表补 `writeApprovedAt` 列（写入授权的时间戳）；旧库首次启动自动升级，脚本带
   `--/ignore` 幂等，无感。
@@ -107,7 +107,7 @@ P2 在 Agent 模式之上叠加外部工具生态：MCP 服务接入（`agent/mc
   （command/args/env）与 streamable HTTP（url + headers，可配 Bearer 认证）；应用启动时自动
   连接全部启用项（失败标记 error 状态，不阻塞启动），页面提供连接状态徽标与启停/重连。
   服务的工具以 `mcp__服务名__工具名` 进入模型可用集；标注 readOnlyHint 的只读工具免审直接
-  执行，其余每次审批——**不适用工作空间写授权**（MCP 的审批卡不出现「允许并记住」）。
+  执行，其余每次审批——**完全访问不豁免 MCP 审批**（权限放开仅限文件与终端工具）。
 - **技能（skills）**：用户级放 `<userData>/skills/<名称>/SKILL.md`（frontmatter 需 name 与
   description 两字段），始终加载；工作空间级放 `<工作空间目录>/.mirror/skills/`，会话绑定
   目录后加载，同名时用户级优先。全部技能的清单（name+description）注入 system prompt，
@@ -115,6 +115,33 @@ P2 在 Agent 模式之上叠加外部工具生态：MCP 服务接入（`agent/mc
   配置，放目录即生效（每次发消息时扫描，免重启增删）。
 - **依赖**：新增运行时依赖 `@modelcontextprotocol/sdk`（官方 MCP SDK），移除 AI 模块时随
   package.json 的 dependencies 一并删除。
+
+## AI 模块 P3 能力（输入框与权限）
+
+P3 重构输入区交互并引入两级权限、终端工具与会话模式（`agent/permission-mode.ts` +
+`agent/command-tool.ts`，渲染层新增 PlusMenu / PermissionCapsule / FullAccessModal 组件；
+原输入行的 AssistantPicker 已移除，并入「＋→专家」子菜单），要点：
+
+- **输入框卡片化**：输入区整体为一张圆角卡片——左上「＋」按钮唤起扩展菜单（添加文件 / 模式 /
+  专家 / 技能 / 连接器五项），旁边是权限胶囊，右下为模型选择器与发送按钮。**@ 文件引用**：
+  「＋→添加文件」经系统对话框多选文本文件（≤512KB）后以 chips 暂存在卡片上，发送时文件内容
+  以 `[引用文件 <路径>]` 文本块注入消息；二进制/超限文件 toast 提示并丢弃，不阻塞发送。
+- **两级权限**：胶囊默认为「默认权限」——文件写与终端命令在沙箱约束内执行、超出范围逐次审批；
+  切换「完全访问」须经过全屏 Modal 风险确认（权限清单 + 免责勾选必选）——之后文件操作与终端
+  命令直接执行，文件路径与命令工作目录不再限定于工作空间内（MCP 审批不豁免）。完全访问是
+  **会话级内存态、不持久**：重启应用或新开会话自动回默认，会话中随时可关、立即生效。该模型
+  取代 P1 的工作空间写授权：`workspace:approveWrite`/`revokeWrite` 通道与「允许并记住」按钮
+  已移除（`workspace.writeApprovedAt` 列保留不读，历史兼容）。相关 IPC：`permission:get`/
+  `permission:set`（会话权限读写）、`file:pickAndRead`（选文件读内容）。
+- **终端工具 `run_command`**：默认权限下执行前逐次审批、工作目录强制为工作空间根；完全访问下
+  直接执行、可用任意 cwd。**高危命令硬拦截常开**（与权限级别无关）：`rm -rf` 根目录、`mkfs`、
+  `dd of=/dev/*`、fork 炸弹、`chmod -R 777 /` 等破坏性命令直接拒绝不执行。命令 60s 超时，
+  stdout+stderr 合并截断 8KB 后回喂。
+- **会话模式**：「＋→模式」三选一，会话级持久（`session.mode` 列，重启保留）——默认 Agent
+  （全能力）/ 仅问答 ASK（纯对话：不注入任何工具与技能清单）/ 计划 PLAN（system 注入计划
+  指令，模型先输出完整计划、经确认前不调用工具）。IPC：`session:setMode`。
+- **数据库 v3**：`DATABASE_VERSION` 升为 3，`electron/infrastructure/script/v3/upgrade-table.sql`
+  给 `session` 表补 `mode` 列（幂等）；旧库首次启动自动升级，无感。
 
 ## 移除 AI 模块
 
@@ -142,9 +169,9 @@ AI 是可选模块，分四个子域：`provider/`（服务商与模型管理）
    `session`、`message`、`mcpServer`，然后执行 `npx prisma generate` 重新生成客户端。
 8. `electron/infrastructure/script/v1/upgrade-table.sql`：删除从「新建服务商表（AI 模块）」到
    文件末尾的建表段。只影响新数据库；老库里多出的表不读写、不影响运行。同时删除
-   `electron/infrastructure/script/v2/` 整个目录（P1 工作空间授权列），并把 `electron/Constants.ts`
-   的 `DATABASE_VERSION` 回到 `1`。
-9. 删除 `tests/ai/`（18 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
+   `electron/infrastructure/script/v2/`（P1 工作空间授权列）与 `v3/`（P3 会话模式列）两个
+   目录，并把 `electron/Constants.ts` 的 `DATABASE_VERSION` 回到 `1`。
+9. 删除 `tests/ai/`（22 个测试文件全部属于 AI 模块，`scripts/` 下的脚手架测试不受影响）。
 10. `package.json`：删除 dependencies 中的 `@modelcontextprotocol/sdk`（P2 MCP SDK，唯一新增
     运行时依赖），重新 `npm install`。
 
@@ -169,7 +196,9 @@ AI 是可选模块，分四个子域：`provider/`（服务商与模型管理）
    与 `mcp.*` 键随之不再使用，可一并删除。
 6. 同步删除 `tests/ai/` 下的 `chat.service`、`blocks`、`param-merge`、`history-truncate`、
    `stream-buffer`、`error-classify`（未按第 2 步移动时）、`agent-loop`、`approval`、
-   `file-tools`、`workspace-path-chip`、`mcp-manager`、`mcp-integration`、`skill-loader`、
-   `read-skill`、`skill-prompt` 测试，保留 `connectivity`、`provider-factory` 与 `v2-migration`。
+   `file-tools`、`workspace-path-chip`、`command-tool`、`permission-mode`、
+   `permissions-integration`、`mcp-manager`、`mcp-integration`、`skill-loader`、
+   `read-skill`、`skill-prompt` 测试，保留 `connectivity`、`provider-factory`、
+   `v2-migration` 与 `v3-migration`。
 7. 数据库（可选）：`assistant`、`workspace`、`session`、`message` 与 `mcpServer` 表不再被
    读写，可连同 schema model 与 v1 脚本对应段一并删除（记得 `npx prisma generate`）；保留不影响运行。

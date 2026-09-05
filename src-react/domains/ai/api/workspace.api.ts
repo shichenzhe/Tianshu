@@ -45,14 +45,6 @@ export class WorkspaceApi {
     return invoke<void>("workspace:delete", id);
   }
 
-  static async approveWrite(id: number): Promise<void> {
-    return invoke<void>("workspace:approveWrite", id);
-  }
-
-  static async revokeWrite(id: number): Promise<void> {
-    return invoke<void>("workspace:revokeWrite", id);
-  }
-
   /** P1：弹系统目录选择框绑定工作空间目录；用户取消返回 null */
   static async bindDirectory(id: number): Promise<WorkspaceRecord | null> {
     return invoke<WorkspaceRecord | null>("workspace:bindDirectory", id);

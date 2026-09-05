@@ -85,6 +85,20 @@ describe("loadSkills 两级加载", () => {
     expect(skills.map((s) => s.name)).toEqual(["real"]);
   });
 
+  it("crash 残留的 .staging-* 隐藏目录跳过:同名不抢占、异名不成幽灵", () => {
+    // 同名场景:字母序 .staging-abc 先扫到,不修会赢得同名去重 → dir 指向隐藏目录
+    makeSkill(userDir, ".staging-abc", SKILL("real", "staging 残留(同名抢占)"));
+    // 异名场景:即便去重不触发,独立 staging 条目也不得被扫成幽灵技能
+    makeSkill(userDir, ".staging-xyz", SKILL("ghost", "staging 残留(幽灵)"));
+    makeSkill(userDir, "real", SKILL("real", "真实技能"));
+
+    const skills = loadSkills([{ dir: userDir, source: "user" }]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]!.name).toBe("real");
+    expect(skills[0]!.description).toBe("真实技能");
+    expect(skills[0]!.dir).toBe(path.join(userDir, "real"));
+  });
+
   it("frontmatter name 与目录名不一致时以 frontmatter 为准（含空格保留原样）", () => {
     makeSkill(userDir, "01-greet", SKILL("hello world", "目录名仅作定位"));
 

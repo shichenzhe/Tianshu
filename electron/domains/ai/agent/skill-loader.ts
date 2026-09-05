@@ -51,7 +51,8 @@ export function parseFrontmatter(raw: string): {
 
 /**
  * 按数组序扫描技能目录（用户级在前 = 优先级高）。
- * 条目 = 目录下含 SKILL.md 的子目录；name/description 缺一跳过该 skill；
+ * 条目 = 目录下含 SKILL.md 的子目录(点前缀隐藏目录跳过,如 .staging-* 残留)；
+ * name/description 缺一跳过该 skill；
  * 同名（按 frontmatter name）后者忽略；目录不存在/不可读 → 静默跳过该 dir。
  */
 export function loadSkills(
@@ -67,7 +68,10 @@ export function loadSkills(
       continue; // 目录不存在/不可读：静默跳过，不影响其余目录
     }
     for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+      // 点前缀隐藏目录(如 crash 残留的 .staging-*)不扫:防幽灵技能
+      // 进 system prompt、同名去重抢占真名目录(dirs 传入的是 skills 根
+      // 目录本身,其子条目无合法点前缀形态,过滤无副作用)
+      if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
       const entryDir = path.join(dir, entry.name);
       const bodyPath = path.join(entryDir, "SKILL.md");
       let raw: string;

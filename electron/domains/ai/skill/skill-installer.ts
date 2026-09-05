@@ -368,7 +368,14 @@ export class SkillInstaller {
         },
       };
     } finally {
-      rmSync(stagingDir, { recursive: true, force: true });
+      // 清理失败(Windows 常见 EBUSY/EPERM)静默吞:upsert 已成功时不能让
+      // 清理错误冒泡成整个安装 reject(UI 误报"安装失败");残留目录为
+      // .staging-* 点前缀,skill-loader 扫描已免疫
+      try {
+        rmSync(stagingDir, { recursive: true, force: true });
+      } catch {
+        // 吞错:残留 staging 无害(下次安装随机后缀不冲突、不被扫成技能)
+      }
     }
   }
 

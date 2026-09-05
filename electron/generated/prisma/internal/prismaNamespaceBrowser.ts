@@ -176,6 +176,8 @@ export const SessionScalarFieldEnum = {
   currentModelId: 'currentModelId',
   title: 'title',
   mode: 'mode',
+  pinnedAt: 'pinnedAt',
+  archivedAt: 'archivedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   lastMessageAt: 'lastMessageAt'

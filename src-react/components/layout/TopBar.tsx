@@ -14,9 +14,11 @@ type AppRegionStyle = CSSProperties & { WebkitAppRegion?: string };
 interface TopBarProps {
   /** 左侧插槽（AI 路由下注入折叠/搜索/筛选按钮） */
   leftSlot?: ReactNode;
+  /** 右侧组前置插槽（AI 路由下注入会话内搜索，渲染在主题切换左边） */
+  rightLeadingSlot?: ReactNode;
 }
 
-export default function TopBar({ leftSlot }: TopBarProps) {
+export default function TopBar({ leftSlot, rightLeadingSlot }: TopBarProps) {
   const isMac = window.platform === "darwin";
   return (
     <div
@@ -45,6 +47,7 @@ export default function TopBar({ leftSlot }: TopBarProps) {
         style={{ WebkitAppRegion: "no-drag" } as AppRegionStyle}
       >
         <div className="flex items-center gap-1 mr-2">
+          {rightLeadingSlot}
           <ThemeSelector size="sm" />
           <LanguageSelector size="sm" />
           <UserMenu />

@@ -18,8 +18,6 @@ import {
   FolderInput,
   ListChecks,
   MoreVertical,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Pin,
   PinOff,
@@ -84,12 +82,11 @@ type WorkspaceDialogState =
   | { mode: "rename"; name: string; workspaceId: number };
 
 export default function AiSidebar() {
-  const { t } = useTranslation(["chat", "common", "layout"]);
+  const { t } = useTranslation(["chat", "common"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const collapsed = useAiUiStore((s) => s.sidebarCollapsed);
-  const toggleSidebar = useAiUiStore((s) => s.toggleSidebar);
   const timeFilter = useAiUiStore((s) => s.timeFilter);
   const isMac = window.platform === "darwin";
 
@@ -322,7 +319,7 @@ export default function AiSidebar() {
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border/50 bg-card transition-[width] duration-200",
+        "flex h-full shrink-0 flex-col border-r border-border/50 bg-muted/40 transition-[width] duration-200",
         collapsed ? "w-12" : "w-64",
       )}
     >
@@ -367,80 +364,68 @@ export default function AiSidebar() {
         ))}
       </div>
 
-      {/* 空间分组任务树 */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-2">
-        <button
-          type="button"
-          className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-          onClick={() => setSpacesOpen((open) => !open)}
-        >
-          {spacesOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          {t("chat:sidebar.spaces")} ({workspaces.length})
-        </button>
-        {spacesOpen &&
-          workspaces.map((workspace) => (
-            <WorkspaceGroup
-              key={workspace.id}
-              workspace={workspace}
-              collapsed={collapsed}
-              collapsedGroup={collapsedSpaces[workspace.id] ?? false}
-              sessions={sessions.filter((s) => s.workspaceId === workspace.id)}
-              selectedSessionId={selectedSessionId}
-              onToggleGroup={() =>
-                setCollapsedSpaces((prev) => ({
-                  ...prev,
-                  [workspace.id]: !(prev[workspace.id] ?? false),
-                }))
-              }
-              onSelect={selectSession}
-              onCreateTask={() => handleCreateSession(workspace.id)}
-              onCreateWorkspace={() =>
-                setWorkspaceDialog({
-                  mode: "create",
-                  name: t("chat:defaultWorkspaceName"),
-                })
-              }
-              onManageRename={() =>
-                setWorkspaceDialog({
-                  mode: "rename",
-                  name: workspace.name,
-                  workspaceId: workspace.id,
-                })
-              }
-              onManageDelete={() => setDeletingWorkspace(workspace)}
-              onManageBind={() => handleBindDirectory(workspace.id)}
-              onManageUnbind={() => setUnbindingWorkspace(workspace)}
-              onSessionRename={(session) => {
-                setSessionTitle(session.title);
-                setRenamingSession(session);
-              }}
-              onSessionDelete={(session) => setDeletingSession(session)}
-              onSessionPin={(s) => void handlePin(s)}
-              onSessionArchive={(s) => void handleArchive(s)}
-              onOpenFolder={() => void handleOpenFolder(workspace.id)}
-            />
-          ))}
-      </div>
-
-      {/* 底部折叠按钮 */}
-      <div className="border-t border-border/50 p-2">
-        <SidebarNavButton
-          collapsed={collapsed}
-          icon={
-            collapsed ? (
-              <PanelLeftOpen size={16} />
+      {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
+      {!collapsed && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            onClick={() => setSpacesOpen((open) => !open)}
+          >
+            {spacesOpen ? (
+              <ChevronDown size={14} />
             ) : (
-              <PanelLeftClose size={16} />
-            )
-          }
-          label={
-            collapsed
-              ? t("layout:sidebar.expand")
-              : t("layout:sidebar.collapse")
-          }
-          onClick={toggleSidebar}
-        />
-      </div>
+              <ChevronRight size={14} />
+            )}
+            {t("chat:sidebar.spaces")} ({workspaces.length})
+          </button>
+          {spacesOpen &&
+            workspaces.map((workspace) => (
+              <WorkspaceGroup
+                key={workspace.id}
+                workspace={workspace}
+                collapsed={collapsed}
+                collapsedGroup={collapsedSpaces[workspace.id] ?? false}
+                sessions={sessions.filter(
+                  (s) => s.workspaceId === workspace.id,
+                )}
+                selectedSessionId={selectedSessionId}
+                onToggleGroup={() =>
+                  setCollapsedSpaces((prev) => ({
+                    ...prev,
+                    [workspace.id]: !(prev[workspace.id] ?? false),
+                  }))
+                }
+                onSelect={selectSession}
+                onCreateTask={() => handleCreateSession(workspace.id)}
+                onCreateWorkspace={() =>
+                  setWorkspaceDialog({
+                    mode: "create",
+                    name: t("chat:defaultWorkspaceName"),
+                  })
+                }
+                onManageRename={() =>
+                  setWorkspaceDialog({
+                    mode: "rename",
+                    name: workspace.name,
+                    workspaceId: workspace.id,
+                  })
+                }
+                onManageDelete={() => setDeletingWorkspace(workspace)}
+                onManageBind={() => handleBindDirectory(workspace.id)}
+                onManageUnbind={() => setUnbindingWorkspace(workspace)}
+                onSessionRename={(session) => {
+                  setSessionTitle(session.title);
+                  setRenamingSession(session);
+                }}
+                onSessionDelete={(session) => setDeletingSession(session)}
+                onSessionPin={(s) => void handlePin(s)}
+                onSessionArchive={(s) => void handleArchive(s)}
+                onOpenFolder={() => void handleOpenFolder(workspace.id)}
+              />
+            ))}
+        </div>
+      )}
 
       {/* 空间新建/重命名对话框 */}
       <Dialog

@@ -3,19 +3,24 @@
  * （text/usage）+ 错误横幅 + 重新生成按钮。user 消息右侧主色气泡，
  * assistant 消息左侧全宽；流式态由 MessageList 以伪消息 + streaming 传入
  */
-import { isValidElement, memo, useState, type ReactNode } from "react";
+import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown, { type Components } from "react-markdown";
 import { Check, Copy, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { parseBlocks } from "../model/blocks";
 import { groupBlocks } from "../lib/group-blocks";
+import {
+  countHits,
+  createHighlightContext,
+  highlightChildren,
+} from "../lib/search-highlight";
 import { detectPseudoToolCallText } from "../lib/pseudo-tool-call";
+import { useSessionSearchStore } from "../../store/session-search.store";
 import type { MessageRecord } from "../../api/session.api";
-import CodeBlock from "./CodeBlock";
 import ThinkingPanel from "./ThinkingPanel";
+import MarkdownView from "./MarkdownView";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
 
 interface MessageItemProps {
@@ -26,65 +31,9 @@ interface MessageItemProps {
   isLastAssistant?: boolean;
   /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
   onRegenerate?: () => void;
+  /** 会话内搜索：该消息首个命中的全局序号（无命中/未搜索为 undefined） */
+  hitOffset?: number;
 }
-
-/**
- * 递归提取 React 子树中的纯文本（code 元素内容为转义后的源码文本）
- */
-function toPlainText(node: ReactNode): string {
-  if (node === null || node === undefined || typeof node === "boolean") {
-    return "";
-  }
-  if (typeof node === "string" || typeof node === "number") {
-    return String(node);
-  }
-  if (Array.isArray(node)) {
-    return node.map(toPlainText).join("");
-  }
-  if (isValidElement(node)) {
-    return toPlainText((node.props as { children?: ReactNode }).children);
-  }
-  return "";
-}
-
-/**
- * react-markdown v9+ 移除了 code 的 inline 属性，围栏代码统一在 pre 层拦截：
- * 提取源码交给 CodeBlock（shiki 高亮，自带 pre），内联代码仍走 code 组件。
- * 不配置 rehype-raw（不渲染原始 HTML，规避 XSS 注入面）。
- */
-const MARKDOWN_COMPONENTS: Components = {
-  pre: ({ children }) => {
-    const first = Array.isArray(children) ? children[0] : children;
-    if (isValidElement(first)) {
-      const { className, children: codeChildren } = first.props as {
-        className?: string;
-        children?: ReactNode;
-      };
-      const lang = /language-([\w-]+)/.exec(className ?? "")?.[1] ?? "text";
-      return (
-        <CodeBlock
-          code={toPlainText(codeChildren).replace(/\n$/, "")}
-          lang={lang}
-        />
-      );
-    }
-    return <pre>{children}</pre>;
-  },
-  code: ({ children }) => (
-    <code className="rounded bg-muted px-1 py-0.5 text-xs">{children}</code>
-  ),
-};
-
-/**
- * markdown 渲染（memo：流式增量重渲染时跳过历史消息的重解析）
- */
-const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
-  return (
-    <div className="break-words text-sm leading-relaxed">
-      <ReactMarkdown components={MARKDOWN_COMPONENTS}>{text}</ReactMarkdown>
-    </div>
-  );
-});
 
 function UsageBlockView({ input, output }: { input: number; output: number }) {
   const { t } = useTranslation(["chat"]);
@@ -101,9 +50,12 @@ function MessageItemImpl({
   streaming = false,
   isLastAssistant = false,
   onRegenerate,
+  hitOffset,
 }: MessageItemProps) {
   const { t } = useTranslation(["chat", "common"]);
   const [copied, setCopied] = useState(false);
+  const searchQuery = useSessionSearchStore((s) => s.query);
+  const searchActiveIndex = useSessionSearchStore((s) => s.activeIndex);
 
   if (message.role === "user") {
     const text = parseBlocks(message.blocks)
@@ -113,8 +65,17 @@ function MessageItemImpl({
 
     return (
       <div className="flex justify-end">
-        <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-lg bg-primary px-3 py-2 text-sm text-primary-foreground">
-          {text}
+        <div className="max-w-[75%] whitespace-pre-wrap break-words rounded-lg bg-secondary px-3 py-2 text-sm text-foreground">
+          {searchQuery && hitOffset !== undefined
+            ? highlightChildren(
+                text,
+                createHighlightContext(
+                  searchQuery,
+                  searchActiveIndex,
+                  hitOffset,
+                ),
+              )
+            : text}
         </div>
       </div>
     );
@@ -123,6 +84,9 @@ function MessageItemImpl({
   const blocks = parseBlocks(message.blocks);
   const grouped = groupBlocks(blocks);
   const showRegenerate = isLastAssistant && Boolean(onRegenerate);
+
+  /** 正文块逐块累计块前命中数：伪调用块计数但不渲染（与 MessageList 统计一致） */
+  let hitsBeforeBlock = 0;
 
   const handleCopy = async () => {
     const text = grouped.texts.map((block) => block.text).join("\n");
@@ -157,14 +121,22 @@ function MessageItemImpl({
           defaultOpen={streaming}
         />
       )}
-      {grouped.texts.map((block, index) =>
+      {grouped.texts.map((block, index) => {
+        // 块级命中序号 = 消息序号 + 块前累计（伪调用块也计数，与列表统计一致）
+        const blockOffset =
+          hitOffset !== undefined ? hitOffset + hitsBeforeBlock : undefined;
+        hitsBeforeBlock += countHits(block.text, searchQuery);
         // 伪工具调用碎片（本地服务未实现结构化 tool_calls）：警示折叠替代正文渲染
-        detectPseudoToolCallText(block.text) ? (
+        return detectPseudoToolCallText(block.text) ? (
           <PseudoToolCallNotice key={`text-${index}`} rawText={block.text} />
         ) : (
-          <MarkdownBlock key={`text-${index}`} text={block.text} />
-        ),
-      )}
+          <MarkdownView
+            key={`text-${index}`}
+            text={block.text}
+            hitOffset={searchQuery ? blockOffset : undefined}
+          />
+        );
+      })}
       {grouped.usage && (
         <UsageBlockView
           input={grouped.usage.input}

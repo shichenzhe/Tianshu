@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useUserStore } from "@/domains/user/store/user.store";
 import { UserApi } from "@/domains/user/api/user.api";
 import AiTopbarActions from "@/domains/ai/layout/components/AiTopbarActions";
+import SessionSearchBox from "@/domains/ai/layout/components/SessionSearchBox";
 import TopBar from "./TopBar";
 
 export default function MainLayout() {
@@ -57,7 +58,10 @@ export default function MainLayout() {
   return (
     <div className="app-container">
       {shouldShowNav && (
-        <TopBar leftSlot={isAiRoute ? <AiTopbarActions /> : undefined} />
+        <TopBar
+          leftSlot={isAiRoute ? <AiTopbarActions /> : undefined}
+          rightLeadingSlot={isAiRoute ? <SessionSearchBox /> : undefined}
+        />
       )}
 
       <div

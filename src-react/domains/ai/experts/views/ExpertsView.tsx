@@ -1,6 +1,6 @@
 /**
  * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=本地技能目录 / 连接器=MCP）
- * 专家与连接器 Tab 复用既有设置视图（自带 PageTitle 作为区块标题）
+ * 专家与连接器 Tab 复用既有设置视图（区块标题由本页 Tab 承担，子视图不带头部）
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

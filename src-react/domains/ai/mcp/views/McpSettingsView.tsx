@@ -8,7 +8,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Edit, Plus, RefreshCw, Trash2 } from "lucide-react";
 
-import PageTitle from "@/components/layout/PageTitle";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -138,11 +137,6 @@ export default function McpSettingsView() {
 
   return (
     <div className="p-6">
-      <PageTitle title={t("ai:mcp.pageTitle")} />
-      <p className="mb-4 text-sm text-muted-foreground">
-        {t("ai:mcp.pageDesc")}
-      </p>
-
       {serversQuery.isPending ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
           {t("common:loading")}

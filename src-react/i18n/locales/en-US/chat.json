@@ -167,5 +167,10 @@
   },
   "pseudoToolCall": {
     "notice": "The model service did not return tool calls properly; raw model output is collapsed (check your inference server's tool-call support)"
+  },
+  "searchInSession": {
+    "label": "Search in conversation",
+    "placeholder": "Search this conversation...",
+    "noResults": "No matches"
   }
 }

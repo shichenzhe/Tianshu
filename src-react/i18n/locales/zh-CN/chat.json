@@ -167,5 +167,10 @@
   },
   "pseudoToolCall": {
     "notice": "当前模型服务未正确返回工具调用，模型原始输出已折叠（建议检查推理服务的工具调用支持）"
+  },
+  "searchInSession": {
+    "label": "搜索会话内容",
+    "placeholder": "搜索当前会话…",
+    "noResults": "无匹配"
   }
 }

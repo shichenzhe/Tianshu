@@ -970,6 +970,7 @@ export default class ChatService {
   /**
    * 注入工具集（P2 spec 决策 #3）：read_skill 常驻（未绑定目录也注入，与
    * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 全量透传；
+   * create_skill 落盘到用户技能目录、不依赖工作空间，未绑定目录也放行（P-D）；
    * 文件四件依赖工作空间路径，仅绑定目录后注入
    */
   private collectToolDefinitions(
@@ -979,7 +980,9 @@ export default class ChatService {
     const registered = registry.getDefinitions();
     const injected = agent.workspacePath
       ? registered
-      : registered.filter((def) => def.name.startsWith("mcp__"));
+      : registered.filter(
+          (def) => def.name.startsWith("mcp__") || def.name === "create_skill",
+        );
     return [makeReadSkillTool(skills), ...injected];
   }
 

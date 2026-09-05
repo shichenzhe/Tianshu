@@ -17,6 +17,8 @@ import {
   type SkillRecordRow,
 } from "./skill-sync";
 import { SkillInstaller } from "./skill-installer";
+import { registerTools } from "../agent/tool-registry";
+import { makeCreateSkillTool } from "../agent/create-skill";
 import { ensureBuiltinSkills as ensureBuiltinSkillsImpl } from "./builtin-skills";
 import { SkillHubClient, type SkillHubListParams } from "./skillhub-client";
 import type {
@@ -44,6 +46,14 @@ export class SkillRepository {
       getVersion: (slug) =>
         this.hub.getDetail(slug).then((d) => d.latestVersion.version),
     });
+    // create_skill 工具静态注册进 P1 聚合点（chat.service 从 registry 透传），
+    // deps 在此装配（skillsRoot/prisma 仓储子集），chat.service 零侵入
+    registerTools([
+      makeCreateSkillTool({
+        skillsRoot: this.skillsRoot(),
+        prisma: this.prismaClient.skillRecord,
+      }),
+    ]);
     this.registerHandlers();
   }
 

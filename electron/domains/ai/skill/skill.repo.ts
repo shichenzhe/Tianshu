@@ -13,12 +13,15 @@ import {
   syncSkillRecords,
   type SkillRecordRow,
 } from "./skill-sync";
+import { SkillHubClient, type SkillHubListParams } from "./skillhub-client";
 import type {
   BatchUninstallResult,
   SkillRecord,
 } from "../../../../src-react/domains/ai/skills/api/skill.api";
 
 export class SkillRepository {
+  private readonly hub = new SkillHubClient();
+
   constructor(private readonly prismaClient: PrismaClient = prisma) {
     this.registerHandlers();
   }
@@ -41,6 +44,11 @@ export class SkillRepository {
     ipcMain.handle("skill:batchUninstall", (_e, p: { names: string[] }) =>
       this.batchUninstall(p.names),
     );
+    ipcMain.handle("skillhub:list", (_e, p: SkillHubListParams) =>
+      this.hub.listSkills(p ?? {}),
+    );
+    ipcMain.handle("skillhub:top", () => this.hub.listTop());
+    ipcMain.handle("skillhub:categories", () => this.hub.listCategories());
   }
 
   private skillsRoot(): string {

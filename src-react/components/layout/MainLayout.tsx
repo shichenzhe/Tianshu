@@ -10,6 +10,7 @@ import { toast } from "sonner";
 
 import { useUserStore } from "@/domains/user/store/user.store";
 import { UserApi } from "@/domains/user/api/user.api";
+import AiTopbarActions from "@/domains/ai/layout/components/AiTopbarActions";
 import TopBar from "./TopBar";
 
 export default function MainLayout() {
@@ -21,6 +22,9 @@ export default function MainLayout() {
   // 判断是否显示导航布局
   const shouldShowNav =
     location.pathname !== "/" && !location.pathname.includes("/login");
+
+  // AI 模块在顶栏左侧注入折叠/搜索/筛选按钮
+  const isAiRoute = location.pathname.startsWith("/module/ai");
 
   // 验证登录状态
   useEffect(() => {
@@ -52,7 +56,9 @@ export default function MainLayout() {
 
   return (
     <div className="app-container">
-      {shouldShowNav && <TopBar />}
+      {shouldShowNav && (
+        <TopBar leftSlot={isAiRoute ? <AiTopbarActions /> : undefined} />
+      )}
 
       <div
         className="main-content bg-muted/40"

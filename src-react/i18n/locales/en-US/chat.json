@@ -21,6 +21,19 @@
     "newTaskInWorkspace": "New task in this space",
     "emptyTask": "No tasks yet"
   },
+  "search": {
+    "placeholder": "Search tasks",
+    "recent": "Recent tasks",
+    "noResults": "No matching tasks"
+  },
+  "filter": {
+    "title": "Filter by time",
+    "all": "All time",
+    "today": "Today",
+    "week": "Last 7 days",
+    "month": "Last 30 days",
+    "reset": "Reset filters"
+  },
   "task": {
     "pin": "Pin to top",
     "unpin": "Unpin",

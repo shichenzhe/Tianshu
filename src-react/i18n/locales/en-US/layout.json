@@ -1,7 +1,8 @@
 {
   "sidebar": {
     "collapse": "Collapse",
-    "expand": "Expand"
+    "expand": "Expand",
+    "search": "Search"
   },
   "userMenu": {
     "defaultUser": "User",

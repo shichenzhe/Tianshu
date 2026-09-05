@@ -21,6 +21,19 @@
     "newTaskInWorkspace": "在此空间新建任务",
     "emptyTask": "暂无任务"
   },
+  "search": {
+    "placeholder": "搜索任务",
+    "recent": "最近任务",
+    "noResults": "没有匹配的任务"
+  },
+  "filter": {
+    "title": "筛选时间",
+    "all": "全部时间",
+    "today": "今天",
+    "week": "最近 7 天",
+    "month": "最近 30 天",
+    "reset": "重置筛选条件"
+  },
   "task": {
     "pin": "置顶",
     "unpin": "取消置顶",

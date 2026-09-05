@@ -55,7 +55,7 @@ export default function SkillDiscoverView({
       SkillHubApi.list({
         keyword: keyword || undefined,
         category: category ?? undefined,
-        pageSize: PAGE_SIZE * pages,
+        pageSize: Math.min(PAGE_SIZE * pages, 100),
         sortBy: "score",
       }),
   });
@@ -106,7 +106,13 @@ export default function SkillDiscoverView({
             align="end"
             className="rounded-lg border border-border/50 shadow-lg"
           >
-            <DropdownMenuItem onClick={() => setKeyword("")}>
+            <DropdownMenuItem
+              onClick={() => {
+                setKeyword("");
+                setKeywordInput("");
+                window.clearTimeout(searchTimerRef.current);
+              }}
+            >
               <Search className="mr-2 h-4 w-4" />
               {t("chat:skills.findSkill")}
             </DropdownMenuItem>
@@ -208,18 +214,19 @@ export default function SkillDiscoverView({
             ))}
           </div>
           {(listQuery.data?.total ?? 0) >
-            (listQuery.data?.skills.length ?? 0) && (
-            <div className="flex justify-center py-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-                onClick={() => setPages((p) => p + 1)}
-              >
-                {t("chat:skills.loadMore")}
-              </Button>
-            </div>
-          )}
+            (listQuery.data?.skills.length ?? 0) &&
+            (listQuery.data?.skills.length ?? 0) < 100 && (
+              <div className="flex justify-center py-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                  onClick={() => setPages((p) => p + 1)}
+                >
+                  {t("chat:skills.loadMore")}
+                </Button>
+              </div>
+            )}
         </>
       )}
     </div>

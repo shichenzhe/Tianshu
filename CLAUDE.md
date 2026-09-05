@@ -204,7 +204,7 @@ npm run typecheck
 
 ## 脚手架专有
 
-本仓库是脚手架模板，源码中内置 5 个占位符，由 `npm run init` 交互式替换（幂等，可重复运行，写入记录在 `shu-init.json`）：
+本仓库是脚手架模板，源码中内置 6 个占位符，由 `npm run init` 交互式替换（幂等，可重复运行，写入记录在 `shu-init.json`）：
 
 - `mirror` - 应用名（package.json `name`、窗口标题、i18n localStorage key 前缀等）
 - `com.xmf.mirror` - 应用 ID（electron-builder `appId`）

@@ -81,6 +81,22 @@ describe("applyPlaceholders", () => {
     );
   });
 
+  it("忽略 superpowers / .superpowers 目录（git 跟踪文档中的哨兵不被替换）", async () => {
+    for (const name of ["superpowers", ".superpowers"]) {
+      const sub = join(dir, name);
+      mkdirSync(sub, { recursive: true });
+      writeFileSync(join(sub, "x.ts"), 'key = "skh-your-api-key";\n');
+    }
+    const changed = await applyPlaceholders(dir, {
+      SKILLHUB_API_KEY: "skh-real-abc",
+    });
+    for (const name of ["superpowers", ".superpowers"]) {
+      const file = join(dir, name, "x.ts");
+      expect(changed).not.toContain(file);
+      expect(readFileSync(file, "utf8")).toBe('key = "skh-your-api-key";\n');
+    }
+  });
+
   it("字面量占位符（非 {{}} 模板）替换；重复 init 自然跳过", async () => {
     const file = join(dir, "Constants.ts");
     writeFileSync(file, 'key = "skh-your-api-key";\n');

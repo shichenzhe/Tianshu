@@ -70,6 +70,8 @@ const IGNORE_DIRS = new Set([
   ".github",
   "scripts",
   "electron/generated",
+  "superpowers",
+  ".superpowers",
 ]);
 
 async function walkFiles(root) {

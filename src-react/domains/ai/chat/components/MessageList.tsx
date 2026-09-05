@@ -10,17 +10,14 @@ import { useQuery } from "@tanstack/react-query";
 import SessionApi, { type MessageRecord } from "../../api/session.api";
 import { serializeBlocks, type MessageBlock } from "../model/blocks";
 import { useChatStore } from "../store/chat.store";
-import { canRemember } from "../../lib/can-remember";
 import MessageItem from "./MessageItem";
 import ToolCallCard from "./ToolCallCard";
 import ApprovalBanner from "./ApprovalBanner";
 
 interface MessageListProps {
   sessionId: number | null;
-  /** 当前工作空间 id（审批横幅「允许并记住」需要）；null 时不挂横幅 */
+  /** 当前工作空间 id；null（未选中/加载中）时不挂审批横幅 */
   workspaceId?: number | null;
-  /** 当前工作空间是否可「允许并记住」（尚未授权过写入时为 true） */
-  rememberAvailable?: boolean;
   /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
   onRegenerate?: () => void;
 }
@@ -32,7 +29,6 @@ const noopOnDecided = () => {};
 export default function MessageList({
   sessionId,
   workspaceId = null,
-  rememberAvailable = false,
   onRegenerate,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
@@ -177,13 +173,9 @@ export default function MessageList({
                   {showBanner && workspaceId !== null && (
                     <ApprovalBanner
                       sessionId={sessionId}
-                      workspaceId={workspaceId}
                       toolCallId={toolCallId}
                       toolName={tool.toolName}
                       argSummary={argSummary}
-                      rememberAvailable={
-                        rememberAvailable && canRemember(tool.toolName)
-                      }
                       onDecided={noopOnDecided}
                     />
                   )}

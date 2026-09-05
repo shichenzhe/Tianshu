@@ -35,13 +35,16 @@ import { invoke } from "@/lib/ipc";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
-import type { ChatModelParams } from "../../api/chat.api";
+import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import SessionSidebar from "../components/SessionSidebar";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 import ModelPicker from "../components/ModelPicker";
 import AssistantPicker from "../components/AssistantPicker";
+import PermissionCapsule, {
+  type AccessMode,
+} from "../components/PermissionCapsule";
 import AgentProgress from "../components/AgentProgress";
 import WorkspacePathChip from "../components/WorkspacePathChip";
 import { useChatSend } from "../hooks/use-chat-send";
@@ -172,6 +175,35 @@ function ChatPane({
 }: ChatPaneProps) {
   const { t } = useTranslation(["chat"]);
   const { sending, send, regenerate, stop } = useChatSend(session.id);
+  const [accessMode, setAccessMode] = useState<AccessMode>("default");
+
+  // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
+  // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底
+  useEffect(() => {
+    let cancelled = false;
+    ChatApi.getPermission(session.id)
+      .then((mode) => {
+        if (!cancelled) {
+          setAccessMode(mode);
+        }
+      })
+      .catch(() => {
+        /* 静默：胶囊保持默认权限展示 */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.id]);
+
+  /** 胶囊决议：先落主进程权限存储，成功后更新本地态（失败保持原状并提示） */
+  const handleAccessModeChange = async (mode: AccessMode) => {
+    try {
+      await ChatApi.setPermission(session.id, mode);
+      setAccessMode(mode);
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  };
 
   // 技能目录一键打开（P2 skill 无管理界面，以此保证发现性）
   const openSkillDir = async () => {
@@ -242,7 +274,6 @@ function ChatPane({
       <MessageList
         sessionId={session.id}
         workspaceId={workspace?.id ?? null}
-        rememberAvailable={workspace ? !workspace.writeApprovedAt : false}
         onRegenerate={handleRegenerate}
       />
       {sending && (
@@ -250,6 +281,11 @@ function ChatPane({
       )}
       <div className="border-t border-border/50 p-4">
         <div className="flex items-end gap-2">
+          <PermissionCapsule
+            sessionId={session.id}
+            accessMode={accessMode}
+            onChange={(mode) => void handleAccessModeChange(mode)}
+          />
           <ModelPicker
             sessionId={session.id}
             currentModelId={session.currentModelId}

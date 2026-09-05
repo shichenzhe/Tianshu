@@ -10,9 +10,6 @@
     "unbindDirectory": "Unbind Directory",
     "unbindConfirmTitle": "Unbind Workspace Directory",
     "unbindConfirmDesc": "Once unbound, the AI can no longer access files in this directory. Message history is preserved.",
-    "authorizeWrite": "Authorize Writing",
-    "authorizeWriteHint": "Allow the AI to write files without confirmation",
-    "revokeWrite": "Revoke write approval ({{date}})",
     "boundPathLabel": "Workspace Directory"
   },
   "defaultWorkspaceName": "Default Workspace",
@@ -59,8 +56,20 @@
     "outputTruncated": "Output too long, showing first {{count}} lines",
     "approve": "Allow",
     "deny": "Deny",
-    "approveRemember": "Allow and remember",
     "argSummaryFallback": "This tool requests to modify workspace files"
+  },
+  "permission": {
+    "default": "Default Access",
+    "full": "Full Access",
+    "panelDefaultDesc": "Currently on default access. All operations run within safe sandbox limits, and anything beyond that will ask for your permission.",
+    "panelFullDesc": "Full access is enabled. The AI will operate your computer directly. Proceed with caution.",
+    "allowFullAccess": "Allow full access",
+    "modalTitle": "Confirm full access?",
+    "modalRisk": "With full access enabled, all tasks will skip confirmation steps and operate your computer directly. Proceed with caution. This includes:",
+    "fileOps": "File operations: read, create, modify, upload, or delete files anywhere on this computer.",
+    "terminalOps": "Terminal commands: run commands, install software, and change system settings.",
+    "disclaimer": "I understand the risks and take responsibility for my data security.",
+    "confirmFullAccess": "Allow full access"
   },
   "agent": {
     "step": "Step {{n}} · {{tool}}",

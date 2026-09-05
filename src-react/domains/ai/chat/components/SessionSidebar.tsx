@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import {
   FolderInput,
   FolderMinus,
@@ -14,8 +14,6 @@ import {
   Pencil,
   Plus,
   Search,
-  ShieldCheck,
-  ShieldOff,
   Trash2,
 } from "lucide-react";
 
@@ -220,23 +218,6 @@ export default function SessionSidebar({
     }
   };
 
-  /** 写入授权切换：未授权 → 授权；已授权 → 撤销（对后续写入立即生效） */
-  const handleToggleWriteApproval = async () => {
-    if (activeWorkspaceId === null) {
-      return;
-    }
-    try {
-      if (activeWorkspace?.writeApprovedAt) {
-        await WorkspaceApi.revokeWrite(activeWorkspaceId);
-      } else {
-        await WorkspaceApi.approveWrite(activeWorkspaceId);
-      }
-      await queryClient.invalidateQueries({ queryKey: WORKSPACES_KEY });
-    } catch (e) {
-      handleError(e);
-    }
-  };
-
   const handleCreateSession = async () => {
     if (activeWorkspaceId === null) {
       return;
@@ -327,7 +308,6 @@ export default function SessionSidebar({
             onDelete={() => setDeletingWorkspace(activeWorkspace)}
             onBindDirectory={handleBindDirectory}
             onUnbindDirectory={() => setUnbindingWorkspace(activeWorkspace)}
-            onToggleWriteApproval={handleToggleWriteApproval}
           />
         </div>
         <Button
@@ -543,14 +523,13 @@ export default function SessionSidebar({
 
 interface WorkspaceMenuProps {
   disabled: boolean;
-  /** 当前激活工作空间；null（未选中）时隐藏目录/授权管理项 */
+  /** 当前激活工作空间；null（未选中）时隐藏目录管理项 */
   workspace: WorkspaceRecord | null;
   onCreate: () => void;
   onRename: () => void;
   onDelete: () => void;
   onBindDirectory: () => void;
   onUnbindDirectory: () => void;
-  onToggleWriteApproval: () => void;
 }
 
 function WorkspaceMenu({
@@ -561,17 +540,8 @@ function WorkspaceMenu({
   onDelete,
   onBindDirectory,
   onUnbindDirectory,
-  onToggleWriteApproval,
 }: WorkspaceMenuProps) {
   const { t } = useTranslation(["chat", "common"]);
-  const locale = getDateFnsLocale();
-  const writeApproved = Boolean(workspace?.writeApprovedAt);
-  // 撤销授权菜单项展示授权时间（date-fns 短格式，随语言切换）
-  const writeApprovedAtText = workspace?.writeApprovedAt
-    ? format(new Date(workspace.writeApprovedAt), "yyyy-MM-dd HH:mm", {
-        locale,
-      })
-    : "";
 
   return (
     <DropdownMenu>
@@ -603,27 +573,6 @@ function WorkspaceMenu({
             <DropdownMenuItem onClick={onBindDirectory}>
               <FolderInput className="mr-2 h-4 w-4" />
               {t("chat:workspace.bindDirectory")}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onToggleWriteApproval}>
-              {writeApproved ? (
-                <ShieldOff className="mr-2 mt-0.5 h-4 w-4" />
-              ) : (
-                <ShieldCheck className="mr-2 mt-0.5 h-4 w-4" />
-              )}
-              <span className="flex flex-col">
-                <span>
-                  {writeApproved
-                    ? t("chat:workspace.revokeWrite", {
-                        date: writeApprovedAtText,
-                      })
-                    : t("chat:workspace.authorizeWrite")}
-                </span>
-                {!writeApproved && (
-                  <span className="text-xs text-muted-foreground">
-                    {t("chat:workspace.authorizeWriteHint")}
-                  </span>
-                )}
-              </span>
             </DropdownMenuItem>
             {workspace.directoryPath && (
               <DropdownMenuItem onClick={onUnbindDirectory}>

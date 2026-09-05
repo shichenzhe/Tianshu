@@ -67,7 +67,6 @@ const TOOL_OUTPUT_SLICE = 2000;
  */
 export interface AgentStreamOptions {
   sessionId: number;
-  sessionWorkspaceId: number;
   /**
    * 绑定目录的规范化绝对路径（无尾部分隔符）；未绑定目录时为 undefined——
    * 文件四件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
@@ -818,14 +817,12 @@ export default class ChatService {
     session: { workspaceId: number },
     sessionId: number,
   ): Promise<AgentStreamOptions> {
-    const sessionWorkspaceId = session.workspaceId;
-    const workspace = sessionWorkspaceId
-      ? await this.sessions.getWorkspace(sessionWorkspaceId)
+    const workspace = session.workspaceId
+      ? await this.sessions.getWorkspace(session.workspaceId)
       : null;
     const directoryPath = workspace?.directoryPath?.trim() || null;
     return {
       sessionId,
-      sessionWorkspaceId,
       workspacePath: directoryPath
         ? normalizeWorkspacePath(directoryPath)
         : undefined,

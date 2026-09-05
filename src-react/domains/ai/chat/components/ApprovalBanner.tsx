@@ -12,9 +12,6 @@ import ChatApi from "../../api/chat.api";
 import { mapIpcError } from "../lib/error-message";
 
 interface ApprovalBannerProps {
-  sessionId: number;
-  /** 卡片头部已展示工具名，此处仅保留上下文（决议只需 toolCallId） */
-  toolName: string;
   toolCallId: string;
   argSummary: string;
   /** 决议回调：先于 invoke 调用，父级立即隐藏横幅 */

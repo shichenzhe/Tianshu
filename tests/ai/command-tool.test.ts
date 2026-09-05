@@ -58,6 +58,13 @@ const DANGEROUS: string[] = [
   "rm -rf ~/*",
   "rm -rf $HOME",
   'rm -rf "$HOME/lib"',
+  // 终审 I1 等价类补丁：转义/长旗标/花括号变量
+  "rm -rf \\/",
+  "rm -rf \\/Users",
+  "rm --recursive --force /",
+  "rm --recursive /",
+  'rm -rf "${HOME}/x"',
+  "chmod --recursive 777 /",
   "mkfs.ext4 /dev/sda1",
   "mkfs /anything",
   "dd if=x of=/dev/disk0",
@@ -77,6 +84,9 @@ const SAFE: string[] = [
   "ls -la",
   "echo hi",
   "npm install",
+  // 长旗标的相对路径形态不误伤
+  "rm --recursive ./dist",
+  "chmod --recursive 755 ./x",
 ];
 
 let ws: string;

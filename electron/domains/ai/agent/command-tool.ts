@@ -22,14 +22,19 @@ const OUTPUT_LIMIT = 8192;
 // ---------- 危险命令拦截（spec §3 五类形态，常开） ----------
 
 /**
- * 绝对路径词元：`/` 开头（可带引号）、`~` 或 `$HOME` 前缀——
+ * 绝对路径词元：`/` 开头（可带引号/反斜杠转义）、`~`、`$HOME`、`${HOME}` 前缀——
  * shell 展开后均可能指向工作空间外，统一视为界外目标（fail-closed）
  */
-const ABSOLUTE_PATH_TOKEN = /["']?(?:\/|\$HOME|~)[^\s|;&]*/.source;
+const ABSOLUTE_PATH_TOKEN = /["']?(?:\\?\/|\$\{?HOME\}?|~)[^\s|;&]*/.source;
+
+/** 递归/强制旗标：短旗标（-rf）或长旗标（--recursive/--force） */
+const RF_FLAGS = /(?:-\w*[rf]\w*|--recursive|--force)/.source;
 
 /** rm 带递归/强制旗标且目标含绝对路径词元（含引号/波浪号/环境变量形态） */
 const RM_ABSOLUTE_TARGET = new RegExp(
-  /\brm\s+(?:-\w+\s+)*-\w*[rf]\w*(?:\s+-\w+)*(?:\s+[^\s|;&]+)*\s+/.source +
+  /\brm\s+(?:-\w+\s+|--\w+\s+)*/.source +
+    RF_FLAGS +
+    /(?:\s+(?:-\w+|--\w+))*(?:\s+[^\s|;&]+)*\s+/.source +
     ABSOLUTE_PATH_TOKEN,
 );
 /** mkfs 系列格式化（任意形态） */
@@ -38,9 +43,10 @@ const MKFS_ANY = /\bmkfs/;
 const DD_TO_DEVICE = /\bdd\b[^;|&]*\bof=\/dev\//;
 /** fork 炸弹字面（含空格变体，判 :(){ 前缀即可） */
 const FORK_BOMB = /:\(\)\{/;
-/** chmod 递归改权限到绝对路径（词元类与 rm 对齐） */
+/** chmod 递归改权限到绝对路径（旗标与词元类与 rm 对齐） */
 const CHMOD_ROOT = new RegExp(
-  /\bchmod\s+(?:-\w+\s+)*\d{3,4}\s+/.source + ABSOLUTE_PATH_TOKEN,
+  /\bchmod\s+(?:(?:-\w+|--\w+|--recursive)\s+)*\d{3,4}\s+/.source +
+    ABSOLUTE_PATH_TOKEN,
 );
 
 /** 高危破坏性命令拦截：命中即拒（与权限无关常开，spec §3） */

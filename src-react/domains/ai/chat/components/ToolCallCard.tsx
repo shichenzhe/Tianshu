@@ -36,13 +36,20 @@ interface ToolCallCardProps {
   output?: string;
 }
 
-/** 取 args.path 字符串摘要；非字符串或缺省视为不存在 */
+/** 取卡片头摘要：优先 args.path；无 path 的工具（如 run_command）取 args.command 前 60 字符 */
 function extractPath(args: unknown): string | null {
   if (typeof args !== "object" || args === null) {
     return null;
   }
-  const path = (args as Record<string, unknown>).path;
-  return typeof path === "string" && path.length > 0 ? path : null;
+  const record = args as Record<string, unknown>;
+  const path = record.path;
+  if (typeof path === "string" && path.length > 0) {
+    return path;
+  }
+  const command = record.command;
+  return typeof command === "string" && command.length > 0
+    ? command.slice(0, 60)
+    : null;
 }
 
 /** 输出超行数时仅保留前 N 行 */

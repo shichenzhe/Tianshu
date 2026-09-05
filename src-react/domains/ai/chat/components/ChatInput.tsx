@@ -177,16 +177,14 @@ export default function ChatInput({
     >
       {/* 上行：＋扩展菜单 + 权限胶囊 + 模式徽标（非默认模式时） */}
       <div className="flex items-center gap-2">
-        <div data-plus-slot>
-          <PlusMenu
-            sessionId={sessionId}
-            currentMode={currentMode}
-            currentAssistantId={currentAssistantId}
-            onPickFiles={handlePickFiles}
-            onOpenSkills={onOpenSkills}
-            onOpenMcp={onOpenMcp}
-          />
-        </div>
+        <PlusMenu
+          sessionId={sessionId}
+          currentMode={currentMode}
+          currentAssistantId={currentAssistantId}
+          onPickFiles={handlePickFiles}
+          onOpenSkills={onOpenSkills}
+          onOpenMcp={onOpenMcp}
+        />
         <PermissionCapsule
           sessionId={sessionId}
           accessMode={accessMode}

@@ -70,9 +70,9 @@ export function filterDisabledSkills<
   return skills.filter((s) => !(s.source === "user" && disabled.has(s.name)));
 }
 
-/** target 是否位于 root 目录内(path.resolve 归一后前缀校验,防 ../ 逃逸) */
+/** target 是否位于 root 目录内(path.resolve 归一后前缀校验,防 ../ 逃逸;等值不算在内) */
 export function isInsideDir(target: string, root: string): boolean {
   const t = path.resolve(target);
   const r = path.resolve(root);
-  return t === r || t.startsWith(r + path.sep);
+  return t.startsWith(r + path.sep);
 }

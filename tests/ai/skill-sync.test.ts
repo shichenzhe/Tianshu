@@ -158,4 +158,7 @@ describe("isInsideDir 路径防越界", () => {
     expect(isInsideDir("/ud/skills-evil/a", "/ud/skills")).toBe(false);
     expect(isInsideDir("/ud/skills/../etc", "/ud/skills")).toBe(false);
   });
+  it("与根相等不算在内(防整根误删)", () => {
+    expect(isInsideDir("/ud/skills", "/ud/skills")).toBe(false);
+  });
 });

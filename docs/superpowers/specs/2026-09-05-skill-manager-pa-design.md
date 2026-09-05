@@ -52,7 +52,7 @@ model skillRecord {
 ```
 
 - `prisma/schema.prisma` 新增模型;`electron/infrastructure/script/v6/upgrade-table.sql`
-  建表(`--/ignore` 幂等语义同 v5);`electron/Constants.ts` DB_VERSION 5→6;
+  建表(`CREATE TABLE IF NOT EXISTS` 表级幂等);`electron/Constants.ts` DB_VERSION 5→6;
   升级仍走 `VersionRepository.update`(Application 启动接线不变)。
 - `installedAt`:自愈首次入库时间即为"安装时间"。
 
@@ -66,7 +66,7 @@ syncSkillRecords(scanned: SkillInfo[], records: SkillRecordRow[]):
 ```
 
 - 目录有、DB 无 → insert `{ name, source: "local", dir, enabled: true }`
-- 双方都有 → 保留 enabled/installedAt,刷新 dir/version
+- 双方都有 → 保留 enabled/installedAt/version/slug,刷新 dir/description
 - DB 有、目录无 → delete(卸载残留/手删目录的清理)
 - keyed by `name`(与 loadSkills 去重键一致;user 级目录只传 userData/skills)
 

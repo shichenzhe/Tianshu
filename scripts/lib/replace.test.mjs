@@ -81,17 +81,17 @@ describe("applyPlaceholders", () => {
     );
   });
 
-  it("字面量占位符（非 {{}} 模板）替换且幂等", async () => {
+  it("字面量占位符（非 {{}} 模板）替换；重复 init 自然跳过", async () => {
     const file = join(dir, "Constants.ts");
     writeFileSync(file, 'key = "skh-your-api-key";\n');
     await applyPlaceholders(dir, { SKILLHUB_API_KEY: "skh-real-abc" });
     expect(readFileSync(file, "utf8")).toBe('key = "skh-real-abc";\n');
-    // 重复运行：旧值（上次写入的真实 Key）被新值覆盖
+    // 敏感键在 shu-init.json 无明文记录，哨兵已消失 → 重复 init 不改文件
     const changed = await applyPlaceholders(dir, {
       SKILLHUB_API_KEY: "skh-real-xyz",
     });
-    expect(changed).toContain(file);
-    expect(readFileSync(file, "utf8")).toBe('key = "skh-real-xyz";\n');
+    expect(changed).not.toContain(file);
+    expect(readFileSync(file, "utf8")).toBe('key = "skh-real-abc";\n');
   });
 
   it("字面量占位符留空替换为空串（不带 Key）", async () => {
@@ -99,5 +99,26 @@ describe("applyPlaceholders", () => {
     writeFileSync(file, 'key = "skh-your-api-key";\n');
     await applyPlaceholders(dir, { SKILLHUB_API_KEY: "" });
     expect(readFileSync(file, "utf8")).toBe('key = "";\n');
+  });
+
+  it("敏感键不落 shu-init.json 明文（只记 <KEY>_SET 布尔）", async () => {
+    const file = join(dir, "Constants.ts");
+    writeFileSync(file, 'key = "skh-your-api-key";\n');
+    await applyPlaceholders(dir, { SKILLHUB_API_KEY: "skh-real-secret" });
+    // 目标文件正常写入真实值（真实值只进源码文件）
+    expect(readFileSync(file, "utf8")).toBe('key = "skh-real-secret";\n');
+    // init 记录文件永不包含明文 Key（该文件被 git 跟踪，防 add -A 泄漏）
+    const raw = readFileSync(join(dir, "shu-init.json"), "utf8");
+    expect(raw).not.toContain("skh-real-secret");
+    expect(JSON.parse(raw)).toEqual({ SKILLHUB_API_KEY_SET: true });
+  });
+
+  it("敏感键留空记录 <KEY>_SET 为 false", async () => {
+    const file = join(dir, "Constants.ts");
+    writeFileSync(file, 'key = "skh-your-api-key";\n');
+    await applyPlaceholders(dir, { SKILLHUB_API_KEY: "" });
+    expect(
+      JSON.parse(readFileSync(join(dir, "shu-init.json"), "utf8")),
+    ).toEqual({ SKILLHUB_API_KEY_SET: false });
   });
 });

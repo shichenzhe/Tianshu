@@ -14,11 +14,35 @@ export const PLACEHOLDERS = [
 
 /**
  * 字面量占位符：非 {{KEY}} 模板，默认值本身即占位形态
- * （如 electron/Constants.ts 的 SkillHub API Key 默认值），init 以真实值整串替换
+ * （如 electron/Constants.ts 的 SkillHub API Key 默认值），init 以真实值整串替换。
+ * sensitive：真实值只进目标源码文件，shu-init.json 仅记 <KEY>_SET 布尔
+ * （该记录文件被 git 跟踪，防明文 Key 随 git add -A 入库）
  */
 export const LITERAL_PLACEHOLDERS = [
-  { placeholder: "skh-your-api-key", key: "SKILLHUB_API_KEY" },
+  { placeholder: "skh-your-api-key", key: "SKILLHUB_API_KEY", sensitive: true },
 ];
+
+/** 敏感占位符键：幂等不依赖明文记录（哨兵被替换后重复 init 自然跳过） */
+const SENSITIVE_KEYS = new Set(
+  LITERAL_PLACEHOLDERS.filter(({ sensitive }) => sensitive).map(
+    ({ key }) => key,
+  ),
+);
+
+/**
+ * 序列化 init 记录：敏感键明文 → <KEY>_SET 布尔，保证 shu-init.json 永不含真实值
+ * @param {Record<string,string>} values
+ */
+function serializeValues(values) {
+  const record = { ...values };
+  for (const key of SENSITIVE_KEYS) {
+    if (key in record) {
+      record[`${key}_SET`] = Boolean(record[key]);
+      delete record[key];
+    }
+  }
+  return record;
+}
 
 const CONFIG_FILE = "shu-init.json";
 const TARGET_EXT = new Set([
@@ -108,6 +132,10 @@ export async function applyPlaceholders(rootDir, values) {
     }
   }
 
-  await writeFile(configPath, JSON.stringify(values, null, 2) + "\n", "utf8");
+  await writeFile(
+    configPath,
+    JSON.stringify(serializeValues(values), null, 2) + "\n",
+    "utf8",
+  );
   return changed;
 }

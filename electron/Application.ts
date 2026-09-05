@@ -14,6 +14,7 @@ import {
   parseMcpRow,
 } from "./domains/ai/agent/mcp-manager";
 import { McpRepository } from "./domains/ai/mcp/mcp.repo";
+import { SkillRepository } from "./domains/ai/skill/skill.repo";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -125,6 +126,8 @@ export default class Application {
     void mcpManager
       .startupConnectAll()
       .catch((e) => Log.error("MCP 启动连接失败", e));
+    // 技能管理:list 自愈对账(扫描→对账→落库)+启停/批量/卸载 IPC
+    new SkillRepository(prisma);
     // 基础设施
     new Log();
     new AppInfoService();

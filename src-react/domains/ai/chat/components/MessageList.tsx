@@ -50,6 +50,9 @@ export default function MessageList({
   const isStreaming = useChatStore((state) =>
     sessionId === null ? false : (state.isStreaming[sessionId] ?? false),
   );
+  const compactNotice = useChatStore((state) =>
+    sessionId === null ? undefined : state.compactNotices[sessionId],
+  );
   const stream = useChatStore((state) =>
     sessionId === null ? undefined : state.streams[sessionId],
   );
@@ -248,6 +251,14 @@ export default function MessageList({
               ) : null;
             })}
         </>
+      )}
+      {/* /compact 完成:正文下方居中提示条(内存态,切换会话/刷新即隐) */}
+      {compactNotice !== undefined && !isStreaming && (
+        <div className="flex justify-center py-1">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground select-none">
+            {t("chat:panel.compactDone")}
+          </span>
+        </div>
       )}
       <div ref={bottomRef} />
     </div>

@@ -51,8 +51,8 @@ interface PlusMenuProps {
   sessionId: number;
   currentMode: SessionMode;
   currentAssistantId?: number;
-  /** 成功读取的文件回传 ChatInput 进 chips 暂存区 */
-  onPickFiles: (files: Array<{ path: string; content: string }>) => void;
+  /** 选中的文件路径回传 ChatInput 以内联 @token 插入(内容发送时再读) */
+  onPickPaths: (paths: string[]) => void;
   onOpenSkills: () => void;
   onOpenMcp: () => void;
 }
@@ -68,7 +68,7 @@ export default function PlusMenu({
   sessionId,
   currentMode,
   currentAssistantId,
-  onPickFiles,
+  onPickPaths,
   onOpenSkills,
   onOpenMcp,
 }: PlusMenuProps) {
@@ -86,7 +86,8 @@ export default function PlusMenu({
     await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
   };
 
-  /** 添加文件：成功项回调进 chips，带 error 项逐个 toast 丢弃，取消（空数组）静默 */
+  /** 添加文件：路径以内联 @token 进输入流（内容发送时再读），
+      读取失败项逐个 toast 丢弃，取消（空数组）静默 */
   const handleAddFile = async () => {
     let picked: PickedFile[];
     try {
@@ -95,6 +96,7 @@ export default function PlusMenu({
       toast.error(e instanceof Error ? e.message : String(e));
       return;
     }
+    const paths: string[] = [];
     for (const file of picked) {
       if (file.error !== undefined) {
         toast.error(
@@ -103,13 +105,12 @@ export default function PlusMenu({
             reason: file.error,
           }),
         );
+      } else {
+        paths.push(file.path);
       }
     }
-    const okFiles = picked
-      .filter((file) => file.content !== undefined)
-      .map((file) => ({ path: file.path, content: file.content as string }));
-    if (okFiles.length > 0) {
-      onPickFiles(okFiles);
+    if (paths.length > 0) {
+      onPickPaths(paths);
     }
   };
 

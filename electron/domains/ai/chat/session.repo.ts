@@ -232,6 +232,21 @@ export class SessionRepository {
     ).map((row) => this.toSession(row));
   }
 
+  /**
+   * /compact 会话压缩(v8):summary 为空串/null 即清压缩态;
+   * upToId 为覆盖到的最后一条消息 id(后续上下文只取其后)
+   */
+  async updateSummary(
+    id: number,
+    summary: string | null,
+    compactedUpToId: number | null,
+  ): Promise<void> {
+    await prisma.session.update({
+      where: { id },
+      data: { summary, compactedUpToId },
+    });
+  }
+
   /** v5 置顶：置 true 记时间戳（前端按其倒序排列），false 清空 */
   async pinSession(id: number, pinned: boolean): Promise<void> {
     await prisma.session.update({

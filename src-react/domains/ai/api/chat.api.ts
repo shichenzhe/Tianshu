@@ -105,6 +105,11 @@ export default class ChatApi {
     return invoke<"default" | "full">("permission:get", sessionId);
   }
 
+  /** /compact 会话压缩(v8):摘要走一次流式 send 后落 session */
+  static async compact(sessionId: number): Promise<void> {
+    return invoke<void>("chat:compact", sessionId);
+  }
+
   /** 设置会话工具权限模式（P3；主进程内存态，无会话校验） */
   static async setPermission(
     sessionId: number,

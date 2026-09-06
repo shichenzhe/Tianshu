@@ -41,6 +41,9 @@ function definedPatch(
 interface ChatStore {
   streams: Record<number, StreamContent>;
   isStreaming: Record<number, boolean>;
+  /** /compact 完成通知(会话 id → 完成时间戳;MessageList 居中提示条) */
+  compactNotices: Record<number, number>;
+  setCompactNotice: (sessionId: number) => void;
   startStream: (sessionId: number) => void;
   setStreamContent: (sessionId: number, content: StreamContent) => void;
   appendDelta: (
@@ -58,6 +61,14 @@ interface ChatStore {
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
+  compactNotices: {},
+  setCompactNotice: (sessionId) =>
+    set((state) => ({
+      compactNotices: {
+        ...state.compactNotices,
+        [sessionId]: Date.now(),
+      },
+    })),
   streams: {},
   isStreaming: {},
   startStream: (sessionId) =>

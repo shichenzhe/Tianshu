@@ -5,7 +5,7 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Settings2 } from "lucide-react";
@@ -25,7 +25,8 @@ import SessionApi, { type SessionRecord } from "../../api/session.api";
 import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import MessageList from "../components/MessageList";
-import ChatInput, { type PendingFile } from "../components/ChatInput";
+import ChatInput from "../components/ChatInput";
+import type { PendingFile } from "../lib/pending-file";
 import type { AccessMode } from "../components/PermissionCapsule";
 import AgentProgress from "../components/AgentProgress";
 import WorkspacePathChip from "../components/WorkspacePathChip";
@@ -136,6 +137,8 @@ function ChatPane({
   hasModel,
   onOpenSettings,
 }: ChatPaneProps) {
+  const { t } = useTranslation(["chat", "common"]);
+  const queryClient = useQueryClient();
   const { sending, send, regenerate, stop } = useChatSend(session.id);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
 
@@ -240,6 +243,20 @@ function ChatPane({
     }
   };
 
+  /** /compact 命令:压缩完成置居中提示条并刷新消息(摘要轮已落库) */
+  const handleRunCommand = (command: string) => {
+    if (command !== "compact") {
+      toast.info(t("chat:skills.comingSoon"));
+      return;
+    }
+    ChatApi.compact(session.id)
+      .then(() => {
+        useChatStore.getState().setCompactNotice(session.id);
+        void queryClient.invalidateQueries({ queryKey: ["messages"] });
+      })
+      .catch((e: unknown) => toast.error(mapIpcError(e)));
+  };
+
   const handleRegenerate = async () => {
     try {
       await regenerate();
@@ -271,6 +288,7 @@ function ChatPane({
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
           onOpenSkills={openSkillDir}
           onOpenMcp={() => onOpenSettings("mcp")}
+          onRunCommand={handleRunCommand}
           onSend={handleSend}
           onStop={stop}
         />

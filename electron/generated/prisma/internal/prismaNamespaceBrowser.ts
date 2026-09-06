@@ -180,6 +180,8 @@ export const SessionScalarFieldEnum = {
   mode: 'mode',
   pinnedAt: 'pinnedAt',
   archivedAt: 'archivedAt',
+  summary: 'summary',
+  compactedUpToId: 'compactedUpToId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   lastMessageAt: 'lastMessageAt'

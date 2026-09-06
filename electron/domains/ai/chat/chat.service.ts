@@ -47,6 +47,26 @@ type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
 >;
 
+/** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
+const COMPACT_DIRECTIVE =
+  "请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。";
+
+/** assistant blocks JSON → 纯文本(text 块拼接;解析失败返回空串) */
+function extractAssistantText(blocksJson: string): string {
+  try {
+    const blocks = JSON.parse(blocksJson) as Array<{
+      type: string;
+      text?: string;
+    }>;
+    return blocks
+      .filter((block) => block.type === "text")
+      .map((block) => block.text ?? "")
+      .join("\n");
+  } catch {
+    return "";
+  }
+}
+
 /** 步数上限保险丝（spec 决策 #3：宽上限，上下文截断为自然限界） */
 const DEFAULT_MAX_STEPS = 50;
 
@@ -636,6 +656,9 @@ export default class ChatService {
     ipcMain.handle("chat:send", (event, params: ChatSendParams) =>
       this.send(params, event.sender),
     );
+    ipcMain.handle("chat:compact", (event, sessionId: number) =>
+      this.compact(sessionId, event.sender),
+    );
     ipcMain.handle("chat:regenerate", (event, sessionId: number) =>
       this.regenerate(sessionId, event.sender),
     );
@@ -847,6 +870,34 @@ export default class ChatService {
       return;
     }
     sender.send(`chat:stream:${sessionId}`, chunk);
+  }
+
+  /**
+   * /compact 会话压缩(/compact 命令实现):先清压缩态(保证压缩基于全量
+   * 历史)→ 摘要指令走一次普通 send(流式可见)→ 取最后一条 assistant 文本
+   * 落 session.summary/compactedUpToId;后续 send 上下文 = 摘要 + 压缩点后消息
+   */
+  async compact(sessionId: number, sender?: WebContents): Promise<void> {
+    const session = await this.sessions.getSession(sessionId);
+    if (!session) {
+      throw new Error("SESSION_NOT_FOUND");
+    }
+    await this.sessions.updateSummary(sessionId, null, null);
+    await this.send({ sessionId, content: COMPACT_DIRECTIVE }, sender);
+    const rows = await prisma.message.findMany({
+      where: { sessionId, role: "assistant" },
+      orderBy: { createdAt: "desc" },
+      take: 1,
+    });
+    const last = rows[0];
+    if (!last) {
+      return;
+    }
+    const summaryText = extractAssistantText(last.blocks);
+    if (summaryText.trim() === "") {
+      return;
+    }
+    await this.sessions.updateSummary(sessionId, summaryText, last.id);
   }
 
   async send(params: ChatSendParams, sender?: WebContents): Promise<void> {
@@ -1064,13 +1115,22 @@ export default class ChatService {
       overrides,
     ]);
 
+    // /compact 压缩态:历史只取压缩点之后(摘要经 system 注入替代旧消息)
+    // 宽松判空:旧会话/测试 stub 字段可能为 undefined,均视为未压缩
+    const compacted =
+      session.compactedUpToId != null && session.summary != null;
     const history = (
       await prisma.message.findMany({
         where: { sessionId },
         orderBy: { createdAt: "asc" },
       })
     )
-      .filter((row) => row.role !== "system" && !row.error)
+      .filter(
+        (row) =>
+          row.role !== "system" &&
+          !row.error &&
+          (!compacted || row.id > (session.compactedUpToId ?? 0)),
+      )
       .map((row) => ({
         role: row.role as "user" | "assistant",
         blocks: row.blocks,
@@ -1087,6 +1147,16 @@ export default class ChatService {
       mode === "ask"
         ? []
         : await this.collectEnabledSkills(agent.workspacePath);
+    // 压缩态摘要段:拼在模式 system 之后(无 base 时单独成段)
+    const baseSystem = buildModeSystem(
+      mode,
+      assistantRow?.systemPrompt,
+      skills,
+    );
+    const systemWithSummary =
+      compacted && session.summary
+        ? `${baseSystem ? `${baseSystem}\n\n` : ""}【此前对话摘要】\n${session.summary}`
+        : baseSystem;
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -1098,7 +1168,7 @@ export default class ChatService {
           },
           modelRow.modelId,
         ),
-        system: buildModeSystem(mode, assistantRow?.systemPrompt, skills),
+        system: systemWithSummary,
         history,
         contextWindow: modelRow.contextWindow ?? undefined,
         params: merged,

@@ -137,7 +137,9 @@
   },
   "mention": {
     "noFiles": "No matching files",
-    "needBind": "Bind a workspace directory to reference files with @"
+    "needBind": "Bind a workspace directory to reference files with @",
+    "tokenReadFailed": "Failed to read: {{names}} (kept as plain text)",
+    "cmd_compact": "Compact conversation context"
   },
   "experts": {
     "tabAssistants": "Experts",
@@ -163,7 +165,8 @@
   "panel": {
     "thinkingStatus": "Thinking",
     "doneStatus": "Completed",
-    "thinkingLabel": "Deep thinking"
+    "thinkingLabel": "Deep thinking",
+    "compactDone": "Context compacted"
   },
   "pseudoToolCall": {
     "notice": "The model service did not return tool calls properly; raw model output is collapsed (check your inference server's tool-call support)"

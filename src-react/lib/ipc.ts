@@ -57,6 +57,7 @@ export type IPCChannel =
   | "chat:send"
   | "chat:regenerate"
   | "chat:stop"
+  | "chat:compact"
   | "agent:approve"
   | "permission:get"
   | "permission:set"

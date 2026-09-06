@@ -18,8 +18,7 @@ export interface TokenSegments {
 export const SLASH_COMMANDS = ["compact"] as const;
 
 /** token 整体(含符号前缀):@path / ⚡name / /compact;前导空白作边界 */
-const TOKEN_RE =
-  /(^|\s)(@[\w\-./]+|⚡[\w-]+|\/(?:compact))(?![\w\-./])/g;
+const TOKEN_RE = /(^|\s)(@[\w\-./]+|⚡[\w-]+|\/(?:compact))(?![\w\-./])/g;
 
 /** 解析输入文本:提取 token 并产出移除 token 后的消息文本 */
 export function parseInlineTokens(input: string): TokenSegments {
@@ -70,6 +69,16 @@ export function renderTokenSegments(input: string): TokenSegment[] {
     segments.push({ text: input.slice(last), isToken: false });
   }
   return segments;
+}
+
+/** 移除命令 token(文件/技能 token 保留:消息文本原样展示引用标记) */
+export function stripCommandTokens(input: string): string {
+  return input
+    .replace(TOKEN_RE, (match, _lead: string, token: string) =>
+      token.startsWith("/") ? "" : match,
+    )
+    .replace(/[^\S\n]+/g, " ")
+    .trim();
 }
 
 /** / 触发检测:光标前最近的 /token(前须行首/空白;token [\w-]*) */

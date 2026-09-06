@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ChevronDown, TriangleAlert } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,6 +99,7 @@ export function CreateTaskDialog({
   }>({});
   const [saving, setSaving] = useState(false);
   const switchCountRef = useRef(0);
+  const initialStartAtRef = useRef<string | undefined>(undefined);
   const promptRef = useRef<HTMLTextAreaElement>(null);
 
   /** open 时按 editTask > template 初始化 */
@@ -114,12 +116,21 @@ export function CreateTaskDialog({
       setWorkspaceId(editTask.workspaceId);
       setMissedPolicy(editTask.missedPolicy);
       setSchedule(JSON.parse(editTask.scheduleJson) as ScheduleConfig);
+      // editTask 日期为 UTC ISO(repo toISOString),validity 消费方按本地日期
+      // slice(0,10) 解释,须 date-fns format 本地化回显,否则回显漂移一天且保存循环累积
+      const startAt = editTask.startAt
+        ? format(new Date(editTask.startAt), "yyyy-MM-dd")
+        : undefined;
+      initialStartAtRef.current = startAt;
       setValidity({
-        startAt: editTask.startAt,
-        endAt: editTask.endAt,
+        startAt,
+        endAt: editTask.endAt
+          ? format(new Date(editTask.endAt), "yyyy-MM-dd")
+          : undefined,
       });
       return;
     }
+    initialStartAtRef.current = undefined;
     if (template) {
       setName(
         t(`chat:automation.templateData.${camelSlug(template.slug)}.title`),
@@ -143,9 +154,13 @@ export function CreateTaskDialog({
   }, [workspaceId, workspaces]);
 
   const parsed = scheduleSchema.safeParse(schedule);
+  // 编辑未改动 startAt 视为维持原任务生命周期,不适用创建期防倒流校验
+  // (运行中任务已过 startAt,否则编辑任意字段都会被 errTimeInPast 卡死)
+  const startAtUnchanged =
+    Boolean(editTask) && validity.startAt === initialStartAtRef.current;
   const validation = validateSchedule(
     parsed.success ? schedule : null,
-    validity,
+    startAtUnchanged ? { ...validity, startAt: undefined } : validity,
     new Date(),
   );
   const canSubmit = Boolean(
@@ -181,7 +196,7 @@ export function CreateTaskDialog({
           ? new Date(`${validity.endAt.slice(0, 10)}T23:59:59`).toISOString()
           : undefined,
         missedPolicy,
-        templateSlug: template?.slug,
+        templateSlug: editTask?.templateSlug ?? template?.slug,
       };
       const saved = editTask
         ? await AutomationApi.update(editTask.id, params)

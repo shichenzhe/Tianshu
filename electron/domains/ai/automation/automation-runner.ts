@@ -1,22 +1,22 @@
 /**
- * 自动化任务执行器(spec §4):建 session → 变量替换 → 静默
- * runChatStream(完全访问 + 审批自动放行,无人值守)→ 落 message 与 run。
- * 不经渲染层(onChunk 不传),产物在聊天页可回看。
+ * 自动化任务执行器(spec §4):建 session → 引用解析注入(spec §2,文件/技能
+ * 内容前缀 + 技能聚焦 + 变量替换)→ 静默 runChatStream(完全访问 + 审批自动
+ * 放行,无人值守)→ 落 message 与 run。不经渲染层(onChunk 不传)，产物在
+ * 聊天页可回看。
  */
 import { format } from "date-fns";
-import path from "node:path";
-import { app } from "electron";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { runChatStream, normalizeWorkspacePath } from "../chat/chat.service";
 import { serializeBlocks, type MessageBlock } from "../chat/blocks";
 import { createLanguageModel } from "../provider/provider-factory";
 import { registry } from "../agent/tool-registry";
-import { loadSkills } from "../agent/skill-loader";
+import type { SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { classifyError } from "../chat/error-classify";
 import { computeNextRun } from "./schedule";
+import { resolveAttachments } from "./resolve-attachments";
 import type { ScheduleConfig } from "../../../../src-react/domains/ai/automation/api/schedule.schema";
 
 export type AutomationTaskRow = NonNullable<
@@ -47,10 +47,7 @@ export function extractUsage(
 }
 
 /** 工具集组装(对齐 chat.service collectToolDefinitions:read_skill 常驻) */
-function collectTools(
-  workspacePath: string | undefined,
-  skills: ReturnType<typeof loadSkills>,
-) {
+function collectTools(workspacePath: string | undefined, skills: SkillInfo[]) {
   const registered = registry.getDefinitions();
   const injected = workspacePath
     ? registered
@@ -161,7 +158,22 @@ async function streamAndRecord(
   opts: ExecuteTaskOptions,
   ctx: StreamContext,
 ): Promise<"success" | "failed"> {
-  const userText = replaceVariables(task.prompt, new Date());
+  // 引用解析(spec §2):失败短路 failRun;成功取注入文本与聚焦技能清单
+  const resolution = await resolveAttachments(
+    task.prompt,
+    ctx.workspacePath,
+    new Date(),
+  );
+  if ("error" in resolution) {
+    return await failRun(
+      ctx.runId,
+      task,
+      resolution.error,
+      ctx.startedAt,
+      ctx.sessionId,
+    );
+  }
+  const userText = resolution.injected;
   await prisma.message.create({
     data: {
       sessionId: ctx.sessionId,
@@ -169,22 +181,7 @@ async function streamAndRecord(
       blocks: serializeBlocks([{ type: "text", text: userText }]),
     },
   });
-  const skills = loadSkills([
-    {
-      dir: path.join(app.getPath("userData"), "skills"),
-      source: "user",
-    },
-    // workspace 级 source 用 "workspace"(对齐 chat.service collectSkills
-    // 的实际签名与语义:同名用户级胜,来源标记供 UI 区分)
-    ...(ctx.workspacePath
-      ? [
-          {
-            dir: path.join(ctx.workspacePath, ".mirror", "skills"),
-            source: "workspace" as const,
-          },
-        ]
-      : []),
-  ]);
+  const skills = resolution.skills;
   const result = await runChatStream({
     model: createLanguageModel(
       {

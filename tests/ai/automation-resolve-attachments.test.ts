@@ -102,6 +102,19 @@ describe("resolveAttachments", () => {
     );
     expect(result).toEqual({ error: "attachment_missing: daily.md" });
   });
+  it("readWorkspaceFile 抛错 → error 含该文件路径(不落泛化 catch)", async () => {
+    const deps: ResolveDeps = {
+      ...fileDeps({}),
+      readWorkspaceFile: vi.fn().mockRejectedValue(new Error("ENOENT")),
+    };
+    const result = await resolveAttachments(
+      "@daily.md 汇总",
+      "/ws",
+      new Date(),
+      deps,
+    );
+    expect(result).toEqual({ error: "attachment_missing: daily.md" });
+  });
   it("技能不存在 → error 含技能名", async () => {
     const result = await resolveAttachments(
       "⚡nosuch 汇总",

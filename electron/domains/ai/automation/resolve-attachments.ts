@@ -67,11 +67,19 @@ export async function resolveAttachments(
         return { error: `attachment_missing: ${filePath}` };
       }
       const abs = resolveFilePath(workspacePath, filePath);
-      const result = await deps.readWorkspaceFile(abs);
-      if (result.kind !== "text" || result.content === undefined) {
+      let content: string | undefined;
+      try {
+        const result = await deps.readWorkspaceFile(abs);
+        if (result.kind === "text") {
+          content = result.content;
+        }
+      } catch {
+        // 读取抛错(ENOENT/EACCES 竞态等):与缺失同义,报该文件路径
+      }
+      if (content === undefined) {
         return { error: `attachment_missing: ${filePath}` };
       }
-      blocks.push({ kind: "file", path: filePath, content: result.content });
+      blocks.push({ kind: "file", path: filePath, content });
     }
     const allSkills = deps.loadSkills([
       {
@@ -94,11 +102,16 @@ export async function resolveAttachments(
       if (!skill || !skill.dir) {
         return { error: `attachment_missing: skill ${name}` };
       }
-      blocks.push({
-        kind: "skill",
-        path: name,
-        content: await deps.readSkillFile(skill.dir),
-      });
+      let content: string | undefined;
+      try {
+        content = await deps.readSkillFile(skill.dir);
+      } catch {
+        // SKILL.md 读取抛错:与技能缺失同义,报该技能名
+      }
+      if (content === undefined) {
+        return { error: `attachment_missing: skill ${name}` };
+      }
+      blocks.push({ kind: "skill", path: name, content });
     }
     const referenced = skillTokens.length > 0;
     const skills = referenced

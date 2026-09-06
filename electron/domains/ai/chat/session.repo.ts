@@ -345,7 +345,11 @@ export class SessionRepository {
       defaultPath: path.basename(absPath),
     });
     if (canceled || !filePath) return null;
-    await fs.copyFile(absPath, filePath);
+    try {
+      await fs.copyFile(absPath, filePath);
+    } catch {
+      throw new Error("另存失败，请检查源文件与目标位置");
+    }
     return filePath;
   }
 

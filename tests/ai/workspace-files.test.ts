@@ -46,6 +46,34 @@ describe("readWorkspaceFile", () => {
     expect(r.dataUrl).toBe("data:image/png;base64,iVBORw==");
   });
 
+  it("真实 PNG（含 NUL 字节）按扩展名返回 image", async () => {
+    const p = path.join(base, "real.png");
+    await writeFile(
+      p,
+      Buffer.from([
+        0x89,
+        0x50,
+        0x4e,
+        0x47,
+        0x0d,
+        0x0a,
+        0x1a,
+        0x0a, // PNG 签名
+        0x00,
+        0x00,
+        0x00,
+        0x0d, // IHDR 长度字段（含 NUL）
+        0x49,
+        0x48,
+        0x44,
+        0x52, // "IHDR"
+      ]),
+    );
+    const r = await readWorkspaceFile(p);
+    expect(r.kind).toBe("image");
+    expect(r.dataUrl).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/);
+  });
+
   it("ENOENT 抛中文文案", async () => {
     await expect(readWorkspaceFile(path.join(base, "nope"))).rejects.toThrow(
       "文件不存在",

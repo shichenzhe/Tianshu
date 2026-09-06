@@ -3,6 +3,8 @@
  * vitest 可直接测试。路径 resolve 取 fullAccess 语义——绝对路径直接用，
  * 相对以 workspacePath 为基，不做越界拒绝（读操作，路径源自会话内
  * write_file 记录；full access 模式可写工作空间外绝对路径，须放行）。
+ * 图片按扩展名先行识别（真实 PNG/JPEG 等普遍含 NUL 字节），
+ * NUL 检查仅用于文本候选文件。
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -34,6 +36,29 @@ export function resolveFilePath(
     : path.resolve(workspacePath, relPath);
 }
 
+/** 图片按扩展名识别 → base64 dataURL；扩展名未收录返回 null（先于 NUL 检查） */
+function toImageContent(
+  absPath: string,
+  buf: Buffer,
+  size: number,
+): WorkspaceFileContent | null {
+  const mime = IMAGE_MIME[path.extname(absPath).toLowerCase()];
+  if (!mime) return null;
+  return {
+    kind: "image",
+    dataUrl: `data:${mime};base64,${buf.toString("base64")}`,
+    size,
+  };
+}
+
+/** 文本候选：含 NUL 字节视为不支持的二进制格式 */
+function toTextContent(buf: Buffer, size: number): WorkspaceFileContent {
+  if (buf.includes(0)) {
+    throw new Error("该格式暂不支持预览，请另存查看");
+  }
+  return { kind: "text", content: buf.toString("utf8"), size };
+}
+
 export async function readWorkspaceFile(
   absPath: string,
 ): Promise<WorkspaceFileContent> {
@@ -46,17 +71,7 @@ export async function readWorkspaceFile(
   if (!stat.isFile()) throw new Error("目标是目录，无法预览");
   if (stat.size > READ_LIMIT) throw new Error("文件超过 512KB 预览上限");
   const buf = await fs.readFile(absPath);
-  if (buf.includes(0)) {
-    throw new Error("该格式暂不支持预览，请另存查看");
-  }
-  const ext = path.extname(absPath).toLowerCase();
-  const mime = IMAGE_MIME[ext];
-  if (mime) {
-    return {
-      kind: "image",
-      dataUrl: `data:${mime};base64,${buf.toString("base64")}`,
-      size: stat.size,
-    };
-  }
-  return { kind: "text", content: buf.toString("utf8"), size: stat.size };
+  const image = toImageContent(absPath, buf, stat.size);
+  if (image) return image;
+  return toTextContent(buf, stat.size);
 }

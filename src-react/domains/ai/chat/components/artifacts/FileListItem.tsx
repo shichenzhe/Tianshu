@@ -68,7 +68,11 @@ function FileListItem({ file, workspaceId, onPreview }: FileListItemProps) {
       aria-disabled={writing}
       onClick={() => !writing && onPreview(file)}
       onKeyDown={(e) => {
-        if ((e.key === "Enter" || e.key === " ") && !writing) onPreview(file);
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (!writing) onPreview(file);
+        }
       }}
     >
       <TooltipProvider>

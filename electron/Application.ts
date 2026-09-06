@@ -15,6 +15,8 @@ import {
 } from "./domains/ai/agent/mcp-manager";
 import { McpRepository } from "./domains/ai/mcp/mcp.repo";
 import { SkillRepository } from "./domains/ai/skill/skill.repo";
+import AutomationRepository from "./domains/ai/automation/automation.repo";
+import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -26,6 +28,7 @@ const __dirname = path.dirname(__filename);
 
 export default class Application {
   private databaseVerson: number;
+  private scheduler = new AutomationScheduler();
   constructor(databaseVerson: number) {
     this.databaseVerson = databaseVerson;
   }
@@ -36,6 +39,7 @@ export default class Application {
   async execute() {
     await this.initDatabase();
     this.registerServices();
+    this.scheduler.start();
     console.info("register dbservice success");
   }
 
@@ -44,6 +48,7 @@ export default class Application {
    */
   private async initDatabase(): Promise<void> {
     app.on("quit", () => {
+      this.scheduler.stop();
       prisma.$disconnect();
       console.info("database closed");
     });
@@ -140,5 +145,7 @@ export default class Application {
     new UpdateLogService({
       logFilePath: path.join(path.join(__dirname, "docs"), "update-log.md"),
     });
+    // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
+    new AutomationRepository();
   }
 }

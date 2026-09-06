@@ -43,7 +43,15 @@
     "openFolder": "Open Folder",
     "share": "Share Task",
     "batchOps": "Batch Actions",
-    "comingSoon": "Coming soon"
+    "comingSoon": "Coming soon",
+    "batchSelectAll": "Select all",
+    "batchDelete": "Delete",
+    "batchArchive": "Archive",
+    "batchDeleteTitle": "Delete sessions",
+    "batchDeleteConfirm": "Delete {{count}} selected sessions? This cannot be undone.",
+    "batchDeleted": "Deleted {{count}} sessions",
+    "batchArchived": "Archived {{count}} sessions",
+    "batchPartial": "Partially done: {{ok}}/{{total}}"
   },
   "defaultWorkspaceName": "Default Workspace",
   "renameSession": "Rename Session",
@@ -74,8 +82,16 @@
     "expert": "Expert",
     "noAssistant": "No Assistant",
     "skill": "Skills",
-    "skillHint": "Type @ skill-name to invoke",
-    "connector": "Connectors"
+    "connector": "Connectors",
+    "searchExperts": "Search experts",
+    "searchSkills": "Search skills",
+    "skillEmpty": "No skills yet — add one below",
+    "skillNoMatch": "No matching skills",
+    "expertNoMatch": "No matching experts",
+    "summonExperts": "Get more experts",
+    "addLocalSkill": "Add skill from local",
+    "manageSkills": "Manage skills",
+    "loadFailed": "Failed to load, please retry"
   },
   "message": {
     "usage": "{{input}} input / {{output}} output tokens",
@@ -228,5 +244,17 @@
       "local": "Local"
     },
     "createSkillPrompt": "Please help me create a skill: "
+  },
+  "usage": {
+    "title": "Context Usage",
+    "system": "System Prompt",
+    "tools": "Tools & Sub-agents",
+    "messages": "Messages",
+    "mcp": "Connectors & MCP",
+    "skills": "Skills",
+    "used": "Used {{used}} / {{limit}}",
+    "noLimit": "Used {{used}} / --",
+    "overflow": "Text too long — trim it or switch models",
+    "unavailable": "No data (no model configured or session missing)"
   }
 }

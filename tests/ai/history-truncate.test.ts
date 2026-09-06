@@ -33,6 +33,25 @@ describe("历史截断", () => {
     expect(truncateHistory(list, undefined)).toHaveLength(3);
   });
 
+  it("未超预算全量保留（前缀稳定，只追加）", () => {
+    const list = [msg("a"), msg("b"), msg("c")];
+    expect(truncateHistory(list, 10)).toHaveLength(3);
+  });
+
+  it("超预算一次截到滞回带（80%），多丢头部消息换多轮前缀稳定", () => {
+    // 10 条各 10 token，budget 90：total 100 超窗 → 目标 72 → 保留 7 条
+    const list = Array.from({ length: 10 }, () => msg("t".repeat(20)));
+    const kept = truncateHistory(list, 90);
+    expect(kept).toHaveLength(7);
+    expect(kept).toEqual(list.slice(3));
+  });
+
+  it("reserveTokens 先扣除输出与固定开销，预算从剩余窗口计算", () => {
+    const list = [msg("a"), msg("b"), msg("c")];
+    // budget = max(1, 10 - 8) = 2 → total 3 超窗 → 目标 1.6 → 仅保最近一条
+    expect(truncateHistory(list, 10, { reserveTokens: 8 })).toEqual([msg("c")]);
+  });
+
   it("超窗从最老丢弃", () => {
     const list = [msg("x".repeat(1000)), msg("y"), msg("z")];
     const kept = truncateHistory(list, 100);

@@ -23,7 +23,11 @@ import {
   type ToolCallBlock,
 } from "./blocks";
 import { mergeParams, type ChatModelParams } from "./param-merge";
-import { truncateHistory } from "./history-truncate";
+import { estimateReserveTokens, truncateHistory } from "./history-truncate";
+import {
+  computeUsageBreakdown,
+  type ContextUsageBreakdown,
+} from "./context-usage";
 import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
@@ -512,10 +516,13 @@ export async function runChatStream(
   let errorCode: string | undefined;
   let errorMessage: string | undefined;
 
-  const messages = truncateHistory(
-    options.history,
-    options.contextWindow,
-  ).flatMap((m) => blocksToModelMessages(parseBlocks(m.blocks), m.role));
+  const messages = truncateHistory(options.history, options.contextWindow, {
+    reserveTokens: estimateReserveTokens(
+      options.params.maxTokens,
+      options.system,
+      options.toolDefinitions ?? [],
+    ),
+  }).flatMap((m) => blocksToModelMessages(parseBlocks(m.blocks), m.role));
 
   const streamOptions = {
     model: options.model,
@@ -667,6 +674,10 @@ export default class ChatService {
     ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
     ipcMain.handle("chat:status", (_, sessionId: number) =>
       this.status(sessionId),
+    );
+    // 上下文用量拆解（输入框环形指示器数据源）
+    ipcMain.handle("chat:usage", (_, sessionId: number) =>
+      this.getUsageBreakdown(sessionId),
     );
     // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具
     ipcMain.handle(
@@ -1113,6 +1124,84 @@ export default class ChatService {
     maxSteps: number = DEFAULT_MAX_STEPS,
   ): Promise<void> {
     const startedAt = Date.now();
+    const ctx = await this.assembleContext(sessionId, overrides);
+    try {
+      const result = await runChatStream({
+        model: createLanguageModel(
+          {
+            type: ctx.providerRow.type,
+            baseUrl: ctx.providerRow.baseUrl,
+            apiKey: ctx.providerRow.apiKey ?? undefined,
+            extraHeaders: ctx.providerRow.extraHeaders,
+          },
+          ctx.modelRow.modelId,
+        ),
+        system: ctx.systemWithSummary,
+        history: ctx.history,
+        contextWindow: ctx.modelRow.contextWindow ?? undefined,
+        params: ctx.merged,
+        abortSignal: abort.signal,
+        toolDefinitions:
+          ctx.mode === "ask"
+            ? []
+            : this.collectToolDefinitions(ctx.agent, ctx.skills),
+        agent: ctx.agent,
+        maxSteps,
+        onChunk: (chunk) => {
+          // 先累积主进程快照（供切回会话恢复），再照常推送渲染层；
+          // 流收尾（finally 清理后）到达的迟到工具事件只转发不落快照
+          if (this.aborts.has(sessionId)) {
+            this.accumulateSnapshot(sessionId, chunk);
+          }
+          this.emit(sender, sessionId, chunk);
+        },
+      });
+
+      // 持久化 assistant 消息（中断也保留已生成部分）
+      if (result.blocks.length > 0 || result.errorCode) {
+        await this.sessions.appendMessage({
+          sessionId,
+          role: "assistant",
+          blocks: serializeBlocks(result.blocks),
+          modelId: ctx.modelId,
+          assistantId: ctx.session.assistantId ?? undefined,
+          error: result.errorMessage,
+          durationMs: Date.now() - startedAt,
+        } satisfies AppendMessageParams);
+      }
+      if (result.errorCode) {
+        this.emit(sender, sessionId, {
+          type: "error",
+          errorCode: result.errorCode,
+          message: result.errorMessage ?? "",
+        });
+      } else {
+        this.emit(sender, sessionId, { type: "finish" });
+        // 首轮问答完成 → AI 起标题（不阻塞、失败静默，spec §6）
+        void this.generateTitleIfFirstExchange(sessionId, sender, {
+          type: ctx.providerRow.type,
+          baseUrl: ctx.providerRow.baseUrl,
+          apiKey: ctx.providerRow.apiKey ?? undefined,
+          extraHeaders: ctx.providerRow.extraHeaders,
+          modelId: ctx.modelRow.modelId,
+        });
+      }
+    } finally {
+      this.aborts.delete(sessionId);
+      this.snapshots.delete(sessionId);
+      // 中断/收尾：作废全部未决审批（resolve false），释放挂起的 execute（spec 决策 #5）
+      this.approvals.voidAll();
+    }
+  }
+
+  /**
+   * 上下文组装（send 与用量拆解共用）：会话/模型/助手 → 参数合并 →
+   * 压缩态过滤历史 → agent/模式/技能 → system（含压缩摘要）
+   */
+  private async assembleContext(
+    sessionId: number,
+    overrides?: ChatModelParams,
+  ) {
     const session = await this.sessions.getSession(sessionId);
     if (!session) {
       throw new Error("SESSION_NOT_FOUND");
@@ -1192,70 +1281,46 @@ export default class ChatService {
       compacted && session.summary
         ? `${baseSystem ? `${baseSystem}\n\n` : ""}【此前对话摘要】\n${session.summary}`
         : baseSystem;
-    try {
-      const result = await runChatStream({
-        model: createLanguageModel(
-          {
-            type: providerRow.type,
-            baseUrl: providerRow.baseUrl,
-            apiKey: providerRow.apiKey ?? undefined,
-            extraHeaders: providerRow.extraHeaders,
-          },
-          modelRow.modelId,
-        ),
-        system: systemWithSummary,
-        history,
-        contextWindow: modelRow.contextWindow ?? undefined,
-        params: merged,
-        abortSignal: abort.signal,
-        toolDefinitions:
-          mode === "ask" ? [] : this.collectToolDefinitions(agent, skills),
-        agent,
-        maxSteps,
-        onChunk: (chunk) => {
-          // 先累积主进程快照（供切回会话恢复），再照常推送渲染层；
-          // 流收尾（finally 清理后）到达的迟到工具事件只转发不落快照
-          if (this.aborts.has(sessionId)) {
-            this.accumulateSnapshot(sessionId, chunk);
-          }
-          this.emit(sender, sessionId, chunk);
-        },
-      });
+    return {
+      session,
+      modelId,
+      modelRow,
+      providerRow,
+      assistantRow,
+      merged,
+      compacted,
+      history,
+      agent,
+      mode,
+      skills,
+      baseSystem,
+      systemWithSummary,
+    };
+  }
 
-      // 持久化 assistant 消息（中断也保留已生成部分）
-      if (result.blocks.length > 0 || result.errorCode) {
-        await this.sessions.appendMessage({
-          sessionId,
-          role: "assistant",
-          blocks: serializeBlocks(result.blocks),
-          modelId,
-          assistantId: session.assistantId ?? undefined,
-          error: result.errorMessage,
-          durationMs: Date.now() - startedAt,
-        } satisfies AppendMessageParams);
-      }
-      if (result.errorCode) {
-        this.emit(sender, sessionId, {
-          type: "error",
-          errorCode: result.errorCode,
-          message: result.errorMessage ?? "",
-        });
-      } else {
-        this.emit(sender, sessionId, { type: "finish" });
-        // 首轮问答完成 → AI 起标题（不阻塞、失败静默，spec §6）
-        void this.generateTitleIfFirstExchange(sessionId, sender, {
-          type: providerRow.type,
-          baseUrl: providerRow.baseUrl,
-          apiKey: providerRow.apiKey ?? undefined,
-          extraHeaders: providerRow.extraHeaders,
-          modelId: modelRow.modelId,
-        });
-      }
-    } finally {
-      this.aborts.delete(sessionId);
-      this.snapshots.delete(sessionId);
-      // 中断/收尾：作废全部未决审批（resolve false），释放挂起的 execute（spec 决策 #5）
-      this.approvals.voidAll();
+  /**
+   * 上下文用量拆解（chat:usage）：与下次请求同口径组装并按五类估算
+   * token 占比；会话缺失/未配模型返回 null（前端灰态）
+   */
+  async getUsageBreakdown(
+    sessionId: number,
+  ): Promise<ContextUsageBreakdown | null> {
+    try {
+      const ctx = await this.assembleContext(sessionId);
+      const toolDefinitions =
+        ctx.mode === "ask"
+          ? []
+          : this.collectToolDefinitions(ctx.agent, ctx.skills);
+      return computeUsageBreakdown({
+        systemWithSummary: ctx.systemWithSummary,
+        skills: ctx.skills,
+        toolDefinitions,
+        history: ctx.history,
+        contextWindow: ctx.modelRow.contextWindow ?? null,
+        params: ctx.merged,
+      });
+    } catch {
+      return null;
     }
   }
 

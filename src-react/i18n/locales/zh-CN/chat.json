@@ -43,7 +43,15 @@
     "openFolder": "打开文件夹",
     "share": "分享任务",
     "batchOps": "批量操作",
-    "comingSoon": "功能开发中"
+    "comingSoon": "功能开发中",
+    "batchSelectAll": "全选",
+    "batchDelete": "删除",
+    "batchArchive": "归档",
+    "batchDeleteTitle": "批量删除会话",
+    "batchDeleteConfirm": "确定要删除选中的 {{count}} 个会话吗？此操作不可恢复。",
+    "batchDeleted": "已删除 {{count}} 个会话",
+    "batchArchived": "已将 {{count}} 个会话移入归档",
+    "batchPartial": "部分成功：{{ok}}/{{total}}"
   },
   "defaultWorkspaceName": "默认工作空间",
   "renameSession": "重命名会话",
@@ -74,8 +82,16 @@
     "expert": "专家",
     "noAssistant": "不使用助手",
     "skill": "技能",
-    "skillHint": "输入 @ 技能名可调用",
-    "connector": "连接器"
+    "connector": "连接器",
+    "searchExperts": "搜索专家",
+    "searchSkills": "搜索技能",
+    "skillEmpty": "暂无可用技能，点击下方添加",
+    "skillNoMatch": "未找到相关技能",
+    "expertNoMatch": "未找到相关专家",
+    "summonExperts": "召唤更多专家",
+    "addLocalSkill": "从本地添加技能",
+    "manageSkills": "管理技能",
+    "loadFailed": "加载失败，请重试"
   },
   "message": {
     "usage": "{{input}} 输入 / {{output}} 输出 tokens",
@@ -228,5 +244,17 @@
       "local": "本地"
     },
     "createSkillPrompt": "请帮我创建一个技能:"
+  },
+  "usage": {
+    "title": "上下文用量",
+    "system": "系统提示词",
+    "tools": "工具及子智能体",
+    "messages": "对话消息",
+    "mcp": "连接器及 MCP",
+    "skills": "技能",
+    "used": "已使用 {{used}} / {{limit}}",
+    "noLimit": "已使用 {{used}} / --",
+    "overflow": "文本过长，请截断或更换模型",
+    "unavailable": "暂无数据（未配置模型或会话不存在）"
   }
 }

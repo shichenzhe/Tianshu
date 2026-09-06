@@ -19,6 +19,9 @@ export interface SessionRecord {
   lastMessageAt?: string;
   pinnedAt?: string;
   archivedAt?: string;
+  /** /compact 摘要(v8):存在即压缩态;compactedUpToId 为压缩覆盖点消息 id */
+  summary?: string | null;
+  compactedUpToId?: number | null;
 }
 
 export interface SessionCreateParams {

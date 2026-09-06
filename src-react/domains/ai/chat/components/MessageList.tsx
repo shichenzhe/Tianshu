@@ -3,7 +3,7 @@
  * 流式期间 thinking/工具/text 拼成完整 blocks，与历史消息同走
  * 「深度思考面板 + 正文」管道；审批横幅留在面板外逐条渲染
  */
-import { useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 
@@ -24,6 +24,8 @@ interface MessageListProps {
   sessionId: number | null;
   /** 当前工作空间 id；null（未选中/加载中）时不挂审批横幅 */
   workspaceId?: number | null;
+  /** /compact 压缩覆盖点:提示条插在该消息之后(随消息流上移) */
+  compactedUpToId?: number | null;
   /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
   onRegenerate?: () => void;
 }
@@ -44,14 +46,12 @@ function searchableText(message: MessageRecord): string {
 export default function MessageList({
   sessionId,
   workspaceId = null,
+  compactedUpToId = null,
   onRegenerate,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
   const isStreaming = useChatStore((state) =>
     sessionId === null ? false : (state.isStreaming[sessionId] ?? false),
-  );
-  const compactNotice = useChatStore((state) =>
-    sessionId === null ? undefined : state.compactNotices[sessionId],
   );
   const stream = useChatStore((state) =>
     sessionId === null ? undefined : state.streams[sessionId],
@@ -215,15 +215,24 @@ export default function MessageList({
       ) : (
         <>
           {messages.map((message, index) => (
-            <MessageItem
-              key={message.id}
-              message={message}
-              isLastAssistant={message.id === lastAssistantId && !isStreaming}
-              onRegenerate={onRegenerate}
-              hitOffset={
-                hitCounts[index] > 0 ? messageOffsets[index] : undefined
-              }
-            />
+            <Fragment key={message.id}>
+              <MessageItem
+                message={message}
+                isLastAssistant={message.id === lastAssistantId && !isStreaming}
+                onRegenerate={onRegenerate}
+                hitOffset={
+                  hitCounts[index] > 0 ? messageOffsets[index] : undefined
+                }
+              />
+              {/* 压缩点标记:钉在压缩轮消息之后,新消息自然排其下方 */}
+              {message.id === compactedUpToId && (
+                <div className="flex justify-center py-1">
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground select-none">
+                    {t("chat:panel.compactDone")}
+                  </span>
+                </div>
+              )}
+            </Fragment>
           ))}
           {liveMessage && <MessageItem message={liveMessage} streaming />}
           {/* 审批横幅保持在面板外（关键交互不埋进折叠区）：
@@ -251,14 +260,6 @@ export default function MessageList({
               ) : null;
             })}
         </>
-      )}
-      {/* /compact 完成:正文下方居中提示条(内存态,切换会话/刷新即隐) */}
-      {compactNotice !== undefined && !isStreaming && (
-        <div className="flex justify-center py-1">
-          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground select-none">
-            {t("chat:panel.compactDone")}
-          </span>
-        </div>
       )}
       <div ref={bottomRef} />
     </div>

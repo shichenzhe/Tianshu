@@ -251,7 +251,8 @@ function ChatPane({
     }
     ChatApi.compact(session.id)
       .then(() => {
-        useChatStore.getState().setCompactNotice(session.id);
+        // sessions 携带 compactedUpToId(提示条随消息流定位);messages 拉压缩轮
+        void queryClient.invalidateQueries({ queryKey: ["sessions"] });
         void queryClient.invalidateQueries({ queryKey: ["messages"] });
       })
       .catch((e: unknown) => toast.error(mapIpcError(e)));
@@ -270,6 +271,7 @@ function ChatPane({
       <MessageList
         sessionId={session.id}
         workspaceId={workspace?.id ?? null}
+        compactedUpToId={session.compactedUpToId ?? null}
         onRegenerate={handleRegenerate}
       />
       {sending && (

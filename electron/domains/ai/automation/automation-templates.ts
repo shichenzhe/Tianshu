@@ -19,8 +19,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "daily-ai-news",
     icon: "Newspaper",
-    titleI18nKey: "chat:automation.template.dailyAiNews.title",
-    descI18nKey: "chat:automation.template.dailyAiNews.desc",
+    titleI18nKey: "chat:automation.templateData.dailyAiNews.title",
+    descI18nKey: "chat:automation.templateData.dailyAiNews.desc",
     prompt:
       "今天是 {{date}} 星期{{weekday}}。请汇总过去一天 AI 领域的重要动态,分「模型发布 / 工具产品 / 行业政策」三节,每条一句话 + 来源,最后给一段 50 字以内的趋势点评。",
     scheduleJson: { mode: "periodic", kind: "daily", time: "09:00" },
@@ -29,8 +29,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "weekly-report",
     icon: "ClipboardList",
-    titleI18nKey: "chat:automation.template.weeklyReport.title",
-    descI18nKey: "chat:automation.template.weeklyReport.desc",
+    titleI18nKey: "chat:automation.templateData.weeklyReport.title",
+    descI18nKey: "chat:automation.templateData.weeklyReport.desc",
     prompt:
       "今天是 {{date}} 星期{{weekday}}。请基于本周工作空间内文件变动,生成一份周报:本周完成 / 数据指标 / 风险与阻塞 / 下周计划,Markdown 输出。",
     scheduleJson: {
@@ -44,8 +44,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "biweekly-review",
     icon: "GitCompare",
-    titleI18nKey: "chat:automation.template.biweeklyReview.title",
-    descI18nKey: "chat:automation.template.biweeklyReview.desc",
+    titleI18nKey: "chat:automation.templateData.biweeklyReview.title",
+    descI18nKey: "chat:automation.templateData.biweeklyReview.desc",
     prompt:
       "今天是 {{date}}。请对工作空间内最近两周的代码/文档做一次双周回顾:亮点、待还的技术债、建议重构点。",
     scheduleJson: {
@@ -60,8 +60,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "monthly-billing",
     icon: "Receipt",
-    titleI18nKey: "chat:automation.template.monthlyBilling.title",
-    descI18nKey: "chat:automation.template.monthlyBilling.desc",
+    titleI18nKey: "chat:automation.templateData.monthlyBilling.title",
+    descI18nKey: "chat:automation.templateData.monthlyBilling.desc",
     prompt:
       "今天是 {{date}}。请汇总本月模型调用账单数据,生成费用月报:分服务商统计、环比变化、异常项预警。",
     scheduleJson: {
@@ -75,8 +75,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "yearly-reminder",
     icon: "Sparkles",
-    titleI18nKey: "chat:automation.template.yearlyReminder.title",
-    descI18nKey: "chat:automation.template.yearlyReminder.desc",
+    titleI18nKey: "chat:automation.templateData.yearlyReminder.title",
+    descI18nKey: "chat:automation.templateData.yearlyReminder.desc",
     prompt:
       "今天是 {{date}}。跨年时刻,请生成本年度 AI 能力使用回顾与明年展望,轻松一点的语气。",
     scheduleJson: {
@@ -91,8 +91,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "workdir-monitor",
     icon: "Radar",
-    titleI18nKey: "chat:automation.template.workdirMonitor.title",
-    descI18nKey: "chat:automation.template.workdirMonitor.desc",
+    titleI18nKey: "chat:automation.templateData.workdirMonitor.title",
+    descI18nKey: "chat:automation.templateData.workdirMonitor.desc",
     prompt:
       "现在是 {{time}}。请快速检查工作空间目录状态:磁盘占用 TOP5、最近修改的 10 个文件,发现异常路径立即指出。",
     scheduleJson: {
@@ -106,8 +106,8 @@ const TEMPLATES: AutomationTemplate[] = [
   {
     slug: "standup-prep",
     icon: "Coffee",
-    titleI18nKey: "chat:automation.template.standupPrep.title",
-    descI18nKey: "chat:automation.template.standupPrep.desc",
+    titleI18nKey: "chat:automation.templateData.standupPrep.title",
+    descI18nKey: "chat:automation.templateData.standupPrep.desc",
     prompt:
       "今天是 {{date}} 星期{{weekday}}。请根据昨天的工作空间产出,准备今日站会三条:昨天完成 / 今天计划 / 需要协助。",
     scheduleJson: {

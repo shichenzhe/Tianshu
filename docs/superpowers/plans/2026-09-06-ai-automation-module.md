@@ -4533,4 +4533,8 @@ git commit -m "chore(automation): 收尾核对与清理"
 
 ## 执行备注（执行中追加）
 
-- （执行者按 Task 18 Step 2 追加）
+- （Task 18 收尾核对，2026-09-07）三项全量检查全绿（lint 无问题 / tsc 无错 / vitest 460 PASS 0 FAIL，其中 automation 8 文件 44 用例全过）。小偏差已直接修复：① automation.api.ts 头注释 "soruce"→"source"；② automation-templates.ts 的 titleI18nKey/descI18nKey 14 处键路径 `chat:automation.template.*`→`chat:automation.templateData.*`（原路径指向不存在的 i18n 键；前端经 camelSlug 推导不消费该字段，纯命名对齐，测试正则同步）。以下语义偏差记录不修：
+  - §1「chat 域唯一改动：ChatStreamResult 增加可选 usage」实际未实施——master 的 chat.service 已在 assistant blocks 产出 `usage` block，runner 的 extractUsage 直接从 block 提取落 run.promptTokens/completionTokens，chat 域零改动，token 落库功能等价、载体不同。
+  - §5「搜索框防抖 300ms」实现为 React `useDeferredValue`（TaskListView），非定时防抖；输入不被过滤重渲染阻塞，效果等价、机制不同。
+  - §5 变量插入入口位于 Prompt 标签行右端下拉（spec ASCII 图为「左下 + 弹菜单」），布局级差异，功能一致。
+  - §1 文件清单为最小集：实际另含 schedule.ts / schedule.schema.ts / camel-slug.ts / use-automation-tasks.ts；automationTask 表额外加 `@@index([enabled])`（调度查询优化）。结构性补充，非语义偏离。

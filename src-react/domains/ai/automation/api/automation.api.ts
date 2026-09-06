@@ -1,7 +1,7 @@
 // src-react/domains/ai/automation/api/automation.api.ts
 /**
  * 自动化任务/运行记录/模板 API(IPC 封装)。
- * 日期字段由主进程 toISOString() 归一;soruce 为后端派生
+ * 日期字段由主进程 toISOString() 归一;source 为后端派生
  * (workspace.directoryPath 有值 = project,无值 = local,spec §0)。
  */
 import { invoke } from "@/lib/ipc";

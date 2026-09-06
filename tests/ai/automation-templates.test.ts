@@ -17,7 +17,7 @@ describe("内置模板", () => {
     for (const t of templates) {
       expect(scheduleSchema.safeParse(t.scheduleJson).success).toBe(true);
       expect(t.prompt).toContain("{{"); // 模板善用变量,保证示例性
-      expect(t.titleI18nKey).toMatch(/^chat:automation\.template\./);
+      expect(t.titleI18nKey).toMatch(/^chat:automation\.templateData\./);
     }
   });
 });

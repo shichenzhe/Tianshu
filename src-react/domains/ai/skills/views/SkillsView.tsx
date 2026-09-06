@@ -15,9 +15,14 @@ import SkillManagerView from "./SkillManagerView";
 
 type SkillView = "discover" | "installed";
 
-export default function SkillsView() {
+export default function SkillsView({
+  initialView,
+}: {
+  /** 入口直达子视图（＋菜单「管理技能」带 ?view=installed） */
+  initialView?: SkillView;
+}) {
   const { t } = useTranslation(["chat", "common"]);
-  const [view, setView] = useState<SkillView>("discover");
+  const [view, setView] = useState<SkillView>(initialView ?? "discover");
 
   const recordsQuery = useQuery({
     queryKey: ["skillRecords"],

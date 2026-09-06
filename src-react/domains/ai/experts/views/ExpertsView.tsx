@@ -2,8 +2,9 @@
  * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=技能管理 / 连接器=MCP）
  * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillsView（P-B 双视图）
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { Bot, Plug, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -15,7 +16,21 @@ type ExpertTab = "assistants" | "skills" | "connectors";
 
 export default function ExpertsView() {
   const { t } = useTranslation(["chat", "common"]);
+  const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<ExpertTab>("assistants");
+  // 入口直达：?tab=skills|connectors|assistants（挂载与变化都切换）
+  const tabParam = searchParams.get("tab");
+  useEffect(() => {
+    if (
+      tabParam === "skills" ||
+      tabParam === "connectors" ||
+      tabParam === "assistants"
+    ) {
+      setTab(tabParam);
+    }
+  }, [tabParam]);
+  // 技能子视图直达：?view=installed（key 变化强制重挂载消费 initialView）
+  const viewParam = searchParams.get("view");
 
   const tabs: Array<{
     value: ExpertTab;
@@ -60,7 +75,12 @@ export default function ExpertsView() {
         ))}
       </div>
       {tab === "assistants" && <AssistantSettingsView />}
-      {tab === "skills" && <SkillsView />}
+      {tab === "skills" && (
+        <SkillsView
+          key={viewParam ?? "discover"}
+          initialView={viewParam === "installed" ? "installed" : "discover"}
+        />
+      )}
       {tab === "connectors" && <McpSettingsView />}
     </div>
   );

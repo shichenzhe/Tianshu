@@ -17,12 +17,14 @@ import {
   type KeyboardEvent,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Send, Sparkles, Square, SquareTerminal } from "lucide-react";
+import { Send, Sparkles, Square, SquareTerminal, X, Zap } from "lucide-react";
 
 import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store";
 import SkillApi from "../../skills/api/skill.api";
+import AssistantApi from "../../api/assistant.api";
+import { mapIpcError } from "../lib/error-message";
 
 import { Button } from "@/components/ui/button";
 import { invoke } from "@/lib/ipc";
@@ -37,6 +39,7 @@ import {
 } from "../lib/inline-tokens";
 import type { PendingFile } from "../lib/pending-file";
 import ModelPicker from "./ModelPicker";
+import ContextUsageButton from "./context-usage-button";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
 import PlusMenu from "./PlusMenu";
 
@@ -64,8 +67,6 @@ interface ChatInputProps {
   currentModelId?: number;
   /** 工作空间（@ 文件联想与读取）；未绑定为 null */
   workspaceId: number | null;
-  /** 打开技能目录（ChatPane 复用同款 handler） */
-  onOpenSkills: () => void;
   /** 跳转连接器（MCP）管理页 */
   onOpenMcp: () => void;
   /** 斜杠命令执行(/compact 等);ChatView 接压缩等实现 */
@@ -114,7 +115,6 @@ export default function ChatInput({
   currentAssistantId,
   currentModelId,
   workspaceId,
-  onOpenSkills,
   onOpenMcp,
   onRunCommand,
   onSend,
@@ -128,6 +128,7 @@ export default function ChatInput({
     query: string;
   } | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
   const consumePendingPrompt = useCreateSkillPromptStore(
@@ -154,13 +155,23 @@ export default function ChatInput({
     staleTime: 300_000,
   });
 
-  // 已安装技能（/ 面板候选;仅启用项）
+  // 已安装技能（/ 面板候选 + 输入框启用标签行；与＋菜单技能浮层共享缓存）
   const skillsQuery = useQuery({
     queryKey: ["skillRecords"],
     queryFn: () => SkillApi.list(),
-    enabled: suggest?.type === "slash",
     staleTime: 60_000,
   });
+  const enabledSkills = (skillsQuery.data ?? []).filter((r) => r.enabled);
+
+  // 当前专家名（徽章展示；与专家子菜单共享缓存）
+  const assistantsQuery = useQuery({
+    queryKey: ["assistants"],
+    queryFn: () => AssistantApi.list(),
+    staleTime: 60_000,
+  });
+  const assistantName = assistantsQuery.data?.find(
+    (a) => a.id === currentAssistantId,
+  )?.name;
 
   // 联想候选:slash 面板 = 命令(SLASH_COMMANDS)+ 技能(名匹配,在前);
   // at 面板 = 文件(空 query 最短路径在前 / 非空 substring 匹配)
@@ -198,6 +209,16 @@ export default function ChatInput({
     highlightIndex,
     Math.max(suggestCandidates.length - 1, 0),
   );
+
+  /** 标签行点击移除 = 禁用技能（与＋菜单技能浮层同口径） */
+  const handleDisableSkill = async (name: string) => {
+    try {
+      await SkillApi.setEnabled(name, false);
+      await queryClient.invalidateQueries({ queryKey: ["skillRecords"] });
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  };
 
   /** 在光标处插入 token 文本(替换正在输入的触发片段),光标落在 token 后空格 */
   const insertAtCaret = useCallback(
@@ -484,12 +505,30 @@ export default function ChatInput({
           )}
         </div>
       )}
+      {/* 已启用技能标签行：点击移除（禁用），与＋菜单技能浮层联动 */}
+      {enabledSkills.length > 0 && (
+        <div className="flex flex-wrap gap-1 pb-1">
+          {enabledSkills.map((skill) => (
+            <button
+              key={skill.name}
+              type="button"
+              title={skill.description ?? skill.name}
+              onClick={() => void handleDisableSkill(skill.name)}
+              className="inline-flex max-w-48 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary hover:border-primary/30"
+            >
+              <Zap className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{skill.name}</span>
+              <X className="h-2.5 w-2.5 shrink-0 opacity-60" />
+            </button>
+          ))}
+        </div>
+      )}
       {/* 输入区:镜像层(可见文字+pill)+ textarea(透明文字,接收输入) */}
       <div className="relative mt-2">
         <div
           ref={mirrorRef}
           aria-hidden
-          className="pointer-events-none absolute inset-0 max-h-40 overflow-hidden border-0 p-0 whitespace-pre-wrap break-words text-sm leading-relaxed"
+          className="pointer-events-none absolute inset-0 max-h-56 overflow-hidden border-0 p-0 whitespace-pre-wrap break-words text-sm leading-relaxed"
         >
           {segments.map((segment, index) =>
             segment.isToken ? (
@@ -518,7 +557,7 @@ export default function ChatInput({
           placeholder={t(
             hasModel ? "chat:input.placeholder" : "chat:input.modelRequired",
           )}
-          className="relative min-h-6 w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-40 outline-none text-transparent caret-foreground placeholder:text-muted-foreground [&::-webkit-scrollbar]:hidden"
+          className="relative min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-56 outline-none text-transparent caret-foreground placeholder:text-muted-foreground [&::-webkit-scrollbar]:hidden"
         />
       </div>
       {/* 下行：左 ＋菜单 + 权限胶囊 + 模式徽标，右 模型 + 发送/停止 */}
@@ -533,7 +572,6 @@ export default function ChatInput({
                 insertAtCaret(`@${filePath} `);
               }
             }}
-            onOpenSkills={onOpenSkills}
             onOpenMcp={onOpenMcp}
           />
           <PermissionCapsule
@@ -541,6 +579,14 @@ export default function ChatInput({
             accessMode={accessMode}
             onChange={onAccessModeChange}
           />
+          {assistantName && (
+            <span
+              className="max-w-32 truncate rounded-full bg-primary-subtle px-2 py-0.5 text-xs text-primary"
+              title={assistantName}
+            >
+              {assistantName}
+            </span>
+          )}
           {currentMode !== "agent" && (
             <span className="text-xs text-muted-foreground">
               {currentMode === "ask" ? "ASK" : "PLAN"}
@@ -548,6 +594,12 @@ export default function ChatInput({
           )}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <ContextUsageButton
+            sessionId={sessionId}
+            currentModelId={currentModelId}
+            sending={sending}
+            draft={content}
+          />
           <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
           {sending ? (
             /* 停止:黑底圆钮 + 白色实心方块 */

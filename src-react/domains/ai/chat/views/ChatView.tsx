@@ -18,7 +18,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { invoke } from "@/lib/ipc";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
@@ -39,7 +38,7 @@ const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
 const ASSISTANTS_ROUTE = "/module/ai/experts";
-const MCP_ROUTE = "/module/ai/experts";
+const MCP_ROUTE = "/module/ai/experts?tab=connectors";
 
 export default function ChatView() {
   const navigate = useNavigate();
@@ -170,15 +169,6 @@ function ChatPane({
     }
   };
 
-  // 技能目录一键打开（P2 skill 无管理界面，以此保证发现性）
-  const openSkillDir = async () => {
-    try {
-      await invoke("skill:openDir");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    }
-  };
-
   // Agent 进度数据：选择器只返回原始值（活跃工具 id/名、步数），流式 delta
   // 不触发本面板重渲染，仅轮次切换或活跃工具变化时更新
   const activeToolId = useChatStore((state) => {
@@ -277,7 +267,7 @@ function ChatPane({
       {sending && (
         <AgentProgress stepCount={stepCount} activeTool={activeTool} />
       )}
-      <div className="border-t border-border/50 p-4">
+      <div className="p-4">
         <ChatInput
           hasModel={hasModel}
           sending={sending}
@@ -288,7 +278,6 @@ function ChatPane({
           currentModelId={session.currentModelId}
           workspaceId={workspace?.id ?? null}
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
-          onOpenSkills={openSkillDir}
           onOpenMcp={() => onOpenSettings("mcp")}
           onRunCommand={handleRunCommand}
           onSend={handleSend}

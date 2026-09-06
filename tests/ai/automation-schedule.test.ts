@@ -60,6 +60,26 @@ describe("computeNextRun:periodic", () => {
     );
   });
 
+  it("biweekly:基点落后 from 多个周期仍取未来双周点(稳态回归)", () => {
+    // 回退相位后必须再前推到未来:anchor 落后 from 超过一个周期时,
+    // 不允许返回过去相位点(否则 runner 立即触发且反复触发)
+    const cfg = {
+      mode: "periodic",
+      kind: "biweekly",
+      anchorDate: "2026-09-07",
+      weekday: 1,
+      time: "10:00",
+    } as const;
+    // from=anchor+18d(09-25) 已过 09-21 → 10-05(anchor+28d)
+    expect(computeNextRun(cfg, new Date("2026-09-25T12:00:00"))).toEqual(
+      new Date("2026-10-05T10:00:00"),
+    );
+    // 序列 09-07/09-21/10-05/10-19/11-02/11-16/11-30/12-14;from 12-01 → 12-14
+    expect(computeNextRun(cfg, new Date("2026-12-01T08:00:00"))).toEqual(
+      new Date("2026-12-14T10:00:00"),
+    );
+  });
+
   it("monthly:正常推进,当月无 31 号则跳过该月", () => {
     const cfg = {
       mode: "periodic",
@@ -119,5 +139,15 @@ describe("computeNextRun:interval", () => {
     expect(computeNextRun(cfg, at("10:00"))).toEqual(
       new Date("2026-09-07T00:00:00"),
     );
+  });
+
+  it("weekdays 空数组等同无限制(纯相位累加,防死循环回归)", () => {
+    const cfg = {
+      mode: "interval",
+      value: 30,
+      unit: "minute",
+      weekdays: [],
+    } as const;
+    expect(computeNextRun(cfg, at("10:00"))).toEqual(at("10:30"));
   });
 });

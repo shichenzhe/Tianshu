@@ -30,6 +30,9 @@ function minutes(cfg: Extract<ScheduleConfig, { mode: "interval" }>): number {
   return cfg.unit === "hour" ? cfg.value * 60 : cfg.value;
 }
 
+/** 双周周期毫秒数(用毫秒常量推进相位,避免月末 DST 争议) */
+const FORTNIGHT_MS = 14 * 24 * 3600 * 1000;
+
 function nextPeriodic(
   cfg: Extract<ScheduleConfig, { mode: "periodic" }>,
   from: Date,
@@ -54,12 +57,16 @@ function nextPeriodic(
     case "biweekly": {
       const [y, m, d] = cfg.anchorDate.split("-").map(Number);
       const anchor = new Date(y, m - 1, d, ...parseTime(cfg.time));
-      // 相位对齐:回退 anchor 到 from 之前最近的双周点,再加 14 天
+      // 相位对齐:anchor 在 from 之后则先回退到 from 之前最近的双周点;
+      // anchor 落后 from 超过一个周期时(稳态)再前推,保证返回值恒为未来时刻
       let base = anchor;
       while (base > from) {
-        base = new Date(base.getTime() - 14 * 24 * 3600 * 1000);
+        base = new Date(base.getTime() - FORTNIGHT_MS);
       }
-      return new Date(base.getTime() + 14 * 24 * 3600 * 1000);
+      while (new Date(base.getTime() + FORTNIGHT_MS) <= from) {
+        base = new Date(base.getTime() + FORTNIGHT_MS);
+      }
+      return new Date(base.getTime() + FORTNIGHT_MS);
     }
     case "monthly": {
       const cursor = new Date(from);
@@ -126,7 +133,8 @@ function nextInterval(
   do {
     next = addMinutes(next, step);
   } while (next <= from);
-  if (!cfg.weekdays) {
+  // 空数组视同不限制(undefined),否则顺延循环对空集合恒真会死循环
+  if (!cfg.weekdays || cfg.weekdays.length === 0) {
     return next;
   }
   if (cfg.weekdays.includes(isoWeekday(next))) {

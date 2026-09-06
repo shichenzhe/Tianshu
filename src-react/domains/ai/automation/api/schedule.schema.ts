@@ -62,7 +62,8 @@ export const scheduleSchema = z.discriminatedUnion("mode", [
     mode: z.literal("interval"),
     value: z.number().int().positive(),
     unit: z.enum(["minute", "hour"]),
-    weekdays: z.array(z.number().int().min(1).max(7)).optional(),
+    // min(1) 双保险:空数组在 computeNextRun 视同不限制,但配置侧直接拒收
+    weekdays: z.array(z.number().int().min(1).max(7)).min(1).optional(),
   }),
 ]);
 

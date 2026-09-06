@@ -1000,6 +1000,14 @@ export default class ChatService {
       if (tailIds.length > 0) {
         await prisma.message.deleteMany({ where: { id: { in: tailIds } } });
       }
+      // 压缩点消息被删(重生成目标在压缩轮或更早)→ 摘要随之失效:
+      // 不清会让 history 过滤掉压缩点之前的全部消息 → 空上下文
+      if (
+        session.compactedUpToId != null &&
+        tailIds.includes(session.compactedUpToId)
+      ) {
+        await this.sessions.updateSummary(sessionId, null, null);
+      }
       await this.streamAndPersist(sessionId, abort, sender);
     } catch (error) {
       this.aborts.delete(sessionId);

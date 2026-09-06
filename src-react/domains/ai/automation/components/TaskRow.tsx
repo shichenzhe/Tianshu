@@ -1,6 +1,7 @@
 // src-react/domains/ai/automation/components/TaskRow.tsx
 /** 单行任务:名称/归属/scheduleText/启停开关/状态;行主体点击进编辑 */
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,10 +17,14 @@ export function TaskRow({
   onClick: () => void;
 }) {
   const { t } = useTranslation(["chat"]);
+  const queryClient = useQueryClient();
   const { batchMode, selectedIds, toggleSelected } = useAutomationStore();
   async function handleToggle(next: boolean) {
     try {
       await AutomationApi.toggle(task.id, next);
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", "tasks"],
+      });
       toast.success(
         t(
           next

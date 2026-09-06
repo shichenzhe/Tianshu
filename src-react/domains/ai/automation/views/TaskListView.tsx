@@ -100,6 +100,7 @@ export default function TaskListView({
           <Button
             onClick={() => {
               setTemplate(undefined);
+              setEditing(undefined);
               setDialogOpen(true);
             }}
           >

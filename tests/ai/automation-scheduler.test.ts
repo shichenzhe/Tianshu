@@ -19,13 +19,15 @@ vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 vi.mock("../../electron/domains/ai/automation/automation-runner", () => ({
-  executeTask: vi.fn(),
+  // 返回 resolved promise:launch 内 .catch/.finally 链需要(裸 vi.fn() 返回 undefined 会在 fire 处抛)
+  executeTask: vi.fn(() => Promise.resolve("success")),
 }));
 
 import AutomationScheduler, {
   decideTick,
   pickRetryTaskIds,
 } from "../../electron/domains/ai/automation/automation-scheduler";
+import { executeTask } from "../../electron/domains/ai/automation/automation-runner";
 import prisma from "../../electron/commons/prisma-client";
 
 const base = {
@@ -165,5 +167,45 @@ describe("AutomationScheduler.tick 调度集合", () => {
     expect(prisma.automationTask.findMany).toHaveBeenCalledWith({
       where: { enabled: true, status: "active" },
     });
+  });
+});
+
+describe("AutomationScheduler.tick 重试联动(once 失败不先 expire)", () => {
+  it("expire 让路待重试任务;scanRetries 独立反查 active+enabled 并以 attempt+1 重试", async () => {
+    const onceFailed = {
+      ...base,
+      status: "active",
+      enabled: true,
+      nextRunAt: null,
+      lastRunAt: new Date("2026-09-07T08:00:00"),
+      scheduleJson:
+        '{"mode":"periodic","kind":"once","runAt":"2026-09-06T09:00:00.000Z"}',
+    };
+    vi.mocked(prisma.automationTask.findMany).mockClear();
+    vi.mocked(prisma.automationTask.findMany)
+      .mockResolvedValueOnce([onceFailed as never]) // tick 决策快照
+      .mockResolvedValueOnce([onceFailed as never]); // scanRetries 独立反查
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      {
+        taskId: 1,
+        status: "failed",
+        attempt: 1,
+        finishedAt: new Date(Date.now() - 120_000),
+      } as never,
+    ]);
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    // 决策树 !nextRunAt 的 expire 让路重试预算:不落 expire 写
+    expect(prisma.automationTask.update).not.toHaveBeenCalled();
+    // 独立反查(不复用 tick 快照,active+enabled 过滤)
+    expect(
+      vi.mocked(prisma.automationTask.findMany).mock.calls[1]?.[0],
+    ).toEqual({
+      where: { id: { in: [1] }, enabled: true, status: "active" },
+    });
+    expect(executeTask).toHaveBeenCalledWith(
+      onceFailed,
+      expect.objectContaining({ triggerType: "retry", attempt: 2 }),
+    );
   });
 });

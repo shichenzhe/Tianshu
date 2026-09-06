@@ -127,16 +127,30 @@ export default class AutomationScheduler {
       const tasks = await prisma.automationTask.findMany({
         where: { enabled: true, status: "active" },
       });
+      const latestRun = await this.loadLatestRuns();
+      // 重试预算集(最新 run failed 且 attempt<3;delayMs=0 不看 60s 冷却,
+      // 冷却期内同样不许 expire):once 非系统失败后 nextRunAt=null、status 仍
+      // active,若决策树 !nextRunAt 先行 expire,任务会被上面的 active 过滤
+      // 出局、永远等不到 scanRetries——故 expire 让路;attempt 耗尽后不再
+      // 入选,由 !nextRunAt 分支兜底置 expired 收尾(spec §7 闭环)
+      const retryPending = new Set(pickRetryTaskIds(latestRun, new Date(), 0));
       let changed = false;
       for (const task of tasks) {
+        // 在途执行不决策:防重试运行中被过期快照误 expire/重复触发
+        if (this.aborts.has(task.id)) {
+          continue;
+        }
         const decision = decideTick(task, new Date(), this.processStartTime);
         if (decision === "noop") {
+          continue;
+        }
+        if (decision === "expire" && retryPending.has(task.id)) {
           continue;
         }
         changed = true;
         await this.applyDecision(task, decision);
       }
-      await this.scanRetries(tasks);
+      await this.scanRetries(latestRun);
       if (changed) {
         this.notifyChanged();
       }
@@ -196,7 +210,10 @@ export default class AutomationScheduler {
     }
   }
 
-  private async scanRetries(tasks: AutomationTaskRow[]): Promise<void> {
+  /** 每 taskId 取最新一条 run(id 倒序取 500 条内首个) */
+  private async loadLatestRuns(): Promise<
+    Map<number, { status: string; attempt: number; finishedAt?: Date }>
+  > {
     const runs = await prisma.automationRun.findMany({
       orderBy: { id: "desc" },
       take: 500,
@@ -214,11 +231,30 @@ export default class AutomationScheduler {
         });
       }
     }
+    return latest;
+  }
+
+  /** 重试扫描:按 run 反查 taskId 独立取任务行(不复用 tick 调度快照——once 失败任务 nextRunAt 已被推进,仍需可重试) */
+  private async scanRetries(
+    latestRun: Map<
+      number,
+      { status: string; attempt: number; finishedAt?: Date }
+    >,
+  ): Promise<void> {
+    const retryIds = pickRetryTaskIds(latestRun, new Date());
+    if (retryIds.length === 0) {
+      return;
+    }
+    // 独立查询同样限 active+enabled:once 失败任务 status 未置 expired 所以
+    // 能入选;attempt 耗尽(=3)后 pickRetryTaskIds 不再给出,交由决策树收尾
+    const tasks = await prisma.automationTask.findMany({
+      where: { id: { in: retryIds }, enabled: true, status: "active" },
+    });
     const byId = new Map(tasks.map((t) => [t.id, t]));
-    for (const taskId of pickRetryTaskIds(latest, new Date())) {
+    for (const taskId of retryIds) {
       const task = byId.get(taskId);
-      const attempt = (latest.get(taskId)?.attempt ?? 0) + 1;
-      if (task && task.enabled) {
+      const attempt = (latestRun.get(taskId)?.attempt ?? 0) + 1;
+      if (task) {
         await this.launch(task, "retry", attempt);
       }
     }

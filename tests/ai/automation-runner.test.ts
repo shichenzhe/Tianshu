@@ -90,6 +90,13 @@ const taskRow = {
   updatedAt: new Date(),
 };
 
+/** once 任务行(advanceTask 终态语义用例:成功才 expired,失败留待重试扫描) */
+const onceRow = {
+  ...taskRow,
+  scheduleJson:
+    '{"mode":"periodic","kind":"once","runAt":"2026-09-06T09:00:00.000Z"}',
+};
+
 describe("executeTask 失败短路", () => {
   it("workspace 缺失 → run failed(workspace_missing) + task error", async () => {
     const { executeTask } =
@@ -171,5 +178,69 @@ describe("executeTask 成功路径", () => {
       }),
     );
     expect(prisma.message.create).toHaveBeenCalledTimes(2);
+  });
+});
+
+/** once 终态两用例共用前置 stub(workspace/model/provider/session 均有效) */
+async function stubOnceHappyPath() {
+  const { executeTask } =
+    await import("../../electron/domains/ai/automation/automation-runner");
+  vi.mocked(prisma.automationRun.create).mockResolvedValue({ id: 1 } as never);
+  vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+    id: 9,
+    directoryPath: null,
+  } as never);
+  vi.mocked(prisma.model.findUnique).mockResolvedValue({
+    id: 1,
+    providerId: 2,
+    modelId: "gpt-test",
+  } as never);
+  vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+    type: "openai-compatible",
+    baseUrl: "https://api.test/v1",
+    apiKey: "k",
+    extraHeaders: null,
+  } as never);
+  vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+  vi.mocked(prisma.automationTask.update).mockClear();
+  return executeTask;
+}
+
+describe("executeTask once 终态(成功才 expired,失败留待重试)", () => {
+  it("once 成功 → task status=expired 且 nextRunAt=null", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "expired",
+          nextRunAt: null,
+          lastRunAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+  it("once 非系统失败(stream 异常) → 不置 expired(nextRunAt=null 留给重试扫描)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockRejectedValue(new Error("ECONNRESET"));
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const data = vi.mocked(prisma.automationTask.update).mock.calls[0]?.[0]
+      .data;
+    expect(data).toMatchObject({
+      nextRunAt: null,
+      lastRunAt: expect.any(Date),
+    });
+    expect(data).not.toHaveProperty("status");
   });
 });

@@ -241,7 +241,7 @@ async function streamAndRecord(
       finishedAt: new Date(),
     },
   });
-  await advanceTask(task, new Date());
+  await advanceTask(task, new Date(), success ? "success" : "failed");
   return success ? "success" : "failed";
 }
 
@@ -269,13 +269,23 @@ async function failRun(
       data: { status: "error", enabled: false, statusNote: errorCode },
     });
   } else {
-    await advanceTask(task, new Date());
+    // 非系统失败:once 不置 expired(留 status=active 待重试扫描,见 advanceTask 注释)
+    await advanceTask(task, new Date(), "failed");
   }
   return "failed";
 }
 
-/** lastRunAt=now;nextRunAt=computeNextRun(once 到期 → expired) */
-async function advanceTask(task: AutomationTaskRow, now: Date): Promise<void> {
+/**
+ * lastRunAt=now;nextRunAt=computeNextRun 推进。
+ * once 的 expired 只在成功路径置位:非系统失败需先走 §7 重试扫描
+ * (nextRunAt=null 但 status 保持 active,重试耗尽后由调度器决策树收尾,
+ * 不得首次失败即 expired——否则被 tick 的 active 过滤出局,零重试)
+ */
+async function advanceTask(
+  task: AutomationTaskRow,
+  now: Date,
+  outcome: "success" | "failed",
+): Promise<void> {
   const schedule = JSON.parse(task.scheduleJson) as ScheduleConfig;
   const next = computeNextRun(schedule, now, now);
   await prisma.automationTask.update({
@@ -284,7 +294,8 @@ async function advanceTask(task: AutomationTaskRow, now: Date): Promise<void> {
       lastRunAt: now,
       nextRunAt: next,
       ...(schedule.mode === "periodic" &&
-        schedule.kind === "once" && { status: "expired" }),
+        schedule.kind === "once" &&
+        outcome === "success" && { status: "expired" }),
     },
   });
 }

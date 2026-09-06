@@ -7,6 +7,9 @@
 import { create } from "zustand";
 import type { TimeFilter } from "../chat/lib/session-list";
 
+/** 产物面板视图（概览总览 / 产物文件 / 工作空间文件） */
+export type AiArtifactsView = "overview" | "artifacts" | "workspace";
+
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
 function readCollapsed(): boolean {
@@ -29,12 +32,18 @@ interface AiUiState {
   setTimeFilter: (filter: TimeFilter) => void;
   resetFilter: () => void;
   setSearchOpen: (open: boolean) => void;
+  artifactsOpen: boolean;
+  artifactsView: AiArtifactsView;
+  toggleArtifacts: () => void;
+  setArtifactsView: (view: AiArtifactsView) => void;
 }
 
 export const useAiUiStore = create<AiUiState>((set) => ({
   sidebarCollapsed: readCollapsed(),
   timeFilter: "all",
   searchOpen: false,
+  artifactsOpen: false,
+  artifactsView: "overview",
   toggleSidebar: () =>
     set((state) => {
       const next = !state.sidebarCollapsed;
@@ -51,4 +60,7 @@ export const useAiUiStore = create<AiUiState>((set) => ({
   setTimeFilter: (filter) => set({ timeFilter: filter }),
   resetFilter: () => set({ timeFilter: "all" }),
   setSearchOpen: (open) => set({ searchOpen: open }),
+  toggleArtifacts: () =>
+    set((state) => ({ artifactsOpen: !state.artifactsOpen })),
+  setArtifactsView: (view) => set({ artifactsView: view }),
 }));

@@ -256,5 +256,24 @@
     "noLimit": "Used {{used}} / --",
     "overflow": "Text too long — trim it or switch models",
     "unavailable": "No data (no model configured or session missing)"
+  },
+  "artifacts": {
+    "open": "Open artifacts panel",
+    "close": "Close artifacts panel",
+    "overview": "Overview",
+    "artifacts": "Artifacts",
+    "workspace": "Workspace Files",
+    "emptyFiles": "No files yet",
+    "writing": "Writing",
+    "back": "Back to list",
+    "fullscreen": "Fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "previewFailed": "Unable to preview this file",
+    "actionPreview": "Preview",
+    "actionExport": "Save a copy…",
+    "actionReveal": "Reveal in Finder",
+    "actionCopyPath": "Copy path",
+    "copyPathSuccess": "Path copied",
+    "exportSuccess": "Saved a copy"
   }
 }

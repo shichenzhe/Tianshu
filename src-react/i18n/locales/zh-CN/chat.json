@@ -256,5 +256,24 @@
     "noLimit": "已使用 {{used}} / --",
     "overflow": "文本过长，请截断或更换模型",
     "unavailable": "暂无数据（未配置模型或会话不存在）"
+  },
+  "artifacts": {
+    "open": "展开产物面板",
+    "close": "收起产物面板",
+    "overview": "概览",
+    "artifacts": "产物文件",
+    "workspace": "工作空间文件",
+    "emptyFiles": "暂无文件",
+    "writing": "写入中",
+    "back": "返回列表",
+    "fullscreen": "全屏",
+    "exitFullscreen": "退出全屏",
+    "previewFailed": "无法预览该文件",
+    "actionPreview": "预览",
+    "actionExport": "另存为副本…",
+    "actionReveal": "在 Finder 中显示",
+    "actionCopyPath": "复制路径",
+    "copyPathSuccess": "路径已复制",
+    "exportSuccess": "已另存为副本"
   }
 }

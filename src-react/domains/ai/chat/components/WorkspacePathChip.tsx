@@ -42,7 +42,7 @@ function WorkspacePathChipImpl({ workspace }: WorkspacePathChipProps) {
   };
 
   return (
-    <div className="flex items-center px-4 pt-2">
+    <div className="flex items-center">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

@@ -29,8 +29,12 @@ import type { PendingFile } from "../lib/pending-file";
 import type { AccessMode } from "../components/PermissionCapsule";
 import AgentProgress from "../components/AgentProgress";
 import WorkspacePathChip from "../components/WorkspacePathChip";
+import ArtifactsPanel, {
+  ArtifactsPanelToggle,
+} from "../components/artifacts/ArtifactsPanel";
 import { useChatSend } from "../hooks/use-chat-send";
 import { useChatStore } from "../store/chat.store";
+import { useAiUiStore } from "../../store/ai-ui.store";
 import { mapIpcError } from "../lib/error-message";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
@@ -87,9 +91,16 @@ export default function ChatView() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏：已绑定工作空间目录时展示路径 chip（重绑/解绑入口） */}
-      {activeWorkspace?.directoryPath && (
-        <WorkspacePathChip workspace={activeWorkspace} />
+      {/* 顶栏：有会话时渲染；左路径 chip（绑定时）+ 右产物面板开关 */}
+      {selectedSession && (
+        <div className="flex items-center justify-between px-4 pt-2">
+          {activeWorkspace?.directoryPath ? (
+            <WorkspacePathChip workspace={activeWorkspace} />
+          ) : (
+            <span />
+          )}
+          <ArtifactsPanelToggle />
+        </div>
       )}
       {needsSetup ? (
         <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
@@ -140,6 +151,7 @@ function ChatPane({
   const queryClient = useQueryClient();
   const { sending, send, regenerate, stop } = useChatSend(session.id);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
+  const artifactsOpen = useAiUiStore((s) => s.artifactsOpen);
 
   // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
   // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底
@@ -257,34 +269,39 @@ function ChatPane({
   };
 
   return (
-    <>
-      <MessageList
-        sessionId={session.id}
-        workspaceId={workspace?.id ?? null}
-        compactedUpToId={session.compactedUpToId ?? null}
-        onRegenerate={handleRegenerate}
-      />
-      {sending && (
-        <AgentProgress stepCount={stepCount} activeTool={activeTool} />
-      )}
-      <div className="p-4">
-        <ChatInput
-          hasModel={hasModel}
-          sending={sending}
+    <div className="relative flex h-full min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <MessageList
           sessionId={session.id}
-          accessMode={accessMode}
-          currentMode={session.mode}
-          currentAssistantId={session.assistantId}
-          currentModelId={session.currentModelId}
           workspaceId={workspace?.id ?? null}
-          onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
-          onOpenMcp={() => onOpenSettings("mcp")}
-          onRunCommand={handleRunCommand}
-          onSend={handleSend}
-          onStop={stop}
+          compactedUpToId={session.compactedUpToId ?? null}
+          onRegenerate={handleRegenerate}
         />
+        {sending && (
+          <AgentProgress stepCount={stepCount} activeTool={activeTool} />
+        )}
+        <div className="p-4">
+          <ChatInput
+            hasModel={hasModel}
+            sending={sending}
+            sessionId={session.id}
+            accessMode={accessMode}
+            currentMode={session.mode}
+            currentAssistantId={session.assistantId}
+            currentModelId={session.currentModelId}
+            workspaceId={workspace?.id ?? null}
+            onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
+            onOpenMcp={() => onOpenSettings("mcp")}
+            onRunCommand={handleRunCommand}
+            onSend={handleSend}
+            onStop={stop}
+          />
+        </div>
       </div>
-    </>
+      {artifactsOpen && workspace && (
+        <ArtifactsPanel sessionId={session.id} workspaceId={workspace.id} />
+      )}
+    </div>
   );
 }
 

@@ -19,7 +19,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Send, Sparkles, Square, SquareTerminal, X } from "lucide-react";
+import { Send, Sparkles, Square, SquareTerminal } from "lucide-react";
 
 import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store";
 import SkillApi from "../../skills/api/skill.api";
@@ -489,13 +489,13 @@ export default function ChatInput({
         <div
           ref={mirrorRef}
           aria-hidden
-          className="pointer-events-none absolute inset-0 max-h-40 overflow-hidden whitespace-pre-wrap break-words text-sm leading-relaxed"
+          className="pointer-events-none absolute inset-0 max-h-40 overflow-hidden border-0 p-0 whitespace-pre-wrap break-words text-sm leading-relaxed"
         >
           {segments.map((segment, index) =>
             segment.isToken ? (
               <span
                 key={index}
-                className="rounded-md bg-primary-subtle px-1 font-medium text-primary"
+                className="rounded-md bg-primary-subtle px-0 py-0.5 text-primary"
               >
                 {segment.text}
               </span>
@@ -518,7 +518,7 @@ export default function ChatInput({
           placeholder={t(
             hasModel ? "chat:input.placeholder" : "chat:input.modelRequired",
           )}
-          className="relative min-h-6 w-full resize-none overflow-y-auto bg-transparent text-sm leading-relaxed field-sizing-content max-h-40 outline-none text-transparent caret-foreground placeholder:text-muted-foreground"
+          className="relative min-h-6 w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-40 outline-none text-transparent caret-foreground placeholder:text-muted-foreground [&::-webkit-scrollbar]:hidden"
         />
       </div>
       {/* 下行：左 ＋菜单 + 权限胶囊 + 模式徽标，右 模型 + 发送/停止 */}

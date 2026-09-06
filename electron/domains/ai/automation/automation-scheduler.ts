@@ -118,8 +118,14 @@ export default class AutomationScheduler {
 
   private async tick(): Promise<void> {
     try {
+      // 只调度 enabled+active:once 到期后 runner 的 advanceTask 置
+      // status="expired" 但不动 enabled,不滤 status 会让 expire 分支每 30s
+      // 重写该行(updatedAt 抖动)并向全窗口广播,前端无谓 invalidate 重拉;
+      // error 任务已被 enabled=false 滤掉,重新启用时 repo toggle 置回
+      // active——故 active+enabled 是唯一应参与调度的集合(applyDecision
+      // 的 expire 分支保留,首次到期仍生效)
       const tasks = await prisma.automationTask.findMany({
-        where: { enabled: true },
+        where: { enabled: true, status: "active" },
       });
       let changed = false;
       for (const task of tasks) {

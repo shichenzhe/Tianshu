@@ -22,10 +22,11 @@ vi.mock("../../electron/domains/ai/automation/automation-runner", () => ({
   executeTask: vi.fn(),
 }));
 
-import {
+import AutomationScheduler, {
   decideTick,
   pickRetryTaskIds,
 } from "../../electron/domains/ai/automation/automation-scheduler";
+import prisma from "../../electron/commons/prisma-client";
 
 const base = {
   id: 1,
@@ -152,5 +153,17 @@ describe("pickRetryTaskIds", () => {
       ],
     ]);
     expect(pickRetryTaskIds(m, now)).toEqual([1]);
+  });
+});
+
+describe("AutomationScheduler.tick 调度集合", () => {
+  it("只取 enabled 且 status=active 的任务(否则 expired-but-enabled 每 30s 重复 expire+广播)", async () => {
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([]);
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    expect(prisma.automationTask.findMany).toHaveBeenCalledWith({
+      where: { enabled: true, status: "active" },
+    });
   });
 });

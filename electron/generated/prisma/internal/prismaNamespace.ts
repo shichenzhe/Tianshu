@@ -409,7 +409,10 @@ export const ModelName = {
   mcpServer: 'mcpServer',
   toolPermission: 'toolPermission',
   skillRecord: 'skillRecord',
-  skillStat: 'skillStat'
+  skillStat: 'skillStat',
+  automationTask: 'automationTask',
+  automationRun: 'automationRun',
+  automationStat: 'automationStat'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -425,7 +428,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1391,6 +1394,228 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    automationTask: {
+      payload: Prisma.$automationTaskPayload<ExtArgs>
+      fields: Prisma.automationTaskFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.automationTaskFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.automationTaskFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        findFirst: {
+          args: Prisma.automationTaskFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.automationTaskFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        findMany: {
+          args: Prisma.automationTaskFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>[]
+        }
+        create: {
+          args: Prisma.automationTaskCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        createMany: {
+          args: Prisma.automationTaskCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.automationTaskCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>[]
+        }
+        delete: {
+          args: Prisma.automationTaskDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        update: {
+          args: Prisma.automationTaskUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        deleteMany: {
+          args: Prisma.automationTaskDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.automationTaskUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.automationTaskUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>[]
+        }
+        upsert: {
+          args: Prisma.automationTaskUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationTaskPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationTaskAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationTask>
+        }
+        groupBy: {
+          args: Prisma.automationTaskGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationTaskGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.automationTaskCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationTaskCountAggregateOutputType> | number
+        }
+      }
+    }
+    automationRun: {
+      payload: Prisma.$automationRunPayload<ExtArgs>
+      fields: Prisma.automationRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.automationRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.automationRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        findFirst: {
+          args: Prisma.automationRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.automationRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        findMany: {
+          args: Prisma.automationRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>[]
+        }
+        create: {
+          args: Prisma.automationRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        createMany: {
+          args: Prisma.automationRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.automationRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>[]
+        }
+        delete: {
+          args: Prisma.automationRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        update: {
+          args: Prisma.automationRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.automationRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.automationRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.automationRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.automationRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationRunPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationRun>
+        }
+        groupBy: {
+          args: Prisma.automationRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.automationRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    automationStat: {
+      payload: Prisma.$automationStatPayload<ExtArgs>
+      fields: Prisma.automationStatFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.automationStatFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.automationStatFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        findFirst: {
+          args: Prisma.automationStatFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.automationStatFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        findMany: {
+          args: Prisma.automationStatFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>[]
+        }
+        create: {
+          args: Prisma.automationStatCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        createMany: {
+          args: Prisma.automationStatCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.automationStatCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>[]
+        }
+        delete: {
+          args: Prisma.automationStatDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        update: {
+          args: Prisma.automationStatUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        deleteMany: {
+          args: Prisma.automationStatDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.automationStatUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.automationStatUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>[]
+        }
+        upsert: {
+          args: Prisma.automationStatUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$automationStatPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationStatAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationStat>
+        }
+        groupBy: {
+          args: Prisma.automationStatGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationStatGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.automationStatCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationStatCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -1604,6 +1829,59 @@ export const SkillStatScalarFieldEnum = {
 } as const
 
 export type SkillStatScalarFieldEnum = (typeof SkillStatScalarFieldEnum)[keyof typeof SkillStatScalarFieldEnum]
+
+
+export const AutomationTaskScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  prompt: 'prompt',
+  workspaceId: 'workspaceId',
+  modelId: 'modelId',
+  temperature: 'temperature',
+  scheduleJson: 'scheduleJson',
+  scheduleText: 'scheduleText',
+  startAt: 'startAt',
+  endAt: 'endAt',
+  missedPolicy: 'missedPolicy',
+  enabled: 'enabled',
+  status: 'status',
+  statusNote: 'statusNote',
+  lastRunAt: 'lastRunAt',
+  nextRunAt: 'nextRunAt',
+  templateSlug: 'templateSlug',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AutomationTaskScalarFieldEnum = (typeof AutomationTaskScalarFieldEnum)[keyof typeof AutomationTaskScalarFieldEnum]
+
+
+export const AutomationRunScalarFieldEnum = {
+  id: 'id',
+  taskId: 'taskId',
+  sessionId: 'sessionId',
+  attempt: 'attempt',
+  triggerType: 'triggerType',
+  status: 'status',
+  durationMs: 'durationMs',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  error: 'error',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt'
+} as const
+
+export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const AutomationStatScalarFieldEnum = {
+  id: 'id',
+  event: 'event',
+  detail: 'detail',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationStatScalarFieldEnum = (typeof AutomationStatScalarFieldEnum)[keyof typeof AutomationStatScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -1826,6 +2104,9 @@ export type GlobalOmitConfig = {
   toolPermission?: Prisma.toolPermissionOmit
   skillRecord?: Prisma.skillRecordOmit
   skillStat?: Prisma.skillStatOmit
+  automationTask?: Prisma.automationTaskOmit
+  automationRun?: Prisma.automationRunOmit
+  automationStat?: Prisma.automationStatOmit
 }
 
 /* Types for Logging */

@@ -106,3 +106,18 @@ export type skillRecord = Prisma.skillRecordModel
  * 
  */
 export type skillStat = Prisma.skillStatModel
+/**
+ * Model automationTask
+ * 
+ */
+export type automationTask = Prisma.automationTaskModel
+/**
+ * Model automationRun
+ * 
+ */
+export type automationRun = Prisma.automationRunModel
+/**
+ * Model automationStat
+ * 
+ */
+export type automationStat = Prisma.automationStatModel

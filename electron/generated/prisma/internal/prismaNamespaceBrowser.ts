@@ -63,7 +63,10 @@ export const ModelName = {
   mcpServer: 'mcpServer',
   toolPermission: 'toolPermission',
   skillRecord: 'skillRecord',
-  skillStat: 'skillStat'
+  skillStat: 'skillStat',
+  automationTask: 'automationTask',
+  automationRun: 'automationRun',
+  automationStat: 'automationStat'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -256,6 +259,59 @@ export const SkillStatScalarFieldEnum = {
 } as const
 
 export type SkillStatScalarFieldEnum = (typeof SkillStatScalarFieldEnum)[keyof typeof SkillStatScalarFieldEnum]
+
+
+export const AutomationTaskScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  prompt: 'prompt',
+  workspaceId: 'workspaceId',
+  modelId: 'modelId',
+  temperature: 'temperature',
+  scheduleJson: 'scheduleJson',
+  scheduleText: 'scheduleText',
+  startAt: 'startAt',
+  endAt: 'endAt',
+  missedPolicy: 'missedPolicy',
+  enabled: 'enabled',
+  status: 'status',
+  statusNote: 'statusNote',
+  lastRunAt: 'lastRunAt',
+  nextRunAt: 'nextRunAt',
+  templateSlug: 'templateSlug',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type AutomationTaskScalarFieldEnum = (typeof AutomationTaskScalarFieldEnum)[keyof typeof AutomationTaskScalarFieldEnum]
+
+
+export const AutomationRunScalarFieldEnum = {
+  id: 'id',
+  taskId: 'taskId',
+  sessionId: 'sessionId',
+  attempt: 'attempt',
+  triggerType: 'triggerType',
+  status: 'status',
+  durationMs: 'durationMs',
+  promptTokens: 'promptTokens',
+  completionTokens: 'completionTokens',
+  error: 'error',
+  startedAt: 'startedAt',
+  finishedAt: 'finishedAt'
+} as const
+
+export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const AutomationStatScalarFieldEnum = {
+  id: 'id',
+  event: 'event',
+  detail: 'detail',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationStatScalarFieldEnum = (typeof AutomationStatScalarFieldEnum)[keyof typeof AutomationStatScalarFieldEnum]
 
 
 export const SortOrder = {

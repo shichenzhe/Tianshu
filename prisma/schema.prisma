@@ -156,3 +156,52 @@ model skillStat {
   event     String // install | enable | disable | uninstall | batch_enable | batch_disable | batch_uninstall | create
   createdAt DateTime @default(now())
 }
+
+model automationTask {
+  id           Int       @id @default(autoincrement())
+  name         String
+  prompt       String
+  workspaceId  Int
+  modelId      Int
+  temperature  Float?
+  scheduleJson String
+  scheduleText String
+  startAt      DateTime?
+  endAt        DateTime?
+  missedPolicy String    @default("skip")
+  enabled      Boolean   @default(true)
+  status       String    @default("active")
+  statusNote   String?
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  templateSlug String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([enabled])
+}
+
+model automationRun {
+  id               Int       @id @default(autoincrement())
+  taskId           Int
+  sessionId        Int?
+  attempt          Int       @default(1)
+  triggerType      String
+  status           String
+  durationMs       Int?
+  promptTokens     Int?
+  completionTokens Int?
+  error            String?
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+
+  @@index([taskId])
+  @@index([startedAt])
+}
+
+model automationStat {
+  id        Int      @id @default(autoincrement())
+  event     String
+  detail    String
+  createdAt DateTime @default(now())
+}

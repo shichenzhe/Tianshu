@@ -20,6 +20,13 @@ import { parseOptionalInt, parseOptionalNumber } from "../../lib/parse-number";
 import ModelApi, { type ModelRecord } from "../../api/model.api";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { diffOptionalString, diffOptionalValue } from "../../lib/update-diff";
+import TokenLimitField from "./token-limit-field";
+
+/** 新建模型的默认 token 上限（输入 128K / 输出 64K，与预设 chips 对齐） */
+const DEFAULT_CONTEXT_WINDOW = 131072;
+const DEFAULT_MAX_TOKENS = 65536;
+const CONTEXT_PRESETS = [32768, 65536, 131072, 262144];
+const OUTPUT_PRESETS = [8192, 16384, 32768, 65536];
 
 interface ModelDialogProps {
   open: boolean;
@@ -52,19 +59,25 @@ export default function ModelDialog({
         editing?.temperature === undefined ? "" : String(editing.temperature),
       );
       setTopP(editing?.topP === undefined ? "" : String(editing.topP));
-      setMaxTokens(
-        editing?.maxTokens === undefined ? "" : String(editing.maxTokens),
-      );
+      setMaxTokens(String(editing?.maxTokens ?? DEFAULT_MAX_TOKENS));
       setContextWindow(
-        editing?.contextWindow === undefined
-          ? ""
-          : String(editing.contextWindow),
+        String(editing?.contextWindow ?? DEFAULT_CONTEXT_WINDOW),
       );
     }
   }, [open, editing]);
 
+  // 联动校验：输出达到或超过输入窗口时，输出空间会挤占全部上下文
+  const exceedsLimit =
+    maxTokens.trim() !== "" &&
+    contextWindow.trim() !== "" &&
+    Number(maxTokens) >= Number(contextWindow);
+
   const handleSubmit = async () => {
     if (!modelId.trim() || submitting) {
+      return;
+    }
+    if (exceedsLimit) {
+      toast.error(t("ai:model.exceedsContext"));
       return;
     }
     let params;
@@ -79,6 +92,13 @@ export default function ModelDialog({
       };
     } catch {
       toast.error(t("ai:model.invalidNumber"));
+      return;
+    }
+    if (
+      (params.maxTokens !== undefined && params.maxTokens <= 0) ||
+      (params.contextWindow !== undefined && params.contextWindow <= 0)
+    ) {
+      toast.error(t("ai:model.positiveIntRequired"));
       return;
     }
     setSubmitting(true);
@@ -155,26 +175,20 @@ export default function ModelDialog({
                 onChange={(e) => setTopP(e.target.value)}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("ai:model.maxTokens")}</Label>
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t("ai:model.contextWindow")}</Label>
-              <Input
-                type="number"
-                step="1"
-                min="1"
-                value={contextWindow}
-                onChange={(e) => setContextWindow(e.target.value)}
-              />
-            </div>
+            <TokenLimitField
+              label={t("ai:model.inputLimit")}
+              value={contextWindow}
+              presets={CONTEXT_PRESETS}
+              onChange={setContextWindow}
+            />
+            <TokenLimitField
+              label={t("ai:model.outputLimit")}
+              value={maxTokens}
+              presets={OUTPUT_PRESETS}
+              onChange={setMaxTokens}
+              error={exceedsLimit}
+              hint={exceedsLimit ? t("ai:model.exceedsContext") : undefined}
+            />
           </div>
         </div>
         <DialogFooter>

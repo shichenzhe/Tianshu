@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -72,6 +73,7 @@ import { bindWorkspaceDirectory } from "../../chat/lib/workspace-actions";
 import { useChatStore } from "../../chat/store/chat.store";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import UnbindDirectoryDialog from "../../chat/components/UnbindDirectoryDialog";
+import BatchActionBar from "./BatchActionBar";
 import WorkspaceMenu from "./WorkspaceMenu";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
@@ -110,6 +112,10 @@ export default function AiSidebar() {
     null,
   );
   const [submitting, setSubmitting] = useState(false);
+  // 批量管理：选中集合按会话 id（Set 天然对父/子混合选择去重）
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [confirmingBatchDelete, setConfirmingBatchDelete] = useState(false);
 
   const workspacesQuery = useQuery({
     queryKey: WORKSPACES_KEY,
@@ -261,6 +267,89 @@ export default function AiSidebar() {
     }
   };
 
+  // ============ 批量管理 ============
+  // 流式进行中的会话对象引用（store 更新才变；用于排除不可选项）
+  const isStreaming = useChatStore((s) => s.isStreaming);
+  // 可选集 = 渲染列表（含折叠组）排除当前选中会话与流式进行中（PRD 4.3）
+  const selectableIds = useMemo(
+    () =>
+      sessions
+        .filter((s) => s.id !== selectedSessionId && !isStreaming[s.id])
+        .map((s) => s.id),
+    [sessions, selectedSessionId, isStreaming],
+  );
+  const selectedInSelectable = selectableIds.filter((id) =>
+    selectedIds.has(id),
+  );
+  const allChecked: boolean | "indeterminate" =
+    selectableIds.length > 0 &&
+    selectedInSelectable.length === selectableIds.length
+      ? true
+      : selectedInSelectable.length > 0
+        ? "indeterminate"
+        : false;
+
+  const toggleBatchIds = (ids: number[], on: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) {
+        if (on) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    toggleBatchIds(
+      selectableIds,
+      selectedInSelectable.length !== selectableIds.length,
+    );
+  };
+
+  const exitBatchMode = () => {
+    setBatchMode(false);
+    setSelectedIds(new Set());
+  };
+
+  /** 批量执行（allSettled 防部分失败短路）：成功全数轻提示，否则部分成功警示 */
+  const runBatchAction = async (
+    action: (id: number) => Promise<unknown>,
+    successKey: string,
+  ) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0 || submitting) {
+      return;
+    }
+    setSubmitting(true);
+    const results = await Promise.allSettled(ids.map(action));
+    const ok = results.filter((r) => r.status === "fulfilled").length;
+    await invalidateSessions();
+    if (ok === ids.length) {
+      toast.success(t(successKey, { count: ok }));
+    } else {
+      toast.warning(t("chat:task.batchPartial", { ok, total: ids.length }));
+    }
+    setSubmitting(false);
+    exitBatchMode();
+  };
+
+  const handleBatchDelete = () =>
+    void runBatchAction(
+      (id) => SessionApi.delete(id),
+      "chat:task.batchDeleted",
+    );
+
+  const handleBatchArchive = () =>
+    void runBatchAction(
+      (id) => SessionApi.archive(id, true),
+      "chat:task.batchArchived",
+    );
+
+  // ============ 单会话操作 ============
   const handleUnarchive = async (sessionId: number) => {
     try {
       await SessionApi.archive(sessionId, false);
@@ -390,6 +479,11 @@ export default function AiSidebar() {
                   (s) => s.workspaceId === workspace.id,
                 )}
                 selectedSessionId={selectedSessionId}
+                batchMode={batchMode}
+                batchSelectedIds={selectedIds}
+                isStreaming={isStreaming}
+                onBatchToggleIds={toggleBatchIds}
+                onBatchEnter={() => setBatchMode(true)}
                 onToggleGroup={() =>
                   setCollapsedSpaces((prev) => ({
                     ...prev,
@@ -425,6 +519,19 @@ export default function AiSidebar() {
               />
             ))}
         </div>
+      )}
+
+      {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
+      {batchMode && !collapsed && (
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          allChecked={allChecked}
+          onToggleAll={toggleAll}
+          onDelete={() => setConfirmingBatchDelete(true)}
+          onArchive={handleBatchArchive}
+          onExit={exitBatchMode}
+          submitting={submitting}
+        />
       )}
 
       {/* 空间新建/重命名对话框 */}
@@ -570,6 +677,33 @@ export default function AiSidebar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog
+        open={confirmingBatchDelete}
+        onOpenChange={setConfirmingBatchDelete}
+      >
+        <AlertDialogContent className="rounded-lg border border-border/50 shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("chat:task.batchDeleteTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat:task.batchDeleteConfirm", { count: selectedIds.size })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmingBatchDelete(false);
+                handleBatchDelete();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t("common:confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }
@@ -619,6 +753,13 @@ interface WorkspaceGroupProps {
   collapsedGroup: boolean;
   sessions: SessionRecord[];
   selectedSessionId: number | null;
+  /** 批量管理：模式开关与选中集合（组复选框按组内可选集联动） */
+  batchMode: boolean;
+  batchSelectedIds: Set<number>;
+  isStreaming: Record<string, boolean>;
+  onBatchToggleIds: (ids: number[], on: boolean) => void;
+  /** 菜单「批量操作」入口：进入批量模式 */
+  onBatchEnter: () => void;
   onToggleGroup: () => void;
   onSelect: (sessionId: number) => void;
   /** 行内 + ：在本空间新建任务 */
@@ -643,6 +784,11 @@ function WorkspaceGroup({
   collapsedGroup,
   sessions,
   selectedSessionId,
+  batchMode,
+  batchSelectedIds,
+  isStreaming,
+  onBatchToggleIds,
+  onBatchEnter,
   onToggleGroup,
   onSelect,
   onCreateTask,
@@ -658,10 +804,38 @@ function WorkspaceGroup({
   onOpenFolder,
 }: WorkspaceGroupProps) {
   const { t } = useTranslation(["chat", "common"]);
+  // 组级复选框（PRD 3.1 父级联动）：勾选=组内可选会话全选；半选=部分
+  const groupSelectableIds = sessions
+    .filter((s) => s.id !== selectedSessionId && !isStreaming[s.id])
+    .map((s) => s.id);
+  const groupSelectedCount = groupSelectableIds.filter((id) =>
+    batchSelectedIds.has(id),
+  ).length;
+  const groupChecked: boolean | "indeterminate" =
+    groupSelectableIds.length > 0 &&
+    groupSelectedCount === groupSelectableIds.length
+      ? true
+      : groupSelectedCount > 0
+        ? "indeterminate"
+        : false;
 
   return (
     <div className="group/workspace mt-1">
       <div className="relative flex items-center">
+        {batchMode && (
+          <Checkbox
+            checked={groupChecked}
+            onCheckedChange={() =>
+              onBatchToggleIds(
+                groupSelectableIds,
+                groupSelectedCount !== groupSelectableIds.length,
+              )
+            }
+            disabled={groupSelectableIds.length === 0}
+            aria-label={workspace.name}
+            className="mr-1.5 shrink-0"
+          />
+        )}
         <button
           type="button"
           className={cn(
@@ -717,6 +891,19 @@ function WorkspaceGroup({
                 session={session}
                 workspaceDirectoryPath={workspace.directoryPath}
                 selected={session.id === selectedSessionId}
+                batchMode={batchMode}
+                batchChecked={batchSelectedIds.has(session.id)}
+                batchDisabled={
+                  session.id === selectedSessionId ||
+                  Boolean(isStreaming[session.id])
+                }
+                onBatchToggle={() =>
+                  onBatchToggleIds(
+                    [session.id],
+                    !batchSelectedIds.has(session.id),
+                  )
+                }
+                onBatchEnter={() => onBatchEnter()}
                 onSelect={() => onSelect(session.id)}
                 onRename={() => onSessionRename(session)}
                 onDelete={() => onSessionDelete(session)}
@@ -736,6 +923,14 @@ interface TaskTreeItemProps {
   session: SessionRecord;
   workspaceDirectoryPath?: string;
   selected: boolean;
+  /** 批量管理：勾选态与切换（批量模式下行点击即切换选择，不再导航） */
+  batchMode: boolean;
+  batchChecked: boolean;
+  /** 当前选中会话/流式进行中：复选框禁用（PRD 4.3） */
+  batchDisabled: boolean;
+  onBatchToggle: () => void;
+  /** 菜单「批量操作」入口 */
+  onBatchEnter: () => void;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -744,11 +939,17 @@ interface TaskTreeItemProps {
   onOpenFolder: () => void;
 }
 
-/** 任务项：标题+相对时间；悬停出 .../归档/置顶 快捷钮；流式中显示绿点 */
+/** 任务项：标题+相对时间；悬停出 .../归档/置顶 快捷钮；流式中显示绿点；
+ *  批量模式：行首复选框，整行点击切换勾选，快捷钮隐藏 */
 function TaskTreeItem({
   session,
   workspaceDirectoryPath,
   selected,
+  batchMode,
+  batchChecked,
+  batchDisabled,
+  onBatchToggle,
+  onBatchEnter,
   onSelect,
   onRename,
   onDelete,
@@ -809,9 +1010,7 @@ function TaskTreeItem({
             <Share2 className="mr-2 h-4 w-4" />
             {t("chat:task.share")}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => toast.info(t("chat:task.comingSoon"))}
-          >
+          <DropdownMenuItem onClick={onBatchEnter}>
             <ListChecks className="mr-2 h-4 w-4" />
             {t("chat:task.batchOps")}
           </DropdownMenuItem>
@@ -854,17 +1053,40 @@ function TaskTreeItem({
     <div
       className={cn(
         "group/task relative mb-0.5 rounded-md",
-        selected
-          ? "bg-primary-subtle text-primary"
-          : "hover:bg-primary-subtle/60",
+        batchChecked
+          ? "bg-primary-subtle"
+          : selected
+            ? "bg-primary-subtle text-primary"
+            : "hover:bg-primary-subtle/60",
+        batchDisabled && batchMode && "opacity-60",
       )}
     >
       <button
         type="button"
-        className="block w-full py-1.5 pl-2 pr-24 text-left"
-        onClick={onSelect}
+        className={cn(
+          "block w-full py-1.5 pl-2 pr-24 text-left",
+          batchDisabled && batchMode && "cursor-not-allowed",
+        )}
+        onClick={() => {
+          if (batchMode) {
+            if (!batchDisabled) {
+              onBatchToggle();
+            }
+            return;
+          }
+          onSelect();
+        }}
       >
         <span className="flex items-center gap-1">
+          {batchMode && (
+            <Checkbox
+              checked={batchChecked}
+              disabled={batchDisabled}
+              onCheckedChange={onBatchToggle}
+              aria-label={session.title}
+              className="mr-0.5 shrink-0"
+            />
+          )}
           {pinned && <Pin className="h-3 w-3 shrink-0" />}
           <span className="truncate text-sm" title={session.title}>
             {session.title}
@@ -875,7 +1097,7 @@ function TaskTreeItem({
         </span>
         <span className="block text-xs text-muted-foreground">{timeText}</span>
       </button>
-      {quickActions}
+      {!batchMode && quickActions}
     </div>
   );
 }

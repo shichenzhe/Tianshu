@@ -34,5 +34,14 @@
   "confirmDelete": "确认删除",
   "irreversible": "此操作无法撤销。",
   "selectDate": "选择日期",
-  "selectMonth": "选择月份"
+  "selectMonth": "选择月份",
+  "weekday": {
+    "1": "周一",
+    "2": "周二",
+    "3": "周三",
+    "4": "周四",
+    "5": "周五",
+    "6": "周六",
+    "7": "周日"
+  }
 }

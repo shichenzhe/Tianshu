@@ -1,5 +1,13 @@
-import { ipcMain, shell } from "electron";
+import { dialog, ipcMain, shell } from "electron";
 import prisma from "../../../commons/prisma-client";
+import fs from "node:fs/promises";
+import path from "node:path";
+
+import {
+  readWorkspaceFile,
+  resolveFilePath,
+  type WorkspaceFileContent,
+} from "./workspace-files";
 import type {
   MessageRecord,
   SearchMessageResult,
@@ -125,6 +133,21 @@ export class SessionRepository {
     );
     ipcMain.handle("workspace:openDirectory", (_, workspaceId: number) =>
       this.openWorkspaceDirectory(workspaceId),
+    );
+    ipcMain.handle(
+      "workspace:readFile",
+      (_, workspaceId: number, relPath: string) =>
+        this.readWorkspaceFileById(workspaceId, relPath),
+    );
+    ipcMain.handle(
+      "workspace:revealFile",
+      (_, workspaceId: number, relPath: string) =>
+        this.revealWorkspaceFile(workspaceId, relPath),
+    );
+    ipcMain.handle(
+      "workspace:exportFile",
+      (_, workspaceId: number, relPath: string) =>
+        this.exportWorkspaceFile(workspaceId, relPath),
     );
     ipcMain.handle("message:listBySession", (_, sessionId: number) =>
       this.listMessages(sessionId),
@@ -287,6 +310,43 @@ export class SessionRepository {
     if (workspace?.directoryPath) {
       await shell.openPath(workspace.directoryPath);
     }
+  }
+
+  /** 产物面板：读工作空间文件（预览）。ENOENT/二进制等由纯逻辑抛中文文案 */
+  async readWorkspaceFileById(
+    workspaceId: number,
+    relPath: string,
+  ): Promise<WorkspaceFileContent> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace?.directoryPath) throw new Error("工作空间未绑定目录");
+    return readWorkspaceFile(resolveFilePath(workspace.directoryPath, relPath));
+  }
+
+  /** 产物面板：Finder 定位文件 */
+  async revealWorkspaceFile(
+    workspaceId: number,
+    relPath: string,
+  ): Promise<void> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (workspace?.directoryPath) {
+      shell.showItemInFolder(resolveFilePath(workspace.directoryPath, relPath));
+    }
+  }
+
+  /** 产物面板：另存为副本（"下载"）。用户取消返回 null */
+  async exportWorkspaceFile(
+    workspaceId: number,
+    relPath: string,
+  ): Promise<string | null> {
+    const workspace = await this.getWorkspace(workspaceId);
+    if (!workspace?.directoryPath) throw new Error("工作空间未绑定目录");
+    const absPath = resolveFilePath(workspace.directoryPath, relPath);
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: path.basename(absPath),
+    });
+    if (canceled || !filePath) return null;
+    await fs.copyFile(absPath, filePath);
+    return filePath;
   }
 
   async renameSession(id: number, title: string): Promise<void> {

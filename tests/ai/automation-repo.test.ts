@@ -87,11 +87,28 @@ describe("buildTaskData(创建/更新共用组装)", () => {
     expect(data).not.toHaveProperty("status");
   });
 
-  it("startAt 晚于首个触发点时 nextRunAt clamp 到 startAt", () => {
+  it("startAt 在未来 → 以 max(now, startAt) 为起点求首个调度点(生效日 09:00 而非零点)", () => {
     const data = buildTaskData(
       { ...params, startAt: "2026-10-01T00:00:00.000Z" },
       new Date("2026-09-06T10:00:00"),
     );
-    expect(data.nextRunAt).toEqual(new Date("2026-10-01T00:00:00.000Z"));
+    expect(data.nextRunAt).toEqual(new Date("2026-10-01T09:00:00"));
+  });
+
+  it("weekly + 未来 startAt → 首个触发点落在选中的星期(2026-10-04 周日)", () => {
+    const data = buildTaskData(
+      {
+        ...params,
+        schedule: {
+          mode: "periodic",
+          kind: "weekly",
+          weekdays: [7],
+          time: "09:00",
+        },
+        startAt: "2026-10-01T00:00:00.000Z",
+      },
+      new Date("2026-09-06T10:00:00"),
+    );
+    expect(data.nextRunAt).toEqual(new Date("2026-10-04T09:00:00"));
   });
 });

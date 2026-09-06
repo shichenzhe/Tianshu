@@ -1,7 +1,9 @@
 /**
  * 频率配置(PRD《执行频率》§2.1 三层级):模式 Tab → 联动表单 →
- * 摘要栏。受控组件,校验由父级调 validateSchedule;周期/间隔 Tab
- * 切换经 onModeSwitch 通知父级计数埋点(见 Props)。
+ * 摘要栏。value/validity 受控,联动表单字段为挂载时惰性初始化的
+ * 内部 state(编辑回填初值由 deriveStateFromValue 从 value 派生,
+ * 来源切换的重置靠挂载方以 key remount);校验由父级调 validateSchedule;
+ * 周期/间隔 Tab 切换经 onModeSwitch 通知父级计数埋点(见 Props)。
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -53,6 +55,78 @@ function toISODate(d: Date): string {
 /** 日历可选上限:DatePicker 缺省 endMonth=当月,不传无法翻到未来月份 */
 const MAX_PICKABLE = new Date(new Date().getFullYear() + 10, 11, 31);
 
+/** 联动表单内部 state 初值形状(deriveStateFromValue 返回值) */
+interface PickerState {
+  intervalValue: number;
+  intervalUnit: "minute" | "hour";
+  intervalWeekdays: number[];
+  runAtDate?: string;
+  runAtTime: string;
+  time: string;
+  weekdays: number[];
+  anchorDate?: string;
+  dayOfMonth: number;
+  monthDay: { month: number; day: number };
+}
+
+/**
+ * 编辑态回填:value(已存调度配置)→ 内部 state 初值。
+ * 纯函数供惰性初始化消费(配合挂载方 key remount,避免受控/非受控
+ * 混合的同步 effect);value 为 null 的空态保持新建默认值。
+ * 数组一律拷贝(weekly 另去重),防内部 state 与 value 共享引用。
+ */
+function deriveStateFromValue(value: ScheduleConfig | null): PickerState {
+  const init: PickerState = {
+    intervalValue: 30,
+    intervalUnit: "minute",
+    intervalWeekdays: [],
+    runAtDate: undefined,
+    runAtTime: "09:00",
+    time: "09:00",
+    weekdays: [1],
+    anchorDate: undefined,
+    dayOfMonth: 1,
+    monthDay: { month: 12, day: 31 },
+  };
+  if (!value) {
+    return init;
+  }
+  if (value.mode === "interval") {
+    init.intervalValue = value.value;
+    init.intervalUnit = value.unit;
+    init.intervalWeekdays = [...(value.weekdays ?? [])];
+    return init;
+  }
+  switch (value.kind) {
+    case "once":
+      // runAt 为 UTC ISO,format 按本地时区拆解回显(与保存口径对称)
+      init.runAtDate = format(new Date(value.runAt), "yyyy-MM-dd");
+      init.runAtTime = format(new Date(value.runAt), "HH:mm");
+      break;
+    case "daily":
+      init.time = value.time;
+      break;
+    case "weekly":
+      init.time = value.time;
+      init.weekdays = [...new Set(value.weekdays)];
+      break;
+    case "biweekly":
+      init.time = value.time;
+      init.weekdays = [value.weekday];
+      init.anchorDate = value.anchorDate;
+      break;
+    case "monthly":
+      init.time = value.time;
+      init.dayOfMonth = value.dayOfMonth;
+      break;
+    case "yearly":
+      init.time = value.time;
+      init.monthDay = { month: value.month, day: value.day };
+      break;
+  }
+  return init;
+}
+
 export interface SchedulePickerProps {
   value: ScheduleConfig | null;
   onChange: (cfg: ScheduleConfig | null) => void;
@@ -72,16 +146,27 @@ export function SchedulePicker({
   const { t } = useTranslation(["chat", "common"]);
   const mode = value?.mode ?? "periodic";
   const kind: PeriodicKind = value?.mode === "periodic" ? value.kind : "daily";
-  const [intervalValue, setIntervalValue] = useState(30);
-  const [intervalUnit, setIntervalUnit] = useState<"minute" | "hour">("minute");
-  const [intervalWeekdays, setIntervalWeekdays] = useState<number[]>([]);
-  const [runAtDate, setRunAtDate] = useState<string | undefined>();
-  const [runAtTime, setRunAtTime] = useState("09:00");
-  const [time, setTime] = useState("09:00");
-  const [weekdays, setWeekdays] = useState<number[]>([1]);
-  const [anchorDate, setAnchorDate] = useState<string | undefined>();
-  const [dayOfMonth, setDayOfMonth] = useState(1);
-  const [monthDay, setMonthDay] = useState({ month: 12, day: 31 });
+  // 惰性初始化:初值仅在挂载时从 value 派生一次(编辑回填),之后归
+  // 内部 state 管理;来源切换的重置由挂载方 key remount 保证
+  const [init] = useState(() => deriveStateFromValue(value));
+  const [intervalValue, setIntervalValue] = useState(init.intervalValue);
+  const [intervalUnit, setIntervalUnit] = useState<"minute" | "hour">(
+    init.intervalUnit,
+  );
+  const [intervalWeekdays, setIntervalWeekdays] = useState<number[]>(
+    init.intervalWeekdays,
+  );
+  const [runAtDate, setRunAtDate] = useState<string | undefined>(
+    init.runAtDate,
+  );
+  const [runAtTime, setRunAtTime] = useState(init.runAtTime);
+  const [time, setTime] = useState(init.time);
+  const [weekdays, setWeekdays] = useState<number[]>(init.weekdays);
+  const [anchorDate, setAnchorDate] = useState<string | undefined>(
+    init.anchorDate,
+  );
+  const [dayOfMonth, setDayOfMonth] = useState(init.dayOfMonth);
+  const [monthDay, setMonthDay] = useState(init.monthDay);
 
   const summary = useMemo(
     () =>
@@ -522,9 +607,12 @@ function ValidityFields({
   onValidityChange: (v: { startAt?: string; endAt?: string }) => void;
 }) {
   const { t } = useTranslation(["chat"]);
-  /** 显式记录用户选择:自定义模式在起止未选时 validity 为空,
-   * 不能由 validity 反推显示值(否则回落长期有效) */
-  const [mode, setMode] = useState<"longTerm" | "custom">("longTerm");
+  /** 初值从 validity 派生(编辑带自定义有效期时回显 DatePicker);挂载后
+   * 显式记录用户选择——自定义模式下起止未选时 validity 为空,不能由
+   * validity 反推显示值(否则回落长期有效) */
+  const [mode, setMode] = useState<"longTerm" | "custom">(
+    validity.startAt || validity.endAt ? "custom" : "longTerm",
+  );
   const custom = mode === "custom";
   return (
     <div className="flex flex-wrap items-center gap-2">

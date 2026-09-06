@@ -84,11 +84,12 @@ export function TaskRow({
           ? t("chat:automation.status.running")
           : t("chat:automation.status.paused")}
       </span>
+      {/* expired 不禁用开关:重新启用走 status→active 恢复路径;
+          endAt 已过的任务 toggle 后由调度器下轮重新回收,无害 */}
       <Switch
         checked={task.enabled}
         onCheckedChange={handleToggle}
         onClick={(e) => e.stopPropagation()}
-        disabled={task.status === "expired"}
       />
     </div>
   );

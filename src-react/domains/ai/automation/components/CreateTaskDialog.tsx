@@ -97,6 +97,9 @@ export function CreateTaskDialog({
     startAt?: string;
     endAt?: string;
   }>({});
+  /** SchedulePicker remount key:打开来源(编辑任务/模板/新建)变化或
+   * 重开时必变,让内部表单字段的惰性初值从新 value 重新派生(编辑回填) */
+  const [pickerKey, setPickerKey] = useState("new");
   const [saving, setSaving] = useState(false);
   const switchCountRef = useRef(0);
   const initialStartAtRef = useRef<string | undefined>(undefined);
@@ -105,10 +108,13 @@ export function CreateTaskDialog({
   /** open 时按 editTask > template 初始化 */
   useEffect(() => {
     if (!open) {
+      // 关闭即重置 key,保证同一来源取消后重开也会 remount 回填已存配置
+      setPickerKey("closed");
       return;
     }
     switchCountRef.current = 0;
     if (editTask) {
+      setPickerKey(`task-${editTask.id}`);
       setName(editTask.name);
       setPrompt(editTask.prompt);
       setModelId(editTask.modelId);
@@ -131,7 +137,10 @@ export function CreateTaskDialog({
       return;
     }
     initialStartAtRef.current = undefined;
+    // 模板/新建无有效期概念,清空防上一编辑会话的有效期泄漏(保存带出脏数据)
+    setValidity({});
     if (template) {
+      setPickerKey(`tpl-${template.slug}`);
       setName(
         t(`chat:automation.templateData.${camelSlug(template.slug)}.title`),
       );
@@ -139,6 +148,7 @@ export function CreateTaskDialog({
       setTemperature(template.temperature);
       setSchedule(JSON.parse(template.scheduleJson) as ScheduleConfig);
     } else {
+      setPickerKey("new");
       setSchedule({ mode: "periodic", kind: "daily", time: "09:00" });
     }
   }, [open, editTask, template, t]);
@@ -403,6 +413,7 @@ export function CreateTaskDialog({
           </div>
 
           <SchedulePicker
+            key={pickerKey}
             value={schedule}
             onChange={setSchedule}
             validity={validity}

@@ -90,11 +90,16 @@ const taskRow = {
   updatedAt: new Date(),
 };
 
-/** once 任务行(advanceTask 终态语义用例:成功才 expired,失败留待重试扫描) */
+/** once 任务行(advanceTask 终态语义用例:成功才 expired,失败留待重试扫描)。
+ * runAt 相对真实时钟动态取过去时刻:nextRunAt=null 断言(需 runAt ≤ now)
+ * 不依赖固定日历日期,任意时间运行均稳定 */
 const onceRow = {
   ...taskRow,
-  scheduleJson:
-    '{"mode":"periodic","kind":"once","runAt":"2026-09-06T09:00:00.000Z"}',
+  scheduleJson: JSON.stringify({
+    mode: "periodic",
+    kind: "once",
+    runAt: new Date(Date.now() - 60_000).toISOString(),
+  }),
 };
 
 describe("executeTask 失败短路", () => {

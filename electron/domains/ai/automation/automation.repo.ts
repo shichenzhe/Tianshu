@@ -58,12 +58,15 @@ export function toTaskRecord(
   };
 }
 
-/** 创建/更新共用:create params → prisma data(nextRunAt 初算,clamp startAt)。
- * 不含 enabled/status——编辑已暂停任务不得重置用户开关 */
+/** 创建/更新共用:create params → prisma data(nextRunAt 初算)。不含
+ * enabled/status——编辑已暂停任务不得重置用户开关 */
 export function buildTaskData(params: TaskCreateParams, now: Date) {
   const schedule = scheduleSchema.parse(params.schedule) as ScheduleConfig;
-  const next = computeNextRun(schedule, now);
   const startAt = params.startAt ? new Date(params.startAt) : null;
+  // 以 max(now, startAt) 为起点求首个调度点:触发点永远落在调度语义时刻
+  // (如 daily 09:00)而非生效边界,避免生效日零点伪触发一次造成当天双跑
+  const base = startAt && startAt > now ? startAt : now;
+  const next = computeNextRun(schedule, base);
   return {
     name: params.name,
     prompt: params.prompt,
@@ -76,7 +79,7 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     endAt: params.endAt ? new Date(params.endAt) : null,
     missedPolicy: params.missedPolicy,
     templateSlug: params.templateSlug ?? null,
-    nextRunAt: next && startAt && startAt > next ? startAt : next,
+    nextRunAt: next,
   };
 }
 
@@ -190,11 +193,18 @@ export default class AutomationRepository {
     id: number,
     p: TaskCreateParams,
   ): Promise<TaskRecord> {
-    const row = await prisma.automationTask.update({
+    const row = await prisma.automationTask.findUnique({ where: { id } });
+    const updated = await prisma.automationTask.update({
       where: { id },
-      data: buildTaskData(p, new Date()),
+      data: {
+        ...buildTaskData(p, new Date()),
+        // 编辑视为续命:原任务已过期(expired)则以新配置复活回 active
+        // (nextRunAt 已由 buildTaskData 重算);其余状态不动——
+        // Prisma 传 undefined 表示不更新该字段,不重置用户开关语义
+        status: row?.status === "expired" ? "active" : undefined,
+      },
     });
-    return this.hydrate(row);
+    return this.hydrate(updated);
   }
 
   async listRuns(page: number, taskId?: number): Promise<RunPage> {

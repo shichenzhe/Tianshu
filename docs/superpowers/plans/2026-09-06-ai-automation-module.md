@@ -2362,6 +2362,9 @@ Expected: FAIL（模块不存在）
  * 文案全走 i18n;t 注入可测;校验规则见 PRD《执行频率》§4。
  */
 import {
+  format,
+} from "date-fns";
+import {
   intervalMinutes,
   INTERVAL_MIN_MINUTES,
   type ScheduleConfig,
@@ -2389,7 +2392,10 @@ export function describeSchedule(cfg: ScheduleConfig, t: TFunc): string {
   }
   switch (cfg.kind) {
     case "once":
-      return t("chat:automation.schedule.textOnce", { time: cfg.runAt.slice(0, 16).replace("T", " ") });
+      // runAt 为 UTC ISO,按本地时区展示(date-fns format)
+      return t("chat:automation.schedule.textOnce", {
+        time: format(new Date(cfg.runAt), "yyyy-MM-dd HH:mm"),
+      });
     case "daily":
       return t("chat:automation.schedule.textDaily", { time: cfg.time });
     case "weekly":
@@ -2445,8 +2451,14 @@ export function validateSchedule(
       return "timeInPast";
     }
   }
-  if (validity.startAt && new Date(validity.startAt) <= now) {
-    return "timeInPast";
+  if (validity.startAt) {
+    // 开始日期按本地零点口径:早于今天才拒绝(「今天开始」= 立即生效,合法)
+    const startDay = new Date(`${validity.startAt.slice(0, 10)}T00:00:00`);
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    if (startDay < todayStart) {
+      return "timeInPast";
+    }
   }
   return "ok";
 }
@@ -2981,7 +2993,8 @@ export function SchedulePicker({
       onChange({
         mode: "periodic",
         kind: "once",
-        runAt: `${runAtDate ?? ""}T${runAtTime}:00.000Z`,
+        // 本地日期时间 → Date → UTC ISO(直接拼 Z 会把本地时间当 UTC,时区错位)
+        runAt: new Date(`${runAtDate ?? "1970-01-01"}T${runAtTime}`).toISOString(),
       });
       return;
     }
@@ -3057,13 +3070,13 @@ export function SchedulePicker({
               setRunAtDate: (d) => {
                 setRunAtDate(d);
                 if (kind === "once" && d) {
-                  patchCurrent({ runAt: `${d}T${runAtTime}:00.000Z` });
+                  patchCurrent({ runAt: new Date(`${d}T${runAtTime}`).toISOString() });
                 }
               },
               setRunAtTime: (tm) => {
                 setRunAtTime(tm);
                 if (kind === "once" && runAtDate) {
-                  patchCurrent({ runAt: `${runAtDate}T${tm}:00.000Z` });
+                  patchCurrent({ runAt: new Date(`${runAtDate}T${tm}`).toISOString() });
                 }
               },
               setTime: (tm) => {
@@ -3557,8 +3570,14 @@ export function CreateTaskDialog({
         temperature,
         schedule: schedule as ScheduleConfig,
         scheduleText: `${describeSchedule(schedule, t)} · ${describeValidity(validity, t)}`,
-        startAt: validity.startAt ? new Date(validity.startAt).toISOString() : undefined,
-        endAt: validity.endAt ? new Date(validity.endAt).toISOString() : undefined,
+        // DatePicker 日期串按本地零点解析(new Date("YYYY-MM-DD") 会按 UTC 解析,
+        // 时区错位导致「当天开始」被误判过期)
+        startAt: validity.startAt
+          ? new Date(`${validity.startAt.slice(0, 10)}T00:00:00`).toISOString()
+          : undefined,
+        endAt: validity.endAt
+          ? new Date(`${validity.endAt.slice(0, 10)}T23:59:59`).toISOString()
+          : undefined,
         missedPolicy,
         templateSlug: template?.slug,
       };

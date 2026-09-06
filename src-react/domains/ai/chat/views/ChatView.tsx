@@ -224,7 +224,11 @@ function ChatPane({
     const injected =
       files.length > 0
         ? `${files
-            .map((file) => `[引用文件 ${file.path}]\n${file.content}`)
+            .map((file) =>
+              file.kind === "skill"
+                ? `[引用技能 ${file.path}]\n${file.content}`
+                : `[引用文件 ${file.path}]\n${file.content}`,
+            )
             .join("\n\n")}\n\n${content}`
         : content;
     try {

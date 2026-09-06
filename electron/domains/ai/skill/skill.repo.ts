@@ -7,7 +7,7 @@
  * 技能埋点采集/聚合查询(P-E,skill:stats)。
  */
 import { ipcMain, app, dialog } from "electron";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import prisma from "../../../commons/prisma-client";
@@ -102,6 +102,9 @@ export class SkillRepository {
     );
     ipcMain.handle("skill:pickImport", () => this.pickImport());
     ipcMain.handle("skill:stats", () => this.stats());
+    ipcMain.handle("skill:readSkill", (_e, p: { name: string }) =>
+      this.readSkill(p.name),
+    );
     ipcMain.handle("skillhub:list", (_e, p: SkillHubListParams) =>
       this.hub.listSkills(p ?? {}),
     );
@@ -257,6 +260,22 @@ export class SkillRepository {
   async stats(): Promise<{ items: SkillStatItem[] }> {
     const rows = await this.prismaClient.skillStat.findMany();
     return { items: aggregateSkillStats(rows) };
+  }
+
+  /** @ 引用读取:按名读 user 级 SKILL.md 正文(≤256KB 截断,同 read_skill 工具语义) */
+  async readSkill(name: string): Promise<{ content: string }> {
+    const skill = loadSkills([{ dir: this.skillsRoot(), source: "user" }]).find(
+      (s) => s.name === name,
+    );
+    if (!skill) {
+      throw new Error(`技能不存在: ${name}`);
+    }
+    const buf = readFileSync(skill.bodyPath);
+    const body =
+      buf.byteLength > 256 * 1024
+        ? `${buf.subarray(0, 256 * 1024).toString("utf8")}\n…(已截断)`
+        : buf.toString("utf8");
+    return { content: body };
   }
 
   /** 系统文件选择器(zip 文件或技能目录);取消/未选返回 canceled:true */

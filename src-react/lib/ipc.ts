@@ -72,6 +72,7 @@ export type IPCChannel =
   | "skill:import"
   | "skill:pickImport"
   | "skill:stats"
+  | "skill:readSkill"
   | "skillhub:list"
   | "skillhub:top"
   | "skillhub:categories"

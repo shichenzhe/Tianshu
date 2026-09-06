@@ -18,9 +18,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Send, Square, X } from "lucide-react";
+import { Send, Sparkles, Square, X } from "lucide-react";
 
 import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store";
+import SkillApi from "../../skills/api/skill.api";
 
 import { Button } from "@/components/ui/button";
 import { invoke } from "@/lib/ipc";
@@ -30,10 +31,13 @@ import ModelPicker from "./ModelPicker";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
 import PlusMenu from "./PlusMenu";
 
-/** 待引用文件：＋菜单/@ 联想选取暂存于此，发送时随 onSend 带出（渲染层拼注入块） */
+/** 待引用文件/技能:＋菜单/@ 联想选取暂存于此,发送时随 onSend 带出(渲染层拼注入块) */
 export interface PendingFile {
+  /** 文件相对路径;kind="skill" 时为技能名 */
   path: string;
   content: string;
+  /** 引用来源:工作空间文件(默认)或已安装技能 */
+  kind?: "file" | "skill";
 }
 
 /** 路径尾段（跨平台分隔符），chips 展示用 */
@@ -46,17 +50,22 @@ function pathBasename(filePath: string): string {
 const MENTION_TOKEN_RE = /[\w\-./]/;
 const MENTION_LIMIT = 8;
 
+/** @ 联想候选:已安装技能或工作空间文件 */
+type MentionCandidate =
+  { kind: "skill"; name: string } | { kind: "file"; path: string };
+
 interface FileChipProps {
   path: string;
+  kind?: "file" | "skill";
   onRemove: () => void;
 }
 
-/** 引用文件 chip：📎 + 文件名（title 悬浮全路径）+ 移除按钮 */
-function FileChip({ path, onRemove }: FileChipProps) {
+/** 引用 chip:📎 文件 / ⚡ 技能 + 名称(title 悬浮全名)+ 移除按钮 */
+function FileChip({ path, kind, onRemove }: FileChipProps) {
   const { t } = useTranslation(["chat"]);
   return (
     <span className="inline-flex max-w-64 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-      <span aria-hidden>{"📎"}</span>
+      <span aria-hidden>{kind === "skill" ? "⚡" : "📎"}</span>
       <span className="truncate" title={path}>
         {pathBasename(path)}
       </span>
@@ -159,10 +168,9 @@ export default function ChatInput({
       setContent(pending);
       textareaRef.current?.focus();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 工作空间文件清单（@ 联想数据源；5 分钟内复用缓存）
+  // 工作空间文件清单（@ 联想数据源；5 分钟内复用缓存;未绑定时不可用,技能候选不受影响）
   const workspaceFilesQuery = useQuery({
     queryKey: ["workspace-files", workspaceId],
     queryFn: () =>
@@ -171,18 +179,37 @@ export default function ChatInput({
     staleTime: 300_000,
   });
 
-  // 联想候选：空 query 取最短路径在前；非空大小写不敏感 substring 匹配
-  const mentionCandidates = useMemo(() => {
-    const files = workspaceFilesQuery.data;
-    if (!mention || !files) {
+  // 已安装技能（@ 联想技能候选;仅启用项对模型有意义）
+  const skillsQuery = useQuery({
+    queryKey: ["skillRecords"],
+    queryFn: () => SkillApi.list(),
+    enabled: mention !== null,
+    staleTime: 60_000,
+  });
+
+  // 联想候选:技能在前（数量少且常为目标,按名大小写不敏感匹配）,文件沿用
+  // 「空 query 最短路径在前 / 非空 substring 匹配」,各自截断后合并
+  const mentionCandidates = useMemo<MentionCandidate[]>(() => {
+    if (!mention) {
       return [];
     }
     const query = mention.query.toLowerCase();
-    const matched = query
-      ? files.filter((file) => file.toLowerCase().includes(query))
-      : [...files].sort((a, b) => a.length - b.length);
-    return matched.slice(0, MENTION_LIMIT);
-  }, [mention, workspaceFilesQuery.data]);
+    const skills: MentionCandidate[] = (skillsQuery.data ?? [])
+      .filter((r) => r.enabled)
+      .filter((r) => !query || r.name.toLowerCase().includes(query))
+      .slice(0, MENTION_LIMIT)
+      .map((r) => ({ kind: "skill", name: r.name }));
+    const files = workspaceFilesQuery.data;
+    const fileCandidates: MentionCandidate[] = !files
+      ? []
+      : (query
+          ? files.filter((file) => file.toLowerCase().includes(query))
+          : [...files].sort((a, b) => a.length - b.length)
+        )
+          .slice(0, MENTION_LIMIT)
+          .map((file) => ({ kind: "file", path: file }));
+    return [...skills, ...fileCandidates];
+  }, [mention, skillsQuery.data, workspaceFilesQuery.data]);
 
   // mention 或候选变化时收敛高亮越界
   const activeIndex = Math.min(
@@ -221,9 +248,9 @@ export default function ChatInput({
     setPendingFiles((prev) => prev.filter((file) => file.path !== path));
   }, []);
 
-  /** @ 选中：删除 token 文本 → 读文件入 chips；读取失败 toast 且保留 @ 文本 */
+  /** @ 选中：删除 token 文本 → 读内容入 chips（技能走 skill:readSkill，文件读工作空间）；读取失败 toast 且保留 @ 文本 */
   const selectMention = useCallback(
-    async (relPath: string) => {
+    async (candidate: MentionCandidate) => {
       if (!mention) {
         return;
       }
@@ -237,21 +264,34 @@ export default function ChatInput({
           Math.min(caret, mention.startIndex + 1 + mention.query.length),
         );
       try {
+        if (candidate.kind === "skill") {
+          const result = await SkillApi.readSkill(candidate.name);
+          handlePickFiles([
+            {
+              path: candidate.name,
+              content: result.content,
+              kind: "skill",
+            },
+          ]);
+          setContent(next);
+          setMention(null);
+          return;
+        }
         const result = await invoke<{ content: string } | { error: string }>(
           "file:readWorkspaceFile",
           workspaceId,
-          relPath,
+          candidate.path,
         );
         if ("error" in result) {
           toast.error(
             t("chat:attach.readFailed", {
-              path: relPath,
+              path: candidate.path,
               reason: result.error,
             }),
           );
           return;
         }
-        handlePickFiles([{ path: relPath, content: result.content }]);
+        handlePickFiles([{ path: candidate.path, content: result.content }]);
         setContent(next);
         setMention(null);
       } catch (e) {
@@ -350,8 +390,7 @@ export default function ChatInput({
   };
 
   const showMentionList = mention !== null;
-  const workspaceUnbound =
-    workspaceId === null || workspaceFilesQuery.data === null;
+  const workspaceUnbound = workspaceId === null;
   const noCandidates = mention !== null && mentionCandidates.length === 0;
 
   return (
@@ -372,23 +411,32 @@ export default function ChatInput({
             </p>
           ) : (
             <ul className="max-h-56 overflow-y-auto py-1">
-              {mentionCandidates.map((file, index) => (
-                <li key={file}>
+              {mentionCandidates.map((candidate, index) => (
+                <li
+                  key={`${candidate.kind}:${candidate.kind === "skill" ? candidate.name : candidate.path}`}
+                >
                   <button
                     type="button"
                     onMouseDown={(event) => {
                       // mousedown 先于 blur/发送键处理，阻止默认避免失焦
                       event.preventDefault();
-                      void selectMention(file);
+                      void selectMention(candidate);
                     }}
                     onMouseEnter={() => setHighlightIndex(index)}
-                    className={`w-full truncate px-2 py-1.5 text-left text-xs ${
+                    className={`flex w-full items-center gap-1.5 truncate px-2 py-1.5 text-left text-xs ${
                       index === activeIndex
                         ? "bg-primary-subtle text-primary"
                         : "text-foreground"
                     }`}
                   >
-                    {file}
+                    {candidate.kind === "skill" ? (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{candidate.name}</span>
+                      </>
+                    ) : (
+                      <span className="truncate">{candidate.path}</span>
+                    )}
                   </button>
                 </li>
               ))}
@@ -419,6 +467,7 @@ export default function ChatInput({
             <FileChip
               key={file.path}
               path={file.path}
+              kind={file.kind}
               onRemove={() => removeFile(file.path)}
             />
           ))}

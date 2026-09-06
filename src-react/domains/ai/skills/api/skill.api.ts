@@ -63,6 +63,9 @@ const SkillApi = {
   pickImport: () => invoke<PickImportResult>("skill:pickImport"),
   /** 埋点聚合查询(P-E:name 升序;暂无 UI 消费,api 层备好) */
   stats: () => invoke<SkillStatsResult>("skill:stats"),
+  /** @ 引用读取:按名读 SKILL.md 正文(≤256KB 截断) */
+  readSkill: (name: string) =>
+    invoke<{ content: string }>("skill:readSkill", { name }),
 };
 
 export default SkillApi;

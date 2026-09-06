@@ -230,6 +230,8 @@ async function streamAndRecord(
     where: { id: ctx.runId },
     data: {
       status: success ? "success" : "failed",
+      // 终态 run 关联 session(spec §4 步骤7):§5 运行记录点击跳回聊天的依据
+      sessionId: ctx.sessionId,
       durationMs: Date.now() - ctx.startedAt,
       promptTokens: usage?.promptTokens,
       completionTokens: usage?.completionTokens,

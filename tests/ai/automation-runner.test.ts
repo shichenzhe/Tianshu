@@ -1,6 +1,11 @@
 // tests/ai/automation-runner.test.ts
 import { describe, expect, it, vi } from "vitest";
 
+// 成功路径执行到 streamAndRecord 内的 app.getPath("userData")（技能目录），
+// 照 chat.service.test.ts 先例 mock electron（仅 app.getPath，无断言涉及）
+vi.mock("electron", () => ({
+  app: { getPath: vi.fn(() => "/tmp/mirror-test-user-data") },
+}));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     workspace: { findUnique: vi.fn() },
@@ -62,6 +67,29 @@ describe("extractUsage", () => {
   });
 });
 
+/** executeTask 用例共用任务行（automationTask 表形状） */
+const taskRow = {
+  id: 1,
+  name: "t",
+  prompt: "p",
+  workspaceId: 9,
+  modelId: 1,
+  temperature: 0.7,
+  scheduleJson: '{"mode":"periodic","kind":"daily","time":"09:00"}',
+  scheduleText: "每天 09:00",
+  startAt: null,
+  endAt: null,
+  missedPolicy: "skip",
+  enabled: true,
+  status: "active",
+  statusNote: null,
+  lastRunAt: null,
+  nextRunAt: null,
+  templateSlug: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
 describe("executeTask 失败短路", () => {
   it("workspace 缺失 → run failed(workspace_missing) + task error", async () => {
     const { executeTask } =
@@ -71,28 +99,7 @@ describe("executeTask 失败短路", () => {
     vi.mocked(prisma.automationRun.create).mockResolvedValue({
       id: 1,
     } as never);
-    const task = {
-      id: 1,
-      name: "t",
-      prompt: "p",
-      workspaceId: 9,
-      modelId: 1,
-      temperature: 0.7,
-      scheduleJson: '{"mode":"periodic","kind":"daily","time":"09:00"}',
-      scheduleText: "每天 09:00",
-      startAt: null,
-      endAt: null,
-      missedPolicy: "skip",
-      enabled: true,
-      status: "active",
-      statusNote: null,
-      lastRunAt: null,
-      nextRunAt: null,
-      templateSlug: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    await executeTask(task as never, {
+    await executeTask(taskRow as never, {
       triggerType: "schedule",
       attempt: 1,
       abort: new AbortController().signal,
@@ -121,5 +128,48 @@ describe("executeTask 失败短路", () => {
       }),
     );
     expect(runChatStream).not.toHaveBeenCalled();
+  });
+});
+
+describe("executeTask 成功路径", () => {
+  it("run 终态 update 关联 sessionId 且 status=success(spec §4 步骤7/§5 跳转)", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    vi.mocked(prisma.automationRun.create).mockResolvedValue({
+      id: 1,
+    } as never);
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+      id: 9,
+      directoryPath: null,
+    } as never);
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 1,
+      providerId: 2,
+      modelId: "gpt-test",
+    } as never);
+    vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+      type: "openai-compatible",
+      baseUrl: "https://api.test/v1",
+      apiKey: "k",
+      extraHeaders: null,
+    } as never);
+    vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(taskRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionId: 99,
+          status: "success",
+        }),
+      }),
+    );
+    expect(prisma.message.create).toHaveBeenCalledTimes(2);
   });
 });

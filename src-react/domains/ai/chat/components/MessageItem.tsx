@@ -51,21 +51,6 @@ function UsageBlockView({ input, output }: { input: number; output: number }) {
   );
 }
 
-/** 生成耗时格式化:<1s / 秒 / 分秒 */
-function formatDuration(ms?: number): string | null {
-  if (ms === undefined || ms === null) {
-    return null;
-  }
-  if (ms < 1000) {
-    return "<1s";
-  }
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  return `${Math.floor(seconds / 60)}m${seconds % 60}s`;
-}
-
 function MessageItemImpl({
   message,
   streaming = false,

@@ -11,6 +11,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { TimeFilter } from "../../chat/lib/session-list";
 import { useAiUiStore } from "../../store/ai-ui.store";
 
@@ -29,16 +35,29 @@ export default function FilterPopover() {
 
   return (
     <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn("h-7 w-7 p-0", timeFilter !== "all" && "text-primary")}
-          aria-label={t("chat:filter.title")}
-        >
-          <Filter className="h-4 w-4" />
-        </Button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          {/* 双 Trigger asChild 链式叠加到同一 Button：Popover 开合 + Tooltip 冒泡 */}
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-7 w-7 p-0",
+                  timeFilter !== "all" && "text-primary",
+                )}
+                aria-label={t("chat:filter.title")}
+              >
+                <Filter className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t("chat:filter.title")}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent
         align="start"
         className="w-44 rounded-lg border border-border/50 shadow-lg"

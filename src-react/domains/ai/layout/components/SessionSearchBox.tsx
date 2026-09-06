@@ -11,6 +11,12 @@ import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useSessionSearchStore } from "../../store/session-search.store";
 
 export default function SessionSearchBox() {
@@ -35,6 +41,17 @@ export default function SessionSearchBox() {
       inputRef.current?.focus();
     }
   }, [open]);
+
+  // 无选中会话即隐藏（按钮与展开框整体）；顺带收起搜索态避免残留
+  useEffect(() => {
+    if (!sessionId) {
+      setOpen(false);
+    }
+  }, [sessionId, setOpen]);
+
+  if (!sessionId) {
+    return null;
+  }
 
   const hitCountText =
     query.length > 0
@@ -78,16 +95,24 @@ export default function SessionSearchBox() {
           </Button>
         </div>
       )}
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 w-7 p-0"
-        onClick={() => setOpen(!open)}
-        disabled={!sessionId}
-        aria-label={t("chat:searchInSession.label")}
-      >
-        <Search className="h-4 w-4" />
-      </Button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setOpen(!open)}
+              aria-label={t("chat:searchInSession.label")}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t("chat:searchInSession.label")}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     </div>
   );
 }

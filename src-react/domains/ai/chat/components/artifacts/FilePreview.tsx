@@ -1,10 +1,11 @@
 /**
- * 产物面板内嵌预览：返回/文件名/全屏切换工具栏 + 内容区（文本走
- * MarkdownView，图片直渲）。全屏 = absolute inset-0 覆盖聊天主区域
- * （定位祖先为 ChatView 行布局容器）。读取失败显示通用空态并 toast
- * 具体原因（spec §6：ENOENT/二进制统一此路径，toast 文案区分）
+ * 产物面板预览：返回/文件名/全屏切换工具栏 + 内容区（文本走 MarkdownView，
+ * 图片直渲）。fullscreen 受控于 ArtifactsPanel：非全屏嵌面板内容区；
+ * 全屏时由 ArtifactsPanel 渲染在行容器层（absolute inset-0 覆盖聊天主
+ * 区域）。读取失败显示通用空态并 toast 具体原因（spec §6：ENOENT/
+ * 二进制统一此路径，toast 文案区分）
  */
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -19,11 +20,18 @@ interface FilePreviewProps {
   file: SessionFile;
   workspaceId: number;
   onBack: () => void;
+  fullscreen: boolean;
+  onToggleFullscreen: () => void;
 }
 
-function FilePreview({ file, workspaceId, onBack }: FilePreviewProps) {
+function FilePreview({
+  file,
+  workspaceId,
+  onBack,
+  fullscreen,
+  onToggleFullscreen,
+}: FilePreviewProps) {
   const { t } = useTranslation(["chat"]);
-  const [fullscreen, setFullscreen] = useState(false);
 
   const fileQuery = useQuery({
     queryKey: ["artifact-file", workspaceId, file.path],
@@ -72,7 +80,7 @@ function FilePreview({ file, workspaceId, onBack }: FilePreviewProps) {
               ? t("chat:artifacts.exitFullscreen")
               : t("chat:artifacts.fullscreen")
           }
-          onClick={() => setFullscreen((prev) => !prev)}
+          onClick={onToggleFullscreen}
           className="rounded p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
         >
           {fullscreen ? (

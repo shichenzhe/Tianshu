@@ -41,6 +41,7 @@ export default function ArtifactsPanel({
   const view = useAiUiStore((s) => s.artifactsView);
   const setView = useAiUiStore((s) => s.setArtifactsView);
   const [previewFile, setPreviewFile] = useState<SessionFile | null>(null);
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
 
   // 与 MessageList 共享 ["messages", sessionId] 缓存；流结束既有 invalidate 链路刷新
   const messagesQuery = useQuery({
@@ -63,51 +64,75 @@ export default function ArtifactsPanel({
     [files],
   );
 
-  const closePreview = () => setPreviewFile(null);
+  const closePreview = () => {
+    setPreviewFile(null);
+    setPreviewFullscreen(false);
+  };
+  const togglePreviewFullscreen = () => setPreviewFullscreen((prev) => !prev);
 
   return (
-    <div className="flex h-full w-[340px] shrink-0 flex-col border-l border-border/50">
-      <div className="flex items-center border-b border-border/50 px-2 py-1.5">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium hover:bg-primary-subtle hover:text-primary"
-            >
-              {t(`chat:artifacts.${view}`)}
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="start"
-            className="border border-border/50 rounded-lg shadow-lg"
-          >
-            {VIEWS.map((item) => (
-              <DropdownMenuItem
-                key={item}
-                onClick={() => {
-                  setView(item);
-                  closePreview();
-                }}
+    <>
+      {/* 悬浮面板：absolute 相对行容器，覆盖聊天区右缘不挤压内容 */}
+      <div className="absolute inset-y-0 right-0 z-30 flex w-[340px] flex-col border-l border-border/50 bg-background shadow-lg">
+        <div className="flex items-center border-b border-border/50 px-2 py-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 rounded px-2 py-1 text-sm font-medium hover:bg-primary-subtle hover:text-primary"
               >
-                {t(`chat:artifacts.${item}`)}
-                {view === item && (
-                  <Check className="ml-auto h-4 w-4 text-primary" />
-                )}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {previewFile ? (
-          <FilePreview
-            file={previewFile}
-            workspaceId={workspaceId}
-            onBack={closePreview}
-          />
-        ) : view === "overview" ? (
-          <>
+                {t(`chat:artifacts.${view}`)}
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="border border-border/50 rounded-lg shadow-lg"
+            >
+              {VIEWS.map((item) => (
+                <DropdownMenuItem
+                  key={item}
+                  onClick={() => {
+                    setView(item);
+                    closePreview();
+                  }}
+                >
+                  {t(`chat:artifacts.${item}`)}
+                  {view === item && (
+                    <Check className="ml-auto h-4 w-4 text-primary" />
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {previewFile && !previewFullscreen ? (
+            <FilePreview
+              file={previewFile}
+              workspaceId={workspaceId}
+              onBack={closePreview}
+              fullscreen={false}
+              onToggleFullscreen={togglePreviewFullscreen}
+            />
+          ) : view === "overview" ? (
+            <>
+              <FileListGroup
+                title={t("chat:artifacts.artifacts")}
+                files={artifactFiles}
+                defaultOpen
+                workspaceId={workspaceId}
+                onPreview={setPreviewFile}
+              />
+              <FileListGroup
+                title={t("chat:artifacts.workspace")}
+                files={workspaceFiles}
+                defaultOpen
+                workspaceId={workspaceId}
+                onPreview={setPreviewFile}
+              />
+            </>
+          ) : view === "artifacts" ? (
             <FileListGroup
               title={t("chat:artifacts.artifacts")}
               files={artifactFiles}
@@ -115,6 +140,7 @@ export default function ArtifactsPanel({
               workspaceId={workspaceId}
               onPreview={setPreviewFile}
             />
+          ) : (
             <FileListGroup
               title={t("chat:artifacts.workspace")}
               files={workspaceFiles}
@@ -122,26 +148,20 @@ export default function ArtifactsPanel({
               workspaceId={workspaceId}
               onPreview={setPreviewFile}
             />
-          </>
-        ) : view === "artifacts" ? (
-          <FileListGroup
-            title={t("chat:artifacts.artifacts")}
-            files={artifactFiles}
-            defaultOpen
-            workspaceId={workspaceId}
-            onPreview={setPreviewFile}
-          />
-        ) : (
-          <FileListGroup
-            title={t("chat:artifacts.workspace")}
-            files={workspaceFiles}
-            defaultOpen
-            workspaceId={workspaceId}
-            onPreview={setPreviewFile}
-          />
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      {/* 全屏预览渲染在行容器层（absolute inset-0 相对行容器而非悬浮面板） */}
+      {previewFile && previewFullscreen && (
+        <FilePreview
+          file={previewFile}
+          workspaceId={workspaceId}
+          onBack={closePreview}
+          fullscreen
+          onToggleFullscreen={togglePreviewFullscreen}
+        />
+      )}
+    </>
   );
 }
 

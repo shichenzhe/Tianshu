@@ -5,6 +5,11 @@
  * write_file 记录；full access 模式可写工作空间外绝对路径，须放行）。
  * 图片按扩展名先行识别（真实 PNG/JPEG 等普遍含 NUL 字节），
  * NUL 检查仅用于文本候选文件。
+ *
+ * 双通道差异：本模块服务 workspace:readFile（产物面板预览），fullAccess
+ * 语义（绝对路径直接用）；既有 file:readWorkspaceFile（chat.service.ts，
+ * AI 工具读取）走 resolveSafePath 沙箱校验，两通道有意不同；后续可将
+ * 读取上限/NUL 判定整合进 file-tools.ts。
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -59,18 +64,35 @@ function toTextContent(buf: Buffer, size: number): WorkspaceFileContent {
   return { kind: "text", content: buf.toString("utf8"), size };
 }
 
+/** stat/read 失败本地化：ENOENT → 文件不存在；其余（EACCES/EPERM 等）→ 无权读取 */
+function localizedReadError(e: unknown): Error {
+  if ((e as NodeJS.ErrnoException)?.code === "ENOENT") {
+    return new Error("文件不存在");
+  }
+  return new Error("无权读取该文件，请检查文件权限");
+}
+
+/** readFile 错误同样本地化（覆盖 stat 通过后的 ENOENT 竞态 / EACCES） */
+async function readFileLocalized(absPath: string): Promise<Buffer> {
+  try {
+    return await fs.readFile(absPath);
+  } catch (e) {
+    throw localizedReadError(e);
+  }
+}
+
 export async function readWorkspaceFile(
   absPath: string,
 ): Promise<WorkspaceFileContent> {
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
     stat = await fs.stat(absPath);
-  } catch {
-    throw new Error("文件不存在");
+  } catch (e) {
+    throw localizedReadError(e);
   }
   if (!stat.isFile()) throw new Error("目标是目录，无法预览");
   if (stat.size > READ_LIMIT) throw new Error("文件超过 512KB 预览上限");
-  const buf = await fs.readFile(absPath);
+  const buf = await readFileLocalized(absPath);
   const image = toImageContent(absPath, buf, stat.size);
   if (image) return image;
   return toTextContent(buf, stat.size);

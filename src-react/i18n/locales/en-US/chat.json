@@ -273,7 +273,9 @@
     "actionExport": "Save a copy…",
     "actionReveal": "Reveal in Finder",
     "actionCopyPath": "Copy path",
+    "moreActions": "More actions",
     "copyPathSuccess": "Path copied",
+    "copyPathFailed": "Failed to copy path",
     "exportSuccess": "Saved a copy"
   }
 }

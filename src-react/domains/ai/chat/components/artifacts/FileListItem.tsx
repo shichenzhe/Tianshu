@@ -30,7 +30,7 @@ interface FileListItemProps {
 }
 
 function FileListItem({ file, workspaceId, onPreview }: FileListItemProps) {
-  const { t } = useTranslation(["chat", "common"]);
+  const { t } = useTranslation(["chat"]);
   const Icon = fileIconFor(file.path);
   const writing = file.status === "writing";
 
@@ -56,7 +56,7 @@ function FileListItem({ file, workspaceId, onPreview }: FileListItemProps) {
       await navigator.clipboard.writeText(file.path);
       toast.success(t("chat:artifacts.copyPathSuccess"));
     } catch {
-      toast.error(t("chat:artifacts.previewFailed"));
+      toast.error(t("chat:artifacts.copyPathFailed"));
     }
   };
 
@@ -95,7 +95,7 @@ function FileListItem({ file, workspaceId, onPreview }: FileListItemProps) {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            aria-label={t("chat:artifacts.actionPreview")}
+            aria-label={t("chat:artifacts.moreActions")}
             className="absolute right-1 hidden shrink-0 rounded p-0.5 text-muted-foreground group-hover:block hover:text-primary"
             onClick={(e) => e.stopPropagation()}
           >

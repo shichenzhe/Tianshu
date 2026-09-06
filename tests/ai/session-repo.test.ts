@@ -19,6 +19,10 @@ vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
   shell: { openPath: vi.fn() },
 }));
+// session.repo 引 commons/Log（Winston，模块加载即建 transport）——mock 掉避免测试写日志
+vi.mock("../../electron/commons/Log", () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: prismaStub,
 }));

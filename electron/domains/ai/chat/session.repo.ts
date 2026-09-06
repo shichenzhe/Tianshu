@@ -1,5 +1,6 @@
 import { dialog, ipcMain, shell } from "electron";
 import prisma from "../../../commons/prisma-client";
+import Log from "../../../commons/Log";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -134,6 +135,10 @@ export class SessionRepository {
     ipcMain.handle("workspace:openDirectory", (_, workspaceId: number) =>
       this.openWorkspaceDirectory(workspaceId),
     );
+    // 双通道差异：workspace:readFile（产物面板预览）fullAccess 语义——绝对路径
+    // 直接用，服务会话内 write_file 记录的任意路径；既有 file:readWorkspaceFile
+    // （chat.service.ts，AI 工具读取）走 resolveSafePath 沙箱校验。两通道有意
+    // 不同，后续可将读取上限/NUL 逻辑整合进 file-tools.ts。
     ipcMain.handle(
       "workspace:readFile",
       (_, workspaceId: number, relPath: string) =>
@@ -347,8 +352,9 @@ export class SessionRepository {
     if (canceled || !filePath) return null;
     try {
       await fs.copyFile(absPath, filePath);
-    } catch {
-      throw new Error("另存失败，请检查源文件与目标位置");
+    } catch (e) {
+      Log.warn("产物另存失败", e instanceof Error ? e.message : e);
+      throw new Error("另存失败，请检查源文件与目标位置", { cause: e });
     }
     return filePath;
   }

@@ -92,6 +92,15 @@ export type IPCChannel =
   | "mcpServer:reconnect"
   | "mcpServer:setEnabled"
   | "mcpServer:statuses"
+  // 自动化模块
+  | "automation:list"
+  | "automation:create"
+  | "automation:update"
+  | "automation:delete"
+  | "automation:toggle"
+  | "automation:templates"
+  | "automation:runs:page"
+  | "automation:stat"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"

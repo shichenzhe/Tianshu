@@ -32,6 +32,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { mapIpcError } from "../../chat/lib/error-message";
+import SessionApi from "../../api/session.api";
+import { WorkspaceApi } from "../../api/workspace.api";
 import SkillHubApi from "../api/skillhub.api";
 import type { SkillHubSkill } from "../api/skillhub-types";
 import { shuffle } from "../lib/shuffle";
@@ -53,9 +55,7 @@ export default function SkillDiscoverView({
   const { t } = useTranslation(["chat", "common"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const setPendingPrompt = useCreateSkillPromptStore(
-    (s) => s.setPendingPrompt,
-  );
+  const setPendingPrompt = useCreateSkillPromptStore((s) => s.setPendingPrompt);
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -67,6 +67,30 @@ export default function SkillDiscoverView({
   );
   const [importOpen, setImportOpen] = useState(false);
   const searchTimerRef = useRef<number | undefined>(undefined);
+
+  /**
+   * 创建技能入口:新开会话(工作空间取第一个,与"无选中"派生语义一致)→
+   * 预填引导语 → 跳转会话页(ChatInput 挂载时消费预填)
+   */
+  const handleCreateSkillFlow = async () => {
+    try {
+      const workspaces = await queryClient.ensureQueryData({
+        queryKey: ["workspaces"],
+        queryFn: () => WorkspaceApi.list(),
+      });
+      const workspaceId = workspaces[0]?.id;
+      if (workspaceId === undefined) {
+        toast.info(t("chat:skills.comingSoon"));
+        return;
+      }
+      const created = await SessionApi.create({ workspaceId });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      setPendingPrompt(t("chat:skills.createSkillPrompt"));
+      navigate(`/module/ai?session=${created.id}`);
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  };
 
   const topQuery = useQuery({
     queryKey: ["skillhub", "top"],
@@ -177,12 +201,7 @@ export default function SkillDiscoverView({
               <Upload className="mr-2 h-4 w-4" />
               {t("chat:skills.uploadSkill")}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setPendingPrompt(t("chat:skills.createSkillPrompt"));
-                navigate("/module/ai");
-              }}
-            >
+            <DropdownMenuItem onClick={() => void handleCreateSkillFlow()}>
               {t("chat:skills.createSkill")}
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -85,7 +85,7 @@ export default function SkillDiscoverView({
       }
       const created = await SessionApi.create({ workspaceId });
       await queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      setPendingPrompt(t("chat:skills.createSkillPrompt"));
+      setPendingPrompt(t("chat:skills.createSkillPrompt"), ["skill-creator"]);
       navigate(`/module/ai?session=${created.id}`);
     } catch (e) {
       toast.error(mapIpcError(e));

@@ -161,12 +161,24 @@ export default function ChatInput({
     (s) => s.consumePendingPrompt,
   );
 
-  // 跨页预填(技能页「创建技能」入口):挂载时消费一次引导语填入输入框
+  // 跨页预填(技能页「创建技能」入口):挂载时消费引导语填入输入框,
+  // 预置技能引用读正文入 chips(如 skill-creator,模型免 read_skill 一跳)
   useEffect(() => {
-    const pending = consumePendingPrompt();
-    if (pending) {
-      setContent(pending);
+    const { prompt, skillRefs } = consumePendingPrompt();
+    if (prompt) {
+      setContent(prompt);
       textareaRef.current?.focus();
+    }
+    for (const name of skillRefs) {
+      SkillApi.readSkill(name)
+        .then((result) =>
+          handlePickFiles([
+            { path: name, content: result.content, kind: "skill" },
+          ]),
+        )
+        .catch((e: unknown) =>
+          toast.error(e instanceof Error ? e.message : String(e)),
+        );
     }
   }, []);
 

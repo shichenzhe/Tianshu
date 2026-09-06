@@ -269,7 +269,7 @@ function ChatPane({
   };
 
   return (
-    <div className="relative flex h-full min-w-0 flex-1">
+    <div className="relative flex min-w-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         <MessageList
           sessionId={session.id}

@@ -40,7 +40,6 @@ export default function ArtifactsPanel({
   const { t } = useTranslation(["chat"]);
   const view = useAiUiStore((s) => s.artifactsView);
   const setView = useAiUiStore((s) => s.setArtifactsView);
-  const toggleOpen = useAiUiStore((s) => s.toggleArtifacts);
   const [previewFile, setPreviewFile] = useState<SessionFile | null>(null);
 
   // 与 MessageList 共享 ["messages", sessionId] 缓存；流结束既有 invalidate 链路刷新
@@ -68,7 +67,7 @@ export default function ArtifactsPanel({
 
   return (
     <div className="flex h-full w-[340px] shrink-0 flex-col border-l border-border/50">
-      <div className="flex items-center justify-between border-b border-border/50 px-2 py-1.5">
+      <div className="flex items-center border-b border-border/50 px-2 py-1.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -99,15 +98,6 @@ export default function ArtifactsPanel({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <button
-          type="button"
-          aria-label={t("chat:artifacts.close")}
-          title={t("chat:artifacts.close")}
-          onClick={toggleOpen}
-          className="rounded p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-        >
-          <PanelRight className="h-4 w-4" />
-        </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {previewFile ? (

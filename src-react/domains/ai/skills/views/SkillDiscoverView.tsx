@@ -220,7 +220,7 @@ export default function SkillDiscoverView({
 
       {/* 分类 Tab(搜索态隐藏) */}
       {!keyword && (
-        <div className="flex items-center gap-1 border-b border-border/50">
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-border/50 [&::-webkit-scrollbar]:hidden">
           <CategoryTab
             active={category === null}
             label={t("chat:skills.allCategories")}
@@ -337,7 +337,7 @@ function CategoryTab({
     <button
       type="button"
       className={cn(
-        "border-b-2 px-3 py-2 text-sm transition-colors",
+        "shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors",
         active
           ? "border-primary text-primary"
           : "border-transparent text-muted-foreground hover:text-foreground",

@@ -550,21 +550,28 @@ export default function ChatInput({
         <div className="ml-auto flex items-center gap-2">
           <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
           {sending ? (
+            /* 停止:黑底圆钮 + 白色实心方块 */
             <Button
-              variant="outline"
+              variant="ghost"
+              size="sm"
               onClick={onStop}
-              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              aria-label={t("chat:input.stop")}
+              title={t("chat:input.stop")}
+              className="h-8 w-8 shrink-0 rounded-full bg-foreground p-0 text-background hover:bg-foreground/85"
             >
-              <Square className="mr-1 h-4 w-4" />
-              {t("chat:input.stop")}
+              <Square className="h-3 w-3 fill-current" />
             </Button>
           ) : (
+            /* 发送:主色圆钮 */
             <Button
+              size="sm"
               onClick={submit}
               disabled={!hasModel || content.trim() === ""}
+              aria-label={t("chat:input.send")}
+              title={t("chat:input.send")}
+              className="h-8 w-8 shrink-0 rounded-full p-0"
             >
-              <Send className="mr-1 h-4 w-4" />
-              {t("chat:input.send")}
+              <Send className="h-4 w-4" />
             </Button>
           )}
         </div>

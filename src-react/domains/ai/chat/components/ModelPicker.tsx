@@ -81,9 +81,9 @@ export default function ModelPicker({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="max-w-44 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+          className="max-w-44 shrink-0 border-0 hover:bg-primary-subtle hover:text-primary"
           title={currentModel?.modelId}
         >
           <span className="truncate">{currentLabel}</span>

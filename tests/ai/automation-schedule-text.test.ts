@@ -26,13 +26,20 @@ describe("describeSchedule", () => {
       'chat:automation.schedule.textWeekly:{"weekdays":"common:weekday.1, common:weekday.5","time":"18:00"}',
     );
   });
-  it("interval → 间隔 + 星期筛选", () => {
+  it("interval → 间隔 + 星期筛选(单位键走扁平 unitHour/unitMinute)", () => {
     expect(
       describeSchedule(
         { mode: "interval", value: 1, unit: "hour", weekdays: [1, 2] },
         t,
       ),
-    ).toContain("chat:automation.schedule.textInterval");
+    ).toBe(
+      'chat:automation.schedule.textInterval:{"weekdays":"common:weekday.1, common:weekday.2","value":1,"unit":"chat:automation.schedule.unitHour"}',
+    );
+    expect(
+      describeSchedule({ mode: "interval", value: 30, unit: "minute" }, t),
+    ).toBe(
+      'chat:automation.schedule.textInterval:{"weekdays":"","value":30,"unit":"chat:automation.schedule.unitMinute"}',
+    );
   });
 });
 

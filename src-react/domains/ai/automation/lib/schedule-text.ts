@@ -24,7 +24,13 @@ export function describeSchedule(cfg: ScheduleConfig, t: TFunc): string {
     return t("chat:automation.schedule.textInterval", {
       weekdays: cfg.weekdays ? weekdayNames(cfg.weekdays, t) : "",
       value: cfg.value,
-      unit: t(`chat:automation.schedule.unit.${cfg.unit}`),
+      // Task 11 只定义扁平 unitMinute/unitHour(unit 本身是「单位」label
+      // 键,嵌套 unit.minute 与之重名被 i18n 规范禁止),不能按 unit 插值拼嵌套键
+      unit: t(
+        cfg.unit === "hour"
+          ? "chat:automation.schedule.unitHour"
+          : "chat:automation.schedule.unitMinute",
+      ),
     });
   }
   switch (cfg.kind) {

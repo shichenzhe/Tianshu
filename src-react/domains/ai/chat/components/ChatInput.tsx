@@ -9,6 +9,7 @@
  */
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -18,6 +19,8 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Send, Square, X } from "lucide-react";
+
+import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store";
 
 import { Button } from "@/components/ui/button";
 import { invoke } from "@/lib/ipc";
@@ -145,6 +148,19 @@ export default function ChatInput({
   } | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const consumePendingPrompt = useCreateSkillPromptStore(
+    (s) => s.consumePendingPrompt,
+  );
+
+  // 跨页预填(技能页「创建技能」入口):挂载时消费一次引导语填入输入框
+  useEffect(() => {
+    const pending = consumePendingPrompt();
+    if (pending) {
+      setContent(pending);
+      textareaRef.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 工作空间文件清单（@ 联想数据源；5 分钟内复用缓存）
   const workspaceFilesQuery = useQuery({

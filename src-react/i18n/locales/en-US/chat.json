@@ -222,6 +222,7 @@
       "builtin": "Built-in",
       "market": "Market",
       "local": "Local"
-    }
+    },
+    "createSkillPrompt": "Please help me create a skill: "
   }
 }

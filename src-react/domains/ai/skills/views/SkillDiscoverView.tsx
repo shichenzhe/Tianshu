@@ -3,10 +3,11 @@
  * 精选区(top 洗牌取 8,换一换)+ 分类 Tab(categories 动态)+
  * 推荐网格(搜索态切 keyword 查询;加载更多 = pageSize 增量,单查询)
  * 安装流:installingSlug 单飞态;冲突 → AlertDialog 覆盖确认(overwrite 重装)
- * 添加下拉「上传技能」→ 导入弹窗(SkillImportDialog);「创建技能」仍占位 toast
+ * 添加下拉「上传技能」→ 导入弹窗;「创建技能」→ 预填引导语跳转聊天页(AI 创建流)
  */
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, Search, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,7 @@ import { mapIpcError } from "../../chat/lib/error-message";
 import SkillHubApi from "../api/skillhub.api";
 import type { SkillHubSkill } from "../api/skillhub-types";
 import { shuffle } from "../lib/shuffle";
+import { useCreateSkillPromptStore } from "../store/create-skill.store";
 import SkillHubCard from "../components/SkillHubCard";
 import SkillImportDialog from "../components/SkillImportDialog";
 
@@ -49,7 +51,11 @@ export default function SkillDiscoverView({
   installedSlugs: Set<string>;
 }) {
   const { t } = useTranslation(["chat", "common"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const setPendingPrompt = useCreateSkillPromptStore(
+    (s) => s.setPendingPrompt,
+  );
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -172,7 +178,10 @@ export default function SkillDiscoverView({
               {t("chat:skills.uploadSkill")}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onClick={() => toast.info(t("chat:skills.comingSoon"))}
+              onClick={() => {
+                setPendingPrompt(t("chat:skills.createSkillPrompt"));
+                navigate("/module/ai");
+              }}
             >
               {t("chat:skills.createSkill")}
             </DropdownMenuItem>

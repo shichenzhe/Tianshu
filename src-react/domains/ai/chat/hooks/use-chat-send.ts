@@ -137,10 +137,10 @@ export function useChatSend(sessionId: number) {
     }
   };
 
-  const regenerate = async () => {
+  const regenerate = async (messageId?: number) => {
     startStream(sessionId);
     try {
-      await ChatApi.regenerate(sessionId);
+      await ChatApi.regenerate(sessionId, messageId);
     } catch (e) {
       finishStream(sessionId);
       void queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });

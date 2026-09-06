@@ -79,8 +79,11 @@ export default class ChatApi {
   /**
    * 重新生成最后一条回复（删除尾部消息原位重跑）
    */
-  static async regenerate(sessionId: number): Promise<void> {
-    return invoke<void>("chat:regenerate", sessionId);
+  static async regenerate(
+    sessionId: number,
+    messageId?: number,
+  ): Promise<void> {
+    return invoke<void>("chat:regenerate", sessionId, messageId);
   }
 
   /**

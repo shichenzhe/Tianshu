@@ -659,8 +659,10 @@ export default class ChatService {
     ipcMain.handle("chat:compact", (event, sessionId: number) =>
       this.compact(sessionId, event.sender),
     );
-    ipcMain.handle("chat:regenerate", (event, sessionId: number) =>
-      this.regenerate(sessionId, event.sender),
+    ipcMain.handle(
+      "chat:regenerate",
+      (event, sessionId: number, messageId?: number) =>
+        this.regenerate(sessionId, messageId, event.sender),
     );
     ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
     ipcMain.handle("chat:status", (_, sessionId: number) =>
@@ -943,9 +945,14 @@ export default class ChatService {
   }
 
   /**
-   * 重新生成：删除最后一条 user 消息之后的所有消息，重跑流（spec §4.2 原位替换）
+   * 重新生成(任意位置):目标 assistant 消息(缺省最后一条)→ 定位其前
+   * 最后一条 user,删除该 user 之后全部(目标及其后内容被覆盖)→ 重跑流
    */
-  async regenerate(sessionId: number, sender?: WebContents): Promise<void> {
+  async regenerate(
+    sessionId: number,
+    messageId?: number,
+    sender?: WebContents,
+  ): Promise<void> {
     if (this.aborts.has(sessionId)) {
       throw new Error("CONCURRENT_REQUEST");
     }
@@ -960,8 +967,27 @@ export default class ChatService {
         where: { sessionId },
         orderBy: { createdAt: "asc" },
       });
+      let targetIdx = -1;
+      if (messageId !== undefined) {
+        targetIdx = rows.findIndex(
+          (row) => row.id === messageId && row.role === "assistant",
+        );
+        if (targetIdx === -1) {
+          throw new Error("MESSAGE_NOT_FOUND");
+        }
+      } else {
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (rows[i].role === "assistant") {
+            targetIdx = i;
+            break;
+          }
+        }
+      }
+      if (targetIdx === -1) {
+        throw new Error("NOTHING_TO_REGENERATE");
+      }
       let lastUserIdx = -1;
-      for (let i = rows.length - 1; i >= 0; i--) {
+      for (let i = targetIdx - 1; i >= 0; i--) {
         if (rows[i].role === "user") {
           lastUserIdx = i;
           break;
@@ -1078,6 +1104,7 @@ export default class ChatService {
     overrides?: ChatModelParams,
     maxSteps: number = DEFAULT_MAX_STEPS,
   ): Promise<void> {
+    const startedAt = Date.now();
     const session = await this.sessions.getSession(sessionId);
     if (!session) {
       throw new Error("SESSION_NOT_FOUND");
@@ -1196,6 +1223,7 @@ export default class ChatService {
           modelId,
           assistantId: session.assistantId ?? undefined,
           error: result.errorMessage,
+          durationMs: Date.now() - startedAt,
         } satisfies AppendMessageParams);
       }
       if (result.errorCode) {

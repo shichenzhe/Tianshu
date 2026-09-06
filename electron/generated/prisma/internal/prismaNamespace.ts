@@ -1546,6 +1546,7 @@ export const MessageScalarFieldEnum = {
   modelId: 'modelId',
   assistantId: 'assistantId',
   error: 'error',
+  durationMs: 'durationMs',
   createdAt: 'createdAt'
 } as const
 

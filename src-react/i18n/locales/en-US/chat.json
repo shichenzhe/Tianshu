@@ -80,7 +80,8 @@
   "message": {
     "usage": "{{input}} input / {{output}} output tokens",
     "failed": "Generation failed",
-    "regenerate": "Regenerate"
+    "regenerate": "Regenerate",
+    "regenerateTip": "Regenerate this reply; messages after it will be replaced. Proceed with care"
   },
   "tool": {
     "state": {

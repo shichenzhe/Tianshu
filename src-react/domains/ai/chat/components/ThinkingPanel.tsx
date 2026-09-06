@@ -22,6 +22,23 @@ interface ThinkingPanelProps {
   tools: ToolPanelItem[];
   /** 挂载初始态：流式 true（实时过程）、落库 false（默认折叠） */
   defaultOpen: boolean;
+  /** 生成耗时毫秒(v9;done 态在「已完成」后展示) */
+  durationMs?: number;
+}
+
+/** 耗时格式化(与 MessageItem 同语义;面板内独立小函数) */
+function formatDuration(ms?: number): string | null {
+  if (ms === undefined || ms === null) {
+    return null;
+  }
+  if (ms < 1000) {
+    return "<1s";
+  }
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  return `${Math.floor(seconds / 60)}m${seconds % 60}s`;
 }
 
 export default function ThinkingPanel({
@@ -29,6 +46,7 @@ export default function ThinkingPanel({
   thinking,
   tools,
   defaultOpen,
+  durationMs,
 }: ThinkingPanelProps) {
   const { t } = useTranslation(["chat"]);
   const [open, setOpen] = useState(defaultOpen);
@@ -51,6 +69,12 @@ export default function ThinkingPanel({
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <Check className="h-3.5 w-3.5" />
             {t("chat:panel.doneStatus")}
+            {status === "done" && formatDuration(durationMs) && (
+              <span className="text-muted-foreground/80">
+                {" · "}
+                {formatDuration(durationMs)}
+              </span>
+            )}
           </span>
         )}
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">

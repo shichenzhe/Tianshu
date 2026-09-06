@@ -30,6 +30,8 @@ export interface AppendMessageParams {
   modelId?: number;
   assistantId?: number;
   error?: string;
+  /** 生成耗时毫秒(assistant 轮) */
+  durationMs?: number;
 }
 
 export class SessionRepository {
@@ -72,6 +74,7 @@ export class SessionRepository {
       modelId: row.modelId ?? undefined,
       assistantId: row.assistantId ?? undefined,
       error: row.error ?? undefined,
+      durationMs: row.durationMs ?? undefined,
       createdAt: row.createdAt.toISOString(),
     };
   }
@@ -375,6 +378,7 @@ export class SessionRepository {
         modelId: p.modelId,
         assistantId: p.assistantId,
         error: p.error,
+        durationMs: p.durationMs,
       },
     });
     await prisma.session.update({

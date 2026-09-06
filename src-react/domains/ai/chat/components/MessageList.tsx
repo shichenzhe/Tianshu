@@ -26,8 +26,8 @@ interface MessageListProps {
   workspaceId?: number | null;
   /** /compact 压缩覆盖点:提示条插在该消息之后(随消息流上移) */
   compactedUpToId?: number | null;
-  /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
-  onRegenerate?: () => void;
+  /** 重新生成回调(任意 assistant 消息);未提供则隐藏按钮 */
+  onRegenerate?: (messageId: number) => void;
 }
 
 /** ApprovalBanner 接口必需的决议回调；可见性纯 store 态门控，本地无需记标记。
@@ -74,15 +74,6 @@ export default function MessageList({
     () => (messagesQuery.data ?? []).filter((m) => m.role !== "system"),
     [messagesQuery.data],
   );
-
-  const lastAssistantId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === "assistant") {
-        return messages[i].id;
-      }
-    }
-    return null;
-  }, [messages]);
 
   // 各消息命中数与首命中全局序号（前缀和），供 MessageItem 分发块级序号
   const hitCounts = useMemo(
@@ -218,8 +209,7 @@ export default function MessageList({
             <Fragment key={message.id}>
               <MessageItem
                 message={message}
-                isLastAssistant={message.id === lastAssistantId && !isStreaming}
-                onRegenerate={onRegenerate}
+                onRegenerate={isStreaming ? undefined : onRegenerate}
                 hitOffset={
                   hitCounts[index] > 0 ? messageOffsets[index] : undefined
                 }

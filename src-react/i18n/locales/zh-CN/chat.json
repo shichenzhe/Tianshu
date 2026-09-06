@@ -80,7 +80,8 @@
   "message": {
     "usage": "{{input}} 输入 / {{output}} 输出 tokens",
     "failed": "生成失败",
-    "regenerate": "重新生成"
+    "regenerate": "重新生成",
+    "regenerateTip": "点击将重新生成内容,此会话后的内容将被覆盖,请谨慎操作"
   },
   "tool": {
     "state": {

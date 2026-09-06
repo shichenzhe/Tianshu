@@ -37,6 +37,8 @@ export interface MessageRecord {
   modelId?: number;
   assistantId?: number;
   error?: string;
+  /** 生成耗时毫秒(assistant 轮,v9) */
+  durationMs?: number;
   createdAt: string;
 }
 

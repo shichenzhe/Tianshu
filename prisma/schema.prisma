@@ -108,6 +108,7 @@ model message {
   modelId     Int?
   assistantId Int?
   error       String?
+  durationMs  Int?
   createdAt   DateTime @default(now())
 
   @@index([sessionId])

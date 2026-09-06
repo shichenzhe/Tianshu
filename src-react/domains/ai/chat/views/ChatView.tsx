@@ -258,9 +258,9 @@ function ChatPane({
       .catch((e: unknown) => toast.error(mapIpcError(e)));
   };
 
-  const handleRegenerate = async () => {
+  const handleRegenerate = async (messageId?: number) => {
     try {
-      await regenerate();
+      await regenerate(messageId);
     } catch (e) {
       toast.error(mapIpcError(e));
     }

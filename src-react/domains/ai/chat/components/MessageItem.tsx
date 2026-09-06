@@ -5,10 +5,18 @@
  */
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, RotateCcw } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Check, Copy, Cpu, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { ModelApi } from "../../api/model.api";
 import { parseBlocks } from "../model/blocks";
 import { groupBlocks } from "../lib/group-blocks";
 import {
@@ -27,10 +35,8 @@ interface MessageItemProps {
   message: MessageRecord;
   /** 流式中的实时气泡：面板显示「思考中」并默认展开 */
   streaming?: boolean;
-  /** 仅最后一条助手消息为 true（配合 onRegenerate 显示重新生成） */
-  isLastAssistant?: boolean;
-  /** 重新生成回调（Task 17 由 useChatSend 接线）；未提供则隐藏按钮 */
-  onRegenerate?: () => void;
+  /** 重新生成回调(任意 assistant 消息;其后内容将被覆盖);未提供则隐藏按钮 */
+  onRegenerate?: (messageId: number) => void;
   /** 会话内搜索：该消息首个命中的全局序号（无命中/未搜索为 undefined） */
   hitOffset?: number;
 }
@@ -45,10 +51,24 @@ function UsageBlockView({ input, output }: { input: number; output: number }) {
   );
 }
 
+/** 生成耗时格式化:<1s / 秒 / 分秒 */
+function formatDuration(ms?: number): string | null {
+  if (ms === undefined || ms === null) {
+    return null;
+  }
+  if (ms < 1000) {
+    return "<1s";
+  }
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  return `${Math.floor(seconds / 60)}m${seconds % 60}s`;
+}
+
 function MessageItemImpl({
   message,
   streaming = false,
-  isLastAssistant = false,
   onRegenerate,
   hitOffset,
 }: MessageItemProps) {
@@ -56,6 +76,17 @@ function MessageItemImpl({
   const [copied, setCopied] = useState(false);
   const searchQuery = useSessionSearchStore((s) => s.query);
   const searchActiveIndex = useSessionSearchStore((s) => s.activeIndex);
+
+  // 当条输出模型(id → 名称;共享 ["models"] 缓存,仅 assistant 且有 modelId 时查)
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: () => ModelApi.listAll(),
+    enabled: message.role === "assistant" && message.modelId !== undefined,
+    staleTime: 300_000,
+  });
+  const modelName = modelsQuery.data?.find(
+    (model) => model.id === message.modelId,
+  )?.modelId;
 
   if (message.role === "user") {
     const text = parseBlocks(message.blocks)
@@ -83,7 +114,7 @@ function MessageItemImpl({
 
   const blocks = parseBlocks(message.blocks);
   const grouped = groupBlocks(blocks);
-  const showRegenerate = isLastAssistant && Boolean(onRegenerate);
+  const showRegenerate = !streaming && Boolean(onRegenerate);
 
   /** 正文块逐块累计块前命中数：伪调用块计数但不渲染（与 MessageList 统计一致） */
   let hitsBeforeBlock = 0;
@@ -118,6 +149,7 @@ function MessageItemImpl({
           status={streaming ? "streaming" : "done"}
           thinking={grouped.thinkingText}
           tools={grouped.tools}
+          durationMs={message.durationMs}
           defaultOpen={streaming}
         />
       )}
@@ -143,30 +175,51 @@ function MessageItemImpl({
           output={grouped.usage.output}
         />
       )}
-      <div className="mt-1 flex items-center gap-1 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleCopy}
-          aria-label={t("common:copy")}
-          className="h-7 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </Button>
-        {showRegenerate && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRegenerate}
-            className="h-7 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-          >
-            <RotateCcw className="mr-1 h-3.5 w-3.5" />
-            {t("chat:message.regenerate")}
-          </Button>
+      {/* 操作行:默认常显(不随悬浮);复制/重新生成带冒泡提示,重生成右侧为当条输出模型 */}
+      <div className="mt-1 flex items-center gap-1">
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopy}
+                aria-label={t("common:copy")}
+                className="h-7 w-7 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("common:copy")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        {showRegenerate && onRegenerate && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRegenerate(message.id)}
+                  aria-label={t("chat:message.regenerate")}
+                  className="h-7 w-7 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("chat:message.regenerateTip")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+        {modelName && (
+          <span className="ml-1 flex items-center gap-1 text-xs text-muted-foreground select-none">
+            <Cpu className="h-3 w-3" />
+            {modelName}
+          </span>
         )}
       </div>
     </div>

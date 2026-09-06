@@ -31,6 +31,7 @@ export type MessageAvgAggregateOutputType = {
   sessionId: number | null
   modelId: number | null
   assistantId: number | null
+  durationMs: number | null
 }
 
 export type MessageSumAggregateOutputType = {
@@ -38,6 +39,7 @@ export type MessageSumAggregateOutputType = {
   sessionId: number | null
   modelId: number | null
   assistantId: number | null
+  durationMs: number | null
 }
 
 export type MessageMinAggregateOutputType = {
@@ -48,6 +50,7 @@ export type MessageMinAggregateOutputType = {
   modelId: number | null
   assistantId: number | null
   error: string | null
+  durationMs: number | null
   createdAt: Date | null
 }
 
@@ -59,6 +62,7 @@ export type MessageMaxAggregateOutputType = {
   modelId: number | null
   assistantId: number | null
   error: string | null
+  durationMs: number | null
   createdAt: Date | null
 }
 
@@ -70,6 +74,7 @@ export type MessageCountAggregateOutputType = {
   modelId: number
   assistantId: number
   error: number
+  durationMs: number
   createdAt: number
   _all: number
 }
@@ -80,6 +85,7 @@ export type MessageAvgAggregateInputType = {
   sessionId?: true
   modelId?: true
   assistantId?: true
+  durationMs?: true
 }
 
 export type MessageSumAggregateInputType = {
@@ -87,6 +93,7 @@ export type MessageSumAggregateInputType = {
   sessionId?: true
   modelId?: true
   assistantId?: true
+  durationMs?: true
 }
 
 export type MessageMinAggregateInputType = {
@@ -97,6 +104,7 @@ export type MessageMinAggregateInputType = {
   modelId?: true
   assistantId?: true
   error?: true
+  durationMs?: true
   createdAt?: true
 }
 
@@ -108,6 +116,7 @@ export type MessageMaxAggregateInputType = {
   modelId?: true
   assistantId?: true
   error?: true
+  durationMs?: true
   createdAt?: true
 }
 
@@ -119,6 +128,7 @@ export type MessageCountAggregateInputType = {
   modelId?: true
   assistantId?: true
   error?: true
+  durationMs?: true
   createdAt?: true
   _all?: true
 }
@@ -217,6 +227,7 @@ export type MessageGroupByOutputType = {
   modelId: number | null
   assistantId: number | null
   error: string | null
+  durationMs: number | null
   createdAt: Date
   _count: MessageCountAggregateOutputType | null
   _avg: MessageAvgAggregateOutputType | null
@@ -251,6 +262,7 @@ export type messageWhereInput = {
   modelId?: Prisma.IntNullableFilter<"message"> | number | null
   assistantId?: Prisma.IntNullableFilter<"message"> | number | null
   error?: Prisma.StringNullableFilter<"message"> | string | null
+  durationMs?: Prisma.IntNullableFilter<"message"> | number | null
   createdAt?: Prisma.DateTimeFilter<"message"> | Date | string
 }
 
@@ -262,6 +274,7 @@ export type messageOrderByWithRelationInput = {
   modelId?: Prisma.SortOrderInput | Prisma.SortOrder
   assistantId?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
+  durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -276,6 +289,7 @@ export type messageWhereUniqueInput = Prisma.AtLeast<{
   modelId?: Prisma.IntNullableFilter<"message"> | number | null
   assistantId?: Prisma.IntNullableFilter<"message"> | number | null
   error?: Prisma.StringNullableFilter<"message"> | string | null
+  durationMs?: Prisma.IntNullableFilter<"message"> | number | null
   createdAt?: Prisma.DateTimeFilter<"message"> | Date | string
 }, "id">
 
@@ -287,6 +301,7 @@ export type messageOrderByWithAggregationInput = {
   modelId?: Prisma.SortOrderInput | Prisma.SortOrder
   assistantId?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
+  durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.messageCountOrderByAggregateInput
   _avg?: Prisma.messageAvgOrderByAggregateInput
@@ -306,6 +321,7 @@ export type messageScalarWhereWithAggregatesInput = {
   modelId?: Prisma.IntNullableWithAggregatesFilter<"message"> | number | null
   assistantId?: Prisma.IntNullableWithAggregatesFilter<"message"> | number | null
   error?: Prisma.StringNullableWithAggregatesFilter<"message"> | string | null
+  durationMs?: Prisma.IntNullableWithAggregatesFilter<"message"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"message"> | Date | string
 }
 
@@ -316,6 +332,7 @@ export type messageCreateInput = {
   modelId?: number | null
   assistantId?: number | null
   error?: string | null
+  durationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -327,6 +344,7 @@ export type messageUncheckedCreateInput = {
   modelId?: number | null
   assistantId?: number | null
   error?: string | null
+  durationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -337,6 +355,7 @@ export type messageUpdateInput = {
   modelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   assistantId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -348,6 +367,7 @@ export type messageUncheckedUpdateInput = {
   modelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   assistantId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -359,6 +379,7 @@ export type messageCreateManyInput = {
   modelId?: number | null
   assistantId?: number | null
   error?: string | null
+  durationMs?: number | null
   createdAt?: Date | string
 }
 
@@ -369,6 +390,7 @@ export type messageUpdateManyMutationInput = {
   modelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   assistantId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -380,6 +402,7 @@ export type messageUncheckedUpdateManyInput = {
   modelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   assistantId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -391,6 +414,7 @@ export type messageCountOrderByAggregateInput = {
   modelId?: Prisma.SortOrder
   assistantId?: Prisma.SortOrder
   error?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -399,6 +423,7 @@ export type messageAvgOrderByAggregateInput = {
   sessionId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   assistantId?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type messageMaxOrderByAggregateInput = {
@@ -409,6 +434,7 @@ export type messageMaxOrderByAggregateInput = {
   modelId?: Prisma.SortOrder
   assistantId?: Prisma.SortOrder
   error?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -420,6 +446,7 @@ export type messageMinOrderByAggregateInput = {
   modelId?: Prisma.SortOrder
   assistantId?: Prisma.SortOrder
   error?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -428,6 +455,7 @@ export type messageSumOrderByAggregateInput = {
   sessionId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   assistantId?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 
@@ -440,6 +468,7 @@ export type messageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   modelId?: boolean
   assistantId?: boolean
   error?: boolean
+  durationMs?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["message"]>
 
@@ -451,6 +480,7 @@ export type messageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   modelId?: boolean
   assistantId?: boolean
   error?: boolean
+  durationMs?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["message"]>
 
@@ -462,6 +492,7 @@ export type messageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   modelId?: boolean
   assistantId?: boolean
   error?: boolean
+  durationMs?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["message"]>
 
@@ -473,10 +504,11 @@ export type messageSelectScalar = {
   modelId?: boolean
   assistantId?: boolean
   error?: boolean
+  durationMs?: boolean
   createdAt?: boolean
 }
 
-export type messageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "sessionId" | "role" | "blocks" | "modelId" | "assistantId" | "error" | "createdAt", ExtArgs["result"]["message"]>
+export type messageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "sessionId" | "role" | "blocks" | "modelId" | "assistantId" | "error" | "durationMs" | "createdAt", ExtArgs["result"]["message"]>
 
 export type $messagePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "message"
@@ -489,6 +521,7 @@ export type $messagePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     modelId: number | null
     assistantId: number | null
     error: string | null
+    durationMs: number | null
     createdAt: Date
   }, ExtArgs["result"]["message"]>
   composites: {}
@@ -920,6 +953,7 @@ export interface messageFieldRefs {
   readonly modelId: Prisma.FieldRef<"message", 'Int'>
   readonly assistantId: Prisma.FieldRef<"message", 'Int'>
   readonly error: Prisma.FieldRef<"message", 'String'>
+  readonly durationMs: Prisma.FieldRef<"message", 'Int'>
   readonly createdAt: Prisma.FieldRef<"message", 'DateTime'>
 }
     

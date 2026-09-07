@@ -353,9 +353,19 @@ export default function TaskPromptInput({
         <div className="flex items-center gap-2">
           <TaskPlusMenu
             onPickPaths={(paths) => {
-              for (const p of paths) {
-                insertAtCaret(`@${p} `);
-              }
+              // 批量一次拼接:循环 insertAtCaret 会因闭包读到过期 value,
+              // 多选 2+ 文件仅落最后一个
+              const suffix = paths.map((p) => `@${p} `).join("");
+              const textarea = textareaRef.current;
+              const caret = textarea?.selectionStart ?? value.length;
+              onChange(
+                `${value.slice(0, caret)}${suffix}${value.slice(caret)}`,
+              );
+              requestAnimationFrame(() => {
+                const pos = caret + suffix.length;
+                textarea?.focus();
+                textarea?.setSelectionRange(pos, pos);
+              });
             }}
             onOpenMcp={onOpenMcp}
             onInsertVariable={(token) => insertAtCaret(token)}

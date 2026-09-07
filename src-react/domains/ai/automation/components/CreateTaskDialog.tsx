@@ -1,14 +1,15 @@
 // src-react/domains/ai/automation/components/CreateTaskDialog.tsx
 /**
- * 创建/编辑自动化任务 Modal(spec §5):名称/prompt(变量插入)/模型+参数
- * 预设/工作空间/完全访问警示/SchedulePicker。模板与编辑复用同表单,
+ * 创建/编辑自动化任务 Modal(spec §5):名称/提示词输入卡
+ * (TaskPromptInput:@引用/⚡技能/变量插入/模型选择)/参数预设/
+ * 工作空间/SchedulePicker。模板与编辑复用同表单,
  * 初始值优先级 editTask > template > 空。
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronDown, TriangleAlert } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,15 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -39,7 +33,6 @@ import {
   type TaskRecord,
   type TemplateRecord,
 } from "../api/automation.api";
-import { ModelApi } from "@/domains/ai/api/model.api";
 import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
 import { camelSlug } from "../lib/camel-slug";
 import { scheduleSchema, type ScheduleConfig } from "../api/schedule.schema";
@@ -49,6 +42,7 @@ import {
   validateSchedule,
 } from "../lib/schedule-text";
 import { SchedulePicker } from "./SchedulePicker";
+import TaskPromptInput from "./TaskPromptInput";
 
 const PARAM_PRESETS = [
   { key: "precise", temperature: 0.2 },
@@ -72,12 +66,8 @@ export function CreateTaskDialog({
   onSaved,
 }: CreateTaskDialogProps) {
   const { t } = useTranslation(["chat"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: models = [] } = useQuery({
-    queryKey: ["models", "all"],
-    queryFn: () => ModelApi.listAll(),
-    enabled: open,
-  });
   const { data: workspaces = [] } = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => WorkspaceApi.list(),
@@ -103,7 +93,6 @@ export function CreateTaskDialog({
   const [saving, setSaving] = useState(false);
   const switchCountRef = useRef(0);
   const initialStartAtRef = useRef<string | undefined>(undefined);
-  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   /** open 时按 editTask > template 初始化 */
   useEffect(() => {
@@ -243,18 +232,6 @@ export function CreateTaskDialog({
     }
   }
 
-  /** 变量插入到光标处 */
-  function insertVariable(token: string) {
-    const el = promptRef.current;
-    if (!el) {
-      setPrompt((p) => p + token);
-      return;
-    }
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? start;
-    setPrompt(`${prompt.slice(0, start)}${token}${prompt.slice(end)}`);
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto border border-border/50 rounded-lg shadow-lg">
@@ -279,89 +256,40 @@ export function CreateTaskDialog({
           </div>
 
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label>{t("chat:automation.create.prompt")}</Label>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 hover:bg-primary-subtle hover:text-primary"
-                  >
-                    {t("chat:automation.create.insertVariable")}
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="border border-border/50 rounded-lg shadow-lg"
-                >
-                  {(["Date", "Weekday", "Time"] as const).map((v) => (
-                    <DropdownMenuItem
-                      key={v}
-                      onClick={() => insertVariable(`{{${v.toLowerCase()}}}`)}
-                    >
-                      {t(`chat:automation.create.var${v}`, {
-                        [v.toLowerCase()]: `{{${v.toLowerCase()}}}`,
-                      })}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <Textarea
-              ref={promptRef}
-              rows={5}
+            <TaskPromptInput
               value={prompt}
+              onChange={setPrompt}
+              workspaceId={workspaceId}
+              modelId={modelId ?? undefined}
+              onModelChange={setModelId}
+              onOpenMcp={() => navigate("/module/ai/experts?tab=connectors")}
               placeholder={t("chat:automation.create.promptPlaceholder")}
-              onChange={(e) => setPrompt(e.target.value)}
             />
+            {/* 权限胶囊恒为完全访问(FullAccessModal 不可达),警示语义需可见入口 */}
+            <p className="text-xs text-red-500">
+              {t("chat:automation.create.fullAccessWarn")}
+            </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t("chat:automation.create.workspace")}</Label>
-              <Select
-                value={workspaceId ? String(workspaceId) : undefined}
-                onValueChange={(v) => setWorkspaceId(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={t(
-                      "chat:automation.create.workspacePlaceholder",
-                    )}
-                  />
-                </SelectTrigger>
-                <SelectContent className="border border-border/50 rounded-lg shadow-lg">
-                  {workspaces.map((w) => (
-                    <SelectItem key={w.id} value={String(w.id)}>
-                      {w.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>{t("chat:automation.create.model")}</Label>
-              <Select
-                value={modelId ? String(modelId) : undefined}
-                onValueChange={(v) => setModelId(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={t("chat:automation.create.modelPlaceholder")}
-                  />
-                </SelectTrigger>
-                <SelectContent className="border border-border/50 rounded-lg shadow-lg max-h-48">
-                  {models.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name || m.modelId}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label>{t("chat:automation.create.workspace")}</Label>
+            <Select
+              value={workspaceId ? String(workspaceId) : undefined}
+              onValueChange={(v) => setWorkspaceId(Number(v))}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={t("chat:automation.create.workspacePlaceholder")}
+                />
+              </SelectTrigger>
+              <SelectContent className="border border-border/50 rounded-lg shadow-lg">
+                {workspaces.map((w) => (
+                  <SelectItem key={w.id} value={String(w.id)}>
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex items-center gap-2">
@@ -430,11 +358,6 @@ export function CreateTaskDialog({
               )}
             </p>
           )}
-
-          <div className="flex items-start gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 p-2 text-sm text-red-600 dark:text-red-400">
-            <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
-            {t("chat:automation.create.fullAccessWarn")}
-          </div>
         </div>
 
         <DialogFooter>

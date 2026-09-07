@@ -237,6 +237,7 @@
       "missedSkip": "跳过",
       "missedCatchUp": "补执行一次",
       "fullAccessWarn": "允许完全访问：该任务将跳过工具审批自动执行，请仅添加信任的任务。",
+      "attachmentMissing": "引用不存在或读取失败：{{name}}",
       "templateSource": "来自模版：{{name}}"
     },
     "schedule": {

@@ -237,6 +237,7 @@
       "missedSkip": "Skip",
       "missedCatchUp": "Catch up once",
       "fullAccessWarn": "Allow full access: this task runs tools without approval. Only add tasks you trust.",
+      "attachmentMissing": "Attachment missing or unreadable: {{name}}",
       "templateSource": "From template: {{name}}"
     },
     "schedule": {

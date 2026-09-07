@@ -1,7 +1,7 @@
 /**
  * 自动化任务执行器(spec §4):建 session → 引用解析注入(spec §2,文件/技能
- * 内容前缀 + 技能聚焦 + 变量替换)→ 静默 runChatStream(完全访问 + 审批自动
- * 放行,无人值守)→ 落 message 与 run。不经渲染层(onChunk 不传)，产物在
+ * 内容前缀 + 技能聚焦 + 变量替换)→ 静默 runChatStream(权限按任务
+ * accessMode 分流,无人值守)→ 落 message 与 run。不经渲染层(onChunk 不传)，产物在
  * 聊天页可回看。
  */
 import { format } from "date-fns";
@@ -57,8 +57,27 @@ function collectTools(workspacePath: string | undefined, skills: SkillInfo[]) {
   return [makeReadSkillTool(skills), ...injected];
 }
 
+export interface AutomationPermissions {
+  fullAccess: () => boolean;
+  isToolAllowed: (toolName: string) => Promise<boolean>;
+  requestApproval: () => Promise<boolean>;
+}
+
+/** 无人值守权限分流:full=完全访问+审批放行(原行为);default=只读执行,
+ * 写类审批被拒但任务继续(agent 收到拒绝反馈),与会话 default 语义对齐 */
+export function resolveAutomationPermissions(
+  accessMode: "default" | "full",
+): AutomationPermissions {
+  const full = accessMode === "full";
+  return {
+    fullAccess: () => full,
+    isToolAllowed: async () => true,
+    requestApproval: async () => full,
+  };
+}
+
 export interface ExecuteTaskOptions {
-  triggerType: "schedule" | "catchUp" | "retry";
+  triggerType: "schedule" | "catchUp" | "retry" | "manual";
   attempt: number;
   abort: AbortSignal;
 }
@@ -205,10 +224,10 @@ async function streamAndRecord(
     agent: {
       sessionId: ctx.sessionId,
       workspacePath: ctx.workspacePath,
-      // 完全访问 + 审批自动放行(spec §0 无人值守决策)
-      fullAccess: () => true,
-      isToolAllowed: async () => true,
-      requestApproval: async () => true,
+      // 权限按任务持久化 accessMode 分流(spec §2.3),不再无条件放行
+      ...resolveAutomationPermissions(
+        task.accessMode === "full" ? "full" : "default",
+      ),
     },
   });
   const usage = extractUsage(result.blocks);

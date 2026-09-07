@@ -20,6 +20,7 @@ import type {
 import { computeNextRun } from "./schedule";
 import { listAutomationTemplates } from "./automation-templates";
 import { recordAutomationEvent } from "./automation-stat";
+import { executeTask } from "./automation-runner";
 
 type TaskRow = NonNullable<
   Awaited<ReturnType<typeof prisma.automationTask.findFirst>>
@@ -151,6 +152,21 @@ export default class AutomationRepository {
           },
         });
         return this.hydrate(row);
+      },
+    );
+    ipcMain.handle(
+      "automation:runNow",
+      async (_, id: number): Promise<void> => {
+        const task = await prisma.automationTask.findUnique({ where: { id } });
+        if (!task) {
+          throw new Error(`automation task ${id} not found`);
+        }
+        // 不 await:单次执行可达分钟级,触发即返回;落库/推送走 executeTask 既有链路
+        void executeTask(task, {
+          triggerType: "manual",
+          attempt: 1,
+          abort: new AbortController().signal,
+        });
       },
     );
     ipcMain.handle("automation:templates", (): TemplateRecord[] =>

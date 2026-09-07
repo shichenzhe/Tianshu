@@ -12,7 +12,7 @@ export type AutomationSource = "local" | "project";
 export type MissedPolicy = "skip" | "catchUpOnce";
 export type AccessMode = "default" | "full";
 export type RunStatus = "running" | "success" | "failed" | "skipped";
-export type TriggerType = "schedule" | "catchUp" | "retry";
+export type TriggerType = "schedule" | "catchUp" | "retry" | "manual";
 
 export interface TaskRecord {
   id: number;
@@ -118,6 +118,11 @@ export class AutomationApi {
 
   static async toggle(id: number, enabled: boolean): Promise<TaskRecord> {
     return invoke<TaskRecord>("automation:toggle", id, enabled);
+  }
+
+  /** 手动触发一次执行(返回即触发完成,结果经 tasks-changed 事件刷新) */
+  static async runNow(id: number): Promise<void> {
+    return invoke<void>("automation:runNow", id);
   }
 
   static async templates(): Promise<TemplateRecord[]> {

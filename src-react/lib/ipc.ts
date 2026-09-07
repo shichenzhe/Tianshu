@@ -98,6 +98,7 @@ export type IPCChannel =
   | "automation:update"
   | "automation:delete"
   | "automation:toggle"
+  | "automation:runNow"
   | "automation:templates"
   | "automation:runs:page"
   | "automation:stat"

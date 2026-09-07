@@ -84,7 +84,7 @@ function createPrismaStub(
 
 const tmpDirs: string[] = [];
 function makeTmpDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "mirror-builtin-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "tianshu-builtin-"));
   tmpDirs.push(dir);
   return dir;
 }

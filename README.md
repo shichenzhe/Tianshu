@@ -1,6 +1,6 @@
-# 枢 · shu-electron-starter
+# 天枢 · Tianshu
 
-> 枢者，门轴也——门之开合，皆系于枢。一切桌面应用，由此开启。
+> 天枢者，北斗第一星——斗柄所指，众星拱之。核心枢纽，由此开启。
 
 开箱即用的 **Electron + React + Prisma** 桌面应用脚手架：登录认证、SQLite 版本化迁移、
 多主题、双语、自动更新、可选 AI 模块，一个模板全都有。
@@ -45,7 +45,7 @@ npm run build
 ```
 
 > ⚠️ `npm run init` 是 `npm run build` 的硬性前置——electron-builder 会校验
-> package.json 的 `name`，未 init 前的 `mirror` 占位符会导致打包直接失败；
+> package.json 的 `name`，未 init 前的占位符 name 会导致打包直接失败；
 > `npm run dev` 不受影响。另外若在 init 之前执行 `npm install`，会看到 name 无效的警告，无害。
 
 首次启动会自动创建本地 SQLite 并执行 v1 建表脚本；在登录页**注册第一个账号**即可使用。

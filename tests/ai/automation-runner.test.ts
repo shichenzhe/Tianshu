@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 // 传递依赖 resolve-attachments 的 skillsRootDir 惰性读 app.getPath
 // ("userData")，照 chat.service.test.ts 先例 mock electron（无断言涉及）
 vi.mock("electron", () => ({
-  app: { getPath: vi.fn(() => "/tmp/mirror-test-user-data") },
+  app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {

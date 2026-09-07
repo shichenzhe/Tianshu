@@ -17,6 +17,7 @@ import { invoke } from "@/lib/ipc";
 interface AppInfo {
   name: string;
   version: string;
+  productName?: string;
 }
 
 interface UpdateLogDialogProps {
@@ -30,7 +31,7 @@ export default function UpdateLogDialog({
 }: UpdateLogDialogProps) {
   const { t } = useTranslation(["layout", "common"]);
   const [appInfo, setAppInfo] = useState<AppInfo>({
-    name: "mirror",
+    name: t("common:appName"),
     version: "unknown",
   });
   const [updateLog, setUpdateLog] = useState<string>(
@@ -47,12 +48,12 @@ export default function UpdateLogDialog({
     try {
       const info = await invoke<AppInfo>("app:getInfo");
       setAppInfo({
-        name: info.name || "mirror",
+        name: info.productName || info.name || t("common:appName"),
         version: info.version || "unknown",
       });
     } catch (error) {
       console.error("获取应用信息失败:", error);
-      setAppInfo({ name: "mirror", version: "unknown" });
+      setAppInfo({ name: t("common:appName"), version: "unknown" });
     }
   };
 

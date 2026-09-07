@@ -8,7 +8,7 @@ describe("shortenPath 路径中段省略", () => {
   });
 
   it("超长路径保留前 10 后 8 字符并以省略号衔接", () => {
-    const long = "/Users/demo/work/mirror/src-react";
+    const long = "/Users/demo/work/tianshu/src-react";
     const expected = `${long.slice(0, 10)}…${long.slice(-8)}`;
     expect(shortenPath(long)).toBe(expected);
   });

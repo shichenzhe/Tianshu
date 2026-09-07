@@ -1,12 +1,12 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  appId: "com.xmf.mirror",
+  appId: "com.xmf.tianshu",
   asar: true,
   compression: "maximum",
   electronLanguages: ["zh-CN", "en-US"],
   afterPack: "electron/after-pack.cjs",
-  productName: "mirror",
+  productName: "天枢",
   copyright: "Copyright © 2026 hjx",
   directories: {
     output: "release/${version}"
@@ -19,7 +19,7 @@
   },
   mac: {
     target: ["dmg"],
-    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
+    artifactName: "Tianshu-Mac-${version}-Installer.${ext}",
     icon: "public/pc_logo.png"
   },
   win: {
@@ -29,7 +29,7 @@
         arch: ["x64"]
       }
     ],
-    artifactName: "${productName}-Windows-${version}-Setup.${ext}",
+    artifactName: "Tianshu-Windows-${version}-Setup.${ext}",
     icon: "public/pc_logo.ico",
     requestedExecutionLevel: "asInvoker"
   },
@@ -43,6 +43,6 @@
   },
   linux: {
     target: ["AppImage"],
-    artifactName: "${productName}-Linux-${version}.${ext}"
+    artifactName: "Tianshu-Linux-${version}.${ext}"
   }
 }

@@ -62,6 +62,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import AppLogo from "@/components/common/AppLogo";
 import WorkspaceApi, { type WorkspaceRecord } from "../../api/workspace.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
 import {
@@ -408,131 +409,124 @@ export default function AiSidebar() {
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col border-r border-border/50 bg-muted/40 transition-[width] duration-200",
-        collapsed ? "w-12" : "w-64",
+        "flex h-full shrink-0 flex-col overflow-hidden bg-muted/40 transition-[width] duration-200",
+        collapsed ? "w-0" : "w-64",
       )}
     >
-      {/* macOS 顶部 Logo（Windows 标题在 TopBar） */}
-      {isMac && (
-        <div
-          className={cn(
-            "flex h-9 shrink-0 items-center border-b border-border/50",
-            collapsed ? "justify-center" : "gap-2 px-3",
-          )}
-        >
-          <img src="./pc_logo.svg" alt="mirror" className="h-5 w-5 shrink-0" />
-          {!collapsed && (
+      {/* 内容层固定宽度 + 自带右边框（收起时随宽度动画一并裁掉，不留残线） */}
+      <div className="flex h-full w-64 shrink-0 flex-col border-r border-border/50">
+        {/* macOS 顶部 Logo（Windows 标题在 TopBar） */}
+        {isMac && (
+          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">
+            <AppLogo className="h-5 w-5" />
             <span className="truncate text-sm font-semibold tracking-tight text-foreground select-none">
-              {"mirror"}
+              {t("common:appName")}
             </span>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* 功能入口区 */}
-      <div className="flex flex-col gap-1 p-2">
-        <Button
-          size="sm"
-          className={cn(
-            "w-full justify-start hover:bg-primary hover:text-primary-foreground",
-            collapsed && "justify-center px-0",
-          )}
-          onClick={() => handleCreateSession(currentWorkspaceId)}
-        >
-          <Plus className="h-4 w-4" />
-          {!collapsed && t("chat:sidebar.newTask")}
-        </Button>
-        {navEntries.map((entry) => (
-          <SidebarNavButton
-            key={entry.label}
-            collapsed={collapsed}
-            icon={entry.icon}
-            label={entry.label}
-            onClick={entry.onClick}
-          />
-        ))}
-      </div>
-
-      {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
-      {!collapsed && (
-        <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          <button
-            type="button"
-            className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => setSpacesOpen((open) => !open)}
+        {/* 功能入口区 */}
+        <div className="flex flex-col gap-1 p-2">
+          <Button
+            size="sm"
+            className="w-full justify-start hover:bg-primary hover:text-primary-foreground"
+            onClick={() => handleCreateSession(currentWorkspaceId)}
           >
-            {spacesOpen ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )}
-            {t("chat:sidebar.spaces")} ({workspaces.length})
-          </button>
-          {spacesOpen &&
-            workspaces.map((workspace) => (
-              <WorkspaceGroup
-                key={workspace.id}
-                workspace={workspace}
-                collapsed={collapsed}
-                collapsedGroup={collapsedSpaces[workspace.id] ?? false}
-                sessions={sessions.filter(
-                  (s) => s.workspaceId === workspace.id,
-                )}
-                selectedSessionId={selectedSessionId}
-                batchMode={batchMode}
-                batchSelectedIds={selectedIds}
-                isStreaming={isStreaming}
-                onBatchToggleIds={toggleBatchIds}
-                onBatchEnter={() => setBatchMode(true)}
-                onToggleGroup={() =>
-                  setCollapsedSpaces((prev) => ({
-                    ...prev,
-                    [workspace.id]: !(prev[workspace.id] ?? false),
-                  }))
-                }
-                onSelect={selectSession}
-                onCreateTask={() => handleCreateSession(workspace.id)}
-                onCreateWorkspace={() =>
-                  setWorkspaceDialog({
-                    mode: "create",
-                    name: t("chat:defaultWorkspaceName"),
-                  })
-                }
-                onManageRename={() =>
-                  setWorkspaceDialog({
-                    mode: "rename",
-                    name: workspace.name,
-                    workspaceId: workspace.id,
-                  })
-                }
-                onManageDelete={() => setDeletingWorkspace(workspace)}
-                onManageBind={() => handleBindDirectory(workspace.id)}
-                onManageUnbind={() => setUnbindingWorkspace(workspace)}
-                onSessionRename={(session) => {
-                  setSessionTitle(session.title);
-                  setRenamingSession(session);
-                }}
-                onSessionDelete={(session) => setDeletingSession(session)}
-                onSessionPin={(s) => void handlePin(s)}
-                onSessionArchive={(s) => void handleArchive(s)}
-                onOpenFolder={() => void handleOpenFolder(workspace.id)}
-              />
-            ))}
+            <Plus className="h-4 w-4" />
+            {t("chat:sidebar.newTask")}
+          </Button>
+          {navEntries.map((entry) => (
+            <SidebarNavButton
+              key={entry.label}
+              collapsed={collapsed}
+              icon={entry.icon}
+              label={entry.label}
+              onClick={entry.onClick}
+            />
+          ))}
         </div>
-      )}
 
-      {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
-      {batchMode && !collapsed && (
-        <BatchActionBar
-          selectedCount={selectedIds.size}
-          allChecked={allChecked}
-          onToggleAll={toggleAll}
-          onDelete={() => setConfirmingBatchDelete(true)}
-          onArchive={handleBatchArchive}
-          onExit={exitBatchMode}
-          submitting={submitting}
-        />
-      )}
+        {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
+        {!collapsed && (
+          <div className="fade-in min-h-0 flex-1 overflow-y-auto p-2">
+            <button
+              type="button"
+              className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+              onClick={() => setSpacesOpen((open) => !open)}
+            >
+              {spacesOpen ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronRight size={14} />
+              )}
+              {t("chat:sidebar.spaces")} ({workspaces.length})
+            </button>
+            {spacesOpen &&
+              workspaces.map((workspace) => (
+                <WorkspaceGroup
+                  key={workspace.id}
+                  workspace={workspace}
+                  collapsed={collapsed}
+                  collapsedGroup={collapsedSpaces[workspace.id] ?? false}
+                  sessions={sessions.filter(
+                    (s) => s.workspaceId === workspace.id,
+                  )}
+                  selectedSessionId={selectedSessionId}
+                  batchMode={batchMode}
+                  batchSelectedIds={selectedIds}
+                  isStreaming={isStreaming}
+                  onBatchToggleIds={toggleBatchIds}
+                  onBatchEnter={() => setBatchMode(true)}
+                  onToggleGroup={() =>
+                    setCollapsedSpaces((prev) => ({
+                      ...prev,
+                      [workspace.id]: !(prev[workspace.id] ?? false),
+                    }))
+                  }
+                  onSelect={selectSession}
+                  onCreateTask={() => handleCreateSession(workspace.id)}
+                  onCreateWorkspace={() =>
+                    setWorkspaceDialog({
+                      mode: "create",
+                      name: t("chat:defaultWorkspaceName"),
+                    })
+                  }
+                  onManageRename={() =>
+                    setWorkspaceDialog({
+                      mode: "rename",
+                      name: workspace.name,
+                      workspaceId: workspace.id,
+                    })
+                  }
+                  onManageDelete={() => setDeletingWorkspace(workspace)}
+                  onManageBind={() => handleBindDirectory(workspace.id)}
+                  onManageUnbind={() => setUnbindingWorkspace(workspace)}
+                  onSessionRename={(session) => {
+                    setSessionTitle(session.title);
+                    setRenamingSession(session);
+                  }}
+                  onSessionDelete={(session) => setDeletingSession(session)}
+                  onSessionPin={(s) => void handlePin(s)}
+                  onSessionArchive={(s) => void handleArchive(s)}
+                  onOpenFolder={() => void handleOpenFolder(workspace.id)}
+                />
+              ))}
+          </div>
+        )}
+
+        {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
+        {batchMode && !collapsed && (
+          <BatchActionBar
+            selectedCount={selectedIds.size}
+            allChecked={allChecked}
+            onToggleAll={toggleAll}
+            onDelete={() => setConfirmingBatchDelete(true)}
+            onArchive={handleBatchArchive}
+            onExit={exitBatchMode}
+            submitting={submitting}
+          />
+        )}
+      </div>
 
       {/* 空间新建/重命名对话框 */}
       <Dialog
@@ -727,14 +721,11 @@ function SidebarNavButton({
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={cn(
-              "flex h-8 cursor-pointer items-center rounded-md text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary",
-              collapsed ? "justify-center" : "gap-2.5 px-3",
-            )}
+            className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary"
             onClick={onClick}
           >
             <span className="shrink-0">{icon}</span>
-            {!collapsed && <span className="truncate">{label}</span>}
+            <span className="truncate">{label}</span>
           </div>
         </TooltipTrigger>
         {collapsed && (
@@ -856,7 +847,7 @@ function WorkspaceGroup({
           {!collapsed && <span className="truncate">{workspace.name}</span>}
         </button>
         {!collapsed && (
-          <div className="absolute right-0 hidden items-center group-hover/workspace:flex">
+          <div className="absolute right-0 flex items-center opacity-0 transition-opacity group-hover/workspace:opacity-100">
             <Button
               variant="ghost"
               size="sm"

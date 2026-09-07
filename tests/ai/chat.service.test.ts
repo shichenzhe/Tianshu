@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
   // Log 模块顶层读取 app.getPath("userData") 计算日志目录
-  app: { getPath: vi.fn(() => "/tmp/mirror-test-user-data") },
+  app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
 }));
 
 // runChatStream 为纯函数；屏蔽 prisma-client 模块初始化对 electron app 路径的依赖。

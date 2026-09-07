@@ -132,7 +132,7 @@ function createPrismaStub(seed: Seed[] = []) {
 
 const createdDirs: string[] = [];
 function makeTmpDir(): string {
-  const dir = mkdtempSync(path.join(tmpdir(), "mirror-installer-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "tianshu-installer-"));
   createdDirs.push(dir);
   return dir;
 }

@@ -102,7 +102,7 @@ export async function resolveAttachments(
       ...(workspacePath
         ? [
             {
-              dir: path.join(workspacePath, ".mirror", "skills"),
+              dir: path.join(workspacePath, ".tianshu", "skills"),
               source: "workspace" as const,
             },
           ]

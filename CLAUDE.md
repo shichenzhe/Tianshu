@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-shu-electron-starter——Electron + Prisma + TypeScript + React 跨平台桌面应用脚手架模板（从生产业务项目抽取）。
+天枢（Tianshu）——Electron + Prisma + TypeScript + React 跨平台桌面应用（北斗第一星，意为"核心枢纽"；基于 shu-electron-starter 脚手架模板）。
 
 ## 开发命令
 
@@ -69,7 +69,7 @@ npm run typecheck
 - Prisma ORM + SQLite
 - Schema 定义：`prisma/schema.prisma`
 - Prisma Client 输出：`electron/generated/prisma`
-- 当前数据库版本：9（`electron/Constants.ts`）
+- 当前数据库版本：1（`electron/Constants.ts`；v1 为发布前合并 v2–v10 的全量建表脚本，后续 schema 变更再逐版新增 `script/vN`）
 
 主要数据表：`user`、`option`、`modelConfig`、`db_version`、`skillRecord`、`skillStat`
 
@@ -100,7 +100,7 @@ npm run typecheck
 - 配置入口：`src-react/i18n/index.ts`
 - 翻译文件目录：`src-react/i18n/locales/{zh-CN,en-US}/`
 - 命名空间：`common`、`layout`、`user`、`ai`、`chat`
-- 语言持久化：localStorage key `mirror-locale`（由 `npm run init` 一并替换）
+- 语言持久化：localStorage key `tianshu-locale`（由 `npm run init` 一并替换）
 - 语言切换组件：`src-react/components/common/LanguageSelector.tsx`
 
 **编码规范：**
@@ -204,13 +204,13 @@ npm run typecheck
 
 ## 脚手架专有
 
-本仓库是脚手架模板，源码中内置 6 个占位符，由 `npm run init` 交互式替换（幂等，可重复运行，写入记录在 `shu-init.json`）：
+本仓库源自 shu-electron-starter 脚手架，`npm run init` 已执行（幂等，可重复运行，值记录在 `shu-init.json`）。当前取值：
 
-- `mirror` - 应用名（package.json `name`、窗口标题、i18n localStorage key 前缀等）
-- `com.xmf.mirror` - 应用 ID（electron-builder `appId`）
-- `` - 更新服务器地址（`electron/Constants.ts` 的 `UPGRADE_URL` 与 `electron-builder.json5` 的 `publish.url`）
+- `天枢` - 应用名（窗口标题、界面显示名，i18n key `common:appName`；package.json `name` 因 npm 命名限制使用 ASCII `tianshu`）
+- `com.xmf.tianshu` - 应用 ID（electron-builder `appId`）
+- 更新服务器地址当前为空 = 自动更新禁用（`electron/Constants.ts` 的 `UPGRADE_URL` 与 `electron-builder.json5` 的 `publish.url`）
 - `hjx` - 作者（打包元信息）
-- `` - 仓库地址
+- 仓库地址当前为空
 
 注意：`npm run init` 是 `npm run build` 的硬性前置（占位符 name 会导致 electron-builder 校验失败）；替换逻辑见 `scripts/lib/replace.mjs`，配套单测用 `npm run test` 运行。
 

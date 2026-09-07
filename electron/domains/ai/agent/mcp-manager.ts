@@ -124,7 +124,7 @@ export async function createDefaultClient(
       env: row.env,
     });
   }
-  const client = new Client({ name: "mirror", version: "1.0.0" });
+  const client = new Client({ name: "tianshu", version: "1.0.0" });
   await client.connect(transport);
   // SDK callTool 返回联合含 task 变体（无 content 字段），弱类型结构检查拒绝；
   // 常规工具调用结果必有 content，manager 仅读取 content，故此处断言收窄

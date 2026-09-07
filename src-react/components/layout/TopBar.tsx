@@ -5,8 +5,10 @@
 
 import ThemeSelector from "@/components/common/ThemeSelector";
 import LanguageSelector from "@/components/common/LanguageSelector";
+import AppLogo from "@/components/common/AppLogo";
 import UserMenu from "./UserMenu";
 import type { CSSProperties, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 /** Electron 无边框窗口拖拽区域样式（React CSSProperties 未内置该属性） */
 type AppRegionStyle = CSSProperties & { WebkitAppRegion?: string };
@@ -20,6 +22,7 @@ interface TopBarProps {
 
 export default function TopBar({ leftSlot, rightLeadingSlot }: TopBarProps) {
   const isMac = window.platform === "darwin";
+  const { t } = useTranslation(["common"]);
   return (
     <div
       className="fixed top-0 left-0 right-0 z-50 h-9 bg-background flex items-center pr-0 justify-between"
@@ -32,9 +35,9 @@ export default function TopBar({ leftSlot, rightLeadingSlot }: TopBarProps) {
       >
         {!isMac && (
           <div className="flex items-center gap-2 mr-1">
-            <img src="./pc_logo.svg" alt="mirror" className="w-5 h-5" />
+            <AppLogo className="w-5 h-5" />
             <span className="text-sm font-semibold text-foreground tracking-tight select-none">
-              {"mirror"}
+              {t("common:appName")}
             </span>
           </div>
         )}

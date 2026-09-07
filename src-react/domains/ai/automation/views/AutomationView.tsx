@@ -5,14 +5,7 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Plus,
-  PlusCircle,
-  RefreshCw,
-  SquarePen,
-  Search,
-  X,
-} from "lucide-react";
+import { PlusCircle, RefreshCw, SquarePen, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -105,17 +98,15 @@ export default function AutomationView() {
             <Button
               variant="outline"
               size="sm"
-              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              className="px-2 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
               onClick={enterBatchMode}
             >
-              <SquarePen className="h-4 w-4 mr-1" />
               {t("chat:automation.toolbar.batchManage")}
             </Button>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
+              <Button size="sm" className="px-2">
                 {t("chat:automation.toolbar.add")}
               </Button>
             </DropdownMenuTrigger>

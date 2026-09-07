@@ -109,7 +109,7 @@ P2 在 Agent 模式之上叠加外部工具生态：MCP 服务接入（`agent/mc
   服务的工具以 `mcp__服务名__工具名` 进入模型可用集；标注 readOnlyHint 的只读工具免审直接
   执行，其余每次审批——**完全访问不豁免 MCP 审批**（权限放开仅限文件与终端工具）。
 - **技能（skills）**：用户级放 `<userData>/skills/<名称>/SKILL.md`（frontmatter 需 name 与
-  description 两字段），始终加载；工作空间级放 `<工作空间目录>/.mirror/skills/`，会话绑定
+  description 两字段），始终加载；工作空间级放 `<工作空间目录>/.tianshu/skills/`，会话绑定
   目录后加载，同名时用户级优先。全部技能的清单（name+description）注入 system prompt，
   模型按需调用内置工具 `read_skill` 读取正文（超过 256KB 截断）。无管理界面——文件系统即
   配置，放目录即生效（每次发消息时扫描，免重启增删）。

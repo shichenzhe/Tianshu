@@ -52,7 +52,7 @@ i18n
     detection: {
       // 仅根据本地缓存判断；首次启动无缓存时回退到 fallbackLng（zh-CN），不跟随系统语言
       order: ["localStorage"],
-      lookupLocalStorage: "mirror-locale",
+      lookupLocalStorage: "tianshu-locale",
       caches: ["localStorage"],
     },
   });
@@ -66,7 +66,7 @@ export function initLocale() {
 
   i18n.on("languageChanged", (lng) => {
     document.documentElement.lang = lng;
-    localStorage.setItem("mirror-locale", lng);
+    localStorage.setItem("tianshu-locale", lng);
   });
 }
 

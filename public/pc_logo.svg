@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="none" stroke="#4a5568" stroke-width="4"/><circle cx="32" cy="32" r="6" fill="#4a5568"/><path d="M32 8a24 24 0 0 1 24 24" fill="none" stroke="#4a5568" stroke-width="4" stroke-linecap="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- 天枢 Tianshu：北斗第一星，核心枢纽。中央四角星为枢，环为轨道，缺口处小星点为运转不息。 -->
+  <path d="M 44 54.78 A 24 24 0 1 1 56 34"
+        fill="none" stroke="#64748B" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="52.78" cy="46" r="3" fill="#4770C2"/>
+  <circle cx="32" cy="34" r="16" fill="#4770C2" fill-opacity="0.12"/>
+  <path d="M 32 17 Q 34.5 31.5 49 34 Q 34.5 36.5 32 51 Q 29.5 36.5 15 34 Q 29.5 31.5 32 17 Z"
+        fill="#4770C2"/>
+</svg>

@@ -1092,7 +1092,7 @@ export default class ChatService {
     ];
     if (workspaceDir) {
       dirs.push({
-        dir: path.join(workspaceDir, ".mirror", "skills"),
+        dir: path.join(workspaceDir, ".tianshu", "skills"),
         source: "workspace",
       });
     }

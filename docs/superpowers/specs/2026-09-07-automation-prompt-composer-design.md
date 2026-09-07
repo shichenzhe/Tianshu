@@ -61,9 +61,10 @@ ChatInput 交互骨架的无会话态变体):
 2. file 段:workspacePath 下 readWorkspaceFile(path) 读最新内容
    (复用 chat 域 workspace-files.ts 现成函数,含其内置限制)
 3. skill 段:loadSkills() 结果按技能名匹配 → SKILL.md 内容
-4. injected = 各引用块按会话同构格式前缀拼接 + 原始 prompt:
+4. injected = 各引用块按会话同构格式前缀拼接 + 移除全部 token 后的正文:
    "[引用文件 <path>]\n<内容>" / "[引用技能 <name>]\n<内容>"
-   (与 ChatView.handleSend 逐字一致)
+   (块格式与 ChatView.handleSend 同构;正文 token 移除——模型不重复看到
+   引用标记,编辑回显走 DB 原文不受影响)
 5. injected 作为 user 消息落库与模型 history —— 会话回看/产物面板
    ([引用文件 <path>] 前缀解析)天然兼容
 ```

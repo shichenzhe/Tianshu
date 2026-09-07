@@ -202,11 +202,21 @@ export default function TaskPromptInput({
     );
   };
 
-  /** onSelect 与 onKeyUp 共用:光标移动(←→/Home/End/点击)重算触发片段 */
-  const handleCaretSync = (
-    event: React.SyntheticEvent<HTMLTextAreaElement>,
-  ) => {
-    syncSuggestFromCaret(event.currentTarget);
+  // 光标移动(←→/Home/End/点击)不触发 onChange——在 keyup/select 上重算,
+  // 光标离开触发片段即关闭面板(守卫照 ChatInput:仅面板已开时重算)
+  const handleSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (suggest !== null) {
+      syncSuggestFromCaret(event.currentTarget);
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      suggest !== null &&
+      ["Home", "End", "PageUp", "PageDown"].includes(event.key)
+    ) {
+      syncSuggestFromCaret(event.currentTarget);
+    }
   };
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -336,8 +346,8 @@ export default function TaskPromptInput({
           value={value}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          onSelect={handleCaretSync}
-          onKeyUp={handleCaretSync}
+          onSelect={handleSelect}
+          onKeyUp={handleKeyUp}
           onBlur={() => setSuggest(null)}
           onScroll={() => {
             if (mirrorRef.current && textareaRef.current) {

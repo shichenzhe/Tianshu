@@ -8,37 +8,11 @@ import { ChevronLeft, ChevronRight, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AutomationApi } from "../api/automation.api";
-
-/** 与 schedule-text.ts 同款 t 签名(纯函数,文案走 i18n 便于测试复用) */
-type TFunc = (key: string, opts?: Record<string, unknown>) => string;
-
-const ATTACHMENT_MISSING_PREFIX = "attachment_missing: ";
-
-/** 运行错误本地化:attachment_missing(file/skill 变体)转可读文案,其余原样 */
-function localizeRunError(error: string | undefined, t: TFunc): string {
-  if (!error) {
-    return "";
-  }
-  if (error.startsWith(ATTACHMENT_MISSING_PREFIX)) {
-    return t("chat:automation.create.attachmentMissing", {
-      name: error.slice(ATTACHMENT_MISSING_PREFIX.length),
-    });
-  }
-  return error;
-}
-
-function formatDuration(ms?: number): string {
-  if (ms === undefined) {
-    return "-";
-  }
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+import {
+  formatDateTime,
+  formatDuration,
+  localizeRunError,
+} from "../lib/run-display";
 
 export default function RunHistoryView() {
   const { t } = useTranslation(["chat"]);

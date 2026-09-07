@@ -2,7 +2,7 @@
 /**
  * 任务详情/编辑页(spec §6):顶栏(返回/标题/测试运行/删除/取消/保存) +
  * 左配置右历史分栏。左侧经 useTaskForm 复用弹窗表单(名称/提示词输入卡/
- * 工作空间/权限胶囊/频率卡片),右侧运行历史由 Task 5 填充(当前占位)。
+ * 工作空间/权限胶囊/频率卡片),右侧 RunHistoryPanel 任务运行历史。
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -38,6 +38,7 @@ import { useAutomationTasks } from "../lib/use-automation-tasks";
 import { mapIpcError } from "../../chat/lib/error-message";
 import PermissionCapsule from "../../chat/components/PermissionCapsule";
 import TaskPromptInput from "../components/TaskPromptInput";
+import RunHistoryPanel from "../components/RunHistoryPanel";
 import { ScheduleDialog } from "../components/ScheduleDialog";
 
 export default function TaskDetailView() {
@@ -195,7 +196,7 @@ export default function TaskDetailView() {
         </div>
       </div>
 
-      {/* 左配置右历史分栏(右侧运行历史由 Task 5 填充) */}
+      {/* 左配置右历史分栏(右侧任务运行历史) */}
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[62%] space-y-5 overflow-y-auto p-4">
           <div className="space-y-1.5">
@@ -277,7 +278,9 @@ export default function TaskDetailView() {
             )}
           </div>
         </div>
-        <div className="w-[38%] border-l border-border/50" />
+        <div className="w-[38%] min-w-0 border-l border-border/50">
+          <RunHistoryPanel taskId={task.id} />
+        </div>
       </div>
 
       {/* 删除确认 */}

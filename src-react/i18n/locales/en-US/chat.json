@@ -317,6 +317,7 @@
       "triggerSchedule": "Scheduled",
       "triggerCatchUp": "Catch-up",
       "triggerRetry": "Retry",
+      "triggerManual": "Manual",
       "statusSuccess": "Success",
       "statusFailed": "Failed",
       "statusSkipped": "Skipped",
@@ -324,6 +325,17 @@
       "attempt": "Attempt {{n}}",
       "tokens": "{{in}} in / {{out}} out",
       "openSession": "View session"
+    },
+    "history": {
+      "title": "Run history ({{count}})",
+      "filterAll": "All",
+      "filterSuccess": "Success",
+      "filterFailed": "Failed",
+      "filterRunning": "Running",
+      "empty": "No runs yet",
+      "errorDetail": "Error detail",
+      "triggerManual": "Manual",
+      "viewSession": "Open session"
     },
     "toast": {
       "created": "Task created",

@@ -317,6 +317,7 @@
       "triggerSchedule": "定时",
       "triggerCatchUp": "补执行",
       "triggerRetry": "重试",
+      "triggerManual": "手动",
       "statusSuccess": "成功",
       "statusFailed": "失败",
       "statusSkipped": "已跳过",
@@ -324,6 +325,17 @@
       "attempt": "第 {{n}} 次",
       "tokens": "{{in}} 入 / {{out}} 出",
       "openSession": "查看会话"
+    },
+    "history": {
+      "title": "运行历史 ({{count}})",
+      "filterAll": "全部",
+      "filterSuccess": "成功",
+      "filterFailed": "失败",
+      "filterRunning": "运行中",
+      "empty": "暂无运行记录",
+      "errorDetail": "错误详情",
+      "triggerManual": "手动",
+      "viewSession": "查看会话"
     },
     "toast": {
       "created": "任务已创建",

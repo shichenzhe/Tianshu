@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS automationTask (
     startAt DATETIME,
     endAt DATETIME,
     missedPolicy TEXT NOT NULL DEFAULT 'skip',
+    accessMode TEXT NOT NULL DEFAULT 'default',
     enabled BOOLEAN NOT NULL DEFAULT true,
     status TEXT NOT NULL DEFAULT 'active',
     statusNote TEXT,

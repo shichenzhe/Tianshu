@@ -47,6 +47,7 @@ export function toTaskRecord(
     startAt: row.startAt?.toISOString(),
     endAt: row.endAt?.toISOString(),
     missedPolicy: row.missedPolicy === "catchUpOnce" ? "catchUpOnce" : "skip",
+    accessMode: row.accessMode === "full" ? "full" : "default",
     enabled: row.enabled,
     status: row.status as TaskRecord["status"],
     statusNote: row.statusNote ?? undefined,
@@ -78,6 +79,7 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     startAt,
     endAt: params.endAt ? new Date(params.endAt) : null,
     missedPolicy: params.missedPolicy,
+    accessMode: params.accessMode ?? "default",
     templateSlug: params.templateSlug ?? null,
     nextRunAt: next,
   };
@@ -154,8 +156,10 @@ export default class AutomationRepository {
     ipcMain.handle("automation:templates", (): TemplateRecord[] =>
       listAutomationTemplates().map(toTemplateRecord),
     );
-    ipcMain.handle("automation:runs:page", (_, page: number, taskId?: number) =>
-      this.listRuns(page, taskId),
+    ipcMain.handle(
+      "automation:runs:page",
+      (_, page: number, taskId?: number, status?: RunRecord["status"]) =>
+        this.listRuns(page, taskId, status),
     );
     ipcMain.handle("automation:stat", (_, detail: CreateStatDetail) => {
       void recordAutomationEvent(prisma, "create", detail);
@@ -207,8 +211,15 @@ export default class AutomationRepository {
     return this.hydrate(updated);
   }
 
-  async listRuns(page: number, taskId?: number): Promise<RunPage> {
-    const where = taskId ? { taskId } : {};
+  async listRuns(
+    page: number,
+    taskId?: number,
+    status?: RunRecord["status"],
+  ): Promise<RunPage> {
+    const where = {
+      ...(taskId ? { taskId } : {}),
+      ...(status ? { status } : {}),
+    };
     const PAGE_SIZE = 20;
     const [total, rows] = await Promise.all([
       prisma.automationRun.count({ where }),

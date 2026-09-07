@@ -33,6 +33,7 @@ const row = {
   startAt: null,
   endAt: null,
   missedPolicy: "skip",
+  accessMode: "default",
   enabled: true,
   status: "active",
   statusNote: null,
@@ -110,5 +111,39 @@ describe("buildTaskData(创建/更新共用组装)", () => {
       new Date("2026-09-06T10:00:00"),
     );
     expect(data.nextRunAt).toEqual(new Date("2026-10-04T09:00:00"));
+  });
+});
+
+const baseParams = {
+  name: "早报",
+  prompt: "总结资讯",
+  workspaceId: 2,
+  modelId: 3,
+  temperature: 0.7,
+  schedule: { mode: "periodic", kind: "daily", time: "09:00" } as const,
+  scheduleText: "每天 09:00",
+  startAt: undefined,
+  endAt: undefined,
+  missedPolicy: "skip" as const,
+  templateSlug: undefined,
+};
+
+describe("accessMode 落库与派生", () => {
+  it("buildTaskData 未传 accessMode 时默认 default", () => {
+    const data = buildTaskData(baseParams, new Date("2026-09-07T00:00:00"));
+    expect(data.accessMode).toBe("default");
+  });
+
+  it("buildTaskData 透传 full", () => {
+    const data = buildTaskData(
+      { ...baseParams, accessMode: "full" },
+      new Date("2026-09-07T00:00:00"),
+    );
+    expect(data.accessMode).toBe("full");
+  });
+
+  it("toTaskRecord 归一非法值为 default", () => {
+    const rec = toTaskRecord({ ...row, accessMode: "full" }, null);
+    expect(rec.accessMode).toBe("full");
   });
 });

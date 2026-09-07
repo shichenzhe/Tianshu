@@ -10,6 +10,7 @@ import type { ScheduleConfig } from "./schedule.schema";
 export type AutomationStatus = "active" | "error" | "expired";
 export type AutomationSource = "local" | "project";
 export type MissedPolicy = "skip" | "catchUpOnce";
+export type AccessMode = "default" | "full";
 export type RunStatus = "running" | "success" | "failed" | "skipped";
 export type TriggerType = "schedule" | "catchUp" | "retry";
 
@@ -28,6 +29,7 @@ export interface TaskRecord {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  accessMode: AccessMode;
   enabled: boolean;
   status: AutomationStatus;
   statusNote?: string;
@@ -49,6 +51,7 @@ export interface TaskCreateParams {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  accessMode?: AccessMode;
   templateSlug?: string;
 }
 
@@ -121,8 +124,12 @@ export class AutomationApi {
     return invoke<TemplateRecord[]>("automation:templates");
   }
 
-  static async runs(page: number, taskId?: number): Promise<RunPage> {
-    return invoke<RunPage>("automation:runs:page", page, taskId);
+  static async runs(
+    page: number,
+    taskId?: number,
+    status?: RunStatus,
+  ): Promise<RunPage> {
+    return invoke<RunPage>("automation:runs:page", page, taskId, status);
   }
 
   static async stat(detail: CreateStatDetail): Promise<void> {

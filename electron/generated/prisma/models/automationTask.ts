@@ -52,6 +52,7 @@ export type AutomationTaskMinAggregateOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string | null
+  accessMode: string | null
   enabled: boolean | null
   status: string | null
   statusNote: string | null
@@ -74,6 +75,7 @@ export type AutomationTaskMaxAggregateOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string | null
+  accessMode: string | null
   enabled: boolean | null
   status: string | null
   statusNote: string | null
@@ -96,6 +98,7 @@ export type AutomationTaskCountAggregateOutputType = {
   startAt: number
   endAt: number
   missedPolicy: number
+  accessMode: number
   enabled: number
   status: number
   statusNote: number
@@ -134,6 +137,7 @@ export type AutomationTaskMinAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  accessMode?: true
   enabled?: true
   status?: true
   statusNote?: true
@@ -156,6 +160,7 @@ export type AutomationTaskMaxAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  accessMode?: true
   enabled?: true
   status?: true
   statusNote?: true
@@ -178,6 +183,7 @@ export type AutomationTaskCountAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  accessMode?: true
   enabled?: true
   status?: true
   statusNote?: true
@@ -287,6 +293,7 @@ export type AutomationTaskGroupByOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string
+  accessMode: string
   enabled: boolean
   status: string
   statusNote: string | null
@@ -332,6 +339,7 @@ export type automationTaskWhereInput = {
   startAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringFilter<"automationTask"> | string
+  accessMode?: Prisma.StringFilter<"automationTask"> | string
   enabled?: Prisma.BoolFilter<"automationTask"> | boolean
   status?: Prisma.StringFilter<"automationTask"> | string
   statusNote?: Prisma.StringNullableFilter<"automationTask"> | string | null
@@ -354,6 +362,7 @@ export type automationTaskOrderByWithRelationInput = {
   startAt?: Prisma.SortOrderInput | Prisma.SortOrder
   endAt?: Prisma.SortOrderInput | Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
   statusNote?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -379,6 +388,7 @@ export type automationTaskWhereUniqueInput = Prisma.AtLeast<{
   startAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringFilter<"automationTask"> | string
+  accessMode?: Prisma.StringFilter<"automationTask"> | string
   enabled?: Prisma.BoolFilter<"automationTask"> | boolean
   status?: Prisma.StringFilter<"automationTask"> | string
   statusNote?: Prisma.StringNullableFilter<"automationTask"> | string | null
@@ -401,6 +411,7 @@ export type automationTaskOrderByWithAggregationInput = {
   startAt?: Prisma.SortOrderInput | Prisma.SortOrder
   endAt?: Prisma.SortOrderInput | Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
   statusNote?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -431,6 +442,7 @@ export type automationTaskScalarWhereWithAggregatesInput = {
   startAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
+  accessMode?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
   enabled?: Prisma.BoolWithAggregatesFilter<"automationTask"> | boolean
   status?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
   statusNote?: Prisma.StringNullableWithAggregatesFilter<"automationTask"> | string | null
@@ -452,6 +464,7 @@ export type automationTaskCreateInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  accessMode?: string
   enabled?: boolean
   status?: string
   statusNote?: string | null
@@ -474,6 +487,7 @@ export type automationTaskUncheckedCreateInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  accessMode?: string
   enabled?: boolean
   status?: string
   statusNote?: string | null
@@ -495,6 +509,7 @@ export type automationTaskUpdateInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   statusNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -517,6 +532,7 @@ export type automationTaskUncheckedUpdateInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   statusNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -539,6 +555,7 @@ export type automationTaskCreateManyInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  accessMode?: string
   enabled?: boolean
   status?: string
   statusNote?: string | null
@@ -560,6 +577,7 @@ export type automationTaskUpdateManyMutationInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   statusNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -582,6 +600,7 @@ export type automationTaskUncheckedUpdateManyInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   statusNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -604,6 +623,7 @@ export type automationTaskCountOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
   statusNote?: Prisma.SortOrder
@@ -633,6 +653,7 @@ export type automationTaskMaxOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
   statusNote?: Prisma.SortOrder
@@ -655,6 +676,7 @@ export type automationTaskMinOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
   statusNote?: Prisma.SortOrder
@@ -686,6 +708,7 @@ export type automationTaskSelect<ExtArgs extends runtime.Types.Extensions.Intern
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  accessMode?: boolean
   enabled?: boolean
   status?: boolean
   statusNote?: boolean
@@ -708,6 +731,7 @@ export type automationTaskSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  accessMode?: boolean
   enabled?: boolean
   status?: boolean
   statusNote?: boolean
@@ -730,6 +754,7 @@ export type automationTaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  accessMode?: boolean
   enabled?: boolean
   status?: boolean
   statusNote?: boolean
@@ -752,6 +777,7 @@ export type automationTaskSelectScalar = {
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  accessMode?: boolean
   enabled?: boolean
   status?: boolean
   statusNote?: boolean
@@ -762,7 +788,7 @@ export type automationTaskSelectScalar = {
   updatedAt?: boolean
 }
 
-export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
+export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "accessMode" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
 
 export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "automationTask"
@@ -779,6 +805,7 @@ export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.Inte
     startAt: Date | null
     endAt: Date | null
     missedPolicy: string
+    accessMode: string
     enabled: boolean
     status: string
     statusNote: string | null
@@ -1221,6 +1248,7 @@ export interface automationTaskFieldRefs {
   readonly startAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly endAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly missedPolicy: Prisma.FieldRef<"automationTask", 'String'>
+  readonly accessMode: Prisma.FieldRef<"automationTask", 'String'>
   readonly enabled: Prisma.FieldRef<"automationTask", 'Boolean'>
   readonly status: Prisma.FieldRef<"automationTask", 'String'>
   readonly statusNote: Prisma.FieldRef<"automationTask", 'String'>

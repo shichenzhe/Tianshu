@@ -169,6 +169,7 @@ model automationTask {
   startAt      DateTime?
   endAt        DateTime?
   missedPolicy String    @default("skip")
+  accessMode   String    @default("default")
   enabled      Boolean   @default(true)
   status       String    @default("active")
   statusNote   String?

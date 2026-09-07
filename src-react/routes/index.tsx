@@ -30,6 +30,10 @@ const LibraryView = lazy(
 const AutomationView = lazy(
   () => import("@/domains/ai/automation/views/AutomationView"),
 );
+// 自动化任务详情/编辑
+const TaskDetailView = lazy(
+  () => import("@/domains/ai/automation/views/TaskDetailView"),
+);
 
 // 加载中组件
 function LoadingFallback() {
@@ -108,6 +112,14 @@ export const router = createHashRouter([
             element: (
               <LazyWrapper>
                 <AutomationView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "automation/task/:id",
+            element: (
+              <LazyWrapper>
+                <TaskDetailView />
               </LazyWrapper>
             ),
           },

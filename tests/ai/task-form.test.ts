@@ -1,9 +1,11 @@
 // tests/ai/task-form.test.ts
 import { describe, expect, it } from "vitest";
+import { format } from "date-fns";
 import {
   buildInitialValues,
   serializeForm,
   buildTaskParams,
+  canSubmitForm,
 } from "../../src-react/domains/ai/automation/lib/task-form";
 import type { TaskRecord } from "../../src-react/domains/ai/automation/api/automation.api";
 
@@ -33,13 +35,18 @@ const task = {
 
 describe("task-form 纯函数", () => {
   it("buildInitialValues 按 task 回填并本地化日期", () => {
+    // 时区可移植:断言与实现同式(date-fns format 本地时区)。取
+    // 16:00Z 使 UTC+8 下本地日期(09-11)≠ slice(0,10)(09-10),
+    // 从构造上区分"本地化格式化"与"字符串截断"
     const v = buildInitialValues(
-      { task: { ...task, startAt: "2026-09-10T00:00:00Z" } },
+      { task: { ...task, startAt: "2026-09-10T16:00:00Z" } },
       t,
     );
     expect(v.name).toBe("早报");
     expect(v.accessMode).toBe("full");
-    expect(v.validity.startAt).toBe("2026-09-10"); // 本地时区格式化,不 slice(0,10)
+    expect(v.validity.startAt).toBe(
+      format(new Date("2026-09-10T16:00:00Z"), "yyyy-MM-dd"),
+    );
   });
 
   it("serializeForm 相同值同串、改值变串(脏检测依据)", () => {
@@ -65,5 +72,35 @@ describe("task-form 纯函数", () => {
       time: "09:00",
     });
     expect(v.accessMode).toBe("default");
+  });
+});
+
+describe("canSubmitForm", () => {
+  // 基线取自 task 夹具:name/prompt/modelId/workspaceId/daily schedule 均合法
+  const base = buildInitialValues({ task }, t);
+  // now 用本地时刻字面量,配合远端日期(2020/2030)使"过去/未来"判定
+  // 与运行时区无关(任何时区下 2020-01-01 本地零点都早于 now 当日零点)
+  const now = new Date("2026-09-06T10:00:00");
+
+  it("name 为空白 → false", () => {
+    expect(canSubmitForm({ ...base, name: " " }, now, false)).toBe(false);
+  });
+
+  it("字段齐备且调度合法 → true", () => {
+    expect(canSubmitForm(base, now, false)).toBe(true);
+  });
+
+  it("过去 startAt:startAtUnchanged 维持原生命周期放行,否则防倒流拦截", () => {
+    const past = { ...base, validity: { startAt: "2020-01-01" } };
+    expect(canSubmitForm(past, now, true)).toBe(true);
+    expect(canSubmitForm(past, now, false)).toBe(false);
+    // 未来 startAt 不受防倒流影响
+    expect(
+      canSubmitForm(
+        { ...base, validity: { startAt: "2030-01-01" } },
+        now,
+        false,
+      ),
+    ).toBe(true);
   });
 });

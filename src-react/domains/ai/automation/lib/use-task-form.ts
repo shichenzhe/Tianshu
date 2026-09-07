@@ -60,7 +60,9 @@ export function useTaskForm(source: TaskFormSource): UseTaskFormResult {
     buildInitialValues({}, t),
   );
   const [pickerKey, setPickerKey] = useState("");
-  const snapshotRef = useRef("");
+  /** 脏检测基线:与初始 values 同源初始化,避免 reset effect 落地前
+   * 首帧 isDirty 误报为 true(详情页保存按钮/离开确认消费该值) */
+  const snapshotRef = useRef(serializeForm(values));
   /** 最近一次重置时的 startAt(本地化 yyyy-MM-dd):编辑未改则免防倒流校验 */
   const initialStartAtRef = useRef<string | undefined>(undefined);
 

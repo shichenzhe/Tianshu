@@ -3,19 +3,21 @@
  * 不实例化 SessionRepository(其构造注册 IPC 有副作用);删除走
  * prisma.$transaction 连带删 run(应用层级联,SQLite 无外键)。
  */
-import { ipcMain } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import prisma from "../../../commons/prisma-client";
+import Log from "../../../commons/Log";
 import {
   scheduleSchema,
   type ScheduleConfig,
 } from "../../../../src-react/domains/ai/automation/api/schedule.schema";
-import type {
-  TaskCreateParams,
-  TaskRecord,
-  RunRecord,
-  RunPage,
-  TemplateRecord,
-  CreateStatDetail,
+import {
+  AUTOMATION_CHANGED_EVENT,
+  type TaskCreateParams,
+  type TaskRecord,
+  type RunRecord,
+  type RunPage,
+  type TemplateRecord,
+  type CreateStatDetail,
 } from "../../../../src-react/domains/ai/automation/api/automation.api";
 import { computeNextRun } from "./schedule";
 import { listAutomationTemplates } from "./automation-templates";
@@ -28,6 +30,14 @@ type TaskRow = NonNullable<
 type RunRow = NonNullable<
   Awaited<ReturnType<typeof prisma.automationRun.findFirst>>
 >;
+
+/** 手动执行收口推送:同 scheduler.notifyChanged 机制(不引 scheduler 实例),
+ * executeTask 本身不推送,runNow 须自行通知渲染层刷新 */
+function notifyTasksChanged(): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(AUTOMATION_CHANGED_EVENT);
+  }
+}
 
 /** DB 行 + workspace → 前端记录(source 派生规则 spec §0) */
 export function toTaskRecord(
@@ -161,12 +171,15 @@ export default class AutomationRepository {
         if (!task) {
           throw new Error(`automation task ${id} not found`);
         }
-        // 不 await:单次执行可达分钟级,触发即返回;落库/推送走 executeTask 既有链路
+        // 不 await:单次执行可达分钟级,触发即返回。executeTask 内部吞
+        // 异常落库,catch 仅兜 create run 之前的意外;收口推送 tasks-changed
         void executeTask(task, {
           triggerType: "manual",
           attempt: 1,
           abort: new AbortController().signal,
-        });
+        })
+          .catch((e) => Log.error("自动化执行失败", task.id, e))
+          .finally(notifyTasksChanged);
       },
     );
     ipcMain.handle("automation:templates", (): TemplateRecord[] =>

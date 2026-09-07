@@ -64,14 +64,16 @@ export interface AutomationPermissions {
 }
 
 /** 无人值守权限分流:full=完全访问+审批放行(原行为);default=只读执行,
- * 写类审批被拒但任务继续(agent 收到拒绝反馈),与会话 default 语义对齐 */
+ * 写类审批被拒但任务继续(agent 收到拒绝反馈),与会话 default 语义对齐。
+ * isToolAllowed 必须随 full 变 false:chat.service 写门禁对 isToolAllowed=true
+ * 的工具直接放行(门禁短路),requestApproval 永不触达 */
 export function resolveAutomationPermissions(
   accessMode: "default" | "full",
 ): AutomationPermissions {
   const full = accessMode === "full";
   return {
     fullAccess: () => full,
-    isToolAllowed: async () => true,
+    isToolAllowed: async () => full,
     requestApproval: async () => full,
   };
 }

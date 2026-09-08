@@ -10,6 +10,8 @@ import {
   User,
   Lock,
   LogOut,
+  Settings,
+  Lightbulb,
   HelpCircle,
   RefreshCw,
   FileText,
@@ -183,6 +185,16 @@ export default function UserMenu() {
             {t("layout:userMenu.changePassword")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          {/* 设置入口（功能待接：点击仅收起菜单，无动作） */}
+          <DropdownMenuItem onClick={() => {}} className="cursor-pointer">
+            <Settings size={14} className="mr-2" />
+            {t("layout:userMenu.settings")}
+          </DropdownMenuItem>
+          {/* 记忆与进化入口（功能待接：点击仅收起菜单，无动作） */}
+          <DropdownMenuItem onClick={() => {}} className="cursor-pointer">
+            <Lightbulb size={14} className="mr-2" />
+            {t("layout:userMenu.memoryEvolution")}
+          </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-pointer">
               <HelpCircle size={14} className="mr-2" />

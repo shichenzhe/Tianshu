@@ -8,6 +8,8 @@
     "defaultUser": "User",
     "userInfo": "User Info",
     "changePassword": "Change Password",
+    "settings": "Settings",
+    "memoryEvolution": "Memory & Evolution",
     "help": "Help",
     "checkUpdate": "Check Update",
     "updateLog": "Update Log",

@@ -40,6 +40,7 @@ import { useChatSend } from "../hooks/use-chat-send";
 import { useChatStore } from "../store/chat.store";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import { mapIpcError } from "../lib/error-message";
+import { truncateMessagesForEdit } from "../lib/truncate-messages-for-edit";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 const PROVIDERS_KEY = ["providers"] as const;
@@ -303,8 +304,10 @@ function ChatPane({
   };
 
   /**
-   * 编辑重发：先乐观退出编辑态（失败由 toast 兜底），再走 editResend 链路；
-   * messageId 在清空 editing 前捕获（onSubmit 仅在编辑态触发，必然存在）
+   * 编辑重发：乐观退出编辑态并同步消息缓存（目标消息换新文本、其后历史
+   * 立即截掉，与后端 editAndResend 删尾对齐；流结束 invalidate 拿回真值）；
+   * 失败 toast 兜底 + invalidate 恢复服务器真值；messageId 在清空 editing
+   * 前捕获（onSubmit 仅在编辑态触发，必然存在）
    */
   const handleEditSubmit = async (text: string) => {
     const messageId = editing?.messageId;
@@ -312,10 +315,15 @@ function ChatPane({
     if (messageId === undefined) {
       return;
     }
+    const messagesKey = ["messages", session.id];
+    queryClient.setQueryData<MessageRecord[]>(messagesKey, (old) =>
+      old ? truncateMessagesForEdit(old, messageId, text) : old,
+    );
     try {
       await editResend(messageId, text);
     } catch (e) {
       toast.error(mapIpcError(e));
+      void queryClient.invalidateQueries({ queryKey: messagesKey });
     }
   };
 

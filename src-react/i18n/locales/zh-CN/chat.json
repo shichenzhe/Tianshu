@@ -97,7 +97,9 @@
     "usage": "{{input}} 输入 / {{output}} 输出 tokens",
     "failed": "生成失败",
     "regenerate": "重新生成",
-    "regenerateTip": "点击将重新生成内容,此会话后的内容将被覆盖,请谨慎操作"
+    "regenerateTip": "点击将重新生成内容,此会话后的内容将被覆盖,请谨慎操作",
+    "editHint": "编辑后重发将更新该消息,其后的内容会被删除并重新生成,请谨慎操作",
+    "resend": "重新发送"
   },
   "tool": {
     "state": {

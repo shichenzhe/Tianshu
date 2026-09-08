@@ -87,6 +87,17 @@ export default class ChatApi {
   }
 
   /**
+   * 编辑 user 消息并重发（更新内容、删除其后全部消息、重跑流）
+   */
+  static async editAndResend(
+    sessionId: number,
+    messageId: number,
+    content: string,
+  ): Promise<void> {
+    return invoke<void>("chat:editAndResend", sessionId, messageId, content);
+  }
+
+  /**
    * 停止会话进行中的流
    */
   static async stop(sessionId: number): Promise<void> {

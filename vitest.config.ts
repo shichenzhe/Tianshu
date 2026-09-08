@@ -14,6 +14,8 @@ export default defineConfig({
     jsx: { runtime: "automatic" },
   },
   test: {
-    include: ["scripts/**/*.test.mjs", "tests/**/*.test.{mjs,ts}"],
+    // tsx：React 组件交互测试（如 tests/ai/edit-bar.test.tsx，
+    // 文件内以 @vitest-environment jsdom 指定 DOM 环境）
+    include: ["scripts/**/*.test.mjs", "tests/**/*.test.{mjs,ts,tsx}"],
   },
 });

@@ -97,7 +97,9 @@
     "usage": "{{input}} input / {{output}} output tokens",
     "failed": "Generation failed",
     "regenerate": "Regenerate",
-    "regenerateTip": "Regenerate this reply; messages after it will be replaced. Proceed with care"
+    "regenerateTip": "Regenerate this reply; messages after it will be replaced. Proceed with care",
+    "editHint": "Resend will update this message and delete everything after it, then regenerate. Proceed with care",
+    "resend": "Resend"
   },
   "tool": {
     "state": {

@@ -148,10 +148,23 @@ export function useChatSend(sessionId: number) {
     }
   };
 
+  /** 编辑 user 消息并重发（与 regenerate 同模式：流式状态先行，失败收尾重取） */
+  const editResend = async (messageId: number, content: string) => {
+    startStream(sessionId);
+    try {
+      await ChatApi.editAndResend(sessionId, messageId, content);
+    } catch (e) {
+      finishStream(sessionId);
+      void queryClient.invalidateQueries({ queryKey: ["messages", sessionId] });
+      throw e;
+    }
+  };
+
   return {
     sending,
     send,
     regenerate,
+    editResend,
     stop: () => ChatApi.stop(sessionId),
   };
 }

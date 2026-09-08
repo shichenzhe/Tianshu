@@ -310,7 +310,10 @@ function ChatPane({
         )}
         <div className="p-4">
           {editing && (
+            /* key=messageId：编辑对象直接切换（A→B）时重挂载 EditBar，
+               使 textarea 按新 initialText 重建，不残留上一条文本 */
             <EditBar
+              key={editing.messageId}
               initialText={editing.text}
               onCancel={handleEditCancel}
               onSubmit={handleEditSubmit}

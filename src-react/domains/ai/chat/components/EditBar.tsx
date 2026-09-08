@@ -27,7 +27,9 @@ export default function EditBar({
   const [text, setText] = useState(initialText);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 挂载后聚焦并把光标置于文末（方便追加编辑）
+  // 挂载后聚焦并把光标置于文末（方便追加编辑）。空依赖仅挂载时执行：
+  // 编辑对象直接切换（A→B 不经过取消）由父组件 key=messageId 驱动重挂载，
+  // state 随新 initialText 重建，避免 textarea 残留上一条的文本
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -35,7 +37,7 @@ export default function EditBar({
     }
     textarea.focus();
     textarea.setSelectionRange(initialText.length, initialText.length);
-  }, [initialText]);
+  }, []);
 
   const submit = () => {
     const trimmed = text.trim();

@@ -5,11 +5,14 @@
  * - 内容 trim 为空时「重发」按钮禁用
  * - Escape 取消；Enter（非 Shift、非 IME 组合）提交并携带当前文本（去首尾空白）；
  *   Shift+Enter 不触发提交（保留默认换行行为）
+ * - 编辑对象直接切换（A→B 不经过取消）：key 重挂载使文本按新 initialText 重建
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import EditBar from "../../src-react/domains/ai/chat/components/EditBar";
+// 源码原文（Vite ?raw）：断言 ChatView 对 EditBar 的 key 接线存在
+import chatViewSource from "../../src-react/domains/ai/chat/views/ChatView.tsx?raw";
 
 // i18n mock：useTranslation 的 t 直接返回 key（按钮名即 key），断言行为不
 // 依赖具体文案；其余导出（initReactI18next 等，经 @/lib/utils → @/i18n 引入）
@@ -106,5 +109,40 @@ describe("EditBar 按钮点击", () => {
     );
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith("hello");
+  });
+});
+
+describe("EditBar 编辑对象切换（key 重挂载）", () => {
+  it("key 变化触发重挂载：文本按新 initialText 重建并重新聚焦文末", () => {
+    const noop = () => {};
+    const { rerender } = render(
+      <EditBar
+        key={101}
+        initialText="消息A文本"
+        onCancel={noop}
+        onSubmit={noop}
+      />,
+    );
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+      "消息A文本",
+    );
+    // 模拟 ChatView：编辑 A 期间点 B 的编辑 → setEditing 换 messageId，
+    // key 变化令 EditBar 重挂载（state 重建，而非保留 A 的旧文本）
+    rerender(
+      <EditBar
+        key={202}
+        initialText="消息B文本"
+        onCancel={noop}
+        onSubmit={noop}
+      />,
+    );
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("消息B文本");
+    expect(document.activeElement).toBe(textarea);
+    expect(textarea.selectionStart).toBe("消息B文本".length);
+  });
+
+  it("ChatView 渲染 EditBar 时以 key=editing.messageId 驱动重挂载", () => {
+    expect(chatViewSource).toContain("key={editing.messageId}");
   });
 });

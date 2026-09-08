@@ -557,18 +557,23 @@ describe("SettingsDialog 通知组", () => {
     vi.stubGlobal("Notification", NotificationStub);
     notificationState.permission = "denied";
     const restoreUserAgent = stubUserAgent("Windows");
-    await renderDialog();
+    try {
+      await renderDialog();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "settings:notification.authorize" }),
-    );
-    await waitFor(() =>
-      expect(invokeMock).toHaveBeenCalledWith(
-        "settings:openExternal",
-        "ms-settings:notifications",
-      ),
-    );
-    restoreUserAgent();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "settings:notification.authorize",
+        }),
+      );
+      await waitFor(() =>
+        expect(invokeMock).toHaveBeenCalledWith(
+          "settings:openExternal",
+          "ms-settings:notifications",
+        ),
+      );
+    } finally {
+      restoreUserAgent();
+    }
   });
 
   it("客户端通知开关保存 + 提示音切换持久化并 beep 试听", async () => {

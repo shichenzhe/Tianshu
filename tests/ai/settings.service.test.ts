@@ -712,6 +712,8 @@ describe("openExternal 白名单纯函数", () => {
         "x-apple.systempreferences:com.apple.preference.notifications",
       ),
     ).toBe(true);
+    // Windows 前缀去尾冒号后，白名单同时放行裸形式与带子页形式
+    expect(isOpenExternalAllowed("ms-settings:notifications")).toBe(true);
     expect(isOpenExternalAllowed("ms-settings:notifications:")).toBe(true);
     expect(isOpenExternalAllowed("ms-settings:notifications:sound")).toBe(true);
   });

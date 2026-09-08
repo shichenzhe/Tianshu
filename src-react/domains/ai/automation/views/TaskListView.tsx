@@ -1,7 +1,8 @@
 // src-react/domains/ai/automation/views/TaskListView.tsx
-/** 任务列表:状态 pill + 行列表 + 批量管理工具栏变体 + 空状态 */
+/** 任务列表:状态 pill + 行列表 + 批量管理工具栏变体 + 空状态;行点击进详情页 */
 import { useDeferredValue, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarClock, Trash2 } from "lucide-react";
@@ -40,6 +41,7 @@ export default function TaskListView({
   isLoading: boolean;
 }) {
   const { t } = useTranslation(["chat"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const {
     sourceFilter,
@@ -51,7 +53,6 @@ export default function TaskListView({
     exitBatchMode,
     selectAll,
   } = useAutomationStore();
-  const [editing, setEditing] = useState<TaskRecord | undefined>();
   const [template, setTemplate] = useState<TemplateRecord | undefined>();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -100,7 +101,6 @@ export default function TaskListView({
           <Button
             onClick={() => {
               setTemplate(undefined);
-              setEditing(undefined);
               setDialogOpen(true);
             }}
           >
@@ -110,7 +110,6 @@ export default function TaskListView({
         <CreateTaskDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}
-          editTask={editing}
           template={template}
         />
       </>
@@ -177,10 +176,7 @@ export default function TaskListView({
           <TaskRow
             key={task.id}
             task={task}
-            onClick={() => {
-              setEditing(task);
-              setDialogOpen(true);
-            }}
+            onClick={() => navigate(`/module/ai/automation/task/${task.id}`)}
           />
         ))
       )}
@@ -213,7 +209,6 @@ export default function TaskListView({
       <CreateTaskDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        editTask={editing}
         template={template}
       />
     </div>

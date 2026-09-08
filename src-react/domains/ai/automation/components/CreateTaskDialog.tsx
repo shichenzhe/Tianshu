@@ -1,10 +1,10 @@
 // src-react/domains/ai/automation/components/CreateTaskDialog.tsx
 /**
- * 创建/编辑自动化任务 Modal(spec §5):名称/提示词输入卡
+ * 创建自动化任务 Modal(spec §5):名称/提示词输入卡
  * (TaskPromptInput:@引用/⚡技能/变量插入/模型选择)/参数预设/
  * 工作空间/SchedulePicker。表单状态/脏快照/校验/参数组装由
- * useTaskForm 承载(与任务详情页共用);模板与编辑复用同表单,
- * 初始值优先级 editTask > template > 空。
+ * useTaskForm 承载(与任务详情页共用);模板复用同表单,
+ * 初始值优先级 template > 空;任务编辑走任务详情页。
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,11 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AutomationApi,
-  type TaskRecord,
-  type TemplateRecord,
-} from "../api/automation.api";
+import { AutomationApi, type TemplateRecord } from "../api/automation.api";
 import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
 import { useTaskForm } from "../lib/use-task-form";
 import { SchedulePicker } from "./SchedulePicker";
@@ -47,7 +43,6 @@ const PARAM_PRESETS = [
 export interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editTask?: TaskRecord;
   template?: TemplateRecord;
   onSaved?: () => void;
 }
@@ -55,7 +50,6 @@ export interface CreateTaskDialogProps {
 export function CreateTaskDialog({
   open,
   onOpenChange,
-  editTask,
   template,
   onSaved,
 }: CreateTaskDialogProps) {
@@ -72,18 +66,11 @@ export function CreateTaskDialog({
   const switchCountRef = useRef(0);
 
   const form = useTaskForm({
-    task: editTask,
     template,
-    // 源变化信号兼 SchedulePicker remount key:打开来源(编辑任务/模板/
-    // 新建)或开合态变化时必变,关闭即重置,保证同一来源取消后重开也
-    // 会 remount 回填已存配置
-    resetKey: open
-      ? editTask
-        ? `task-${editTask.id}`
-        : template
-          ? `tpl-${template.slug}`
-          : "new"
-      : "closed",
+    // 源变化信号兼 SchedulePicker remount key:打开来源(模板/新建)
+    // 或开合态变化时必变,关闭即重置,保证同一来源取消后重开也会
+    // remount 回填已存配置
+    resetKey: open ? (template ? `tpl-${template.slug}` : "new") : "closed",
     workspaces,
   });
   const { values, patch } = form;
@@ -102,33 +89,22 @@ export function CreateTaskDialog({
     setSaving(true);
     try {
       const params = form.buildParams();
-      const saved = editTask
-        ? await AutomationApi.update(editTask.id, params)
-        : await AutomationApi.create(params);
-      if (!editTask) {
-        void AutomationApi.stat({
-          mode: values.schedule.mode,
-          kind:
-            values.schedule.mode === "periodic"
-              ? values.schedule.kind
-              : "interval",
-          hasEndAt: Boolean(values.validity.endAt),
-          tabSwitchCount: switchCountRef.current,
-        });
-      }
-      toast.success(
-        t(
-          editTask
-            ? "chat:automation.toast.updated"
-            : "chat:automation.toast.created",
-        ),
-      );
+      await AutomationApi.create(params);
+      void AutomationApi.stat({
+        mode: values.schedule.mode,
+        kind:
+          values.schedule.mode === "periodic"
+            ? values.schedule.kind
+            : "interval",
+        hasEndAt: Boolean(values.validity.endAt),
+        tabSwitchCount: switchCountRef.current,
+      });
+      toast.success(t("chat:automation.toast.created"));
       await queryClient.invalidateQueries({
         queryKey: ["automation", "tasks"],
       });
       onSaved?.();
       onOpenChange(false);
-      void saved;
     } catch (e) {
       toast.error(
         t("chat:automation.toast.loadFailed", {
@@ -144,13 +120,7 @@ export function CreateTaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto border border-border/50 rounded-lg shadow-lg">
         <DialogHeader>
-          <DialogTitle>
-            {t(
-              editTask
-                ? "chat:automation.create.titleEdit"
-                : "chat:automation.create.titleCreate",
-            )}
-          </DialogTitle>
+          <DialogTitle>{t("chat:automation.create.titleCreate")}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">

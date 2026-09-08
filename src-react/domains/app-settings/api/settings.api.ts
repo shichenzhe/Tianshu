@@ -86,6 +86,11 @@ export class SettingsApi {
   static async openExternal(url: string): Promise<void> {
     return invoke<void>("settings:openExternal", url);
   }
+
+  /** 发送测试桌面通知（主进程 Notification；渲染层在未签名 dev 下不可靠） */
+  static async testNotification(title: string, body: string): Promise<void> {
+    return invoke<void>("settings:testNotification", title, body);
+  }
 }
 
 export default SettingsApi;

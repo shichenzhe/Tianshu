@@ -1,5 +1,7 @@
 /**
- * 桌面通知辅助：授权态读取、系统授权设置跳转、测试通知发送
+ * 桌面通知辅助：授权态读取、系统授权设置跳转
+ * （测试通知发送改走 SettingsApi.testNotification 主进程 IPC：
+ * macOS 未签名 dev 应用渲染层通知被系统静默丢弃，已移除渲染层实现）
  */
 
 import { SettingsApi } from "../api/settings.api";
@@ -31,10 +33,4 @@ export function desktopPermission(): NotificationPermission {
   return typeof Notification === "undefined"
     ? "denied"
     : Notification.permission;
-}
-
-/** 发送一条测试桌面通知（Electron 渲染层 Notification 可用；标题由调用方传
- * t("common:appName")，避免硬编码应用名） */
-export function sendTestNotification(title: string, body: string): void {
-  new Notification(title, { body });
 }

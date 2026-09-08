@@ -3,10 +3,14 @@
  * 起停幂等与退出清理、代理模式映射纯函数与双层应用/启动重放、
  * storageInfo 计算（真实临时目录；含单文件 stat 删除竞态容错）、
  * openDirectory 目录校验（真实临时目录）、
- * skill 开关默认值与 IPC 通道注册。
+ * skill 开关默认值与 IPC 通道注册、
+ * 测试通知（主进程 Notification：isSupported 分支与构造透传）。
  * electron/prisma/undici/Log 走 mock 三件套（参照 chat.service.test.ts）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// 主进程 Notification 的 show 桩（构造实例共享，断言 show 调用）
+const notificationShow = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
@@ -16,6 +20,13 @@ vi.mock("electron", () => ({
     setLoginItemSettings: vi.fn(),
     on: vi.fn(),
   },
+  Notification: Object.assign(
+    // 普通函数（非箭头）才能被 new 调用：构造返回带 show 桩的实例
+    vi.fn(function () {
+      return { show: notificationShow };
+    }),
+    { isSupported: vi.fn(() => true) },
+  ),
   powerSaveBlocker: {
     start: vi.fn(),
     stop: vi.fn(),
@@ -92,6 +103,7 @@ import {
   app,
   dialog,
   ipcMain,
+  Notification,
   powerSaveBlocker,
   session,
   shell,
@@ -705,6 +717,28 @@ describe("目录选择/打开与提示音", () => {
   });
 });
 
+describe("测试通知（主进程 IPC）", () => {
+  it("IPC 直调：title/body 透传主进程 Notification 构造并 show", () => {
+    new SettingsService();
+    handlerOf("settings:testNotification")(undefined, "天枢", "测试正文");
+    expect(Notification).toHaveBeenCalledWith({
+      title: "天枢",
+      body: "测试正文",
+    });
+    expect(notificationShow).toHaveBeenCalledTimes(1);
+  });
+
+  it("系统不支持时抛 TEST_NOTIFICATION_UNSUPPORTED 且不构造不 show", () => {
+    vi.mocked(Notification.isSupported).mockReturnValueOnce(false);
+    const svc = new SettingsService();
+    expect(() => svc.testNotification("t", "b")).toThrow(
+      "TEST_NOTIFICATION_UNSUPPORTED",
+    );
+    expect(Notification).not.toHaveBeenCalled();
+    expect(notificationShow).not.toHaveBeenCalled();
+  });
+});
+
 describe("openExternal 白名单纯函数", () => {
   it("仅放行两个系统通知设置 scheme 前缀", () => {
     expect(
@@ -752,6 +786,7 @@ describe("IPC 通道注册与 getAll/set", () => {
         "settings:openDirectory",
         "settings:beep",
         "settings:openExternal",
+        "settings:testNotification",
       ].sort(),
     );
   });

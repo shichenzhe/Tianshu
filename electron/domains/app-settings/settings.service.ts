@@ -6,13 +6,16 @@
  * 持久化供启动重放）、storageInfo（userData 递归占用 + statfs 磁盘）、
  * pickDirectory/openDirectory（目录选择与打开，打开前 stat 校验仅放行目录）、
  * beep（提示音）、
- * openExternal（白名单外部地址跳转，当前仅系统通知授权设置页）。
+ * openExternal（白名单外部地址跳转，当前仅系统通知授权设置页）、
+ * testNotification（测试通知，主进程 Notification：未签名 dev 下渲染层
+ * 通知被 macOS 静默丢弃且 permission 谎报 granted，故收口到主进程）。
  * 注：本域目录名为 app-settings（settings 目录名被本地权限规则拒绝，功能不受影响）。
  */
 import {
   app,
   dialog,
   ipcMain,
+  Notification,
   powerSaveBlocker,
   session,
   shell,
@@ -104,6 +107,11 @@ export default class SettingsService {
     ipcMain.handle("settings:beep", () => shell.beep());
     ipcMain.handle("settings:openExternal", (_, url: unknown): Promise<void> =>
       this.openExternal(url),
+    );
+    ipcMain.handle(
+      "settings:testNotification",
+      (_, title: string, body: string): void =>
+        this.testNotification(title, body),
     );
   }
 
@@ -248,5 +256,17 @@ export default class SettingsService {
       throw new Error("OPEN_EXTERNAL_FORBIDDEN");
     }
     await shell.openExternal(url as string);
+  }
+
+  /**
+   * 发送测试桌面通知（主进程 Electron Notification：macOS 未签名 dev 应用
+   * 的渲染层通知被系统静默丢弃，生产打包签名后主进程路径确定可用）；
+   * 系统不支持时抛错误码让渲染层给出可见反馈。
+   */
+  testNotification(title: string, body: string): void {
+    if (!Notification.isSupported()) {
+      throw new Error("TEST_NOTIFICATION_UNSUPPORTED");
+    }
+    new Notification({ title, body }).show();
   }
 }

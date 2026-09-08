@@ -59,6 +59,7 @@
     "authorize": "去授权",
     "testNotification": "测试通知",
     "testBody": "桌面通知已开启，任务完成或有新消息时会在这里提醒你",
+    "testSent": "测试通知已发送，若未显示请检查系统设置中的通知权限",
     "client": "客户端通知",
     "clientDesc": "运营消息优先在应用内显示，应用切换到后台以后自动转桌面通知",
     "sound": "提示音",
@@ -69,6 +70,7 @@
     "saveFailed": "保存失败，请重试",
     "loadFailed": "读取设置失败",
     "openFailed": "打开目录失败",
-    "openExternalFailed": "打开系统设置失败"
+    "openExternalFailed": "打开系统设置失败",
+    "testNotificationFailed": "发送测试通知失败，请重试"
   }
 }

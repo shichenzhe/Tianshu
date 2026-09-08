@@ -7,7 +7,8 @@
  * - 权限组：初始值一次性载入、开关即时保存与失败回滚、代理三态切换与
  *   自定义表单显隐/校验/保存参数
  * - 存储组：storageInfo Loading→渲染、打开目录、工作空间路径更改（含取消）
- * - 通知组：桌面通知授权态分支（去授权跳系统设置/测试通知）、
+ * - 通知组：桌面通知授权态分支（去授权跳系统设置/测试通知经主进程 IPC
+ *   发送并 toast 成功引导或失败提示）、
  *   客户端通知开关保存、提示音切换持久化 + beep 试听
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -64,23 +65,20 @@ vi.mock("@/lib/ipc", () => ({
     invokeMock(channel, ...args),
 }));
 
-// toast mock：断言失败兜底提示
-const toastMock = vi.hoisted(() => ({ error: vi.fn() }));
+// toast mock：断言失败兜底与测试通知成功/失败反馈
+const toastMock = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
-// Notification stub：permission 可变（授权分支），构造调用被记录（测试通知）
+// Notification stub：permission 可变（授权分支；测试通知已改走主进程 IPC，
+// 渲染层不再构造）
 const notificationState = vi.hoisted(() => ({
   permission: "denied" as NotificationPermission,
-  calls: [] as Array<{ title: string; body?: string }>,
 }));
-class NotificationStub {
-  static get permission() {
+const NotificationStub = {
+  get permission() {
     return notificationState.permission;
-  }
-  constructor(title: string, options?: { body?: string }) {
-    notificationState.calls.push({ title, body: options?.body });
-  }
-}
+  },
+};
 
 /** 各通道默认桩返回（未覆盖通道 → undefined） */
 const DEFAULT_STORAGE_INFO: StorageInfo = {
@@ -136,7 +134,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   notificationState.permission = "denied";
-  notificationState.calls.length = 0;
 });
 
 beforeEach(() => {
@@ -144,6 +141,7 @@ beforeEach(() => {
   localStorage.clear();
   document.documentElement.style.fontSize = "";
   toastMock.error.mockClear();
+  toastMock.info.mockClear();
   invokeMock.mockClear();
   stubInvoke();
 });
@@ -537,7 +535,7 @@ describe("SettingsDialog 通知组", () => {
     restoreUserAgent();
   });
 
-  it("桌面通知已授权：测试通知发送标题与正文", async () => {
+  it("桌面通知已授权：测试通知经主进程 IPC 发送（title/body 透传）并 toast 成功引导", async () => {
     vi.stubGlobal("Notification", NotificationStub);
     notificationState.permission = "granted";
     await renderDialog();
@@ -548,9 +546,43 @@ describe("SettingsDialog 通知组", () => {
         name: "settings:notification.testNotification",
       }),
     );
-    expect(notificationState.calls).toEqual([
-      { title: "common:appName", body: "settings:notification.testBody" },
-    ]);
+    // 标题/正文 key 透传主进程通道（渲染层不再本地构造 Notification）
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "settings:testNotification",
+        "common:appName",
+        "settings:notification.testBody",
+      ),
+    );
+    // 成功反馈：含检查系统通知权限的引导文案
+    await waitFor(() =>
+      expect(toastMock.info).toHaveBeenCalledWith(
+        "settings:notification.testSent",
+      ),
+    );
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it("测试通知发送失败（如系统不支持）：toast 错误提示且无成功提示", async () => {
+    vi.stubGlobal("Notification", NotificationStub);
+    notificationState.permission = "granted";
+    stubInvoke({
+      "settings:testNotification": () =>
+        Promise.reject(new Error("TEST_NOTIFICATION_UNSUPPORTED")),
+    });
+    await renderDialog();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings:notification.testNotification",
+      }),
+    );
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "settings:error.testNotificationFailed",
+      ),
+    );
+    expect(toastMock.info).not.toHaveBeenCalled();
   });
 
   it("Windows 去授权：经白名单桥跳 ms-settings 通知页（URI 无尾冒号）", async () => {

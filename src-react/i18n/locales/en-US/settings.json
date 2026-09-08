@@ -59,6 +59,7 @@
     "authorize": "Authorize",
     "testNotification": "Test Notification",
     "testBody": "Desktop notifications are on. You will be alerted here when tasks finish or new messages arrive.",
+    "testSent": "Test notification sent. If it doesn't appear, check notification permissions in system settings",
     "client": "In-app Notifications",
     "clientDesc": "Operational messages are shown in-app first, and switch to desktop notifications once the app goes to the background",
     "sound": "Alert Sound",
@@ -69,6 +70,7 @@
     "saveFailed": "Save failed, please try again",
     "loadFailed": "Failed to load settings",
     "openFailed": "Failed to open directory",
-    "openExternalFailed": "Failed to open system settings"
+    "openExternalFailed": "Failed to open system settings",
+    "testNotificationFailed": "Failed to send test notification, please try again"
   }
 }

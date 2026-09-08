@@ -1,5 +1,6 @@
 /**
- * 通知组：桌面通知（系统授权态分支：未授权→去授权跳系统设置；已授权→测试通知）、
+ * 通知组：桌面通知（系统授权态分支：未授权→去授权跳系统设置；已授权→测试
+ * 通知经主进程 IPC，成功/失败均 toast 可见反馈）、
  * 客户端通知开关、提示音（无音效/默认提示音，选中默认提示音即试听）
  */
 
@@ -12,7 +13,6 @@ import { SettingsApi } from "../api/settings.api";
 import {
   desktopPermission,
   openNotificationSettings,
-  sendTestNotification,
 } from "../model/desktop-notification";
 import { parseBoolOption, toOptionMap } from "../model/app-options";
 import { useSaveOrRevert } from "../model/use-save-or-revert";
@@ -85,11 +85,15 @@ export default function NotificationsGroup() {
     saveOrRevert(SettingsApi.set(SOUND_KEY, next), () => setSound(previous));
   };
 
+  /** 测试通知走主进程 IPC（渲染层在未签名 dev 下被系统静默丢弃），
+   * 成功/失败均 toast 给可见反馈（成功文案引导检查系统通知权限） */
   const sendTest = () => {
-    sendTestNotification(
+    SettingsApi.testNotification(
       t("common:appName"),
       t("settings:notification.testBody"),
-    );
+    )
+      .then(() => toast.info(t("settings:notification.testSent")))
+      .catch(() => toast.error(t("settings:error.testNotificationFailed")));
   };
 
   /** 去授权：经主进程白名单桥跳系统设置，失败 toast */

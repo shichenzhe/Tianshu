@@ -549,8 +549,26 @@ describe("SettingsDialog 通知组", () => {
       }),
     );
     expect(notificationState.calls).toEqual([
-      { title: "Tianshu", body: "settings:notification.testBody" },
+      { title: "common:appName", body: "settings:notification.testBody" },
     ]);
+  });
+
+  it("Windows 去授权：经白名单桥跳 ms-settings 通知页（URI 无尾冒号）", async () => {
+    vi.stubGlobal("Notification", NotificationStub);
+    notificationState.permission = "denied";
+    const restoreUserAgent = stubUserAgent("Windows");
+    await renderDialog();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:notification.authorize" }),
+    );
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "settings:openExternal",
+        "ms-settings:notifications",
+      ),
+    );
+    restoreUserAgent();
   });
 
   it("客户端通知开关保存 + 提示音切换持久化并 beep 试听", async () => {

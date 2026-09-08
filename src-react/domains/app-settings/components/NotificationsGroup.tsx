@@ -38,7 +38,7 @@ const CLIENT_NOTIFICATION_KEY = "clientNotification";
 const SOUND_KEY = "sound";
 
 export default function NotificationsGroup() {
-  const { t } = useTranslation(["settings"]);
+  const { t } = useTranslation(["settings", "common"]);
   const saveOrRevert = useSaveOrRevert();
   const [permission] = useState<NotificationPermission>(() =>
     desktopPermission(),
@@ -86,7 +86,10 @@ export default function NotificationsGroup() {
   };
 
   const sendTest = () => {
-    sendTestNotification(t("settings:notification.testBody"));
+    sendTestNotification(
+      t("common:appName"),
+      t("settings:notification.testBody"),
+    );
   };
 
   /** 去授权：经主进程白名单桥跳系统设置，失败 toast */

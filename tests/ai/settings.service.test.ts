@@ -1,7 +1,9 @@
 /**
  * 设置服务单测（Task 10）：upsert 语义、autoLaunch 读写映射、keepAwake
  * 起停幂等与退出清理、代理模式映射纯函数与双层应用/启动重放、
- * storageInfo 计算（真实临时目录）、skill 开关默认值与 IPC 通道注册。
+ * storageInfo 计算（真实临时目录；含单文件 stat 删除竞态容错）、
+ * openDirectory 目录校验（真实临时目录）、
+ * skill 开关默认值与 IPC 通道注册。
  * electron/prisma/undici/Log 走 mock 三件套（参照 chat.service.test.ts）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -120,6 +122,7 @@ import {
 import {
   computeDirSize,
   diskBytesFromStatfs,
+  type DirSizeFs,
 } from "../../electron/domains/app-settings/storage-info";
 import { isOpenExternalAllowed } from "../../electron/domains/app-settings/external-url";
 
@@ -561,6 +564,25 @@ describe("storageInfo", () => {
     ).toBe(0);
   });
 
+  it("computeDirSize：遍历中单文件 stat 失败（删除竞态）跳过该文件仍返回其余大小", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "tianshu-settings-race-"));
+    try {
+      writeFileSync(path.join(dir, "vanishing.log"), Buffer.alloc(10));
+      writeFileSync(path.join(dir, "kept.bin"), Buffer.alloc(7));
+      // stat vanishing.log 时恰被轮转删除（ENOENT 竞态）：按 0 跳过不连坐
+      const fsRace: DirSizeFs = {
+        readdir: (target, options) => fsp.readdir(target, options),
+        stat: (target) =>
+          target.endsWith("vanishing.log")
+            ? Promise.reject(new Error("ENOENT"))
+            : fsp.stat(target),
+      };
+      expect(await computeDirSize(fsRace, dir)).toBe(7);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("storageInfo：真实临时目录 end-to-end（userData 递归 + 磁盘容量）", async () => {
     const dir = mkdtempSync(path.join(tmpdir(), "tianshu-settings-e2e-"));
     try {
@@ -606,13 +628,42 @@ describe("目录选择/打开与提示音", () => {
     await expect(svc.pickDirectory()).resolves.toBeNull();
   });
 
-  it("openDirectory：openPath 错误串转 reject，成功静默；空路径拒绝", async () => {
+  it("openDirectory：目录透传 shell.openPath 成功；openPath 错误串转 reject；空路径拒绝", async () => {
     const svc = new SettingsService();
-    vi.mocked(shell.openPath).mockResolvedValue("");
-    await expect(svc.openDirectory("/some/dir")).resolves.toBeUndefined();
-    vi.mocked(shell.openPath).mockResolvedValue("无法打开");
-    await expect(svc.openDirectory("/some/dir")).rejects.toThrow("无法打开");
+    const dir = mkdtempSync(path.join(tmpdir(), "tianshu-open-dir-"));
+    try {
+      vi.mocked(shell.openPath).mockResolvedValue("");
+      await expect(svc.openDirectory(dir)).resolves.toBeUndefined();
+      expect(shell.openPath).toHaveBeenCalledWith(dir);
+      vi.mocked(shell.openPath).mockResolvedValue("无法打开");
+      await expect(svc.openDirectory(dir)).rejects.toThrow("无法打开");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     await expect(svc.openDirectory("")).rejects.toThrow("EMPTY_PATH");
+  });
+
+  it("openDirectory：文件路径拒绝 INVALID_DIRECTORY 且不触 openPath（防可执行文件借默认处理器执行）", async () => {
+    const svc = new SettingsService();
+    const dir = mkdtempSync(path.join(tmpdir(), "tianshu-open-file-"));
+    try {
+      const file = path.join(dir, "evil.app");
+      writeFileSync(file, "x");
+      await expect(svc.openDirectory(file)).rejects.toThrow(
+        "INVALID_DIRECTORY",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    expect(shell.openPath).not.toHaveBeenCalled();
+  });
+
+  it("openDirectory：不存在的路径拒绝 INVALID_DIRECTORY 且不触 openPath", async () => {
+    const svc = new SettingsService();
+    await expect(
+      svc.openDirectory(path.join(tmpdir(), "tianshu-open-missing")),
+    ).rejects.toThrow("INVALID_DIRECTORY");
+    expect(shell.openPath).not.toHaveBeenCalled();
   });
 
   it("beep：调用 shell.beep", () => {

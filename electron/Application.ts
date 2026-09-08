@@ -39,7 +39,7 @@ export default class Application {
    */
   async execute() {
     await this.initDatabase();
-    this.registerServices();
+    await this.registerServices();
     this.scheduler.start();
     console.info("register dbservice success");
   }
@@ -103,7 +103,7 @@ export default class Application {
   /**
    * 注册服务（新增业务域时在此接线，参考 docs/guide.md）
    */
-  private registerServices(): void {
+  private async registerServices(): Promise<void> {
     new UserRepository();
     new OptionRepository();
     // 可选 AI 模块：不需要时删除本块与 electron/domains/ai
@@ -120,6 +120,13 @@ export default class Application {
     void skillRepo
       .ensureBuiltinSkills()
       .catch((e) => Log.error("内置技能自愈安装失败", e));
+    // 设置服务（通用设置面板）：IPC 注册 + 按持久化配置重放代理/防休眠。
+    // 重放先于 MCP 启动连接并 await（失败仅日志不阻塞启动），消除并发首连
+    // 走未恢复代理的启动竞态
+    const settingsService = new SettingsService();
+    await settingsService
+      .restorePersistedSettings()
+      .catch((e) => Log.error("设置启动恢复失败", e));
     // MCP 工具接入：manager 负责连接生命周期与工具注册；repo 负责 CRUD IPC 并联动
     // manager（create/update/delete/setEnabled/reconnect）。启动连接为 fire-and-forget，
     // 失败不影响应用启动（此处 wrapper 过滤 enabled 行，仅启动路径使用）
@@ -146,12 +153,6 @@ export default class Application {
     new UpdateLogService({
       logFilePath: path.join(path.join(__dirname, "docs"), "update-log.md"),
     });
-    // 设置服务（通用设置面板）：IPC 注册 + 按持久化配置重放代理/防休眠
-    // （fire-and-forget，失败仅日志不阻塞启动）
-    const settingsService = new SettingsService();
-    void settingsService
-      .restorePersistedSettings()
-      .catch((e) => Log.error("设置启动恢复失败", e));
     // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
     new AutomationRepository();
   }

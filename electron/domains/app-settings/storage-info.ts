@@ -11,8 +11,9 @@ export interface DirSizeFs {
 }
 
 /**
- * 目录递归大小（字节）：目录不存在/不可读返回 0；
- * 符号链接既不跟随也不计大小（防死循环，链接自身按 Dirent 非文件非目录跳过）
+ * 目录递归大小（字节）：目录不存在/不可读返回 0；遍历中单文件 stat 失败
+ * （删除竞态/无权限）按 0 跳过不连坐；符号链接既不跟随也不计大小
+ * （防死循环，链接自身按 Dirent 非文件非目录跳过）
  */
 export async function computeDirSize(
   fsLike: DirSizeFs,
@@ -31,10 +32,22 @@ async function walkDir(
 ): Promise<void> {
   for (const entry of await readEntries(fsLike, dir)) {
     if (entry.isFile()) {
-      total.bytes += (await fsLike.stat(path.join(dir, entry.name))).size;
+      total.bytes += await fileSizeOrZero(fsLike, path.join(dir, entry.name));
     } else if (entry.isDirectory()) {
       await walkDir(fsLike, path.join(dir, entry.name), total);
     }
+  }
+}
+
+/** 单文件大小：stat 失败（遍历竞态中被删/无权限）按 0 计，不连坐整个统计 */
+async function fileSizeOrZero(
+  fsLike: DirSizeFs,
+  file: string,
+): Promise<number> {
+  try {
+    return (await fsLike.stat(file)).size;
+  } catch {
+    return 0;
   }
 }
 

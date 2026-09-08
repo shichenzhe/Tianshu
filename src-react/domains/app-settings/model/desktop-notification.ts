@@ -4,9 +4,6 @@
 
 import { SettingsApi } from "../api/settings.api";
 
-/** 测试通知标题（ASCII 应用名，与 package.json name 一致） */
-const APP_ASCII_NAME = "Tianshu";
-
 /** 平台对应的系统通知授权设置页地址（不支持的系统返回 null 不跳转） */
 export function notificationSettingsUrl(): string | null {
   const userAgent = navigator.userAgent;
@@ -14,7 +11,7 @@ export function notificationSettingsUrl(): string | null {
     return "x-apple.systempreferences:com.apple.preference.notifications";
   }
   if (userAgent.includes("Windows")) {
-    return "ms-settings:notifications:";
+    return "ms-settings:notifications";
   }
   return null;
 }
@@ -36,7 +33,8 @@ export function desktopPermission(): NotificationPermission {
     : Notification.permission;
 }
 
-/** 发送一条测试桌面通知（Electron 渲染层 Notification 可用） */
-export function sendTestNotification(body: string): void {
-  new Notification(APP_ASCII_NAME, { body });
+/** 发送一条测试桌面通知（Electron 渲染层 Notification 可用；标题由调用方传
+ * t("common:appName")，避免硬编码应用名） */
+export function sendTestNotification(title: string, body: string): void {
+  new Notification(title, { body });
 }

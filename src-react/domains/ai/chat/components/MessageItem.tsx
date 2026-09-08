@@ -2,7 +2,8 @@
  * 单条消息渲染：过程块（thinking/tool_call）收进深度思考面板 + 答案正文
  * （text/usage）+ 错误横幅 + 重新生成按钮。user 消息右侧气泡 + hover 操作栏
  * （时间戳/编辑/复制），编辑态气泡原位替换为 EditBar；assistant 消息左侧
- * 全宽；流式态由 MessageList 以伪消息 + streaming 传入
+ * 全宽，操作行最右为悬浮时间戳（与 user 共用 HoverTimestamp）；流式态由
+ * MessageList 以伪消息 + streaming 传入
  */
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 import { ModelApi } from "../../api/model.api";
 import { parseBlocks } from "../model/blocks";
 import { groupBlocks } from "../lib/group-blocks";
@@ -101,9 +103,40 @@ function CopyButton({
 }
 
 /**
- * user 消息 hover 操作栏：时间戳仅在 hovered 时按当前时钟计算（每次进入
- * 重新渲染，跨天显示正确）；编辑按钮存在 onEdit 时渲染；hideActions
- * （流式生成中）隐藏编辑与复制、仅余时间戳
+ * 悬浮时间戳（user/assistant 操作栏共用）：文本每次渲染按当前时钟格式化
+ * （外层 hovered state 随移入/移出重渲染，跨天显示正确），显隐与 150ms 淡入
+ * 淡出交由外层 group + group-hover:opacity-100；show 控制挂载——user 悬浮
+ * 才挂载按需计算，assistant 非 streaming 常驻（保留移出淡出动画）
+ */
+function HoverTimestamp({
+  iso,
+  locale,
+  className,
+  show,
+}: {
+  iso: string;
+  locale: string;
+  className?: string;
+  show: boolean;
+}) {
+  if (!show) return null;
+  return (
+    <span
+      className={cn(
+        "text-xs text-muted-foreground select-none pointer-events-none",
+        "opacity-0 group-hover:opacity-100 transition-opacity duration-150",
+        className,
+      )}
+    >
+      {formatMessageTime(iso, locale)}
+    </span>
+  );
+}
+
+/**
+ * user 消息 hover 操作栏：时间戳（共用 HoverTimestamp）仅 hovered 时按当前
+ * 时钟计算（每次进入重新渲染，跨天显示正确）；编辑按钮存在 onEdit 时渲染；
+ * hideActions（流式生成中）隐藏编辑与复制、仅余时间戳
  */
 function UserActionBar({
   createdAt,
@@ -126,11 +159,7 @@ function UserActionBar({
 
   return (
     <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-      {hovered && (
-        <span className="text-xs text-muted-foreground select-none">
-          {formatMessageTime(createdAt, i18n.language)}
-        </span>
-      )}
+      <HoverTimestamp iso={createdAt} locale={i18n.language} show={hovered} />
       {!hideActions && onEdit && (
         <TooltipProvider>
           <Tooltip>
@@ -168,9 +197,10 @@ function MessageItemImpl({
   onEditCancel,
   hitOffset,
 }: MessageItemProps) {
-  const { t } = useTranslation(["chat", "common"]);
+  const { t, i18n } = useTranslation(["chat", "common"]);
   const [copied, setCopied] = useState(false);
-  // hover 态仅为重算时间戳触发重渲染（显隐交给 CSS group-hover）
+  // hover 态仅为重算时间戳触发重渲染（显隐交给 CSS group-hover；user/
+  // assistant 均接线移入移出，assistant 流式期同理仅重算）
   const [hovered, setHovered] = useState(false);
   const searchQuery = useSessionSearchStore((s) => s.query);
   const searchActiveIndex = useSessionSearchStore((s) => s.activeIndex);
@@ -261,7 +291,11 @@ function MessageItemImpl({
     copyText(grouped.texts.map((block) => block.text).join("\n"));
 
   return (
-    <div className="group min-w-0">
+    <div
+      className="group min-w-0"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       {message.error && (
         <div className="mb-2 rounded-md bg-destructive/10 px-3 py-2">
           <p className="text-xs font-medium text-destructive">
@@ -304,7 +338,8 @@ function MessageItemImpl({
           output={grouped.usage.output}
         />
       )}
-      {/* 操作行:默认常显(不随悬浮);复制/重新生成带冒泡提示,重生成右侧为当条输出模型 */}
+      {/* 操作行:默认常显(不随悬浮);复制/重新生成带冒泡提示,重生成右侧为当
+          条输出模型,最右为悬浮时间戳(与 user 同格式,streaming 不渲染) */}
       <div className="mt-1 flex items-center gap-1">
         <CopyButton
           label={t("common:copy")}
@@ -335,6 +370,12 @@ function MessageItemImpl({
             {modelName}
           </span>
         )}
+        <HoverTimestamp
+          iso={message.createdAt}
+          locale={i18n.language}
+          show={!streaming}
+          className="ml-2"
+        />
       </div>
     </div>
   );

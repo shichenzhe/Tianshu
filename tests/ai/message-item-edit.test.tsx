@@ -24,7 +24,11 @@ vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
   return {
     ...actual,
-    useTranslation: () => ({ t: (key: string) => key }),
+    // i18n.language 需随 mock 提供：HoverTimestamp 的 locale prop 渲染即求值
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n: { language: "zh-CN" },
+    }),
   };
 });
 

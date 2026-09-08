@@ -57,12 +57,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import AppLogo from "@/components/common/AppLogo";
 import WorkspaceApi, { type WorkspaceRecord } from "../../api/workspace.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
@@ -429,7 +423,6 @@ export default function AiSidebar() {
         {/* 功能入口区 */}
         <div className="flex flex-col gap-1 p-2">
           <SidebarNavButton
-            collapsed={collapsed}
             icon={<MessageSquare size={16} />}
             label={t("chat:sidebar.newTask")}
             onClick={() => handleCreateSession(currentWorkspaceId)}
@@ -437,7 +430,6 @@ export default function AiSidebar() {
           {navEntries.map((entry) => (
             <SidebarNavButton
               key={entry.label}
-              collapsed={collapsed}
               icon={entry.icon}
               label={entry.label}
               onClick={entry.onClick}
@@ -702,38 +694,21 @@ export default function AiSidebar() {
 }
 
 interface SidebarNavButtonProps {
-  collapsed: boolean;
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
 }
 
-/** 侧边栏入口行（展开=图标+文字，折叠=仅图标+Tooltip） */
-function SidebarNavButton({
-  collapsed,
-  icon,
-  label,
-  onClick,
-}: SidebarNavButtonProps) {
+/** 侧边栏入口行（图标+文字） */
+function SidebarNavButton({ icon, label, onClick }: SidebarNavButtonProps) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div
-            className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary"
-            onClick={onClick}
-          >
-            <span className="shrink-0">{icon}</span>
-            <span className="truncate">{label}</span>
-          </div>
-        </TooltipTrigger>
-        {collapsed && (
-          <TooltipContent side="right">
-            <p>{label}</p>
-          </TooltipContent>
-        )}
-      </Tooltip>
-    </TooltipProvider>
+    <div
+      className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary"
+      onClick={onClick}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
+    </div>
   );
 }
 

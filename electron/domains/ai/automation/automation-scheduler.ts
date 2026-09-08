@@ -1,13 +1,16 @@
 /**
  * 调度器(spec §4):30s tick + 决策树 + 重试扫描。
- * 互斥:内存 Map<taskId, AbortController>;退出 abort 全部在途。
- * 推送:执行/过期/异常后向全部窗口发 automation:tasks-changed。
+ * 互斥:进程级 inflight 注册表(automation-inflight,与 repo runNow 手动
+ * 触发共享,taskId → AbortController);退出 abort 全部在途。
+ * 推送:执行/过期/异常后向全部窗口发 AUTOMATION_CHANGED_EVENT。
  */
 import { BrowserWindow } from "electron";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { computeNextRun } from "./schedule";
 import { executeTask, type AutomationTaskRow } from "./automation-runner";
+import { inflight } from "./automation-inflight";
+import { AUTOMATION_CHANGED_EVENT } from "../../../../src-react/domains/ai/automation/api/automation.api";
 import type { ScheduleConfig } from "../../../../src-react/domains/ai/automation/api/schedule.schema";
 
 const TICK_MS = 30_000;
@@ -83,7 +86,6 @@ export function pickRetryTaskIds(
 
 export default class AutomationScheduler {
   private timer?: NodeJS.Timeout;
-  private aborts = new Map<number, AbortController>();
   private processStartTime = new Date();
 
   start(): void {
@@ -100,10 +102,10 @@ export default class AutomationScheduler {
       clearInterval(this.timer);
       this.timer = undefined;
     }
-    for (const abort of this.aborts.values()) {
+    for (const abort of inflight.values()) {
       abort.abort();
     }
-    this.aborts.clear();
+    inflight.clear();
   }
 
   private async recoverInterruptedRuns(): Promise<void> {
@@ -136,8 +138,9 @@ export default class AutomationScheduler {
       const retryPending = new Set(pickRetryTaskIds(latestRun, new Date(), 0));
       let changed = false;
       for (const task of tasks) {
-        // 在途执行不决策:防重试运行中被过期快照误 expire/重复触发
-        if (this.aborts.has(task.id)) {
+        // 在途执行不决策(含 runNow 手动触发):防重试运行中被过期快照误
+        // expire/重复触发
+        if (inflight.has(task.id)) {
           continue;
         }
         const decision = decideTick(task, new Date(), this.processStartTime);
@@ -260,28 +263,28 @@ export default class AutomationScheduler {
     }
   }
 
-  /** fire:不 await 完成,互斥已有则跳过 */
+  /** fire:不 await 完成,互斥已有则跳过(共享 inflight,含 runNow 手动触发) */
   private launch(
     task: AutomationTaskRow,
     triggerType: "schedule" | "catchUp" | "retry",
     attempt: number,
   ): void {
-    if (this.aborts.has(task.id)) {
+    if (inflight.has(task.id)) {
       return;
     }
     const abort = new AbortController();
-    this.aborts.set(task.id, abort);
+    inflight.set(task.id, abort);
     void executeTask(task, { triggerType, attempt, abort: abort.signal })
       .catch((e) => Log.error("自动化执行失败", task.id, e))
       .finally(() => {
-        this.aborts.delete(task.id);
+        inflight.delete(task.id);
         this.notifyChanged();
       });
   }
 
   private notifyChanged(): void {
     for (const win of BrowserWindow.getAllWindows()) {
-      win.webContents.send("automation:tasks-changed");
+      win.webContents.send(AUTOMATION_CHANGED_EVENT);
     }
   }
 }

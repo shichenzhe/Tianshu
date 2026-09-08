@@ -232,7 +232,7 @@
       "missedPolicy": "Missed runs",
       "missedSkip": "Skip",
       "missedCatchUp": "Catch up once",
-      "fullAccessWarn": "Allow full access: this task runs tools without approval. Only add tasks you trust.",
+      "fullAccessWarn": "This task runs with restricted permissions by default (write operations are denied); enable full access on the task detail page after saving.",
       "attachmentMissing": "Attachment missing or unreadable: {{name}}",
       "templateSource": "From template: {{name}}"
     },
@@ -250,7 +250,7 @@
       "keepEditing": "Keep editing",
       "notFound": "Task not found or deleted",
       "saved": "Saved",
-      "runTriggered": "Run triggered, check run history shortly",
+      "invalidForRun": "Validation failed — check name/prompt/model/workspace",
       "name": "Task name",
       "namePlaceholder": "Enter task name",
       "prompt": "Prompt",
@@ -258,7 +258,8 @@
       "permission": "Execution permission",
       "schedule": "Schedule",
       "scheduleEdit": "Edit",
-      "runNowFailed": "Failed to trigger"
+      "runNowFailed": "Failed to trigger",
+      "alreadyRunning": "This task is already running. Please try again later."
     },
     "schedule": {
       "tabPeriodic": "Periodic",

@@ -1,5 +1,5 @@
 // src-react/domains/ai/automation/components/TaskRow.tsx
-/** 单行任务:名称/归属/scheduleText/启停开关/状态;行主体点击进编辑 */
+/** 单行任务:名称/归属/scheduleText/启停开关/状态;行主体点击进详情页 */
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { Switch } from "@/components/ui/switch";

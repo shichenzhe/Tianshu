@@ -143,7 +143,8 @@ export function CreateTaskDialog({
               onOpenMcp={() => navigate("/module/ai/experts?tab=connectors")}
               placeholder={t("chat:automation.create.promptPlaceholder")}
             />
-            {/* 权限胶囊恒为完全访问(FullAccessModal 不可达),警示语义需可见入口 */}
+            {/* 弹框不暴露权限选择:落库恒为受限权限(default,写类运行时被拒),
+                完全访问须保存后进任务详情页开启 */}
             <p className="text-xs text-red-500">
               {t("chat:automation.create.fullAccessWarn")}
             </p>

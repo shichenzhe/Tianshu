@@ -105,6 +105,12 @@ export default function TaskDetailView() {
   async function handlePlay() {
     setRunning(true);
     try {
+      // 校验不过(如名称被清空)先中止并提示:handleSave 对此静默返回
+      // false,play 需给出可见反馈(API 失败路径已有专属 toast 不重复)
+      if (form.isDirty && !form.canSubmit) {
+        toast.error(t("chat:automation.detail.invalidForRun"));
+        return;
+      }
       // 有未保存修改先落库(失败即中止本次触发)
       if (form.isDirty && !(await handleSave())) {
         return;
@@ -114,14 +120,22 @@ export default function TaskDetailView() {
         queryKey: ["automation", "runs"],
       });
       toast.success(t("chat:automation.detail.playing"));
-    } catch {
-      toast.error(t("chat:automation.detail.runNowFailed"));
+    } catch (e) {
+      // runNow 互斥拒发(TASK_ALREADY_RUNNING)单独文案,其余保持通用触发失败
+      toast.error(
+        mapIpcError(e).includes("TASK_ALREADY_RUNNING")
+          ? t("chat:automation.detail.alreadyRunning")
+          : t("chat:automation.detail.runNowFailed"),
+      );
     } finally {
       setRunning(false);
     }
   }
 
   async function handleDelete() {
+    // 删除后 invalidateTasks 重拉会让 task 变 undefined,先封 notFound 口,
+    // 防 notFound effect 抢在导航前误报「任务不存在」
+    notFoundRef.current = true;
     setDeleting(true);
     try {
       await AutomationApi.remove([taskId]);
@@ -270,7 +284,7 @@ export default function TaskDetailView() {
               {task.scheduleText}
             </p>
             {form.validation !== "ok" && (
-              <p className="text-sm text-red-500">
+              <p className="text-sm text-destructive">
                 {t(
                   `chat:automation.schedule.err${form.validation[0].toUpperCase()}${form.validation.slice(1)}`,
                 )}

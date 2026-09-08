@@ -1,7 +1,8 @@
 /**
  * 自动化任务执行器(spec §4):建 session → 引用解析注入(spec §2,文件/技能
  * 内容前缀 + 技能聚焦 + 变量替换)→ 静默 runChatStream(权限按任务
- * accessMode 分流,无人值守)→ 落 message 与 run。不经渲染层(onChunk 不传)，产物在
+ * accessMode 分流,无人值守)→ 落 message 与 run(调度字段仅 schedule/
+ * catchUp/retry 触发推进,手动测试运行不消耗调度)。不经渲染层(onChunk 不传)，产物在
  * 聊天页可回看。
  */
 import { format } from "date-fns";
@@ -115,6 +116,7 @@ export async function executeTask(
         "workspace_missing",
         startedAt,
         sessionId,
+        opts.triggerType,
       );
     }
     const modelRow = await prisma.model.findUnique({
@@ -126,7 +128,14 @@ export async function executeTask(
         })
       : null;
     if (!modelRow || !providerRow) {
-      return await failRun(run.id, task, "model_missing", startedAt, sessionId);
+      return await failRun(
+        run.id,
+        task,
+        "model_missing",
+        startedAt,
+        sessionId,
+        opts.triggerType,
+      );
     }
     sessionId = await createSession(task);
     return await streamAndRecord(task, opts, {
@@ -145,7 +154,14 @@ export async function executeTask(
     });
   } catch (e) {
     Log.error("自动化任务执行异常", task.id, e);
-    return await failRun(run.id, task, classifyError(e), startedAt, sessionId);
+    return await failRun(
+      run.id,
+      task,
+      classifyError(e),
+      startedAt,
+      sessionId,
+      opts.triggerType,
+    );
   }
 }
 
@@ -192,6 +208,7 @@ async function streamAndRecord(
       resolution.error,
       ctx.startedAt,
       ctx.sessionId,
+      opts.triggerType,
     );
   }
   const userText = resolution.injected;
@@ -259,7 +276,12 @@ async function streamAndRecord(
       finishedAt: new Date(),
     },
   });
-  await advanceTask(task, new Date(), success ? "success" : "failed");
+  await advanceTask(
+    task,
+    new Date(),
+    success ? "success" : "failed",
+    opts.triggerType,
+  );
   return success ? "success" : "failed";
 }
 
@@ -269,7 +291,8 @@ async function failRun(
   task: AutomationTaskRow,
   errorCode: string,
   startedAt: number,
-  sessionId?: number,
+  sessionId: number | undefined,
+  triggerType: ExecuteTaskOptions["triggerType"],
 ): Promise<"failed"> {
   await prisma.automationRun.update({
     where: { id: runId },
@@ -288,13 +311,16 @@ async function failRun(
     });
   } else {
     // 非系统失败:once 不置 expired(留 status=active 待重试扫描,见 advanceTask 注释)
-    await advanceTask(task, new Date(), "failed");
+    await advanceTask(task, new Date(), "failed", triggerType);
   }
   return "failed";
 }
 
 /**
  * lastRunAt=now;nextRunAt=computeNextRun 推进。
+ * 手动测试运行(triggerType=manual)不消耗调度:直接返回,once 不因此
+ * expired、nextRunAt/lastRunAt 均不动——lastRunAt 若被推进,决策树
+ * lastRunAt>=nextRunAt 会把未到触发点的 once 任务提前回收。
  * once 的 expired 只在成功路径置位:非系统失败需先走 §7 重试扫描
  * (nextRunAt=null 但 status 保持 active,重试耗尽后由调度器决策树收尾,
  * 不得首次失败即 expired——否则被 tick 的 active 过滤出局,零重试)
@@ -303,7 +329,11 @@ async function advanceTask(
   task: AutomationTaskRow,
   now: Date,
   outcome: "success" | "failed",
+  triggerType: ExecuteTaskOptions["triggerType"],
 ): Promise<void> {
+  if (triggerType === "manual") {
+    return;
+  }
   const schedule = JSON.parse(task.scheduleJson) as ScheduleConfig;
   const next = computeNextRun(schedule, now, now);
   await prisma.automationTask.update({

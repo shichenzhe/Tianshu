@@ -232,7 +232,7 @@
       "missedPolicy": "错过处理",
       "missedSkip": "跳过",
       "missedCatchUp": "补执行一次",
-      "fullAccessWarn": "允许完全访问：该任务将跳过工具审批自动执行，请仅添加信任的任务。",
+      "fullAccessWarn": "该任务默认以受限权限运行（写入类操作将被拒绝）；可在保存后进入任务详情页开启完全访问",
       "attachmentMissing": "引用不存在或读取失败：{{name}}",
       "templateSource": "来自模版：{{name}}"
     },
@@ -250,7 +250,7 @@
       "keepEditing": "继续编辑",
       "notFound": "任务不存在或已删除",
       "saved": "已保存",
-      "runTriggered": "已触发执行,请稍候在运行历史查看",
+      "invalidForRun": "表单校验未通过，请检查名称/提示词/模型/工作空间",
       "name": "任务名称",
       "namePlaceholder": "输入任务名称",
       "prompt": "提示词",
@@ -258,7 +258,8 @@
       "permission": "执行权限",
       "schedule": "执行频率",
       "scheduleEdit": "修改",
-      "runNowFailed": "触发失败"
+      "runNowFailed": "触发失败",
+      "alreadyRunning": "该任务正在运行中，请稍候再试"
     },
     "schedule": {
       "tabPeriodic": "周期",

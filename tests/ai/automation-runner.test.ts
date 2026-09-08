@@ -270,6 +270,90 @@ describe("executeTask once 终态(成功才 expired,失败留待重试)", () => 
   });
 });
 
+describe("executeTask 手动触发不消耗调度(manual 不推进调度字段)", () => {
+  it("manual 成功 → run 照常收口 success,task 零推进(once 不 expired,nextRunAt/lastRunAt 不动)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "manual",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "success" }),
+      }),
+    );
+    expect(prisma.automationTask.update).not.toHaveBeenCalled();
+  });
+  it("manual 非系统失败 → 同样零推进(once 不因测试失败被决策树提前回收)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockRejectedValue(new Error("ECONNRESET"));
+    await executeTask(onceRow as never, {
+      triggerType: "manual",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "failed" }),
+      }),
+    );
+    expect(prisma.automationTask.update).not.toHaveBeenCalled();
+  });
+  it("对照:schedule 成功 → 推进调度字段(once 置 expired,见上「once 终态」用例)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "expired",
+          nextRunAt: null,
+        }),
+      }),
+    );
+  });
+});
+
+describe("executeTask 权限接线(agent 回调随任务 accessMode 分流)", () => {
+  it("full 任务 → fullAccess=true 且审批/工具放行;default 任务 → 全 false", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(runChatStream).mockClear();
+    await executeTask({ ...taskRow, accessMode: "full" } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const fullAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
+    expect(fullAgent.fullAccess()).toBe(true);
+    await expect(fullAgent.requestApproval("t", "s")).resolves.toBe(true);
+    await expect(fullAgent.isToolAllowed("write_file")).resolves.toBe(true);
+
+    vi.mocked(runChatStream).mockClear();
+    await executeTask({ ...taskRow, accessMode: "default" } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const defaultAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
+    expect(defaultAgent.fullAccess()).toBe(false);
+    await expect(defaultAgent.requestApproval("t", "s")).resolves.toBe(false);
+    await expect(defaultAgent.isToolAllowed("write_file")).resolves.toBe(false);
+  });
+});
+
 describe("executeTask 引用注入", () => {
   const wsTask = {
     ...taskRow,

@@ -13,13 +13,18 @@ vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
-  default: {},
+  // listRuns where 组合用例需要 automationRun/automationTask 查询桩
+  default: {
+    automationRun: { count: vi.fn(), findMany: vi.fn() },
+    automationTask: { findMany: vi.fn() },
+  },
 }));
 
-import {
+import AutomationRepository, {
   toTaskRecord,
   buildTaskData,
 } from "../../electron/domains/ai/automation/automation.repo";
+import prisma from "../../electron/commons/prisma-client";
 
 const row = {
   id: 1,
@@ -142,8 +147,39 @@ describe("accessMode 落库与派生", () => {
     expect(data.accessMode).toBe("full");
   });
 
-  it("toTaskRecord 归一非法值为 default", () => {
-    const rec = toTaskRecord({ ...row, accessMode: "full" }, null);
-    expect(rec.accessMode).toBe("full");
+  it("toTaskRecord 透传 full,归一非法值为 default", () => {
+    expect(toTaskRecord({ ...row, accessMode: "full" }, null).accessMode).toBe(
+      "full",
+    );
+    expect(
+      toTaskRecord({ ...row, accessMode: "bogus" as never }, null).accessMode,
+    ).toBe("default");
+  });
+});
+
+describe("listRuns where 组合", () => {
+  it("taskId/status 只传有值者;分页 skip/take 随页码", async () => {
+    vi.mocked(prisma.automationRun.count).mockResolvedValue(0);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
+    const repo = new AutomationRepository();
+    await repo.listRuns(1, 7, "failed");
+    expect(prisma.automationRun.count).toHaveBeenCalledWith({
+      where: { taskId: 7, status: "failed" },
+    });
+    expect(prisma.automationRun.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { taskId: 7, status: "failed" },
+        skip: 0,
+        take: 20,
+      }),
+    );
+    await repo.listRuns(3);
+    expect(prisma.automationRun.count).toHaveBeenLastCalledWith({
+      where: {},
+    });
+    expect(prisma.automationRun.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({ where: {}, skip: 40, take: 20 }),
+    );
   });
 });

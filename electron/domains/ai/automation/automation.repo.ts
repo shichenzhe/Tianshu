@@ -23,6 +23,7 @@ import { computeNextRun } from "./schedule";
 import { listAutomationTemplates } from "./automation-templates";
 import { recordAutomationEvent } from "./automation-stat";
 import { executeTask } from "./automation-runner";
+import { inflight } from "./automation-inflight";
 
 type TaskRow = NonNullable<
   Awaited<ReturnType<typeof prisma.automationTask.findFirst>>
@@ -171,15 +172,25 @@ export default class AutomationRepository {
         if (!task) {
           throw new Error(`automation task ${id} not found`);
         }
+        // 与调度器共用 inflight 互斥:调度执行中/连点播放直接拒发,防同一
+        // 任务并发双跑(重复会话/full 模式重复写盘);渲染端按码映射文案
+        if (inflight.has(id)) {
+          throw new Error("TASK_ALREADY_RUNNING");
+        }
+        const abort = new AbortController();
+        inflight.set(id, abort);
         // 不 await:单次执行可达分钟级,触发即返回。executeTask 内部吞
         // 异常落库,catch 仅兜 create run 之前的意外;收口推送 tasks-changed
         void executeTask(task, {
           triggerType: "manual",
           attempt: 1,
-          abort: new AbortController().signal,
+          abort: abort.signal,
         })
           .catch((e) => Log.error("自动化执行失败", task.id, e))
-          .finally(notifyTasksChanged);
+          .finally(() => {
+            inflight.delete(task.id);
+            notifyTasksChanged();
+          });
       },
     );
     ipcMain.handle("automation:templates", (): TemplateRecord[] =>

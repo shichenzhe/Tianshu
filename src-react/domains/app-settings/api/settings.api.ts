@@ -81,6 +81,11 @@ export class SettingsApi {
   static async beep(): Promise<void> {
     return invoke<void>("settings:beep");
   }
+
+  /** 打开白名单外部地址（当前仅系统通知授权设置页） */
+  static async openExternal(url: string): Promise<void> {
+    return invoke<void>("settings:openExternal", url);
+  }
 }
 
 export default SettingsApi;

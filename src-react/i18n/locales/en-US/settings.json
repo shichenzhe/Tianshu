@@ -68,6 +68,7 @@
   "error": {
     "saveFailed": "Save failed, please try again",
     "loadFailed": "Failed to load settings",
-    "openFailed": "Failed to open directory"
+    "openFailed": "Failed to open directory",
+    "openExternalFailed": "Failed to open system settings"
   }
 }

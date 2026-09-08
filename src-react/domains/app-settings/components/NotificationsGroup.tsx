@@ -89,6 +89,13 @@ export default function NotificationsGroup() {
     sendTestNotification(t("settings:notification.testBody"));
   };
 
+  /** 去授权：经主进程白名单桥跳系统设置，失败 toast */
+  const authorize = () => {
+    openNotificationSettings().catch(() =>
+      toast.error(t("settings:error.openExternalFailed")),
+    );
+  };
+
   const granted = permission === "granted";
   const currentSound =
     SOUND_OPTIONS.find((option) => option.value === sound) ?? SOUND_OPTIONS[0];
@@ -117,7 +124,7 @@ export default function NotificationsGroup() {
             variant="outline"
             size="sm"
             className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            onClick={granted ? sendTest : openNotificationSettings}
+            onClick={granted ? sendTest : authorize}
           >
             {t(
               granted

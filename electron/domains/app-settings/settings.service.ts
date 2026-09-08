@@ -4,7 +4,8 @@
  * OS 登录项为唯一事实源）、getKeepAwake/setKeepAwake（防休眠，powerSaveBlocker
  * 幂等起停 + 偏好持久化）、setProxy（代理，Electron session + 主进程 undici 双层，
  * 持久化供启动重放）、storageInfo（userData 递归占用 + statfs 磁盘）、
- * pickDirectory/openDirectory（目录选择与打开）、beep（提示音）。
+ * pickDirectory/openDirectory（目录选择与打开）、beep（提示音）、
+ * openExternal（白名单外部地址跳转，当前仅系统通知授权设置页）。
  * 注：本域目录名为 app-settings（settings 目录名被本地权限规则拒绝，功能不受影响）。
  */
 import {
@@ -35,6 +36,7 @@ import {
 } from "./proxy-config";
 import { applyProxyDispatcher } from "./proxy-dispatcher";
 import { computeDirSize, diskBytesFromStatfs } from "./storage-info";
+import { isOpenExternalAllowed } from "./external-url";
 
 export interface StorageInfo {
   /** 用户数据目录绝对路径 */
@@ -90,6 +92,9 @@ export default class SettingsService {
       (_, targetPath: string): Promise<void> => this.openDirectory(targetPath),
     );
     ipcMain.handle("settings:beep", () => shell.beep());
+    ipcMain.handle("settings:openExternal", (_, url: unknown): Promise<void> =>
+      this.openExternal(url),
+    );
   }
 
   /** option 表 delegate（类型收窄到结构子集，便于测试注入） */
@@ -221,5 +226,13 @@ export default class SettingsService {
     if (openError) {
       throw new Error(openError);
     }
+  }
+
+  /** 打开白名单外部地址（当前仅系统通知授权设置页；白名单外拒绝防任意跳转） */
+  async openExternal(url: unknown): Promise<void> {
+    if (!isOpenExternalAllowed(url)) {
+      throw new Error("OPEN_EXTERNAL_FORBIDDEN");
+    }
+    await shell.openExternal(url as string);
   }
 }

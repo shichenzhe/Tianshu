@@ -490,13 +490,10 @@ describe("SettingsDialog 存储组", () => {
 });
 
 describe("SettingsDialog 通知组", () => {
-  it("桌面通知未授权：展示去授权按钮，点击跳系统设置", async () => {
+  it("桌面通知未授权：展示去授权按钮，点击经 openExternal 桥跳系统设置", async () => {
     vi.stubGlobal("Notification", NotificationStub);
     notificationState.permission = "denied";
     const restoreUserAgent = stubUserAgent("Macintosh");
-    const openSpy = vi
-      .spyOn(window, "open")
-      .mockImplementation(() => null as unknown as Window);
     await renderDialog();
 
     expect(
@@ -509,8 +506,33 @@ describe("SettingsDialog 通知组", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "settings:notification.authorize" }),
     );
-    expect(openSpy).toHaveBeenCalledWith(
-      "x-apple.systempreferences:com.apple.preference.notifications",
+    // window.open 对自定义 scheme 报 ERR_UNKNOWN_URL_SCHEME，须经主进程白名单桥
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "settings:openExternal",
+        "x-apple.systempreferences:com.apple.preference.notifications",
+      ),
+    );
+    restoreUserAgent();
+  });
+
+  it("去授权跳转失败：toast 提示", async () => {
+    vi.stubGlobal("Notification", NotificationStub);
+    notificationState.permission = "denied";
+    const restoreUserAgent = stubUserAgent("Macintosh");
+    stubInvoke({
+      "settings:openExternal": () =>
+        Promise.reject(new Error("OPEN_EXTERNAL_FORBIDDEN")),
+    });
+    await renderDialog();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:notification.authorize" }),
+    );
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "settings:error.openExternalFailed",
+      ),
     );
     restoreUserAgent();
   });

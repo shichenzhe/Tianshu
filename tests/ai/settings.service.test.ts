@@ -19,7 +19,7 @@ vi.mock("electron", () => ({
     stop: vi.fn(),
     isStarted: vi.fn(() => false),
   },
-  shell: { beep: vi.fn(), openPath: vi.fn() },
+  shell: { beep: vi.fn(), openPath: vi.fn(), openExternal: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
   session: { defaultSession: { setProxy: vi.fn(async () => undefined) } },
 }));
@@ -121,6 +121,7 @@ import {
   computeDirSize,
   diskBytesFromStatfs,
 } from "../../electron/domains/app-settings/storage-info";
+import { isOpenExternalAllowed } from "../../electron/domains/app-settings/external-url";
 
 /** IPC 通道 → 注册的 handler（断言通道名与直调 handler 用） */
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -619,6 +620,66 @@ describe("目录选择/打开与提示音", () => {
     handlerOf("settings:beep")();
     expect(shell.beep).toHaveBeenCalledTimes(1);
   });
+
+  it("openExternal：白名单地址透传 shell.openExternal，白名单外拒绝不触副作用", async () => {
+    const svc = new SettingsService();
+    vi.mocked(shell.openExternal).mockResolvedValue();
+    await expect(
+      svc.openExternal(
+        "x-apple.systempreferences:com.apple.preference.notifications",
+      ),
+    ).resolves.toBeUndefined();
+    await expect(
+      svc.openExternal("ms-settings:notifications:"),
+    ).resolves.toBeUndefined();
+    expect(shell.openExternal).toHaveBeenCalledTimes(2);
+    expect(shell.openExternal).toHaveBeenCalledWith(
+      "x-apple.systempreferences:com.apple.preference.notifications",
+    );
+
+    await expect(svc.openExternal("https://evil.example.com")).rejects.toThrow(
+      "OPEN_EXTERNAL_FORBIDDEN",
+    );
+    await expect(svc.openExternal("")).rejects.toThrow(
+      "OPEN_EXTERNAL_FORBIDDEN",
+    );
+    await expect(svc.openExternal(undefined)).rejects.toThrow(
+      "OPEN_EXTERNAL_FORBIDDEN",
+    );
+    expect(shell.openExternal).toHaveBeenCalledTimes(2); // 拒绝路径不触副作用
+    // IPC 通道直调同语义
+    await expect(
+      handlerOf("settings:openExternal")(undefined, "file:///etc/passwd"),
+    ).rejects.toThrow("OPEN_EXTERNAL_FORBIDDEN");
+  });
+});
+
+describe("openExternal 白名单纯函数", () => {
+  it("仅放行两个系统通知设置 scheme 前缀", () => {
+    expect(
+      isOpenExternalAllowed(
+        "x-apple.systempreferences:com.apple.preference.notifications",
+      ),
+    ).toBe(true);
+    expect(isOpenExternalAllowed("ms-settings:notifications:")).toBe(true);
+    expect(isOpenExternalAllowed("ms-settings:notifications:sound")).toBe(true);
+  });
+
+  it("非字符串/空串/http(s)/文件协议/近似前缀一律拒绝", () => {
+    for (const url of [
+      "",
+      "http://example.com",
+      "https://example.com",
+      "file:///etc/passwd",
+      "x-apple.systempreferences:com.apple.preference.security",
+      "ms-settings:other-pane",
+      123,
+      null,
+      undefined,
+    ]) {
+      expect(isOpenExternalAllowed(url)).toBe(false);
+    }
+  });
 });
 
 describe("IPC 通道注册与 getAll/set", () => {
@@ -637,6 +698,7 @@ describe("IPC 通道注册与 getAll/set", () => {
         "settings:pickDirectory",
         "settings:openDirectory",
         "settings:beep",
+        "settings:openExternal",
       ].sort(),
     );
   });

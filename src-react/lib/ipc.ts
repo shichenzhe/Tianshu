@@ -115,6 +115,7 @@ export type IPCChannel =
   | "settings:pickDirectory"
   | "settings:openDirectory"
   | "settings:beep"
+  | "settings:openExternal"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"

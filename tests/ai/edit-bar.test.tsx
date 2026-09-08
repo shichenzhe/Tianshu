@@ -5,7 +5,9 @@
  * - 内容 trim 为空时「重发」按钮禁用
  * - Escape 取消；Enter（非 Shift、非 IME 组合）提交并携带当前文本（去首尾空白）；
  *   Shift+Enter 不触发提交（保留默认换行行为）
- * - 编辑对象直接切换（A→B 不经过取消）：key 重挂载使文本按新 initialText 重建
+ * - 编辑对象直接切换（A→B 不经过取消）：EditBar 移入另一条消息的
+ *   MessageItem（不同实例）触发重挂载，文本按新 initialText 重建（此处以
+ *   key 变化模拟重挂载）
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -114,8 +116,8 @@ describe("EditBar 按钮点击", () => {
   });
 });
 
-describe("EditBar 编辑对象切换（key 重挂载）", () => {
-  it("key 变化触发重挂载：文本按新 initialText 重建并重新聚焦文末", () => {
+describe("EditBar 编辑对象切换（重挂载）", () => {
+  it("重挂载后文本按新 initialText 重建并重新聚焦文末", () => {
     const noop = () => {};
     const { rerender } = render(
       <EditBar
@@ -128,8 +130,9 @@ describe("EditBar 编辑对象切换（key 重挂载）", () => {
     expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
       "消息A文本",
     );
-    // 模拟 ChatView：编辑 A 期间点 B 的编辑 → setEditing 换 messageId，
-    // key 变化令 EditBar 重挂载（state 重建，而非保留 A 的旧文本）
+    // 模拟切换编辑对象（A→B 不经过取消）：生产中 EditBar 随 MessageItem
+    // 实例更替重挂载（isEditing 移到另一条消息），此处以 key 变化等价模拟，
+    // 断言重挂载后 state 重建（而非保留 A 的旧文本）并重新聚焦文末
     rerender(
       <EditBar
         key={202}

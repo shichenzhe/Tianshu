@@ -1,8 +1,8 @@
 /**
  * 单条消息渲染：过程块（thinking/tool_call）收进深度思考面板 + 答案正文
  * （text/usage）+ 错误横幅 + 重新生成按钮。user 消息右侧气泡 + hover 操作栏
- * （时间戳/编辑/复制），assistant 消息左侧全宽；流式态由 MessageList 以
- * 伪消息 + streaming 传入
+ * （时间戳/编辑/复制），编辑态气泡原位替换为 EditBar；assistant 消息左侧
+ * 全宽；流式态由 MessageList 以伪消息 + streaming 传入
  */
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -32,6 +32,7 @@ import type { MessageRecord } from "../../api/session.api";
 import ThinkingPanel from "./ThinkingPanel";
 import MarkdownView from "./MarkdownView";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
+import EditBar from "./EditBar";
 
 interface MessageItemProps {
   message: MessageRecord;
@@ -43,6 +44,14 @@ interface MessageItemProps {
   onEdit?: (messageId: number) => void;
   /** 隐藏编辑/复制按钮(流式生成中,user 操作栏仅余时间戳) */
   hideActions?: boolean;
+  /** 原位编辑态：该 user 消息正被编辑（气泡原位替换为 EditBar） */
+  isEditing?: boolean;
+  /** 编辑回填原文（isEditing 时传给 EditBar 的 initialText） */
+  editInitialText?: string;
+  /** 原位编辑提交（重发）；未提供则不进入编辑态渲染 */
+  onEditSubmit?: (text: string) => void;
+  /** 原位编辑取消 */
+  onEditCancel?: () => void;
   /** 会话内搜索：该消息首个命中的全局序号（无命中/未搜索为 undefined） */
   hitOffset?: number;
 }
@@ -153,6 +162,10 @@ function MessageItemImpl({
   onRegenerate,
   onEdit,
   hideActions = false,
+  isEditing = false,
+  editInitialText,
+  onEditSubmit,
+  onEditCancel,
   hitOffset,
 }: MessageItemProps) {
   const { t } = useTranslation(["chat", "common"]);
@@ -190,6 +203,21 @@ function MessageItemImpl({
       .filter((block) => block.type === "text")
       .map((block) => (block.type === "text" ? block.text : ""))
       .join("\n");
+
+    // 原位编辑态：EditBar 替换气泡与 hover 操作栏（items-end 列内右对齐，
+    // 宽度由 EditBar 外层 75% 上限自适配）；hideActions（会话 sending）期间
+    // 恢复普通气泡防呆，流结束自动回到编辑态（editing state 由 ChatView 持有）
+    if (isEditing && !hideActions && onEditSubmit && onEditCancel) {
+      return (
+        <div className="flex flex-col items-end">
+          <EditBar
+            initialText={editInitialText ?? ""}
+            onCancel={onEditCancel}
+            onSubmit={onEditSubmit}
+          />
+        </div>
+      );
+    }
 
     return (
       <div

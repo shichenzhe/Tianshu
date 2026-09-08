@@ -28,7 +28,6 @@ import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
-import EditBar from "../components/EditBar";
 import { parseBlocks } from "../model/blocks";
 import type { PendingFile } from "../lib/pending-file";
 import type { AccessMode } from "../components/PermissionCapsule";
@@ -158,8 +157,9 @@ function ChatPane({
     session.id,
   );
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
-  // 消息编辑态：messageId 定位待编辑 user 消息，text 为其原文回填；
-  // 进入编辑由 user 消息 hover 操作栏的编辑按钮（MessageList onEdit）触发
+  // 消息编辑态：messageId 定位待编辑 user 消息，text 为其原文回填；经
+  // MessageList 透传到对应 MessageItem，气泡原位替换为 EditBar；进入编辑
+  // 由 user 消息 hover 操作栏的编辑按钮（MessageList onEdit）触发
   const [editing, setEditing] = useState<{
     messageId: number;
     text: string;
@@ -251,6 +251,8 @@ function ChatPane({
         : content;
     try {
       await send(injected, undefined, overrides);
+      // 防呆：成功发出新消息后退出编辑态，避免随后的编辑重发静默截断刚发的消息
+      setEditing(null);
     } catch (e) {
       toast.error(mapIpcError(e));
       // rethrow：保持调用链 Promise 拒绝语义（ChatInput 已乐观清空，此处静默防双弹由其 catch 处理）
@@ -328,41 +330,30 @@ function ChatPane({
           compactedUpToId={session.compactedUpToId ?? null}
           onRegenerate={handleRegenerate}
           onEdit={handleEdit}
+          editing={editing}
+          onEditSubmit={handleEditSubmit}
+          onEditCancel={handleEditCancel}
         />
         {sending && (
           <AgentProgress stepCount={stepCount} activeTool={activeTool} />
         )}
+        {/* 底部输入区常驻（编辑态在消息区原位，与发送态互不干扰） */}
         <div className="p-4">
-          {editing && !sending && (
-            /* key=messageId：编辑对象直接切换（A→B）时重挂载 EditBar，
-               使 textarea 按新 initialText 重建，不残留上一条文本；
-               sending 期间卸载防呆：流中提交必被 CONCURRENT_REQUEST 拒绝，
-               流结束若仍在编辑态（未取消/未提交）自然恢复 */
-            <EditBar
-              key={editing.messageId}
-              initialText={editing.text}
-              onCancel={handleEditCancel}
-              onSubmit={handleEditSubmit}
-            />
-          )}
-          {/* 编辑期间隐藏而非卸载 ChatInput：输入草稿与联想态保持不丢 */}
-          <div className={editing ? "hidden" : undefined}>
-            <ChatInput
-              hasModel={hasModel}
-              sending={sending}
-              sessionId={session.id}
-              accessMode={accessMode}
-              currentMode={session.mode}
-              currentAssistantId={session.assistantId}
-              currentModelId={session.currentModelId}
-              workspaceId={workspace?.id ?? null}
-              onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
-              onOpenMcp={() => onOpenSettings("mcp")}
-              onRunCommand={handleRunCommand}
-              onSend={handleSend}
-              onStop={stop}
-            />
-          </div>
+          <ChatInput
+            hasModel={hasModel}
+            sending={sending}
+            sessionId={session.id}
+            accessMode={accessMode}
+            currentMode={session.mode}
+            currentAssistantId={session.assistantId}
+            currentModelId={session.currentModelId}
+            workspaceId={workspace?.id ?? null}
+            onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
+            onOpenMcp={() => onOpenSettings("mcp")}
+            onRunCommand={handleRunCommand}
+            onSend={handleSend}
+            onStop={stop}
+          />
         </div>
       </div>
       {artifactsOpen && workspace && (

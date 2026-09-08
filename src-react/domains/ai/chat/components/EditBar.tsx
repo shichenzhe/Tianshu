@@ -1,5 +1,6 @@
 /**
- * 消息编辑条（EditBar）：编辑既有 user 消息并重发。
+ * 消息编辑条（EditBar）：编辑既有 user 消息并重发（在 MessageItem 内原位
+ * 替换 user 气泡，宽度与气泡同口径 75%）。
  * 卡片样式与 ChatInput 一致（无联想/镜像层，独立轻量组件）：
  * 顶部提示行说明重发后果；textarea 回填 initialText，挂载即 focus 且
  * 光标置文末；底部右侧 取消/重发（内容 trim 为空时禁用）。
@@ -28,8 +29,9 @@ export default function EditBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 挂载后聚焦并把光标置于文末（方便追加编辑）。空依赖仅挂载时执行：
-  // 编辑对象直接切换（A→B 不经过取消）由父组件 key=messageId 驱动重挂载，
-  // state 随新 initialText 重建，避免 textarea 残留上一条的文本
+  // 编辑对象直接切换（A→B 不经过取消）时 EditBar 移入另一条消息的
+  // MessageItem（外层 key=message.id 不同实例），自然重挂载，state 随新
+  // initialText 重建，避免 textarea 残留上一条的文本
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -66,7 +68,7 @@ export default function EditBar({
   return (
     <div
       data-testid="edit-bar"
-      className="relative flex min-w-0 flex-1 flex-col rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
+      className="relative flex w-full max-w-[75%] min-w-0 flex-col rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
     >
       <div className="flex items-center gap-1.5 pt-1">
         <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

@@ -30,6 +30,12 @@ interface MessageListProps {
   onRegenerate?: (messageId: number) => void;
   /** 编辑重发回调(user 消息 hover 操作栏);未提供则隐藏编辑按钮 */
   onEdit?: (messageId: number) => void;
+  /** 消息编辑态：messageId 定位被编辑的 user 消息（气泡原位替换为 EditBar），text 为回填原文 */
+  editing?: { messageId: number; text: string } | null;
+  /** 原位编辑提交（重发）回调，透传给被编辑消息的 EditBar */
+  onEditSubmit?: (text: string) => void;
+  /** 原位编辑取消回调，透传给被编辑消息的 EditBar */
+  onEditCancel?: () => void;
 }
 
 /** ApprovalBanner 接口必需的决议回调；可见性纯 store 态门控，本地无需记标记。
@@ -51,6 +57,9 @@ export default function MessageList({
   compactedUpToId = null,
   onRegenerate,
   onEdit,
+  editing,
+  onEditSubmit,
+  onEditCancel,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
   const isStreaming = useChatStore((state) =>
@@ -215,6 +224,10 @@ export default function MessageList({
                 onRegenerate={isStreaming ? undefined : onRegenerate}
                 onEdit={isStreaming ? undefined : onEdit}
                 hideActions={isStreaming}
+                isEditing={editing?.messageId === message.id}
+                editInitialText={editing?.text}
+                onEditSubmit={onEditSubmit}
+                onEditCancel={onEditCancel}
                 hitOffset={
                   hitCounts[index] > 0 ? messageOffsets[index] : undefined
                 }

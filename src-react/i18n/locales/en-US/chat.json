@@ -98,6 +98,7 @@
     "failed": "Generation failed",
     "regenerate": "Regenerate",
     "regenerateTip": "Regenerate this reply; messages after it will be replaced. Proceed with care",
+    "edit": "Edit",
     "editHint": "Resend will update this message and delete everything after it, then regenerate. Proceed with care",
     "resend": "Resend"
   },

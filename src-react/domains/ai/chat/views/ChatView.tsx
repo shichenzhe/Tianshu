@@ -20,12 +20,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProviderApi } from "../../api/provider.api";
 import { ModelApi } from "../../api/model.api";
-import SessionApi, { type SessionRecord } from "../../api/session.api";
+import SessionApi, {
+  type MessageRecord,
+  type SessionRecord,
+} from "../../api/session.api";
 import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 import EditBar from "../components/EditBar";
+import { parseBlocks } from "../model/blocks";
 import type { PendingFile } from "../lib/pending-file";
 import type { AccessMode } from "../components/PermissionCapsule";
 import AgentProgress from "../components/AgentProgress";
@@ -155,7 +159,7 @@ function ChatPane({
   );
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
   // 消息编辑态：messageId 定位待编辑 user 消息，text 为其原文回填；
-  // 进入编辑由 MessageList 的 onEdit 触发（后续任务接线）
+  // 进入编辑由 user 消息 hover 操作栏的编辑按钮（MessageList onEdit）触发
   const [editing, setEditing] = useState<{
     messageId: number;
     text: string;
@@ -269,6 +273,25 @@ function ChatPane({
       .catch((e: unknown) => toast.error(mapIpcError(e)));
   };
 
+  /**
+   * 进入编辑：从消息缓存取该 user 消息的 text 块拼接原文（与消息渲染
+   * 同口径）回填 EditBar；缓存缺失时回退空文本（仅禁用态重发按钮）
+   */
+  const handleEdit = (messageId: number) => {
+    const messages = queryClient.getQueryData<MessageRecord[]>([
+      "messages",
+      session.id,
+    ]);
+    const target = messages?.find((message) => message.id === messageId);
+    const text = target
+      ? parseBlocks(target.blocks)
+          .filter((block) => block.type === "text")
+          .map((block) => (block.type === "text" ? block.text : ""))
+          .join("\n")
+      : "";
+    setEditing({ messageId, text });
+  };
+
   const handleRegenerate = async (messageId?: number) => {
     try {
       await regenerate(messageId);
@@ -304,6 +327,7 @@ function ChatPane({
           workspaceId={workspace?.id ?? null}
           compactedUpToId={session.compactedUpToId ?? null}
           onRegenerate={handleRegenerate}
+          onEdit={handleEdit}
         />
         {sending && (
           <AgentProgress stepCount={stepCount} activeTool={activeTool} />

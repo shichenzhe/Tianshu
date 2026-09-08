@@ -28,6 +28,8 @@ interface MessageListProps {
   compactedUpToId?: number | null;
   /** 重新生成回调(任意 assistant 消息);未提供则隐藏按钮 */
   onRegenerate?: (messageId: number) => void;
+  /** 编辑重发回调(user 消息 hover 操作栏);未提供则隐藏编辑按钮 */
+  onEdit?: (messageId: number) => void;
 }
 
 /** ApprovalBanner 接口必需的决议回调；可见性纯 store 态门控，本地无需记标记。
@@ -48,6 +50,7 @@ export default function MessageList({
   workspaceId = null,
   compactedUpToId = null,
   onRegenerate,
+  onEdit,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
   const isStreaming = useChatStore((state) =>
@@ -210,6 +213,8 @@ export default function MessageList({
               <MessageItem
                 message={message}
                 onRegenerate={isStreaming ? undefined : onRegenerate}
+                onEdit={isStreaming ? undefined : onEdit}
+                hideActions={isStreaming}
                 hitOffset={
                   hitCounts[index] > 0 ? messageOffsets[index] : undefined
                 }

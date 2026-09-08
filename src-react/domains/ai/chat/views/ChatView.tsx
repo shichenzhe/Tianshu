@@ -333,9 +333,11 @@ function ChatPane({
           <AgentProgress stepCount={stepCount} activeTool={activeTool} />
         )}
         <div className="p-4">
-          {editing && (
+          {editing && !sending && (
             /* key=messageId：编辑对象直接切换（A→B）时重挂载 EditBar，
-               使 textarea 按新 initialText 重建，不残留上一条文本 */
+               使 textarea 按新 initialText 重建，不残留上一条文本；
+               sending 期间卸载防呆：流中提交必被 CONCURRENT_REQUEST 拒绝，
+               流结束若仍在编辑态（未取消/未提交）自然恢复 */
             <EditBar
               key={editing.messageId}
               initialText={editing.text}

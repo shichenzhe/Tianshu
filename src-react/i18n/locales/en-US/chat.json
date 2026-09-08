@@ -142,6 +142,7 @@
     "NETWORK": "Network error, please check the base URL and your network",
     "CONCURRENT_REQUEST": "This session already has a request in progress",
     "SESSION_NOT_FOUND": "Session not found",
+    "MESSAGE_NOT_FOUND": "Message not found, please refresh and try again",
     "NO_MODEL": "No model selected. Pick one in the input bar or set a workspace default model",
     "MODEL_OR_PROVIDER_MISSING": "Model or provider not found",
     "NOTHING_TO_REGENERATE": "Nothing to regenerate",

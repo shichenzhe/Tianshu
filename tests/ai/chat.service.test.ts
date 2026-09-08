@@ -471,25 +471,29 @@ const clearWriteCalls = () => {
   prismaStub.messageDeleteMany.mockClear();
 };
 
-describe("ChatService.editAndResend（编辑重发）", () => {
-  /** 组装 service：getEffectiveModelId 返回 null 使截断后在模型解析处失败（不触网、不依赖更多 prisma 通道） */
-  const makeService = (sessionOverrides: Record<string, unknown> = {}) => {
-    const sessions = {
-      getSession: vi.fn().mockResolvedValue({
-        id: 1,
-        assistantId: null,
-        compactedUpToId: null,
-        ...sessionOverrides,
-      }),
-      getEffectiveModelId: vi.fn().mockResolvedValue(null),
-      updateSummary: vi.fn().mockResolvedValue(undefined),
-    };
-    return {
-      sessions,
-      service: new ChatService(sessions as unknown as SessionRepository),
-    };
+/**
+ * 组装 sessions stub + ChatService（editAndResend / regenerate 共用）：
+ * getEffectiveModelId 返回 null 使截断后在模型解析处失败（不触网、不依赖
+ * 更多 prisma 通道）；sessionOverrides 覆盖 getSession 返回值（如压缩点）
+ */
+const makeService = (sessionOverrides: Record<string, unknown> = {}) => {
+  const sessions = {
+    getSession: vi.fn().mockResolvedValue({
+      id: 1,
+      assistantId: null,
+      compactedUpToId: null,
+      ...sessionOverrides,
+    }),
+    getEffectiveModelId: vi.fn().mockResolvedValue(null),
+    updateSummary: vi.fn().mockResolvedValue(undefined),
   };
+  return {
+    sessions,
+    service: new ChatService(sessions as unknown as SessionRepository),
+  };
+};
 
+describe("ChatService.editAndResend（编辑重发）", () => {
   const abortsOf = (service: ChatService) =>
     (service as unknown as { aborts: Map<number, AbortController> }).aborts;
 
@@ -569,16 +573,7 @@ describe("ChatService.regenerate（截断抽取后行为不变）", () => {
 
   it("删除目标 assistant 前最后一条 user 之后全部尾部并重跑流", async () => {
     prismaStub.messages = fourChatRows();
-    const sessions = {
-      getSession: vi.fn().mockResolvedValue({
-        id: 1,
-        assistantId: null,
-        compactedUpToId: null,
-      }),
-      getEffectiveModelId: vi.fn().mockResolvedValue(null),
-      updateSummary: vi.fn().mockResolvedValue(undefined),
-    };
-    const service = new ChatService(sessions as unknown as SessionRepository);
+    const { service } = makeService();
     // 目标 id=2（assistant），其前最后一条 user 为 id=1 → 删 [2,3,4]
     await expect(service.regenerate(1, 2)).rejects.toThrow("NO_MODEL");
     expect(prismaStub.messageDeleteMany).toHaveBeenCalledWith({
@@ -589,12 +584,7 @@ describe("ChatService.regenerate（截断抽取后行为不变）", () => {
 
   it("目标消息不存在或非 assistant → MESSAGE_NOT_FOUND", async () => {
     prismaStub.messages = fourChatRows();
-    const sessions = {
-      getSession: vi.fn().mockResolvedValue({ id: 1, assistantId: null }),
-      getEffectiveModelId: vi.fn().mockResolvedValue(null),
-      updateSummary: vi.fn().mockResolvedValue(undefined),
-    };
-    const service = new ChatService(sessions as unknown as SessionRepository);
+    const { service } = makeService();
     await expect(service.regenerate(1, 99)).rejects.toThrow(
       "MESSAGE_NOT_FOUND",
     );

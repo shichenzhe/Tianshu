@@ -142,6 +142,7 @@
     "NETWORK": "网络错误，请检查接口地址与网络",
     "CONCURRENT_REQUEST": "该会话已有进行中的请求",
     "SESSION_NOT_FOUND": "会话不存在",
+    "MESSAGE_NOT_FOUND": "未找到该消息，请刷新后重试",
     "NO_MODEL": "未选择模型，请先在输入框选择或设置工作空间默认模型",
     "MODEL_OR_PROVIDER_MISSING": "模型或服务商不存在",
     "NOTHING_TO_REGENERATE": "没有可重新生成的消息",

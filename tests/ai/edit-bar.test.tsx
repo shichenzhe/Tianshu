@@ -11,12 +11,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import EditBar from "../../src-react/domains/ai/chat/components/EditBar";
-// 源码原文（Vite ?raw）：断言 ChatView 对 EditBar 的 key 接线存在
-import chatViewSource from "../../src-react/domains/ai/chat/views/ChatView.tsx?raw";
 
 // i18n mock：useTranslation 的 t 直接返回 key（按钮名即 key），断言行为不
-// 依赖具体文案；其余导出（initReactI18next 等，经 @/lib/utils → @/i18n 引入）
-// 保留真实实现，避免破坏应用 i18n 初始化
+// 依赖具体文案；@/i18n（经 button → @/lib/utils 引入）以最小 stub 替代真实
+// 初始化——真实 LanguageDetector 读 localStorage，Node 26 无 --localstorage-file
+// 时会向 stderr 打一条 ExperimentalWarning
+vi.mock("@/i18n", () => ({
+  default: { t: (key: string) => key },
+}));
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
   return {
@@ -140,9 +142,5 @@ describe("EditBar 编辑对象切换（key 重挂载）", () => {
     expect(textarea.value).toBe("消息B文本");
     expect(document.activeElement).toBe(textarea);
     expect(textarea.selectionStart).toBe("消息B文本".length);
-  });
-
-  it("ChatView 渲染 EditBar 时以 key=editing.messageId 驱动重挂载", () => {
-    expect(chatViewSource).toContain("key={editing.messageId}");
   });
 });

@@ -51,6 +51,11 @@ type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
 >;
 
+/** 会话消息行（regenerate / editAndResend 定位与截断共用） */
+type ChatMessageRow = Awaited<
+  ReturnType<typeof prisma.message.findMany>
+>[number];
+
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 const COMPACT_DIRECTIVE =
   "请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。";
@@ -671,6 +676,12 @@ export default class ChatService {
       (event, sessionId: number, messageId?: number) =>
         this.regenerate(sessionId, messageId, event.sender),
     );
+    // 编辑重发：改写目标 user 消息并删除其后全部，重跑流
+    ipcMain.handle(
+      "chat:editAndResend",
+      (event, sessionId: number, messageId: number, content: string) =>
+        this.editAndResend(sessionId, messageId, content, event.sender),
+    );
     ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
     ipcMain.handle("chat:status", (_, sessionId: number) =>
       this.status(sessionId),
@@ -1007,23 +1018,94 @@ export default class ChatService {
       if (lastUserIdx === -1) {
         throw new Error("NOTHING_TO_REGENERATE");
       }
-      const tailIds = rows.slice(lastUserIdx + 1).map((row) => row.id);
-      if (tailIds.length > 0) {
-        await prisma.message.deleteMany({ where: { id: { in: tailIds } } });
-      }
-      // 压缩点消息被删(重生成目标在压缩轮或更早)→ 摘要随之失效:
-      // 不清会让 history 过滤掉压缩点之前的全部消息 → 空上下文
-      if (
-        session.compactedUpToId != null &&
-        tailIds.includes(session.compactedUpToId)
-      ) {
-        await this.sessions.updateSummary(sessionId, null, null);
-      }
-      await this.streamAndPersist(sessionId, abort, sender);
+      await this.truncateAfterAndStream(
+        sessionId,
+        rows,
+        lastUserIdx,
+        session.compactedUpToId,
+        abort,
+        sender,
+      );
     } catch (error) {
       this.aborts.delete(sessionId);
       throw error;
     }
+  }
+
+  /**
+   * 编辑重发:目标 user 消息就地改写为新内容(保留原时间戳)→ 删除其后全部
+   * (原回答等内容被覆盖)→ 重跑流
+   */
+  async editAndResend(
+    sessionId: number,
+    messageId: number,
+    content: string,
+    sender?: WebContents,
+  ): Promise<void> {
+    // 并发检查必须是首条语句；AbortController 在首个 await 前注册，消除 TOCTOU 窗口
+    if (this.aborts.has(sessionId)) {
+      throw new Error("CONCURRENT_REQUEST");
+    }
+    const abort = new AbortController();
+    this.aborts.set(sessionId, abort);
+    try {
+      const session = await this.sessions.getSession(sessionId);
+      if (!session) {
+        throw new Error("SESSION_NOT_FOUND");
+      }
+      const rows = await prisma.message.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: "asc" },
+      });
+      const targetIdx = rows.findIndex(
+        (row) => row.id === messageId && row.role === "user",
+      );
+      if (targetIdx === -1) {
+        throw new Error("MESSAGE_NOT_FOUND");
+      }
+      await prisma.message.update({
+        where: { id: messageId },
+        data: { blocks: serializeBlocks([{ type: "text", text: content }]) },
+      });
+      await this.truncateAfterAndStream(
+        sessionId,
+        rows,
+        targetIdx,
+        session.compactedUpToId,
+        abort,
+        sender,
+      );
+    } catch (error) {
+      // 早期失败同样清理注册(与 send 一致)；streamAndPersist 的 finally
+      // 已清理时此处为幂等空操作
+      this.aborts.delete(sessionId);
+      throw error;
+    }
+  }
+
+  /**
+   * 截断重跑(regenerate 与 editAndResend 共用):删除保留边界(含)之后全部
+   * 消息 → 压缩点失效清理 → 重启流(AbortController 由调用方在首个 await
+   * 前注册并传入)
+   */
+  private async truncateAfterAndStream(
+    sessionId: number,
+    rows: ChatMessageRow[],
+    keepUpToIndex: number,
+    compactedUpToId: number | null,
+    abort: AbortController,
+    sender?: WebContents,
+  ): Promise<void> {
+    const tailIds = rows.slice(keepUpToIndex + 1).map((row) => row.id);
+    if (tailIds.length > 0) {
+      await prisma.message.deleteMany({ where: { id: { in: tailIds } } });
+    }
+    // 压缩点消息被删(压缩点位于被删尾部)→ 摘要随之失效:
+    // 不清会让 history 过滤掉压缩点之前的全部消息 → 空上下文
+    if (compactedUpToId != null && tailIds.includes(compactedUpToId)) {
+      await this.sessions.updateSummary(sessionId, null, null);
+    }
+    await this.streamAndPersist(sessionId, abort, sender);
   }
 
   /**

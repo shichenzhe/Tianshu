@@ -1,10 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
   // Log 模块顶层读取 app.getPath("userData") 计算日志目录
   app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
 }));
+
+type MessageUpdateArgs = { where: { id: number }; data: { blocks: string } };
+type MessageDeleteManyArgs = { where: { id: { in: number[] } } };
 
 // runChatStream 为纯函数；屏蔽 prisma-client 模块初始化对 electron app 路径的依赖。
 // prismaStub 供自动标题守卫测试注入 message.findMany 结果（既有 runChatStream 测试不触 prisma 方法）
@@ -17,12 +20,22 @@ const prismaStub = {
     error: string | null;
   }>,
   sessionTitle: "新会话" as string,
+  /** message.update / deleteMany 写通道记录（editAndResend、regenerate 断言参数） */
+  messageUpdate: vi.fn<(_: MessageUpdateArgs) => Promise<null>>(
+    async () => null,
+  ),
+  messageDeleteMany: vi.fn<
+    (_: MessageDeleteManyArgs) => Promise<{ count: number }>
+  >(async () => ({ count: 0 })),
 };
 
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     message: {
       findMany: async () => prismaStub.messages,
+      update: (args: MessageUpdateArgs) => prismaStub.messageUpdate(args),
+      deleteMany: (args: MessageDeleteManyArgs) =>
+        prismaStub.messageDeleteMany(args),
     },
   },
 }));
@@ -37,6 +50,38 @@ const userHistory = [
   {
     role: "user" as const,
     blocks: JSON.stringify([{ type: "text", text: "hi" }]),
+  },
+];
+
+/** 两轮问答（id=3 的 user 为编辑目标，其后仅剩 id=4 的 assistant） */
+const fourChatRows = () => [
+  {
+    id: 1,
+    sessionId: 1,
+    role: "user",
+    blocks: JSON.stringify([{ type: "text", text: "你好" }]),
+    error: null,
+  },
+  {
+    id: 2,
+    sessionId: 1,
+    role: "assistant",
+    blocks: JSON.stringify([{ type: "text", text: "你好！有什么可以帮你" }]),
+    error: null,
+  },
+  {
+    id: 3,
+    sessionId: 1,
+    role: "user",
+    blocks: JSON.stringify([{ type: "text", text: "再问" }]),
+    error: null,
+  },
+  {
+    id: 4,
+    sessionId: 1,
+    role: "assistant",
+    blocks: JSON.stringify([{ type: "text", text: "回答" }]),
+    error: null,
   },
 ];
 
@@ -417,5 +462,144 @@ describe("AI 自动标题守卫（generateTitleIfFirstExchange）", () => {
     await runGuard(svc, titleModel);
     expect(renamed).toEqual([]);
     expect(titleModel).not.toHaveBeenCalled();
+  });
+});
+
+/** 截断写通道断言前重置共享 prisma stub 的调用记录 */
+const clearWriteCalls = () => {
+  prismaStub.messageUpdate.mockClear();
+  prismaStub.messageDeleteMany.mockClear();
+};
+
+describe("ChatService.editAndResend（编辑重发）", () => {
+  /** 组装 service：getEffectiveModelId 返回 null 使截断后在模型解析处失败（不触网、不依赖更多 prisma 通道） */
+  const makeService = (sessionOverrides: Record<string, unknown> = {}) => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: null,
+        compactedUpToId: null,
+        ...sessionOverrides,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(null),
+      updateSummary: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+      sessions,
+      service: new ChatService(sessions as unknown as SessionRepository),
+    };
+  };
+
+  const abortsOf = (service: ChatService) =>
+    (service as unknown as { aborts: Map<number, AbortController> }).aborts;
+
+  beforeEach(clearWriteCalls);
+
+  it("改写目标 user 消息内容并删除其后尾部，失败后清理并发注册", async () => {
+    prismaStub.messages = fourChatRows();
+    const { service } = makeService();
+    await expect(service.editAndResend(1, 3, "改后的内容")).rejects.toThrow(
+      "NO_MODEL",
+    );
+    // 仅改写 blocks：断言完整入参即证明 createdAt 等其余字段未被触碰
+    expect(prismaStub.messageUpdate).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: {
+        blocks: JSON.stringify([{ type: "text", text: "改后的内容" }]),
+      },
+    });
+    expect(prismaStub.messageDeleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [4] } },
+    });
+    expect(abortsOf(service).has(1)).toBe(false);
+  });
+
+  it("目标是 assistant（非 user）→ MESSAGE_NOT_FOUND，不触写通道", async () => {
+    prismaStub.messages = fourChatRows();
+    const { service } = makeService();
+    await expect(service.editAndResend(1, 2, "改")).rejects.toThrow(
+      "MESSAGE_NOT_FOUND",
+    );
+    expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
+    expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
+    expect(abortsOf(service).has(1)).toBe(false);
+  });
+
+  it("消息不存在 → MESSAGE_NOT_FOUND，不触写通道", async () => {
+    prismaStub.messages = fourChatRows();
+    const { service } = makeService();
+    await expect(service.editAndResend(1, 99, "改")).rejects.toThrow(
+      "MESSAGE_NOT_FOUND",
+    );
+    expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
+    expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
+    expect(abortsOf(service).has(1)).toBe(false);
+  });
+
+  it("并发（该会话已有进行中流）→ CONCURRENT_REQUEST，且不覆盖既有注册", async () => {
+    prismaStub.messages = fourChatRows();
+    const { service } = makeService();
+    const existing = new AbortController();
+    abortsOf(service).set(1, existing);
+    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow(
+      "CONCURRENT_REQUEST",
+    );
+    expect(abortsOf(service).get(1)).toBe(existing);
+    expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
+    expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
+  });
+
+  it("压缩点在被删尾部 → 摘要失效清空", async () => {
+    prismaStub.messages = fourChatRows();
+    const { sessions, service } = makeService({ compactedUpToId: 4 });
+    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow("NO_MODEL");
+    expect(sessions.updateSummary).toHaveBeenCalledWith(1, null, null);
+  });
+
+  it("压缩点在保留区 → 摘要保留", async () => {
+    prismaStub.messages = fourChatRows();
+    const { sessions, service } = makeService({ compactedUpToId: 2 });
+    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow("NO_MODEL");
+    expect(sessions.updateSummary).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChatService.regenerate（截断抽取后行为不变）", () => {
+  beforeEach(clearWriteCalls);
+
+  it("删除目标 assistant 前最后一条 user 之后全部尾部并重跑流", async () => {
+    prismaStub.messages = fourChatRows();
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: null,
+        compactedUpToId: null,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(null),
+      updateSummary: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new ChatService(sessions as unknown as SessionRepository);
+    // 目标 id=2（assistant），其前最后一条 user 为 id=1 → 删 [2,3,4]
+    await expect(service.regenerate(1, 2)).rejects.toThrow("NO_MODEL");
+    expect(prismaStub.messageDeleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [2, 3, 4] } },
+    });
+    expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
+  });
+
+  it("目标消息不存在或非 assistant → MESSAGE_NOT_FOUND", async () => {
+    prismaStub.messages = fourChatRows();
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({ id: 1, assistantId: null }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(null),
+      updateSummary: vi.fn().mockResolvedValue(undefined),
+    };
+    const service = new ChatService(sessions as unknown as SessionRepository);
+    await expect(service.regenerate(1, 99)).rejects.toThrow(
+      "MESSAGE_NOT_FOUND",
+    );
+    // id=3 是 user 而非 assistant，同样拒绝
+    await expect(service.regenerate(1, 3)).rejects.toThrow("MESSAGE_NOT_FOUND");
+    expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
   });
 });

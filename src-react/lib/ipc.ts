@@ -103,6 +103,18 @@ export type IPCChannel =
   | "automation:templates"
   | "automation:runs:page"
   | "automation:stat"
+  // 设置（通用设置面板）
+  | "settings:getAll"
+  | "settings:set"
+  | "settings:getAutoLaunch"
+  | "settings:setAutoLaunch"
+  | "settings:getKeepAwake"
+  | "settings:setKeepAwake"
+  | "settings:setProxy"
+  | "settings:storageInfo"
+  | "settings:pickDirectory"
+  | "settings:openDirectory"
+  | "settings:beep"
   // 应用信息
   | "app:getInfo"
   | "app:getVersion"

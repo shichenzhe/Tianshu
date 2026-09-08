@@ -15,6 +15,7 @@ import {
 } from "./domains/ai/agent/mcp-manager";
 import { McpRepository } from "./domains/ai/mcp/mcp.repo";
 import { SkillRepository } from "./domains/ai/skill/skill.repo";
+import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import SqlFileExecutor from "./commons/sql-file-executor";
@@ -145,6 +146,12 @@ export default class Application {
     new UpdateLogService({
       logFilePath: path.join(path.join(__dirname, "docs"), "update-log.md"),
     });
+    // 设置服务（通用设置面板）：IPC 注册 + 按持久化配置重放代理/防休眠
+    // （fire-and-forget，失败仅日志不阻塞启动）
+    const settingsService = new SettingsService();
+    void settingsService
+      .restorePersistedSettings()
+      .catch((e) => Log.error("设置启动恢复失败", e));
     // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
     new AutomationRepository();
   }

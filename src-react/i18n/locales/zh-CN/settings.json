@@ -21,5 +21,53 @@
     "fontSmall": "小",
     "fontDefault": "默认",
     "fontLarge": "大"
+  },
+  "permission": {
+    "keepAwake": "锁屏运行",
+    "keepAwakeDesc": "锁屏后设备保持唤醒状态，保障远程控制与后台 Agent 任务持续执行",
+    "autoLaunch": "开机自启",
+    "autoLaunchDesc": "开启后 Tianshu 会在你登录电脑后自动启动",
+    "autoInstallTrustedSkills": "自动安装可信技能",
+    "autoInstallTrustedSkillsDesc": "安全检测通过后自动安装，高风险项始终要求手动确认",
+    "autoUpdateSkills": "技能自动更新",
+    "autoUpdateSkillsDesc": "开启后将自动更新已安装的技能为最新版本，不会更新你在 Tianshu 中编辑过的技能",
+    "proxy": "网络代理",
+    "proxyDirect": "直连",
+    "proxySystem": "跟随系统",
+    "proxyCustom": "自定义代理",
+    "proxyHost": "服务器地址",
+    "proxyPort": "端口"
+  },
+  "storage": {
+    "cacheDirectory": "缓存目录",
+    "cacheDirectoryDesc": "存放对话记录、运行缓存与临时文件",
+    "openDirectory": "打开目录",
+    "diskCaption": "已用 {{used}} / 共 {{total}}",
+    "cacheLegend": "应用缓存",
+    "otherLegend": "其他占用",
+    "freeLegend": "可用空间",
+    "workspacePath": "默认工作空间路径",
+    "workspacePathDesc": "新建任务、工作空间时将自动存放在该路径下；修改后不影响已有数据",
+    "workspaceNotSet": "未设置",
+    "change": "更改"
+  },
+  "notification": {
+    "desktop": "桌面通知",
+    "desktopDesc": "任务完成或有新消息时，通过系统弹窗提醒你",
+    "granted": "已授权",
+    "notGranted": "未授权",
+    "authorize": "去授权",
+    "testNotification": "测试通知",
+    "testBody": "桌面通知已开启，任务完成或有新消息时会在这里提醒你",
+    "client": "客户端通知",
+    "clientDesc": "运营消息优先在应用内显示，应用切换到后台以后自动转桌面通知",
+    "sound": "提示音",
+    "soundNone": "无音效",
+    "soundDefault": "默认提示音"
+  },
+  "error": {
+    "saveFailed": "保存失败，请重试",
+    "loadFailed": "读取设置失败",
+    "openFailed": "打开目录失败"
   }
 }

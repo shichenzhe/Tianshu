@@ -1,7 +1,7 @@
 /**
  * 设置面板对话框
  * 左栏固定宽导航（通用为当前页；个人主页/外观/快捷键占位禁用），
- * 右栏滚动区按分组渲染：常规组已交付，权限/存储/通知分组容器由后续任务填充
+ * 右栏滚动区按分组渲染：常规/权限/存储/通知四组
  */
 
 import { useTranslation } from "react-i18next";
@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/dialog";
 import SettingsGroup from "./SettingsGroup";
 import GeneralGroup from "./GeneralGroup";
+import PermissionsGroup from "./PermissionsGroup";
+import StorageGroup from "./StorageGroup";
+import NotificationsGroup from "./NotificationsGroup";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -81,9 +84,15 @@ export default function SettingsDialog({
             <SettingsGroup title={t("settings:groups.general")}>
               <GeneralGroup />
             </SettingsGroup>
-            <SettingsGroup title={t("settings:groups.permission")} />
-            <SettingsGroup title={t("settings:groups.storage")} />
-            <SettingsGroup title={t("settings:groups.notification")} />
+            <SettingsGroup title={t("settings:groups.permission")}>
+              <PermissionsGroup />
+            </SettingsGroup>
+            <SettingsGroup title={t("settings:groups.storage")}>
+              <StorageGroup />
+            </SettingsGroup>
+            <SettingsGroup title={t("settings:groups.notification")}>
+              <NotificationsGroup />
+            </SettingsGroup>
           </div>
         </div>
       </DialogContent>

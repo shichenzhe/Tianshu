@@ -21,5 +21,53 @@
     "fontSmall": "Small",
     "fontDefault": "Default",
     "fontLarge": "Large"
+  },
+  "permission": {
+    "keepAwake": "Run When Locked",
+    "keepAwakeDesc": "Keep the device awake while the screen is locked, so remote control and background agent tasks keep running",
+    "autoLaunch": "Launch at Login",
+    "autoLaunchDesc": "Tianshu will start automatically after you log in to your computer",
+    "autoInstallTrustedSkills": "Auto-install Trusted Skills",
+    "autoInstallTrustedSkillsDesc": "Install automatically once security checks pass; high-risk items always require manual confirmation",
+    "autoUpdateSkills": "Auto-update Skills",
+    "autoUpdateSkillsDesc": "Automatically update installed skills to the latest version; skills you have edited in Tianshu are never updated",
+    "proxy": "Network Proxy",
+    "proxyDirect": "Direct",
+    "proxySystem": "Follow System",
+    "proxyCustom": "Custom Proxy",
+    "proxyHost": "Server Address",
+    "proxyPort": "Port"
+  },
+  "storage": {
+    "cacheDirectory": "Cache Directory",
+    "cacheDirectoryDesc": "Stores chat history, runtime cache, and temporary files",
+    "openDirectory": "Open Directory",
+    "diskCaption": "{{used}} used of {{total}}",
+    "cacheLegend": "App Cache",
+    "otherLegend": "Other Usage",
+    "freeLegend": "Free Space",
+    "workspacePath": "Default Workspace Path",
+    "workspacePathDesc": "New tasks and workspaces are stored under this path; existing data is not affected",
+    "workspaceNotSet": "Not set",
+    "change": "Change"
+  },
+  "notification": {
+    "desktop": "Desktop Notifications",
+    "desktopDesc": "Get system alerts when tasks finish or new messages arrive",
+    "granted": "Granted",
+    "notGranted": "Not granted",
+    "authorize": "Authorize",
+    "testNotification": "Test Notification",
+    "testBody": "Desktop notifications are on. You will be alerted here when tasks finish or new messages arrive.",
+    "client": "In-app Notifications",
+    "clientDesc": "Operational messages are shown in-app first, and switch to desktop notifications once the app goes to the background",
+    "sound": "Alert Sound",
+    "soundNone": "No Sound",
+    "soundDefault": "Default Sound"
+  },
+  "error": {
+    "saveFailed": "Save failed, please try again",
+    "loadFailed": "Failed to load settings",
+    "openFailed": "Failed to open directory"
   }
 }

@@ -17,6 +17,7 @@ import {
   FileText,
   FolderInput,
   ListChecks,
+  MessageSquare,
   MoreVertical,
   Pencil,
   Pin,
@@ -427,14 +428,12 @@ export default function AiSidebar() {
 
         {/* 功能入口区 */}
         <div className="flex flex-col gap-1 p-2">
-          <Button
-            size="sm"
-            className="w-full justify-start hover:bg-primary hover:text-primary-foreground"
+          <SidebarNavButton
+            collapsed={collapsed}
+            icon={<MessageSquare size={16} />}
+            label={t("chat:sidebar.newTask")}
             onClick={() => handleCreateSession(currentWorkspaceId)}
-          >
-            <Plus className="h-4 w-4" />
-            {t("chat:sidebar.newTask")}
-          </Button>
+          />
           {navEntries.map((entry) => (
             <SidebarNavButton
               key={entry.label}

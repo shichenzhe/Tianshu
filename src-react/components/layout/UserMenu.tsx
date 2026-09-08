@@ -23,6 +23,7 @@ import { useUserStore } from "@/domains/user/store/user.store";
 import UserInfoDialog from "@/domains/user/components/UserInfoDialog";
 import PasswordDialog from "@/domains/user/components/PasswordDialog";
 import UpdateLogDialog from "@/components/common/UpdateLogDialog";
+import SettingsDialog from "@/domains/app-settings/components/SettingsDialog";
 
 import {
   DropdownMenu,
@@ -53,6 +54,7 @@ export default function UserMenu() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false);
   const [updateLogDialogOpen, setUpdateLogDialogOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [checkUpdateDialogOpen, setCheckUpdateDialogOpen] = useState(false);
   const [updateAvailableDialogOpen, setUpdateAvailableDialogOpen] =
@@ -185,8 +187,10 @@ export default function UserMenu() {
             {t("layout:userMenu.changePassword")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {/* 设置入口（功能待接：点击仅收起菜单，无动作） */}
-          <DropdownMenuItem onClick={() => {}} className="cursor-pointer">
+          <DropdownMenuItem
+            onClick={() => setSettingsDialogOpen(true)}
+            className="cursor-pointer"
+          >
             <Settings size={14} className="mr-2" />
             {t("layout:userMenu.settings")}
           </DropdownMenuItem>
@@ -240,6 +244,10 @@ export default function UserMenu() {
       <UpdateLogDialog
         open={updateLogDialogOpen}
         onOpenChange={setUpdateLogDialogOpen}
+      />
+      <SettingsDialog
+        open={settingsDialogOpen}
+        onOpenChange={setSettingsDialogOpen}
       />
 
       {/* 退出登录确认 */}

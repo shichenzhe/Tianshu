@@ -1,0 +1,25 @@
+{
+  "title": "Settings",
+  "nav": {
+    "general": "General",
+    "profile": "Profile",
+    "appearance": "Appearance",
+    "shortcuts": "Shortcuts",
+    "comingSoon": "Coming Soon"
+  },
+  "groups": {
+    "general": "General",
+    "permission": "Permissions",
+    "storage": "Storage",
+    "notification": "Notifications"
+  },
+  "general": {
+    "language": "Language",
+    "zhCN": "简体中文",
+    "enUS": "English",
+    "fontSize": "Font Size",
+    "fontSmall": "Small",
+    "fontDefault": "Default",
+    "fontLarge": "Large"
+  }
+}

@@ -10,6 +10,7 @@ import { Toaster } from "sonner";
 
 import router from "./routes";
 import { initTheme } from "./stores/theme.store";
+import { initFontScale } from "@/domains/app-settings/model/font-scale";
 import "./i18n";
 import { initLocale } from "./i18n";
 import "./styles/globals.css";
@@ -19,6 +20,9 @@ initTheme();
 
 // 初始化语言设置
 initLocale();
+
+// 恢复字体缩放档位（必须在渲染前执行，避免首帧字号跳变）
+initFontScale();
 
 // 创建 React Query 客户端
 const queryClient = new QueryClient({

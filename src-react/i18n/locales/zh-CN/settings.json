@@ -1,0 +1,25 @@
+{
+  "title": "设置",
+  "nav": {
+    "general": "通用",
+    "profile": "个人主页",
+    "appearance": "外观",
+    "shortcuts": "快捷键",
+    "comingSoon": "敬请期待"
+  },
+  "groups": {
+    "general": "常规",
+    "permission": "权限",
+    "storage": "存储",
+    "notification": "通知"
+  },
+  "general": {
+    "language": "界面语言",
+    "zhCN": "简体中文",
+    "enUS": "English",
+    "fontSize": "字体大小",
+    "fontSmall": "小",
+    "fontDefault": "默认",
+    "fontLarge": "大"
+  }
+}

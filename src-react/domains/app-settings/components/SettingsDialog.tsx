@@ -1,9 +1,10 @@
 /**
  * 设置面板对话框
- * 左栏固定宽导航（通用为当前页；个人主页/外观/快捷键占位禁用），
- * 右栏滚动区按分组渲染：常规/权限/存储/通知四组
+ * 左栏固定宽导航（通用/快捷键为可用页；个人主页/外观占位禁用），
+ * 右栏按导航切换：通用页四分组（常规/权限/存储/通知）或快捷键页整页
  */
 
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Keyboard,
@@ -25,18 +26,26 @@ import GeneralGroup from "./GeneralGroup";
 import PermissionsGroup from "./PermissionsGroup";
 import StorageGroup from "./StorageGroup";
 import NotificationsGroup from "./NotificationsGroup";
+import ShortcutsGroup from "./ShortcutsGroup";
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+/** 右栏可用页 id（其余导航项为占位禁用） */
+type SettingsTabId = "general" | "shortcuts";
+
 /** 导航项（disabled = 占位，敬请期待） */
-const NAV_ITEMS: { id: string; icon: LucideIcon; disabled: boolean }[] = [
+const NAV_ITEMS: {
+  id: string;
+  icon: LucideIcon;
+  disabled: boolean;
+}[] = [
   { id: "general", icon: Settings, disabled: false },
   { id: "profile", icon: UserRound, disabled: true },
   { id: "appearance", icon: Palette, disabled: true },
-  { id: "shortcuts", icon: Keyboard, disabled: true },
+  { id: "shortcuts", icon: Keyboard, disabled: false },
 ];
 
 export default function SettingsDialog({
@@ -44,6 +53,14 @@ export default function SettingsDialog({
   onOpenChange,
 }: SettingsDialogProps) {
   const { t } = useTranslation(["settings"]);
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
+
+  // 关闭面板回退通用页（下次打开不残留快捷键页的搜索/监听状态）
+  useEffect(() => {
+    if (!open) {
+      setActiveTab("general");
+    }
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,9 +77,10 @@ export default function SettingsDialog({
                 type="button"
                 disabled={disabled}
                 title={disabled ? t("settings:nav.comingSoon") : undefined}
+                onClick={() => setActiveTab(id as SettingsTabId)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors",
-                  id === "general"
+                  id === activeTab
                     ? "bg-primary-subtle text-primary font-medium"
                     : "cursor-pointer hover:bg-primary-subtle hover:text-primary",
                   disabled &&
@@ -79,21 +97,27 @@ export default function SettingsDialog({
               </button>
             ))}
           </nav>
-          {/* 右栏滚动分组区 */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-8">
-            <SettingsGroup title={t("settings:groups.general")}>
-              <GeneralGroup />
-            </SettingsGroup>
-            <SettingsGroup title={t("settings:groups.permission")}>
-              <PermissionsGroup />
-            </SettingsGroup>
-            <SettingsGroup title={t("settings:groups.storage")}>
-              <StorageGroup />
-            </SettingsGroup>
-            <SettingsGroup title={t("settings:groups.notification")}>
-              <NotificationsGroup />
-            </SettingsGroup>
-          </div>
+          {/* 右栏：按导航切换通用页/快捷键页 */}
+          {activeTab === "shortcuts" ? (
+            <div className="flex-1 overflow-y-auto p-6">
+              <ShortcutsGroup />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+              <SettingsGroup title={t("settings:groups.general")}>
+                <GeneralGroup />
+              </SettingsGroup>
+              <SettingsGroup title={t("settings:groups.permission")}>
+                <PermissionsGroup />
+              </SettingsGroup>
+              <SettingsGroup title={t("settings:groups.storage")}>
+                <StorageGroup />
+              </SettingsGroup>
+              <SettingsGroup title={t("settings:groups.notification")}>
+                <NotificationsGroup />
+              </SettingsGroup>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

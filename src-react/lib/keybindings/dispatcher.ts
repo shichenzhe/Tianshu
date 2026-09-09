@@ -117,9 +117,10 @@ function isBarePlatformF11(binding: KeyBinding, platform: Platform): boolean {
  * 但接收结构化输入而非 DOM KeyboardEvent（React 合成事件可直接传入）；
  * 修饰键提取的少量重复是为了不改 Task 14 冻结文件。
  * "+" 符号在常见布局需按住 shift 产生（mac ⌘⇧=）：剥离 shift 使其与
- * cmd+=（zoomIn 默认绑定）等价，preventDefault 才能拦住 Chromium 页面缩放
+ * cmd+=（zoomIn 默认绑定）等价，preventDefault 才能拦住 Chromium 页面缩放。
+ * 设置页监听捕获（Task 16）复用本函数，保证录到的绑定与分发生效口径一致
  */
-function bindingOfEvent(
+export function bindingOfEvent(
   event: DispatchKeyEvent,
   platform: Platform,
 ): KeyBinding | null {

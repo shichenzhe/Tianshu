@@ -97,19 +97,22 @@ function stubInvoke(handlers: Record<string, () => unknown> = {}) {
   });
 }
 
-/** 渲染打开态设置面板，并冲刷挂载期异步载入（避免 act 外更新） */
+/** 渲染打开态设置面板，并冲刷挂载期异步载入（避免 act 外更新）；返回关闭回调桩 */
 async function renderDialog() {
-  render(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const onOpenChange = vi.fn();
+  render(<SettingsDialog open onOpenChange={onOpenChange} />);
   await act(async () => {});
+  return onOpenChange;
 }
 
-/** 打开设置面板并切换左导航到快捷键页 */
+/** 打开设置面板并切换左导航到快捷键页（返回关闭回调桩） */
 async function renderShortcutsPage() {
-  await renderDialog();
+  const onOpenChange = await renderDialog();
   fireEvent.click(
     screen.getByRole("button", { name: "settings:nav.shortcuts" }),
   );
   await act(async () => {});
+  return onOpenChange;
 }
 
 /** 取指定命令的表格行（命令名单元格文本即 i18n key） */
@@ -221,7 +224,7 @@ describe("快捷键页骨架与展示", () => {
   });
 
   it("搜索词非空时 Esc 清空且不关闭面板", async () => {
-    await renderShortcutsPage();
+    const onOpenChange = await renderShortcutsPage();
     const input = screen.getByPlaceholderText(
       "settings:shortcut.searchPlaceholder",
     ) as HTMLInputElement;
@@ -230,6 +233,8 @@ describe("快捷键页骨架与展示", () => {
     fireEvent.keyDown(input, { key: "Escape" });
     expect(input.value).toBe("");
     expect(screen.getByRole("dialog")).toBeTruthy(); // 面板未被 Esc 关闭
+    // open 受控恒为 true 时 getByRole 恒真，以未触发关闭回调为准
+    expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getAllByRole("row")).toHaveLength(18);
   });
 });
@@ -248,12 +253,14 @@ describe("监听编辑", () => {
   });
 
   it("Esc 退出监听不保存，面板保持打开", async () => {
-    await renderShortcutsPage();
+    const onOpenChange = await renderShortcutsPage();
     fireEvent.click(bindingButton("openSettings"));
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByText("settings:shortcut.listening")).toBeNull();
     expect(localStorage.getItem("tianshu-keybindings")).toBeNull();
     expect(screen.getByRole("dialog")).toBeTruthy();
+    // open 受控恒为 true 时 getByRole 恒真，以未触发关闭回调为准
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 
   it("纯修饰键忽略继续监听；无效组合 toast 且保持监听", async () => {

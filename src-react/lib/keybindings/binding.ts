@@ -1,7 +1,7 @@
 /**
  * 按键绑定解析/归一/序列化/平台符号渲染
  * 核心为纯函数（抽象输入：修饰键数组 + 原始 key 字符串），便于脱离 DOM 单测；
- * KeyboardEvent 薄适配与平台探测仅供渲染层（Task 15/16）使用，不依赖 React/electron
+ * 平台探测仅供渲染层（Task 15/16）使用，不依赖 React/electron
  */
 import type { KeyBinding, Modifier, Platform } from "./types";
 
@@ -46,7 +46,8 @@ export function parseKeyBinding(
   rawKey: string,
 ): KeyBinding | null {
   const key = normalizeKey(rawKey);
-  if (!key || MODIFIER_KEY_NAMES.has(rawKey)) return null;
+  // 后置修饰键检查：小写修饰键名（cmd/ctrl/alt/shift）非真实主键，拒绝
+  if (!key || MODIFIER_KEY_NAMES.has(rawKey) || isModifier(key)) return null;
   return { modifiers: orderedModifiers(modifiers), key };
 }
 
@@ -85,14 +86,6 @@ export function formatBinding(
   ];
 }
 
-/** KeyboardEvent 薄适配：按平台抽修饰键后交给纯解析 */
-export function bindingFromKeyEvent(
-  event: KeyboardEvent,
-  platform: Platform,
-): KeyBinding | null {
-  return parseKeyBinding(extractModifiers(event, platform), event.key);
-}
-
 /** 平台探测（渲染层调用一次并缓存；无 navigator 环境回退 darwin） */
 export function detectPlatform(): Platform {
   const ua = typeof navigator === "undefined" ? "" : navigator.userAgent;
@@ -108,20 +101,6 @@ function orderedModifiers(modifiers: readonly Modifier[]): Modifier[] {
 /** 判断 token 是否为合法修饰键名 */
 function isModifier(token: string): token is Modifier {
   return MODIFIER_ORDER.includes(token as Modifier);
-}
-
-/** 按平台抽修饰键：darwin ⌘=metaKey/^=ctrlKey；win·linux Ctrl=cmd（Meta 忽略） */
-function extractModifiers(
-  event: KeyboardEvent,
-  platform: Platform,
-): Modifier[] {
-  const primary = platform === "darwin" ? event.metaKey : event.ctrlKey;
-  const modifiers: Modifier[] = [];
-  if (primary) modifiers.push("cmd");
-  if (platform === "darwin" && event.ctrlKey) modifiers.push("ctrl");
-  if (event.altKey) modifiers.push("alt");
-  if (event.shiftKey) modifiers.push("shift");
-  return modifiers;
 }
 
 /** 主键显示：darwin 单字母大写（⌘B 风格），其余（Enter/Esc/@///）原样 */

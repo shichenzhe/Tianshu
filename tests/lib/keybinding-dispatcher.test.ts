@@ -6,7 +6,8 @@
  * - 覆盖即时生效：改绑命中新键、解绑（unbound）原键落空
  * - 输入框聚焦语义：带修饰键命令仍触发，裸可打印键（Enter/@//）不触发，
  *   裸非打印键（Esc/F11）仍触发
- * - win/linux 裸 F11 平台等价键映射 toggleFullscreen（darwin 不映射，带修饰不映射）
+ * - win/linux 裸 F11 平台等价键映射 toggleFullscreen（darwin 不映射，带修饰
+ *   不映射；仅全屏绑定保持默认时映射——解绑/改绑后落空，遵守删除契约）
  * - 同键占用按定义表顺序取首个（冲突容错）
  * - eventMatchesBinding：输入框内发送/换行判定的匹配原语（含平台归一）
  * - currentBindings：localStorage 覆盖直读（每次按键即时合成）
@@ -136,6 +137,28 @@ describe("win/linux 修饰键归一", () => {
     // darwin 无此惯例；带修饰键的 F11 不映射（F11 非用户可绑键，无绑定可命中）
     expect(match("F11", {}, { platform: "darwin" })).toBeNull();
     expect(match("F11", { ctrlKey: true }, { platform: "win" })).toBeNull();
+  });
+
+  it("F11 等价键遵守删除契约：解绑或改绑非默认后裸 F11 落空", () => {
+    // 解绑（unbound 哨兵）：行显示未绑定，F11 不得再切换全屏
+    const unbound = resolveBindings({ toggleFullscreen: UNBOUND });
+    expect(match("F11", {}, { platform: "win" }, unbound)).toBeNull();
+    expect(match("F11", {}, { platform: "linux" }, unbound)).toBeNull();
+    // 改绑为可命中键：UI 按实际绑定展示，F11 不再是等价键
+    const rebound = resolveBindings({ toggleFullscreen: "cmd+shift+f" });
+    expect(match("F11", {}, { platform: "win" }, rebound)).toBeNull();
+    // 改绑键本身可命中（与默认 F11 等价键互为对照）
+    expect(
+      match(
+        "f",
+        { ctrlKey: true, shiftKey: true },
+        { platform: "win" },
+        rebound,
+      ),
+    ).toBe("toggleFullscreen");
+    expect(match("F11", {}, { platform: "win" }, resolveBindings({}))).toBe(
+      "toggleFullscreen",
+    );
   });
 });
 

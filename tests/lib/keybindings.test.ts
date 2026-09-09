@@ -2,7 +2,7 @@
 /**
  * 快捷键基建测试（jsdom：localStorage + KeyboardEvent 构造）：
  * - 解析/序列化往返：抽象输入归一（Escape→Esc、+→=、单字符小写、固定
- *   顺序）、反解析容错、KeyboardEvent 薄适配（平台修饰键归一）
+ *   顺序）、反解析容错、结构化事件适配 bindingOfEvent（平台修饰键归一）
  * - 平台符号矩阵：darwin ⌘⇧^⌥ + 单字母大写 / win·linux Ctrl+Shift+Alt 字面
  * - 有效性矩阵：Enter/Esc/@// 裸绑或含 cmd/ctrl/alt 有效，裸/仅 shift 拒绝
  * - 冲突查找：占用判定含固定绑定、跳过自身、unbound 释放占用
@@ -33,7 +33,6 @@ import {
   KEYBINDING_COMMANDS,
   KEYBINDINGS_STORAGE_KEY,
   UNBOUND,
-  bindingFromKeyEvent,
   clearOverride,
   detectPlatform,
   findConflict,
@@ -48,6 +47,7 @@ import {
   saveOverride,
   serializeBinding,
 } from "../../src-react/lib/keybindings";
+import { bindingOfEvent } from "../../src-react/lib/keybindings/dispatcher";
 import type { KeyBinding } from "../../src-react/lib/keybindings";
 
 /** 快捷构造绑定（序列化 → KeyBinding；测试用例均已保证合法） */
@@ -97,6 +97,13 @@ describe("解析与序列化往返", () => {
     expect(parseKeyBinding(["alt"], "Control")).toBeNull();
   });
 
+  it("小写修饰键名作主键返回 null（垃圾绑定后置拒绝）", () => {
+    expect(parseKeyBinding(["cmd"], "cmd")).toBeNull();
+    expect(parseKeyBinding(["alt"], "ctrl")).toBeNull();
+    expect(parseKeyBinding([], "shift")).toBeNull();
+    expect(parseKeyBinding(["shift"], "alt")).toBeNull();
+  });
+
   it("序列化：无修饰键仅 key，多修饰键按 cmd/ctrl/alt/shift 固定顺序", () => {
     expect(serializeBinding(bindingOf("Enter"))).toBe("Enter");
     expect(serializeBinding(bindingOf("cmd+shift+b"))).toBe("cmd+shift+b");
@@ -129,12 +136,12 @@ describe("解析与序列化往返", () => {
     }
   });
 
-  it("KeyboardEvent 适配：darwin metaKey→cmd·ctrlKey→ctrl；win ctrlKey→cmd", () => {
+  it("结构化事件适配 bindingOfEvent：darwin metaKey→cmd·ctrlKey→ctrl；win ctrlKey→cmd", () => {
     const darwinCmdB = new KeyboardEvent("keydown", {
       key: "b",
       metaKey: true,
     });
-    expect(serializeBinding(bindingFromKeyEvent(darwinCmdB, "darwin")!)).toBe(
+    expect(serializeBinding(bindingOfEvent(darwinCmdB, "darwin")!)).toBe(
       "cmd+b",
     );
     const darwinFullScreen = new KeyboardEvent("keydown", {
@@ -142,15 +149,13 @@ describe("解析与序列化往返", () => {
       metaKey: true,
       ctrlKey: true,
     });
-    expect(
-      serializeBinding(bindingFromKeyEvent(darwinFullScreen, "darwin")!),
-    ).toBe("cmd+ctrl+f");
-    const winCtrlF = new KeyboardEvent("keydown", { key: "f", ctrlKey: true });
-    expect(serializeBinding(bindingFromKeyEvent(winCtrlF, "win")!)).toBe(
-      "cmd+f",
+    expect(serializeBinding(bindingOfEvent(darwinFullScreen, "darwin")!)).toBe(
+      "cmd+ctrl+f",
     );
+    const winCtrlF = new KeyboardEvent("keydown", { key: "f", ctrlKey: true });
+    expect(serializeBinding(bindingOfEvent(winCtrlF, "win")!)).toBe("cmd+f");
     const escape = new KeyboardEvent("keydown", { key: "Escape" });
-    expect(bindingFromKeyEvent(escape, "darwin")).toEqual({
+    expect(bindingOfEvent(escape, "darwin")).toEqual({
       modifiers: [],
       key: "Esc",
     });
@@ -158,7 +163,16 @@ describe("解析与序列化往返", () => {
       key: "Meta",
       metaKey: true,
     });
-    expect(bindingFromKeyEvent(modifierOnly, "darwin")).toBeNull();
+    expect(bindingOfEvent(modifierOnly, "darwin")).toBeNull();
+    // ⌘⇧= 实际产生 key="+" + shift：剥离 shift 归一为 "="（与分发口径一致）
+    const shiftedPlus = new KeyboardEvent("keydown", {
+      key: "+",
+      metaKey: true,
+      shiftKey: true,
+    });
+    expect(serializeBinding(bindingOfEvent(shiftedPlus, "darwin")!)).toBe(
+      "cmd+=",
+    );
   });
 });
 

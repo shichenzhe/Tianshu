@@ -3,7 +3,9 @@
  * window keydown（非 capture，组件 stopPropagation 可拦截）→ 每次按键
  * 即时合成生效绑定（localStorage 覆盖变更立即生效）→ 匹配命中且登记了
  * 处理器时 preventDefault 执行；消费者优先：已被组件 preventDefault 的
- * 事件（联想面板/编辑态的 Esc、Radix 弹层）不参与分发
+ * 事件（联想面板/编辑态的 Esc、Radix 弹层）不参与分发；弹层门控：目标
+ * 位于 Dialog/AlertDialog 内时不分发（Radix 未 preventDefault 的按键也
+ * 不在遮罩背后静默执行）
  */
 import { useEffect, useMemo, useRef } from "react";
 
@@ -27,6 +29,9 @@ export function useKeybindingDispatcher(handlers: KeybindingHandlers): void {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (isInsideOverlay(event.target)) {
+        return;
+      }
       const commandId = matchKeybindingCommand(
         currentBindings(),
         toMatchInput(event, platform),
@@ -40,6 +45,19 @@ export function useKeybindingDispatcher(handlers: KeybindingHandlers): void {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [platform]);
+}
+
+/**
+ * 弹层门控：事件目标位于 Radix Dialog/AlertDialog（portal 挂 body）内时
+ * 跳过分发——布局命令在遮罩背后执行不可见（侧栏切换/确认弹窗后新建会话
+ * 并导航），键盘语义交给弹层自身（Esc 关闭等）；缩放命令不豁免，口径一致
+ */
+function isInsideOverlay(target: EventTarget | null): boolean {
+  return Boolean(
+    (target as Element | null)?.closest?.(
+      '[role="dialog"], [role="alertdialog"]',
+    ),
+  );
 }
 
 /** 原生事件 → 匹配输入（聚焦/消费/重复旗标在此采集） */

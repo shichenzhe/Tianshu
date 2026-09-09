@@ -6,7 +6,9 @@
  * 再导出，消费方从 "@/lib/keybindings/dispatcher" 直接引入。
  * win/linux 裸 F11 作为 toggleFullscreen 的平台等价键在此映射（裁决：
  * F11 是平台等价键而非用户绑定，isValidNewBinding 保持不变——F11 本就
- * 不是用户可绑键）。
+ * 不是用户可绑键）；映射仅在全屏生效绑定保持默认时成立（镜像设置页
+ * showsF11Equivalent 判定），解绑/改绑后裸 F11 落空，遵守
+ * 「删除 = unbound 哨兵」契约。
  */
 import { parseKeyBinding, serializeBinding } from "./binding";
 import { KEYBINDING_COMMANDS } from "./commands";
@@ -67,7 +69,7 @@ export function matchKeybindingCommand(
     return null;
   }
   if (isBarePlatformF11(pressed, input.platform)) {
-    return "toggleFullscreen";
+    return keepsFullscreenDefault(bindings) ? "toggleFullscreen" : null;
   }
   return findMatchedCommand(
     bindings,
@@ -112,10 +114,30 @@ function isBarePlatformF11(binding: KeyBinding, platform: Platform): boolean {
   );
 }
 
+/** toggleFullscreen 默认序列化（裸 F11 等价键映射的默认绑定基准） */
+const FULLSCREEN_DEFAULT_SERIALIZED = serializeBinding(
+  KEYBINDING_COMMANDS.find(({ id }) => id === "toggleFullscreen")!
+    .defaultBinding,
+);
+
 /**
- * 结构化事件 → 归一绑定：与 binding.ts 的 bindingFromKeyEvent 同语义，
- * 但接收结构化输入而非 DOM KeyboardEvent（React 合成事件可直接传入）；
- * 修饰键提取的少量重复是为了不改 Task 14 冻结文件。
+ * 全屏生效绑定是否保持默认（⌘⌃F 在 win/linux 因修饰键归一无法命中，
+ * 设置页此时显示平台等价键 F11）：解绑（unbound）或改绑为可命中键后
+ * 裸 F11 不再映射（镜像 shortcut-bindings.ts 的 showsF11Equivalent），
+ * 避免不可见不可删的幽灵绑定
+ */
+function keepsFullscreenDefault(bindings: ResolvedBindings): boolean {
+  const fullscreen = bindings.toggleFullscreen;
+  return (
+    fullscreen !== null &&
+    fullscreen !== undefined &&
+    serializeBinding(fullscreen) === FULLSCREEN_DEFAULT_SERIALIZED
+  );
+}
+
+/**
+ * 结构化事件 → 归一绑定：接收结构化输入而非 DOM KeyboardEvent
+ * （React 合成事件与原生事件均可直接传入，取其最小公共面）。
  * "+" 符号在常见布局需按住 shift 产生（mac ⌘⇧=）：剥离 shift 使其与
  * cmd+=（zoomIn 默认绑定）等价，preventDefault 才能拦住 Chromium 页面缩放。
  * 设置页监听捕获（Task 16）复用本函数，保证录到的绑定与分发生效口径一致

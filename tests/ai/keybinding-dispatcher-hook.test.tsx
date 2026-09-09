@@ -2,7 +2,8 @@
 /**
  * 分发 hook 集成测试（jsdom + renderHook）：window keydown → 命中即执行
  * 处理器并 preventDefault；消费者优先（已 preventDefault 的事件不分发）；
- * 输入框聚焦时裸键命令被挡；localStorage 覆盖变更无重渲染即时生效；
+ * 弹层门控（目标位于 Dialog/AlertDialog 内不分发）；输入框聚焦时裸键
+ * 命令被挡；localStorage 覆盖变更无重渲染即时生效；
  * 未登记处理器的命令（发送键）命中不 preventDefault
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,6 +82,41 @@ describe("useKeybindingDispatcher", () => {
     const event = fireKeydown({ key: "Enter" });
     expect(event.defaultPrevented).toBe(false);
     expect(openSettings).not.toHaveBeenCalled();
+  });
+
+  it("弹层门控：目标在 Dialog/AlertDialog 内不分发，普通目标正常分发", () => {
+    const newConversation = vi.fn();
+    renderHook(() => useKeybindingDispatcher({ newConversation }));
+
+    /** 自目标元素冒泡派发 ⌘N（可断言 defaultPrevented） */
+    const keydownOn = (target: Element) => {
+      const event = new KeyboardEvent("keydown", {
+        key: "n",
+        metaKey: true,
+        cancelable: true,
+        bubbles: true,
+      });
+      target.dispatchEvent(event);
+      return event;
+    };
+
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "alertdialog");
+    const dialogButton = document.createElement("button");
+    dialog.appendChild(dialogButton);
+    document.body.appendChild(dialog);
+    const inOverlay = keydownOn(dialogButton);
+    expect(newConversation).not.toHaveBeenCalled();
+    expect(inOverlay.defaultPrevented).toBe(false);
+
+    const plain = document.createElement("div");
+    document.body.appendChild(plain);
+    const outside = keydownOn(plain);
+    expect(newConversation).toHaveBeenCalledTimes(1);
+    expect(outside.defaultPrevented).toBe(true);
+
+    dialog.remove();
+    plain.remove();
   });
 
   it("输入框聚焦：修饰键命令仍执行，裸键命令被挡", () => {

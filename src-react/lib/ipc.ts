@@ -121,6 +121,8 @@ export type IPCChannel =
   | "app:getInfo"
   | "app:getVersion"
   | "app:getName"
+  // 窗口控制（快捷键分发）
+  | "window:toggleFullScreen"
   // 日志
   | "log:info"
   | "log:warn"

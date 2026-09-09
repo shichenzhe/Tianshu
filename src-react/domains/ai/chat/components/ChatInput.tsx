@@ -6,7 +6,8 @@
  * 发送:命令 token 移出执行(onRunCommand);文件/技能 token 读内容
  * 随 onSend 注入(消息文本保留 token 原样)。
  * 触发器:@ 文件、/ 命令+技能;↑↓ 移动、Enter 选中、Esc 关闭;
- * Enter 发送 / Shift+Enter 换行(IME 组合中的 Enter 不触发)
+ * 发送/换行读快捷键生效绑定(默认 Enter 发送、Shift+Enter 换行;
+ * IME 组合中的 Enter 不触发)
  */
 import {
   useCallback,
@@ -28,6 +29,11 @@ import { mapIpcError } from "../lib/error-message";
 
 import { Button } from "@/components/ui/button";
 import { invoke } from "@/lib/ipc";
+import { detectPlatform } from "@/lib/keybindings";
+import {
+  currentBindings,
+  eventMatchesBinding,
+} from "@/lib/keybindings/dispatcher";
 import type { ChatModelParams } from "../../api/chat.api";
 import type { SessionMode } from "../../api/session.api";
 import {
@@ -209,6 +215,21 @@ export default function ChatInput({
     highlightIndex,
     Math.max(suggestCandidates.length - 1, 0),
   );
+
+  /**
+   * 光标处插入换行（换行命令命中时统一手工插行：绑定带修饰键时浏览器
+   * 默认不插入，手工插入保证任意绑定行为一致；选中区间被替换）
+   */
+  const insertNewline = useCallback(() => {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? content.length;
+    const end = textarea?.selectionEnd ?? start;
+    setContent(`${content.slice(0, start)}\n${content.slice(end)}`);
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + 1, start + 1);
+    });
+  }, [content]);
 
   /** 标签行点击移除 = 禁用技能（与＋菜单技能浮层同口径） */
   const handleDisableSkill = async (name: string) => {
@@ -429,13 +450,26 @@ export default function ChatInput({
         return;
       }
     }
+    // IME 组合中的 Enter 仅确认候选：发送/换行绑定均不触发
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+    // 发送/换行读生效绑定（默认 Enter 发送、Shift+Enter 换行；
+    // 每次按键即时合成，用户改绑立即生效）
+    const platform = detectPlatform();
+    const bindings = currentBindings();
     if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
+      eventMatchesBinding(event.nativeEvent, bindings.sendMessage, platform)
     ) {
       event.preventDefault();
       submit();
+      return;
+    }
+    if (
+      eventMatchesBinding(event.nativeEvent, bindings.newlineInInput, platform)
+    ) {
+      event.preventDefault();
+      insertNewline();
     }
   };
 

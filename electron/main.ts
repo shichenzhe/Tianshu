@@ -4,6 +4,7 @@ import path from "node:path";
 import ConsoleLogProxy from "./commons/console-log-proxy.js";
 import Log from "./commons/Log.js";
 import Application from "./Application.js";
+import WindowService from "./commons/window.service.js";
 import { Constants } from "./Constants.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -191,6 +192,8 @@ app.whenReady().then(async () => {
   try {
     await new Application(Constants.DATABASE_VERSION).execute();
     createWindow();
+    // 窗口服务：全屏切换 IPC + 唤起/隐藏主窗口全局快捷键（⇧⌥W）
+    new WindowService(() => win);
   } catch (e) {
     console.error("Application execute failed:", e);
     dialog.showErrorBox(

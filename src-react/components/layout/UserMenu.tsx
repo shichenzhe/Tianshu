@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 
 import { useUserStore } from "@/domains/user/store/user.store";
+import { useSettingsUiStore } from "@/domains/app-settings/store/settings-ui.store";
 import UserInfoDialog from "@/domains/user/components/UserInfoDialog";
 import PasswordDialog from "@/domains/user/components/PasswordDialog";
 import UpdateLogDialog from "@/components/common/UpdateLogDialog";
@@ -54,7 +55,9 @@ export default function UserMenu() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false);
   const [updateLogDialogOpen, setUpdateLogDialogOpen] = useState(false);
-  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  // 设置面板 open 态走 Zustand：用户菜单与 ⌘, 快捷键共用（见 AiLayout 分发器）
+  const settingsOpen = useSettingsUiStore((s) => s.settingsOpen);
+  const setSettingsOpen = useSettingsUiStore((s) => s.setSettingsOpen);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [checkUpdateDialogOpen, setCheckUpdateDialogOpen] = useState(false);
   const [updateAvailableDialogOpen, setUpdateAvailableDialogOpen] =
@@ -188,7 +191,7 @@ export default function UserMenu() {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => setSettingsDialogOpen(true)}
+            onClick={() => setSettingsOpen(true)}
             className="cursor-pointer"
           >
             <Settings size={14} className="mr-2" />
@@ -245,10 +248,7 @@ export default function UserMenu() {
         open={updateLogDialogOpen}
         onOpenChange={setUpdateLogDialogOpen}
       />
-      <SettingsDialog
-        open={settingsDialogOpen}
-        onOpenChange={setSettingsDialogOpen}
-      />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* 退出登录确认 */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>

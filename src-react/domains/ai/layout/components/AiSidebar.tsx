@@ -66,6 +66,10 @@ import {
 } from "../../chat/lib/session-list";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { bindWorkspaceDirectory } from "../../chat/lib/workspace-actions";
+import {
+  createSessionAndSelect,
+  deriveCurrentWorkspaceId,
+} from "../../chat/lib/session-actions";
 import { useChatStore } from "../../chat/store/chat.store";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import UnbindDirectoryDialog from "../../chat/components/UnbindDirectoryDialog";
@@ -145,23 +149,15 @@ export default function AiSidebar() {
 
   // 当前空间 = 选中任务所属空间，无选中取第一个（spec §2.3）。
   // 派生用原始数据：时间筛选只影响渲染，不得改变新建任务的目标空间
-  const selectedSession =
-    (sessionsQuery.data ?? []).find((s) => s.id === selectedSessionId) ?? null;
-  const currentWorkspaceId =
-    selectedSession?.workspaceId ?? workspaces[0]?.id ?? null;
+  // （逻辑与 AiLayout 快捷键分发共用 session-actions）
+  const currentWorkspaceId = deriveCurrentWorkspaceId(
+    sessionsQuery.data ?? [],
+    workspaces,
+    selectedSessionId,
+  );
 
-  const handleCreateSession = async (workspaceId: number | null) => {
-    if (workspaceId === null) {
-      return;
-    }
-    try {
-      const created = await SessionApi.create({ workspaceId });
-      await invalidateSessions();
-      selectSession(created.id);
-    } catch (e) {
-      handleError(e);
-    }
-  };
+  const handleCreateSession = (workspaceId: number | null) =>
+    void createSessionAndSelect({ queryClient, navigate, workspaceId });
 
   const handleWorkspaceDialogSubmit = async () => {
     if (!workspaceDialog || submitting) {

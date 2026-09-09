@@ -39,3 +39,9 @@ export function applyFontScale(scale: FontScale): void {
 export function initFontScale(): void {
   applyFontScale(readFontScale());
 }
+
+/** 档位递进（zoomIn/zoomOut 快捷键用）：delta 1 增大 / -1 减小；越界保持当前档 */
+export function stepFontScale(scale: FontScale, delta: 1 | -1): FontScale {
+  const index = FONT_SCALES.indexOf(scale) + delta;
+  return FONT_SCALES[index] ?? scale;
+}

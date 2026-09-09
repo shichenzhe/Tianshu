@@ -3,8 +3,9 @@
  * EditBar 组件交互测试（jsdom + testing-library）：
  * - 回填 initialText，挂载即 focus 且光标置于文末
  * - 内容 trim 为空时「重发」按钮禁用
- * - Escape 取消；Enter（非 Shift、非 IME 组合）提交并携带当前文本（去首尾空白）；
- *   Shift+Enter 不触发提交（保留默认换行行为）
+ * - Escape 取消；提交/换行读快捷键生效绑定（默认 Enter 提交、
+ *   Shift+Enter 手工插行；IME 组合中的 Enter 不触发）
+ * - 改绑发送键（localStorage 覆盖）：新键提交、裸 Enter 转为插行
  * - 编辑对象直接切换（A→B 不经过取消）：EditBar 移入另一条消息的
  *   MessageItem（不同实例）触发重挂载，文本按新 initialText 重建（此处以
  *   key 变化模拟重挂载）
@@ -13,6 +14,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import EditBar from "../../src-react/domains/ai/chat/components/EditBar";
+
+// localStorage stub：本仓库 jsdom 环境无原生 localStorage（快捷键覆盖读取
+// tianshu-keybindings 需要它），与 tests/ai/chat-view-edit-optimistic.test.tsx
+// 同款内存 stub
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  const stub = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => void memory.set(key, value),
+    removeItem: (key: string) => void memory.delete(key),
+    clear: () => memory.clear(),
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: stub,
+    configurable: true,
+    writable: true,
+  });
+});
 
 // i18n mock：useTranslation 的 t 直接返回 key（按钮名即 key），断言行为不
 // 依赖具体文案；@/i18n（经 button → @/lib/utils 引入）以最小 stub 替代真实
@@ -78,7 +97,7 @@ describe("EditBar 键盘交互", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
-  it("Enter（非 Shift）触发 onSubmit 并携带当前文本（去首尾空白）", () => {
+  it("Enter（默认发送绑定）触发 onSubmit 并携带当前文本（去首尾空白）", () => {
     const { onSubmit, textarea } = renderEditBar("hello");
     fireEvent.change(textarea, { target: { value: "  改写后的内容  " } });
     fireEvent.keyDown(textarea, { key: "Enter" });
@@ -86,16 +105,60 @@ describe("EditBar 键盘交互", () => {
     expect(onSubmit).toHaveBeenCalledWith("改写后的内容");
   });
 
-  it("Shift+Enter 不触发提交（换行）", () => {
+  it("Shift+Enter 不触发提交并手工插入换行", () => {
     const { onSubmit, textarea } = renderEditBar("hello");
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
     expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello\n");
   });
 
-  it("IME 组合中的 Enter 不触发提交", () => {
+  it("IME 组合中的 Enter 不触发提交也不插行", () => {
     const { onSubmit, textarea } = renderEditBar("hello");
     fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
     expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello");
+  });
+});
+
+describe("EditBar 快捷键绑定读取（覆盖即时生效）", () => {
+  /** 桩 mac userAgent（⌘=metaKey 口径；组件每次按键时探测） */
+  const stubDarwin = () =>
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      configurable: true,
+    });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("改绑发送键为 ⌘Enter：⌘Enter 提交，裸 Enter 转为插行", () => {
+    stubDarwin();
+    localStorage.setItem(
+      "tianshu-keybindings",
+      JSON.stringify({ sendMessage: "cmd+Enter", newlineInInput: "Enter" }),
+    );
+    const { onSubmit, textarea } = renderEditBar("hello");
+
+    fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("hello");
+
+    fireEvent.change(textarea, { target: { value: "second" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe("second\n");
+  });
+
+  it("解除发送绑定且换行改绑 Enter：Enter 仅插行不提交", () => {
+    localStorage.setItem(
+      "tianshu-keybindings",
+      JSON.stringify({ sendMessage: "unbound", newlineInInput: "Enter" }),
+    );
+    const { onSubmit, textarea } = renderEditBar("hello");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello\n");
   });
 });
 

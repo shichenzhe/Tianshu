@@ -4,13 +4,19 @@
  * 卡片样式与 ChatInput 一致（无联想/镜像层，独立轻量组件）：
  * 顶部提示行说明重发后果；textarea 回填 initialText，挂载即 focus 且
  * 光标置文末；底部右侧 取消/重发（内容 trim 为空时禁用）。
- * 键盘：Enter（非 IME 组合、非 Shift）提交、Shift+Enter 换行、Escape 取消。
+ * 键盘：Escape 取消；提交/换行读快捷键生效绑定（默认 Enter 提交、
+ * Shift+Enter 换行；IME 组合中的 Enter 不触发）。
  */
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { detectPlatform } from "@/lib/keybindings";
+import {
+  currentBindings,
+  eventMatchesBinding,
+} from "@/lib/keybindings/dispatcher";
 
 interface EditBarProps {
   /** 待编辑的原消息文本（回填进 textarea） */
@@ -49,19 +55,44 @@ export default function EditBar({
     onSubmit(trimmed);
   };
 
+  /** 光标处插入换行（换行命令命中时统一手工插行：绑定带修饰键时浏览器
+   * 默认不插入，手工插入保证任意绑定行为一致；选中区间被替换） */
+  const insertNewline = () => {
+    const textarea = textareaRef.current;
+    const start = textarea?.selectionStart ?? text.length;
+    const end = textarea?.selectionEnd ?? start;
+    setText(`${text.slice(0, start)}\n${text.slice(end)}`);
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(start + 1, start + 1);
+    });
+  };
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Escape") {
       event.preventDefault();
       onCancel();
       return;
     }
+    // IME 组合中的 Enter 仅确认候选：提交/换行绑定均不触发
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+    // 提交/换行读生效绑定（每次按键即时合成，用户改绑立即生效）
+    const platform = detectPlatform();
+    const bindings = currentBindings();
     if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
+      eventMatchesBinding(event.nativeEvent, bindings.sendMessage, platform)
     ) {
       event.preventDefault();
       submit();
+      return;
+    }
+    if (
+      eventMatchesBinding(event.nativeEvent, bindings.newlineInInput, platform)
+    ) {
+      event.preventDefault();
+      insertNewline();
     }
   };
 

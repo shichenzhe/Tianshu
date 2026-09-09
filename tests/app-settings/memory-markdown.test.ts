@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   MEMORY_PROFILE_LIMIT,
   buildMemoryMarkdown,
+  hasMemoryHeadings,
   mergeMemoryMarkdown,
   parseMemoryMarkdown,
   sortRecentEntries,
@@ -31,6 +32,19 @@ describe("stripCodeFence", () => {
   });
   it("无围栏原样返回", () => {
     expect(stripCodeFence("## 工作背景")).toBe("## 工作背景");
+  });
+});
+
+describe("hasMemoryHeadings", () => {
+  it("含四节标题行（含无空格/行首空白写法）", () => {
+    expect(hasMemoryHeadings("## 近期动态\nx")).toBe(true);
+    expect(hasMemoryHeadings("##工作背景")).toBe(true);
+    expect(hasMemoryHeadings("  ## 个人背景")).toBe(true);
+  });
+  it("无任何标题（纯文本/未知标题/空）为 false", () => {
+    expect(hasMemoryHeadings("只是一段文本")).toBe(false);
+    expect(hasMemoryHeadings("## 其他\nb")).toBe(false);
+    expect(hasMemoryHeadings("")).toBe(false);
   });
 });
 

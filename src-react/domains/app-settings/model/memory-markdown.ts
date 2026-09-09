@@ -42,6 +42,14 @@ export function stripCodeFence(text: string): string {
   return match ? match[1].trim() : trimmed;
 }
 
+/** 是否识别到任一四节标题行（与 parseMemoryMarkdown 的标题识别同规则；
+ * 导入弹窗据此区分「分类识别成功」与「无标题回退」） */
+export function hasMemoryHeadings(md: string): boolean {
+  return md
+    .split("\n")
+    .some((line) => TITLE_TO_KEY.has(line.trim().replace(/^##\s*/, "")));
+}
+
 /** 按四标题切分；缺节空串；无任何已知标题 → 全部进 work */
 export function parseMemoryMarkdown(md: string): MemorySections {
   const sections: MemorySections = { ...EMPTY_SECTIONS };

@@ -40,6 +40,8 @@ import {
   savePersonalizationOption,
 } from "../model/personalization-options";
 import { useSaveOrRevert } from "../model/use-save-or-revert";
+import ImportMemoryDialog from "./memory/ImportMemoryDialog";
+import ResetMemoryDialog from "./memory/ResetMemoryDialog";
 import SettingSwitchRow from "./SettingSwitchRow";
 
 /** 单条（单行）超过该字数折叠，点「展开」查看全文（spec §6.2 单条粒度） */
@@ -89,6 +91,8 @@ export default function MemoryGroup() {
   const [draftTouched, setDraftTouched] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [applying, setApplying] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // 草稿跟随展示态四节（含数据晚到/失效刷新），用户改过草稿后不再覆盖
   // （防数据慢到时以空草稿覆写记忆）
@@ -129,6 +133,21 @@ export default function MemoryGroup() {
       toast.error(t("settings:error.saveFailed"));
     }
   }, [draft, persistQuiet, t]);
+
+  /** 重置确认（spec §6.3）：编辑态点重置先退出编辑丢弃草稿，再清空记忆 */
+  const confirmReset = useCallback(async () => {
+    setDraftTouched(false);
+    setEditing(false);
+    await persistQuiet(PERSONALIZATION_KEYS.memoryProfile, "");
+  }, [persistQuiet]);
+
+  /** 导入落库（spec §6.4）：合并结果追加持久化（弹窗侧已 merge） */
+  const importMemory = useCallback(
+    async (merged: string) => {
+      await persistQuiet(PERSONALIZATION_KEYS.memoryProfile, merged);
+    },
+    [persistQuiet],
+  );
 
   const submitInstruction = useCallback(async () => {
     const text = instruction.trim();
@@ -200,7 +219,20 @@ export default function MemoryGroup() {
         onEnterEdit={enterEdit}
         onCancelEdit={cancelEdit}
         onSaveEdit={saveEdit}
+        onReset={() => setResetOpen(true)}
+        onImport={() => setImportOpen(true)}
         showContent={editing || hasProfile}
+      />
+      <ResetMemoryDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        onConfirm={confirmReset}
+      />
+      <ImportMemoryDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        currentMemory={options.memoryProfile}
+        onImported={importMemory}
       />
       {!editing && !hasProfile && (
         <EmptyMemoryCard
@@ -227,13 +259,15 @@ interface ManageMemoryCardProps {
   onEnterEdit: () => void;
   onCancelEdit: () => void;
   onSaveEdit: () => Promise<void>;
+  onReset: () => void;
+  onImport: () => void;
   showContent: boolean;
 }
 
 /**
  * 管理记忆卡片（spec §6.1 单卡结构）：头部按钮（展示态 重置/编辑/导入，
  * 编辑态 重置/取消/保存、导入隐藏）+ 卡内四板块内容区（超高右侧滚动）。
- * 重置/导入按钮本任务为占位（弹窗由 Task 9 接入）。
+ * AI 指令应用中取消/保存禁用，防指令未落定就退出/覆盖编辑。
  */
 function ManageMemoryCard(props: ManageMemoryCardProps) {
   const { t } = useTranslation(["settings"]);
@@ -249,6 +283,8 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
     onEnterEdit,
     onCancelEdit,
     onSaveEdit,
+    onReset,
+    onImport,
     showContent,
   } = props;
   return (
@@ -266,19 +302,27 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
           <Button
             variant="outline"
             size="sm"
+            onClick={onReset}
             className="border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             {t("settings:memory.actions.reset")}
           </Button>
           {editing ? (
             <>
-              <Button variant="outline" size="sm" onClick={onCancelEdit}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onCancelEdit}
+                disabled={applying}
+                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              >
                 {t("settings:memory.edit.cancel")}
               </Button>
               <Button
                 variant="default"
                 size="sm"
                 onClick={() => void onSaveEdit()}
+                disabled={applying}
               >
                 {t("settings:memory.edit.save")}
               </Button>
@@ -296,6 +340,7 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={onImport}
                 className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
               >
                 {t("settings:memory.actions.import")}

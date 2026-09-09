@@ -58,7 +58,8 @@ option 表（`type="app"`）新增 8 个 name：
 ### 4.2 System Prompt 拼接规则
 
 ```
-buildPersonalizedSystem(config, baseSystem) → string
+buildPersonalizedSystem(config, baseSystem) → string | undefined
+（无任何段时返回 undefined——与现状 buildModeSystem 的 undefined 语义在线级一致，D8）
 
 段序（"\n\n" 连接，空段直接跳过）：
 1. persona 段   ：仅当 option 行存在且非空时注入原文，不加包装标签（缺省/空串 → 跳过）

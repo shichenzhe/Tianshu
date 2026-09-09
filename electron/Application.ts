@@ -18,6 +18,7 @@ import { SkillRepository } from "./domains/ai/skill/skill.repo";
 import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
+import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -30,6 +31,9 @@ const __dirname = path.dirname(__filename);
 export default class Application {
   private databaseVerson: number;
   private scheduler = new AutomationScheduler();
+  // 记忆定时器在 registerServices 组装（需注入已注册 IPC 的 provider/model
+  // repo 实例，避免二次 new 触发 ipcMain 重复注册），启动/退出随应用生命周期
+  private memoryScheduler: MemoryScheduler | null = null;
   constructor(databaseVerson: number) {
     this.databaseVerson = databaseVerson;
   }
@@ -41,6 +45,7 @@ export default class Application {
     await this.initDatabase();
     await this.registerServices();
     this.scheduler.start();
+    this.memoryScheduler?.start();
     console.info("register dbservice success");
   }
 
@@ -50,6 +55,7 @@ export default class Application {
   private async initDatabase(): Promise<void> {
     app.on("quit", () => {
       this.scheduler.stop();
+      this.memoryScheduler?.stop();
       prisma.$disconnect();
       console.info("database closed");
     });
@@ -108,7 +114,9 @@ export default class Application {
     new OptionRepository();
     // 可选 AI 模块：不需要时删除本块与 electron/domains/ai
     const providerRepo = new ProviderRepository();
-    new ModelRepository(providerRepo);
+    const modelRepo = new ModelRepository(providerRepo);
+    // 记忆调度器：每晚窗口整理 + 启动补跑（spec §5.2），复用上方 repo 实例
+    this.memoryScheduler = new MemoryScheduler({ providerRepo, modelRepo });
     new AssistantRepository();
     const sessionRepo = new SessionRepository();
     // 技能管理：list 自愈对账（扫描→对账→落库）+启停/批量/卸载 IPC；

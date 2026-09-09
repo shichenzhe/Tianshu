@@ -40,6 +40,8 @@ export const PERSONALIZATION_LIMITS = {
   persona: 4000,
   memory: 1500,
   memoryProfile: 8000,
+  /** 上次整理时间（ISO 字符串，正常 24 字符，留余量防脏数据） */
+  memoryLastCompiledAt: 40,
 } as const;
 
 export interface PersonalizationConfig {
@@ -132,6 +134,11 @@ export function fromAppOptions(
       map.get(keys.memoryEnabled),
       defaultPersonalization().memoryEnabled,
     ),
-    memoryLastCompiledAt: textValue(map, keys.memoryLastCompiledAt, 40, ""),
+    memoryLastCompiledAt: textValue(
+      map,
+      keys.memoryLastCompiledAt,
+      limit.memoryLastCompiledAt,
+      "",
+    ),
   };
 }

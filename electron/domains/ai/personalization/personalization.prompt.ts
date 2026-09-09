@@ -1,6 +1,6 @@
 /**
  * 个性化 system prompt 拼接（spec §4.2，纯函数）：
- * 段序 persona → baseSystem → 风格 → 身份 → 记忆 → 指令；"\n\n" 连接，
+ * 段序 persona → baseSystem → 风格 → 身份 → 记忆 → 画像 → 指令；"\n\n" 连接，
  * 空段跳过。缓存友好约束（spec §4.6/D3）：同 config → 逐字节相同输出，
  * 段内禁止任何时间戳/随机数/会话相关内容。
  */

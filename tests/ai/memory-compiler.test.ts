@@ -56,20 +56,28 @@ describe("prompt 构建", () => {
   });
 });
 
+/** 四标题齐备的合法输出（I2：四节标题缺一不可） */
+const FULL_MD =
+  "## 工作背景\na\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\nd";
+
 describe("validateMemoryOutput", () => {
-  it("剥围栏 + 截断后返回", () => {
-    const raw = "```\n## 工作背景\nabc\n```";
-    expect(validateMemoryOutput(raw)).toBe("## 工作背景\nabc");
+  it("四标题齐备：剥围栏 + 截断后返回", () => {
+    const raw = "```\n" + FULL_MD + "\n```";
+    expect(validateMemoryOutput(raw)).toBe(FULL_MD);
   });
   it("无任何已知标题 → null（彻底失败）", () => {
     expect(validateMemoryOutput("我无法完成这个任务")).toBeNull();
     expect(validateMemoryOutput("")).toBeNull();
   });
+  it("只含部分四节标题（如仅一节/缺节）→ null（I2 四标题齐备校验）", () => {
+    expect(validateMemoryOutput("## 工作背景\nabc")).toBeNull();
+    expect(validateMemoryOutput("## 工作背景\na\n## 当前关注\nc")).toBeNull();
+  });
   it("超 MEMORY_PROFILE_LIMIT 从头部截断", () => {
-    const raw = `## 工作背景\n${"旧".repeat(9000)}\n## 当前关注\n新`;
+    const raw = `## 工作背景\n${"旧".repeat(9000)}\n## 个人背景\nb\n## 当前关注\nc\n## 近期动态\n新`;
     const validated = validateMemoryOutput(raw);
     expect(validated?.length).toBe(8000);
-    expect(validated?.endsWith("## 当前关注\n新")).toBe(true);
+    expect(validated?.endsWith("## 近期动态\n新")).toBe(true);
   });
 });
 
@@ -178,7 +186,9 @@ describe("compileMemory", () => {
     modelId: "m1",
   };
   it("整理模式：走对话材料 prompt，返回校验后的新记忆", async () => {
-    const modelText = vi.fn(async () => "## 工作背景\n[2026-09-09] - 新条目");
+    const output =
+      "## 工作背景\n[2026-09-09] - 新条目\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\nd";
+    const modelText = vi.fn(async () => output);
     const memory = await compileMemory({
       currentMemory: "",
       material: "对话材料",
@@ -186,7 +196,7 @@ describe("compileMemory", () => {
       model,
       modelText,
     });
-    expect(memory).toBe("## 工作背景\n[2026-09-09] - 新条目");
+    expect(memory).toBe(output);
     expect(modelText).toHaveBeenCalledTimes(1);
     const [system, prompt] = modelText.mock.calls[0];
     expect(system).toBe(MEMORY_COMPILER_SYSTEM_PROMPT);
@@ -195,7 +205,7 @@ describe("compileMemory", () => {
     expect(prompt).toContain("对话材料");
   });
   it("指令模式：走用户指令 prompt", async () => {
-    const modelText = vi.fn(async () => "## 当前关注\nx");
+    const modelText = vi.fn(async () => FULL_MD);
     await compileMemory({
       currentMemory: "当前记忆",
       material: "删掉天气",
@@ -214,6 +224,17 @@ describe("compileMemory", () => {
         instructionMode: false,
         model,
         modelText: async () => "无法完成",
+      }),
+    ).rejects.toThrow("MEMORY_COMPILE_FAILED");
+  });
+  it("输出只含部分四节标题 → 抛 MEMORY_COMPILE_FAILED（I2）", async () => {
+    await expect(
+      compileMemory({
+        currentMemory: "",
+        material: "材料",
+        instructionMode: false,
+        model,
+        modelText: async () => "## 工作背景\n只有一节",
       }),
     ).rejects.toThrow("MEMORY_COMPILE_FAILED");
   });

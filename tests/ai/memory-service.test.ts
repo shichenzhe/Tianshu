@@ -65,6 +65,10 @@ const MODEL: MemoryModelContext = {
   modelId: "m1",
 };
 
+/** 四标题齐备的合法编译输出（I2 后单节标题不再有效） */
+const fourSectionMemory = (work = "新记忆") =>
+  `## 工作背景\n${work}\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\nd`;
+
 /** 独立 inflight 桩（每 handlers 一套，避免真实模块级状态串扰纯逻辑用例） */
 function mkLock() {
   let held: AbortController | null = null;
@@ -108,7 +112,7 @@ function mkHandlers(overrides: {
       (overrides.model === undefined
         ? MODEL
         : overrides.model) as MemoryModelContext | null,
-    compile: async () => overrides.compiled ?? "## 工作背景\n新记忆",
+    compile: async () => overrides.compiled ?? fourSectionMemory(),
     save: async () => {},
     ...mkLockDeps(),
   });
@@ -125,13 +129,13 @@ describe("applyMemoryInstruction", () => {
       }),
       fetchMaterial: async () => "m",
       resolveModel: async () => MODEL,
-      compile: async () => "## 工作背景\n新记忆",
+      compile: async () => fourSectionMemory("新记忆"),
       save,
       ...mkLockDeps(),
     });
     expect(await h.applyInstruction("记住我在厦门")).toEqual({
       ok: true,
-      memory: "## 工作背景\n新记忆",
+      memory: fourSectionMemory("新记忆"),
     });
     expect(save).not.toHaveBeenCalled();
   });
@@ -185,7 +189,7 @@ describe("applyMemoryInstruction", () => {
         if (call === 1) {
           throw new Error("network down");
         }
-        return "## 工作背景\n恢复";
+        return fourSectionMemory("恢复");
       },
       save: async () => {},
       acquire: lock.acquire,
@@ -198,12 +202,30 @@ describe("applyMemoryInstruction", () => {
     expect(lock.isInflight()).toBe(false);
     expect(await h.applyInstruction("x")).toEqual({
       ok: true,
-      memory: "## 工作背景\n恢复",
+      memory: fourSectionMemory("恢复"),
     });
+  });
+  it("超长指令入口截断到 2000 字再送编译（M1）", async () => {
+    const compile = vi.fn(async () => fourSectionMemory());
+    const h = createMemoryHandlers({
+      loadConfig: async () => ({
+        memoryEnabled: true,
+        memoryProfile: "",
+        memoryLastCompiledAt: "",
+      }),
+      fetchMaterial: async () => "m",
+      resolveModel: async () => MODEL,
+      compile,
+      save: async () => {},
+      ...mkLockDeps(),
+    });
+    await h.applyInstruction("长".repeat(3000));
+    // 指令模式下 compile 的 material 参数即用户指令
+    expect(compile.mock.calls[0][1]).toBe("长".repeat(2000));
   });
   it("在途占用 → MEMORY_BUSY 且不调编译", async () => {
     const lock = mkLock();
-    const compile = vi.fn(async () => "## 工作背景\nx");
+    const compile = vi.fn(async () => fourSectionMemory("x"));
     const h = createMemoryHandlers({
       loadConfig: async () => ({
         memoryEnabled: true,
@@ -238,6 +260,28 @@ describe("compileMemory", () => {
       error: "MEMORY_NO_MATERIAL",
     });
   });
+  it("开关关 → MEMORY_DISABLED 且不取对话材料（T5b）", async () => {
+    const fetchMaterial = vi.fn(async () => "材料");
+    const compile = vi.fn(async () => fourSectionMemory());
+    const h = createMemoryHandlers({
+      loadConfig: async () => ({
+        memoryEnabled: false,
+        memoryProfile: "",
+        memoryLastCompiledAt: "",
+      }),
+      fetchMaterial,
+      resolveModel: async () => MODEL,
+      compile,
+      save: async () => {},
+      ...mkLockDeps(),
+    });
+    await expect(h.compileNow()).resolves.toEqual({
+      ok: false,
+      error: "MEMORY_DISABLED",
+    });
+    expect(fetchMaterial).not.toHaveBeenCalled();
+    expect(compile).not.toHaveBeenCalled();
+  });
   it("成功写 LastCompiledAt", async () => {
     const saved: string[] = [];
     const h = createMemoryHandlers({
@@ -248,7 +292,8 @@ describe("compileMemory", () => {
       }),
       fetchMaterial: async () => "材料",
       resolveModel: async () => MODEL,
-      compile: async () => "## 近期动态\n[2026-09-09] - a",
+      compile: async () =>
+        "## 工作背景\na\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\n[2026-09-09] - a",
       save: async (name: string) => void saved.push(name),
       ...mkLockDeps(),
     });
@@ -303,7 +348,7 @@ describe("共享在途互斥（scheduler × service，spec §5.2）", () => {
         }),
         fetchMaterial: async () => "材料",
         resolveModel: async () => MODEL,
-        compile: async () => "## 工作背景\n手动整理",
+        compile: async () => fourSectionMemory("手动整理"),
         save: async () => {},
         acquire,
         release,
@@ -320,7 +365,9 @@ describe("共享在途互斥（scheduler × service，spec §5.2）", () => {
       // quit 语义：stop 清定时器并 abort 在途（槽位立即腾空）
       scheduler.stop();
       expect(isInflight()).toBe(false);
-      finishCompile("## 近期动态\n[2026-09-09] - a");
+      finishCompile(
+        "## 工作背景\na\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\n[2026-09-09] - a",
+      );
       for (let i = 0; i < 50; i += 1) {
         await Promise.resolve(); // scheduler 收口（release 因持有权校验为 no-op）
       }

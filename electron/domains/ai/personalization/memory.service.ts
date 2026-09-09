@@ -37,6 +37,9 @@ export interface MemoryServiceResult {
   error?: MemoryErrorCode;
 }
 
+/** 用户 AI 指令入口限长（M1）：超长截断，防 IPC 直调撑爆 prompt */
+const MEMORY_INSTRUCTION_LIMIT = 2000;
+
 export interface MemoryHandlerDeps {
   loadConfig: () => Promise<{
     memoryEnabled: boolean;
@@ -61,18 +64,25 @@ export interface MemoryHandlerDeps {
 /** 前置闸门结果：未通过为错误码，通过携带后续编译所需上下文 */
 type MemoryGate =
   | { ok: false; error: MemoryErrorCode }
-  | { ok: true; model: MemoryModelContext; currentMemory: string };
+  | {
+      ok: true;
+      model: MemoryModelContext;
+      currentMemory: string;
+      material: string;
+    };
 
 export function createMemoryHandlers(deps: MemoryHandlerDeps) {
-  /** 前置闸门：开关关 / 无材料（整理路径）/ 无模型 → 错误码 */
+  /** 前置闸门：开关关 / 无材料（整理路径，材料惰性求值）/ 无模型 → 错误码 */
   const passGates = async (
-    material: string,
+    getMaterial: () => Promise<string>,
     instructionMode: boolean,
   ): Promise<MemoryGate> => {
     const config = await deps.loadConfig();
     if (!config.memoryEnabled) {
       return { ok: false, error: "MEMORY_DISABLED" };
     }
+    // T5b：开关通过后才取对话材料（整理路径的库扫描不在开关关时白跑）
+    const material = await getMaterial();
     if (!instructionMode && material === "") {
       return { ok: false, error: "MEMORY_NO_MATERIAL" };
     }
@@ -80,13 +90,12 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
     if (!model) {
       return { ok: false, error: "MEMORY_MODEL_MISSING" };
     }
-    return { ok: true, model, currentMemory: config.memoryProfile };
+    return { ok: true, model, currentMemory: config.memoryProfile, material };
   };
 
   /** 编译（锁内执行）：失败或输出非法 → MEMORY_COMPILE_FAILED；指令模式不落库 */
   const execute = async (
     gate: Extract<MemoryGate, { ok: true }>,
-    material: string,
     instructionMode: boolean,
     signal?: AbortSignal,
   ): Promise<MemoryServiceResult> => {
@@ -94,7 +103,7 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
     try {
       raw = await deps.compile(
         gate.currentMemory,
-        material,
+        gate.material,
         instructionMode,
         gate.model,
         signal,
@@ -120,10 +129,10 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
   };
 
   const run = async (
-    material: string,
+    getMaterial: () => Promise<string>,
     instructionMode: boolean,
   ): Promise<MemoryServiceResult> => {
-    const gate = await passGates(material, instructionMode);
+    const gate = await passGates(getMaterial, instructionMode);
     if (!gate.ok) {
       return gate;
     }
@@ -133,18 +142,17 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
       return { ok: false, error: "MEMORY_BUSY" };
     }
     try {
-      return await execute(gate, material, instructionMode, lock.signal);
+      return await execute(gate, instructionMode, lock.signal);
     } finally {
       deps.release(lock);
     }
   };
 
   return {
-    applyInstruction: (instruction: string) => run(instruction, true),
-    compileNow: async () => {
-      const material = await deps.fetchMaterial();
-      return run(material, false);
-    },
+    applyInstruction: (instruction: string) =>
+      // M1：入口限长截断，防 IPC 直调绕过前端 maxLength 撑爆 prompt
+      run(async () => instruction.slice(0, MEMORY_INSTRUCTION_LIMIT), true),
+    compileNow: () => run(deps.fetchMaterial, false),
   };
 }
 

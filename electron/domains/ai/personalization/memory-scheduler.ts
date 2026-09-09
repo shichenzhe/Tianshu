@@ -2,8 +2,10 @@
  * 记忆定时器（spec §5.2）：30s tick 决策 + 启动补跑（>24h 延迟 90s）。
  * 在途互斥走 memory-inflight 共享模块（与 memory.service 手动触发共用，
  * 定时与手动不并发）；退出时 stop 统一 abort 在途请求；失败静默记日志
- * 等下一轮。provider/model 查询面由外部注入（repo 构造器注册 IPC，
- * 此处二次 new 会因重复注册抛错，故复用 Application 已建实例）。
+ * 等下一轮（I1：失败后 10 分钟内不再尝试）。90s 补跑评估无论结果均消费
+ * 补跑标志（M4），未满足 24h 时不再阻塞夜间窗口分支。provider/model
+ * 查询面由外部注入（repo 构造器注册 IPC，此处二次 new 会因重复注册抛错，
+ * 故复用 Application 已建实例）。
  */
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
@@ -23,12 +25,16 @@ import { abortInflight, acquire, isInflight, release } from "./memory-inflight";
 const TICK_MS = 30_000;
 const CATCHUP_DELAY_MS = 90_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** 失败退避（I1）：编译失败后距下次尝试的最小间隔 */
+export const RETRY_BACKOFF_MS = 10 * 60 * 1000;
 
 export interface MemoryTickState {
   enabled: boolean;
   inflight: boolean;
   lastCompiledAt: string;
   catchUpPending: boolean;
+  /** 上次尝试（含失败）的 epoch ms；0/缺省 = 从未尝试（I1 失败退避） */
+  lastAttemptAt?: number;
 }
 
 export type MemoryTickDecision = "compile" | "catchUp" | "noop";
@@ -59,6 +65,11 @@ export function decideMemoryTick(
   if (!state.enabled || state.inflight) {
     return "noop";
   }
+  // I1 失败退避：距上次尝试 <10 分钟 → noop（窗口内与补跑路径均拦截）
+  const lastAttemptAt = state.lastAttemptAt ?? 0;
+  if (lastAttemptAt > 0 && now.getTime() - lastAttemptAt < RETRY_BACKOFF_MS) {
+    return "noop";
+  }
   if (state.catchUpPending) {
     const last = state.lastCompiledAt ? new Date(state.lastCompiledAt) : null;
     const overdue = last === null || now.getTime() - last.getTime() > DAY_MS;
@@ -76,14 +87,19 @@ export default class MemoryScheduler {
   private timer: NodeJS.Timeout | null = null;
   private catchUpTimer: NodeJS.Timeout | null = null;
   private catchUpPending = false;
+  private lastAttemptAt = 0;
 
   constructor(private deps: MemorySchedulerDeps) {}
 
   start(): void {
-    // 启动补跑：90s 计时到点才挂补跑标志（spec §5.2），到点即补跑一轮
+    // 启动补跑（spec §5.2）：90s 计时到点挂补跑标志并评估一轮；评估后
+    // 无论结果均消费标志（M4）——未满 24h 时不再阻塞夜间窗口分支，
+    // 等 02:00-04:00 窗口触发
     this.catchUpTimer = setTimeout(() => {
       this.catchUpPending = true;
-      void this.tick();
+      void this.tick().finally(() => {
+        this.catchUpPending = false;
+      });
     }, CATCHUP_DELAY_MS);
     this.timer = setInterval(
       () => void this.tick(),
@@ -112,6 +128,7 @@ export default class MemoryScheduler {
       inflight: isInflight(),
       lastCompiledAt: config.memoryLastCompiledAt,
       catchUpPending: this.catchUpPending,
+      lastAttemptAt: this.lastAttemptAt,
     };
   }
 
@@ -127,7 +144,7 @@ export default class MemoryScheduler {
     }
   }
 
-  /** 执行一次整理（共享 inflight 互斥；补跑标志消费后不复位） */
+  /** 执行一次整理（共享 inflight 互斥；失败记录退避起点） */
   private async run(): Promise<void> {
     const abort = acquire();
     if (!abort) {
@@ -137,7 +154,8 @@ export default class MemoryScheduler {
     try {
       await this.compileOnce(abort.signal);
     } catch (error) {
-      Log.warn("记忆整理失败（等待下一轮）", error);
+      this.lastAttemptAt = Date.now(); // I1：10 分钟退避起点
+      Log.warn("记忆整理失败（10 分钟后重试）", error);
     } finally {
       release(abort);
     }

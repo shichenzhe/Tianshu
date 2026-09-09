@@ -69,12 +69,12 @@ export function buildInstructionUserPrompt(
   return `当前记忆：\n${currentMemory || "（空）"}\n\n用户指令（应用增删改后输出完整新记忆）：\n${instruction}`;
 }
 
-/** 校验 AI 输出：剥围栏、截断；无任何四标题 → null */
+/** 校验 AI 输出（I2 四标题齐备）：剥围栏、截断；四节标题缺一 → null */
 export function validateMemoryOutput(raw: string): string | null {
   const text = stripCodeFence(raw ?? "");
   if (
     text === "" ||
-    !["工作背景", "个人背景", "当前关注", "近期动态"].some((t) =>
+    !["工作背景", "个人背景", "当前关注", "近期动态"].every((t) =>
       text.includes(`## ${t}`),
     )
   ) {

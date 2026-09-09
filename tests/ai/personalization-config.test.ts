@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   PERSONALIZATION_KEYS,
+  PERSONALIZATION_LIMITS,
   defaultPersonalization,
   fromAppOptions,
 } from "../../electron/domains/ai/personalization/personalization.config";
@@ -65,19 +66,27 @@ describe("fromAppOptions", () => {
   });
 
   it("超长文本 → 截断到限长", () => {
-    const long = "a".repeat(5000);
+    const long = "a".repeat(9000);
     const config = fromAppOptions([
       { name: PERSONALIZATION_KEYS.customInstructions, value: long },
       { name: PERSONALIZATION_KEYS.userNickname, value: long },
       { name: PERSONALIZATION_KEYS.aiName, value: long },
       { name: PERSONALIZATION_KEYS.persona, value: long },
       { name: PERSONALIZATION_KEYS.memory, value: long },
+      { name: PERSONALIZATION_KEYS.memoryProfile, value: long },
+      { name: PERSONALIZATION_KEYS.memoryLastCompiledAt, value: long },
     ]);
     expect(config.customInstructions).toHaveLength(1500);
     expect(config.userNickname).toHaveLength(20);
     expect(config.aiName).toHaveLength(20);
     expect(config.persona).toHaveLength(4000);
     expect(config.memory).toHaveLength(1500);
+    expect(config.memoryProfile).toHaveLength(8000);
+    expect(config.memoryLastCompiledAt).toHaveLength(40);
+  });
+
+  it("memoryLastCompiledAt 限长收口于 PERSONALIZATION_LIMITS（T2b）", () => {
+    expect(PERSONALIZATION_LIMITS.memoryLastCompiledAt).toBe(40);
   });
 
   it("非个性化前缀的行被忽略", () => {

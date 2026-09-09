@@ -7,6 +7,7 @@
  */
 import { SettingsApi, type SettingItem } from "../api/settings.api";
 import { parseBoolOption, toOptionMap } from "./app-options";
+import { MEMORY_PROFILE_LIMIT } from "./memory-markdown";
 
 /** 回复风格枚举（与后端同构） */
 export type ResponseStyle =
@@ -29,6 +30,9 @@ export const PERSONALIZATION_KEYS = {
   aiName: "personalization.aiName",
   persona: "personalization.persona",
   memory: "personalization.memory",
+  memoryProfile: "personalization.memoryProfile",
+  memoryEnabled: "personalization.memoryEnabled",
+  memoryLastCompiledAt: "personalization.memoryLastCompiledAt",
 } as const;
 
 /** 个性化 option 名联合（PERSONALIZATION_KEYS 的值；调用方传 PERSONALIZATION_KEYS.xxx） */
@@ -42,6 +46,7 @@ export const PERSONALIZATION_LIMITS = {
   aiName: 20,
   persona: 4000,
   memory: 1500,
+  memoryProfile: MEMORY_PROFILE_LIMIT,
 } as const;
 
 /** 默认人设（需求方提供，编辑弹窗预填；Continuity 段为后续产品愿景文案） */
@@ -73,6 +78,9 @@ export interface PersonalizationOptions {
   aiName: string;
   persona: string;
   memory: string;
+  memoryProfile: string;
+  memoryEnabled: boolean;
+  memoryLastCompiledAt: string;
 }
 
 const RESPONSE_STYLES: readonly ResponseStyle[] = [
@@ -96,6 +104,9 @@ export function defaultPersonalizationOptions(): PersonalizationOptions {
     aiName: "天枢",
     persona: "",
     memory: "",
+    memoryProfile: "",
+    memoryEnabled: true,
+    memoryLastCompiledAt: "",
   };
 }
 
@@ -125,6 +136,12 @@ export function parsePersonalizationOptions(
     aiName: map[PERSONALIZATION_KEYS.aiName] ?? fallback.aiName,
     persona: map[PERSONALIZATION_KEYS.persona] ?? "",
     memory: map[PERSONALIZATION_KEYS.memory] ?? "",
+    memoryProfile: map[PERSONALIZATION_KEYS.memoryProfile] ?? "",
+    memoryEnabled: parseBoolOption(
+      map[PERSONALIZATION_KEYS.memoryEnabled],
+      fallback.memoryEnabled,
+    ),
+    memoryLastCompiledAt: map[PERSONALIZATION_KEYS.memoryLastCompiledAt] ?? "",
   };
 }
 

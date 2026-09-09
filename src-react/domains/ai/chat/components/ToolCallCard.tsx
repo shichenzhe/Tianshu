@@ -34,10 +34,15 @@ interface ToolCallCardProps {
   /** 主进程透传的状态字符串（渲染层不做枚举收窄，未知值按 ready 兜底） */
   state: string;
   output?: string;
+  /**
+   * 挂载初始展开（文件变更详情开关：流式期文件类工具自动展开）。
+   * details.open 为初始 attribute——用户手动切换后 DOM 自管
+   */
+  defaultOpen?: boolean;
 }
 
 /** 取卡片头摘要：优先 args.path；无 path 的工具（如 run_command）取 args.command 前 60 字符 */
-function extractPath(args: unknown): string | null {
+export function extractPath(args: unknown): string | null {
   if (typeof args !== "object" || args === null) {
     return null;
   }
@@ -69,6 +74,7 @@ function ToolCallCardImpl({
   args,
   state,
   output,
+  defaultOpen,
 }: ToolCallCardProps) {
   const { t } = useTranslation(["chat"]);
 
@@ -82,7 +88,7 @@ function ToolCallCardImpl({
   }`;
 
   return (
-    <details className={containerClass}>
+    <details className={containerClass} open={defaultOpen}>
       <summary className="cursor-pointer select-none px-3 py-1.5 text-xs text-muted-foreground">
         <span className="inline-flex max-w-full items-center gap-1.5">
           <span className="shrink-0">🔧 {toolName}</span>

@@ -2,7 +2,8 @@
  * 深度思考面板：消息过程块（thinking + 工具调用）的统一折叠容器
  * 头部状态（思考中/已完成）随流式与落库两态切换；展开区限高内滚。
  * 流式面板与落库面板是两个组件实例——流结束 liveMessage 卸载、
- * 落库面板以 defaultOpen=false 挂载，「展开→已完成折叠」即挂载切换
+ * 落库面板以 defaultOpen=false 挂载，「展开→已完成折叠」即挂载切换。
+ * 文件变更详情开关（spec §5.3B）：仅流式实例的文件类卡片自动展开，落库面板保持折叠
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { useLoadingPhrase } from "../hooks/use-loading-phrase";
 import { usePersonalizationUi } from "../hooks/use-personalization-ui";
 import { summarizeThinking, type ToolPanelItem } from "../lib/group-blocks";
-import ToolCallCard from "./ToolCallCard";
+import ToolCallCard, { extractPath } from "./ToolCallCard";
 
 /** 展开区最大高度（PRD §3.2：超长思考内滚，避免撑破布局） */
 const EXPAND_MAX_HEIGHT = "max-h-[400px]";
@@ -54,7 +55,8 @@ export default function ThinkingPanel({
   const [open, setOpen] = useState(defaultOpen);
 
   // 加载欢迎语（spec §5.3A）：开关开 → 1.5s 后轮换问候语；关 → 仅 spinner 无文字
-  const { welcomeLoading } = usePersonalizationUi();
+  // 文件变更详情（spec §5.3B）：开关开 → 流式期文件类工具卡片自动展开
+  const { welcomeLoading, fileChangeDetails } = usePersonalizationUi();
   const phrase = useLoadingPhrase(status === "streaming" && welcomeLoading);
 
   return (
@@ -109,7 +111,15 @@ export default function ThinkingPanel({
             </p>
           )}
           {tools.map((tool, index) => (
-            <ToolCallCard key={`${index}-${tool.toolName}`} {...tool} />
+            <ToolCallCard
+              key={`${index}-${tool.toolName}`}
+              {...tool}
+              defaultOpen={
+                status === "streaming" &&
+                fileChangeDetails &&
+                extractPath(tool.args) !== null
+              }
+            />
           ))}
         </div>
       )}

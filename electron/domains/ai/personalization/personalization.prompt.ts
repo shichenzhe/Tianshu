@@ -79,10 +79,15 @@ function personalSegments(
   return segments;
 }
 
-/** 全默认 → 原样返回 baseSystem（D8 回归保证）；baseSystem 可能 undefined */
+/**
+ * 全默认 → 原样返回 baseSystem（D8 回归保证）；baseSystem 可能 undefined。
+ * 无任何段时不返回 ""而返回 undefined——AI SDK 仅对 undefined 省略 system
+ * 消息，"" 会在协议层发出空 system（anthropic/gemini 等会拒绝）。
+ */
 export function buildPersonalizedSystem(
   config: PersonalizationConfig,
   baseSystem: string | undefined,
-): string {
-  return personalSegments(config, baseSystem).join("\n\n");
+): string | undefined {
+  const segments = personalSegments(config, baseSystem);
+  return segments.length > 0 ? segments.join("\n\n") : undefined;
 }

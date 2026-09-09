@@ -22,11 +22,11 @@ function withConfig(
 }
 
 describe("buildPersonalizedSystem", () => {
-  it("D8 全默认 → 与 baseSystem 逐字节一致（含 baseSystem 为 undefined）", () => {
+  it("D8 全默认 → 与 baseSystem 逐字节一致（baseSystem 为 undefined → undefined，不产生空 system）", () => {
     expect(buildPersonalizedSystem(defaultPersonalization(), BASE)).toBe(BASE);
-    expect(buildPersonalizedSystem(defaultPersonalization(), undefined)).toBe(
-      "",
-    );
+    expect(
+      buildPersonalizedSystem(defaultPersonalization(), undefined),
+    ).toBeUndefined();
   });
 
   it("persona 非空 → 原文置于最前，不加包装标签", () => {

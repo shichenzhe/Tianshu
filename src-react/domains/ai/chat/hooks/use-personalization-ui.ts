@@ -10,6 +10,7 @@ import {
   parseBoolOption,
   toOptionMap,
 } from "@/domains/app-settings/model/app-options";
+import { PERSONALIZATION_KEYS } from "@/domains/app-settings/model/personalization-options";
 
 export interface PersonalizationUiFlags {
   welcomeLoading: boolean;
@@ -30,11 +31,11 @@ export function usePersonalizationUi(): PersonalizationUiFlags {
       const map = toOptionMap(items);
       return {
         welcomeLoading: parseBoolOption(
-          map["personalization.welcomeLoading"],
+          map[PERSONALIZATION_KEYS.welcomeLoading],
           DEFAULT_FLAGS.welcomeLoading,
         ),
         fileChangeDetails: parseBoolOption(
-          map["personalization.fileChangeDetails"],
+          map[PERSONALIZATION_KEYS.fileChangeDetails],
           DEFAULT_FLAGS.fileChangeDetails,
         ),
       };

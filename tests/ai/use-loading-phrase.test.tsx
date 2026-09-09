@@ -1,16 +1,19 @@
 // @vitest-environment jsdom
 /**
  * useLoadingPhrase hook 测试（fake timers）：1.5s 内 null、超时出句、
- * 3s 轮换不重复、active 结束复位
+ * 3s 轮换不重复、active 结束复位、文案池非数组守卫
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, renderHook } from "@testing-library/react";
+
+// 文案池可注入：默认数组；单个用例改为字符串以模拟 locale 缺 key 的回退
+const phrasePool = vi.hoisted(() => ({ value: ["甲", "乙", "丙"] as unknown }));
 
 vi.mock("react-i18next", () => {
   // t 须为稳定引用（与真实 react-i18next 一致）：若每次渲染返回新函数，
   // hook 的 effect 依赖 [active, t] 会随渲染反复重挂定时器，轮换节奏失真
   const t = (key: string, opts?: Record<string, unknown>) =>
-    opts?.returnObjects ? ["甲", "乙", "丙"] : key;
+    opts?.returnObjects ? phrasePool.value : key;
   return {
     useTranslation: () => ({ t }),
   };
@@ -72,5 +75,16 @@ describe("useLoadingPhrase", () => {
     expect(result.current).toBe("甲");
     rerender({ active: false });
     expect(result.current).toBeNull();
+  });
+
+  it("文案池非数组（locale 缺 key 时 returnObjects 回退 key 字符串）→ 恒为 null 不崩溃", () => {
+    phrasePool.value = "chat:loadingPhrases";
+    try {
+      const { result } = renderHook(() => useLoadingPhrase(true));
+      act(() => vi.advanceTimersByTime(5000));
+      expect(result.current).toBeNull();
+    } finally {
+      phrasePool.value = ["甲", "乙", "丙"];
+    }
   });
 });

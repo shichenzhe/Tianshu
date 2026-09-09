@@ -111,7 +111,7 @@ describe("fromAppOptions", () => {
   });
 
   it("超长文本 → 截断到限长", () => {
-    const long = "a".repeat(2000);
+    const long = "a".repeat(5000);
     const config = fromAppOptions([
       { name: PERSONALIZATION_KEYS.customInstructions, value: long },
       { name: PERSONALIZATION_KEYS.userNickname, value: long },
@@ -1679,9 +1679,9 @@ const STYLE_OPTIONS: ResponseStyle[] = [
 /** 高级区摘要截断长度 */
 const SUMMARY_SLICE = 60;
 
-/** 单项持久化函数类型（key 取前端 PERSONALIZATION_KEYS） */
+/** 单项持久化函数类型（key 为完整 option 名，即 PERSONALIZATION_KEYS 的值） */
 type PersistFn = (
-  key: keyof typeof PERSONALIZATION_KEYS,
+  key: (typeof PERSONALIZATION_KEYS)[keyof typeof PERSONALIZATION_KEYS],
   value: string | boolean,
 ) => Promise<void>;
 

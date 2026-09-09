@@ -27,10 +27,13 @@ export function useLoadingPhrase(active: boolean): string | null {
       setPhrase(null);
       return;
     }
-    const phrases = t("chat:loadingPhrases", {
-      returnObjects: true,
-    }) as string[];
-    const rotate = () => setPhrase((prev) => pickPhrase(phrases, prev));
+    // returnObjects 在 locale 缺 key 时会返回 key 字符串而非数组，须守卫
+    const raw = t("chat:loadingPhrases", { returnObjects: true }) as unknown;
+    const phrases = Array.isArray(raw) ? (raw as string[]) : [];
+    const rotate = () => {
+      if (phrases.length === 0) return;
+      setPhrase((prev) => pickPhrase(phrases, prev));
+    };
     const showTimer = window.setTimeout(rotate, PHRASE_DELAY_MS);
     const rotateTimer = window.setInterval(rotate, PHRASE_ROTATE_MS);
     return () => {

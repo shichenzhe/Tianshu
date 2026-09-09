@@ -26,8 +26,8 @@ import {
 import { useSaveOrRevert } from "../model/use-save-or-revert";
 import SettingSwitchRow from "./SettingSwitchRow";
 
-/** 单节超过该字数折叠，点「展开」查看全文 */
-const SECTION_COLLAPSE_LIMIT = 500;
+/** 单条（单行）超过该字数折叠，点「展开」查看全文（spec §6.2 单条粒度） */
+const LINE_COLLAPSE_LIMIT = 500;
 
 /** 保存函数签名（与 ProfileGroup 的 PersistFn 同构） */
 type PersistFn = (
@@ -194,7 +194,7 @@ function MemorySectionsCard({ memoryProfile }: { memoryProfile: string }) {
   );
 }
 
-/** 单节：标题 + 逐行正文（近期动态行首加 "- "）；超限折叠可展开 */
+/** 单节：标题 + 逐行正文（近期动态行首加 "- "）；单条 >500 字折叠可展开 */
 function MemorySectionBlock({
   sectionKey,
   text,
@@ -203,11 +203,11 @@ function MemorySectionBlock({
   text: string;
 }) {
   const { t } = useTranslation(["settings"]);
-  const [expanded, setExpanded] = useState(false);
-  const collapsible = text.length > SECTION_COLLAPSE_LIMIT && !expanded;
-  const lines = (collapsible ? text.slice(0, SECTION_COLLAPSE_LIMIT) : text)
-    .split("\n")
-    .filter((line) => line.trim() !== "");
+  const [expandedLines, setExpandedLines] = useState<number[]>([]);
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+
+  const expandLine = (index: number) =>
+    setExpandedLines((previous) => [...previous, index]);
 
   return (
     <div className="space-y-1.5">
@@ -215,20 +215,27 @@ function MemorySectionBlock({
         {t(`settings:memory.sections.${sectionKey}`)}
       </h4>
       <div className="space-y-1 text-xs leading-relaxed text-foreground/80">
-        {lines.map((line, index) => (
-          <p key={index}>{sectionKey === "recent" ? `- ${line}` : line}</p>
-        ))}
-        {collapsible && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(true)}
-            className="h-6 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-          >
-            <ChevronDown size={12} />
-            {t("settings:memory.expand")}
-          </Button>
-        )}
+        {lines.map((line, index) => {
+          const collapsed =
+            line.length > LINE_COLLAPSE_LIMIT && !expandedLines.includes(index);
+          const content = collapsed ? line.slice(0, LINE_COLLAPSE_LIMIT) : line;
+          return (
+            <p key={index}>
+              {sectionKey === "recent" ? `- ${content}` : content}
+              {collapsed && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => expandLine(index)}
+                  className="ml-1 h-6 px-2 align-middle text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                >
+                  <ChevronDown size={12} />
+                  {t("settings:memory.expand")}
+                </Button>
+              )}
+            </p>
+          );
+        })}
       </div>
     </div>
   );

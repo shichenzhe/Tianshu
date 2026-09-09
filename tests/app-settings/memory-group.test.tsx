@@ -129,11 +129,11 @@ describe("MemoryGroup 四板块渲染", () => {
     expect(screen.getByText("- [2026-09-01] 完成记忆解析")).toBeTruthy();
   });
 
-  it("单节超 500 字折叠，「展开」后完整显示", async () => {
+  it("单条超 500 字折叠，「展开」后完整显示，相邻短行不受影响", async () => {
     mockItems = [
       {
         name: "personalization.memoryProfile",
-        value: `## 工作背景\n${"长".repeat(600)}`,
+        value: `## 工作背景\n${"长".repeat(600)}\n${"短".repeat(10)}`,
       },
     ];
     renderGroup();
@@ -141,12 +141,37 @@ describe("MemoryGroup 四板块渲染", () => {
       expect(screen.getByText("settings:memory.sections.work")).toBeTruthy(),
     );
     expect(screen.queryByText("长".repeat(600))).toBeNull();
+    expect(screen.getByText("短".repeat(10))).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", { name: "settings:memory.expand" }),
     );
     await waitFor(() =>
       expect(screen.getByText("长".repeat(600))).toBeTruthy(),
     );
+  });
+
+  it("单条均未超限的节累计超 500 字不折叠（spec §6.2 单条粒度）", async () => {
+    // 三条各 200 字（互不相同便于唯一定位）：节累计 600+ 但单条未超限
+    const entries = Array.from(
+      { length: 3 },
+      (_, i) => "条".repeat(199) + String(i),
+    );
+    mockItems = [
+      {
+        name: "personalization.memoryProfile",
+        value: `## 近期动态\n${entries.join("\n")}`,
+      },
+    ];
+    renderGroup();
+    await waitFor(() =>
+      expect(screen.getByText("settings:memory.sections.recent")).toBeTruthy(),
+    );
+    for (const entry of entries) {
+      expect(screen.getByText(`- ${entry}`)).toBeTruthy();
+    }
+    expect(
+      screen.queryByRole("button", { name: "settings:memory.expand" }),
+    ).toBeNull();
   });
 });
 

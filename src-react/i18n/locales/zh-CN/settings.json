@@ -73,6 +73,18 @@
     "openExternalFailed": "打开系统设置失败",
     "testNotificationFailed": "发送测试通知失败，请重试"
   },
+  "personalization": {
+    "charCount": "{{count}} / {{max}}",
+    "savedToast": "保存成功",
+    "editor": {
+      "save": "保存",
+      "cancel": "取消",
+      "unsavedTitle": "放弃未保存的修改？",
+      "unsavedBody": "关闭后本次修改将丢失。",
+      "discard": "丢弃修改",
+      "keepEditing": "继续编辑"
+    }
+  },
   "shortcut": {
     "searchPlaceholder": "搜索快捷键",
     "resetAll": "全部恢复默认",

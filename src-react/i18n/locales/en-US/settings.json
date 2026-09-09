@@ -73,6 +73,18 @@
     "openExternalFailed": "Failed to open system settings",
     "testNotificationFailed": "Failed to send test notification, please try again"
   },
+  "personalization": {
+    "charCount": "{{count}} / {{max}}",
+    "savedToast": "Saved",
+    "editor": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "unsavedTitle": "Discard unsaved changes?",
+      "unsavedBody": "Your edits will be lost if you close now.",
+      "discard": "Discard changes",
+      "keepEditing": "Keep editing"
+    }
+  },
   "shortcut": {
     "searchPlaceholder": "Search shortcuts",
     "resetAll": "Reset All to Default",

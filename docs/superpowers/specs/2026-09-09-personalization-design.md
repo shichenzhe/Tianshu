@@ -22,7 +22,7 @@
 | D3 | 缓存友好约束：拼接为纯函数，同 config → 逐字节相同输出；段顺序固定、空值跳过、段内禁止时间戳/随机数等动态内容；摘要段保持现有「system 尾部」位置 |
 | D4 | 「展示文件变更过程详情」= 工具调用卡片的默认展开控制（轻量方案），**不做** diff 红绿视图 |
 | D5 | 敏感词/越狱过滤**本期不做**（本地单机应用，无平台侧风险；防误伤）；PRD §4 其余条款（字数上限、空值回退、保存反馈）全部保留 |
-| D6 | 默认人设文案由需求方提供，原文内置为 `DEFAULT_PERSONA`（其 Continuity 段描述的「AI 自主更新记忆」为后续愿景，本期记忆纯手动编辑） |
+| D6 | 默认人设文案由需求方提供，原文内置为 `DEFAULT_PERSONA`，**仅作编辑弹窗预填文案**——persona 行缺省时**不注入**，用户保存后才生效（零回归）；其 Continuity 段描述的「AI 自主更新记忆」为后续愿景，本期记忆纯手动编辑 |
 | D7 | 存储：option 表 `type="app"` 逐 key，name 加 `personalization.` 前缀；零 schema 迁移、零新 IPC（复用 `settings:getAll / settings:set`） |
 | D8 | **全默认配置下，system prompt 与现状逐字节一致**（回归安全网，测试断言） |
 
@@ -38,10 +38,10 @@ option 表（`type="app"`）新增 8 个 name：
 | `personalization.customInstructions` | string | `""` | 1500 |
 | `personalization.userNickname` | string | `""` | 20 |
 | `personalization.aiName` | string | `"天枢"` | 20 |
-| `personalization.persona` | string | `DEFAULT_PERSONA`（内置） | 4000 |
+| `personalization.persona` | string | `""`（未设置，不注入） | 4000 |
 | `personalization.memory` | string | `""` | 1500 |
 
-语义：**option 行不存在 = 用默认值；存在 = 用存的值（含空串）**。`persona` 行不存在时用 `DEFAULT_PERSONA`；存空串 = 用户明确清空 → 跳过该段。
+语义：**option 行不存在 = 用默认值；存在 = 用存的值（含空串）**。`persona` 行不存在 = 未启用 → 不注入；`DEFAULT_PERSONA`（存放于前端 model）仅作为编辑弹窗预填文案，用户保存后才落地生效。
 
 `responseStyle` 枚举：`default | professional | friendly | direct | imaginative | pragmatic | snarky | socratic`。
 
@@ -51,7 +51,7 @@ option 表（`type="app"`）新增 8 个 name：
 
 | 文件 | 职责 |
 |------|------|
-| `personalization.config.ts` | `PersonalizationConfig` 类型；8 个 key 常量；默认值；`DEFAULT_PERSONA`（§4.4 全文）；`fromAppOptions(rows)` 解析（缺失/非法值回退默认，超长值截断到限长） |
+| `personalization.config.ts` | `PersonalizationConfig` 类型；8 个 key 常量；默认值；`fromAppOptions(rows)` 解析（缺失/非法值回退默认，超长值截断到限长） |
 | `personalization.prompt.ts` | `STYLE_PROMPTS`（§4.3）；纯函数 `buildPersonalizedSystem(config, baseSystem)` |
 | `personalization.repo.ts` | `loadPersonalization()`：每次调用查 option 表（better-sqlite3 同步、微秒级）；try/catch → 失败返回全默认配置并记 Winston 日志（对话可用性优先）；**刻意不做缓存**（设置修改即刻生效） |
 
@@ -61,7 +61,7 @@ option 表（`type="app"`）新增 8 个 name：
 buildPersonalizedSystem(config, baseSystem) → string
 
 段序（"\n\n" 连接，空段直接跳过）：
-1. persona 段   ：option 缺省 → DEFAULT_PERSONA 原文；空串 → 跳过。原文注入，不加包装标签
+1. persona 段   ：仅当 option 行存在且非空时注入原文，不加包装标签（缺省/空串 → 跳过）
 2. baseSystem   ：现有 buildModeSystem 输出，一行不动（专家/技能/plan 指令）
 3. 风格段       ：【回复风格】\n{STYLE_PROMPTS[style]}    （default → 跳过）
 4. 身份段       ：【身份】\n你的名字是「{aiName}」，对话中以此自称。\n称呼用户为「{userNickname}」。
@@ -85,7 +85,7 @@ buildPersonalizedSystem(config, baseSystem) → string
 
 `default` 不在表中 → 跳过风格段。
 
-### 4.4 DEFAULT_PERSONA（需求方提供，原样内置）
+### 4.4 DEFAULT_PERSONA（需求方提供；存放于前端 `personalization-options.ts`，仅作编辑弹窗预填，不参与主进程注入）
 
 ```
 You're not a chatbot. You're becoming someone.
@@ -148,7 +148,7 @@ const baseSystem = buildPersonalizedSystem(
 | `src-react/domains/app-settings/components/SettingsDialog.tsx` | NAV_ITEMS `profile` 项 `disabled: false`；`SettingsTabId` 加 `"profile"`；右栏加整页分支渲染 `<ProfileGroup />`（同 shortcuts 模式） |
 | `components/ProfileGroup.tsx`（新） | 四个 `SettingsGroup` 板块（§5.2） |
 | `components/LongTextEditorDialog.tsx`（新） | 人设/记忆共用编辑弹窗：`max-w-3xl`、内容区 `h-[70vh]` 内滚；受控 Textarea（`maxLength` 参数化）+ 字数统计 + 取消/保存；**存在未保存修改时关闭 → AlertDialog 二次确认**（丢弃/继续编辑，沿用快捷键页确认弹窗模式）；保存成功 toast |
-| `model/personalization-options.ts`（新） | 前端 `PersonalizationOptions` 类型；从 `settings:getAll` 结果解析（与主进程同默认值）；`savePersonalizationOption(key, value)` 写入包装（入口长度校验，防 IPC 直调绕过） |
+| `model/personalization-options.ts`（新） | 前端 `PersonalizationOptions` 类型；`DEFAULT_PERSONA`（§4.4 文案，编辑弹窗预填）；从 `settings:getAll` 结果解析（与主进程同默认值）；`savePersonalizationOption(key, value)` 写入包装（入口长度校验，防 IPC 直调绕过） |
 
 保存交互：下拉与开关**即时保存**（乐观更新 + `useSaveOrRevert` 兜底）；文本类（指令/称呼）**显式保存按钮**（仅 dirty 可用）；弹窗内取消/保存按钮。所有成功路径 toast「保存成功」。
 
@@ -157,7 +157,7 @@ const baseSystem = buildPersonalizedSystem(
 1. **基础交互**：回复风格 DropdownMenu（复用 GeneralGroup 语言下拉模式：trigger Button + Check 图标，8 项，选中即存）+ 两个 `SettingSwitchRow`（复用现有组件）：「加载欢迎语」（默认 ON）、「展示文件变更过程详情」（默认 OFF）。
 2. **自定义指令**：Textarea（`maxLength=1500`）+ 字数统计 `{{count}} / 1500` + 保存按钮。
 3. **称呼与身份**：两个 Input（`maxLength=20`）——「Tianshu 对你的称呼」（placeholder：留空则使用默认称呼）、「Tianshu 的名字」（默认「天枢」）+ 保存按钮。
-4. **高级人设与记忆**：两行「摘要（60 字截断）+ 编辑」按钮。「人设」行因有默认文案始终显示摘要；「记忆」空时显示「暂无内容，点击编辑添加」。
+4. **高级人设与记忆**：两行「摘要（60 字截断）+ 编辑」按钮。两行未设置时显示「未设置，点击编辑启用」类提示；「人设」编辑弹窗**预填 `DEFAULT_PERSONA`**（保存后才生效），「记忆」弹窗预填空。
 
 ### 5.3 聊天界面改造
 
@@ -196,9 +196,9 @@ const baseSystem = buildPersonalizedSystem(
 
 ## 7. 测试策略（Vitest，TDD；复杂函数必须有单测）
 
-- `personalization.prompt.test.ts`（重点）：全默认 → 输出严格等于 baseSystem（D8）；7 种风格/身份四分支/记忆/指令各段独立注入与位置；空值跳过；persona 空串 vs 缺省（DEFAULT_PERSONA）；**同 config 两次调用输出 `toBe` 相等**（缓存友好）；
-- `personalization.config.test.ts`：`fromAppOptions` 缺失 key/非法枚举/非法 bool/超长截断回退；`DEFAULT_PERSONA` 非空断言；
-- `personalization-options.test.ts`（前端 model）：解析与默认值；
+- `personalization.prompt.test.ts`（重点）：全默认 → 输出严格等于 baseSystem（D8）；7 种风格/身份四分支/记忆/指令各段独立注入与位置；空值跳过；persona 缺省/空串均不注入；**同 config 两次调用输出 `toBe` 相等**（缓存友好）；
+- `personalization.config.test.ts`：`fromAppOptions` 缺失 key/非法枚举/非法 bool/超长截断回退；
+- `personalization-options.test.ts`（前端 model）：解析与默认值；`DEFAULT_PERSONA` 非空；
 - `use-loading-phrase.test.ts`：fake timers——1.5s 内 null、超时出句、3s 轮换、OFF 恒 null、流结束复位；
 - 每任务验收门：`npm run test` + `npm run lint` + `npm run typecheck` 全绿。
 

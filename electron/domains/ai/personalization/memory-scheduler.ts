@@ -1,7 +1,8 @@
 /**
  * 记忆定时器（spec §5.2）：30s tick 决策 + 启动补跑（>24h 延迟 90s）。
- * 进程级 inflight 互斥（AbortController，退出时 abort 在途请求）；失败静默
- * 记日志等下一轮。provider/model 查询面由外部注入（repo 构造器注册 IPC，
+ * 在途互斥走 memory-inflight 共享模块（与 memory.service 手动触发共用，
+ * 定时与手动不并发）；退出时 stop 统一 abort 在途请求；失败静默记日志
+ * 等下一轮。provider/model 查询面由外部注入（repo 构造器注册 IPC，
  * 此处二次 new 会因重复注册抛错，故复用 Application 已建实例）。
  */
 import prisma from "../../../commons/prisma-client";
@@ -17,6 +18,7 @@ import {
 } from "./memory-compiler";
 import { loadPersonalization } from "./personalization.repo";
 import { PERSONALIZATION_KEYS } from "./personalization.config";
+import { abortInflight, acquire, isInflight, release } from "./memory-inflight";
 
 const TICK_MS = 30_000;
 const CATCHUP_DELAY_MS = 90_000;
@@ -73,7 +75,6 @@ export function decideMemoryTick(
 export default class MemoryScheduler {
   private timer: NodeJS.Timeout | null = null;
   private catchUpTimer: NodeJS.Timeout | null = null;
-  private abort: AbortController | null = null;
   private catchUpPending = false;
 
   constructor(private deps: MemorySchedulerDeps) {}
@@ -100,15 +101,15 @@ export default class MemoryScheduler {
       clearTimeout(this.catchUpTimer);
       this.catchUpTimer = null;
     }
-    this.abort?.abort();
-    this.abort = null;
+    // 共享在途槽统一 abort（含 service 手动触发的在途，spec §5.2 退出语义）
+    abortInflight();
   }
 
   private async loadState(): Promise<MemoryTickState> {
     const config = await loadPersonalization();
     return {
       enabled: config.memoryEnabled,
-      inflight: this.abort !== null,
+      inflight: isInflight(),
       lastCompiledAt: config.memoryLastCompiledAt,
       catchUpPending: this.catchUpPending,
     };
@@ -126,19 +127,19 @@ export default class MemoryScheduler {
     }
   }
 
-  /** 执行一次整理（inflight 互斥；补跑标志消费后不复位） */
+  /** 执行一次整理（共享 inflight 互斥；补跑标志消费后不复位） */
   private async run(): Promise<void> {
-    if (this.abort) {
+    const abort = acquire();
+    if (!abort) {
       return;
     }
     this.catchUpPending = false;
-    this.abort = new AbortController();
     try {
-      await this.compileOnce(this.abort.signal);
+      await this.compileOnce(abort.signal);
     } catch (error) {
       Log.warn("记忆整理失败（等待下一轮）", error);
     } finally {
-      this.abort = null;
+      release(abort);
     }
   }
 

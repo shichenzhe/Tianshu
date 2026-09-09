@@ -53,6 +53,7 @@ vi.mock(
 import { createMemoryHandlers } from "../../electron/domains/ai/personalization/memory.service";
 import type { MemoryModelContext } from "../../electron/domains/ai/personalization/memory-compiler";
 import MemoryScheduler from "../../electron/domains/ai/personalization/memory-scheduler";
+import { PERSONALIZATION_KEYS } from "../../electron/domains/ai/personalization/personalization.config";
 import {
   acquire,
   isInflight,
@@ -119,7 +120,7 @@ function mkHandlers(overrides: {
 }
 
 describe("applyMemoryInstruction", () => {
-  it("成功返回新记忆（草稿）且不落库（spec §5.4 裁决）", async () => {
+  it("成功返回新记忆且直接落库 Profile（不更新 LastCompiledAt，修订 2026-09-10）", async () => {
     const save = vi.fn(async () => {});
     const h = createMemoryHandlers({
       loadConfig: async () => ({
@@ -137,7 +138,16 @@ describe("applyMemoryInstruction", () => {
       ok: true,
       memory: fourSectionMemory("新记忆"),
     });
-    expect(save).not.toHaveBeenCalled();
+    expect(save).toHaveBeenCalledWith(
+      PERSONALIZATION_KEYS.memoryProfile,
+      fourSectionMemory("新记忆"),
+    );
+    // LastCompiledAt 语义为「定时整理时间」，指令应用不算，避免干扰
+    // 「当日未整理」判断（修订 2026-09-10 验收反馈）
+    expect(save).not.toHaveBeenCalledWith(
+      PERSONALIZATION_KEYS.memoryLastCompiledAt,
+      expect.anything(),
+    );
   });
   it("开关关 → MEMORY_DISABLED", async () => {
     const h = mkHandlers({ enabled: false });

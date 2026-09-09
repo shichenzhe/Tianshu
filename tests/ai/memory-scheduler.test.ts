@@ -1,6 +1,7 @@
 /**
  * memory-scheduler 单测（spec §5.2）：决策纯函数（整理窗口 / 当日已整理 /
- * 补跑条件 / 开关 / inflight 互斥 / 失败退避）+ 运行时 catchUp 消费语义。
+ * 补跑条件 / 开关 / inflight 互斥 / 失败退避）+ 运行时 catchUp 消费语义
+ * + 整理失败原因持久化（修订 A：memoryLastError）。
  * scheduler 模块顶层 import memory-compiler（→ prisma-client/Log）在 vitest
  * node 环境即崩——照 memory-compiler.test 先例先 mock electron 与
  * prisma-client 两个基建模块；运行时用例另以 importOriginal 局部改写
@@ -19,18 +20,19 @@ vi.mock("electron", () => ({
 // updateMany/create 回写 stub 行模拟真实落库（成功整理后 tick 应转 noop）
 const prismaStubs = vi.hoisted(() => ({
   optionRows: [] as Array<{ name: string; value: string }>,
+  messageRows: [
+    {
+      id: 1,
+      role: "user",
+      blocks: JSON.stringify([{ type: "text", text: "对话材料" }]),
+    },
+  ] as Array<{ id: number; role: string; blocks: string }>,
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     workspace: { findMany: vi.fn(async () => []) },
     message: {
-      findMany: vi.fn(async () => [
-        {
-          id: 1,
-          role: "user",
-          blocks: JSON.stringify([{ type: "text", text: "对话材料" }]),
-        },
-      ]),
+      findMany: vi.fn(async () => prismaStubs.messageRows),
     },
     option: {
       findMany: vi.fn(async () => prismaStubs.optionRows),
@@ -240,6 +242,143 @@ describe("catchUp 消费语义（M4，spec §5.2 修订）", () => {
       // 成功落库后（stub 回写 LastCompiledAt）当夜不再重复整理
       await vi.advanceTimersByTimeAsync(30 * 60_000);
       expect(compileMemoryMock).toHaveBeenCalledTimes(1);
+      scheduler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+/** 运行时用例统一复位共享 stub（option 行清空 + 消息材料恢复默认一条） */
+function resetRuntimeStubs() {
+  prismaStubs.optionRows.length = 0;
+  prismaStubs.messageRows.length = 0;
+  prismaStubs.messageRows.push({
+    id: 1,
+    role: "user",
+    blocks: JSON.stringify([{ type: "text", text: "对话材料" }]),
+  });
+}
+
+/** 当前 memoryLastError 行值（缺行 = undefined） */
+const memoryLastErrorValue = () =>
+  prismaStubs.optionRows.find(
+    (row) => row.name === "personalization.memoryLastError",
+  )?.value;
+
+function mkScheduler(
+  listModels: () => Promise<
+    Array<{ id: number; providerId: number; modelId: string; enabled: boolean }>
+  > = async () => [{ id: 1, providerId: 1, modelId: "m1", enabled: true }],
+) {
+  return new MemoryScheduler({
+    providerRepo: {
+      getRuntimeInfo: async () => ({
+        type: "openai-compatible",
+        baseUrl: "http://x",
+      }),
+    },
+    modelRepo: {
+      getById: async (id: number) => ({
+        id,
+        providerId: 1,
+        modelId: "m1",
+        enabled: true,
+      }),
+      listAll: listModels,
+    },
+  });
+}
+
+describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
+  it("编译失败 → 失败原因写入 memoryLastError（超长截断 200），成功后清除", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(atSeconds(1, 0, 0)); // 01:00：90s 补跑计时到点
+      resetRuntimeStubs();
+      compileMemoryMock.mockReset();
+      compileMemoryMock.mockRejectedValue(new Error("boom"));
+
+      const scheduler = mkScheduler();
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(90_000); // 补跑 → run → 编译失败
+      expect(compileMemoryMock).toHaveBeenCalledTimes(1);
+      expect(memoryLastErrorValue()).toBe("记忆整理失败：boom");
+
+      // 夜间窗口重试再失败（超长原因）：截断到 200 字
+      compileMemoryMock.mockRejectedValue(new Error("x".repeat(300)));
+      await vi.advanceTimersByTimeAsync(60 * 60_000); // → 02:01:30 窗口内
+      expect(compileMemoryMock).toHaveBeenCalledTimes(2);
+      const truncated = memoryLastErrorValue() ?? "";
+      expect(truncated.startsWith("记忆整理失败：")).toBe(true);
+      expect(truncated).toHaveLength(200);
+
+      // 恢复成功 → 清除失败标记 + 落库 Profile/LastCompiledAt
+      compileMemoryMock.mockResolvedValue(COMPILED_MD);
+      await vi.advanceTimersByTimeAsync(10 * 60_000); // 退避期满窗口内重试
+      expect(memoryLastErrorValue()).toBe("");
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.memoryProfile",
+        )?.value,
+      ).toBe(COMPILED_MD);
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.memoryLastCompiledAt",
+        )?.value,
+      ).toBeTruthy();
+      scheduler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("无对话材料早退 → 不写也不清 memoryLastError（跳过不算失败）", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(atSeconds(1, 0, 0));
+      resetRuntimeStubs();
+      prismaStubs.messageRows.length = 0; // 无对话材料
+      prismaStubs.optionRows.push({
+        name: "personalization.memoryLastError",
+        value: "记忆整理失败：旧原因",
+      });
+      compileMemoryMock.mockReset();
+      compileMemoryMock.mockResolvedValue(COMPILED_MD);
+
+      const scheduler = mkScheduler();
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(compileMemoryMock).not.toHaveBeenCalled();
+      expect(memoryLastErrorValue()).toBe("记忆整理失败：旧原因"); // 不清空
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.memoryProfile",
+        ),
+      ).toBeUndefined(); // 未写 Profile / LastCompiledAt
+      scheduler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("无可用模型早退 → 不写也不清 memoryLastError", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(atSeconds(1, 0, 0));
+      resetRuntimeStubs();
+      prismaStubs.optionRows.push({
+        name: "personalization.memoryLastError",
+        value: "记忆整理失败：旧原因",
+      });
+      compileMemoryMock.mockReset();
+      compileMemoryMock.mockResolvedValue(COMPILED_MD);
+
+      const scheduler = mkScheduler(async () => []); // 无可用模型
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(compileMemoryMock).not.toHaveBeenCalled();
+      expect(memoryLastErrorValue()).toBe("记忆整理失败：旧原因");
       scheduler.stop();
     } finally {
       vi.useRealTimers();

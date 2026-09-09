@@ -24,6 +24,7 @@ describe("defaultPersonalization", () => {
       memoryProfile: "",
       memoryEnabled: true,
       memoryLastCompiledAt: "",
+      memoryLastError: "",
     });
   });
 });
@@ -75,6 +76,7 @@ describe("fromAppOptions", () => {
       { name: PERSONALIZATION_KEYS.memory, value: long },
       { name: PERSONALIZATION_KEYS.memoryProfile, value: long },
       { name: PERSONALIZATION_KEYS.memoryLastCompiledAt, value: long },
+      { name: PERSONALIZATION_KEYS.memoryLastError, value: long },
     ]);
     expect(config.customInstructions).toHaveLength(1500);
     expect(config.userNickname).toHaveLength(20);
@@ -83,10 +85,15 @@ describe("fromAppOptions", () => {
     expect(config.memory).toHaveLength(1500);
     expect(config.memoryProfile).toHaveLength(8000);
     expect(config.memoryLastCompiledAt).toHaveLength(40);
+    expect(config.memoryLastError).toHaveLength(200);
   });
 
   it("memoryLastCompiledAt 限长收口于 PERSONALIZATION_LIMITS（T2b）", () => {
     expect(PERSONALIZATION_LIMITS.memoryLastCompiledAt).toBe(40);
+  });
+
+  it("memoryLastError 限长收口于 PERSONALIZATION_LIMITS（修订 A：失败可观测）", () => {
+    expect(PERSONALIZATION_LIMITS.memoryLastError).toBe(200);
   });
 
   it("非个性化前缀的行被忽略", () => {

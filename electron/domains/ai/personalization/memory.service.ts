@@ -1,12 +1,12 @@
 /**
  * 记忆 IPC 服务（spec §4/§5.1）：编辑指令应用 + 手动整理触发。
  * 错误以错误码返回（不 throw 到渲染端），渲染层映射 i18n；在途互斥走
- * memory-inflight 共享模块（与定时整理不并发，spec §5.2）。指令模式为
- * 纯「AI 应用到记忆文本」计算，不落库（spec §5.4：结果作为前端草稿，
- * 用户点保存才持久化）；整理路径落库 Profile + LastCompiledAt。依赖全
- * 注入（createMemoryHandlers 纯逻辑可测），MemoryService 仅做生产依赖
- * 组装与 IPC 注册——repo 为 Application 已建实例（构造器会
- * ipcMain.handle，二次 new 因重复注册抛错，故构造注入复用）。
+ * memory-inflight 共享模块（与定时整理不并发，spec §5.2）。指令应用与
+ * 整理路径均直接落库 Profile（修订 2026-09-10 验收反馈）；仅整理路径
+ * 更新 LastCompiledAt。依赖全注入（createMemoryHandlers 纯逻辑可测），
+ * MemoryService 仅做生产依赖组装与 IPC 注册——repo 为 Application 已建
+ * 实例（构造器会 ipcMain.handle，二次 new 因重复注册抛错，故构造注入
+ * 复用）。
  */
 import { ipcMain } from "electron";
 
@@ -93,7 +93,7 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
     return { ok: true, model, currentMemory: config.memoryProfile, material };
   };
 
-  /** 编译（锁内执行）：失败或输出非法 → MEMORY_COMPILE_FAILED；指令模式不落库 */
+  /** 编译（锁内执行）：失败或输出非法 → MEMORY_COMPILE_FAILED；指令模式不更新 LastCompiledAt */
   const execute = async (
     gate: Extract<MemoryGate, { ok: true }>,
     instructionMode: boolean,
@@ -115,16 +115,16 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
     if (memory === null) {
       return { ok: false, error: "MEMORY_COMPILE_FAILED" };
     }
-    // 指令模式不落库（spec §5.4 裁决）：结果仅作为前端文本域草稿，
-    // 持久化决策权在用户保存按钮；整理路径写 Profile + LastCompiledAt
-    if (instructionMode) {
-      return { ok: true, memory };
-    }
+    // 指令应用直接落库（修订 2026-09-10 验收反馈）；但不更新
+    // memoryLastCompiledAt——该时间戳语义为定时整理时间，指令应用
+    // 不算，避免干扰「当日未整理」判断
     await deps.save(PERSONALIZATION_KEYS.memoryProfile, memory);
-    await deps.save(
-      PERSONALIZATION_KEYS.memoryLastCompiledAt,
-      new Date().toISOString(),
-    );
+    if (!instructionMode) {
+      await deps.save(
+        PERSONALIZATION_KEYS.memoryLastCompiledAt,
+        new Date().toISOString(),
+      );
+    }
     return { ok: true, memory };
   };
 

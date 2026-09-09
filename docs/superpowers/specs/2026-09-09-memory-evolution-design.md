@@ -24,27 +24,32 @@
 
 ## 3. 数据模型
 
-option 表（type="app"）新增 3 个 key：
+option 表（type="app"）新增 4 个 key：
 
-| key | 类型 | 说明 |
-|---|---|---|
-| `personalization.memoryProfile` | markdown 文本 | 记忆正文，限长 8000（解析端截断保尾部最新） |
-| `personalization.memoryEnabled` | bool | 生成开关，默认 true |
-| `personalization.memoryLastCompiledAt` | ISO 时间 | 上次整理时间；缺省 = 从未整理 |
+| key                                    | 类型          | 说明                                        |
+| -------------------------------------- | ------------- | ------------------------------------------- |
+| `personalization.memoryProfile`        | markdown 文本 | 记忆正文，限长 8000（解析端截断保尾部最新） |
+| `personalization.memoryEnabled`        | bool          | 生成开关，默认 true                         |
+| `personalization.memoryLastCompiledAt` | ISO 时间      | 上次整理时间；缺省 = 从未整理               |
+| `personalization.memoryLastError`      | 文本          | 最近一次整理失败原因；空 = 无失败           |
 
 ### 3.1 记忆 markdown 格式（全链路统一约定）
 
 ```markdown
 ## 工作背景
+
 用户参与 Tianshu 项目，负责 UI 复刻…
 
 ## 个人背景
+
 用户位于福建厦门…
 
 ## 当前关注
+
 [2026-09-08] - Tianshu 项目 UI 界面复刻…
 
 ## 近期动态
+
 [2026-09-08] - 开始推进 Tianshu 项目相关工作
 [2026-09-07] - 查询厦门天气
 ```
@@ -67,14 +72,14 @@ option 表（type="app"）新增 3 个 key：
 
 ## 4. 架构与模块
 
-| 位置 | 文件 | 职责 |
-|---|---|---|
-| 主进程 | `electron/domains/ai/personalization/memory-markdown.ts` | 纯函数：切分/拼接/合并/规范化 markdown（展示切分、导入解析、AI 输出校验共用） |
-| 主进程 | `electron/domains/ai/personalization/memory-compiler.ts` | AI 管线：读近期对话 → 调默认模型 → 返回新记忆 markdown |
-| 主进程 | `electron/domains/ai/personalization/memory-scheduler.ts` | 定时器：每晚窗口 + 启动补跑，进程级 inflight 互斥 |
-| 主进程 | `electron/domains/ai/personalization/memory.service.ts` | IPC 注册：`personalization:applyMemoryInstruction`、`personalization:compileMemory` |
-| 渲染进程 | `src-react/domains/app-settings/components/MemoryGroup.tsx` | 「记忆与进化」整页 |
-| 渲染进程 | `src-react/domains/app-settings/components/memory/` | ResetMemoryDialog、ImportMemoryDialog 等子组件 |
+| 位置     | 文件                                                        | 职责                                                                                |
+| -------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| 主进程   | `electron/domains/ai/personalization/memory-markdown.ts`    | 纯函数：切分/拼接/合并/规范化 markdown（展示切分、导入解析、AI 输出校验共用）       |
+| 主进程   | `electron/domains/ai/personalization/memory-compiler.ts`    | AI 管线：读近期对话 → 调默认模型 → 返回新记忆 markdown                              |
+| 主进程   | `electron/domains/ai/personalization/memory-scheduler.ts`   | 定时器：每晚窗口 + 启动补跑，进程级 inflight 互斥                                   |
+| 主进程   | `electron/domains/ai/personalization/memory.service.ts`     | IPC 注册：`personalization:applyMemoryInstruction`、`personalization:compileMemory` |
+| 渲染进程 | `src-react/domains/app-settings/components/MemoryGroup.tsx` | 「记忆与进化」整页                                                                  |
+| 渲染进程 | `src-react/domains/app-settings/components/memory/`         | ResetMemoryDialog、ImportMemoryDialog 等子组件                                      |
 
 - 设置读写复用现有 `settings:getAll` / `settings:set` IPC；缓存沿用 React Query `["personalization"]`（staleTime Infinity + 保存后 invalidate），与既有模式一致。
 - `SettingsDialog` 左栏导航加第 5 项「记忆与进化」（Lightbulb 图标），插在「个性化」之后。
@@ -83,11 +88,11 @@ option 表（type="app"）新增 3 个 key：
 
 ### 5.1 触发路径（共用 compiler）
 
-| 路径 | 触发 | 输入 |
-|---|---|---|
+| 路径     | 触发                     | 输入                |
+| -------- | ------------------------ | ------------------- |
 | 定时整理 | MemoryScheduler 窗口命中 | 近期对话 + 当前记忆 |
-| 启动补跑 | MemoryScheduler 启动检查 | 同上 |
-| 编辑指令 | 用户在编辑输入框发送 | 用户指令 + 当前记忆 |
+| 启动补跑 | MemoryScheduler 启动检查 | 同上                |
+| 编辑指令 | 用户在编辑输入框发送     | 用户指令 + 当前记忆 |
 
 ### 5.2 MemoryScheduler 决策（30s tick）
 
@@ -119,7 +124,7 @@ compile():
 
 ### 5.4 编辑指令交互
 
-发送 → 输入框/按钮 loading → IPC → 返回新 memoryProfile → **作为文本域草稿刷新（不直接落库）**，用户点「保存」才持久化。
+发送 → 输入框/按钮 loading → IPC → AI 应用 → **直接落库并返回新记忆**，前端刷新展示（修订 2026-09-10 验收反馈：记忆文本只读渲染，修改仅经 AI 指令，指令结果直接持久化）。
 
 ## 6. 前端交互（MemoryGroup）
 
@@ -155,14 +160,14 @@ compile():
 
 ## 7. 错误处理
 
-| 场景 | 行为 |
-|---|---|
-| AI 指令失败/超时 | Toast「记忆指令应用失败」，文本域保留原草稿 |
-| 定时/补跑失败 | Log.warn 静默，等下一 tick/窗口 |
-| 无可用模型 | 指令路径 Toast 提示先配置模型；定时静默跳过 |
-| 保存失败 | Toast `settings:error.saveFailed` |
-| 复制失败 | 按钮旁提示「复制失败，请手动选择复制」 |
-| 解析失败 | 导入回退工作背景（§6.4）；AI 输出失败保原记忆（§5.3） |
+| 场景             | 行为                                                                        |
+| ---------------- | --------------------------------------------------------------------------- |
+| AI 指令失败/超时 | Toast「记忆指令应用失败」，文本域保留原草稿                                 |
+| 定时/补跑失败    | Log.warn 静默，等下一 tick/窗口 + 失败原因写入 memoryLastError 供设置页展示 |
+| 无可用模型       | 指令路径 Toast 提示先配置模型；定时静默跳过                                 |
+| 保存失败         | Toast `settings:error.saveFailed`                                           |
+| 复制失败         | 按钮旁提示「复制失败，请手动选择复制」                                      |
+| 解析失败         | 导入回退工作背景（§6.4）；AI 输出失败保原记忆（§5.3）                       |
 
 ## 8. i18n
 

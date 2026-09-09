@@ -2,7 +2,8 @@
  * 记忆定时器（spec §5.2）：30s tick 决策 + 启动补跑（>24h 延迟 90s）。
  * 在途互斥走 memory-inflight 共享模块（与 memory.service 手动触发共用，
  * 定时与手动不并发）；退出时 stop 统一 abort 在途请求；失败静默记日志
- * 等下一轮（I1：失败后 10 分钟内不再尝试）。90s 补跑评估无论结果均消费
+ * 并将原因持久化 memoryLastError 供设置页展示（修订 A），等下一轮
+ * （I1：失败后 10 分钟内不再尝试）。90s 补跑评估无论结果均消费
  * 补跑标志（M4），未满足 24h 时不再阻塞夜间窗口分支。provider/model
  * 查询面由外部注入（repo 构造器注册 IPC，此处二次 new 会因重复注册抛错，
  * 故复用 Application 已建实例）。
@@ -19,7 +20,10 @@ import {
   type ProviderRuntimeSource,
 } from "./memory-compiler";
 import { loadPersonalization } from "./personalization.repo";
-import { PERSONALIZATION_KEYS } from "./personalization.config";
+import {
+  PERSONALIZATION_KEYS,
+  PERSONALIZATION_LIMITS,
+} from "./personalization.config";
 import { abortInflight, acquire, isInflight, release } from "./memory-inflight";
 
 const TICK_MS = 30_000;
@@ -155,9 +159,28 @@ export default class MemoryScheduler {
       await this.compileOnce(abort.signal);
     } catch (error) {
       this.lastAttemptAt = Date.now(); // I1：10 分钟退避起点
+      await this.recordError(error); // 失败可观测（修订 A）
       Log.warn("记忆整理失败（10 分钟后重试）", error);
     } finally {
       release(abort);
+    }
+  }
+
+  /** 失败原因写入 memoryLastError（限长 200）供设置页展示；写失败仅记日志 */
+  private async recordError(error: unknown): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    const reason = `记忆整理失败：${message}`.slice(
+      0,
+      PERSONALIZATION_LIMITS.memoryLastError,
+    );
+    try {
+      await setAppOption(
+        prisma.option,
+        PERSONALIZATION_KEYS.memoryLastError,
+        reason,
+      );
+    } catch (saveError) {
+      Log.warn("写入 memoryLastError 失败", saveError);
     }
   }
 
@@ -198,5 +221,8 @@ export default class MemoryScheduler {
       PERSONALIZATION_KEYS.memoryLastCompiledAt,
       new Date().toISOString(),
     );
+    // 成功清除失败标记（修订 A）；无材料/无模型早退不写不清
+    // （跳过不算失败）
+    await setAppOption(prisma.option, PERSONALIZATION_KEYS.memoryLastError, "");
   }
 }

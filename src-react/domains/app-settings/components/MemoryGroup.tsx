@@ -30,6 +30,7 @@ import {
   MEMORY_SECTION_DEFS,
   buildMemoryMarkdown,
   parseMemoryMarkdown,
+  truncateMemoryMarkdown,
   type MemorySectionKey,
   type MemorySections,
 } from "../model/memory-markdown";
@@ -46,6 +47,9 @@ import SettingSwitchRow from "./SettingSwitchRow";
 
 /** 单条（单行）超过该字数折叠，点「展开」查看全文（spec §6.2 单条粒度） */
 const LINE_COLLAPSE_LIMIT = 500;
+
+/** AI 指令输入框限长（M1 前端侧；主进程入口另有 2000 截断兜底） */
+const INSTRUCTION_MAX_LENGTH = 500;
 
 /** 保存函数签名（与 ProfileGroup 的 PersistFn 同构） */
 type PersistFn = (
@@ -69,6 +73,12 @@ export default function MemoryGroup() {
     [items],
   );
   const revert = useSaveOrRevert();
+
+  // M2 数据新鲜度：mount 即失效刷新——夜间整理落库后打开设置页能拉到
+  // 新值（staleTime Infinity 保持不变，沿用域内「写后 invalidate」模式）
+  useEffect(() => {
+    void queryClient.invalidateQueries({ queryKey: ["personalization"] });
+  }, [queryClient]);
 
   const persistQuiet = useCallback<PersistFn>(
     async (key, value) => {
@@ -123,9 +133,11 @@ export default function MemoryGroup() {
 
   const saveEdit = useCallback(async () => {
     try {
+      // M5 截断方向统一：拼接后再截断（超限保尾部最新），与主进程
+      // truncateMemoryMarkdown 同向，落库值恒 ≤8000
       await persistQuiet(
         PERSONALIZATION_KEYS.memoryProfile,
-        buildMemoryMarkdown(draft),
+        truncateMemoryMarkdown(buildMemoryMarkdown(draft)),
       );
       toast.success(t("settings:memory.toast.saved"));
       setEditing(false);
@@ -435,6 +447,7 @@ function EditableMemorySections(props: EditableMemorySectionsProps) {
           onChange={(event) => onInstructionChange(event.target.value)}
           onKeyDown={handleInstructionKeyDown}
           placeholder={t("settings:memory.edit.instructionPlaceholder")}
+          maxLength={INSTRUCTION_MAX_LENGTH}
           disabled={applying}
           className="h-8 text-xs"
         />

@@ -84,6 +84,7 @@ vi.mock("../../src-react/domains/app-settings/api/settings.api", () => ({
 
 import MemoryGroup from "../../src-react/domains/app-settings/components/MemoryGroup";
 import SettingsDialog from "../../src-react/domains/app-settings/components/SettingsDialog";
+import { SettingsApi } from "../../src-react/domains/app-settings/api/settings.api";
 
 const PROFILE_MD = [
   "## 工作背景",
@@ -280,6 +281,50 @@ describe("SettingsDialog 记忆导航", () => {
     await waitFor(() =>
       expect(screen.getByText("settings:memory.sections.work")).toBeTruthy(),
     );
+  });
+});
+
+describe("MemoryGroup 数据新鲜度（M2）", () => {
+  beforeEach(() => {
+    mockItems = [];
+    setMock.mockClear();
+    vi.mocked(SettingsApi.getAll).mockClear();
+  });
+  afterEach(() => cleanup());
+
+  it("mount 即失效刷新：缓存持有旧值时，重开页面拉到落库新值", async () => {
+    // 首次挂载：拉到旧记忆（进入 React Query 缓存，staleTime Infinity）
+    mockItems = [{ name: "personalization.memoryProfile", value: PROFILE_MD }];
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const first = render(
+      <QueryClientProvider client={client}>
+        <MemoryGroup />
+      </QueryClientProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("后端工程师，主攻分布式存储")).toBeTruthy(),
+    );
+    first.unmount();
+    // 夜间整理落库：数据源更新为新内容
+    mockItems = [
+      {
+        name: "personalization.memoryProfile",
+        value: "## 工作背景\n夜间新整理",
+      },
+    ];
+    // 二次挂载（同一缓存）：无 mount 失效刷新则永远读旧缓存
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryGroup />
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("夜间新整理")).toBeTruthy());
+    expect(screen.queryByText("后端工程师，主攻分布式存储")).toBeNull();
+    expect(
+      vi.mocked(SettingsApi.getAll).mock.calls.length,
+    ).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -537,5 +582,32 @@ describe("MemoryGroup 编辑模式", () => {
         "## 工作背景\n第一次写入",
       ),
     );
+  });
+
+  it("保存超限草稿：拼接后截断到 8000（保尾部最新）再落库（M5）", async () => {
+    mockItems = [];
+    renderGroup();
+    const work = await enterEditMode();
+    fireEvent.change(work, {
+      // 9000 字：拼接 "## 工作背景\n" 后共 9007 字，超 8000 限
+      target: { value: `头${"甲".repeat(8998)}尾` },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.save" }),
+    );
+    await waitFor(() => expect(setMock).toHaveBeenCalled());
+    const saved = setMock.mock.calls.find(
+      ([name]) => name === "personalization.memoryProfile",
+    )?.[1] as string;
+    expect(saved).toHaveLength(8000);
+    expect(saved.endsWith("尾")).toBe(true);
+    expect(saved).not.toContain("头"); // 头部（含节标题）被截去，尾部最新保留
+  });
+
+  it("AI 指令输入框 maxLength=500（M1 前端限长）", async () => {
+    mockItems = [{ name: "personalization.memoryProfile", value: PROFILE_MD }];
+    renderGroup();
+    await enterEditMode();
+    expect(findInstructionInput().getAttribute("maxlength")).toBe("500");
   });
 });

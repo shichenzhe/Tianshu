@@ -4,9 +4,10 @@
  * ② 粘贴返回结果 → 先剥代码块围栏再 mergeMemoryMarkdown 合并追加（近期
  * 动态按日期重排）。未识别到任何四节标题 → 回退 toast（内容仍全进工作
  * 背景，merge 自身处理）；成功 → toast + 关闭清空；失败 → toast 且弹窗
- * 保持打开。
+ * 保持打开。T9：复制复位计时器存 ref 于关闭/卸载时清理；导入进行中
+ * 拦截用户关闭（取消禁用 + onOpenChange 关闭请求忽略），防半途状态丢失。
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -48,14 +49,29 @@ export default function ImportMemoryDialog({
   const [value, setValue] = useState("");
   const [copied, setCopied] = useState(false);
   const [importing, setImporting] = useState(false);
+  // T9a：复制复位计时器存 ref，弹窗关闭/卸载时清理（防越界 setState）
+  const copiedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 每次打开重置粘贴内容与复制态（关闭期间状态不跨次残留）
+  const clearCopiedResetTimer = useCallback(() => {
+    if (copiedResetTimer.current !== null) {
+      clearTimeout(copiedResetTimer.current);
+      copiedResetTimer.current = null;
+    }
+  }, []);
+
+  // 卸载兜底清理（T9a）
+  useEffect(() => clearCopiedResetTimer, [clearCopiedResetTimer]);
+
+  // 每次打开重置粘贴内容与复制态，关闭时清掉挂起的复位计时器
+  // （关闭期间状态不跨次残留）
   useEffect(() => {
     if (open) {
       setValue("");
       setCopied(false);
+    } else {
+      clearCopiedResetTimer();
     }
-  }, [open]);
+  }, [open, clearCopiedResetTimer]);
 
   const prompt = getImportPrompt(
     i18n.language.startsWith("en") ? "en-US" : "zh-CN",
@@ -66,7 +82,10 @@ export default function ImportMemoryDialog({
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
-      setTimeout(() => setCopied(false), COPIED_RESET_MS);
+      copiedResetTimer.current = setTimeout(
+        () => setCopied(false),
+        COPIED_RESET_MS,
+      );
     } catch {
       toast.error(t("settings:memory.toast.copyFailed"));
     }
@@ -92,8 +111,16 @@ export default function ImportMemoryDialog({
     }
   };
 
+  /** T9b：导入进行中忽略用户关闭请求（取消/Esc/遮罩/× 均走 false 方向） */
+  const requestOpenChange = (next: boolean) => {
+    if (importing && !next) {
+      return;
+    }
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestOpenChange}>
       <DialogContent className="sm:max-w-lg border-border/50 rounded-lg shadow-lg">
         <DialogHeader>
           <DialogTitle>{t("settings:memory.importDialog.title")}</DialogTitle>
@@ -145,6 +172,7 @@ export default function ImportMemoryDialog({
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
+            disabled={importing}
             className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
           >
             {t("common:cancel")}

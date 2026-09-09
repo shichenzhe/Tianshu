@@ -79,7 +79,12 @@ describe("导入提示词", () => {
     }
     expect(p).toContain("[YYYY-MM-DD]");
   });
-  it("en 提示词存在且非空", () => {
-    expect(getImportPrompt("en-US").length).toBeGreaterThan(50);
+  it("en 提示词存在且非空，且四个中文分类标题齐备（T6b）", () => {
+    const p = getImportPrompt("en-US");
+    expect(p.length).toBeGreaterThan(50);
+    for (const t of ["工作背景", "个人背景", "当前关注", "近期动态"]) {
+      expect(p).toContain(`## ${t}`);
+    }
+    expect(p).toContain("[YYYY-MM-DD]");
   });
 });

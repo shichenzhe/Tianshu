@@ -385,6 +385,116 @@ describe("ImportMemoryDialog", () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(findPasteTextarea().value).toBe(FOUR_TITLE_MD);
   });
+
+  it("复制复位计时器在弹窗关闭与卸载时被清理（T9a）", async () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout");
+    try {
+      const onOpenChange = vi.fn();
+      const onImported = vi.fn(async () => undefined);
+      const view = render(
+        <ImportMemoryDialog
+          open
+          onOpenChange={onOpenChange}
+          currentMemory={CURRENT_MD}
+          onImported={onImported}
+        />,
+      );
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "settings:memory.importDialog.step1.copy",
+        }),
+      );
+      await act(async () => {}); // flush clipboard promise → setCopied(true) + 挂复位计时器
+      // 复位计时器（delay 恰为 COPIED_RESET_MS=2000）在延迟参数上可唯一定位
+      const idx = setTimeoutSpy.mock.calls.findIndex(
+        (call) => call[1] === 2000,
+      );
+      expect(idx).toBeGreaterThanOrEqual(0);
+      const timerId = setTimeoutSpy.mock.results[idx].value;
+      clearTimeoutSpy.mockClear();
+      // 关闭（open=false）：复位计时器清理，防计时器越界触发
+      view.rerender(
+        <ImportMemoryDialog
+          open={false}
+          onOpenChange={onOpenChange}
+          currentMemory={CURRENT_MD}
+          onImported={onImported}
+        />,
+      );
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(timerId);
+      // 再次复制 → 卸载路径同样清理
+      view.rerender(
+        <ImportMemoryDialog
+          open
+          onOpenChange={onOpenChange}
+          currentMemory={CURRENT_MD}
+          onImported={onImported}
+        />,
+      );
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: "settings:memory.importDialog.step1.copy",
+        }),
+      );
+      await act(async () => {});
+      const idx2 = setTimeoutSpy.mock.calls.findIndex(
+        (call, i) => call[1] === 2000 && i > idx,
+      );
+      const timerId2 = setTimeoutSpy.mock.results[idx2].value;
+      clearTimeoutSpy.mockClear();
+      view.unmount();
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(timerId2);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("importing 中：取消按钮禁用，Esc 关闭请求被忽略，完成后正常关闭（T9b）", async () => {
+    let resolveImport!: () => void;
+    const onImported = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveImport = resolve;
+        }),
+    );
+    const onOpenChange = vi.fn();
+    render(
+      <ImportMemoryDialog
+        open
+        onOpenChange={onOpenChange}
+        currentMemory={CURRENT_MD}
+        onImported={onImported}
+      />,
+    );
+    fireEvent.change(findPasteTextarea(), { target: { value: FOUR_TITLE_MD } });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings:memory.importDialog.confirm",
+      }),
+    );
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+    // 导入进行中：取消禁用 + 用户关闭请求（Esc → onOpenChange(false)）被忽略
+    expect(
+      screen
+        .getByRole("button", { name: "common:cancel" })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await act(async () => {});
+    expect(onOpenChange).not.toHaveBeenCalled();
+    // 完成后：成功路径正常关弹窗
+    await act(async () => {
+      resolveImport();
+    });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    expect(
+      screen
+        .getByRole("button", { name: "common:cancel" })
+        .hasAttribute("disabled"),
+    ).toBe(false);
+  });
 });
 
 function renderGroup() {

@@ -22,6 +22,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { invoke } from "@/lib/ipc";
 import SessionApi, { type SessionMode } from "../../api/session.api";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
@@ -119,14 +125,21 @@ export default function PlusMenu({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label={t("chat:plus.title")}
-            className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t("chat:input.addMenuHint")}
+                  className="h-8 w-8 shrink-0 p-0 hover:bg-primary-subtle hover:text-primary"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t("chat:input.addMenuHint")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"

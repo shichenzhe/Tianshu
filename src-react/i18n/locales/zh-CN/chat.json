@@ -15,7 +15,7 @@
   "sidebar": {
     "newTask": "新建任务",
     "experts": "专家·技能·连接器",
-    "automation": "自动化",
+    "automation": "定时任务",
     "library": "资料库",
     "spaces": "空间",
     "newTaskInWorkspace": "在此空间新建任务",
@@ -73,6 +73,7 @@
     "placeholder": "今天帮你做些什么？@ 引用资产文件... / 调用技能与指令",
     "send": "发送",
     "stop": "停止",
+    "addMenuHint": "可添加文件、专家、技能、连接器",
     "selectModel": "选择模型",
     "modelRequired": "请先选择模型"
   },
@@ -443,12 +444,13 @@
     "skills": "技能",
     "used": "已使用 {{used}} / {{limit}}",
     "noLimit": "已使用 {{used}} / --",
+    "tooltip": "{{percent}}% · {{used}}/{{limit}} 上下文已使用",
     "overflow": "文本过长，请截断或更换模型",
     "unavailable": "暂无数据（未配置模型或会话不存在）"
   },
   "artifacts": {
-    "open": "展开产物面板",
-    "close": "收起产物面板",
+    "open": "产物面板",
+    "close": "收起右栏",
     "overview": "概览",
     "artifacts": "产物文件",
     "workspace": "工作空间文件",

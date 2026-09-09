@@ -15,6 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import SessionApi from "../../../api/session.api";
 import { useAiUiStore, type AiArtifactsView } from "../../../store/ai-ui.store";
 import { useChatStore } from "../../store/chat.store";
@@ -165,20 +171,27 @@ export default function ArtifactsPanel({
   );
 }
 
-/** 顶栏开关按钮（ChatView 顶行右侧） */
+/** 顶栏开关按钮（ChatView 顶行右侧）：展开态提示「收起右栏」，收起态提示「产物面板」 */
 export function ArtifactsPanelToggle() {
   const { t } = useTranslation(["chat"]);
   const open = useAiUiStore((s) => s.artifactsOpen);
   const toggle = useAiUiStore((s) => s.toggleArtifacts);
+  const label = open ? t("chat:artifacts.close") : t("chat:artifacts.open");
   return (
-    <button
-      type="button"
-      aria-label={open ? t("chat:artifacts.close") : t("chat:artifacts.open")}
-      title={open ? t("chat:artifacts.close") : t("chat:artifacts.open")}
-      onClick={toggle}
-      className="rounded p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-    >
-      <PanelRight className="h-4 w-4" />
-    </button>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={label}
+            onClick={toggle}
+            className="rounded p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+          >
+            <PanelRight className="h-4 w-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

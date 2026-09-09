@@ -15,7 +15,7 @@
   "sidebar": {
     "newTask": "New Task",
     "experts": "Experts·Skills·Connectors",
-    "automation": "Automation",
+    "automation": "Scheduled Tasks",
     "library": "Library",
     "spaces": "Spaces",
     "newTaskInWorkspace": "New task in this space",
@@ -73,6 +73,7 @@
     "placeholder": "What can I help you with today? @ reference files... / use skills & commands",
     "send": "Send",
     "stop": "Stop",
+    "addMenuHint": "Add files, experts, skills, or connectors",
     "selectModel": "Select Model",
     "modelRequired": "Select a model first"
   },
@@ -443,12 +444,13 @@
     "skills": "Skills",
     "used": "Used {{used}} / {{limit}}",
     "noLimit": "Used {{used}} / --",
+    "tooltip": "{{percent}}% · {{used}}/{{limit}} context used",
     "overflow": "Text too long — trim it or switch models",
     "unavailable": "No data (no model configured or session missing)"
   },
   "artifacts": {
-    "open": "Open artifacts panel",
-    "close": "Close artifacts panel",
+    "open": "Artifacts panel",
+    "close": "Collapse right panel",
     "overview": "Overview",
     "artifacts": "Artifacts",
     "workspace": "Workspace Files",

@@ -15,6 +15,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { invoke } from "@/lib/ipc";
 import { cn } from "@/lib/utils";
 
@@ -113,40 +119,58 @@ export default function ContextUsageButton({
   const valueOf = (key: (typeof SEGMENTS)[number]["key"]): number =>
     key === "messages" ? messages : (breakdown?.[key] ?? 0);
 
+  // 悬停提示：白底圆钮有别于同行透明按钮，tooltip 带百分比与用量概览
+  const usageTooltip =
+    limit === null
+      ? t("chat:usage.noLimit", { used: formatTokens(total) })
+      : t("chat:usage.tooltip", {
+          percent: Math.round(ratio * 100),
+          used: formatTokens(total),
+          limit: formatTokens(limit),
+        });
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={t("chat:usage.title")}
-          title={t("chat:usage.title")}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-primary-subtle hover:text-primary"
-        >
-          <svg viewBox="0 0 36 36" className="h-5 w-5 -rotate-90">
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              strokeWidth="4"
-              className="stroke-border"
-            />
-            <circle
-              cx="18"
-              cy="18"
-              r="15.5"
-              fill="none"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeDasharray={`${Math.min(ratio, 1) * 97.39} 97.39`}
-              className={cn(
-                "transition-all",
-                ratio > 0 ? riskStroke(ratio) : "stroke-muted-foreground/40",
-              )}
-            />
-          </svg>
-        </button>
-      </PopoverTrigger>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                aria-label={usageTooltip}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-background shadow-sm hover:border-primary/30"
+              >
+                <svg viewBox="0 0 36 36" className="h-5 w-5 -rotate-90">
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="15.5"
+                    fill="none"
+                    strokeWidth="4"
+                    className="stroke-border"
+                  />
+                  <circle
+                    cx="18"
+                    cy="18"
+                    r="15.5"
+                    fill="none"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeDasharray={`${Math.min(ratio, 1) * 97.39} 97.39`}
+                    className={cn(
+                      "transition-all",
+                      ratio > 0
+                        ? riskStroke(ratio)
+                        : "stroke-muted-foreground/40",
+                    )}
+                  />
+                </svg>
+              </button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{usageTooltip}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <PopoverContent
         align="end"
         side="top"

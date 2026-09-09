@@ -4,10 +4,14 @@
  * - 四板块渲染：memoryProfile 按标题切分、近期动态行首 "- "、超长折叠展开
  * - 空状态：开关开等待首次编译 / 开关关展示「去开启」并持久化
  * - 开关关闭：底部 disabledNotice 提示条 + 记忆仍只读展示；开关即时持久化
+ * - 编辑模式：四 textarea（aria-label）/ 取消丢弃 / 保存落库 / AI 指令草稿
+ *   刷新（成功 loading 消失、失败 toast 且草稿保留、空指令不触发）/ 编辑态
+ *   关开关退出编辑转只读 / 空 memoryProfile 也可编辑
  * - SettingsDialog 导航：记忆项出现并可切换渲染 MemoryGroup
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -15,6 +19,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 // i18n mock：t 直接返回 key；i18n.language 供常规组语言下拉读当前值
 // （渲染 SettingsDialog 挂载 GeneralGroup，与 settings-dialog.test.tsx 同款）
@@ -29,6 +34,15 @@ vi.mock("react-i18next", () => ({
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
+}));
+
+// memory.api 模块桩：编辑态 AI 指令走 applyInstruction（IPC），jsdom 无桥接
+const applyInstructionMock = vi.hoisted(() => vi.fn());
+vi.mock("../../src-react/domains/app-settings/api/memory.api", () => ({
+  MemoryApi: {
+    applyInstruction: (...args: unknown[]) => applyInstructionMock(...args),
+    compileNow: vi.fn(async () => ({ ok: true })),
+  },
 }));
 
 // localStorage stub（常规组字体档位读写；与 settings-dialog.test.tsx 同款）
@@ -265,6 +279,263 @@ describe("SettingsDialog 记忆导航", () => {
     );
     await waitFor(() =>
       expect(screen.getByText("settings:memory.sections.work")).toBeTruthy(),
+    );
+  });
+});
+
+/** 进入编辑态并返回工作背景 textarea（各用例公共前置） */
+async function enterEditMode() {
+  fireEvent.click(
+    await screen.findByRole("button", { name: "settings:memory.actions.edit" }),
+  );
+  return (await screen.findByRole("textbox", {
+    name: "settings:memory.sections.work",
+  })) as HTMLTextAreaElement;
+}
+
+function findInstructionInput() {
+  return screen.getByPlaceholderText(
+    "settings:memory.edit.instructionPlaceholder",
+  ) as HTMLInputElement;
+}
+
+describe("MemoryGroup 编辑模式", () => {
+  beforeEach(() => {
+    mockItems = [{ name: "personalization.memoryProfile", value: PROFILE_MD }];
+    setMock.mockClear();
+    applyInstructionMock.mockReset();
+    vi.mocked(toast.success).mockClear();
+    vi.mocked(toast.error).mockClear();
+  });
+  afterEach(() => cleanup());
+
+  it("点击编辑：四板块变四个 textarea（aria-label 为四节标题）且预填切分内容", async () => {
+    renderGroup();
+    const work = await enterEditMode();
+    expect(work.value).toBe("后端工程师，主攻分布式存储");
+    const personal = screen.getByRole("textbox", {
+      name: "settings:memory.sections.personal",
+    }) as HTMLTextAreaElement;
+    expect(personal.value).toBe("常驻上海");
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "settings:memory.sections.current",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("记忆与进化模块");
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "settings:memory.sections.recent",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("[2026-09-01] 完成记忆解析");
+    // 编辑态头部：重置保留、取消/保存出现、编辑/导入隐藏（spec §6.2）
+    expect(
+      screen.getByRole("button", { name: "settings:memory.actions.reset" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "settings:memory.edit.cancel" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "settings:memory.edit.save" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "settings:memory.actions.edit" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "settings:memory.actions.import" }),
+    ).toBeNull();
+    // AI 指令输入框随编辑态出现
+    expect(findInstructionInput()).toBeTruthy();
+  });
+
+  it("点击取消：textarea 修改被丢弃，恢复展示态原文", async () => {
+    renderGroup();
+    const work = await enterEditMode();
+    fireEvent.change(work, { target: { value: "被丢弃的修改" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.cancel" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("后端工程师，主攻分布式存储")).toBeTruthy(),
+    );
+    expect(
+      screen.queryByRole("textbox", {
+        name: "settings:memory.sections.work",
+      }),
+    ).toBeNull();
+    expect(screen.queryByText("被丢弃的修改")).toBeNull();
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it("点击保存：set 收到 buildMemoryMarkdown 拼接（含修改文本）+ 成功 toast + 退出编辑", async () => {
+    renderGroup();
+    const work = await enterEditMode();
+    fireEvent.change(work, { target: { value: "新的工作内容" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.save" }),
+    );
+    await waitFor(() =>
+      expect(setMock).toHaveBeenCalledWith(
+        "personalization.memoryProfile",
+        "## 工作背景\n新的工作内容\n\n## 个人背景\n常驻上海\n\n## 当前关注\n记忆与进化模块\n\n## 近期动态\n[2026-09-01] 完成记忆解析",
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("textbox", {
+          name: "settings:memory.sections.work",
+        }),
+      ).toBeNull(),
+    );
+    expect(toast.success).toHaveBeenCalledWith("settings:memory.toast.saved");
+  });
+
+  it("AI 指令成功：loading 出现后消失，草稿刷新为返回 markdown，输入框清空，不落库", async () => {
+    renderGroup();
+    await enterEditMode();
+    let resolveApply!: (value: { ok: boolean; memory?: string }) => void;
+    applyInstructionMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveApply = resolve;
+        }),
+    );
+    const input = findInstructionInput();
+    fireEvent.change(input, { target: { value: "记住我在厦门" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.send" }),
+    );
+    expect(
+      await screen.findByText("settings:memory.edit.applying"),
+    ).toBeTruthy();
+    await act(async () => {
+      resolveApply({ ok: true, memory: "## 工作背景\n新工作背景" });
+    });
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("textbox", {
+            name: "settings:memory.sections.work",
+          }) as HTMLTextAreaElement
+        ).value,
+      ).toBe("新工作背景"),
+    );
+    await waitFor(() =>
+      expect(screen.queryByText("settings:memory.edit.applying")).toBeNull(),
+    );
+    expect(input.value).toBe("");
+    expect(applyInstructionMock).toHaveBeenCalledWith("记住我在厦门");
+    // 指令模式不落库（spec §5.4）：保存前不触发 SettingsApi.set
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it("AI 指令失败（MEMORY_MODEL_MISSING）：toast.error 错误码文案，草稿与输入框保留", async () => {
+    renderGroup();
+    const work = await enterEditMode();
+    fireEvent.change(work, { target: { value: "未保存的草稿修改" } });
+    applyInstructionMock.mockResolvedValueOnce({
+      ok: false,
+      error: "MEMORY_MODEL_MISSING",
+    });
+    const input = findInstructionInput();
+    fireEvent.change(input, { target: { value: "记住我在厦门" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.send" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "settings:memory.error.MEMORY_MODEL_MISSING",
+      ),
+    );
+    expect(
+      (
+        screen.getByRole("textbox", {
+          name: "settings:memory.sections.work",
+        }) as HTMLTextAreaElement
+      ).value,
+    ).toBe("未保存的草稿修改");
+    expect(input.value).toBe("记住我在厦门");
+    expect(setMock).not.toHaveBeenCalled();
+  });
+
+  it("AI 指令网络层 rejection：catch 后 toast 通用失败文案，草稿保留", async () => {
+    renderGroup();
+    await enterEditMode();
+    applyInstructionMock.mockRejectedValueOnce(new Error("IPC 断连"));
+    fireEvent.change(findInstructionInput(), {
+      target: { value: "记住我在厦门" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.send" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "settings:memory.toast.instructionFailed",
+      ),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "settings:memory.sections.work" }),
+    ).toBeTruthy();
+  });
+
+  it("空指令：发送按钮禁用，Enter 也不触发 applyInstruction", async () => {
+    renderGroup();
+    await enterEditMode();
+    const input = findInstructionInput();
+    const send = screen.getByRole("button", {
+      name: "settings:memory.edit.send",
+    });
+    expect(send.hasAttribute("disabled")).toBe(true);
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: "   " } });
+    expect(send.hasAttribute("disabled")).toBe(true);
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(applyInstructionMock).not.toHaveBeenCalled();
+  });
+
+  it("编辑态把开关关掉：退出编辑转只读 + disabledNotice 出现（D3 无确认弹窗）", async () => {
+    renderGroup();
+    const work = await enterEditMode();
+    fireEvent.change(work, { target: { value: "编辑中的修改" } });
+    fireEvent.click(
+      screen.getByRole("switch", { name: "settings:memory.toggle.label" }),
+    );
+    await waitFor(() =>
+      expect(setMock).toHaveBeenCalledWith(
+        "personalization.memoryEnabled",
+        "false",
+      ),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("textbox", {
+          name: "settings:memory.sections.work",
+        }),
+      ).toBeNull(),
+    );
+    expect(screen.getByText("settings:memory.disabledNotice")).toBeTruthy();
+    // 转只读：原文恢复，编辑中的修改被丢弃
+    expect(screen.getByText("后端工程师，主攻分布式存储")).toBeTruthy();
+    expect(screen.queryByText("编辑中的修改")).toBeNull();
+  });
+
+  it("memoryProfile 为空也可进入编辑：空草稿四 textarea 可写并保存", async () => {
+    mockItems = [];
+    renderGroup();
+    const work = await enterEditMode();
+    expect(work.value).toBe("");
+    fireEvent.change(work, { target: { value: "第一次写入" } });
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.edit.save" }),
+    );
+    await waitFor(() =>
+      expect(setMock).toHaveBeenCalledWith(
+        "personalization.memoryProfile",
+        "## 工作背景\n第一次写入",
+      ),
     );
   });
 });

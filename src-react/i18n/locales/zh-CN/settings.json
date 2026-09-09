@@ -210,7 +210,8 @@
       "save": "保存",
       "cancel": "取消",
       "instructionPlaceholder": "输入指令调整记忆，如：记住我在厦门 / 删掉天气相关记忆",
-      "applying": "应用中…"
+      "applying": "应用中…",
+      "send": "发送指令"
     },
     "resetDialog": {
       "title": "重置记忆",

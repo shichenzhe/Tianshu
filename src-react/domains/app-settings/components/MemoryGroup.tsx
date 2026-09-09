@@ -1,21 +1,37 @@
 /**
- * 记忆与进化页（展示态）：页头说明 + 记忆开关（即时生效）+ 管理记忆卡片
- * （编辑/导入/重置为占位按钮，交互由 Task 8/9 接入）+ 记忆画像四板块只读
- * 展示。读取复用 ["personalization"] React Query 缓存，开关复用乐观更新 +
- * revert 失败回滚模式（与 ProfileGroup 的 ToggleSection 同构）。
+ * 记忆与进化页：页头说明 + 记忆开关（即时生效）+ 管理记忆卡片（spec §6.1
+ * 单卡结构：头部按钮 + 卡内四板块内容区，超高右侧滚动）。展示态四板块
+ * 只读（单条 >500 字折叠）；编辑态四板块变 Textarea + 底部 AI 指令输入框
+ * （指令仅刷新草稿不落库，用户点「保存」才持久化，spec §5.4）。读取复用
+ * ["personalization"] React Query 缓存，开关复用乐观更新 + revert 失败
+ * 回滚模式（与 ProfileGroup 的 ToggleSection 同构）。
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type KeyboardEvent,
+  type SetStateAction,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, ChevronDown, Info } from "lucide-react";
+import { Brain, ChevronDown, Info, Loader2, Send } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { MemoryApi } from "../api/memory.api";
 import { SettingsApi } from "../api/settings.api";
 import {
   MEMORY_SECTION_DEFS,
+  buildMemoryMarkdown,
   parseMemoryMarkdown,
   type MemorySectionKey,
+  type MemorySections,
 } from "../model/memory-markdown";
 import {
   PERSONALIZATION_KEYS,
@@ -60,10 +76,90 @@ export default function MemoryGroup() {
     [queryClient],
   );
 
+  /** 展示态四节（当前持久化内容切分）：编辑初值 / 取消回滚基准 */
+  const sections = useMemo(
+    () => parseMemoryMarkdown(options.memoryProfile),
+    [options.memoryProfile],
+  );
+
   const [enabled, setEnabled] = useState(options.memoryEnabled);
   useEffect(() => setEnabled(options.memoryEnabled), [options.memoryEnabled]);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<MemorySections>(sections);
+  const [draftTouched, setDraftTouched] = useState(false);
+  const [instruction, setInstruction] = useState("");
+  const [applying, setApplying] = useState(false);
+
+  // 草稿跟随展示态四节（含数据晚到/失效刷新），用户改过草稿后不再覆盖
+  // （防数据慢到时以空草稿覆写记忆）
+  useEffect(() => {
+    if (!editing || !draftTouched) {
+      setDraft(sections);
+    }
+  }, [editing, draftTouched, sections]);
+
+  /** 用户改草稿（textarea 输入 / AI 指令刷新）即标记，退出编辑时复位 */
+  const changeDraft = useCallback(
+    (updater: (previous: MemorySections) => MemorySections) => {
+      setDraftTouched(true);
+      setDraft(updater);
+    },
+    [],
+  );
+
+  const enterEdit = useCallback(() => {
+    setDraftTouched(false);
+    setEditing(true);
+  }, []);
+
+  const cancelEdit = useCallback(() => {
+    setDraftTouched(false);
+    setEditing(false);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    try {
+      await persistQuiet(
+        PERSONALIZATION_KEYS.memoryProfile,
+        buildMemoryMarkdown(draft),
+      );
+      toast.success(t("settings:memory.toast.saved"));
+      setEditing(false);
+    } catch {
+      toast.error(t("settings:error.saveFailed"));
+    }
+  }, [draft, persistQuiet, t]);
+
+  const submitInstruction = useCallback(async () => {
+    const text = instruction.trim();
+    if (text === "") {
+      return;
+    }
+    setApplying(true);
+    try {
+      const result = await MemoryApi.applyInstruction(text);
+      if (result.ok) {
+        // 指令模式不落库（spec §5.4）：返回草稿刷新文本域，保存才持久化
+        changeDraft(() => parseMemoryMarkdown(result.memory ?? ""));
+        setInstruction("");
+      } else {
+        toast.error(t(`settings:memory.error.${result.error}`));
+      }
+    } catch {
+      toast.error(t("settings:memory.toast.instructionFailed"));
+    } finally {
+      setApplying(false);
+    }
+  }, [changeDraft, instruction, t]);
+
   const changeEnabled = useCallback(
     (checked: boolean) => {
+      if (!checked) {
+        // D3 裁决：编辑态关开关 → 退出编辑转只读（草稿由上方 effect 丢弃），
+        // 无确认弹窗
+        setDraftTouched(false);
+        setEditing(false);
+      }
       setEnabled(checked);
       revert(persistQuiet(PERSONALIZATION_KEYS.memoryEnabled, checked), () =>
         setEnabled(!checked),
@@ -71,6 +167,8 @@ export default function MemoryGroup() {
     },
     [persistQuiet, revert],
   );
+
+  const hasProfile = options.memoryProfile.trim() !== "";
 
   return (
     <div className="space-y-8">
@@ -90,57 +188,233 @@ export default function MemoryGroup() {
           onCheckedChange={changeEnabled}
         />
       </section>
-      <ManageMemoryCard />
-      {options.memoryProfile.trim() === "" ? (
+      <ManageMemoryCard
+        editing={editing}
+        sections={sections}
+        draft={draft}
+        onDraftChange={changeDraft}
+        instruction={instruction}
+        onInstructionChange={setInstruction}
+        applying={applying}
+        onSubmitInstruction={submitInstruction}
+        onEnterEdit={enterEdit}
+        onCancelEdit={cancelEdit}
+        onSaveEdit={saveEdit}
+        showContent={editing || hasProfile}
+      />
+      {!editing && !hasProfile && (
         <EmptyMemoryCard
           enabled={enabled}
           onEnable={() => changeEnabled(true)}
         />
-      ) : (
-        <MemorySectionsCard memoryProfile={options.memoryProfile} />
       )}
       {!enabled && <DisabledNotice />}
     </div>
   );
 }
 
-/** 管理记忆卡片：三按钮本任务为占位（编辑/导入/重置交互由 Task 8/9 接入） */
-function ManageMemoryCard() {
+interface ManageMemoryCardProps {
+  editing: boolean;
+  sections: MemorySections;
+  draft: MemorySections;
+  onDraftChange: (
+    updater: (previous: MemorySections) => MemorySections,
+  ) => void;
+  instruction: string;
+  onInstructionChange: Dispatch<SetStateAction<string>>;
+  applying: boolean;
+  onSubmitInstruction: () => Promise<void>;
+  onEnterEdit: () => void;
+  onCancelEdit: () => void;
+  onSaveEdit: () => Promise<void>;
+  showContent: boolean;
+}
+
+/**
+ * 管理记忆卡片（spec §6.1 单卡结构）：头部按钮（展示态 重置/编辑/导入，
+ * 编辑态 重置/取消/保存、导入隐藏）+ 卡内四板块内容区（超高右侧滚动）。
+ * 重置/导入按钮本任务为占位（弹窗由 Task 9 接入）。
+ */
+function ManageMemoryCard(props: ManageMemoryCardProps) {
   const { t } = useTranslation(["settings"]);
+  const {
+    editing,
+    sections,
+    draft,
+    onDraftChange,
+    instruction,
+    onInstructionChange,
+    applying,
+    onSubmitInstruction,
+    onEnterEdit,
+    onCancelEdit,
+    onSaveEdit,
+    showContent,
+  } = props;
   return (
-    <section className="space-y-3 rounded-lg border border-border/50 bg-card p-4">
-      <div className="space-y-0.5">
-        <h3 className="text-sm font-medium text-foreground">
-          {t("settings:memory.manage.title")}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t("settings:memory.manage.subtitle")}
-        </p>
+    <section className="rounded-lg border border-border/50 bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-medium text-foreground">
+            {t("settings:memory.manage.title")}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {t("settings:memory.manage.subtitle")}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-destructive/50 text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            {t("settings:memory.actions.reset")}
+          </Button>
+          {editing ? (
+            <>
+              <Button variant="outline" size="sm" onClick={onCancelEdit}>
+                {t("settings:memory.edit.cancel")}
+              </Button>
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => void onSaveEdit()}
+              >
+                {t("settings:memory.edit.save")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onEnterEdit}
+                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              >
+                {t("settings:memory.actions.edit")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              >
+                {t("settings:memory.actions.import")}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-        >
-          {t("settings:memory.actions.edit")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-        >
-          {t("settings:memory.actions.import")}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-        >
-          {t("settings:memory.actions.reset")}
-        </Button>
-      </div>
+      {showContent && (
+        <div className="mt-4 max-h-[60vh] space-y-5 overflow-y-auto pr-1">
+          {editing ? (
+            <EditableMemorySections
+              draft={draft}
+              onDraftChange={onDraftChange}
+              instruction={instruction}
+              onInstructionChange={onInstructionChange}
+              applying={applying}
+              onSubmitInstruction={onSubmitInstruction}
+            />
+          ) : (
+            MEMORY_SECTION_DEFS.map(({ key }) => (
+              <MemorySectionBlock
+                key={key}
+                sectionKey={key}
+                text={sections[key]}
+              />
+            ))
+          )}
+        </div>
+      )}
     </section>
+  );
+}
+
+interface EditableMemorySectionsProps {
+  draft: MemorySections;
+  onDraftChange: (
+    updater: (previous: MemorySections) => MemorySections,
+  ) => void;
+  instruction: string;
+  onInstructionChange: Dispatch<SetStateAction<string>>;
+  applying: boolean;
+  onSubmitInstruction: () => Promise<void>;
+}
+
+/** 编辑态内容区：四板块 Textarea（draft 受控）+ 底部 AI 指令输入行 */
+function EditableMemorySections(props: EditableMemorySectionsProps) {
+  const { t } = useTranslation(["settings"]);
+  const {
+    draft,
+    onDraftChange,
+    instruction,
+    onInstructionChange,
+    applying,
+    onSubmitInstruction,
+  } = props;
+
+  const changeSection = (key: MemorySectionKey, value: string) => {
+    onDraftChange((previous) => {
+      const next: MemorySections = { ...previous };
+      next[key] = value;
+      return next;
+    });
+  };
+
+  /** Enter 提交指令（空指令不触发），Shift 无换行语义（单行输入框） */
+  const handleInstructionKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && !applying && instruction.trim() !== "") {
+      event.preventDefault();
+      void onSubmitInstruction();
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {MEMORY_SECTION_DEFS.map(({ key }) => (
+        <div key={key} className="space-y-1.5">
+          <h4 className="text-sm font-medium text-foreground">
+            {t(`settings:memory.sections.${key}`)}
+          </h4>
+          <Textarea
+            aria-label={t(`settings:memory.sections.${key}`)}
+            value={draft[key]}
+            onChange={(event) => changeSection(key, event.target.value)}
+            className="min-h-[80px] text-xs leading-relaxed"
+          />
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <Input
+          value={instruction}
+          onChange={(event) => onInstructionChange(event.target.value)}
+          onKeyDown={handleInstructionKeyDown}
+          placeholder={t("settings:memory.edit.instructionPlaceholder")}
+          disabled={applying}
+          className="h-8 text-xs"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          className="h-8 w-8 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+          onClick={() => void onSubmitInstruction()}
+          disabled={applying || instruction.trim() === ""}
+          aria-label={t("settings:memory.edit.send")}
+        >
+          {applying ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Send size={14} />
+          )}
+        </Button>
+        {applying && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t("settings:memory.edit.applying")}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -175,21 +449,6 @@ function EmptyMemoryCard({
           </Button>
         )}
       </div>
-    </section>
-  );
-}
-
-/** 四板块卡片：parseMemoryMarkdown 按固定标题切分后逐节渲染 */
-function MemorySectionsCard({ memoryProfile }: { memoryProfile: string }) {
-  const sections = useMemo(
-    () => parseMemoryMarkdown(memoryProfile),
-    [memoryProfile],
-  );
-  return (
-    <section className="space-y-5 rounded-lg border border-border/50 bg-card p-4">
-      {MEMORY_SECTION_DEFS.map(({ key }) => (
-        <MemorySectionBlock key={key} sectionKey={key} text={sections[key]} />
-      ))}
     </section>
   );
 }

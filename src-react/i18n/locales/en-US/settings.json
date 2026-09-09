@@ -225,7 +225,8 @@
       "save": "Save",
       "cancel": "Cancel",
       "instructionPlaceholder": "Enter an instruction to adjust memory, e.g. Remember I'm in Xiamen / Delete weather-related memories",
-      "applying": "Applying…"
+      "applying": "Applying…",
+      "send": "Send instruction"
     },
     "resetDialog": {
       "title": "Reset Memory",

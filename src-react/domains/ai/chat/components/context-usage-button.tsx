@@ -119,7 +119,7 @@ export default function ContextUsageButton({
   const valueOf = (key: (typeof SEGMENTS)[number]["key"]): number =>
     key === "messages" ? messages : (breakdown?.[key] ?? 0);
 
-  // 悬停提示：白底圆钮有别于同行透明按钮，tooltip 带百分比与用量概览
+  // 悬停气泡：有别于其他按钮的默认深色气泡，白底 + 百分比与用量概览
   const usageTooltip =
     limit === null
       ? t("chat:usage.noLimit", { used: formatTokens(total) })
@@ -138,7 +138,7 @@ export default function ContextUsageButton({
               <button
                 type="button"
                 aria-label={usageTooltip}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/50 bg-background shadow-sm hover:border-primary/30"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full hover:bg-primary-subtle hover:text-primary"
               >
                 <svg viewBox="0 0 36 36" className="h-5 w-5 -rotate-90">
                   <circle
@@ -168,7 +168,9 @@ export default function ContextUsageButton({
               </button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent>{usageTooltip}</TooltipContent>
+          <TooltipContent className="border border-border/50 bg-background text-foreground">
+            {usageTooltip}
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <PopoverContent

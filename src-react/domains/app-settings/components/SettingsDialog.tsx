@@ -1,7 +1,8 @@
 /**
  * 设置面板对话框
- * 左栏固定宽导航（通用/快捷键为可用页；个人主页/外观占位禁用），
- * 右栏按导航切换：通用页四分组（常规/权限/存储/通知）或快捷键页整页
+ * 左栏固定宽导航（通用/个性化/快捷键为可用页；外观占位禁用），
+ * 右栏按导航切换：通用页四分组（常规/权限/存储/通知）、个性化页整页
+ * 或快捷键页整页
  */
 
 import { useEffect, useState } from "react";
@@ -27,6 +28,7 @@ import PermissionsGroup from "./PermissionsGroup";
 import StorageGroup from "./StorageGroup";
 import NotificationsGroup from "./NotificationsGroup";
 import ShortcutsGroup from "./ShortcutsGroup";
+import ProfileGroup from "./ProfileGroup";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -34,7 +36,7 @@ interface SettingsDialogProps {
 }
 
 /** 右栏可用页 id（其余导航项为占位禁用） */
-type SettingsTabId = "general" | "shortcuts";
+type SettingsTabId = "general" | "profile" | "shortcuts";
 
 /** 导航项（disabled = 占位，敬请期待） */
 const NAV_ITEMS: {
@@ -43,7 +45,7 @@ const NAV_ITEMS: {
   disabled: boolean;
 }[] = [
   { id: "general", icon: Settings, disabled: false },
-  { id: "profile", icon: UserRound, disabled: true },
+  { id: "profile", icon: UserRound, disabled: false },
   { id: "appearance", icon: Palette, disabled: true },
   { id: "shortcuts", icon: Keyboard, disabled: false },
 ];
@@ -97,10 +99,14 @@ export default function SettingsDialog({
               </button>
             ))}
           </nav>
-          {/* 右栏：按导航切换通用页/快捷键页 */}
+          {/* 右栏：按导航切换通用页/个性化页/快捷键页 */}
           {activeTab === "shortcuts" ? (
             <div className="flex-1 overflow-y-auto p-6">
               <ShortcutsGroup />
+            </div>
+          ) : activeTab === "profile" ? (
+            <div className="flex-1 overflow-y-auto p-6">
+              <ProfileGroup />
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-6 space-y-8">

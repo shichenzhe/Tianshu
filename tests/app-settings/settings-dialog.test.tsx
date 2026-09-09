@@ -2,8 +2,9 @@
 /**
  * SettingsDialog 组件测试（jsdom + testing-library）：
  * - 打开面板：渲染标题与四个分组标题（常规/权限/存储/通知）
- * - 导航占位：个人主页/外观 disabled；通用/快捷键可交互（快捷键页
- *   交互见 settings-shortcuts.test.tsx）
+ * - 导航占位：外观 disabled；通用/个性化/快捷键可交互（快捷键页
+ *   交互见 settings-shortcuts.test.tsx；个性化页控件交互见
+ *   personalization-group.test.tsx）
  * - 常规组-语言：下拉选择调用 i18n.changeLanguage；字体：滑条/刻度即时生效
  * - 权限组：初始值一次性载入、开关即时保存与失败回滚、代理三态切换与
  *   自定义表单显隐/校验/保存参数
@@ -21,6 +22,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import SettingsDialog from "../../src-react/domains/app-settings/components/SettingsDialog";
 import type { StorageInfo } from "../../src-react/domains/app-settings/api/settings.api";
@@ -106,7 +108,15 @@ function stubInvoke(handlers: Record<string, () => unknown> = {}) {
 
 /** 渲染打开态设置面板，并冲刷挂载期异步载入（避免 act 外更新） */
 async function renderDialog() {
-  render(<SettingsDialog open onOpenChange={vi.fn()} />);
+  // 个性化页走 React Query（ProfileGroup useQuery 读 getAll），需 Provider
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <SettingsDialog open onOpenChange={vi.fn()} />
+    </QueryClientProvider>,
+  );
   await act(async () => {});
 }
 
@@ -158,22 +168,41 @@ describe("SettingsDialog 骨架", () => {
     expect(screen.getByText("settings:groups.notification")).toBeTruthy();
   });
 
-  it("导航占位：个人主页/外观禁用，通用/快捷键可交互", async () => {
+  it("导航占位：外观禁用，通用/个性化/快捷键可交互", async () => {
     await renderDialog();
-    for (const id of ["general", "shortcuts"]) {
+    for (const id of ["general", "profile", "shortcuts"]) {
       const item = screen.getByRole("button", {
         name: new RegExp(`settings:nav.${id}`),
       }) as HTMLButtonElement;
       expect(item.disabled).toBe(false);
       expect(item.title).toBe("");
     }
-    for (const id of ["profile", "appearance"]) {
-      const item = screen.getByRole("button", {
-        name: new RegExp(`settings:nav.${id}`),
-      }) as HTMLButtonElement;
-      expect(item.disabled).toBe(true);
-      expect(item.title).toBe("settings:nav.comingSoon");
-    }
+    const appearance = screen.getByRole("button", {
+      name: /settings:nav.appearance/,
+    }) as HTMLButtonElement;
+    expect(appearance.disabled).toBe(true);
+    expect(appearance.title).toBe("settings:nav.comingSoon");
+  });
+
+  it("导航切换：个性化页可点击并渲染 ProfileGroup 四分组标题", async () => {
+    await renderDialog();
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings:nav.profile/ }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText("settings:personalization.groups.basic"),
+      ).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("settings:personalization.groups.instructions"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("settings:personalization.groups.identity"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("settings:personalization.groups.advanced"),
+    ).toBeTruthy();
   });
 
   it("常规组-语言：下拉选择调用 i18n.changeLanguage", async () => {

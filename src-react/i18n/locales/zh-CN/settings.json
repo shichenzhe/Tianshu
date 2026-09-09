@@ -2,7 +2,7 @@
   "title": "设置",
   "nav": {
     "general": "通用",
-    "profile": "个人主页",
+    "profile": "个性化",
     "appearance": "外观",
     "shortcuts": "快捷键",
     "comingSoon": "敬请期待"
@@ -76,6 +76,62 @@
   "personalization": {
     "charCount": "{{count}} / {{max}}",
     "savedToast": "保存成功",
+    "groups": {
+      "basic": "基础交互",
+      "instructions": "自定义指令",
+      "identity": "称呼与身份",
+      "advanced": "高级人设与记忆"
+    },
+    "style": {
+      "label": "回复风格",
+      "options": {
+        "default": { "label": "默认", "desc": "不设定特定风格" },
+        "professional": { "label": "专业严谨", "desc": "清晰、准确、值得信赖" },
+        "friendly": { "label": "亲和友善", "desc": "温暖、平易近人、鼓励支持" },
+        "direct": { "label": "直言不讳", "desc": "简明扼要、直击要点" },
+        "imaginative": {
+          "label": "天马行空",
+          "desc": "富有想象力、善用比喻类比"
+        },
+        "pragmatic": { "label": "高效务实", "desc": "最少文字、最大信息量" },
+        "snarky": { "label": "毒舌吐槽", "desc": "犀利吐槽、但绝不伤人" },
+        "socratic": { "label": "启发引导", "desc": "用提问引导思考、授人以渔" }
+      }
+    },
+    "welcomeLoading": {
+      "label": "加载欢迎语",
+      "desc": "AI 响应较久时轮换显示随机问候语，缓解等待焦虑"
+    },
+    "fileChangeDetails": {
+      "label": "展示文件变更过程详情",
+      "desc": "AI 执行文件操作时实时展开操作步骤；历史消息不受影响"
+    },
+    "customInstructions": {
+      "label": "自定义指令",
+      "desc": "全局生效的补充规则，自动拼接在每次对话中",
+      "placeholder": "如：回答先给结论再展开；始终使用 Python 代码示例"
+    },
+    "userNickname": {
+      "label": "Tianshu 对你的称呼",
+      "desc": "AI 在对话中以此称呼你",
+      "placeholder": "留空则使用默认称呼"
+    },
+    "aiName": {
+      "label": "Tianshu 的名字",
+      "desc": "AI 在对话中的自称，默认「天枢」",
+      "placeholder": "天枢"
+    },
+    "persona": {
+      "label": "人设 / 人格描述",
+      "desc": "AI 的底层 System Prompt，定义其世界观与行为准则",
+      "empty": "未设置，点击编辑启用"
+    },
+    "memory": {
+      "label": "长期记忆",
+      "desc": "希望 AI 永远记住的信息，每轮对话自动携带",
+      "empty": "暂无内容，点击编辑添加"
+    },
+    "edit": "编辑",
     "editor": {
       "save": "保存",
       "cancel": "取消",

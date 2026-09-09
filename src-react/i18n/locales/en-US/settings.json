@@ -2,7 +2,7 @@
   "title": "Settings",
   "nav": {
     "general": "General",
-    "profile": "Profile",
+    "profile": "Personalization",
     "appearance": "Appearance",
     "shortcuts": "Shortcuts",
     "comingSoon": "Coming Soon"
@@ -76,6 +76,77 @@
   "personalization": {
     "charCount": "{{count}} / {{max}}",
     "savedToast": "Saved",
+    "groups": {
+      "basic": "Basics",
+      "instructions": "Custom Instructions",
+      "identity": "Names & Identity",
+      "advanced": "Persona & Memory"
+    },
+    "style": {
+      "label": "Response style",
+      "options": {
+        "default": { "label": "Default", "desc": "No specific style" },
+        "professional": {
+          "label": "Professional",
+          "desc": "Clear, accurate, trustworthy"
+        },
+        "friendly": {
+          "label": "Friendly",
+          "desc": "Warm, approachable, supportive"
+        },
+        "direct": {
+          "label": "Straightforward",
+          "desc": "Concise, straight to the point"
+        },
+        "imaginative": {
+          "label": "Imaginative",
+          "desc": "Rich metaphors and analogies"
+        },
+        "pragmatic": {
+          "label": "Pragmatic",
+          "desc": "Minimal words, maximum information"
+        },
+        "snarky": { "label": "Snarky", "desc": "Sharp wit, never hurtful" },
+        "socratic": {
+          "label": "Socratic",
+          "desc": "Guide thinking with questions"
+        }
+      }
+    },
+    "welcomeLoading": {
+      "label": "Loading greetings",
+      "desc": "Show rotating greetings while the AI is taking longer to respond"
+    },
+    "fileChangeDetails": {
+      "label": "Show file operation details",
+      "desc": "Expand file tool steps in real time; history messages stay collapsed"
+    },
+    "customInstructions": {
+      "label": "Custom instructions",
+      "desc": "Global rules appended to every conversation",
+      "placeholder": "e.g. Lead with the conclusion; always use Python examples"
+    },
+    "userNickname": {
+      "label": "What Tianshu calls you",
+      "desc": "How the AI addresses you in conversations",
+      "placeholder": "Leave empty for the default"
+    },
+    "aiName": {
+      "label": "Tianshu's name",
+      "desc": "How the AI refers to itself; default is Tianshu",
+      "placeholder": "Tianshu"
+    },
+    "persona": {
+      "label": "Persona description",
+      "desc": "The AI's underlying system prompt: worldview and behavior",
+      "empty": "Not set — click edit to enable"
+    },
+    "memory": {
+      "label": "Long-term memory",
+      "desc": "Facts the AI should always remember, injected every turn",
+      "empty": "Nothing yet — click edit to add"
+    },
+    "edit": "Edit",
     "editor": {
       "save": "Save",
       "cancel": "Cancel",

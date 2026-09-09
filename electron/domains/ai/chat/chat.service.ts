@@ -13,6 +13,8 @@ import {
 } from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
+import { buildPersonalizedSystem } from "../personalization/personalization.prompt";
+import { loadPersonalization } from "../personalization/personalization.repo";
 import {
   blocksToModelMessages,
   parseBlocks,
@@ -1354,10 +1356,11 @@ export default class ChatService {
         ? []
         : await this.collectEnabledSkills(agent.workspacePath);
     // 压缩态摘要段:拼在模式 system 之后(无 base 时单独成段)
-    const baseSystem = buildModeSystem(
-      mode,
-      assistantRow?.systemPrompt,
-      skills,
+    // 个性化段注入（spec §4.5）：persona 前置 + 行为段后置，全默认时逐字节还原
+    const personalization = await loadPersonalization();
+    const baseSystem = buildPersonalizedSystem(
+      personalization,
+      buildModeSystem(mode, assistantRow?.systemPrompt, skills),
     );
     const systemWithSummary =
       compacted && session.summary

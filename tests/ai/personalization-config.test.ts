@@ -10,7 +10,7 @@ import {
 } from "../../electron/domains/ai/personalization/personalization.config";
 
 describe("defaultPersonalization", () => {
-  it("默认值：default 风格 / 欢迎语开 / 文件详情关 / 文本空 / aiName 天枢 / persona 空", () => {
+  it("默认值：default 风格 / 欢迎语开 / 文件详情关 / 文本空 / aiName 天枢 / persona 空 / 画像记忆默认", () => {
     expect(defaultPersonalization()).toEqual({
       responseStyle: "default",
       welcomeLoading: true,
@@ -20,6 +20,9 @@ describe("defaultPersonalization", () => {
       aiName: "天枢",
       persona: "",
       memory: "",
+      memoryProfile: "",
+      memoryEnabled: true,
+      memoryLastCompiledAt: "",
     });
   });
 });

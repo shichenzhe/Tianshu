@@ -71,6 +71,11 @@ function personalSegments(
       `【用户长期记忆】\n以下是用户希望你长期记住的信息，请在对话中遵循：\n${config.memory}`,
     );
   }
+  if (config.memoryProfile.trim() !== "") {
+    segments.push(
+      `【用户画像记忆】\n以下是系统从对话中提炼的用户画像，请在对话中参考：\n${config.memoryProfile}`,
+    );
+  }
   if (config.customInstructions.trim() !== "") {
     segments.push(
       `【用户自定义指令】\n用户设定的全局规则，必须遵守：\n${config.customInstructions}`,

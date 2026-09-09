@@ -23,7 +23,9 @@ import { loadPersonalization } from "../../electron/domains/ai/personalization/p
 import {
   PERSONALIZATION_KEYS,
   defaultPersonalization,
+  fromAppOptions,
 } from "../../electron/domains/ai/personalization/personalization.config";
+import { buildPersonalizedSystem } from "../../electron/domains/ai/personalization/personalization.prompt";
 
 describe("loadPersonalization", () => {
   beforeEach(() => {
@@ -63,5 +65,53 @@ describe("loadPersonalization", () => {
     await expect(loadPersonalization()).resolves.toEqual(
       defaultPersonalization(),
     );
+  });
+});
+
+describe("记忆画像字段（memory-evolution spec §3）", () => {
+  it("默认值：memoryProfile 空、memoryEnabled true、lastCompiledAt 空", () => {
+    const config = fromAppOptions([]);
+    expect(config.memoryProfile).toBe("");
+    expect(config.memoryEnabled).toBe(true);
+    expect(config.memoryLastCompiledAt).toBe("");
+  });
+
+  it("option 行解析三字段并截断 memoryProfile", () => {
+    const long = "x".repeat(9000);
+    const config = fromAppOptions([
+      { name: "personalization.memoryProfile", value: long },
+      { name: "personalization.memoryEnabled", value: "false" },
+      {
+        name: "personalization.memoryLastCompiledAt",
+        value: "2026-09-08T18:00:00.000Z",
+      },
+    ]);
+    expect(config.memoryProfile).toHaveLength(8000);
+    expect(config.memoryEnabled).toBe(false);
+    expect(config.memoryLastCompiledAt).toBe("2026-09-08T18:00:00.000Z");
+  });
+
+  it("buildPersonalizedSystem 注入【用户画像记忆】段且位于长期记忆与自定义指令之间", () => {
+    const config = {
+      ...defaultPersonalization(),
+      memory: "手动记忆",
+      memoryProfile: "## 工作背景\n画像",
+      customInstructions: "规则",
+    };
+    const system = buildPersonalizedSystem(config, "base");
+    const idxMemory = system!.indexOf("【用户长期记忆】");
+    const idxProfile = system!.indexOf("【用户画像记忆】");
+    const idxInstr = system!.indexOf("【用户自定义指令】");
+    expect(idxProfile).toBeGreaterThan(0);
+    expect(idxMemory).toBeLessThan(idxProfile);
+    expect(idxProfile).toBeLessThan(idxInstr);
+    expect(system).toContain(
+      "以下是系统从对话中提炼的用户画像，请在对话中参考：",
+    );
+  });
+
+  it("memoryProfile 空 → 不注入画像段（D8 线级行为不回归）", () => {
+    const system = buildPersonalizedSystem(defaultPersonalization(), "base");
+    expect(system).not.toContain("【用户画像记忆】");
   });
 });

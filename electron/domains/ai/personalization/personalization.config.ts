@@ -27,6 +27,9 @@ export const PERSONALIZATION_KEYS = {
   aiName: "personalization.aiName",
   persona: "personalization.persona",
   memory: "personalization.memory",
+  memoryProfile: "personalization.memoryProfile",
+  memoryEnabled: "personalization.memoryEnabled",
+  memoryLastCompiledAt: "personalization.memoryLastCompiledAt",
 } as const;
 
 /** 文本字段限长（解析端截断，防 IPC 直调绕过 UI 的 maxLength） */
@@ -36,6 +39,7 @@ export const PERSONALIZATION_LIMITS = {
   aiName: 20,
   persona: 4000,
   memory: 1500,
+  memoryProfile: 8000,
 } as const;
 
 export interface PersonalizationConfig {
@@ -47,6 +51,9 @@ export interface PersonalizationConfig {
   aiName: string;
   persona: string;
   memory: string;
+  memoryProfile: string;
+  memoryEnabled: boolean;
+  memoryLastCompiledAt: string;
 }
 
 const RESPONSE_STYLES: readonly ResponseStyle[] = [
@@ -70,6 +77,9 @@ export function defaultPersonalization(): PersonalizationConfig {
     aiName: "天枢",
     persona: "",
     memory: "",
+    memoryProfile: "",
+    memoryEnabled: true,
+    memoryLastCompiledAt: "",
   };
 }
 
@@ -117,5 +127,11 @@ export function fromAppOptions(
     aiName: textValue(map, keys.aiName, limit.aiName, "天枢"),
     persona: textValue(map, keys.persona, limit.persona, ""),
     memory: textValue(map, keys.memory, limit.memory, ""),
+    memoryProfile: textValue(map, keys.memoryProfile, limit.memoryProfile, ""),
+    memoryEnabled: parseBoolOption(
+      map.get(keys.memoryEnabled),
+      defaultPersonalization().memoryEnabled,
+    ),
+    memoryLastCompiledAt: textValue(map, keys.memoryLastCompiledAt, 40, ""),
   };
 }

@@ -53,6 +53,14 @@
     "batchArchived": "Archived {{count}} sessions",
     "batchPartial": "Partially done: {{ok}}/{{total}}"
   },
+  "loadingPhrases": [
+    "Thinking hard...",
+    "Almost there...",
+    "Just a moment...",
+    "Putting it together...",
+    "Let me double-check...",
+    "Wrapping it up..."
+  ],
   "defaultWorkspaceName": "Default Workspace",
   "renameSession": "Rename Session",
   "deleteSession": "Delete Session",

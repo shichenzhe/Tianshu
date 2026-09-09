@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import { Check, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { useLoadingPhrase } from "../hooks/use-loading-phrase";
+import { usePersonalizationUi } from "../hooks/use-personalization-ui";
 import { summarizeThinking, type ToolPanelItem } from "../lib/group-blocks";
 import ToolCallCard from "./ToolCallCard";
 
@@ -51,6 +53,10 @@ export default function ThinkingPanel({
   const { t } = useTranslation(["chat"]);
   const [open, setOpen] = useState(defaultOpen);
 
+  // 加载欢迎语（spec §5.3A）：开关开 → 1.5s 后轮换问候语；关 → 仅 spinner 无文字
+  const { welcomeLoading } = usePersonalizationUi();
+  const phrase = useLoadingPhrase(status === "streaming" && welcomeLoading);
+
   return (
     <div className="my-1 rounded-md border border-border/50 bg-muted/30">
       {/* 头部：状态 + 摘要（点击整行切换折叠） */}
@@ -63,7 +69,7 @@ export default function ThinkingPanel({
         {status === "streaming" ? (
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            {t("chat:panel.thinkingStatus")}
+            {welcomeLoading ? (phrase ?? t("chat:panel.thinkingStatus")) : null}
           </span>
         ) : (
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">

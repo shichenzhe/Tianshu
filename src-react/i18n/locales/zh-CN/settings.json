@@ -181,5 +181,76 @@
       "atMention": "@ 提及",
       "slashCommand": "/ 命令"
     }
+  },
+  "memory": {
+    "title": "记忆与进化",
+    "description": "开启后，Tianshu 会从对话中提取上下文信息，生成关于您的个性化记忆，以便提供更贴合您需求的回应。详见隐私政策。",
+    "toggle": {
+      "label": "生成对话记忆",
+      "desc": "允许 Tianshu 从对话中提取上下文，生成个性化记忆，提供更精准的回应。"
+    },
+    "manage": {
+      "title": "管理记忆",
+      "subtitle": "记忆每晚自动整理更新"
+    },
+    "actions": {
+      "reset": "重置",
+      "edit": "编辑",
+      "import": "导入"
+    },
+    "sections": {
+      "work": "工作背景",
+      "personal": "个人背景",
+      "current": "当前关注",
+      "recent": "近期动态"
+    },
+    "expand": "展开",
+    "edit": {
+      "save": "保存",
+      "cancel": "取消",
+      "instructionPlaceholder": "输入指令调整记忆，如：记住我在厦门 / 删掉天气相关记忆",
+      "applying": "应用中…"
+    },
+    "resetDialog": {
+      "title": "重置记忆",
+      "warning1": "此操作将清空全部记忆且不可恢复。",
+      "warning2": "若「生成对话记忆」功能已开启，后续仍会生成新记忆。",
+      "warning3": "如需彻底停用，请关闭记忆功能。",
+      "confirm": "重置记忆"
+    },
+    "importDialog": {
+      "title": "导入其他记忆",
+      "step1": {
+        "title": "复制以下提示词到其他 AI 对话中",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "step2": {
+        "title": "将结果粘贴到下方，添加到 Tianshu 记忆",
+        "placeholder": "在此粘贴你的记忆"
+      },
+      "confirm": "导入"
+    },
+    "empty": {
+      "title": "开启对话记忆后，AI 将自动为您整理使用偏好与背景信息",
+      "pending": "记忆将在每晚自动整理时生成",
+      "enable": "去开启"
+    },
+    "disabledNotice": "已关闭对话记忆生成，记忆内容将不再自动更新",
+    "toast": {
+      "reset": "记忆已重置",
+      "imported": "记忆导入成功",
+      "importFallback": "未能识别分类标记，全部内容已存入工作背景",
+      "instructionFailed": "记忆指令应用失败",
+      "copyFailed": "复制失败，请手动选择复制",
+      "saved": "记忆已保存"
+    },
+    "error": {
+      "MEMORY_DISABLED": "记忆功能已关闭",
+      "MEMORY_MODEL_MISSING": "暂无可用模型，请先在服务商设置中配置",
+      "MEMORY_COMPILE_FAILED": "记忆整理失败，请稍后重试",
+      "MEMORY_NO_MATERIAL": "暂无可整理的对话内容",
+      "MEMORY_BUSY": "记忆整理进行中，请稍后再试"
+    }
   }
 }

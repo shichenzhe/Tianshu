@@ -196,5 +196,76 @@
       "atMention": "@ Mention",
       "slashCommand": "/ Command"
     }
+  },
+  "memory": {
+    "title": "Memory & Evolution",
+    "description": "When enabled, Tianshu extracts contextual information from your conversations to build a personalized memory about you, so it can respond in a way that better fits your needs. See the privacy policy for details.",
+    "toggle": {
+      "label": "Conversation Memory",
+      "desc": "Allow Tianshu to extract context from conversations and build personalized memory for more precise responses."
+    },
+    "manage": {
+      "title": "Manage Memory",
+      "subtitle": "Memory is compiled and updated automatically every night"
+    },
+    "actions": {
+      "reset": "Reset",
+      "edit": "Edit",
+      "import": "Import"
+    },
+    "sections": {
+      "work": "Work Background",
+      "personal": "Personal Background",
+      "current": "Current Focus",
+      "recent": "Recent Activity"
+    },
+    "expand": "Expand",
+    "edit": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "instructionPlaceholder": "Enter an instruction to adjust memory, e.g. Remember I'm in Xiamen / Delete weather-related memories",
+      "applying": "Applying…"
+    },
+    "resetDialog": {
+      "title": "Reset Memory",
+      "warning1": "This will erase all memories and cannot be undone.",
+      "warning2": "If Conversation Memory stays enabled, new memories will still be generated afterwards.",
+      "warning3": "To disable it completely, turn off Conversation Memory.",
+      "confirm": "Reset Memory"
+    },
+    "importDialog": {
+      "title": "Import Memories from Another AI",
+      "step1": {
+        "title": "Copy the prompt below into another AI chat",
+        "copy": "Copy",
+        "copied": "Copied"
+      },
+      "step2": {
+        "title": "Paste the result below to add it to Tianshu memory",
+        "placeholder": "Paste your memories here"
+      },
+      "confirm": "Import"
+    },
+    "empty": {
+      "title": "Once Conversation Memory is on, the AI will automatically organize your preferences and background information",
+      "pending": "Memories are generated during the nightly automatic compilation",
+      "enable": "Turn On"
+    },
+    "disabledNotice": "Conversation Memory is off; memory content will no longer update automatically",
+    "toast": {
+      "reset": "Memory has been reset",
+      "imported": "Memories imported successfully",
+      "importFallback": "No section headings recognized; all content was saved under Work Background",
+      "instructionFailed": "Failed to apply the memory instruction",
+      "copyFailed": "Copy failed; please select and copy manually",
+      "saved": "Memory saved"
+    },
+    "error": {
+      "MEMORY_DISABLED": "Memory is disabled",
+      "MEMORY_MODEL_MISSING": "No model available; configure one in provider settings first",
+      "MEMORY_COMPILE_FAILED": "Memory compilation failed, please try again later",
+      "MEMORY_NO_MATERIAL": "No conversation content available to compile yet",
+      "MEMORY_BUSY": "Memory compilation in progress, please try again shortly"
+    }
   }
 }

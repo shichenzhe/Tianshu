@@ -33,6 +33,7 @@ export const PERSONALIZATION_KEYS = {
   memoryProfile: "personalization.memoryProfile",
   memoryEnabled: "personalization.memoryEnabled",
   memoryLastCompiledAt: "personalization.memoryLastCompiledAt",
+  memoryLastError: "personalization.memoryLastError",
 } as const;
 
 /** 个性化 option 名联合（PERSONALIZATION_KEYS 的值；调用方传 PERSONALIZATION_KEYS.xxx） */
@@ -47,6 +48,10 @@ export const PERSONALIZATION_LIMITS = {
   persona: 4000,
   memory: 1500,
   memoryProfile: MEMORY_PROFILE_LIMIT,
+  /** 上次整理时间（ISO 字符串，正常 24 字符，留余量防脏数据） */
+  memoryLastCompiledAt: 40,
+  /** 最近一次整理失败原因截断（修订 A：失败可观测） */
+  memoryLastError: 200,
 } as const;
 
 /** 默认人设（需求方提供，编辑弹窗预填；Continuity 段为后续产品愿景文案） */
@@ -81,6 +86,7 @@ export interface PersonalizationOptions {
   memoryProfile: string;
   memoryEnabled: boolean;
   memoryLastCompiledAt: string;
+  memoryLastError: string;
 }
 
 const RESPONSE_STYLES: readonly ResponseStyle[] = [
@@ -107,6 +113,7 @@ export function defaultPersonalizationOptions(): PersonalizationOptions {
     memoryProfile: "",
     memoryEnabled: true,
     memoryLastCompiledAt: "",
+    memoryLastError: "",
   };
 }
 
@@ -142,6 +149,7 @@ export function parsePersonalizationOptions(
       fallback.memoryEnabled,
     ),
     memoryLastCompiledAt: map[PERSONALIZATION_KEYS.memoryLastCompiledAt] ?? "",
+    memoryLastError: map[PERSONALIZATION_KEYS.memoryLastError] ?? "",
   };
 }
 

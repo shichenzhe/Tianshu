@@ -19,7 +19,7 @@ export interface MemoryServiceResult {
 }
 
 export class MemoryApi {
-  /** 编辑态 AI 指令：返回应用后的新记忆 markdown（草稿，未落库——用户点保存才持久化） */
+  /** AI 指令：主进程直接应用并落库（修订 B），返回落库后的新记忆 markdown */
   static async applyInstruction(
     instruction: string,
   ): Promise<MemoryServiceResult> {

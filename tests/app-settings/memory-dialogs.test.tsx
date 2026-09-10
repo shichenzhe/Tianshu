@@ -7,8 +7,8 @@
  *   （mock navigator.clipboard + 2s 复位）、导入按钮空值禁用、四标题/
  *   无标题/代码块围栏三类输入的合并结果与回退 toast、onImported 失败
  *   弹窗保持打开
- * - MemoryGroup 接线：重置确认清空落库、编辑态重置先退出编辑、导入合并
- *   落库、AI 指令应用中取消/保存禁用（Task 8 移交）
+ * - MemoryGroup 接线：重置确认清空落库、指令模式中重置退出指令模式、
+ *   导入合并落库、AI 指令应用中「完成」禁用（Task 8 移交）
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -34,9 +34,13 @@ vi.mock("react-i18next", () => ({
 vi.mock("sonner", () => ({
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
-vi.mock("@/i18n", () => ({
-  default: { t: (key: string) => key },
-}));
+vi.mock("@/i18n", async () => {
+  const { zhCN } = await import("date-fns/locale");
+  return {
+    default: { t: (key: string) => key },
+    getDateFnsLocale: () => zhCN,
+  };
+});
 
 // memory.api 模块桩：MemoryGroup 编辑态 AI 指令走 applyInstruction（IPC）
 const applyInstructionMock = vi.hoisted(() => vi.fn());
@@ -508,14 +512,14 @@ function renderGroup() {
   );
 }
 
-/** 进入编辑态并返回工作背景 textarea（接线用例公共前置） */
-async function enterEditMode() {
+/** 进入 AI 指令模式并返回指令输入框（接线用例公共前置） */
+async function enterInstructionMode() {
   fireEvent.click(
     await screen.findByRole("button", { name: "settings:memory.actions.edit" }),
   );
-  return (await screen.findByRole("textbox", {
-    name: "settings:memory.sections.work",
-  })) as HTMLTextAreaElement;
+  return (await screen.findByPlaceholderText(
+    "settings:memory.edit.instructionPlaceholder",
+  )) as HTMLInputElement;
 }
 
 describe("MemoryGroup 三按钮接线", () => {
@@ -549,10 +553,10 @@ describe("MemoryGroup 三按钮接线", () => {
     await screen.findByText("settings:memory.empty.title");
   });
 
-  it("编辑态点重置：确认后退出编辑（草稿丢弃）并清空落库", async () => {
+  it("指令模式中点重置：确认后退出指令模式并清空落库", async () => {
     renderGroup();
-    const work = await enterEditMode();
-    fireEvent.change(work, { target: { value: "未保存的草稿" } });
+    const input = await enterInstructionMode();
+    fireEvent.change(input, { target: { value: "删除全部记忆" } });
     fireEvent.click(
       screen.getByRole("button", { name: "settings:memory.actions.reset" }),
     );
@@ -566,9 +570,9 @@ describe("MemoryGroup 三按钮接线", () => {
     );
     await waitFor(() =>
       expect(
-        screen.queryByRole("textbox", {
-          name: "settings:memory.sections.work",
-        }),
+        screen.queryByPlaceholderText(
+          "settings:memory.edit.instructionPlaceholder",
+        ),
       ).toBeNull(),
     );
   });
@@ -602,9 +606,9 @@ describe("MemoryGroup 三按钮接线", () => {
     );
   });
 
-  it("AI 指令应用中：取消/保存按钮禁用（Task 8 移交）", async () => {
+  it("AI 指令应用中：「完成」按钮禁用，完成后恢复（Task 8 移交）", async () => {
     renderGroup();
-    await enterEditMode();
+    await enterInstructionMode();
     let resolveApply!: (value: { ok: boolean; memory?: string }) => void;
     applyInstructionMock.mockImplementationOnce(
       () =>
@@ -626,12 +630,7 @@ describe("MemoryGroup 三按钮接线", () => {
     ).toBeTruthy();
     expect(
       screen
-        .getByRole("button", { name: "settings:memory.edit.cancel" })
-        .hasAttribute("disabled"),
-    ).toBe(true);
-    expect(
-      screen
-        .getByRole("button", { name: "settings:memory.edit.save" })
+        .getByRole("button", { name: "settings:memory.edit.done" })
         .hasAttribute("disabled"),
     ).toBe(true);
     await act(async () => {
@@ -642,7 +641,7 @@ describe("MemoryGroup 三按钮接线", () => {
     );
     expect(
       screen
-        .getByRole("button", { name: "settings:memory.edit.cancel" })
+        .getByRole("button", { name: "settings:memory.edit.done" })
         .hasAttribute("disabled"),
     ).toBe(false);
   });

@@ -205,13 +205,16 @@
       "current": "当前关注",
       "recent": "近期动态"
     },
-    "expand": "展开",
     "edit": {
-      "save": "保存",
-      "cancel": "取消",
+      "done": "完成",
       "instructionPlaceholder": "输入指令调整记忆，如：记住我在厦门 / 删掉天气相关记忆",
       "applying": "应用中…",
       "send": "发送指令"
+    },
+    "status": {
+      "lastCompiledAt": "上次整理：{{time}}",
+      "neverCompiled": "待首次整理",
+      "errorPrefix": "上次整理失败："
     },
     "resetDialog": {
       "title": "重置记忆",
@@ -244,8 +247,7 @@
       "imported": "记忆导入成功",
       "importFallback": "未能识别分类标记，全部内容已存入工作背景",
       "instructionFailed": "记忆指令应用失败",
-      "copyFailed": "复制失败，请手动选择复制",
-      "saved": "记忆已保存"
+      "copyFailed": "复制失败，请手动选择复制"
     },
     "error": {
       "MEMORY_DISABLED": "记忆功能已关闭",

@@ -44,10 +44,12 @@ describe("parsePersonalizationOptions", () => {
       { name: PERSONALIZATION_KEYS.responseStyle, value: "socratic" },
       { name: PERSONALIZATION_KEYS.fileChangeDetails, value: "true" },
       { name: PERSONALIZATION_KEYS.persona, value: "自定义人设" },
+      { name: PERSONALIZATION_KEYS.memoryLastError, value: "模型超时" },
     ]);
     expect(options.responseStyle).toBe("socratic");
     expect(options.fileChangeDetails).toBe(true);
     expect(options.persona).toBe("自定义人设");
+    expect(options.memoryLastError).toBe("模型超时");
     const bad = parsePersonalizationOptions([
       { name: PERSONALIZATION_KEYS.responseStyle, value: "nope" },
     ]);

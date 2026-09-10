@@ -1,10 +1,12 @@
 /**
  * 记忆与进化页：页头说明 + 记忆开关（即时生效）+ 管理记忆卡片（spec §6.1
- * 单卡结构：头部按钮 + 卡内四板块内容区，超高右侧滚动）。展示态四板块
- * 只读（单条 >500 字折叠）；编辑态四板块变 Textarea + 底部 AI 指令输入框
- * （指令仅刷新草稿不落库，用户点「保存」才持久化，spec §5.4）。读取复用
- * ["personalization"] React Query 缓存，开关复用乐观更新 + revert 失败
- * 回滚模式（与 ProfileGroup 的 ToggleSection 同构）。
+ * 单卡结构：头部按钮 + 卡内四板块内容区，超高右侧滚动）。修订 B：四板块
+ * 正文永远只读 markdown 渲染；「编辑」按钮切换 AI 指令模式——底部出现指令
+ * 框，指令由主进程直接应用并落库，成功后失效 ["personalization"] 缓存刷新
+ * 展示（无草稿/保存/取消概念）；导入按钮常驻；管理卡头部显示上次整理时间
+ * 与失败原因（memoryLastCompiledAt / memoryLastError，失败可观测）。
+ * 开关复用乐观更新 + revert 失败回滚模式（与 ProfileGroup 的
+ * ToggleSection 同构）。
  */
 
 import {
@@ -18,19 +20,18 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Brain, ChevronDown, Info, Loader2, Send } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { Brain, Info, Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 
+import { getDateFnsLocale } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { MemoryApi } from "../api/memory.api";
 import { SettingsApi } from "../api/settings.api";
 import {
   MEMORY_SECTION_DEFS,
-  buildMemoryMarkdown,
   parseMemoryMarkdown,
-  truncateMemoryMarkdown,
   type MemorySectionKey,
   type MemorySections,
 } from "../model/memory-markdown";
@@ -42,11 +43,9 @@ import {
 } from "../model/personalization-options";
 import { useSaveOrRevert } from "../model/use-save-or-revert";
 import ImportMemoryDialog from "./memory/ImportMemoryDialog";
+import MemoryMarkdown from "./memory/MemoryMarkdown";
 import ResetMemoryDialog from "./memory/ResetMemoryDialog";
 import SettingSwitchRow from "./SettingSwitchRow";
-
-/** 单条（单行）超过该字数折叠，点「展开」查看全文（spec §6.2 单条粒度） */
-const LINE_COLLAPSE_LIMIT = 500;
 
 /** AI 指令输入框限长（M1 前端侧；主进程入口另有 2000 截断兜底） */
 const INSTRUCTION_MAX_LENGTH = 500;
@@ -88,7 +87,7 @@ export default function MemoryGroup() {
     [queryClient],
   );
 
-  /** 展示态四节（当前持久化内容切分）：编辑初值 / 取消回滚基准 */
+  /** 四节（当前持久化内容切分）：只读展示唯一数据源 */
   const sections = useMemo(
     () => parseMemoryMarkdown(options.memoryProfile),
     [options.memoryProfile],
@@ -96,59 +95,20 @@ export default function MemoryGroup() {
 
   const [enabled, setEnabled] = useState(options.memoryEnabled);
   useEffect(() => setEnabled(options.memoryEnabled), [options.memoryEnabled]);
+  // 指令模式开关：开 = 卡片底部显示 AI 指令框（记忆正文始终只读）
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<MemorySections>(sections);
-  const [draftTouched, setDraftTouched] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [applying, setApplying] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
-  // 草稿跟随展示态四节（含数据晚到/失效刷新），用户改过草稿后不再覆盖
-  // （防数据慢到时以空草稿覆写记忆）
-  useEffect(() => {
-    if (!editing || !draftTouched) {
-      setDraft(sections);
-    }
-  }, [editing, draftTouched, sections]);
-
-  /** 用户改草稿（textarea 输入 / AI 指令刷新）即标记，退出编辑时复位 */
-  const changeDraft = useCallback(
-    (updater: (previous: MemorySections) => MemorySections) => {
-      setDraftTouched(true);
-      setDraft(updater);
-    },
-    [],
-  );
-
-  const enterEdit = useCallback(() => {
-    setDraftTouched(false);
-    setEditing(true);
+  /** 编辑按钮 = 进入指令模式 / 完成按钮 = 退出 */
+  const toggleEditing = useCallback(() => {
+    setEditing((previous) => !previous);
   }, []);
 
-  const cancelEdit = useCallback(() => {
-    setDraftTouched(false);
-    setEditing(false);
-  }, []);
-
-  const saveEdit = useCallback(async () => {
-    try {
-      // M5 截断方向统一：拼接后再截断（超限保尾部最新），与主进程
-      // truncateMemoryMarkdown 同向，落库值恒 ≤8000
-      await persistQuiet(
-        PERSONALIZATION_KEYS.memoryProfile,
-        truncateMemoryMarkdown(buildMemoryMarkdown(draft)),
-      );
-      toast.success(t("settings:memory.toast.saved"));
-      setEditing(false);
-    } catch {
-      toast.error(t("settings:error.saveFailed"));
-    }
-  }, [draft, persistQuiet, t]);
-
-  /** 重置确认（spec §6.3）：编辑态点重置先退出编辑丢弃草稿，再清空记忆 */
+  /** 重置确认（spec §6.3）：退出指令模式并清空记忆 */
   const confirmReset = useCallback(async () => {
-    setDraftTouched(false);
     setEditing(false);
     await persistQuiet(PERSONALIZATION_KEYS.memoryProfile, "");
   }, [persistQuiet]);
@@ -170,8 +130,8 @@ export default function MemoryGroup() {
     try {
       const result = await MemoryApi.applyInstruction(text);
       if (result.ok) {
-        // 指令模式不落库（spec §5.4）：返回草稿刷新文本域，保存才持久化
-        changeDraft(() => parseMemoryMarkdown(result.memory ?? ""));
+        // 主进程已应用并落库（修订 B）：失效缓存拉新值，展示随刷新
+        await queryClient.invalidateQueries({ queryKey: ["personalization"] });
         setInstruction("");
       } else {
         toast.error(t(`settings:memory.error.${result.error}`));
@@ -181,14 +141,13 @@ export default function MemoryGroup() {
     } finally {
       setApplying(false);
     }
-  }, [changeDraft, instruction, t]);
+  }, [instruction, queryClient, t]);
 
   const changeEnabled = useCallback(
     (checked: boolean) => {
       if (!checked) {
-        // D3 裁决：编辑态关开关 → 退出编辑转只读（草稿由上方 effect 丢弃），
-        // 无确认弹窗
-        setDraftTouched(false);
+        // 开关关：退出指令模式（记忆转只读，指令会被后端
+        // MEMORY_DISABLED 拒绝，编辑入口同步禁用），无确认弹窗（D3 裁决）
         setEditing(false);
       }
       setEnabled(checked);
@@ -221,16 +180,15 @@ export default function MemoryGroup() {
       </section>
       <ManageMemoryCard
         editing={editing}
+        editDisabled={!enabled}
         sections={sections}
-        draft={draft}
-        onDraftChange={changeDraft}
+        lastCompiledAt={options.memoryLastCompiledAt}
+        lastError={options.memoryLastError}
         instruction={instruction}
         onInstructionChange={setInstruction}
         applying={applying}
         onSubmitInstruction={submitInstruction}
-        onEnterEdit={enterEdit}
-        onCancelEdit={cancelEdit}
-        onSaveEdit={saveEdit}
+        onToggleEditing={toggleEditing}
         onReset={() => setResetOpen(true)}
         onImport={() => setImportOpen(true)}
         showContent={editing || hasProfile}
@@ -259,46 +217,55 @@ export default function MemoryGroup() {
 
 interface ManageMemoryCardProps {
   editing: boolean;
+  editDisabled: boolean;
   sections: MemorySections;
-  draft: MemorySections;
-  onDraftChange: (
-    updater: (previous: MemorySections) => MemorySections,
-  ) => void;
+  lastCompiledAt: string;
+  lastError: string;
   instruction: string;
   onInstructionChange: Dispatch<SetStateAction<string>>;
   applying: boolean;
   onSubmitInstruction: () => Promise<void>;
-  onEnterEdit: () => void;
-  onCancelEdit: () => void;
-  onSaveEdit: () => Promise<void>;
+  onToggleEditing: () => void;
   onReset: () => void;
   onImport: () => void;
   showContent: boolean;
 }
 
 /**
- * 管理记忆卡片（spec §6.1 单卡结构）：头部按钮（展示态 重置/编辑/导入，
- * 编辑态 重置/取消/保存、导入隐藏）+ 卡内四板块内容区（超高右侧滚动）。
- * AI 指令应用中取消/保存禁用，防指令未落定就退出/覆盖编辑。
+ * 管理记忆卡片（spec §6.1 单卡结构）：头部按钮（重置 + 编辑/完成 + 导入，
+ * 导入常驻修订 B）+ 整理状态行（上次整理时间 / 失败原因）+ 卡内四板块
+ * 只读内容区（超高右侧滚动）。指令模式底部追加 AI 指令框，应用中「完成」
+ * 禁用，防指令未落定就退出。
  */
 function ManageMemoryCard(props: ManageMemoryCardProps) {
   const { t } = useTranslation(["settings"]);
   const {
     editing,
+    editDisabled,
     sections,
-    draft,
-    onDraftChange,
+    lastCompiledAt,
+    lastError,
     instruction,
     onInstructionChange,
     applying,
     onSubmitInstruction,
-    onEnterEdit,
-    onCancelEdit,
-    onSaveEdit,
+    onToggleEditing,
     onReset,
     onImport,
     showContent,
   } = props;
+
+  const compiledDate = new Date(lastCompiledAt);
+  const lastCompiledText =
+    lastCompiledAt.trim() !== "" && !Number.isNaN(compiledDate.getTime())
+      ? t("settings:memory.status.lastCompiledAt", {
+          time: formatDistanceToNow(compiledDate, {
+            addSuffix: true,
+            locale: getDateFnsLocale(),
+          }),
+        })
+      : t("settings:memory.status.neverCompiled");
+
   return (
     <section className="rounded-lg border border-border/50 bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -309,6 +276,13 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
           <p className="text-xs text-muted-foreground">
             {t("settings:memory.manage.subtitle")}
           </p>
+          <p className="text-xs text-muted-foreground">{lastCompiledText}</p>
+          {lastError.trim() !== "" && (
+            <p className="break-words text-xs text-destructive">
+              {t("settings:memory.status.errorPrefix")}
+              {lastError}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -319,104 +293,66 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
           >
             {t("settings:memory.actions.reset")}
           </Button>
-          {editing ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onCancelEdit}
-                disabled={applying}
-                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-              >
-                {t("settings:memory.edit.cancel")}
-              </Button>
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => void onSaveEdit()}
-                disabled={applying}
-              >
-                {t("settings:memory.edit.save")}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onEnterEdit}
-                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-              >
-                {t("settings:memory.actions.edit")}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onImport}
-                className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-              >
-                {t("settings:memory.actions.import")}
-              </Button>
-            </>
-          )}
+          <Button
+            variant={editing ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleEditing}
+            disabled={editing ? applying : editDisabled}
+            className={
+              editing
+                ? undefined
+                : "hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            }
+          >
+            {editing
+              ? t("settings:memory.edit.done")
+              : t("settings:memory.actions.edit")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onImport}
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+          >
+            {t("settings:memory.actions.import")}
+          </Button>
         </div>
       </div>
       {showContent && (
         <div className="mt-4 max-h-[60vh] space-y-5 overflow-y-auto pr-1">
-          {editing ? (
-            <EditableMemorySections
-              draft={draft}
-              onDraftChange={onDraftChange}
-              instruction={instruction}
-              onInstructionChange={onInstructionChange}
-              applying={applying}
-              onSubmitInstruction={onSubmitInstruction}
+          {MEMORY_SECTION_DEFS.map(({ key }) => (
+            <MemorySectionBlock
+              key={key}
+              sectionKey={key}
+              text={sections[key]}
             />
-          ) : (
-            MEMORY_SECTION_DEFS.map(({ key }) => (
-              <MemorySectionBlock
-                key={key}
-                sectionKey={key}
-                text={sections[key]}
-              />
-            ))
-          )}
+          ))}
         </div>
+      )}
+      {editing && (
+        <InstructionBar
+          instruction={instruction}
+          onInstructionChange={onInstructionChange}
+          applying={applying}
+          onSubmitInstruction={onSubmitInstruction}
+        />
       )}
     </section>
   );
 }
 
-interface EditableMemorySectionsProps {
-  draft: MemorySections;
-  onDraftChange: (
-    updater: (previous: MemorySections) => MemorySections,
-  ) => void;
+interface InstructionBarProps {
   instruction: string;
   onInstructionChange: Dispatch<SetStateAction<string>>;
   applying: boolean;
   onSubmitInstruction: () => Promise<void>;
 }
 
-/** 编辑态内容区：四板块 Textarea（draft 受控）+ 底部 AI 指令输入行 */
-function EditableMemorySections(props: EditableMemorySectionsProps) {
+/** 指令模式底部输入行：Input + 发送按钮 + 应用中提示 */
+function InstructionBar(props: InstructionBarProps) {
   const { t } = useTranslation(["settings"]);
-  const {
-    draft,
-    onDraftChange,
-    instruction,
-    onInstructionChange,
-    applying,
-    onSubmitInstruction,
-  } = props;
-
-  const changeSection = (key: MemorySectionKey, value: string) => {
-    onDraftChange((previous) => {
-      const next: MemorySections = { ...previous };
-      next[key] = value;
-      return next;
-    });
-  };
+  const { instruction, onInstructionChange, applying, onSubmitInstruction } =
+    props;
 
   /** Enter 提交指令（空指令不触发），Shift 无换行语义（单行输入框） */
   const handleInstructionKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -427,51 +363,36 @@ function EditableMemorySections(props: EditableMemorySectionsProps) {
   };
 
   return (
-    <div className="space-y-5">
-      {MEMORY_SECTION_DEFS.map(({ key }) => (
-        <div key={key} className="space-y-1.5">
-          <h4 className="text-sm font-medium text-foreground">
-            {t(`settings:memory.sections.${key}`)}
-          </h4>
-          <Textarea
-            aria-label={t(`settings:memory.sections.${key}`)}
-            value={draft[key]}
-            onChange={(event) => changeSection(key, event.target.value)}
-            className="min-h-[80px] text-xs leading-relaxed"
-          />
-        </div>
-      ))}
-      <div className="flex items-center gap-2">
-        <Input
-          value={instruction}
-          onChange={(event) => onInstructionChange(event.target.value)}
-          onKeyDown={handleInstructionKeyDown}
-          placeholder={t("settings:memory.edit.instructionPlaceholder")}
-          maxLength={INSTRUCTION_MAX_LENGTH}
-          disabled={applying}
-          className="h-8 text-xs"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-8 w-8 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-          onClick={() => void onSubmitInstruction()}
-          disabled={applying || instruction.trim() === ""}
-          aria-label={t("settings:memory.edit.send")}
-        >
-          {applying ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Send size={14} />
-          )}
-        </Button>
-        {applying && (
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {t("settings:memory.edit.applying")}
-          </span>
+    <div className="mt-4 flex items-center gap-2">
+      <Input
+        value={instruction}
+        onChange={(event) => onInstructionChange(event.target.value)}
+        onKeyDown={handleInstructionKeyDown}
+        placeholder={t("settings:memory.edit.instructionPlaceholder")}
+        maxLength={INSTRUCTION_MAX_LENGTH}
+        disabled={applying}
+        className="h-8 text-xs"
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="h-8 w-8 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+        onClick={() => void onSubmitInstruction()}
+        disabled={applying || instruction.trim() === ""}
+        aria-label={t("settings:memory.edit.send")}
+      >
+        {applying ? (
+          <Loader2 size={14} className="animate-spin" />
+        ) : (
+          <Send size={14} />
         )}
-      </div>
+      </Button>
+      {applying && (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {t("settings:memory.edit.applying")}
+        </span>
+      )}
     </div>
   );
 }
@@ -511,7 +432,10 @@ function EmptyMemoryCard({
   );
 }
 
-/** 单节：标题 + 逐行正文（近期动态行首加 "- "）；单条 >500 字折叠可展开 */
+/**
+ * 单节（只读）：标题 + 正文 markdown 渲染。近期动态条目行首加 "- "
+ * 列表化；非列表行以空行分隔保证逐行成段（markdown 单换行会被合并成段）
+ */
 function MemorySectionBlock({
   sectionKey,
   text,
@@ -520,40 +444,21 @@ function MemorySectionBlock({
   text: string;
 }) {
   const { t } = useTranslation(["settings"]);
-  const [expandedLines, setExpandedLines] = useState<number[]>([]);
-  const lines = text.split("\n").filter((line) => line.trim() !== "");
-
-  const expandLine = (index: number) =>
-    setExpandedLines((previous) => [...previous, index]);
+  const body = useMemo(() => {
+    const lines = text.split("\n").filter((line) => line.trim() !== "");
+    const items = lines.map((line) =>
+      sectionKey === "recent" ? `- ${line}` : line,
+    );
+    // 列表行紧邻组成同一列表，普通行空行分隔逐行成段
+    return items.join(sectionKey === "recent" ? "\n" : "\n\n");
+  }, [sectionKey, text]);
 
   return (
     <div className="space-y-1.5">
       <h4 className="text-sm font-medium text-foreground">
         {t(`settings:memory.sections.${sectionKey}`)}
       </h4>
-      <div className="space-y-1 text-xs leading-relaxed text-foreground/80">
-        {lines.map((line, index) => {
-          const collapsed =
-            line.length > LINE_COLLAPSE_LIMIT && !expandedLines.includes(index);
-          const content = collapsed ? line.slice(0, LINE_COLLAPSE_LIMIT) : line;
-          return (
-            <p key={index}>
-              {sectionKey === "recent" ? `- ${content}` : content}
-              {collapsed && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => expandLine(index)}
-                  className="ml-1 h-6 px-2 align-middle text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-                >
-                  <ChevronDown size={12} />
-                  {t("settings:memory.expand")}
-                </Button>
-              )}
-            </p>
-          );
-        })}
-      </div>
+      {body !== "" && <MemoryMarkdown text={body} />}
     </div>
   );
 }

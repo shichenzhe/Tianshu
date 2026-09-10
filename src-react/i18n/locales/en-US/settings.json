@@ -220,13 +220,16 @@
       "current": "Current Focus",
       "recent": "Recent Activity"
     },
-    "expand": "Expand",
     "edit": {
-      "save": "Save",
-      "cancel": "Cancel",
+      "done": "Done",
       "instructionPlaceholder": "Enter an instruction to adjust memory, e.g. Remember I'm in Xiamen / Delete weather-related memories",
       "applying": "Applying…",
       "send": "Send instruction"
+    },
+    "status": {
+      "lastCompiledAt": "Last compiled: {{time}}",
+      "neverCompiled": "Pending first compilation",
+      "errorPrefix": "Last compile failed: "
     },
     "resetDialog": {
       "title": "Reset Memory",
@@ -259,8 +262,7 @@
       "imported": "Memories imported successfully",
       "importFallback": "No section headings recognized; all content was saved under Work Background",
       "instructionFailed": "Failed to apply the memory instruction",
-      "copyFailed": "Copy failed; please select and copy manually",
-      "saved": "Memory saved"
+      "copyFailed": "Copy failed; please select and copy manually"
     },
     "error": {
       "MEMORY_DISABLED": "Memory is disabled",

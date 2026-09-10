@@ -31,14 +31,15 @@ import NotificationsGroup from "./NotificationsGroup";
 import ShortcutsGroup from "./ShortcutsGroup";
 import ProfileGroup from "./ProfileGroup";
 import MemoryGroup from "./MemoryGroup";
+import {
+  useSettingsUiStore,
+  type SettingsTab,
+} from "../store/settings-ui.store";
 
 interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-/** 右栏可用页 id（其余导航项为占位禁用） */
-type SettingsTabId = "general" | "profile" | "memory" | "shortcuts";
 
 /** 导航项（disabled = 占位，敬请期待） */
 const NAV_ITEMS: {
@@ -58,14 +59,21 @@ export default function SettingsDialog({
   onOpenChange,
 }: SettingsDialogProps) {
   const { t } = useTranslation(["settings"]);
-  const [activeTab, setActiveTab] = useState<SettingsTabId>("general");
+  // 入口直达页（如用户菜单「记忆与进化」）：null = 默认 general
+  const settingsTab = useSettingsUiStore((s) => s.settingsTab);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
 
-  // 关闭面板回退通用页（下次打开不残留快捷键页的搜索/监听状态）
+  // 打开时定位到入口指定页（tab 只在打开瞬间生效）；关闭统一回退通用页
+  // （下次打开不残留快捷键页的搜索/监听状态）
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      if (settingsTab !== null) {
+        setActiveTab(settingsTab);
+      }
+    } else {
       setActiveTab("general");
     }
-  }, [open]);
+  }, [open, settingsTab]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,7 +90,7 @@ export default function SettingsDialog({
                 type="button"
                 disabled={disabled}
                 title={disabled ? t("settings:nav.comingSoon") : undefined}
-                onClick={() => setActiveTab(id as SettingsTabId)}
+                onClick={() => setActiveTab(id as SettingsTab)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors",
                   id === activeTab

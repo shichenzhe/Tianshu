@@ -58,6 +58,7 @@ export default function UserMenu() {
   // 设置面板 open 态走 Zustand：用户菜单与 ⌘, 快捷键共用（见 AiLayout 分发器）
   const settingsOpen = useSettingsUiStore((s) => s.settingsOpen);
   const setSettingsOpen = useSettingsUiStore((s) => s.setSettingsOpen);
+  const openSettings = useSettingsUiStore((s) => s.openSettings);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [checkUpdateDialogOpen, setCheckUpdateDialogOpen] = useState(false);
   const [updateAvailableDialogOpen, setUpdateAvailableDialogOpen] =
@@ -197,8 +198,11 @@ export default function UserMenu() {
             <Settings size={14} className="mr-2" />
             {t("layout:userMenu.settings")}
           </DropdownMenuItem>
-          {/* 记忆与进化入口（功能待接：点击仅收起菜单，无动作） */}
-          <DropdownMenuItem onClick={() => {}} className="cursor-pointer">
+          {/* 记忆与进化：直达设置面板记忆页 */}
+          <DropdownMenuItem
+            onClick={() => openSettings("memory")}
+            className="cursor-pointer"
+          >
             <Lightbulb size={14} className="mr-2" />
             {t("layout:userMenu.memoryEvolution")}
           </DropdownMenuItem>

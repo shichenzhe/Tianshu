@@ -82,7 +82,7 @@ export function useAiLayoutKeybindings(): void {
   };
 
   useKeybindingDispatcher({
-    openSettings: () => useSettingsUiStore.getState().setSettingsOpen(true),
+    openSettings: () => useSettingsUiStore.getState().openSettings(),
     sessionSearch: () => useSessionSearchStore.getState().setOpen(true),
     newConversation: createConversation,
     stopGeneration,

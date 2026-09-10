@@ -34,11 +34,17 @@ import {
 import type { MemoryModelContext } from "../../electron/domains/ai/personalization/memory-compiler";
 
 describe("prompt 构建", () => {
-  it("系统提示词含四标题与硬性约束", () => {
+  it("系统提示词含四标题与硬性约束（画像式提炼，修订 2026-09-10 去流水账）", () => {
     for (const title of ["工作背景", "个人背景", "当前关注", "近期动态"]) {
       expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain(title);
     }
     expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("只输出");
+    // 新验收反馈核心条款：画像式提炼 + 各节条数上限 8/8/5/10 + 淘汰一次性内容
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("画像式而非流水账");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("工作背景 ≤8 条");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("个人背景 ≤8 条");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("当前关注 ≤5 条");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("近期动态 ≤10 条");
   });
   it("整理 prompt 含当前记忆与材料", () => {
     const p = buildCompileUserPrompt("当前记忆", "对话材料");

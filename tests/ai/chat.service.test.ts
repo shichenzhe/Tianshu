@@ -29,6 +29,14 @@ const prismaStub = {
   >(async () => ({ count: 0 })),
 };
 
+// assembleContext 读通道（项目会话 base 注入测试按需覆写返回值）；
+// vi.hoisted 使 vi.mock 工厂执行前已初始化
+const assembleReads = vi.hoisted(() => ({
+  model: { findUnique: vi.fn() },
+  provider: { findUnique: vi.fn() },
+  assistant: { findUnique: vi.fn() },
+}));
+
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     message: {
@@ -37,7 +45,13 @@ vi.mock("../../electron/commons/prisma-client", () => ({
       deleteMany: (args: MessageDeleteManyArgs) =>
         prismaStub.messageDeleteMany(args),
     },
+    ...assembleReads,
   },
+}));
+
+// 技能扫描依赖 userData 目录的真实文件系统：固定空清单保证 base 断言确定性
+vi.mock("../../electron/domains/ai/agent/skill-loader", () => ({
+  loadSkills: () => [],
 }));
 
 import { MockLanguageModelV3 } from "ai/test";
@@ -591,5 +605,140 @@ describe("ChatService.regenerate（截断抽取后行为不变）", () => {
     // id=3 是 user 而非 assistant，同样拒绝
     await expect(service.regenerate(1, 3)).rejects.toThrow("MESSAGE_NOT_FOUND");
     expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * assembleContext 项目会话 base 注入（项目模块一期 spec §5）：
+ * 项目会话 base = 项目指令 + 挂载专家 prompt + 能力软约束声明；
+ * 非项目会话 / 项目上下文为空 / repo 缺席 → 回退助手 prompt（行为不变）。
+ * 直接调私有 assembleContext 断言 systemWithSummary（本文件既有内部访问模式）。
+ */
+describe("ChatService.assembleContext（项目会话 base 注入）", () => {
+  const modelRow = {
+    id: 1,
+    providerId: 2,
+    modelId: "m",
+    temperature: null,
+    topP: null,
+    maxTokens: null,
+    contextWindow: null,
+  };
+  const providerRow = {
+    id: 2,
+    type: "openai-compatible",
+    baseUrl: "https://x.example/v1",
+    apiKey: "k",
+    extraHeaders: null,
+  };
+
+  const makeProjectSvc = (
+    sessionOverrides: Record<string, unknown>,
+    getPromptContext: () => Promise<unknown>,
+  ) => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: 1,
+        workspaceId: 1,
+        mode: null,
+        compactedUpToId: null,
+        summary: null,
+        projectId: null,
+        ...sessionOverrides,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(1),
+      getWorkspace: vi.fn().mockResolvedValue(null),
+    };
+    const projectRepo = { getPromptContext: vi.fn(getPromptContext) };
+    const service = new ChatService(
+      sessions as unknown as SessionRepository,
+      undefined,
+      projectRepo as never,
+    );
+    return { projectRepo, service };
+  };
+
+  const assemble = (service: ChatService) =>
+    (
+      service as unknown as {
+        assembleContext: (
+          sessionId: number,
+        ) => Promise<{ systemWithSummary: string | undefined }>;
+      }
+    ).assembleContext(1);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    assembleReads.model.findUnique.mockResolvedValue(modelRow);
+    assembleReads.provider.findUnique.mockResolvedValue(providerRow);
+    assembleReads.assistant.findUnique.mockResolvedValue({
+      id: 1,
+      systemPrompt: "助手指令",
+      temperature: null,
+      topP: null,
+      maxTokens: null,
+    });
+  });
+
+  it("项目会话：base 换为项目指令+挂载专家+能力软约束声明", async () => {
+    const { service } = makeProjectSvc(
+      { projectId: 11 },
+      async () => ({
+        projectName: "p",
+        systemPrompt: "项目指令",
+        boundAssistantPrompts: ["专家A", "专家B"],
+        boundSkillNames: ["技能1"],
+        boundConnectorNames: ["连接器1"],
+      }),
+    );
+    const ctx = await assemble(service);
+    expect(ctx.systemWithSummary).toBe(
+      "项目指令\n\n专家A\n\n专家B\n\n【本项目可用能力】\n技能：技能1\n连接器：连接器1\n本项目对话中请优先（且仅）使用以上已挂载能力。",
+    );
+  });
+
+  it("非项目会话：不查项目上下文，base 仍为助手 prompt", async () => {
+    const { projectRepo, service } = makeProjectSvc(
+      {},
+      async () => null,
+    );
+    const ctx = await assemble(service);
+    expect(ctx.systemWithSummary).toBe("助手指令");
+    expect(projectRepo.getPromptContext).not.toHaveBeenCalled();
+  });
+
+  it("项目上下文为空（无指令无专家）→ 回退助手 prompt", async () => {
+    const { service } = makeProjectSvc(
+      { projectId: 11 },
+      async () => ({
+        projectName: "p",
+        systemPrompt: null,
+        boundAssistantPrompts: [],
+        boundSkillNames: [],
+        boundConnectorNames: [],
+      }),
+    );
+    const ctx = await assemble(service);
+    expect(ctx.systemWithSummary).toBe("助手指令");
+  });
+
+  it("项目 repo 缺席（测试/降级）→ 项目会话回退助手 prompt", async () => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: 1,
+        workspaceId: 1,
+        mode: null,
+        compactedUpToId: null,
+        summary: null,
+        projectId: 11,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(1),
+      getWorkspace: vi.fn().mockResolvedValue(null),
+    };
+    const service = new ChatService(sessions as unknown as SessionRepository);
+    const ctx = await assemble(service);
+    expect(ctx.systemWithSummary).toBe("助手指令");
   });
 });

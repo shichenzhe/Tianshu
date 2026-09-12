@@ -130,7 +130,10 @@ export default class Application {
     // 技能管理：list 自愈对账（扫描→对账→落库）+启停/批量/卸载 IPC；
     // 禁用名单供 chat 组装过滤（P-A §4.2），须先于 ChatService 实例化传入
     const skillRepo = new SkillRepository(prisma);
-    new ChatService(sessionRepo, skillRepo);
+    // 项目模块：repo 供 chat 组装项目会话上下文（项目指令+挂载专家），
+    // 须先于 ChatService 实例化传入（单实例，避免 IPC 重复注册）
+    const projectRepo = new ProjectRepository();
+    new ChatService(sessionRepo, skillRepo, projectRepo);
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）
     void skillRepo
@@ -171,7 +174,5 @@ export default class Application {
     });
     // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
     new AutomationRepository();
-    // 项目模块
-    new ProjectRepository();
   }
 }

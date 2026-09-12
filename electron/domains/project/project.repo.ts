@@ -14,6 +14,7 @@ import {
   ProjectRecord,
   ProjectUpdateParams,
 } from "./project.entity";
+import type { ProjectPromptContext } from "./project-prompt";
 import type {
   SessionMode,
   SessionRecord,
@@ -170,6 +171,83 @@ export default class ProjectRepository {
         })),
       });
     }
+  }
+
+  /**
+   * 项目提示词上下文（项目模块一期）：project 行 + 三源挂载名/prompt 集合，
+   * 供 ChatService 组装项目会话 system base（project-prompt.buildProjectSystemBase）
+   * @param projectId 项目 id；项目行缺失返回 null（调用方回退助手 prompt）
+   */
+  async getPromptContext(
+    projectId: number,
+  ): Promise<ProjectPromptContext | null> {
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) {
+      return null;
+    }
+    const bindings = await prisma.projectBinding.findMany({
+      where: { projectId },
+      orderBy: { id: "asc" },
+    });
+    const idsByType = this.groupBindingIds(bindings);
+    const [assistantRows, skillRows, mcpRows] = await Promise.all([
+      idsByType.assistant.length > 0
+        ? prisma.assistant.findMany({
+            where: { id: { in: idsByType.assistant } },
+            select: { id: true, systemPrompt: true },
+          })
+        : [],
+      idsByType.skill.length > 0
+        ? prisma.skillRecord.findMany({
+            where: { id: { in: idsByType.skill } },
+            select: { id: true, name: true },
+          })
+        : [],
+      idsByType.mcpServer.length > 0
+        ? prisma.mcpServer.findMany({
+            where: { id: { in: idsByType.mcpServer } },
+            select: { id: true, name: true },
+          })
+        : [],
+    ]);
+    return {
+      projectName: project.name,
+      systemPrompt: project.systemPrompt,
+      boundAssistantPrompts: this.orderByIds(
+        idsByType.assistant,
+        assistantRows,
+      ).map((row) => row.systemPrompt),
+      boundSkillNames: this.orderByIds(idsByType.skill, skillRows).map(
+        (row) => row.name,
+      ),
+      boundConnectorNames: this.orderByIds(idsByType.mcpServer, mcpRows).map(
+        (row) => row.name,
+      ),
+    };
+  }
+
+  /** 挂载行按类型分组取源 id（保持挂载写入顺序） */
+  private groupBindingIds(
+    bindings: ProjectBindingRow[],
+  ): Record<ProjectBindingType, number[]> {
+    const idsByType: Record<ProjectBindingType, number[]> = {
+      assistant: [],
+      skill: [],
+      mcpServer: [],
+    };
+    for (const row of bindings) {
+      idsByType[row.itemType as ProjectBindingType].push(row.itemId);
+    }
+    return idsByType;
+  }
+
+  /** findMany in-查询不保序：按挂载 id 顺序重排源实体行（已删源自然出队） */
+  private orderByIds<T extends { id: number }>(ids: number[], rows: T[]): T[] {
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
   }
 
   /** 同用户下项目名唯一校验（excludeId 用于改名时排除自身） */

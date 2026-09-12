@@ -42,6 +42,8 @@ import type { ToolDefinition } from "../agent/file-tools";
 import { resolveSafePath } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
 import { PermissionStore } from "../agent/permission-mode";
+import { buildProjectSystemBase } from "../../project/project-prompt";
+import type ProjectRepository from "../../project/project.repo";
 import type {
   ChatSendParams,
   ChatStatusResult,
@@ -662,6 +664,9 @@ export default class ChatService {
   constructor(
     private sessions: SessionRepository,
     private skillRepo?: SkillDisabledLookup,
+    // 项目模块一期：项目会话 base 注入项目上下文（项目指令+挂载专家）；
+    // repo 缺席（测试）时回退助手 prompt，行为与非项目会话一致
+    private projectRepo?: ProjectRepository,
   ) {
     this.registerHandlers();
   }
@@ -1357,10 +1362,18 @@ export default class ChatService {
         : await this.collectEnabledSkills(agent.workspacePath);
     // 压缩态摘要段:拼在模式 system 之后(无 base 时单独成段)
     // 个性化段注入（spec §4.5）：persona 前置 + 行为段后置，全默认时逐字节还原
+    // 项目会话（项目模块一期 spec §5）：base 换为项目上下文（项目指令+挂载专家
+    // prompt+能力软约束声明）；非项目会话或项目上下文为空 → 原助手 prompt 不变
+    const projectCtx = session.projectId
+      ? await this.projectRepo?.getPromptContext(session.projectId)
+      : null;
+    const base = projectCtx
+      ? buildProjectSystemBase(projectCtx) ?? assistantRow?.systemPrompt
+      : assistantRow?.systemPrompt;
     const personalization = await loadPersonalization();
     const baseSystem = buildPersonalizedSystem(
       personalization,
-      buildModeSystem(mode, assistantRow?.systemPrompt, skills),
+      buildModeSystem(mode, base, skills),
     );
     const systemWithSummary =
       compacted && session.summary

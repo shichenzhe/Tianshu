@@ -37,6 +37,8 @@ const prismaStub = vi.hoisted(() => ({
   message: { create: vi.fn(), deleteMany: vi.fn() },
   workspace: { findFirst: vi.fn() },
   assistant: { findMany: vi.fn() },
+  skillRecord: { findMany: vi.fn() },
+  mcpServer: { findMany: vi.fn() },
   $transaction: vi.fn((fn) => fn(prismaStub)),
 }));
 
@@ -184,6 +186,68 @@ describe("ProjectRepository.setBindings", () => {
         { projectId: 11, itemType: "assistant", itemId: 3 },
         { projectId: 11, itemType: "skill", itemId: 4 },
       ],
+    });
+  });
+});
+
+describe("ProjectRepository.getPromptContext", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("项目不存在 → null（调用方回退助手 prompt）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue(null);
+    await expect(repo.getPromptContext(99)).resolves.toBeNull();
+    expect(prismaStub.projectBinding.findMany).not.toHaveBeenCalled();
+  });
+
+  it("三源挂载 → 专家 prompt/技能名/连接器名按挂载顺序收集", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      name: "p",
+      systemPrompt: "项目指令",
+    });
+    // 挂载顺序：assistant(5,3) → skill(4) → mcpServer(6)；assistant 5 无 prompt 行
+    prismaStub.projectBinding.findMany.mockResolvedValue([
+      { id: 1, projectId: 11, itemType: "assistant", itemId: 5 },
+      { id: 2, projectId: 11, itemType: "assistant", itemId: 3 },
+      { id: 3, projectId: 11, itemType: "skill", itemId: 4 },
+      { id: 4, projectId: 11, itemType: "mcpServer", itemId: 6 },
+    ]);
+    // findMany 返回乱序：验证按挂载 id 顺序重排
+    prismaStub.assistant.findMany.mockResolvedValue([
+      { id: 3, systemPrompt: "专家B" },
+      { id: 5, systemPrompt: "专家A" },
+    ]);
+    prismaStub.skillRecord.findMany.mockResolvedValue([{ id: 4, name: "技能1" }]);
+    prismaStub.mcpServer.findMany.mockResolvedValue([{ id: 6, name: "连接器1" }]);
+
+    await expect(repo.getPromptContext(11)).resolves.toEqual({
+      projectName: "p",
+      systemPrompt: "项目指令",
+      boundAssistantPrompts: ["专家A", "专家B"],
+      boundSkillNames: ["技能1"],
+      boundConnectorNames: ["连接器1"],
+    });
+  });
+
+  it("已删挂载源 → 出队不计入（兜底不产生 #id 占位）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      name: "p",
+      systemPrompt: null,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([
+      { id: 1, projectId: 11, itemType: "assistant", itemId: 5 },
+      { id: 2, projectId: 11, itemType: "skill", itemId: 4 },
+    ]);
+    prismaStub.assistant.findMany.mockResolvedValue([]); // 专家已删
+    prismaStub.skillRecord.findMany.mockResolvedValue([]); // 技能已删
+
+    await expect(repo.getPromptContext(11)).resolves.toEqual({
+      projectName: "p",
+      systemPrompt: null,
+      boundAssistantPrompts: [],
+      boundSkillNames: [],
+      boundConnectorNames: [],
     });
   });
 });

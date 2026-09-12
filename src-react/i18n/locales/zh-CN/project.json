@@ -1,0 +1,83 @@
+{
+  "hub": {
+    "title": "项目",
+    "subtitle": "多人协同，打造超级团队",
+    "newProject": "新建项目",
+    "myProjects": "我的项目",
+    "fromTemplate": "从模版创建",
+    "searchPlaceholder": "搜索项目",
+    "empty": "暂无项目，点击「新建项目」开始",
+    "menuRename": "重命名",
+    "menuDelete": "删除",
+    "deleteTitle": "删除项目",
+    "deleteDesc": "将删除项目的动态流与全部挂载配置，此操作不可撤销",
+    "createdAt": "创建于 {{date}}"
+  },
+  "create": {
+    "title": "新建项目",
+    "nameLabel": "项目名称",
+    "namePlaceholder": "输入项目名称（15 字以内）",
+    "nameRequired": "请输入项目名称",
+    "nameTooLong": "项目名称不能超过 15 字",
+    "nameExists": "该项目名称已存在，请修改",
+    "promptLabel": "指令配置",
+    "templateLabel": "选择模版",
+    "templateBlank": "不使用模版",
+    "promptPlaceholder": "定义 AI 在本项目中的角色、工作流与规范（可通过模版快速填充）",
+    "overwriteTitle": "切换模版",
+    "overwriteDesc": "切换模版将覆盖当前已编辑的指令内容，是否继续？",
+    "overwriteConfirm": "继续",
+    "capabilities": "能力挂载",
+    "connectors": "连接器",
+    "experts": "专家",
+    "skills": "技能",
+    "add": "添加",
+    "invalid": "已失效"
+  },
+  "picker": {
+    "searchPlaceholder": "搜索",
+    "empty": "暂无可选项",
+    "selectedCount": "已选 {{count}} 项",
+    "confirm": "确定",
+    "cancel": "取消",
+    "all": "全部"
+  },
+  "workspace": {
+    "tabActivity": "动态",
+    "tabPlan": "计划",
+    "tabTasks": "任务",
+    "tabAssets": "资产",
+    "comingSoon": "规划中，敬请期待",
+    "filterMine": "与我相关",
+    "filterMembers": "成员动态",
+    "togglePanel": "项目配置",
+    "notFound": "项目不存在或已删除"
+  },
+  "panel": {
+    "title": "项目配置",
+    "instruction": "指令",
+    "instructionEmpty": "未设置项目指令",
+    "editInstruction": "编辑指令",
+    "saveInstruction": "保存",
+    "members": "成员",
+    "owner": "创建者",
+    "me": "我",
+    "automation": "定时任务",
+    "automationTip": "让 AI 按计划自动执行任务",
+    "goAutomation": "前往自动化"
+  },
+  "sidebar": {
+    "projects": "项目",
+    "myProjects": "我的项目",
+    "empty": "还没有项目",
+    "createFirst": "创建第一个项目"
+  },
+  "toast": {
+    "created": "项目创建成功",
+    "deleted": "项目已删除",
+    "renamed": "已重命名",
+    "createFailed": "创建失败，请重试",
+    "operationFailed": "操作失败，请重试",
+    "saved": "已保存"
+  }
+}

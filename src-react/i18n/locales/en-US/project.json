@@ -1,0 +1,83 @@
+{
+  "hub": {
+    "title": "Projects",
+    "subtitle": "Work together, build a super team",
+    "newProject": "New Project",
+    "myProjects": "My Projects",
+    "fromTemplate": "Create from Template",
+    "searchPlaceholder": "Search projects",
+    "empty": "No projects yet. Click \"New Project\" to get started",
+    "menuRename": "Rename",
+    "menuDelete": "Delete",
+    "deleteTitle": "Delete Project",
+    "deleteDesc": "This will delete the project's activity feed and all mounted configurations. This action cannot be undone",
+    "createdAt": "Created {{date}}"
+  },
+  "create": {
+    "title": "New Project",
+    "nameLabel": "Project Name",
+    "namePlaceholder": "Enter a project name (15 characters max)",
+    "nameRequired": "Please enter a project name",
+    "nameTooLong": "Project name cannot exceed 15 characters",
+    "nameExists": "This project name already exists. Please choose another",
+    "promptLabel": "Instructions",
+    "templateLabel": "Choose a Template",
+    "templateBlank": "No template",
+    "promptPlaceholder": "Define the AI's role, workflow, and standards in this project (can be prefilled from a template)",
+    "overwriteTitle": "Switch Template",
+    "overwriteDesc": "Switching templates will overwrite the instructions you have edited. Continue?",
+    "overwriteConfirm": "Continue",
+    "capabilities": "Capabilities",
+    "connectors": "Connectors",
+    "experts": "Experts",
+    "skills": "Skills",
+    "add": "Add",
+    "invalid": "Invalid"
+  },
+  "picker": {
+    "searchPlaceholder": "Search",
+    "empty": "No options available",
+    "selectedCount": "{{count}} selected",
+    "confirm": "OK",
+    "cancel": "Cancel",
+    "all": "All"
+  },
+  "workspace": {
+    "tabActivity": "Activity",
+    "tabPlan": "Plan",
+    "tabTasks": "Tasks",
+    "tabAssets": "Assets",
+    "comingSoon": "Coming soon",
+    "filterMine": "Involving me",
+    "filterMembers": "Member activity",
+    "togglePanel": "Project Settings",
+    "notFound": "Project not found or has been deleted"
+  },
+  "panel": {
+    "title": "Project Settings",
+    "instruction": "Instructions",
+    "instructionEmpty": "No project instructions set",
+    "editInstruction": "Edit Instructions",
+    "saveInstruction": "Save",
+    "members": "Members",
+    "owner": "Owner",
+    "me": "Me",
+    "automation": "Scheduled Tasks",
+    "automationTip": "Let AI run tasks automatically on a schedule",
+    "goAutomation": "Go to Automation"
+  },
+  "sidebar": {
+    "projects": "Projects",
+    "myProjects": "My Projects",
+    "empty": "No projects yet",
+    "createFirst": "Create your first project"
+  },
+  "toast": {
+    "created": "Project created",
+    "deleted": "Project deleted",
+    "renamed": "Renamed",
+    "createFailed": "Failed to create. Please try again",
+    "operationFailed": "Operation failed. Please try again",
+    "saved": "Saved"
+  }
+}

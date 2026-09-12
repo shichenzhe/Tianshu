@@ -225,7 +225,8 @@ export class SessionRepository {
   async listSessions(workspaceId: number): Promise<SessionRecord[]> {
     return (
       await prisma.session.findMany({
-        where: { workspaceId, archivedAt: null },
+        // 项目会话不进 AI 任务树（项目模块一期会话隔离）
+        where: { workspaceId, archivedAt: null, projectId: null },
         orderBy: { lastMessageAt: "desc" },
       })
     ).map((row) => this.toSession(row));
@@ -253,11 +254,11 @@ export class SessionRepository {
     return this.toSession(row);
   }
 
-  /** v5：全部未归档任务（标准侧边栏分组树数据源） */
+  /** v5：全部未归档任务（标准侧边栏分组树数据源）；项目会话隔离在外 */
   async listAllSessions(): Promise<SessionRecord[]> {
     return (
       await prisma.session.findMany({
-        where: { archivedAt: null },
+        where: { archivedAt: null, projectId: null },
         orderBy: { lastMessageAt: "desc" },
       })
     ).map((row) => this.toSession(row));
@@ -294,12 +295,12 @@ export class SessionRepository {
     });
   }
 
-  /** v5 任务标题搜索：空关键词退化为最近任务（spec §4.1） */
+  /** v5 任务标题搜索：空关键词退化为最近任务（spec §4.1）；项目会话隔离在外 */
   async searchSessionsByTitle(keyword: string): Promise<SessionRecord[]> {
     const trimmed = keyword.trim();
     const where = trimmed
-      ? { title: { contains: trimmed }, archivedAt: null }
-      : { archivedAt: null };
+      ? { title: { contains: trimmed }, archivedAt: null, projectId: null }
+      : { archivedAt: null, projectId: null };
     return (
       await prisma.session.findMany({
         where,
@@ -404,9 +405,17 @@ export class SessionRepository {
 
   /** P0 历史搜索：LIKE 查询（spec §4.2），附带所属会话信息供搜索结果跳转 */
   async searchMessages(keyword: string): Promise<SearchMessageResult[]> {
+    // 消息按 blocks 全库搜会带出项目消息——先取非项目会话 id 集限定搜索范围
+    const visibleSessions = await prisma.session.findMany({
+      where: { projectId: null },
+      select: { id: true },
+    });
     const rows = (
       await prisma.message.findMany({
-        where: { blocks: { contains: keyword } },
+        where: {
+          blocks: { contains: keyword },
+          sessionId: { in: visibleSessions.map((s) => s.id) },
+        },
         orderBy: { createdAt: "desc" },
         take: 100,
       })

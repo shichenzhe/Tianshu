@@ -3,6 +3,7 @@
  * searchByTitle 的 LIKE/排序/take 语义、toSession 的新字段序列化。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用
  * permissions-integration.test.ts 的 mock 模式。
+ * 项目模块一期（Task 3）起，AI 侧查询均隐含 projectId: null（会话隔离）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -62,7 +63,7 @@ describe("SessionRepository v5 扩展", () => {
     ]);
     const rows = await repo.listAllSessions();
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { archivedAt: null },
+      where: { archivedAt: null, projectId: null },
       orderBy: { lastMessageAt: "desc" },
     });
     expect(rows[0].pinnedAt).toBe("2026-09-03T00:00:00.000Z");
@@ -94,7 +95,7 @@ describe("SessionRepository v5 扩展", () => {
     prismaStub.session.findMany.mockResolvedValue([]);
     await repo.searchSessionsByTitle("金价");
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { title: { contains: "金价" }, archivedAt: null },
+      where: { title: { contains: "金价" }, archivedAt: null, projectId: null },
       orderBy: { updatedAt: "desc" },
       take: 20,
     });
@@ -104,7 +105,7 @@ describe("SessionRepository v5 扩展", () => {
     prismaStub.session.findMany.mockResolvedValue([]);
     await repo.searchSessionsByTitle("");
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { archivedAt: null },
+      where: { archivedAt: null, projectId: null },
       orderBy: { updatedAt: "desc" },
       take: 20,
     });
@@ -114,7 +115,7 @@ describe("SessionRepository v5 扩展", () => {
     prismaStub.session.findMany.mockResolvedValue([]);
     await repo.listSessions(2);
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { workspaceId: 2, archivedAt: null },
+      where: { workspaceId: 2, archivedAt: null, projectId: null },
       orderBy: { lastMessageAt: "desc" },
     });
   });

@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 /**
  * ＋菜单能力过滤测试（Task 9：项目动态流仅展示已挂载能力）：
- * - 传 allowedIds/allowedNames → 专家/技能子菜单仅显示白名单项
+ * - 传 boundAssistantIds/boundSkillNames → 专家/技能子菜单仅显示白名单项
  * - 未传 → 不过滤、全量显示（AI 模块 ChatView 不传，行为不变的回归锚点）
- * 数据源 mock：AssistantApi.list / SkillApi.list 返回固定列表（两子菜单
- * useQuery 的 queryFn 即此二者），mock 骨架照 tests/ai/plus-menu.test.tsx
- * （i18n 直返 key）。注：PlusMenu 的 ＋ 触发按钮在当前分支存在 asChild
- * 嵌套回归（b68d536，主仓修复未合入），无法经完整菜单链交互，故以
- * DropdownMenu 包裹直接渲染真实子菜单验证过滤（与生产同组件路径）
+ * 全链路交互：渲染真实 PlusMenu，经 ＋ 触发按钮（pointerDown+click 开根，
+ * 点二级触发器开浮层）驱动。触发嵌套已修复：TooltipProvider 最外层、
+ * 两个 asChild 触发器直连 Button 合并事件 props（b68d536 回归，正确
+ * 嵌套参照 context-usage-button.tsx，与主仓 tests/ai/plus-menu.test.tsx
+ * 同驱动方式）。数据源 mock：AssistantApi.list / SkillApi.list 返回固定
+ * 列表（两子菜单 useQuery 的 queryFn 即此二者），i18n 直返 key。
+ * SkillImportDialog 与过滤无关且依赖较重，mock 为空组件。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -17,15 +19,9 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ComponentProps } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "../../src-react/components/ui/dropdown-menu";
 
 // fixture 经 vi.hoisted 提升供 hoisted 的 mock 工厂引用
 const { ASSISTANTS, SKILLS } = vi.hoisted(() => ({
@@ -101,11 +97,18 @@ vi.mock("../../src-react/domains/ai/skills/api/skill.api", () => ({
   default: { list: () => Promise.resolve(SKILLS) },
 }));
 
-import ExpertSubMenu from "../../src-react/domains/ai/chat/components/expert-sub-menu";
-import SkillSubMenu from "../../src-react/domains/ai/chat/components/skill-sub-menu";
+// 导入弹窗依赖较重且与过滤断言无关
+vi.mock(
+  "../../src-react/domains/ai/skills/components/SkillImportDialog",
+  () => ({
+    default: () => null,
+  }),
+);
 
-/** 真实子菜单挂进可用菜单（pointerDown 开根 → 点二级触发器开浮层） */
-function renderInMenu(subMenu: ReactElement): void {
+import PlusMenu from "../../src-react/domains/ai/chat/components/PlusMenu";
+
+/** 渲染真实 PlusMenu（过滤 props 透传，其余给与 ChatView 一致的默认值） */
+function renderPlusMenu(props: Partial<ComponentProps<typeof PlusMenu>>): void {
   render(
     <QueryClientProvider
       client={
@@ -113,20 +116,33 @@ function renderInMenu(subMenu: ReactElement): void {
       }
     >
       <MemoryRouter>
-        <DropdownMenu>
-          <DropdownMenuTrigger>toggle</DropdownMenuTrigger>
-          <DropdownMenuContent>{subMenu}</DropdownMenuContent>
-        </DropdownMenu>
+        <PlusMenu
+          sessionId={1}
+          currentMode="agent"
+          onPickPaths={() => undefined}
+          onOpenMcp={() => undefined}
+          {...props}
+        />
       </MemoryRouter>
     </QueryClientProvider>,
   );
 }
 
-/** 开根菜单（pointerDown+click，同 tests/ai/plus-menu.test.tsx）后点二级触发器 */
-async function openSubMenu(subTriggerLabel: string): Promise<void> {
-  const trigger = screen.getByText("toggle");
+/** 开根菜单：Radix DropdownMenuTrigger 经 pointerDown(主键)+click 打开 */
+async function openPlusMenu(): Promise<void> {
+  const trigger = screen.getByRole("button", {
+    name: "chat:input.addMenuHint",
+  });
   fireEvent.pointerDown(trigger, { button: 0 });
   fireEvent.click(trigger);
+  await waitFor(() =>
+    expect(screen.getByText("chat:plus.addFile")).toBeTruthy(),
+  );
+}
+
+/** 根菜单展开后点二级触发器开浮层 */
+async function openSubMenu(subTriggerLabel: string): Promise<void> {
+  await openPlusMenu();
   await waitFor(() => expect(screen.getByText(subTriggerLabel)).toBeTruthy());
   fireEvent.click(screen.getByText(subTriggerLabel));
 }
@@ -134,36 +150,37 @@ async function openSubMenu(subTriggerLabel: string): Promise<void> {
 afterEach(cleanup);
 
 describe("＋菜单能力过滤", () => {
-  it("传入 allowedIds → 专家子菜单仅显示已挂载专家", async () => {
-    renderInMenu(<ExpertSubMenu sessionId={1} allowedIds={[1]} />);
+  it("点击 ＋ 触发按钮应打开扩展菜单（嵌套修复回归锚点）", async () => {
+    renderPlusMenu({});
+    await openPlusMenu();
+    expect(screen.getByText("chat:plus.connector")).toBeTruthy();
+  });
+
+  it("传入 boundAssistantIds → 专家子菜单仅显示已挂载专家", async () => {
+    renderPlusMenu({ boundAssistantIds: [1] });
     await openSubMenu("chat:plus.expert");
     expect(await screen.findByText("专家A")).toBeTruthy();
     expect(screen.queryByText("专家B")).toBeNull();
     expect(screen.queryByText("专家C")).toBeNull();
   });
 
-  it("未传 allowedIds → 不过滤，全量显示", async () => {
-    renderInMenu(<ExpertSubMenu sessionId={1} />);
+  it("未传 boundAssistantIds → 不过滤，全量显示", async () => {
+    renderPlusMenu({});
     await openSubMenu("chat:plus.expert");
     expect(await screen.findByText("专家A")).toBeTruthy();
     expect(screen.getByText("专家B")).toBeTruthy();
     expect(screen.getByText("专家C")).toBeTruthy();
   });
 
-  it("传入 allowedNames → 技能子菜单仅显示已挂载技能", async () => {
-    renderInMenu(
-      <SkillSubMenu
-        onImport={() => undefined}
-        allowedNames={["alpha-skill"]}
-      />,
-    );
+  it("传入 boundSkillNames → 技能子菜单仅显示已挂载技能", async () => {
+    renderPlusMenu({ boundSkillNames: ["alpha-skill"] });
     await openSubMenu("chat:plus.skill");
     expect(await screen.findByText("alpha-skill")).toBeTruthy();
     expect(screen.queryByText("beta-skill")).toBeNull();
   });
 
-  it("未传 allowedNames → 不过滤，全量显示", async () => {
-    renderInMenu(<SkillSubMenu onImport={() => undefined} />);
+  it("未传 boundSkillNames → 不过滤，全量显示", async () => {
+    renderPlusMenu({});
     await openSubMenu("chat:plus.skill");
     expect(await screen.findByText("alpha-skill")).toBeTruthy();
     expect(screen.getByText("beta-skill")).toBeTruthy();

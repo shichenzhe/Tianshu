@@ -143,7 +143,12 @@ export default class ProjectRepository {
     if (!row) {
       throw new Error(PROJECT_NOT_FOUND);
     }
-    if (params.name && params.name !== row.name) {
+    // 显式判空：name 缺席跳过校验；空串绕过重名校验（truthiness 漏洞）
+    if (
+      params.name !== undefined &&
+      params.name.length > 0 &&
+      params.name !== row.name
+    ) {
       await this.ensureNameAvailable(row.ownerId, params.name, params.id);
     }
     await prisma.project.update({

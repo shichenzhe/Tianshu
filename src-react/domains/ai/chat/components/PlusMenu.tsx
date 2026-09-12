@@ -130,10 +130,14 @@ export default function PlusMenu({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
+        {/* 嵌套顺序回归锚点（b68d536）：TooltipProvider 最外层，两个
+            asChild 触发器直连 Button 合并事件 props（同
+            context-usage-button.tsx）；若 TooltipProvider 插入两个
+            asChild 之间，Dropdown 触发事件将无法到达按钮 */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -142,11 +146,11 @@ export default function PlusMenu({
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t("chat:input.addMenuHint")}</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </DropdownMenuTrigger>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{t("chat:input.addMenuHint")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <DropdownMenuContent
           align="start"
           className="w-52 border border-border/50 rounded-lg shadow-lg"

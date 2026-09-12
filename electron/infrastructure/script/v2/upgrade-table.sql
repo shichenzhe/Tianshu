@@ -36,6 +36,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_project_binding ON projectBinding (project
 CREATE INDEX IF NOT EXISTS project_binding_projectId_index ON projectBinding (projectId);
 
 --/p 会话归属项目（项目动态流会话；NULL = 普通会话，出现在 AI 任务树）
+--/ignore
 ALTER TABLE session ADD COLUMN projectId INTEGER NULL;
 --/ignore
 CREATE INDEX IF NOT EXISTS session_projectId_index ON session (projectId);

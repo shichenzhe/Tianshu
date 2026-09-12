@@ -133,7 +133,8 @@ async function buildConversationWhere(
   };
   if (prismaLike.session) {
     const sessions = await prismaLike.session.findMany({
-      where: { archivedAt: null },
+      // 全局画像只消化普通会话：项目动态流（projectId 非空）不进夜间记忆
+      where: { archivedAt: null, projectId: null },
       select: { id: true },
     });
     where.sessionId = { in: sessions.map((s) => s.id) };

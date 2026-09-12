@@ -53,6 +53,9 @@ const PROJECTS_KEY = ["projects"] as const;
  */
 const PROJECT_NAME_EXISTS = "PROJECT_NAME_EXISTS";
 
+/** 项目名称长度上限（与 CreateProjectDialog 同口径） */
+const NAME_MAX_LENGTH = 15;
+
 interface ProjectCardProps {
   project: ProjectRecord;
 }
@@ -63,6 +66,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
   const queryClient = useQueryClient();
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameName, setRenameName] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -76,7 +80,8 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
   const handleRename = async () => {
     const name = renameName.trim();
-    if (!name || submitting) {
+    // 与新建弹窗同口径：≤15 字客户端拦截，超出不发 IPC
+    if (!name || name.length > NAME_MAX_LENGTH || submitting) {
       return;
     }
     setSubmitting(true);
@@ -116,6 +121,7 @@ export default function ProjectCard({ project }: ProjectCardProps) {
 
   const openRename = () => {
     setRenameName(project.name);
+    setRenameError(null);
     setRenameOpen(true);
   };
 
@@ -191,13 +197,25 @@ export default function ProjectCard({ project }: ProjectCardProps) {
             <Input
               id={`rename-project-${project.id}`}
               value={renameName}
-              onChange={(e) => setRenameName(e.target.value)}
+              onChange={(e) => {
+                setRenameName(e.target.value);
+                // 实时长度校验（与新建弹窗同口径，reuse create 命名空间文案）
+                setRenameError(
+                  e.target.value.trim().length > NAME_MAX_LENGTH
+                    ? t("project:create.nameTooLong")
+                    : null,
+                );
+              }}
+              aria-invalid={renameError !== null}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   void handleRename();
                 }
               }}
             />
+            {renameError && (
+              <p className="text-xs text-destructive">{renameError}</p>
+            )}
           </div>
           <DialogFooter>
             <Button

@@ -140,6 +140,18 @@ describe("fetchRecentConversation", () => {
       }),
     );
   });
+  it("会话过滤排除项目会话（projectId: null，项目动态流不进全局记忆）", async () => {
+    const sessionFindMany = vi.fn(async () => [{ id: 5 }]);
+    const prismaLike = {
+      message: { findMany: async () => [mkRow(1, "user", "你好")] },
+      session: { findMany: sessionFindMany },
+    };
+    await fetchRecentConversation(prismaLike as never, 7, 30000);
+    expect(sessionFindMany).toHaveBeenCalledWith({
+      where: { archivedAt: null, projectId: null },
+      select: { id: true },
+    });
+  });
 });
 
 describe("resolveMemoryModel", () => {

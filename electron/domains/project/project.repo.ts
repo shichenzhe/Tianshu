@@ -181,7 +181,9 @@ export default class ProjectRepository {
   async getPromptContext(
     projectId: number,
   ): Promise<ProjectPromptContext | null> {
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
     if (!project) {
       return null;
     }

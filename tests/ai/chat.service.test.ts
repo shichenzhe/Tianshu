@@ -682,16 +682,13 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
   });
 
   it("项目会话：base 换为项目指令+挂载专家+能力软约束声明", async () => {
-    const { service } = makeProjectSvc(
-      { projectId: 11 },
-      async () => ({
-        projectName: "p",
-        systemPrompt: "项目指令",
-        boundAssistantPrompts: ["专家A", "专家B"],
-        boundSkillNames: ["技能1"],
-        boundConnectorNames: ["连接器1"],
-      }),
-    );
+    const { service } = makeProjectSvc({ projectId: 11 }, async () => ({
+      projectName: "p",
+      systemPrompt: "项目指令",
+      boundAssistantPrompts: ["专家A", "专家B"],
+      boundSkillNames: ["技能1"],
+      boundConnectorNames: ["连接器1"],
+    }));
     const ctx = await assemble(service);
     expect(ctx.systemWithSummary).toBe(
       "项目指令\n\n专家A\n\n专家B\n\n【本项目可用能力】\n技能：技能1\n连接器：连接器1\n本项目对话中请优先（且仅）使用以上已挂载能力。",
@@ -699,26 +696,20 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
   });
 
   it("非项目会话：不查项目上下文，base 仍为助手 prompt", async () => {
-    const { projectRepo, service } = makeProjectSvc(
-      {},
-      async () => null,
-    );
+    const { projectRepo, service } = makeProjectSvc({}, async () => null);
     const ctx = await assemble(service);
     expect(ctx.systemWithSummary).toBe("助手指令");
     expect(projectRepo.getPromptContext).not.toHaveBeenCalled();
   });
 
   it("项目上下文为空（无指令无专家）→ 回退助手 prompt", async () => {
-    const { service } = makeProjectSvc(
-      { projectId: 11 },
-      async () => ({
-        projectName: "p",
-        systemPrompt: null,
-        boundAssistantPrompts: [],
-        boundSkillNames: [],
-        boundConnectorNames: [],
-      }),
-    );
+    const { service } = makeProjectSvc({ projectId: 11 }, async () => ({
+      projectName: "p",
+      systemPrompt: null,
+      boundAssistantPrompts: [],
+      boundSkillNames: [],
+      boundConnectorNames: [],
+    }));
     const ctx = await assemble(service);
     expect(ctx.systemWithSummary).toBe("助手指令");
   });

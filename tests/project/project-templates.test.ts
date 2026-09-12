@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_TEMPLATES, getTemplate } from "../../src-react/domains/project/model/project-templates";
+import {
+  PROJECT_TEMPLATES,
+  getTemplate,
+} from "../../src-react/domains/project/model/project-templates";
 
 describe("内置模版", () => {
   it("key 唯一", () => {

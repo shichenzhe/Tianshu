@@ -1368,7 +1368,7 @@ export default class ChatService {
       ? await this.projectRepo?.getPromptContext(session.projectId)
       : null;
     const base = projectCtx
-      ? buildProjectSystemBase(projectCtx) ?? assistantRow?.systemPrompt
+      ? (buildProjectSystemBase(projectCtx) ?? assistantRow?.systemPrompt)
       : assistantRow?.systemPrompt;
     const personalization = await loadPersonalization();
     const baseSystem = buildPersonalizedSystem(

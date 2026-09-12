@@ -16,24 +16,32 @@ describe("buildProjectSystemBase", () => {
   it("全部为空 → undefined", () => {
     expect(
       buildProjectSystemBase({
-        projectName: "p", systemPrompt: null,
-        boundAssistantPrompts: [], boundSkillNames: [], boundConnectorNames: [],
+        projectName: "p",
+        systemPrompt: null,
+        boundAssistantPrompts: [],
+        boundSkillNames: [],
+        boundConnectorNames: [],
       }),
     ).toBeUndefined();
   });
 
   it("无项目指令但有专家 → 仅专家拼接", () => {
     const result = buildProjectSystemBase({
-      projectName: "p", systemPrompt: null,
-      boundAssistantPrompts: ["A"], boundSkillNames: [], boundConnectorNames: [],
+      projectName: "p",
+      systemPrompt: null,
+      boundAssistantPrompts: ["A"],
+      boundSkillNames: [],
+      boundConnectorNames: [],
     });
     expect(result).toBe("A");
   });
 
   it("有挂载能力时附加可用能力软约束声明段", () => {
     const result = buildProjectSystemBase({
-      projectName: "p", systemPrompt: "指令",
-      boundAssistantPrompts: [], boundSkillNames: ["技能1"],
+      projectName: "p",
+      systemPrompt: "指令",
+      boundAssistantPrompts: [],
+      boundSkillNames: ["技能1"],
       boundConnectorNames: ["连接器1"],
     });
     expect(result).toContain("技能1");

@@ -217,8 +217,12 @@ describe("ProjectRepository.getPromptContext", () => {
       { id: 3, systemPrompt: "专家B" },
       { id: 5, systemPrompt: "专家A" },
     ]);
-    prismaStub.skillRecord.findMany.mockResolvedValue([{ id: 4, name: "技能1" }]);
-    prismaStub.mcpServer.findMany.mockResolvedValue([{ id: 6, name: "连接器1" }]);
+    prismaStub.skillRecord.findMany.mockResolvedValue([
+      { id: 4, name: "技能1" },
+    ]);
+    prismaStub.mcpServer.findMany.mockResolvedValue([
+      { id: 6, name: "连接器1" },
+    ]);
 
     await expect(repo.getPromptContext(11)).resolves.toEqual({
       projectName: "p",

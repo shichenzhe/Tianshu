@@ -66,7 +66,10 @@ export const ModelName = {
   skillStat: 'skillStat',
   automationTask: 'automationTask',
   automationRun: 'automationRun',
-  automationStat: 'automationStat'
+  automationStat: 'automationStat',
+  project: 'project',
+  projectMember: 'projectMember',
+  projectBinding: 'projectBinding'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -183,6 +186,7 @@ export const SessionScalarFieldEnum = {
   mode: 'mode',
   pinnedAt: 'pinnedAt',
   archivedAt: 'archivedAt',
+  projectId: 'projectId',
   summary: 'summary',
   compactedUpToId: 'compactedUpToId',
   createdAt: 'createdAt',
@@ -313,6 +317,41 @@ export const AutomationStatScalarFieldEnum = {
 } as const
 
 export type AutomationStatScalarFieldEnum = (typeof AutomationStatScalarFieldEnum)[keyof typeof AutomationStatScalarFieldEnum]
+
+
+export const ProjectScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  systemPrompt: 'systemPrompt',
+  templateKey: 'templateKey',
+  ownerId: 'ownerId',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProjectScalarFieldEnum = (typeof ProjectScalarFieldEnum)[keyof typeof ProjectScalarFieldEnum]
+
+
+export const ProjectMemberScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  userId: 'userId',
+  role: 'role',
+  joinedAt: 'joinedAt'
+} as const
+
+export type ProjectMemberScalarFieldEnum = (typeof ProjectMemberScalarFieldEnum)[keyof typeof ProjectMemberScalarFieldEnum]
+
+
+export const ProjectBindingScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  itemType: 'itemType',
+  itemId: 'itemId',
+  createdAt: 'createdAt'
+} as const
+
+export type ProjectBindingScalarFieldEnum = (typeof ProjectBindingScalarFieldEnum)[keyof typeof ProjectBindingScalarFieldEnum]
 
 
 export const SortOrder = {

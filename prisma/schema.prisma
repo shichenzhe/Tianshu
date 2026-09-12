@@ -93,11 +93,14 @@ model session {
   mode           String?
   pinnedAt       DateTime?
   archivedAt     DateTime?
+  projectId      Int?
   summary        String?
   compactedUpToId Int?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   lastMessageAt  DateTime?
+
+  @@index([projectId], map: "session_projectId_index")
 }
 
 model message {
@@ -205,4 +208,37 @@ model automationStat {
   event     String
   detail    String
   createdAt DateTime @default(now())
+}
+
+model project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  systemPrompt String?
+  templateKey  String?
+  ownerId      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([ownerId, name], map: "idx_project_owner_name")
+}
+
+model projectMember {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId], map: "idx_project_member_pid_uid")
+}
+
+model projectBinding {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  itemType  String
+  itemId    Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, itemType, itemId], map: "idx_project_binding")
+  @@index([projectId], map: "project_binding_projectId_index")
 }

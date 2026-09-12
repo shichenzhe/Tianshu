@@ -97,3 +97,18 @@ export type automationRun = Prisma.automationRunModel
  * 
  */
 export type automationStat = Prisma.automationStatModel
+/**
+ * Model project
+ * 
+ */
+export type project = Prisma.projectModel
+/**
+ * Model projectMember
+ * 
+ */
+export type projectMember = Prisma.projectMemberModel
+/**
+ * Model projectBinding
+ * 
+ */
+export type projectBinding = Prisma.projectBindingModel

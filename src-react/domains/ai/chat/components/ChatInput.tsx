@@ -73,6 +73,10 @@ interface ChatInputProps {
   currentModelId?: number;
   /** 工作空间（@ 文件联想与读取）；未绑定为 null */
   workspaceId: number | null;
+  /** 项目动态流：仅展示已挂载专家；未传不过滤（AI 模块行为不变） */
+  boundAssistantIds?: number[];
+  /** 项目动态流：仅展示已挂载技能（skillRecord.name 匹配） */
+  boundSkillNames?: string[];
   /** 跳转连接器（MCP）管理页 */
   onOpenMcp: () => void;
   /** 斜杠命令执行(/compact 等);ChatView 接压缩等实现 */
@@ -121,6 +125,8 @@ export default function ChatInput({
   currentAssistantId,
   currentModelId,
   workspaceId,
+  boundAssistantIds,
+  boundSkillNames,
   onOpenMcp,
   onRunCommand,
   onSend,
@@ -601,6 +607,8 @@ export default function ChatInput({
             sessionId={sessionId}
             currentMode={currentMode}
             currentAssistantId={currentAssistantId}
+            boundAssistantIds={boundAssistantIds}
+            boundSkillNames={boundSkillNames}
             onPickPaths={(paths) => {
               for (const filePath of paths) {
                 insertAtCaret(`@${filePath} `);

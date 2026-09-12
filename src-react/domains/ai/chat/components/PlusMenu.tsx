@@ -48,6 +48,10 @@ interface PlusMenuProps {
   sessionId: number;
   currentMode: SessionMode;
   currentAssistantId?: number;
+  /** 项目动态流：仅展示已挂载专家（透传为专家子菜单 allowedIds）；未传不过滤 */
+  boundAssistantIds?: number[];
+  /** 项目动态流：仅展示已挂载技能（透传为技能子菜单 allowedNames）；未传不过滤 */
+  boundSkillNames?: string[];
   /** 选中的文件路径回传 ChatInput 以内联 @token 插入(内容发送时再读) */
   onPickPaths: (paths: string[]) => void;
   onOpenMcp: () => void;
@@ -64,6 +68,8 @@ export default function PlusMenu({
   sessionId,
   currentMode,
   currentAssistantId,
+  boundAssistantIds,
+  boundSkillNames,
   onPickPaths,
   onOpenMcp,
 }: PlusMenuProps) {
@@ -172,8 +178,12 @@ export default function PlusMenu({
           <ExpertSubMenu
             sessionId={sessionId}
             currentAssistantId={currentAssistantId}
+            allowedIds={boundAssistantIds}
           />
-          <SkillSubMenu onImport={handleImportSkill} />
+          <SkillSubMenu
+            onImport={handleImportSkill}
+            allowedNames={boundSkillNames}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onOpenMcp}>
             <Plug />

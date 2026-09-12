@@ -29,11 +29,14 @@ const EXPERTS_ROUTE = "/module/ai/experts?tab=assistants";
 interface ExpertSubMenuProps {
   sessionId: number;
   currentAssistantId?: number;
+  /** 已挂载专家白名单（项目动态流）；未传不过滤（AI 模块行为不变） */
+  allowedIds?: number[];
 }
 
 export default function ExpertSubMenu({
   sessionId,
   currentAssistantId,
+  allowedIds,
 }: ExpertSubMenuProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
@@ -44,15 +47,25 @@ export default function ExpertSubMenu({
     queryKey: ASSISTANTS_KEY,
     queryFn: () => AssistantApi.list(),
   });
+  // 挂载过滤在前、关键字过滤在后：未传 allowedIds 时数组原样透传
+  const mounted = useMemo(
+    () =>
+      allowedIds
+        ? (assistantsQuery.data ?? []).filter((assistant) =>
+            allowedIds.includes(assistant.id),
+          )
+        : (assistantsQuery.data ?? []),
+    [assistantsQuery.data, allowedIds],
+  );
   const keyword = query.trim().toLowerCase();
   const filtered = useMemo(
     () =>
       keyword
-        ? (assistantsQuery.data ?? []).filter((assistant) =>
+        ? mounted.filter((assistant) =>
             assistant.name.toLowerCase().includes(keyword),
           )
-        : (assistantsQuery.data ?? []),
-    [assistantsQuery.data, keyword],
+        : mounted,
+    [mounted, keyword],
   );
 
   /** 单选：写会话后失效 sessions，选中态与徽章随缓存刷新 */

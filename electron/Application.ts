@@ -17,6 +17,7 @@ import { McpRepository } from "./domains/ai/mcp/mcp.repo";
 import { SkillRepository } from "./domains/ai/skill/skill.repo";
 import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
+import ProjectRepository from "./domains/project/project.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
@@ -170,5 +171,7 @@ export default class Application {
     });
     // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
     new AutomationRepository();
+    // 项目模块
+    new ProjectRepository();
   }
 }

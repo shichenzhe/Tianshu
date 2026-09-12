@@ -103,6 +103,13 @@ export type IPCChannel =
   | "automation:templates"
   | "automation:runs:page"
   | "automation:stat"
+  // 项目模块
+  | "project:list"
+  | "project:getDetail"
+  | "project:create"
+  | "project:update"
+  | "project:delete"
+  | "project:setBindings"
   // 个性化记忆（记忆与进化）
   | "personalization:applyMemoryInstruction"
   | "personalization:compileMemory"

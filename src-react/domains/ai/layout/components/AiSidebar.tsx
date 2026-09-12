@@ -16,6 +16,7 @@ import {
   Clock,
   FileText,
   FolderInput,
+  FolderKanban,
   ListChecks,
   MessageSquare,
   MoreVertical,
@@ -84,7 +85,7 @@ type WorkspaceDialogState =
   | { mode: "rename"; name: string; workspaceId: number };
 
 export default function AiSidebar() {
-  const { t } = useTranslation(["chat", "common"]);
+  const { t } = useTranslation(["chat", "common", "project"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -380,6 +381,12 @@ export default function AiSidebar() {
   };
 
   const navEntries = [
+    // 项目入口（临时挂 AI 侧边栏，Task 11 重构时并入 GlobalSidebar）
+    {
+      icon: <FolderKanban size={16} />,
+      label: t("project:sidebar.projects"),
+      onClick: () => navigate("/module/project"),
+    },
     {
       icon: <Bot size={16} />,
       label: t("chat:sidebar.experts"),

@@ -3,6 +3,15 @@
  * 新建项目时可选的四类起点（内容数据不走 i18n；prompt 为项目级系统提示词，welcome 为动态流首条消息）
  */
 
+import {
+  Bug,
+  FileText,
+  FolderKanban,
+  Globe,
+  SquarePen,
+  type LucideIcon,
+} from "lucide-react";
+
 /**
  * 项目模版
  */
@@ -55,4 +64,19 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
  */
 export function getTemplate(key: string): ProjectTemplate | undefined {
   return PROJECT_TEMPLATES.find((t) => t.key === key);
+}
+
+/** 模版 icon 名（lucide 组件名）→ 组件的静态映射，未知名回退 FolderKanban */
+const TEMPLATE_ICON_BY_NAME: Record<string, LucideIcon> = {
+  FileText,
+  Globe,
+  Bug,
+  SquarePen,
+};
+
+/**
+ * 模版 icon 名解析为 lucide 组件；未知名/缺省回退 FolderKanban
+ */
+export function getTemplateIcon(iconName: string | undefined): LucideIcon {
+  return (iconName && TEMPLATE_ICON_BY_NAME[iconName]) || FolderKanban;
 }

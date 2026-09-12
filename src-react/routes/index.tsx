@@ -34,6 +34,14 @@ const AutomationView = lazy(
 const TaskDetailView = lazy(
   () => import("@/domains/ai/automation/views/TaskDetailView"),
 );
+// 项目列表页（hub）
+const ProjectHubView = lazy(
+  () => import("@/domains/project/views/ProjectHubView"),
+);
+// 项目工作台（Task 10 完整实现，本任务先占位）
+const ProjectWorkspaceView = lazy(
+  () => import("@/domains/project/views/ProjectWorkspaceView"),
+);
 
 // 加载中组件
 function LoadingFallback() {
@@ -124,6 +132,22 @@ export const router = createHashRouter([
             ),
           },
         ],
+      },
+      {
+        path: "project",
+        element: (
+          <LazyWrapper>
+            <ProjectHubView />
+          </LazyWrapper>
+        ),
+      },
+      {
+        path: "project/:projectId",
+        element: (
+          <LazyWrapper>
+            <ProjectWorkspaceView />
+          </LazyWrapper>
+        ),
       },
     ],
   },

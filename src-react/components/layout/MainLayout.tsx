@@ -1,6 +1,7 @@
 /**
  * 主布局组件
- * 包含顶部栏和主内容区（模块内布局由各模块自带，如 AI 标准侧边栏）
+ * 包含顶部栏和主内容区：内容区为横向 flex——全局侧边栏（GlobalSidebar，
+ * 所有 /module/* 路由共用，主体区随模块切换）+ 主面板（Outlet 挂模块路由）
  */
 
 import { useEffect } from "react";
@@ -12,6 +13,7 @@ import { useUserStore } from "@/domains/user/store/user.store";
 import { UserApi } from "@/domains/user/api/user.api";
 import AiTopbarActions from "@/domains/ai/layout/components/AiTopbarActions";
 import SessionSearchBox from "@/domains/ai/layout/components/SessionSearchBox";
+import GlobalSidebar from "./GlobalSidebar";
 import TopBar from "./TopBar";
 
 export default function MainLayout() {
@@ -65,13 +67,16 @@ export default function MainLayout() {
       )}
 
       <div
-        className="main-content bg-muted/40"
+        className="main-content flex"
         style={{
           marginTop: shouldShowNav ? 36 : 0,
           transition: "margin-top 0.2s",
         }}
       >
-        <Outlet />
+        {shouldShowNav && <GlobalSidebar />}
+        <main className="min-w-0 flex-1 overflow-y-auto bg-muted/40">
+          <Outlet />
+        </main>
       </div>
 
       <style>{`
@@ -83,7 +88,7 @@ export default function MainLayout() {
 
         .main-content {
           height: calc(100vh - ${shouldShowNav ? 36 : 0}px);
-          overflow-y: auto;
+          overflow: hidden;
         }
       `}</style>
     </div>

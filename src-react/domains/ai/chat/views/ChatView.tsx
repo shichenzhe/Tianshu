@@ -1,5 +1,5 @@
 /**
- * AI 对话主界面：消息区/输入区（标准侧边栏由 AiLayout 提供）
+ * AI 对话主界面：消息区/输入区（标准侧边栏由全局 GlobalSidebar 提供）
  * 当前空间由选中任务派生（侧边栏分组树已展示全部空间），会话数据经共享
  * React Query 缓存派生，setModel/setAssistant/setMode 失效后即为最新值
  * 单会话面板拆至 components/ChatPane（跨模块复用），本视图只做选态派生

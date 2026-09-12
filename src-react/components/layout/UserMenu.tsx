@@ -55,7 +55,7 @@ export default function UserMenu() {
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [userInfoDialogOpen, setUserInfoDialogOpen] = useState(false);
   const [updateLogDialogOpen, setUpdateLogDialogOpen] = useState(false);
-  // 设置面板 open 态走 Zustand：用户菜单与 ⌘, 快捷键共用（见 AiLayout 分发器）
+  // 设置面板 open 态走 Zustand：用户菜单与 ⌘, 快捷键共用（见 GlobalSidebar 分发器）
   const settingsOpen = useSettingsUiStore((s) => s.settingsOpen);
   const setSettingsOpen = useSettingsUiStore((s) => s.setSettingsOpen);
   const openSettings = useSettingsUiStore((s) => s.openSettings);

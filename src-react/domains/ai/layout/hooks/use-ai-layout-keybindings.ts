@@ -3,7 +3,7 @@
  * - 设置面板/会话内搜索/侧栏/产物面板：各 Zustand store 的 getState 直调
  *   （分发层不订阅、不引起重渲染）
  * - 新建任务与上/下一任务：会话与空间数据从 React Query 缓存按需读取
- *   （AiSidebar 挂载即预热），切换经 URL ?session= 导航
+ *   （SessionTreePanel 挂载即预热），切换经 URL ?session= 导航
  * - 停止生成：URL 会话 + chat.store 流式态判定后调 ChatApi.stop
  * - 全屏：主进程 IPC 窗口翻转；字号三档递进/重置走 font-scale
  * 其余 5 条不在此层：发送/换行在输入框内部（ChatInput/EditBar 读绑定）、
@@ -36,7 +36,7 @@ export function useAiLayoutKeybindings(): void {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  // 与 ChatView/AiSidebar 同源：当前任务在 URL ?session=
+  // 与 ChatView/SessionTreePanel 同源：当前任务在 URL ?session=
   const currentSessionId = Number(searchParams.get("session")) || null;
 
   const cachedSessions = () =>

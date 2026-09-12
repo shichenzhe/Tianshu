@@ -1,6 +1,6 @@
 /**
  * 设置面板 UI 状态：open 态由 UserMenu 内部 useState 迁入 Zustand，
- * 供用户菜单入口与 ⌘, 快捷键（AiLayout 分发器）共用；
+ * 供用户菜单入口与 ⌘, 快捷键（GlobalSidebar 分发器）共用；
  * settingsTab 供入口直达指定页（如用户菜单「记忆与进化」直达记忆页）
  */
 

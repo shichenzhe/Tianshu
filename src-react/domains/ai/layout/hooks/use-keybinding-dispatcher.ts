@@ -1,5 +1,5 @@
 /**
- * 全局快捷键分发 hook（AiLayout 挂载）：
+ * 全局快捷键分发 hook（GlobalSidebar 挂载）：
  * window keydown（非 capture，组件 stopPropagation 可拦截）→ 每次按键
  * 即时合成生效绑定（localStorage 覆盖变更立即生效）→ 匹配命中且登记了
  * 处理器时 preventDefault 执行；消费者优先：已被组件 preventDefault 的

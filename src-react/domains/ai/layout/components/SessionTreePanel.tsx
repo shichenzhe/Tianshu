@@ -1,5 +1,6 @@
 /**
- * 标准侧边栏：功能入口（新建任务/专家/自动化/资料库）+ 空间分组任务树。
+ * 任务树主体（原 AiSidebar 主体拆出，全局侧边栏 GlobalSidebar 的 AI 侧内容）：
+ * 空间分组任务树 + 批量管理 + 空间/任务对话框。
  * 任务选中态在 URL（?session=），当前空间由选中任务派生。
  */
 import { useMemo, useState } from "react";
@@ -10,15 +11,10 @@ import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import {
   Archive,
-  Bot,
   ChevronDown,
   ChevronRight,
-  Clock,
-  FileText,
   FolderInput,
-  FolderKanban,
   ListChecks,
-  MessageSquare,
   MoreVertical,
   Pencil,
   Pin,
@@ -58,7 +54,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import AppLogo from "@/components/common/AppLogo";
 import WorkspaceApi, { type WorkspaceRecord } from "../../api/workspace.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
 import {
@@ -84,14 +79,17 @@ type WorkspaceDialogState =
   | { mode: "create"; name: string }
   | { mode: "rename"; name: string; workspaceId: number };
 
-export default function AiSidebar() {
-  const { t } = useTranslation(["chat", "common", "project"]);
+interface SessionTreePanelProps {
+  /** 侧边栏折叠态（收缩时整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */
+  collapsed: boolean;
+}
+
+export default function SessionTreePanel({ collapsed }: SessionTreePanelProps) {
+  const { t } = useTranslation(["chat", "common"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const collapsed = useAiUiStore((s) => s.sidebarCollapsed);
   const timeFilter = useAiUiStore((s) => s.timeFilter);
-  const isMac = window.platform === "darwin";
 
   const selectedSessionId = Number(searchParams.get("session")) || null;
 
@@ -150,7 +148,7 @@ export default function AiSidebar() {
 
   // 当前空间 = 选中任务所属空间，无选中取第一个（spec §2.3）。
   // 派生用原始数据：时间筛选只影响渲染，不得改变新建任务的目标空间
-  // （逻辑与 AiLayout 快捷键分发共用 session-actions）
+  // （逻辑与布局快捷键分发共用 session-actions）
   const currentWorkspaceId = deriveCurrentWorkspaceId(
     sessionsQuery.data ?? [],
     workspaces,
@@ -380,147 +378,88 @@ export default function AiSidebar() {
     }
   };
 
-  const navEntries = [
-    // 项目入口（临时挂 AI 侧边栏，Task 11 重构时并入 GlobalSidebar）
-    {
-      icon: <FolderKanban size={16} />,
-      label: t("project:sidebar.projects"),
-      onClick: () => navigate("/module/project"),
-    },
-    {
-      icon: <Bot size={16} />,
-      label: t("chat:sidebar.experts"),
-      onClick: () => navigate("/module/ai/experts"),
-    },
-    {
-      icon: <Clock size={16} />,
-      label: t("chat:sidebar.automation"),
-      onClick: () => navigate("/module/ai/automation"),
-    },
-    {
-      icon: <FileText size={16} />,
-      label: t("chat:sidebar.library"),
-      onClick: () => navigate("/module/ai/library"),
-    },
-  ];
-
   return (
-    <aside
-      className={cn(
-        "flex h-full shrink-0 flex-col overflow-hidden bg-muted/40 transition-[width] duration-200",
-        collapsed ? "w-0" : "w-64",
-      )}
-    >
-      {/* 内容层固定宽度 + 自带右边框（收起时随宽度动画一并裁掉，不留残线） */}
-      <div className="flex h-full w-64 shrink-0 flex-col border-r border-border/50">
-        {/* macOS 顶部 Logo（Windows 标题在 TopBar） */}
-        {isMac && (
-          <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">
-            <AppLogo className="h-5 w-5" />
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground select-none">
-              {t("common:appName")}
-            </span>
-          </div>
-        )}
-
-        {/* 功能入口区 */}
-        <div className="flex flex-col gap-1 p-2">
-          <SidebarNavButton
-            icon={<MessageSquare size={16} />}
-            label={t("chat:sidebar.newTask")}
-            onClick={() => handleCreateSession(currentWorkspaceId)}
-          />
-          {navEntries.map((entry) => (
-            <SidebarNavButton
-              key={entry.label}
-              icon={entry.icon}
-              label={entry.label}
-              onClick={entry.onClick}
-            />
-          ))}
+    <>
+      {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
+      {!collapsed && (
+        <div className="fade-in min-h-0 flex-1 overflow-y-auto p-2">
+          <button
+            type="button"
+            className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            onClick={() => setSpacesOpen((open) => !open)}
+          >
+            {spacesOpen ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
+            {t("chat:sidebar.spaces")} ({workspaces.length})
+          </button>
+          {spacesOpen &&
+            workspaces.map((workspace) => (
+              <WorkspaceGroup
+                key={workspace.id}
+                workspace={workspace}
+                collapsed={collapsed}
+                collapsedGroup={collapsedSpaces[workspace.id] ?? false}
+                sessions={sessions.filter(
+                  (s) => s.workspaceId === workspace.id,
+                )}
+                selectedSessionId={selectedSessionId}
+                batchMode={batchMode}
+                batchSelectedIds={selectedIds}
+                isStreaming={isStreaming}
+                onBatchToggleIds={toggleBatchIds}
+                onBatchEnter={() => setBatchMode(true)}
+                onToggleGroup={() =>
+                  setCollapsedSpaces((prev) => ({
+                    ...prev,
+                    [workspace.id]: !(prev[workspace.id] ?? false),
+                  }))
+                }
+                onSelect={selectSession}
+                onCreateTask={() => handleCreateSession(workspace.id)}
+                onCreateWorkspace={() =>
+                  setWorkspaceDialog({
+                    mode: "create",
+                    name: t("chat:defaultWorkspaceName"),
+                  })
+                }
+                onManageRename={() =>
+                  setWorkspaceDialog({
+                    mode: "rename",
+                    name: workspace.name,
+                    workspaceId: workspace.id,
+                  })
+                }
+                onManageDelete={() => setDeletingWorkspace(workspace)}
+                onManageBind={() => handleBindDirectory(workspace.id)}
+                onManageUnbind={() => setUnbindingWorkspace(workspace)}
+                onSessionRename={(session) => {
+                  setSessionTitle(session.title);
+                  setRenamingSession(session);
+                }}
+                onSessionDelete={(session) => setDeletingSession(session)}
+                onSessionPin={(s) => void handlePin(s)}
+                onSessionArchive={(s) => void handleArchive(s)}
+                onOpenFolder={() => void handleOpenFolder(workspace.id)}
+              />
+            ))}
         </div>
+      )}
 
-        {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
-        {!collapsed && (
-          <div className="fade-in min-h-0 flex-1 overflow-y-auto p-2">
-            <button
-              type="button"
-              className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-              onClick={() => setSpacesOpen((open) => !open)}
-            >
-              {spacesOpen ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
-              {t("chat:sidebar.spaces")} ({workspaces.length})
-            </button>
-            {spacesOpen &&
-              workspaces.map((workspace) => (
-                <WorkspaceGroup
-                  key={workspace.id}
-                  workspace={workspace}
-                  collapsed={collapsed}
-                  collapsedGroup={collapsedSpaces[workspace.id] ?? false}
-                  sessions={sessions.filter(
-                    (s) => s.workspaceId === workspace.id,
-                  )}
-                  selectedSessionId={selectedSessionId}
-                  batchMode={batchMode}
-                  batchSelectedIds={selectedIds}
-                  isStreaming={isStreaming}
-                  onBatchToggleIds={toggleBatchIds}
-                  onBatchEnter={() => setBatchMode(true)}
-                  onToggleGroup={() =>
-                    setCollapsedSpaces((prev) => ({
-                      ...prev,
-                      [workspace.id]: !(prev[workspace.id] ?? false),
-                    }))
-                  }
-                  onSelect={selectSession}
-                  onCreateTask={() => handleCreateSession(workspace.id)}
-                  onCreateWorkspace={() =>
-                    setWorkspaceDialog({
-                      mode: "create",
-                      name: t("chat:defaultWorkspaceName"),
-                    })
-                  }
-                  onManageRename={() =>
-                    setWorkspaceDialog({
-                      mode: "rename",
-                      name: workspace.name,
-                      workspaceId: workspace.id,
-                    })
-                  }
-                  onManageDelete={() => setDeletingWorkspace(workspace)}
-                  onManageBind={() => handleBindDirectory(workspace.id)}
-                  onManageUnbind={() => setUnbindingWorkspace(workspace)}
-                  onSessionRename={(session) => {
-                    setSessionTitle(session.title);
-                    setRenamingSession(session);
-                  }}
-                  onSessionDelete={(session) => setDeletingSession(session)}
-                  onSessionPin={(s) => void handlePin(s)}
-                  onSessionArchive={(s) => void handleArchive(s)}
-                  onOpenFolder={() => void handleOpenFolder(workspace.id)}
-                />
-              ))}
-          </div>
-        )}
-
-        {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
-        {batchMode && !collapsed && (
-          <BatchActionBar
-            selectedCount={selectedIds.size}
-            allChecked={allChecked}
-            onToggleAll={toggleAll}
-            onDelete={() => setConfirmingBatchDelete(true)}
-            onArchive={handleBatchArchive}
-            onExit={exitBatchMode}
-            submitting={submitting}
-          />
-        )}
-      </div>
+      {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
+      {batchMode && !collapsed && (
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          allChecked={allChecked}
+          onToggleAll={toggleAll}
+          onDelete={() => setConfirmingBatchDelete(true)}
+          onArchive={handleBatchArchive}
+          onExit={exitBatchMode}
+          submitting={submitting}
+        />
+      )}
 
       {/* 空间新建/重命名对话框 */}
       <Dialog
@@ -692,26 +631,7 @@ export default function AiSidebar() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </aside>
-  );
-}
-
-interface SidebarNavButtonProps {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}
-
-/** 侧边栏入口行（图标+文字） */
-function SidebarNavButton({ icon, label, onClick }: SidebarNavButtonProps) {
-  return (
-    <div
-      className="flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary"
-      onClick={onClick}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="truncate">{label}</span>
-    </div>
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 /**
- * 会话动作（AiSidebar 与 AiLayout 快捷键分发共用）：
+ * 会话动作（SessionTreePanel/GlobalSidebar 与布局快捷键分发共用）：
  * 新建任务并进入（落库 → 失效缓存 → URL 选中）、当前空间派生、
  * 任务列表内按序取相邻任务；均为纯数据操作，错误经 mapIpcError toast
  */

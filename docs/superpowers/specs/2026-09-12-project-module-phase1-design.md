@@ -72,7 +72,7 @@ src-react/domains/project/
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| id | TEXT PK | 沿用现有 id 生成惯例 |
+| id | Int PK autoincrement | 沿用现有 id 惯例（全表均为 Int 自增） |
 | name | TEXT NOT NULL | ≤15 字，同一用户下唯一（应用层校验） |
 | systemPrompt | TEXT NULL | 项目指令；空白创建时为空 |
 | templateKey | TEXT NULL | 来源模版 key |

@@ -415,7 +415,8 @@ export const ModelName = {
   automationStat: 'automationStat',
   project: 'project',
   projectMember: 'projectMember',
-  projectBinding: 'projectBinding'
+  projectBinding: 'projectBinding',
+  planItem: 'planItem'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -431,7 +432,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1841,6 +1842,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    planItem: {
+      payload: Prisma.$planItemPayload<ExtArgs>
+      fields: Prisma.planItemFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.planItemFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.planItemFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        findFirst: {
+          args: Prisma.planItemFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.planItemFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        findMany: {
+          args: Prisma.planItemFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>[]
+        }
+        create: {
+          args: Prisma.planItemCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        createMany: {
+          args: Prisma.planItemCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.planItemCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>[]
+        }
+        delete: {
+          args: Prisma.planItemDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        update: {
+          args: Prisma.planItemUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        deleteMany: {
+          args: Prisma.planItemDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.planItemUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.planItemUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>[]
+        }
+        upsert: {
+          args: Prisma.planItemUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemPayload>
+        }
+        aggregate: {
+          args: Prisma.PlanItemAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlanItem>
+        }
+        groupBy: {
+          args: Prisma.planItemGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanItemGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.planItemCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanItemCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2147,6 +2222,24 @@ export const ProjectBindingScalarFieldEnum = {
 export type ProjectBindingScalarFieldEnum = (typeof ProjectBindingScalarFieldEnum)[keyof typeof ProjectBindingScalarFieldEnum]
 
 
+export const PlanItemScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  title: 'title',
+  status: 'status',
+  priority: 'priority',
+  assigneeId: 'assigneeId',
+  tags: 'tags',
+  customFields: 'customFields',
+  sortOrder: 'sortOrder',
+  createdById: 'createdById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PlanItemScalarFieldEnum = (typeof PlanItemScalarFieldEnum)[keyof typeof PlanItemScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2373,6 +2466,7 @@ export type GlobalOmitConfig = {
   project?: Prisma.projectOmit
   projectMember?: Prisma.projectMemberOmit
   projectBinding?: Prisma.projectBindingOmit
+  planItem?: Prisma.planItemOmit
 }
 
 /* Types for Logging */

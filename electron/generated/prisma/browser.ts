@@ -112,3 +112,8 @@ export type projectMember = Prisma.projectMemberModel
  * 
  */
 export type projectBinding = Prisma.projectBindingModel
+/**
+ * Model planItem
+ * 
+ */
+export type planItem = Prisma.planItemModel

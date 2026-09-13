@@ -69,7 +69,8 @@ export const ModelName = {
   automationStat: 'automationStat',
   project: 'project',
   projectMember: 'projectMember',
-  projectBinding: 'projectBinding'
+  projectBinding: 'projectBinding',
+  planItem: 'planItem'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -353,6 +354,24 @@ export const ProjectBindingScalarFieldEnum = {
 } as const
 
 export type ProjectBindingScalarFieldEnum = (typeof ProjectBindingScalarFieldEnum)[keyof typeof ProjectBindingScalarFieldEnum]
+
+
+export const PlanItemScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  title: 'title',
+  status: 'status',
+  priority: 'priority',
+  assigneeId: 'assigneeId',
+  tags: 'tags',
+  customFields: 'customFields',
+  sortOrder: 'sortOrder',
+  createdById: 'createdById',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PlanItemScalarFieldEnum = (typeof PlanItemScalarFieldEnum)[keyof typeof PlanItemScalarFieldEnum]
 
 
 export const SortOrder = {

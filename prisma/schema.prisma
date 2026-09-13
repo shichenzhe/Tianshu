@@ -245,3 +245,21 @@ model projectBinding {
   @@unique([projectId, itemType, itemId], map: "idx_project_binding")
   @@index([projectId], map: "project_binding_projectId_index")
 }
+
+model planItem {
+  id           Int      @id @default(autoincrement())
+  projectId    Int? // NULL = 本地任务（仅任务 Tab 可见）
+  title        String
+  status       String   @default("not_started") // not_started|in_progress|paused|done
+  priority     String   @default("P1") // P0|P1|P2
+  assigneeId   Int? // 预留，单成员恒当前用户
+  tags         String? // JSON string[]
+  customFields String? // JSON Record<fieldName, string|number>
+  sortOrder    Int      @default(0)
+  createdById  Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId], map: "plan_item_projectId_index")
+  @@index([assigneeId], map: "plan_item_assignee_index")
+}

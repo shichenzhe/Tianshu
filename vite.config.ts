@@ -39,8 +39,15 @@ export default defineConfig(({ command }) => {
   }
   syncElectronAssets();
 
+  const appVersion = fs.readJsonSync(path.resolve(__dirname, "package.json"))
+    .version as string;
+
   return {
     base: "./",
+    define: {
+      // 应用版本号编译期注入（渲染进程用 __APP_VERSION__，与 electron app.getVersion() 同源 package.json）
+      __APP_VERSION__: JSON.stringify(appVersion),
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "src-react"),

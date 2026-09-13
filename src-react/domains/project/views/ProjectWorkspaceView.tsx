@@ -210,7 +210,10 @@ export default function ProjectWorkspaceView() {
         {tab === "activity" ? (
           <ActivityPane detail={detailQuery.data} />
         ) : tab === "assets" ? (
-          <AssetsPane projectId={detailQuery.data.project.id} />
+          <AssetsPane
+            key={detailQuery.data.project.id}
+            projectId={detailQuery.data.project.id}
+          />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle text-primary">

@@ -61,8 +61,8 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
   const workspace = { id: detail.assetWorkspaceId };
 
   return (
-    // 内容列限宽居中：右面板开合时输入框宽度稳定不挤压（聊天产品惯例布局）
-    <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1">
+    // 内容列全宽（与普通聊天面板同口径——验收反馈：两聊天面板宽度一致）
+    <div className="flex min-h-0 w-full flex-1">
       <ChatPane
         key={detail.session.id}
         session={detail.session}

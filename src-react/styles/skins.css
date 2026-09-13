@@ -100,108 +100,142 @@
    每组仅定义 --skin-bg-gradient 与 --skin-sidebar-image 两个变量
    ===================================================== */
 
-/* 晨雾（light / 260° 淡紫云纹） */
+/* =====================================================
+   壁纸装饰层（8 款，真实摄影图 Unsplash License 免费商用无需署名，
+   图片本地打包于 ../assets/skins/，运行时零网络依赖）
+   每组三个变量：
+   - --skin-bg-image        背景大图（body 与侧栏共用，cover 铺满）
+   - --skin-body-overlay    body 可读性叠加层（半透明底色，保证界面文字对比）
+   - --skin-sidebar-overlay 侧栏叠加层（更透明，壁纸更显眼）
+   浅色系叠白、深色系叠黑；图片缺失时 overlay 仍提供完整底色。
+   ===================================================== */
+
+/* 晨雾（light / 淡紫）— 紫薰衣草田与远山 */
 [data-wallpaper="dawn-mist"] {
-  --skin-bg-gradient: linear-gradient(
+  --skin-bg-image: url("../assets/skins/dawn-mist.jpg");
+  --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(260 40% 95% / 0.85) 0%,
-    hsl(260 25% 97% / 0.4) 45%,
-    hsl(215 35% 96% / 0.3) 100%
+    hsl(260 30% 98% / 0.88) 0%,
+    hsl(255 25% 98% / 0.8) 55%,
+    hsl(250 20% 97% / 0.85) 100%
   );
-  --skin-sidebar-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><g fill='hsl(260 40% 80%)' fill-opacity='0.18'><ellipse cx='30' cy='30' rx='26' ry='12'/><ellipse cx='55' cy='24' rx='18' ry='9'/><ellipse cx='85' cy='44' rx='22' ry='10'/></g><g fill='hsl(210 40% 85%)' fill-opacity='0.15'><ellipse cx='70' cy='90' rx='30' ry='13'/><ellipse cx='100' cy='82' rx='16' ry='8'/></g></svg>");
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(260 35% 96% / 0.55) 0%,
+    hsl(255 30% 96% / 0.35) 100%
+  );
 }
 
-/* 涟漪（light / 190° 水纹同心圆） */
+/* 涟漪（light / 清蓝）— 柔光下的蓝色水纹 */
 [data-wallpaper="ripple"] {
-  --skin-bg-gradient:
-    radial-gradient(1100px 700px at 80% -10%, hsl(190 55% 94% / 0.9), transparent 65%),
-    linear-gradient(180deg, transparent 60%, hsl(190 45% 93% / 0.6) 100%);
-  --skin-sidebar-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><g fill='none' stroke='hsl(190 55% 60%)' stroke-opacity='0.16' stroke-width='1.5'><circle cx='35' cy='35' r='8'/><circle cx='35' cy='35' r='16'/><circle cx='35' cy='35' r='26'/><circle cx='105' cy='98' r='10'/><circle cx='105' cy='98' r='22'/><circle cx='105' cy='98' r='34'/></g></svg>");
+  --skin-bg-image: url("../assets/skins/ripple.jpg");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(195 30% 98% / 0.88) 0%,
+    hsl(195 25% 98% / 0.82) 50%,
+    hsl(200 25% 97% / 0.86) 100%
+  );
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(195 35% 96% / 0.5) 0%,
+    hsl(195 30% 96% / 0.3) 100%
+  );
 }
 
-/* 原野（light / 120° 草地渐变） */
+/* 原野（light / 草绿）— 草地树林与远山 */
 [data-wallpaper="field"] {
-  --skin-bg-gradient: linear-gradient(
+  --skin-bg-image: url("../assets/skins/field.jpg");
+  --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(90 30% 97% / 0.4) 0%,
-    transparent 45%,
-    hsl(120 35% 93% / 0.65) 100%
+    hsl(100 25% 98% / 0.88) 0%,
+    hsl(110 20% 98% / 0.8) 55%,
+    hsl(120 20% 97% / 0.85) 100%
   );
-  --skin-sidebar-image: repeating-linear-gradient(
+  --skin-sidebar-overlay: linear-gradient(
     180deg,
-    hsl(120 30% 88% / 0.35) 0px,
-    hsl(120 30% 88% / 0.35) 26px,
-    hsl(120 40% 83% / 0.3) 26px,
-    hsl(120 40% 83% / 0.3) 52px
+    hsl(110 30% 96% / 0.5) 0%,
+    hsl(120 28% 96% / 0.32) 100%
   );
 }
 
-/* 海空（light / 205° 天海线） */
+/* 海空（light / 湛蓝）— 平静海面与天际线 */
 [data-wallpaper="ocean-sky"] {
-  --skin-bg-gradient: linear-gradient(
+  --skin-bg-image: url("../assets/skins/ocean-sky.jpg");
+  --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(205 55% 93% / 0.75) 0%,
-    hsl(205 40% 96% / 0.5) 58%,
-    hsl(199 55% 89% / 0.65) 58%,
-    hsl(199 50% 92% / 0.6) 100%
+    hsl(205 40% 98% / 0.85) 0%,
+    hsl(203 32% 98% / 0.78) 50%,
+    hsl(199 38% 97% / 0.85) 100%
   );
-  --skin-sidebar-image: linear-gradient(
+  --skin-sidebar-overlay: linear-gradient(
     180deg,
-    hsl(205 65% 90% / 0.5) 0%,
-    hsl(205 50% 94% / 0.45) 58%,
-    hsl(199 60% 85% / 0.55) 58%,
-    hsl(199 55% 87% / 0.5) 100%
+    hsl(205 45% 96% / 0.45) 0%,
+    hsl(200 38% 96% / 0.28) 100%
   );
 }
 
-/* 暖沙（light / 35° 沙丘弧线） */
+/* 暖沙（light / 暖橙）— 金色阳光下的沙丘 */
 [data-wallpaper="warm-sand"] {
-  --skin-bg-gradient: linear-gradient(
+  --skin-bg-image: url("../assets/skins/warm-sand.jpg");
+  --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(38 60% 96% / 0.55) 0%,
-    hsl(35 50% 94% / 0.5) 55%,
-    hsl(32 55% 91% / 0.6) 100%
+    hsl(38 45% 98% / 0.88) 0%,
+    hsl(36 38% 98% / 0.8) 55%,
+    hsl(33 40% 97% / 0.85) 100%
   );
-  --skin-sidebar-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='90'><g fill='none' stroke='hsl(35 55% 70%)' stroke-opacity='0.25' stroke-width='2'><path d='M-10 30 Q 35 12 80 30 T 170 30'/><path d='M-10 55 Q 35 37 80 55 T 170 55'/><path d='M-10 80 Q 35 62 80 80 T 170 80'/></g></svg>");
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(38 50% 96% / 0.5) 0%,
+    hsl(35 45% 96% / 0.32) 100%
+  );
 }
 
-/* 暮色（dark / 15° 暖橙暮光） */
+/* 暮色（dark / 暖橙夜）— 群山剪影与橙色落日 */
 [data-wallpaper="dusk"] {
-  --skin-bg-gradient:
-    radial-gradient(1200px 800px at 50% -20%, hsl(14 50% 20% / 0.85), transparent 70%),
-    linear-gradient(
-      180deg,
-      hsl(230 16% 8% / 0.9) 0%,
-      hsl(222 14% 7% / 0.95) 60%,
-      hsl(350 20% 10% / 0.6) 100%
-    );
-  --skin-sidebar-image: radial-gradient(
-    320px 480px at 50% -10%,
-    hsl(15 70% 45% / 0.35),
-    hsl(20 60% 30% / 0.18) 55%,
-    transparent 75%
-  );
-}
-
-/* 松林（dark / 150° 墨绿层叠） */
-[data-wallpaper="pine"] {
-  --skin-bg-gradient: linear-gradient(
+  --skin-bg-image: url("../assets/skins/dusk.jpg");
+  --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(222 14% 8%) 0%,
-    hsl(180 15% 8%) 40%,
-    hsl(160 18% 8%) 70%,
-    hsl(152 20% 7%) 100%
+    hsl(222 14% 7% / 0.82) 0%,
+    hsl(222 14% 7% / 0.9) 45%,
+    hsl(230 16% 8% / 0.95) 100%
   );
-  --skin-sidebar-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='140'><g fill-opacity='0.5'><path fill='hsl(150 28% 16%)' d='M45 15 L78 70 L12 70 Z'/><path fill='hsl(150 32% 12%)' d='M118 50 L150 105 L86 105 Z'/><path fill='hsl(150 28% 16%)' d='M70 90 L96 132 L44 132 Z'/><rect fill='hsl(150 30% 12%)' x='42' y='70' width='6' height='16'/><rect fill='hsl(150 30% 12%)' x='115' y='105' width='6' height='16'/></g></svg>");
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(222 14% 7% / 0.45) 0%,
+    hsl(222 14% 7% / 0.7) 100%
+  );
 }
 
-/* 墨韵（dark / 225° 深蓝漩涡） */
+/* 松林（dark / 墨绿）— 雾中深绿松林 */
+[data-wallpaper="pine"] {
+  --skin-bg-image: url("../assets/skins/pine.jpg");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(160 18% 7% / 0.85) 0%,
+    hsl(155 16% 7% / 0.9) 50%,
+    hsl(150 18% 6% / 0.95) 100%
+  );
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(155 18% 7% / 0.45) 0%,
+    hsl(150 18% 6% / 0.68) 100%
+  );
+}
+
+/* 墨韵（dark / 深蓝）— 暗底蓝色墨旋 */
 [data-wallpaper="ink"] {
-  --skin-bg-gradient:
-    radial-gradient(900px 640px at 78% 18%, hsl(225 35% 16% / 0.75), transparent 65%),
-    radial-gradient(700px 500px at 12% 88%, hsl(228 30% 14% / 0.6), transparent 60%),
-    linear-gradient(165deg, hsl(225 24% 9% / 0.95), hsl(222 14% 7%));
-  --skin-sidebar-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><g fill='none' stroke='hsl(225 45% 55%)' stroke-opacity='0.22' stroke-width='1.6'><path d='M70 70 a6 6 0 0 1 12 0 a12 12 0 0 1 -24 0 a18 18 0 0 1 36 0 a24 24 0 0 1 -48 0 a30 30 0 0 1 60 0'/><path d='M20 20 a5 5 0 0 1 10 0 a10 10 0 0 1 -20 0 a15 15 0 0 1 30 0'/><path d='M110 105 a5 5 0 0 1 10 0 a10 10 0 0 1 -20 0 a15 15 0 0 1 30 0'/></g></svg>");
+  --skin-bg-image: url("../assets/skins/ink.jpg");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(225 20% 8% / 0.8) 0%,
+    hsl(222 16% 7% / 0.88) 50%,
+    hsl(228 18% 9% / 0.94) 100%
+  );
+  --skin-sidebar-overlay: linear-gradient(
+    180deg,
+    hsl(225 22% 8% / 0.42) 0%,
+    hsl(222 18% 7% / 0.65) 100%
+  );
 }
 
 /* =====================================================
@@ -213,7 +247,12 @@
    随明暗切换，深色下白字——验收反馈：漏网文本黑底黑字看不清） */
 body {
   background-color: var(--color-background);
-  background-image: var(--skin-bg-gradient, none);
+  background-image:
+    var(--skin-body-overlay, none),
+    var(--skin-bg-image, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
   color: var(--color-foreground);
 }
 
@@ -226,5 +265,9 @@ body {
 /* 全局侧边栏壳（GlobalSidebar 内层 div，data-sidebar-shell 标记）：
    叠加壁纸侧栏图案，未设置时回落 none */
 [data-sidebar-shell] {
-  background-image: var(--skin-sidebar-image, none);
+  background-image:
+    var(--skin-sidebar-overlay, none),
+    var(--skin-bg-image, none);
+  background-size: cover;
+  background-position: center;
 }

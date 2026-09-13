@@ -72,6 +72,29 @@
   --color-ring: hsl(150 55% 45%);
 }
 
+/* 局部作用域孪生规则（非 :root）：皮肤预览卡/缩略卡把三元组写在卡片根元素上，
+   上方 :root 版本不匹配卡片，globals.css 的 [data-theme="..."]（0,1,0、源序在
+   skins.css 之后）会以亮色字面值覆盖暗色主色公式（预览所见即所选会被破坏）。
+   此处 0,2,0 特异度对任意携带 data-mode+data-theme 的元素生效；html 上与
+   :root 版本值完全相同（计算结果 bit 级不变）。与上方 :root 版本值同步维护 */
+[data-mode="dark"][data-theme] {
+  --color-primary: hsl(var(--theme-hue) 60% 62%);
+  --color-primary-hover: hsl(var(--theme-hue) 62% 68%);
+  --color-primary-active: hsl(var(--theme-hue) 62% 74%);
+  --color-primary-subtle: hsl(var(--theme-hue) 30% 18%);
+  --color-ring: hsl(var(--theme-hue) 60% 62%);
+}
+
+/* 绿色 hue 特例（局部作用域孪生）：与 :root[data-theme="green"][data-mode="dark"]
+   同值；源序在后保证 green 暗色卡片仍取低亮度白字安全值。同步维护同上 */
+[data-theme="green"][data-mode="dark"] {
+  --color-primary: hsl(150 55% 45%);
+  --color-primary-hover: hsl(150 55% 41%);
+  --color-primary-active: hsl(150 58% 36%);
+  --color-primary-subtle: hsl(150 30% 15%);
+  --color-ring: hsl(150 55% 45%);
+}
+
 /* =====================================================
    壁纸装饰层（8 款，mode 固定——light 系低透明度叠加 / dark 系深色渐变）
    每组仅定义 --skin-bg-gradient 与 --skin-sidebar-image 两个变量

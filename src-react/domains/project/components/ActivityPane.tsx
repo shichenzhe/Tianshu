@@ -25,6 +25,7 @@ import type { ProjectDetail } from "../../../../electron/domains/project/project
 
 const PROVIDERS_ROUTE = "/module/ai/providers";
 const EXPERTS_ROUTE = "/module/ai/experts";
+const CONNECTORS_ROUTE = "/module/ai/experts?tab=connectors";
 
 interface ActivityPaneProps {
   detail: ProjectDetail;
@@ -73,7 +74,13 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
         detail.session.currentModelId ?? workspace?.defaultModelId,
       )}
       onOpenSettings={(target) =>
-        navigate(target === "providers" ? PROVIDERS_ROUTE : EXPERTS_ROUTE)
+        navigate(
+          target === "providers"
+            ? PROVIDERS_ROUTE
+            : target === "mcp"
+              ? CONNECTORS_ROUTE
+              : EXPERTS_ROUTE,
+        )
       }
       boundAssistantIds={detail.bindings
         .filter((b) => b.itemType === "assistant" && b.valid)

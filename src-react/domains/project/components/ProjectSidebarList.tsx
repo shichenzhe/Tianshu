@@ -6,10 +6,8 @@
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { useUserStore } from "@/domains/user/store/user.store";
 import ProjectApi from "../api/project.api";
 import { getTemplate, getTemplateIcon } from "../model/project-templates";
@@ -40,7 +38,7 @@ export default function ProjectSidebarList({
   return (
     <>
       {!collapsed && (
-        <div className="fade-in min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="fade-in p-2">
           <p className="flex items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground">
             {t("project:sidebar.myProjects")} ({projects.length})
           </p>
@@ -67,20 +65,9 @@ export default function ProjectSidebarList({
             );
           })}
           {projects.length === 0 && (
-            <div className="flex flex-col items-center gap-2 px-2 py-6 text-center">
-              <p className="text-xs text-muted-foreground">
-                {t("project:sidebar.empty")}
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 gap-1 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
-                onClick={() => navigate("/module/project")}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {t("project:sidebar.createFirst")}
-              </Button>
-            </div>
+            <p className="px-2 py-2 text-xs text-muted-foreground">
+              {t("project:sidebar.empty")}
+            </p>
           )}
         </div>
       )}

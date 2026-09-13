@@ -69,8 +69,7 @@
   "sidebar": {
     "projects": "Projects",
     "myProjects": "My Projects",
-    "empty": "No projects yet",
-    "createFirst": "Create your first project"
+    "empty": "No projects yet"
   },
   "toast": {
     "created": "Project created",

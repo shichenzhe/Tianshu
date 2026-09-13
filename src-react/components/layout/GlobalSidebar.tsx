@@ -116,6 +116,9 @@ export default function GlobalSidebar() {
             <span className="truncate text-sm font-semibold tracking-tight text-foreground select-none">
               {t("common:appName")}
             </span>
+            <span className="shrink-0 text-xs text-muted-foreground select-none">
+              {__APP_VERSION__}
+            </span>
           </div>
         )}
 
@@ -137,12 +140,11 @@ export default function GlobalSidebar() {
           ))}
         </div>
 
-        {/* 主体区：项目模块 → 项目列表；其余 → AI 空间分组任务树 */}
-        {isProjectRoute ? (
+        {/* 主体区：我的项目 + AI 空间分组任务树上下共存（统一滚动容器） */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <ProjectSidebarList collapsed={collapsed} />
-        ) : (
           <SessionTreePanel collapsed={collapsed} />
-        )}
+        </div>
       </div>
     </aside>
   );

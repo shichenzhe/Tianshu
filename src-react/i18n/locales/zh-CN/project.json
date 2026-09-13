@@ -69,8 +69,7 @@
   "sidebar": {
     "projects": "项目",
     "myProjects": "我的项目",
-    "empty": "还没有项目",
-    "createFirst": "创建第一个项目"
+    "empty": "还没有项目"
   },
   "toast": {
     "created": "项目创建成功",

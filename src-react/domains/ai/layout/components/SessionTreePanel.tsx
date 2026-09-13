@@ -382,7 +382,7 @@ export default function SessionTreePanel({ collapsed }: SessionTreePanelProps) {
     <>
       {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
       {!collapsed && (
-        <div className="fade-in min-h-0 flex-1 overflow-y-auto p-2">
+        <div className="fade-in p-2 border-t border-border/50">
           <button
             type="button"
             className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"

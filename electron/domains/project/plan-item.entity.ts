@@ -158,12 +158,12 @@ export interface PlanItemCreateParams {
   source?: PlanItemSource;
 
   /**
-   * ISO 日期；null = 清空（仅 update）
+   * ISO 日期；空串 = 未填
    */
   startDate?: string | null;
 
   /**
-   * ISO 日期；null = 清空（仅 update）
+   * ISO 日期；空串 = 未填
    */
   dueDate?: string | null;
 }
@@ -213,12 +213,12 @@ export interface PlanItemUpdateParams {
   source?: PlanItemSource;
 
   /**
-   * 新开始日期（ISO）；null = 清空
+   * 新开始日期（ISO）；null/空串 = 清空
    */
   startDate?: string | null;
 
   /**
-   * 新截止日期（ISO）；null = 清空
+   * 新截止日期（ISO）；null/空串 = 清空
    */
   dueDate?: string | null;
 }

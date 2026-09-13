@@ -371,7 +371,7 @@ export default class PlanItemRepository {
 
   /**
    * 组装局部更新 data：只含传入键（assigneeId null = 显式清空指派；
-   * startDate/dueDate 传 null = 清空日期，未传不写该列）
+   * startDate/dueDate 传 null/空串 = 清空日期，未传不写该列）
    */
   private buildUpdateData(
     params: PlanItemUpdateParams,
@@ -402,15 +402,21 @@ export default class PlanItemRepository {
     return value !== undefined ? JSON.stringify(value) : undefined;
   }
 
-  /** ISO 字符串 → Date；null → null（清空）；undefined → undefined（不写该列） */
+  /** ISO 字符串 → Date；空串/null → null（清空）；undefined 不写该列；非法串抛中文错误 */
   private toDateOrNull(
     value: string | null | undefined,
   ): Date | null | undefined {
-    return value === undefined
-      ? undefined
-      : value === null
-        ? null
-        : new Date(value);
+    if (value === undefined) {
+      return undefined;
+    }
+    if (value === null || value === "") {
+      return null;
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new Error("无效的日期格式");
+    }
+    return date;
   }
 
   /** 目标状态列下一个列内序：取该列（projectId 精确匹配，null 为本地任务列）最大值 +1 */

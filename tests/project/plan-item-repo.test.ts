@@ -7,8 +7,8 @@
  * fields:list/save 自定义字段（option 域 planFields:<projectId> 行、畸形行丢弃、
  * 空名/非法类型/重名拒绝、deleteMany+createMany 全量替换、消失字段行值逐行清理
  * + 失败收集汇总抛出）、8 通道自注册（fields 两通道补齐）；
- * 字段扩展（子系统 A）：source/startDate/dueDate 透传与 null 清空、
- * 非法 source 拒绝、处理人必须是项目成员校验。
+ * 字段扩展（子系统 A）：source/startDate/dueDate 透传、null/空串清空、
+ * 非法日期串拒绝、非法 source 拒绝、处理人必须是项目成员校验。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用 project-repo.test.ts 模式。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -615,6 +615,23 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
     prismaStub.projectMember.findFirst.mockResolvedValue(null);
     await expect(repo.update({ id: 1, assigneeId: 99 })).rejects.toThrow(
       "处理人必须是项目成员",
+    );
+    expect(prismaStub.planItem.update).not.toHaveBeenCalled();
+  });
+
+  it("update 传空串 startDate → 归一为 null 清空（弹窗回填空串 = 无日期）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    await repo.update({ id: 1, startDate: "" });
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { startDate: null },
+    });
+  });
+
+  it("update 非法日期串 → 抛「无效的日期格式」不落库", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    await expect(repo.update({ id: 1, startDate: "garbage" })).rejects.toThrow(
+      "无效的日期格式",
     );
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });

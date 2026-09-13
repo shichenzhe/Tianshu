@@ -371,8 +371,8 @@ export type PlanItemSource = (typeof PLAN_SOURCES)[number];
 
 - [ ] **Step 4: 运行测试确认通过 + 全量回归**
 
-Run: `npm run test -- tests/project/plan-item-repo.test.ts && npm run typecheck`
-Expected: 全部 PASS（P3 加入 PLAN_PRIORITIES 会引起前端 `Record<PlanPriority, ...>` 缺键编译错——本任务只改后端文件；若 typecheck 报前端缺 P3 键，属预期，Task 3 修复后回归）
+Run: `npm run test -- tests/project/plan-item-repo.test.ts`
+Expected: 全部 PASS。随后单独运行 `npm run typecheck`：P3 加入 PLAN_PRIORITIES 会引起前端 `Record<PlanPriority, ...>` 缺键编译错——本任务只改后端文件，typecheck 若仅报 PlanItemDialog/PlanKanbanView/PlanTableView/TasksPane 的 P3 缺键属预期中间态（Task 3 修复后回归）；出现其他任何编译错则不可接受，需修复。
 
 - [ ] **Step 5: Commit**
 
@@ -644,17 +644,19 @@ const row = (over: Record<string, unknown> = {}) => ({
 describe("PlanViewRepository.list 懒播种", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("空列表 → $transaction createMany 播种表格/看板两条（name 空串）再返回", async () => {
+  it("空列表 → $transaction 数组式 create×2 播种表格/看板两条（name 空串）再返回", async () => {
     prismaStub.planView.findMany
       .mockResolvedValueOnce([]) // 播种前
       .mockResolvedValueOnce([row(), row({ id: 2, type: "kanban", sortOrder: 1 })]); // 播种后重查
     const views = await repo.list(11);
-    expect(prismaStub.$transaction).toHaveBeenCalled();
-    expect(prismaStub.planView.createMany).toHaveBeenCalledWith({
-      data: [
-        { projectId: 11, name: "", type: "table", sortOrder: 0 },
-        { projectId: 11, name: "", type: "kanban", sortOrder: 1 },
-      ],
+    expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+    expect(Array.isArray((prismaStub.$transaction as ReturnType<typeof vi.fn>).mock.calls[0][0])).toBe(true);
+    expect(prismaStub.planView.create).toHaveBeenCalledTimes(2);
+    expect(prismaStub.planView.create).toHaveBeenNthCalledWith(1, {
+      data: { projectId: 11, name: "", type: "table", sortOrder: 0 },
+    });
+    expect(prismaStub.planView.create).toHaveBeenNthCalledWith(2, {
+      data: { projectId: 11, name: "", type: "kanban", sortOrder: 1 },
     });
     expect(views).toHaveLength(2);
     expect(views[1].type).toBe("kanban");

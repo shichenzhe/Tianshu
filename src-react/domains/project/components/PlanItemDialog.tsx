@@ -9,9 +9,10 @@
  * project:listMembers 拉取；本地任务只读「我」）/ 自定义字段动态区
  * （text=Input、number=Input[type=number]、date=Input[type=date]；仅项目
  * 任务渲染，本地任务 projectId=null 无该区）。
- * 保存：新建 → create（assigneeId 缺省当前用户；日期仅项目任务携带、空串
- * 归一 null；customFields 仅保留值非空键）、编辑 → update（全量字段，
- * assigneeId null = 清空指派）→ invalidate planItems + planItemsMine 双 key
+ * 保存：新建 → create（assigneeId 打开时缺省当前用户、显式「未指派」传
+ * null；日期仅项目任务携带、空串归一 null；customFields 仅保留值非空键）、
+ * 编辑 → update（全量字段，assigneeId null = 清空指派）
+ * → invalidate planItems + planItemsMine 双 key
  * → toast(plan:saved) + onSaved + 关闭；失败 toast mapIpcError 且弹窗保留。
  */
 import { useEffect, useMemo, useState } from "react";
@@ -71,9 +72,10 @@ const NO_PROJECT_CACHE_KEY = -1;
 
 const TITLE_MAX_LENGTH = 100;
 
-/** 「YYYY-MM-DD」本地日期 → ISO 字符串；空串 = 未填（null 清空） */
+/** 「YYYY-MM-DD」日历日 → UTC 零点 ISO（与回填 slice(0,10) 精确往返，
+ *  不受本地时区偏移影响）；空串 = 未填（null 清空） */
 const toIsoOrNull = (value: string): string | null =>
-  value ? new Date(`${value}T00:00:00`).toISOString() : null;
+  value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null;
 
 export const STATUS_OPTIONS: PlanStatus[] = [
   "not_started",
@@ -266,9 +268,9 @@ export default function PlanItemDialog({
       } else {
         await PlanItemApi.create({
           createdById: user.id,
-          // 处理人：成员选择器可改派/留空未指派，缺省指派给自己
-          // （任务 Tab「指派给我的」依赖）
-          assigneeId: assigneeId ?? user.id,
+          // 处理人：打开时缺省指派自己（任务 Tab「指派给我的」依赖），
+          // 成员选择器可改派；显式选「未指派」传 null 原样透传
+          assigneeId,
           projectId: projectId ?? undefined,
           title: trimmedTitle,
           status,

@@ -8,7 +8,10 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 
 const scriptDir = (version: string) =>
-  path.resolve(__dirname, `../../electron/infrastructure/script/v${version}/upgrade-table.sql`);
+  path.resolve(
+    __dirname,
+    `../../electron/infrastructure/script/v${version}/upgrade-table.sql`,
+  );
 
 /** 去注释行后按分号拆分（模拟 sql-file-executor 最小语义：
  * --/p 描述行、--/ignore 标记下一条语句失败可忽略，跨行语句累积到分号） */

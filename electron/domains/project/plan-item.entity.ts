@@ -138,9 +138,9 @@ export interface PlanItemCreateParams {
   priority?: PlanPriority;
 
   /**
-   * 处理人用户 id
+   * 处理人用户 id；null = 显式未指派（缺省存 null）
    */
-  assigneeId?: number;
+  assigneeId?: number | null;
 
   /**
    * 标签

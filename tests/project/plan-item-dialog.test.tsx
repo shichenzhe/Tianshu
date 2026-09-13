@@ -12,7 +12,9 @@
  *   null）不渲染该区且不拉取字段定义
  * - 排期与处理人（三期子系统 A）：编辑回填日期（ISO 前 10 位）/成员昵称；
  *   update 携带 ISO/null 与 assigneeId；日期区与成员 Select 仅项目任务
- *   （本地任务只读「我」、无日期框且 create 不带日期键）；优先级含 P3
+ *   （本地任务只读「我」、无日期框且 create 不带日期键）；日期为 UTC 零点
+ *   存储、往返日历日不偏移；显式「未指派」→ create/update assigneeId null；
+ *   优先级含 P3
  * - 保存链路：create 参数完整（createdById/projectId/title/status/priority/
  *   tags/customFields，number 型转数字）；本地任务 projectId/customFields 省略；
  *   update 传全量字段；成功 invalidate planItems + planItemsMine 双 key +
@@ -486,11 +488,22 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
       tags: ["设计"],
       customFields: { 预算: 100 },
       assigneeId: 1,
-      // 日期框「YYYY-MM-DD」→ 本地零点 ISO；空截止 → null（清空）
-      startDate: new Date("2026-09-05T00:00:00").toISOString(),
+      // 日期框「YYYY-MM-DD」→ UTC 零点 ISO；空截止 → null（清空）
+      startDate: "2026-09-05T00:00:00.000Z",
       dueDate: null,
     });
     expect(ProjectApi.listMembers).toHaveBeenCalledWith(1);
+  });
+
+  it("日期时区往返：选 2026-09-14 → update 载荷 startDate 以 2026-09-14 开头", async () => {
+    await renderPlanDialog({ item: makeItem({ assigneeId: 1 }) });
+    fireEvent.change(getStartDateInput(), { target: { value: "2026-09-14" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(PlanItemApi.update).mock.calls[0][0];
+    // UTC 零点存储：任何时区下日历日不得偏移（UTC+8 曾偏成 09-13T16:00Z）
+    expect(payload.startDate).toMatch(/^2026-09-14T00:00:00\.000Z$/);
   });
 
   it("处理人可改选「未指派」；编辑提交 update 携带 assigneeId null（清空指派）", async () => {
@@ -507,6 +520,22 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.update).toHaveBeenCalledWith(
       expect.objectContaining({ assigneeId: null }),
+    );
+  });
+
+  it("新建显式选「未指派」→ create 携带 assigneeId null（不被回落为当前用户）", async () => {
+    await renderPlanDialog();
+    // 打开缺省指派自己（成员 1），显式改选「未指派」后保存
+    await waitFor(() =>
+      expect(getAssigneeTrigger().textContent).toContain("黄"),
+    );
+    await selectOption(getAssigneeTrigger(), "project:plan.unassigned");
+    fireEvent.change(getTitleInput(), { target: { value: "无主事项" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "无主事项", assigneeId: null }),
     );
   });
 

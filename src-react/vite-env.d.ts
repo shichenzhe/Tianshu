@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+/** 应用版本号（vite.config.ts define 编译期注入，源自 package.json） */
+declare const __APP_VERSION__: string;
+
 interface Window {
   platform: NodeJS.Platform;
   /** 拖拽文件路径（preload 经 webUtils.getPathForFile 暴露，File.path 的官方替代） */

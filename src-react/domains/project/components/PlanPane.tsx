@@ -288,10 +288,15 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     }
   };
 
-  /** 快速新增：与弹窗共用 create 链（缺省状态/优先级） */
+  /** 快速新增：与弹窗共用 create 链（缺省状态/优先级；创建即指派自己） */
   const handleQuickCreate = async (title: string) => {
     try {
-      await PlanItemApi.create({ createdById: user.id, projectId, title });
+      await PlanItemApi.create({
+        createdById: user.id,
+        assigneeId: user.id,
+        projectId,
+        title,
+      });
       await invalidatePlanCaches();
     } catch (error) {
       toast.error(mapIpcError(error));

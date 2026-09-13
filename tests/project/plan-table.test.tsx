@@ -7,7 +7,7 @@
  * - 表格渲染全列（标题/状态/处理人/优先级/标签 + 动态自定义字段列与缺值 --）
  * - 行内状态 Select 切换走 move 通道（id + 目标状态 + sortOrder=目标列 max+1，
  *   不调 update）；优先级切换走 update({ id, priority })（不调 move）
- * - 快速新增回车 → create（createdById/projectId/title 缺省态）+ 双 key 失效；
+ * - 快速新增回车 → create（createdById/assigneeId/projectId/title 缺省态）+ 双 key 失效；
  *   空标题回车忽略
  * - 筛选组合：标签/状态/优先级多选 checkbox 跨维度 AND 过滤；搜索标题包含过滤
  * - 视图切换：?view= 写入保留 ?tab=plan（URL 断言）；非法 view 回落表格
@@ -359,7 +359,7 @@ describe("PlanPane 行内编辑", () => {
 });
 
 describe("PlanPane 快速新增", () => {
-  it("回车 → create 缺省态（createdById/projectId/title）+ 双 key 失效 + 清空输入", async () => {
+  it("回车 → create 缺省态（createdById/assigneeId/projectId/title）+ 双 key 失效 + 清空输入", async () => {
     const client = renderPlanPane();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     await screen.findByText("需求梳理");
@@ -373,6 +373,7 @@ describe("PlanPane 快速新增", () => {
     await waitFor(() =>
       expect(PlanItemApi.create).toHaveBeenCalledWith({
         createdById: 1,
+        assigneeId: 1,
         projectId: 1,
         title: "快速新增事项",
       }),

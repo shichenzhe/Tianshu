@@ -7,7 +7,8 @@
  * 不触发）/ 处理人只读「我」/ 自定义字段动态区（text=Input、number=
  * Input[type=number]、date=Input[type=date]；仅项目任务渲染，本地任务
  * projectId=null 无该区）。
- * 保存：新建 → create（customFields 仅保留值非空键）、编辑 → update（全量字段）
+ * 保存：新建 → create（单成员语义 assigneeId=当前用户；customFields 仅保留值
+ * 非空键）、编辑 → update（全量字段）
  * → invalidate planItems + planItemsMine 双 key → toast(plan:saved) + onSaved +
  * 关闭；失败 toast mapIpcError 且弹窗保留。
  */
@@ -231,6 +232,8 @@ export default function PlanItemDialog({
       } else {
         await PlanItemApi.create({
           createdById: user.id,
+          // 单成员语义（spec §2）：创建即指派给自己，任务 Tab「指派给我的」依赖
+          assigneeId: user.id,
           projectId: projectId ?? undefined,
           title: trimmedTitle,
           status,

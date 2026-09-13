@@ -324,6 +324,7 @@ describe("PlanItemDialog 保存链路", () => {
     await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.create).toHaveBeenCalledWith({
       createdById: 1,
+      assigneeId: 1,
       projectId: 1,
       title: "新事项",
       status: "done",
@@ -356,6 +357,7 @@ describe("PlanItemDialog 保存链路", () => {
     await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.create).toHaveBeenCalledWith({
       createdById: 1,
+      assigneeId: 1,
       title: "本地任务",
       status: "not_started",
       priority: "P1",

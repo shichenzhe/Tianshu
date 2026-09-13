@@ -486,4 +486,32 @@ describe("ProjectRepository.getPromptContext", () => {
       boundConnectorNames: [],
     });
   });
+
+  it("挂载连接器仅取启用行（声明与注册工具集一致，二期 §3.7）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      name: "p",
+      systemPrompt: null,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([
+      { id: 1, projectId: 11, itemType: "mcpServer", itemId: 6 },
+      { id: 2, projectId: 11, itemType: "mcpServer", itemId: 7 },
+    ]);
+    // 禁用行（id=7）由 DB where 过滤：mock 返回值即查询结果
+    prismaStub.mcpServer.findMany.mockResolvedValue([
+      { id: 6, name: "启用连接器" },
+    ]);
+
+    await expect(repo.getPromptContext(11)).resolves.toEqual({
+      projectName: "p",
+      systemPrompt: null,
+      boundAssistantPrompts: [],
+      boundSkillNames: [],
+      boundConnectorNames: ["启用连接器"],
+    });
+    expect(prismaStub.mcpServer.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [6, 7] }, enabled: true },
+      select: { id: true, name: true },
+    });
+  });
 });

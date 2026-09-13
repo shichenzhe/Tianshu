@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
@@ -49,9 +57,19 @@ vi.mock("../../electron/commons/prisma-client", () => ({
   },
 }));
 
-// 技能扫描依赖 userData 目录的真实文件系统：固定空清单保证 base 断言确定性
+// 技能扫描依赖 userData 目录的真实文件系统：默认空清单保证 base 断言确定性；
+// 工具硬隔离测试按需覆写 skillScanStub.skills（默认空，既有断言不受影响）
+const skillScanStub = vi.hoisted(() => ({
+  skills: [] as Array<{
+    name: string;
+    description: string;
+    dir: string;
+    bodyPath: string;
+    source: "user" | "workspace";
+  }>,
+}));
 vi.mock("../../electron/domains/ai/agent/skill-loader", () => ({
-  loadSkills: () => [],
+  loadSkills: () => skillScanStub.skills,
 }));
 
 import { MockLanguageModelV3 } from "ai/test";
@@ -59,6 +77,11 @@ import ChatService, {
   runChatStream,
 } from "../../electron/domains/ai/chat/chat.service";
 import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
+import {
+  registerTools,
+  unregisterTools,
+} from "../../electron/domains/ai/agent/tool-registry";
+import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
 
 const userHistory = [
   {
@@ -679,9 +702,21 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
       topP: null,
       maxTokens: null,
     });
+    skillScanStub.skills = [];
   });
 
   it("项目会话：base 换为项目指令+挂载专家+能力软约束声明", async () => {
+    // 二期 §3.7 声明与实际一致：声明段的技能名取实际可用集，
+    // 故挂载技能需在扫描结果中真实存在
+    skillScanStub.skills = [
+      {
+        name: "技能1",
+        description: "挂载技能",
+        dir: "/skills/技能1",
+        bodyPath: "/skills/技能1/SKILL.md",
+        source: "user",
+      },
+    ];
     const { service } = makeProjectSvc({ projectId: 11 }, async () => ({
       projectName: "p",
       systemPrompt: "项目指令",
@@ -690,8 +725,11 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
       boundConnectorNames: ["连接器1"],
     }));
     const ctx = await assemble(service);
+    // base（项目指令+专家+声明）之后按 P2 组装规则追加技能清单段
     expect(ctx.systemWithSummary).toBe(
-      "项目指令\n\n专家A\n\n专家B\n\n【本项目可用能力】\n技能：技能1\n连接器：连接器1\n本项目对话中请优先（且仅）使用以上已挂载能力。",
+      "项目指令\n\n专家A\n\n专家B\n\n【本项目可用能力】\n技能：技能1\n连接器：连接器1\n本项目对话中请优先（且仅）使用以上已挂载能力。" +
+        "\n\n你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：" +
+        "\n- 技能1: 挂载技能",
     );
   });
 
@@ -731,5 +769,226 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
     const service = new ChatService(sessions as unknown as SessionRepository);
     const ctx = await assemble(service);
     expect(ctx.systemWithSummary).toBe("助手指令");
+  });
+});
+
+/**
+ * 项目会话工具硬隔离（项目模块二期 spec §3.7）：
+ * 项目会话（ask 外）实际注入工具集按挂载集过滤——mcp__ 工具仅保留已挂载
+ * 连接器前缀（非 mcp 工具不受影响），技能清单 = 启用扫描 ∩ 挂载技能，
+ * 软约束声明段同步收窄（声明与实际一致）；非项目会话全量（回归锚点）。
+ * registry 为模块级真实现：注册两个伪 mcp 工具断言过滤，收尾清理防泄漏。
+ */
+describe("ChatService.assembleContext（项目会话工具硬隔离）", () => {
+  const modelRow = {
+    id: 1,
+    providerId: 2,
+    modelId: "m",
+    temperature: null,
+    topP: null,
+    maxTokens: null,
+    contextWindow: null,
+  };
+  const providerRow = {
+    id: 2,
+    type: "openai-compatible",
+    baseUrl: "https://x.example/v1",
+    apiKey: "k",
+    extraHeaders: null,
+  };
+  const assistantRow = {
+    id: 1,
+    systemPrompt: "助手指令",
+    temperature: null,
+    topP: null,
+    maxTokens: null,
+  };
+
+  const makeSvc = (
+    sessionOverrides: Record<string, unknown>,
+    getPromptContext: () => Promise<unknown>,
+  ) => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: 1,
+        workspaceId: 1,
+        mode: null,
+        compactedUpToId: null,
+        summary: null,
+        projectId: null,
+        ...sessionOverrides,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(1),
+      // 未绑定目录 → 文件四件不注入，工具集聚焦 mcp__ 与 create_skill/read_skill
+      getWorkspace: vi.fn().mockResolvedValue(null),
+    };
+    const projectRepo = { getPromptContext: vi.fn(getPromptContext) };
+    const service = new ChatService(
+      sessions as unknown as SessionRepository,
+      undefined,
+      projectRepo as never,
+    );
+    return { projectRepo, service };
+  };
+
+  /** assembleContext 内部返回（本文件既有内部访问模式） */
+  const assemble = (service: ChatService) =>
+    (
+      service as unknown as {
+        assembleContext: (sessionId: number) => Promise<{
+          mode: string;
+          skills: Array<{ name: string }>;
+          allowedMcpServers: string[] | null;
+          agent: { workspacePath?: string };
+          systemWithSummary: string | undefined;
+        }>;
+      }
+    ).assembleContext(1);
+
+  /** 生产同口径组装注入工具集（streamAndPersist/getUsageBreakdown 的调用式） */
+  const toolNames = async (service: ChatService) => {
+    const ctx = await assemble(service);
+    if (ctx.mode === "ask") return [];
+    const defs = (
+      service as unknown as {
+        collectToolDefinitions: (
+          agent: { workspacePath?: string },
+          skills: Array<{ name: string }>,
+          allowedMcpServers: string[] | null,
+        ) => ToolDefinition[];
+      }
+    ).collectToolDefinitions(ctx.agent, ctx.skills, ctx.allowedMcpServers);
+    return defs.map((def) => def.name);
+  };
+
+  /** 伪 mcp 工具（注册进真 registry；execute 不被触达） */
+  const mcpTool = (name: string): ToolDefinition => ({
+    name,
+    description: `伪工具 ${name}`,
+    parameters: {},
+    kind: "read",
+    execute: async () => "ok",
+  });
+
+  const projectCtx = (overrides: Record<string, unknown> = {}) => ({
+    projectName: "p",
+    systemPrompt: "项目指令",
+    boundAssistantPrompts: [],
+    boundSkillNames: [],
+    boundConnectorNames: [],
+    ...overrides,
+  });
+
+  beforeAll(() => {
+    registerTools([mcpTool("mcp__alpha__query"), mcpTool("mcp__beta__fetch")]);
+  });
+  afterAll(() => {
+    unregisterTools("mcp__");
+  });
+  beforeEach(() => {
+    vi.clearAllMocks();
+    assembleReads.model.findUnique.mockResolvedValue(modelRow);
+    assembleReads.provider.findUnique.mockResolvedValue(providerRow);
+    assembleReads.assistant.findUnique.mockResolvedValue(assistantRow);
+    skillScanStub.skills = [];
+  });
+
+  it("项目会话：mcp 工具仅保留挂载连接器前缀，非 mcp 工具不受影响", async () => {
+    const { service } = makeSvc({ projectId: 11 }, async () =>
+      projectCtx({ boundConnectorNames: ["alpha"] }),
+    );
+    const names = await toolNames(service);
+    // 未绑定目录：文件四件缺席（create_skill 由 SkillRepository 注册，
+    // 测试环境不实例化）；mcp 仅 alpha 前缀（beta 被硬隔离）
+    expect(names).toEqual(["read_skill", "mcp__alpha__query"]);
+    expect(names).not.toContain("mcp__beta__fetch");
+  });
+
+  it("项目会话：技能清单 = 启用扫描 ∩ 挂载集，声明段技能名同步收窄", async () => {
+    skillScanStub.skills = [
+      {
+        name: "技能1",
+        description: "挂载技能",
+        dir: "/skills/技能1",
+        bodyPath: "/skills/技能1/SKILL.md",
+        source: "user",
+      },
+      {
+        name: "技能2",
+        description: "未挂载技能",
+        dir: "/skills/技能2",
+        bodyPath: "/skills/技能2/SKILL.md",
+        source: "user",
+      },
+    ];
+    const { service } = makeSvc({ projectId: 11 }, async () =>
+      projectCtx({
+        boundSkillNames: ["技能1"],
+        boundConnectorNames: ["alpha"],
+      }),
+    );
+    const ctx = await assemble(service);
+    expect(ctx.skills.map((skill) => skill.name)).toEqual(["技能1"]);
+    // 声明段与系统技能清单均不含未挂载技能（声明与实际一致）
+    expect(ctx.systemWithSummary).toContain("技能：技能1");
+    expect(ctx.systemWithSummary).not.toContain("技能2");
+    expect(await toolNames(service)).toContain("read_skill");
+  });
+
+  it("项目会话挂载空连接器集 → mcp 工具全隔离（空数组不等于不过滤）", async () => {
+    const { service } = makeSvc({ projectId: 11 }, async () => projectCtx());
+    const names = await toolNames(service);
+    expect(names).toEqual(["read_skill"]);
+  });
+
+  it("非项目会话：工具集与技能清单全量（回归锚点）", async () => {
+    skillScanStub.skills = [
+      {
+        name: "技能1",
+        description: "d1",
+        dir: "/d1",
+        bodyPath: "/d1/SKILL.md",
+        source: "user",
+      },
+      {
+        name: "技能2",
+        description: "d2",
+        dir: "/d2",
+        bodyPath: "/d2/SKILL.md",
+        source: "user",
+      },
+    ];
+    const { projectRepo, service } = makeSvc({}, async () => null);
+    const ctx = await assemble(service);
+    expect(ctx.allowedMcpServers).toBeNull();
+    expect(ctx.skills.map((skill) => skill.name)).toEqual(["技能1", "技能2"]);
+    expect(await toolNames(service)).toEqual([
+      "read_skill",
+      "mcp__alpha__query",
+      "mcp__beta__fetch",
+    ]);
+    expect(projectRepo.getPromptContext).not.toHaveBeenCalled();
+  });
+
+  it("ask 模式项目会话：零工具零技能，声明段保持一期挂载集口径", async () => {
+    skillScanStub.skills = [
+      {
+        name: "技能1",
+        description: "d1",
+        dir: "/d1",
+        bodyPath: "/d1/SKILL.md",
+        source: "user",
+      },
+    ];
+    const { service } = makeSvc({ projectId: 11, mode: "ask" }, async () =>
+      projectCtx({ boundSkillNames: ["技能1"] }),
+    );
+    const ctx = await assemble(service);
+    expect(ctx.allowedMcpServers).toBeNull();
+    expect(ctx.skills).toEqual([]);
+    expect(await toolNames(service)).toEqual([]);
+    // ask 不做运行时交集（无实际工具集可对齐），声明沿用挂载集
+    expect(ctx.systemWithSummary).toContain("技能：技能1");
   });
 });

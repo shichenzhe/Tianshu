@@ -42,7 +42,10 @@ import type { ToolDefinition } from "../agent/file-tools";
 import { resolveSafePath } from "../agent/file-tools";
 import { ApprovalCoordinator } from "../agent/approval";
 import { PermissionStore } from "../agent/permission-mode";
-import { buildProjectSystemBase } from "../../project/project-prompt";
+import {
+  buildProjectSystemBase,
+  type ProjectPromptContext,
+} from "../../project/project-prompt";
 import type ProjectRepository from "../../project/project.repo";
 import type {
   ChatSendParams,
@@ -197,6 +200,38 @@ function buildModeSystem(
   return withSkills
     ? `${withSkills}\n\n${PLAN_MODE_INSTRUCTION}`
     : PLAN_MODE_INSTRUCTION;
+}
+
+/** 项目会话工具硬隔离结果（项目模块二期 §3.7）：ask 模式不适用（零工具零技能） */
+interface ProjectToolIsolation {
+  /** 过滤后技能清单（= 启用扫描结果 ∩ 挂载技能名） */
+  skills: SkillInfo[];
+  /** 声明段消费的项目上下文（技能名收窄到实际可用集，声明与实际一致） */
+  declaredCtx: ProjectPromptContext;
+  /** 挂载连接器名集合（mcp__ 工具前缀白名单；空数组 = 全隔离） */
+  allowedMcpServers: string[];
+}
+
+/**
+ * 项目会话工具硬隔离（项目模块二期 §3.7）：技能清单按挂载集过滤、
+ * 声明段技能名同步收窄、连接器名透传为 mcp__ 前缀白名单。
+ * 纯函数：由 assembleContext 在项目上下文非空且非 ask 模式时调用
+ */
+function isolateProjectTools(
+  skills: SkillInfo[],
+  projectCtx: ProjectPromptContext,
+): ProjectToolIsolation {
+  const mounted = skills.filter((skill) =>
+    projectCtx.boundSkillNames.includes(skill.name),
+  );
+  return {
+    skills: mounted,
+    declaredCtx: {
+      ...projectCtx,
+      boundSkillNames: mounted.map((skill) => skill.name),
+    },
+    allowedMcpServers: projectCtx.boundConnectorNames,
+  };
 }
 
 /**
@@ -1154,20 +1189,33 @@ export default class ChatService {
 
   /**
    * 注入工具集（P2 spec 决策 #3）：read_skill 常驻（未绑定目录也注入，与
-   * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 全量透传；
+   * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 透传——
+   * 项目会话工具硬隔离（二期 §3.7）：allowedMcpServers 非 null 时仅保留
+   * 挂载连接器前缀的工具（前缀 `mcp__<server>__` 精确到 server 边界），
+   * 非 mcp 工具不受影响；null = 非项目/ask 会话，全量；
    * create_skill 落盘到用户技能目录、不依赖工作空间，未绑定目录也放行（P-D）；
    * 文件四件依赖工作空间路径，仅绑定目录后注入
    */
   private collectToolDefinitions(
     agent: AgentStreamOptions,
     skills: SkillInfo[],
+    allowedMcpServers: string[] | null = null,
   ): ToolDefinition[] {
     const registered = registry.getDefinitions();
-    const injected = agent.workspacePath
+    const workspaceScoped = agent.workspacePath
       ? registered
       : registered.filter(
           (def) => def.name.startsWith("mcp__") || def.name === "create_skill",
         );
+    const injected = allowedMcpServers
+      ? workspaceScoped.filter(
+          (def) =>
+            !def.name.startsWith("mcp__") ||
+            allowedMcpServers.some((server) =>
+              def.name.startsWith(`mcp__${server}__`),
+            ),
+        )
+      : workspaceScoped;
     return [makeReadSkillTool(skills), ...injected];
   }
 
@@ -1233,7 +1281,11 @@ export default class ChatService {
         toolDefinitions:
           ctx.mode === "ask"
             ? []
-            : this.collectToolDefinitions(ctx.agent, ctx.skills),
+            : this.collectToolDefinitions(
+                ctx.agent,
+                ctx.skills,
+                ctx.allowedMcpServers,
+              ),
         agent: ctx.agent,
         maxSteps,
         onChunk: (chunk) => {
@@ -1363,17 +1415,26 @@ export default class ChatService {
     // 压缩态摘要段:拼在模式 system 之后(无 base 时单独成段)
     // 个性化段注入（spec §4.5）：persona 前置 + 行为段后置，全默认时逐字节还原
     // 项目会话（项目模块一期 spec §5）：base 换为项目上下文（项目指令+挂载专家
-    // prompt+能力软约束声明）；非项目会话或项目上下文为空 → 原助手 prompt 不变
+    // prompt+能力软约束声明）；非项目会话或项目上下文为空 → 原助手 prompt 不变。
+    // 工具硬隔离（二期 §3.7）：ask 外的项目会话，技能清单按挂载集过滤、
+    // mcp 工具按挂载连接器前缀过滤（声明段同步收窄到实际可用集）
     const projectCtx = session.projectId
       ? await this.projectRepo?.getPromptContext(session.projectId)
       : null;
-    const base = projectCtx
-      ? (buildProjectSystemBase(projectCtx) ?? assistantRow?.systemPrompt)
+    const isolation =
+      projectCtx && mode !== "ask"
+        ? isolateProjectTools(skills, projectCtx)
+        : null;
+    const sessionSkills = isolation ? isolation.skills : skills;
+    const allowedMcpServers = isolation?.allowedMcpServers ?? null;
+    const baseProjectCtx = isolation ? isolation.declaredCtx : projectCtx;
+    const base = baseProjectCtx
+      ? (buildProjectSystemBase(baseProjectCtx) ?? assistantRow?.systemPrompt)
       : assistantRow?.systemPrompt;
     const personalization = await loadPersonalization();
     const baseSystem = buildPersonalizedSystem(
       personalization,
-      buildModeSystem(mode, base, skills),
+      buildModeSystem(mode, base, sessionSkills),
     );
     const systemWithSummary =
       compacted && session.summary
@@ -1390,7 +1451,8 @@ export default class ChatService {
       history,
       agent,
       mode,
-      skills,
+      skills: sessionSkills,
+      allowedMcpServers,
       baseSystem,
       systemWithSummary,
     };
@@ -1408,7 +1470,11 @@ export default class ChatService {
       const toolDefinitions =
         ctx.mode === "ask"
           ? []
-          : this.collectToolDefinitions(ctx.agent, ctx.skills);
+          : this.collectToolDefinitions(
+              ctx.agent,
+              ctx.skills,
+              ctx.allowedMcpServers,
+            );
       return computeUsageBreakdown({
         systemWithSummary: ctx.systemWithSummary,
         skills: ctx.skills,

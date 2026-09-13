@@ -230,7 +230,9 @@ export default class ProjectRepository {
         : [],
       idsByType.mcpServer.length > 0
         ? prisma.mcpServer.findMany({
-            where: { id: { in: idsByType.mcpServer } },
+            // 仅启用行（二期 §3.7 声明与实际一致）：禁用 server 的工具未注册
+            // 进 registry，软约束声明不得将其列为可用能力
+            where: { id: { in: idsByType.mcpServer }, enabled: true },
             select: { id: true, name: true },
           })
         : [],

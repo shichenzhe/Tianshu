@@ -65,11 +65,11 @@
 /* 绿色 hue 特例：G 通道主导亮度感知偏高，统一 62% 亮度下白字对比仅 1.69，
    沿用亮色 green 主题的低亮度策略（亮色为 40%），hover/active 同亮色方向变深 */
 :root[data-theme="green"][data-mode="dark"] {
-  --color-primary: hsl(150 55% 45%);
-  --color-primary-hover: hsl(150 55% 41%);
-  --color-primary-active: hsl(150 58% 36%);
+  --color-primary: hsl(150 55% 47%);
+  --color-primary-hover: hsl(150 55% 43%);
+  --color-primary-active: hsl(150 58% 38%);
   --color-primary-subtle: hsl(150 30% 15%);
-  --color-ring: hsl(150 55% 45%);
+  --color-ring: hsl(150 55% 47%);
 }
 
 /* 局部作用域孪生规则（非 :root）：皮肤预览卡/缩略卡把三元组写在卡片根元素上，
@@ -88,11 +88,11 @@
 /* 绿色 hue 特例（局部作用域孪生）：与 :root[data-theme="green"][data-mode="dark"]
    同值；源序在后保证 green 暗色卡片仍取低亮度白字安全值。同步维护同上 */
 [data-theme="green"][data-mode="dark"] {
-  --color-primary: hsl(150 55% 45%);
-  --color-primary-hover: hsl(150 55% 41%);
-  --color-primary-active: hsl(150 58% 36%);
+  --color-primary: hsl(150 55% 47%);
+  --color-primary-hover: hsl(150 55% 43%);
+  --color-primary-active: hsl(150 58% 38%);
   --color-primary-subtle: hsl(150 30% 15%);
-  --color-ring: hsl(150 55% 45%);
+  --color-ring: hsl(150 55% 47%);
 }
 
 /* =====================================================

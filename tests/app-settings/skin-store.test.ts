@@ -187,6 +187,13 @@ describe("initSkin 启动初始化", () => {
     expect(root().dataset.mode).toBe("light");
     expect(root().dataset.theme).toBe("orange");
   });
+
+  it("localStorage 为畸形 JSON 时不抛错，回落默认（light + orange）", () => {
+    localStorage.setItem("tianshu-theme", "{invalid json");
+    expect(() => initSkin()).not.toThrow();
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("orange");
+  });
 });
 
 describe("useThemeStore 兼容层", () => {

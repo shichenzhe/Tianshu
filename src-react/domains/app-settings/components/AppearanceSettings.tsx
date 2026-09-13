@@ -1,6 +1,6 @@
 /**
  * 外观设置页（spec §3.2）：主题预览大卡（当前皮肤，点击卡片即时换肤——
- * store 驱动）+「全部皮肤」十款缩略卡网格（5 列，md 3 列 / sm 2 列响应）。
+ * store 驱动）+「全部皮肤」十款缩略卡网格（窄 2 列 → md 3 列 → xl 5 列响应）。
  * 选中态读 store.skin 单一数据源；整页滚动由 SettingsDialog 内容区承担
  * （外观分支同样走右栏 overflow-y-auto 容器）
  */
@@ -28,7 +28,7 @@ export default function AppearanceSettings() {
         <h3 className="text-sm font-medium text-muted-foreground">
           {t("settings:appearance.allSkins")}
         </h3>
-        <div className="grid grid-cols-5 gap-3 md:grid-cols-3 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {SKINS.map((item) => (
             <SkinCard
               key={item.id}

@@ -3,7 +3,7 @@
  * 外观设置页测试（外观模块 Task 5）：真实 skin store 驱动（每例 reset 回
  * light/orange），jsdom 不计算 CSS，颜色跟随以三元组属性断言兜底：
  * - 渲染：页标题 + 预览卡（当前皮肤）+ 「全部皮肤」标题 + 十款 SkinCard
- *   5 列网格（md 3 列 / sm 2 列响应）
+ *   窄 2 列网格（md 3 列 / xl 5 列响应）
  * - 点击 SkinCard → useSkinStore.setSkin 调用 → store.skin 切换 + 选中样式
  *   （aria-pressed/边框类名）转移到新卡 + 预览卡 data-mode 即时换肤
  * - 预览卡随 store 外部变化同步（如顶栏色相选择器同源 store）
@@ -79,13 +79,13 @@ describe("AppearanceSettings 渲染", () => {
     }
   });
 
-  it("皮肤网格：5 列（md 3 列 / sm 2 列响应）+ gap-3", () => {
+  it("皮肤网格：窄 2 列（md 3 列 / xl 5 列响应）+ gap-3", () => {
     const { container } = render(<AppearanceSettings />);
     const grid = screen.getByText("深色").closest(".grid");
     expect(grid).toBeTruthy();
-    expect(grid?.className).toContain("grid-cols-5");
+    expect(grid?.className).toContain("grid-cols-2");
     expect(grid?.className).toContain("md:grid-cols-3");
-    expect(grid?.className).toContain("sm:grid-cols-2");
+    expect(grid?.className).toContain("xl:grid-cols-5");
     expect(grid?.className).toContain("gap-3");
     expect(container.querySelectorAll(".grid > button")).toHaveLength(
       SKINS.length,

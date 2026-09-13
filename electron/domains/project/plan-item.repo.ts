@@ -4,14 +4,17 @@
  * create（title trim + 枚举校验 + sortOrder 置目标状态列尾）、
  * update（局部更新）/ move（看板拖拽落点）/ remove。
  * tags/customFields 为 JSON 字符串列，读写经 parseJsonColumn/stringifyColumn 容错。
- * fields:list / fields:save 两通道（option 域复用）由 Task 3 注册。
+ * fields:list / fields:save 自定义字段定义（option 域复用，spec §3.2）。
  */
 import { ipcMain } from "electron";
 import prisma from "../../commons/prisma-client";
 import {
+  PLAN_FIELD_TYPES,
   PLAN_ITEM_NOT_FOUND,
   PLAN_PRIORITIES,
   PLAN_STATUSES,
+  type PlanFieldDef,
+  type PlanFieldType,
   type PlanItemCreateParams,
   type PlanItemMoveParams,
   type PlanItemRecord,
@@ -23,6 +26,27 @@ import {
 type PlanItemRow = NonNullable<
   Awaited<ReturnType<typeof prisma.planItem.findFirst>>
 >;
+
+/** option 域自定义字段的 type 键：planFields:<projectId> */
+function planFieldsType(projectId: number): string {
+  return `planFields:${projectId}`;
+}
+
+/** 字段类型枚举守卫：null（note 列可空）或非枚举值 → false（listFields 丢弃畸形行） */
+function isPlanFieldType(value: string | null): value is PlanFieldType {
+  return (
+    value !== null && (PLAN_FIELD_TYPES as readonly string[]).includes(value)
+  );
+}
+
+/** customFields JSON 列形状守卫：非 null 非数组的普通对象 */
+function isPlainObject(
+  parsed: unknown,
+): parsed is Record<string, string | number> {
+  return (
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+  );
+}
 
 /** JSON 字符串列解析：畸形 JSON / 非预期形状 / null → fallback（渲染层容错，spec §4） */
 function parseJsonColumn<T>(
@@ -44,7 +68,7 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 注册IPC处理程序（6 通道；fields 两通道 Task 3 补）
+   * 注册IPC处理程序（8 通道：事项 6 + 自定义字段定义 2）
    */
   private registerHandlers() {
     ipcMain.handle("planItem:list", (_, projectId: number) =>
@@ -62,6 +86,14 @@ export default class PlanItemRepository {
     ipcMain.handle("planItem:delete", (_, id: number) => this.remove(id));
     ipcMain.handle("planItem:move", (_, params: PlanItemMoveParams) =>
       this.move(params),
+    );
+    ipcMain.handle("planItem:fields:list", (_, projectId: number) =>
+      this.listFields(projectId),
+    );
+    ipcMain.handle(
+      "planItem:fields:save",
+      (_, projectId: number, fields: PlanFieldDef[]) =>
+        this.saveFields(projectId, fields),
     );
   }
 
@@ -158,6 +190,53 @@ export default class PlanItemRepository {
     });
   }
 
+  /**
+   * 项目自定义字段定义：option 域 planFields:<projectId> 行
+   * （value=字段名，note=类型），name asc；note 缺失/非枚举的畸形行丢弃
+   * @param projectId 项目 id
+   */
+  async listFields(projectId: number): Promise<PlanFieldDef[]> {
+    const rows = await prisma.option.findMany({
+      where: { type: planFieldsType(projectId) },
+      orderBy: { value: "asc" },
+    });
+    return rows.flatMap((row) =>
+      isPlanFieldType(row.note) ? [{ name: row.value, type: row.note }] : [],
+    );
+  }
+
+  /**
+   * 保存自定义字段定义（全量替换）：校验 → deleteMany + createMany 重建
+   * option 行；消失字段名（删除或重命名导致）同步清理该项目全部
+   * planItem 行的 customFields 键（失败收集，收尾汇总抛出，调用方 toast）
+   * @param projectId 项目 id
+   * @param fields 字段定义全集
+   */
+  async saveFields(projectId: number, fields: PlanFieldDef[]): Promise<void> {
+    const normalized = this.normalizeFieldsOrThrow(fields);
+    const type = planFieldsType(projectId);
+    const existingRows = await prisma.option.findMany({
+      where: { type },
+      select: { value: true },
+    });
+    const keptNames = new Set(normalized.map((field) => field.name));
+    const removedNames = existingRows
+      .map((row) => row.value)
+      .filter((name) => !keptNames.has(name));
+    await prisma.option.deleteMany({ where: { type } });
+    if (normalized.length > 0) {
+      await prisma.option.createMany({
+        data: normalized.map((field) => ({
+          type,
+          name: field.name,
+          value: field.name,
+          note: field.type,
+        })),
+      });
+    }
+    await this.cleanRemovedFieldValues(projectId, removedNames);
+  }
+
   /** 枚举值校验：undefined 跳过（走缺省值），非枚举值抛中文错误（裸 IPC 容错，spec §4） */
   private ensureEnumOrThrow(
     value: string | undefined,
@@ -176,6 +255,82 @@ export default class PlanItemRepository {
     }
     this.ensureEnumOrThrow(params.status, PLAN_STATUSES, "无效的状态");
     this.ensureEnumOrThrow(params.priority, PLAN_PRIORITIES, "无效的优先级");
+  }
+
+  /**
+   * 字段定义校验（裸 IPC 容错，spec §4）：name trim 非空、type 三枚举、
+   * trim 后项目内不重名；返回 trim 后定义（存库以 trim 名对齐 value 列）
+   */
+  private normalizeFieldsOrThrow(fields: PlanFieldDef[]): PlanFieldDef[] {
+    const seen = new Set<string>();
+    const normalized: PlanFieldDef[] = [];
+    for (const field of fields) {
+      const name = field.name.trim();
+      if (!name) {
+        throw new Error("字段名不能为空");
+      }
+      if (!isPlanFieldType(field.type)) {
+        throw new Error("无效的字段类型");
+      }
+      if (seen.has(name)) {
+        throw new Error("字段名重复");
+      }
+      seen.add(name);
+      normalized.push({ name, type: field.type });
+    }
+    return normalized;
+  }
+
+  /**
+   * 清理消失字段的项目内行值：该项目全部行逐行删键回写；
+   * 单行失败收集不中断，收尾有失败则抛汇总（调用方 toast），成功静默
+   */
+  private async cleanRemovedFieldValues(
+    projectId: number,
+    removedNames: string[],
+  ): Promise<void> {
+    if (removedNames.length === 0) {
+      return;
+    }
+    const rows = await prisma.planItem.findMany({
+      where: { projectId },
+      select: { id: true, customFields: true },
+    });
+    const failedIds: number[] = [];
+    for (const row of rows) {
+      try {
+        await this.removeRowFieldKeys(row.id, row.customFields, removedNames);
+      } catch {
+        failedIds.push(row.id);
+      }
+    }
+    if (failedIds.length > 0) {
+      throw new Error(`清理字段值失败 ${failedIds.length} 条`);
+    }
+  }
+
+  /** 单行 customFields 删键回写：行不含任何消失键（含空列/畸形 JSON）时不写库 */
+  private async removeRowFieldKeys(
+    rowId: number,
+    raw: string | null,
+    removedNames: string[],
+  ): Promise<void> {
+    const fields = parseJsonColumn<Record<string, string | number>>(
+      raw,
+      {},
+      isPlainObject,
+    );
+    const hits = Object.keys(fields).filter((key) =>
+      removedNames.includes(key),
+    );
+    if (hits.length === 0) {
+      return;
+    }
+    hits.forEach((key) => delete fields[key]);
+    await prisma.planItem.update({
+      where: { id: rowId },
+      data: { customFields: JSON.stringify(fields) },
+    });
   }
 
   /** 组装局部更新 data：只含传入键（assigneeId null = 显式清空指派） */
@@ -224,14 +379,7 @@ export default class PlanItemRepository {
       priority: row.priority as PlanPriority,
       assigneeId: row.assigneeId,
       tags: parseJsonColumn(row.tags, [], Array.isArray),
-      customFields: parseJsonColumn(
-        row.customFields,
-        {},
-        (parsed) =>
-          typeof parsed === "object" &&
-          parsed !== null &&
-          !Array.isArray(parsed),
-      ),
+      customFields: parseJsonColumn(row.customFields, {}, isPlainObject),
       sortOrder: row.sortOrder,
       createdById: row.createdById,
       createdAt: this.toIso(row.createdAt),

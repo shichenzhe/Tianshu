@@ -193,7 +193,13 @@ export interface PlanItemMoveParams {
 }
 
 /**
- * 自定义字段定义（planItem:fields:list/save 载荷，Task 3 消费；
+ * 自定义字段类型枚举：text 文本 / number 数字 / date 日期
+ */
+export const PLAN_FIELD_TYPES = ["text", "number", "date"] as const;
+export type PlanFieldType = (typeof PLAN_FIELD_TYPES)[number];
+
+/**
+ * 自定义字段定义（planItem:fields:list/save 载荷；
  * 持久化复用 option 表：type = "planFields:<projectId>"，value=字段名，note=类型）
  */
 export interface PlanFieldDef {
@@ -203,9 +209,9 @@ export interface PlanFieldDef {
   name: string;
 
   /**
-   * 字段类型：text 文本 / number 数字 / date 日期
+   * 字段类型
    */
-  type: "text" | "number" | "date";
+  type: PlanFieldType;
 }
 
 /**

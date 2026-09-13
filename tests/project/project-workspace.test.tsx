@@ -7,7 +7,7 @@
  * - 默认动态 Tab（?tab 缺省）：ChatPane mock 渲染，且收到 valid 过滤后的
  *   boundAssistantIds / boundSkillNames（失效挂载不下发给输入过滤集）
  * - 点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane（计划空态）且 ChatPane 卸载
- * - switchTab 合并式写入（回归）：?view= 不随 Tab 切换丢失
+ * - switchTab 合并式写入（回归）：?viewId= 不随 Tab 切换丢失
  * - getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project
  * - 配置面板：点击收起按钮隐藏面板，再点展开
  * - 失效挂载语义（Task 6 裁定）：灰显 + invalid 徽标 + X 移除直接 setBindings；
@@ -59,7 +59,12 @@ const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 vi.mock("@/domains/project/api/project.api", () => ({
-  default: { getDetail: vi.fn(), update: vi.fn(), setBindings: vi.fn() },
+  default: {
+    getDetail: vi.fn(),
+    update: vi.fn(),
+    setBindings: vi.fn(),
+    listMembers: vi.fn(),
+  },
 }));
 
 // 计划 Tab（PlanPane）数据源：list/listFields，key 工厂形状与真实实现一致
@@ -69,6 +74,20 @@ vi.mock("@/domains/project/api/plan-item.api", () => ({
   PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
   PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
 }));
+
+// 计划 Tab 视图数据源（PlanPane usePlanViews）：仅 list 消费，key 工厂保留
+const planViewMock = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/domains/project/api/plan-view.api", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/domains/project/api/plan-view.api")
+    >();
+  return {
+    ...actual,
+    default: planViewMock,
+    PLAN_VIEWS_KEY: actual.PLAN_VIEWS_KEY,
+  };
+});
 
 // 动态流能力查询（ActivityPane）：provider 非空避免落入服务商引导卡
 vi.mock("@/domains/ai/api/provider.api", () => ({
@@ -134,6 +153,7 @@ import { AssistantApi } from "@/domains/ai/api/assistant.api";
 import SkillApi from "@/domains/ai/skills/api/skill.api";
 import { McpServerApi } from "@/domains/ai/api/mcp.api";
 import type { ProjectDetail } from "../../../electron/domains/project/project.entity";
+import type { PlanViewRecord } from "../../../electron/domains/project/plan-view.entity";
 
 const DETAIL: ProjectDetail = {
   project: {
@@ -219,12 +239,42 @@ function LocationProbe() {
   );
 }
 
+/** 视图播种：表格(10) + 看板(11)，空名 = 默认视图（UI 类型名兜底显示） */
+const VIEWS: PlanViewRecord[] = [
+  {
+    id: 10,
+    projectId: 1,
+    name: "",
+    type: "table",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 0,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: 11,
+    projectId: 1,
+    name: "",
+    type: "kanban",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 1,
+    createdAt: "",
+    updatedAt: "",
+  },
+];
+
 beforeEach(() => {
   vi.mocked(ProjectApi.getDetail).mockReset().mockResolvedValue(DETAIL);
   vi.mocked(PlanItemApi.list).mockReset().mockResolvedValue([]);
   vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue([]);
   vi.mocked(ProjectApi.update).mockReset().mockResolvedValue(undefined);
   vi.mocked(ProjectApi.setBindings).mockReset().mockResolvedValue(undefined);
+  vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue([]);
+  planViewMock.list.mockReset().mockResolvedValue(VIEWS);
   vi.mocked(ProviderApi.list)
     .mockReset()
     .mockResolvedValue([
@@ -333,7 +383,7 @@ describe("Tab 容器", () => {
     );
   });
 
-  it("switchTab 合并式写入：切 Tab 不丢 ?view=（回归）", async () => {
+  it("switchTab 合并式写入：切 Tab 不丢 ?viewId=（回归）", async () => {
     vi.mocked(PlanItemApi.list).mockResolvedValue([
       {
         id: 11,
@@ -353,41 +403,47 @@ describe("Tab 容器", () => {
     renderWorkspace();
     await screen.findByText("chat-pane-mock");
 
-    // 计划 Tab → 切看板视图：?tab=plan&view=kanban
+    // 计划 Tab → 切看板视图：?tab=plan&viewId=11
     fireEvent.click(
       screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
     );
     fireEvent.click(
-      await screen.findByRole("button", { name: "project:plan.viewKanban" }),
+      await screen.findByRole("button", {
+        name: "project:planView.typeKanban",
+      }),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/module/project/1?tab=plan&view=kanban",
+        "/module/project/1?tab=plan&viewId=11",
       ),
     );
     // 看板视图渲染计划卡片（细节断言在 plan-kanban.test）
     expect(await screen.findByText("需求梳理")).toBeTruthy();
 
-    // 切动态 Tab：只改 tab，view 保留（合并式写入）
+    // 切动态 Tab：只改 tab，viewId 保留（合并式写入）
     fireEvent.click(
       screen.getByRole("tab", { name: "project:workspace.tabActivity" }),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/module/project/1?tab=activity&view=kanban",
+        "/module/project/1?tab=activity&viewId=11",
       ),
     );
 
-    // 切回计划 Tab：仍处看板视图
+    // 切回计划 Tab：仍处看板视图（viewId 解析回激活视图）
     fireEvent.click(
       screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/module/project/1?tab=plan&view=kanban",
+        "/module/project/1?tab=plan&viewId=11",
       ),
     );
-    expect(await screen.findByText("需求梳理")).toBeTruthy();
+    expect(
+      await screen.findByRole("region", {
+        name: "project:plan.statusNotStarted",
+      }),
+    ).toBeTruthy();
   });
 
   it("getDetail 抛 PROJECT_NOT_FOUND → toast 提示并跳回 /module/project", async () => {

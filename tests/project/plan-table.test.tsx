@@ -3,14 +3,17 @@
  * PlanPane / PlanTableView 计划表格视图测试（jsdom + testing-library，mock 骨架
  * 同 tests/project/plan-item-dialog.test.tsx：t 返回 key、sonner、Radix 桩、
  * QueryClientProvider；PlanItemApi 八静态方法 + key 工厂 + useUserStore 整体
- * mock；MemoryRouter + LocationProbe 捕获 ?view= 写入）：
+ * mock；PlanViewApi / ProjectApi.listMembers（视图与成员数据源）mock；
+ * MemoryRouter + LocationProbe 捕获 ?viewId= 写入）：
  * - 表格渲染全列（标题/状态/处理人/优先级/标签 + 动态自定义字段列与缺值 --）
  * - 行内状态 Select 切换走 move 通道（id + 目标状态 + sortOrder=目标列 max+1，
  *   不调 update）；优先级切换走 update({ id, priority })（不调 move）
  * - 快速新增回车 → create（createdById/assigneeId/projectId/title 缺省态）+ 双 key 失效；
  *   空标题回车忽略
- * - 筛选组合：标签/状态/优先级多选 checkbox 跨维度 AND 过滤；搜索标题包含过滤
- * - 视图切换：?view= 写入保留 ?tab=plan（URL 断言）；非法 view 回落表格
+ * - 筛选组合：标签/状态/优先级多选 checkbox 跨维度 AND 过滤（draft.conditions
+ *   经引擎 filterItems 生效）；搜索标题包含过滤
+ * - 视图切换：Tab 点击写 ?viewId= 且保留 ?tab=plan（URL 断言）；非法 ?view=
+ *   回落表格；旧参数 ?view=kanban 初始渲染看板（resolveInitialViewId 映射）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
  * - 空态：无任何事项居中 plan.empty
  */
@@ -85,12 +88,39 @@ vi.mock("@/domains/user/store/user.store", () => ({
     selector ? selector({ user: { id: 1 } }) : { user: { id: 1 } },
 }));
 
+// PlanViewApi 静态类整体 mock（视图数据源；key 工厂保留真实实现）
+const planViewMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+  reorder: vi.fn(),
+}));
+vi.mock("@/domains/project/api/plan-view.api", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/domains/project/api/plan-view.api")
+    >();
+  return {
+    ...actual,
+    default: planViewMock,
+    PLAN_VIEWS_KEY: actual.PLAN_VIEWS_KEY,
+  };
+});
+
+// ProjectApi.listMembers（成员数据源，PlanPane 预取）整体 mock
+const projectApiMock = vi.hoisted(() => ({ listMembers: vi.fn() }));
+vi.mock("@/domains/project/api/project.api", () => ({
+  default: projectApiMock,
+}));
+
 import PlanPane from "../../src-react/domains/project/components/PlanPane";
 import PlanItemApi from "@/domains/project/api/plan-item.api";
 import type {
   PlanFieldDef,
   PlanItemRecord,
 } from "../../../electron/domains/project/plan-item.entity";
+import type { PlanViewRecord } from "../../../electron/domains/project/plan-view.entity";
 
 const FIELD_DEFS: PlanFieldDef[] = [
   { name: "里程碑", type: "text" },
@@ -219,6 +249,37 @@ const prioritySelectOf = (title: string) =>
     name: "project:plan.priority",
   });
 
+/** 视图播种：表格(10) + 看板(11)，空名 = 默认视图（UI 类型名兜底显示） */
+const VIEWS: PlanViewRecord[] = [
+  {
+    id: 10,
+    projectId: 1,
+    name: "",
+    type: "table",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 0,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: 11,
+    projectId: 1,
+    name: "",
+    type: "kanban",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 1,
+    createdAt: "",
+    updatedAt: "",
+  },
+];
+
+/** 项目成员（处理人筛选/看板分组候选） */
+const MEMBERS = [{ userId: 1, nickname: "我", username: "me", role: "owner" }];
+
 beforeEach(() => {
   vi.mocked(PlanItemApi.list).mockReset().mockResolvedValue(ITEMS);
   vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue(FIELD_DEFS);
@@ -226,6 +287,8 @@ beforeEach(() => {
   vi.mocked(PlanItemApi.update).mockReset().mockResolvedValue(undefined);
   vi.mocked(PlanItemApi.remove).mockReset().mockResolvedValue(undefined);
   vi.mocked(PlanItemApi.move).mockReset().mockResolvedValue(undefined);
+  planViewMock.list.mockReset().mockResolvedValue(VIEWS);
+  projectApiMock.listMembers.mockReset().mockResolvedValue(MEMBERS);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -445,16 +508,16 @@ describe("PlanPane 筛选与搜索", () => {
 });
 
 describe("PlanPane 视图切换", () => {
-  it("?view= 合并式写入且保留 ?tab=plan；切回表格恢复", async () => {
+  it("Tab 点击写 ?viewId= 且保留 ?tab=plan；切回表格恢复", async () => {
     renderPlanPane();
     await screen.findByText("需求梳理");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "project:plan.viewKanban" }),
+      screen.getByRole("button", { name: "project:planView.typeKanban" }),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/module/project/1?tab=plan&view=kanban",
+        "/module/project/1?tab=plan&viewId=11",
       ),
     );
     // 看板视图渲染卡片（四态泳道细节断言在 plan-kanban.test）
@@ -462,21 +525,36 @@ describe("PlanPane 视图切换", () => {
     expect(
       screen.getByRole("region", { name: "project:plan.statusInProgress" }),
     ).toBeTruthy();
+    expect(screen.queryByRole("row")).toBeNull();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "project:plan.viewTable" }),
+      screen.getByRole("button", { name: "project:planView.typeTable" }),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
-        "/module/project/1?tab=plan&view=table",
+        "/module/project/1?tab=plan&viewId=10",
       ),
     );
-    expect(await screen.findByText("需求梳理")).toBeTruthy();
+    expect(
+      await screen.findByRole("columnheader", { name: "project:plan.title" }),
+    ).toBeTruthy();
   });
 
   it("非法 ?view= 回落表格视图", async () => {
     renderPlanPane({ initialEntry: "/module/project/1?tab=plan&view=bogus" });
     expect(await screen.findByText("需求梳理")).toBeTruthy();
+  });
+
+  it("旧参数 ?view=kanban 初始渲染看板视图（resolveInitialViewId 映射）", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&view=kanban" });
+    expect(
+      await screen.findByRole("region", {
+        name: "project:plan.statusNotStarted",
+      }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("row")).toBeNull();
+    // 视图数据流已换轨：激活视图经 PlanViewApi 解析（而非 ?view= 直读）
+    expect(planViewMock.list).toHaveBeenCalledWith(1);
   });
 });
 

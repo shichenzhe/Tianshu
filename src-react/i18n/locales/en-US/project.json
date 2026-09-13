@@ -95,6 +95,13 @@
     "tagPlaceholder": "Type a tag and press Enter to add",
     "deleted": "Deleted"
   },
+  "planView": {
+    "typeTable": "Table",
+    "typeKanban": "Board",
+    "typeList": "List",
+    "typeGantt": "Gantt",
+    "typeCalendar": "Calendar"
+  },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",
     "mine": "My Tasks",

@@ -3,7 +3,8 @@
  * PlanKanbanView 看板视图测试（jsdom + testing-library，mock 骨架同
  * tests/project/plan-table.test.tsx：t 返回 key、sonner、Radix 桩、
  * QueryClientProvider；PlanItemApi 静态方法 + key 工厂 + useUserStore 整体
- * mock；MemoryRouter 支撑 PlanPane 集成）：
+ * mock；PlanViewApi / ProjectApi.listMembers（视图与成员数据源）mock；
+ * MemoryRouter 支撑 PlanPane 集成，缺省 ?view=kanban 旧参数经视图解析映射）：
  * - 落点纯函数 computeDrop：over=列 id（空列/非空列）→ 列尾；over=卡片 id
  *   跨列 → 该卡所在列 + afterId；同列原位（自身/前一项/列背景）→ null；
  *   同列重排（后方卡片）→ 同状态 + afterId；active/over 未知 → null
@@ -94,10 +95,31 @@ vi.mock("@/domains/user/store/user.store", () => ({
       : { user: { id: 1, nickname: "测试用户" } },
 }));
 
-// ProjectApi.listMembers（PlanItemDialog 处理人选择器成员源）整体 mock
+// ProjectApi.listMembers（处理人选择器成员源 + PlanPane 预取）整体 mock
+const projectApiMock = vi.hoisted(() => ({ listMembers: vi.fn() }));
 vi.mock("@/domains/project/api/project.api", () => ({
-  default: { listMembers: vi.fn() },
+  default: projectApiMock,
 }));
+
+// PlanViewApi 静态类整体 mock（视图数据源；key 工厂保留真实实现）
+const planViewMock = vi.hoisted(() => ({
+  list: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  remove: vi.fn(),
+  reorder: vi.fn(),
+}));
+vi.mock("@/domains/project/api/plan-view.api", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/domains/project/api/plan-view.api")
+    >();
+  return {
+    ...actual,
+    default: planViewMock,
+    PLAN_VIEWS_KEY: actual.PLAN_VIEWS_KEY,
+  };
+});
 
 import PlanKanbanView, {
   computeDrop,
@@ -105,12 +127,12 @@ import PlanKanbanView, {
 } from "../../src-react/domains/project/components/PlanKanbanView";
 import PlanPane from "../../src-react/domains/project/components/PlanPane";
 import PlanItemApi from "@/domains/project/api/plan-item.api";
-import ProjectApi from "@/domains/project/api/project.api";
 import type { KanbanColumnData } from "../../src-react/domains/project/components/PlanKanbanView";
 import type {
   PlanItemRecord,
   PlanStatus,
 } from "../../../electron/domains/project/plan-item.entity";
+import type { PlanViewRecord } from "../../../electron/domains/project/plan-view.entity";
 
 const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   id: 1,
@@ -146,12 +168,45 @@ const PURE_COLUMNS: KanbanColumnData[] = [
   { status: "done", items: [item(5, "done", 5)] },
 ];
 
+/** 视图播种：表格(10) + 看板(11)，空名 = 默认视图（UI 类型名兜底显示） */
+const VIEWS: PlanViewRecord[] = [
+  {
+    id: 10,
+    projectId: 1,
+    name: "",
+    type: "table",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 0,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: 11,
+    projectId: 1,
+    name: "",
+    type: "kanban",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 1,
+    createdAt: "",
+    updatedAt: "",
+  },
+];
+
 beforeEach(() => {
   vi.mocked(PlanItemApi.list).mockReset().mockResolvedValue([]);
   vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue([]);
   vi.mocked(PlanItemApi.create).mockReset().mockResolvedValue(makeItem());
   vi.mocked(PlanItemApi.move).mockReset().mockResolvedValue(undefined);
-  vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue([]);
+  planViewMock.list.mockReset().mockResolvedValue(VIEWS);
+  projectApiMock.listMembers
+    .mockReset()
+    .mockResolvedValue([
+      { userId: 1, nickname: "我", username: "me", role: "owner" },
+    ]);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -416,7 +471,10 @@ describe("PlanPane 看板集成", () => {
     vi.mocked(PlanItemApi.list).mockResolvedValue(KANBAN_ITEMS);
     vi.mocked(PlanItemApi.listFields).mockResolvedValue([]);
     renderPlanPane();
-    await screen.findByText("需求评审");
+    // 视图异步解析（?view=kanban → 激活看板视图），先等看板列挂载
+    await screen.findByRole("region", {
+      name: "project:plan.statusInProgress",
+    });
 
     fireEvent.click(
       within(columnOf("project:plan.statusInProgress")).getByRole("button", {
@@ -434,7 +492,7 @@ describe("PlanPane 看板集成", () => {
     vi.mocked(PlanItemApi.list).mockResolvedValue(KANBAN_ITEMS);
     vi.mocked(PlanItemApi.listFields).mockResolvedValue([]);
     renderPlanPane();
-    await screen.findByText("发布上线");
+    await screen.findByRole("region", { name: "project:plan.statusDone" });
 
     fireEvent.click(cardOf("发布上线"));
     const dialog = await screen.findByRole("dialog");

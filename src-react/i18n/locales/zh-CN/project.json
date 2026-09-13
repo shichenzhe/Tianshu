@@ -95,6 +95,13 @@
     "tagPlaceholder": "输入标签，回车添加",
     "deleted": "已删除"
   },
+  "planView": {
+    "typeTable": "表格",
+    "typeKanban": "看板",
+    "typeList": "列表",
+    "typeGantt": "甘特",
+    "typeCalendar": "日历"
+  },
   "tasks": {
     "privateTip": "仅自己可见，不同步到项目",
     "mine": "我的任务",

@@ -1,10 +1,14 @@
 /**
  * 计划面板（spec §6 计划 Tab）：单表数据源 PLAN_ITEMS_KEY + 字段定义
- * PLAN_FIELDS_KEY；视图切换 ?view=table|kanban（缺省 table，非法回落，
- * 合并式写入保留 ?tab= 等既有参数）；表格/看板双视图（看板 = PlanKanbanView
- * 四态泳道拖拽）。
- * 工具栏：状态/优先级/标签三组多选筛选（标签候选=当前事项 distinct）+
- * 标题搜索（客户端过滤）+「添加」（PlanItemDialog 新建态）。
+ * PLAN_FIELDS_KEY；视图驱动——usePlanViews 管 ?viewId= 激活路由（兼容旧
+ * ?view=，合并式写入保留 ?tab= 等既有参数）与 draft 未保存调整态，
+ * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
+ * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部极简视图 Tab 行
+ * （完整交互后续任务替换）；表格/看板双视图（看板 = PlanKanbanView 四态
+ * 泳道拖拽）；项目成员预取共享缓存（处理人筛选/看板分组候选）。
+ * 工具栏：状态/优先级/标签三组多选筛选（onToggle 改写 draft 同字段单条
+ * 条件，标签候选=当前事项 distinct）+ 标题搜索 +「添加」（PlanItemDialog
+ * 新建态）。
  * 行内变更统一在本层处理（表格/看板纯触发）：状态切换与看板落点走 move 通道
  * （sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、有落点=与前一项后邻
  * 均值，防筛选错序），优先级走 update，快速新增走 create——均乐观更新
@@ -13,17 +17,14 @@
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CalendarDays,
   ChevronDown,
-  LayoutGrid,
   ListFilter,
   Loader2,
   Plus,
-  Table as TableIcon,
 } from "lucide-react";
 
 import {
@@ -47,11 +48,15 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useUserStore } from "@/domains/user/store/user.store";
+import ProjectApi from "../api/project.api";
 import PlanItemApi, {
   PLAN_FIELDS_KEY,
   PLAN_ITEMS_KEY,
   PLAN_ITEMS_MINE_KEY,
 } from "../api/plan-item.api";
+import { usePlanViews } from "../model/use-plan-views";
+import { filterItems, sortItems } from "../model/plan-view-engine";
+import type { FilterCondition } from "../model/plan-view-engine";
 import CustomFieldsEditor from "./CustomFieldsEditor";
 import PlanItemDialog, {
   PRIORITY_LABEL_KEYS,
@@ -72,8 +77,6 @@ import type {
 interface PlanPaneProps {
   projectId: number;
 }
-
-type PlanView = "table" | "kanban";
 
 interface FilterOption {
   value: string;
@@ -122,20 +125,6 @@ function FilterMenu({ label, options, selected, onToggle }: FilterMenuProps) {
   );
 }
 
-/** 维度内 OR、跨维度 AND 的多选匹配 */
-const matchesFilter = (selected: string[], value: string) =>
-  selected.length === 0 || selected.includes(value);
-
-/** 看板列序即表格缺省排序：状态四态 → 列内 sortOrder → id 兜底 */
-function compareItems(a: PlanItemRecord, b: PlanItemRecord): number {
-  const statusGap =
-    PLAN_STATUSES.indexOf(a.status) - PLAN_STATUSES.indexOf(b.status);
-  if (statusGap !== 0) {
-    return statusGap;
-  }
-  return a.sortOrder !== b.sortOrder ? a.sortOrder - b.sortOrder : a.id - b.id;
-}
-
 /** 列表项局部补丁写入缓存（乐观更新） */
 function patchItem(
   prev: PlanItemRecord[] | undefined,
@@ -149,13 +138,18 @@ function patchItem(
 
 export default function PlanPane({ projectId }: PlanPaneProps) {
   const { t } = useTranslation(["project", "common"]);
-  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
 
-  const [statusFilter, setStatusFilter] = useState<PlanStatus[]>([]);
-  const [priorityFilter, setPriorityFilter] = useState<PlanPriority[]>([]);
-  const [tagFilter, setTagFilter] = useState<string[]>([]);
+  const { views, activeView, activeViewId, setActiveViewId, draft, setDraft } =
+    usePlanViews(projectId);
+
+  // 项目成员预取（与弹窗共享 projectMembers 缓存；筛选/看板分组候选后续任务消费）
+  useQuery({
+    queryKey: ["projectMembers", projectId],
+    queryFn: () => ProjectApi.listMembers(projectId),
+  });
+
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PlanItemRecord | undefined>();
@@ -178,51 +172,57 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const fields = useMemo(() => fieldsQuery.data ?? [], [fieldsQuery.data]);
 
-  /** 非法值回落 table（缺省同） */
-  const view: PlanView =
-    searchParams.get("view") === "kanban" ? "kanban" : "table";
-
-  /** 合并式写入：保留 ?tab= 等既有参数（replace 不产生历史记录） */
-  const switchView = (next: PlanView) => {
-    setSearchParams(
-      (prev) => {
-        prev.set("view", next);
-        return prev;
-      },
-      { replace: true },
-    );
-  };
-
   /** 标签候选 = 当前事项 distinct */
   const tagOptions = useMemo(
     () => [...new Set(items.flatMap((item) => item.tags))].sort(),
     [items],
   );
 
-  const keyword = search.trim().toLowerCase();
   const visibleItems = useMemo(
     () =>
-      items
-        .filter((item) => matchesFilter(statusFilter, item.status))
-        .filter((item) => matchesFilter(priorityFilter, item.priority))
-        .filter(
-          (item) =>
-            tagFilter.length === 0 ||
-            item.tags.some((tag) => tagFilter.includes(tag)),
-        )
-        .filter(
-          (item) =>
-            keyword === "" || item.title.toLowerCase().includes(keyword),
-        )
-        .sort(compareItems),
-    [items, statusFilter, priorityFilter, tagFilter, keyword],
+      sortItems(
+        filterItems(items, draft.conditions, search, user.id),
+        draft.sortRules,
+      ),
+    [items, draft.conditions, draft.sortRules, search, user.id],
   );
 
-  /** 多选筛选切换（维度内去重增删） */
-  const toggleFilter = <T,>(list: T[], value: T): T[] =>
-    list.includes(value)
-      ? list.filter((entry) => entry !== value)
-      : [...list, value];
+  /** 多选维度 → draft 单条件（in）切换（tags 维度用 contains，数组值 OR） */
+  const toggleDraftIn = (
+    field: "status" | "priority" | "tags",
+    value: string,
+  ) => {
+    setDraft((prev) => {
+      const condition = prev.conditions.find((c) => c.field === field);
+      const current =
+        condition && Array.isArray(condition.value) ? condition.value : [];
+      const next = current.includes(value)
+        ? current.filter((v) => v !== value)
+        : [...current, value];
+      const rest = prev.conditions.filter((c) => c.field !== field);
+      return {
+        ...prev,
+        conditions:
+          next.length > 0
+            ? [
+                ...rest,
+                {
+                  field,
+                  op:
+                    field === "tags" ? ("contains" as const) : ("in" as const),
+                  value: next,
+                },
+              ]
+            : rest,
+      };
+    });
+  };
+
+  /** draft 对应字段条件的值数组（FilterMenu 选中态回显） */
+  const conditionValues = (field: FilterCondition["field"]): string[] => {
+    const condition = draft.conditions.find((c) => c.field === field);
+    return condition && Array.isArray(condition.value) ? condition.value : [];
+  };
 
   /** create/remove 后双失效（计划 Tab + 任务 Tab 数据源，T4 契约） */
   const invalidatePlanCaches = async () => {
@@ -343,17 +343,32 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const toolbarButtonClass =
     "h-8 gap-1 px-2 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary";
 
-  const viewButtonClass = (active: boolean) =>
-    cn(
-      "flex h-7 w-7 items-center justify-center transition-colors",
-      active
-        ? "bg-primary-subtle text-primary"
-        : "text-muted-foreground hover:text-primary",
-    );
-
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 工具栏：筛选 + 搜索 + 视图切换 + 添加 */}
+      {/* 视图 Tab（子系统 A：完整交互在 PlanViewTabs 任务替换） */}
+      <div className="flex items-center gap-1 border-b border-border/50 px-4 py-1.5">
+        {views.map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            aria-pressed={entry.id === activeViewId}
+            onClick={() => setActiveViewId(entry.id)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs transition-colors",
+              entry.id === activeViewId
+                ? "bg-primary-subtle font-medium text-primary"
+                : "text-muted-foreground hover:bg-primary-subtle hover:text-primary",
+            )}
+          >
+            {entry.name ||
+              t(
+                `project:planView.type${entry.type.charAt(0).toUpperCase()}${entry.type.slice(1)}`,
+              )}
+          </button>
+        ))}
+      </div>
+
+      {/* 工具栏：筛选 + 搜索 + 添加 */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-4 py-2">
         <FilterMenu
           label={t("project:plan.filterStatus")}
@@ -361,10 +376,8 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             value: status,
             label: t(STATUS_LABEL_KEYS[status]),
           }))}
-          selected={statusFilter}
-          onToggle={(value) =>
-            setStatusFilter((prev) => toggleFilter(prev, value as PlanStatus))
-          }
+          selected={conditionValues("status")}
+          onToggle={(value) => toggleDraftIn("status", value)}
         />
         <FilterMenu
           label={t("project:plan.filterPriority")}
@@ -372,21 +385,15 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             value: priority,
             label: t(PRIORITY_LABEL_KEYS[priority]),
           }))}
-          selected={priorityFilter}
-          onToggle={(value) =>
-            setPriorityFilter((prev) =>
-              toggleFilter(prev, value as PlanPriority),
-            )
-          }
+          selected={conditionValues("priority")}
+          onToggle={(value) => toggleDraftIn("priority", value)}
         />
         {tagOptions.length > 0 && (
           <FilterMenu
             label={t("project:plan.filterTag")}
             options={tagOptions.map((tag) => ({ value: tag, label: tag }))}
-            selected={tagFilter}
-            onToggle={(value) =>
-              setTagFilter((prev) => toggleFilter(prev, value))
-            }
+            selected={conditionValues("tags")}
+            onToggle={(value) => toggleDraftIn("tags", value)}
           />
         )}
         <Input
@@ -397,27 +404,6 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           className="h-8 w-44 text-sm"
         />
         <div className="ml-auto flex items-center gap-1.5">
-          {/* 视图切换：表格 / 看板 */}
-          <div className="flex items-center overflow-hidden rounded-md border border-border/50">
-            <button
-              type="button"
-              aria-pressed={view === "table"}
-              aria-label={t("project:plan.viewTable")}
-              onClick={() => switchView("table")}
-              className={viewButtonClass(view === "table")}
-            >
-              <TableIcon className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === "kanban"}
-              aria-label={t("project:plan.viewKanban")}
-              onClick={() => switchView("kanban")}
-              className={viewButtonClass(view === "kanban")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-          </div>
           <Button size="sm" onClick={openCreate} className={toolbarButtonClass}>
             <Plus className="h-3.5 w-3.5" />
             {t("project:plan.add")}
@@ -446,7 +432,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             {t("project:plan.add")}
           </Button>
         </div>
-      ) : view === "kanban" ? (
+      ) : activeView?.type === "kanban" ? (
         // 看板视图：四态泳道拖拽（可见项渲染，落点序号由 handleMove 全量推导）
         <PlanKanbanView
           items={visibleItems}

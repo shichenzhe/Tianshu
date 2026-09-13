@@ -48,7 +48,7 @@ export default function LanguageSelector({
     >
       <DropdownMenuTrigger asChild>
         <div
-          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer hover:bg-gray-200 text-gray-600 transition-all duration-200`}
+          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer hover:bg-muted text-muted-foreground transition-all duration-200`}
           onMouseEnter={() => {
             if (menuTimer.current) clearTimeout(menuTimer.current);
             setMenuOpen(true);

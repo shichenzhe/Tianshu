@@ -145,7 +145,7 @@ export function CreateTaskDialog({
             />
             {/* 弹框不暴露权限选择:落库恒为受限权限(default,写类运行时被拒),
                 完全访问须保存后进任务详情页开启 */}
-            <p className="text-xs text-red-500">
+            <p className="text-xs text-destructive">
               {t("chat:automation.create.fullAccessWarn")}
             </p>
           </div>
@@ -233,7 +233,7 @@ export function CreateTaskDialog({
           />
 
           {form.validation !== "ok" && (
-            <p className="text-sm text-red-500">
+            <p className="text-sm text-destructive">
               {t(
                 `chat:automation.schedule.err${form.validation[0].toUpperCase()}${form.validation.slice(1)}`,
               )}

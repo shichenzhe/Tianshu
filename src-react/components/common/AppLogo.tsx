@@ -18,11 +18,11 @@ export default function AppLogo({ className }: AppLogoProps) {
       aria-label={t("common:appName")}
       className={cn("shrink-0", className)}
     >
-      {/* 轨道环（中性灰，不随主题） */}
+      {/* 轨道环（中性灰，随明暗模式变亮度，不随色相主题） */}
       <path
         d="M 44 54.78 A 24 24 0 1 1 56 34"
         fill="none"
-        stroke="#64748B"
+        stroke="var(--color-muted-foreground)"
         strokeWidth={2.5}
         strokeLinecap="round"
       />

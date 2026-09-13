@@ -980,7 +980,7 @@ function TaskTreeItem({
             {session.title}
           </span>
           {streaming && (
-            <span className="ml-auto mr-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <span className="ml-auto mr-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
           )}
         </span>
         <span className="block text-xs text-muted-foreground">{timeText}</span>

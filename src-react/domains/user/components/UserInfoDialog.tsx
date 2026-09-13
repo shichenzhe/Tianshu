@@ -154,7 +154,7 @@ export default function UserInfoDialog({
           <div className="space-y-2">
             <Label htmlFor="username">
               {t("user:userInfo.username")}{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="username"
@@ -166,7 +166,7 @@ export default function UserInfoDialog({
               placeholder={t("user:userInfo.usernamePlaceholder")}
             />
             {errors.username && (
-              <p className="text-sm text-red-500">{errors.username}</p>
+              <p className="text-sm text-destructive">{errors.username}</p>
             )}
           </div>
 
@@ -174,7 +174,7 @@ export default function UserInfoDialog({
           <div className="space-y-2">
             <Label htmlFor="nickname">
               {t("user:userInfo.nickname")}{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="nickname"
@@ -185,14 +185,15 @@ export default function UserInfoDialog({
               placeholder={t("user:userInfo.nicknamePlaceholder")}
             />
             {errors.nickname && (
-              <p className="text-sm text-red-500">{errors.nickname}</p>
+              <p className="text-sm text-destructive">{errors.nickname}</p>
             )}
           </div>
 
           {/* 邮箱 */}
           <div className="space-y-2">
             <Label htmlFor="email">
-              {t("user:userInfo.email")} <span className="text-red-500">*</span>
+              {t("user:userInfo.email")}{" "}
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="email"
@@ -204,7 +205,7 @@ export default function UserInfoDialog({
               placeholder={t("user:userInfo.emailPlaceholder")}
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email}</p>
+              <p className="text-sm text-destructive">{errors.email}</p>
             )}
           </div>
         </div>

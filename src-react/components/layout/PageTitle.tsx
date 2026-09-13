@@ -17,7 +17,7 @@ export default function PageTitle({
   return (
     <div className="mb-2 rounded-lg overflow-hidden shadow-sm border border-primary/20">
       <div
-        className={`px-4 py-2 text-white flex items-center justify-between ${
+        className={`px-4 py-2 text-primary-foreground flex items-center justify-between ${
           gradient
             ? "bg-gradient-to-r from-primary to-primary-active"
             : "bg-primary"

@@ -242,7 +242,7 @@ export default function LoginView() {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen bg-gradient-to-br from-primary-subtle via-white to-primary-subtle relative">
+    <div className="flex justify-center items-center h-screen bg-gradient-to-br from-primary-subtle via-background to-primary-subtle relative">
       {/* Logo 区域 */}
       <div className="absolute top-6 left-6 flex items-center gap-3">
         <AppLogo className="w-8 h-8" />
@@ -252,7 +252,7 @@ export default function LoginView() {
       </div>
 
       {/* 登录卡片 */}
-      <Card className="w-96 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <Card className="w-96 bg-card rounded-lg shadow-sm border border-border/50 p-6">
         <h2 className="text-center text-primary text-2xl mb-6 font-semibold">
           {t("user:login.title")}
         </h2>
@@ -262,7 +262,7 @@ export default function LoginView() {
           <div className="space-y-2">
             <Label htmlFor="username">{t("user:login.username")}</Label>
             <div className="relative">
-              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 id="username"
                 ref={usernameInputRef}
@@ -279,7 +279,7 @@ export default function LoginView() {
               />
             </div>
             {loginErrors.username && (
-              <p className="text-sm text-red-600">{loginErrors.username}</p>
+              <p className="text-sm text-destructive">{loginErrors.username}</p>
             )}
           </div>
 
@@ -287,7 +287,7 @@ export default function LoginView() {
           <div className="space-y-2">
             <Label htmlFor="password">{t("user:login.password")}</Label>
             <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
                 id="password"
                 ref={passwordInputRef}
@@ -305,7 +305,7 @@ export default function LoginView() {
               />
             </div>
             {loginErrors.password && (
-              <p className="text-sm text-red-600">{loginErrors.password}</p>
+              <p className="text-sm text-destructive">{loginErrors.password}</p>
             )}
           </div>
 
@@ -364,10 +364,10 @@ export default function LoginView() {
             <div className="space-y-2">
               <Label htmlFor="reg-username">
                 {t("user:register.username")}{" "}
-                <span className="text-red-600">*</span>
+                <span className="text-destructive">*</span>
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   id="reg-username"
                   placeholder={t("user:register.usernamePlaceholder")}
@@ -382,7 +382,7 @@ export default function LoginView() {
                 />
               </div>
               {registerErrors.username && (
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-destructive">
                   {registerErrors.username}
                 </p>
               )}
@@ -394,7 +394,7 @@ export default function LoginView() {
                 {t("user:register.nickname")}
               </Label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   id="reg-nickname"
                   placeholder={t("user:register.nicknamePlaceholder")}
@@ -414,10 +414,10 @@ export default function LoginView() {
             <div className="space-y-2">
               <Label htmlFor="reg-email">
                 {t("user:register.email")}{" "}
-                <span className="text-red-600">*</span>
+                <span className="text-destructive">*</span>
               </Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   id="reg-email"
                   type="email"
@@ -433,7 +433,9 @@ export default function LoginView() {
                 />
               </div>
               {registerErrors.email && (
-                <p className="text-sm text-red-600">{registerErrors.email}</p>
+                <p className="text-sm text-destructive">
+                  {registerErrors.email}
+                </p>
               )}
             </div>
 
@@ -441,10 +443,10 @@ export default function LoginView() {
             <div className="space-y-2">
               <Label htmlFor="reg-password">
                 {t("user:register.password")}{" "}
-                <span className="text-red-600">*</span>
+                <span className="text-destructive">*</span>
               </Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
                 <Input
                   id="reg-password"
                   type="password"
@@ -460,7 +462,7 @@ export default function LoginView() {
                 />
               </div>
               {registerErrors.password && (
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-destructive">
                   {registerErrors.password}
                 </p>
               )}

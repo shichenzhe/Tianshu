@@ -35,7 +35,7 @@ export default function LibraryView() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-white/90 hover:bg-white/20 hover:text-white"
+          className="text-primary-foreground/90 hover:bg-primary-foreground/20 hover:text-primary-foreground"
           onClick={comingSoon}
           aria-label={t("chat:library.export")}
         >

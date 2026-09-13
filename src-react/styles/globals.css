@@ -46,6 +46,9 @@
   --radius-lg: 0.5rem; /* 8px */
 }
 
+/* 深色变体：跟随应用皮肤 data-mode（documentElement 属性），而非 OS prefers-color-scheme */
+@custom-variant dark (&:where([data-mode=dark], [data-mode=dark] *));
+
 /* 主题类 - 通过 data-theme 属性切换 */
 [data-theme="blue"] {
   --theme-hue: 220deg;

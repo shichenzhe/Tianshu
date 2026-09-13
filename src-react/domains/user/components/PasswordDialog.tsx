@@ -133,7 +133,7 @@ export default function PasswordDialog({
           <div className="space-y-2">
             <Label htmlFor="current-password">
               {t("user:password.currentPassword")}{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="current-password"
@@ -146,7 +146,9 @@ export default function PasswordDialog({
               placeholder={t("user:password.currentPasswordPlaceholder")}
             />
             {errors.currentPassword && (
-              <p className="text-sm text-red-500">{errors.currentPassword}</p>
+              <p className="text-sm text-destructive">
+                {errors.currentPassword}
+              </p>
             )}
           </div>
 
@@ -154,7 +156,7 @@ export default function PasswordDialog({
           <div className="space-y-2">
             <Label htmlFor="new-password">
               {t("user:password.newPassword")}{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="new-password"
@@ -166,7 +168,7 @@ export default function PasswordDialog({
               placeholder={t("user:password.newPasswordPlaceholder")}
             />
             {errors.newPassword && (
-              <p className="text-sm text-red-500">{errors.newPassword}</p>
+              <p className="text-sm text-destructive">{errors.newPassword}</p>
             )}
           </div>
 
@@ -174,7 +176,7 @@ export default function PasswordDialog({
           <div className="space-y-2">
             <Label htmlFor="confirm-password">
               {t("user:password.confirmPassword")}{" "}
-              <span className="text-red-500">*</span>
+              <span className="text-destructive">*</span>
             </Label>
             <Input
               id="confirm-password"
@@ -186,7 +188,9 @@ export default function PasswordDialog({
               placeholder={t("user:password.confirmPasswordPlaceholder")}
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-red-500">{errors.confirmPassword}</p>
+              <p className="text-sm text-destructive">
+                {errors.confirmPassword}
+              </p>
             )}
           </div>
         </div>

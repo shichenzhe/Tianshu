@@ -48,9 +48,7 @@ export function FilterMenu({ tasks }: { tasks: TaskRecord[] }) {
             className="justify-between"
           >
             {t(`chat:automation.filter.${s}`, { count: counts[s] })}
-            {sourceFilter === s && (
-              <Check className="h-4 w-4 text-emerald-500" />
-            )}
+            {sourceFilter === s && <Check className="h-4 w-4 text-primary" />}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

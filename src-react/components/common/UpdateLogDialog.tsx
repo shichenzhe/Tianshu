@@ -89,19 +89,19 @@ export default function UpdateLogDialog({
           __html: content
             .replace(
               /^# (.*$)/gim,
-              '<h1 class="text-2xl font-bold mb-4 text-gray-800">$1</h1>',
+              '<h1 class="text-2xl font-bold mb-4 text-foreground">$1</h1>',
             )
             .replace(
               /^## (.*$)/gim,
-              '<h2 class="text-xl font-semibold mb-3 text-gray-700">$1</h2>',
+              '<h2 class="text-xl font-semibold mb-3 text-foreground/90">$1</h2>',
             )
             .replace(
               /^### (.*$)/gim,
-              '<h3 class="text-lg font-medium mb-2 text-gray-600">$1</h3>',
+              '<h3 class="text-lg font-medium mb-2 text-foreground/80">$1</h3>',
             )
             .replace(
               /^- (.*$)/gim,
-              '<li class="ml-4 mb-1 text-gray-600">$1</li>',
+              '<li class="ml-4 mb-1 text-muted-foreground">$1</li>',
             )
             .replace(
               /\*\*(.*?)\*\*/g,
@@ -110,7 +110,7 @@ export default function UpdateLogDialog({
             .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
             .replace(
               /`(.*?)`/g,
-              '<code class="bg-gray-100 px-1 py-0.5 rounded text-sm font-mono">$1</code>',
+              '<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">$1</code>',
             )
             .replace(/\n/g, "<br>"),
         }}

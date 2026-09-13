@@ -255,6 +255,9 @@ model planItem {
   assigneeId   Int? // 预留，单成员恒当前用户
   tags         String? // JSON string[]
   customFields String? // JSON Record<fieldName, string|number>
+  startDate   DateTime? // 排期开始（甘特/日历视图）
+  dueDate     DateTime? // 截止日期
+  source      String   @default("manual") // manual|ai|template
   sortOrder    Int      @default(0)
   createdById  Int
   createdAt    DateTime @default(now())
@@ -262,4 +265,20 @@ model planItem {
 
   @@index([projectId], map: "plan_item_projectId_index")
   @@index([assigneeId], map: "plan_item_assignee_index")
+}
+
+model planView {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  name       String   @default("") // 空串 = 播种默认视图（UI 显示本地化类型名）
+  type       String   @default("table") // table|kanban|list|gantt|calendar
+  groupBy    String? // status|priority|assignee（看板分组依据）
+  filterJson String   @default("{}")
+  sortJson   String   @default("[]")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([projectId, name], map: "idx_plan_view_project_name")
+  @@index([projectId], map: "plan_view_projectId_index")
 }

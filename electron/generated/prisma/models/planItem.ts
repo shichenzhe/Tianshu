@@ -51,6 +51,9 @@ export type PlanItemMinAggregateOutputType = {
   assigneeId: number | null
   tags: string | null
   customFields: string | null
+  startDate: Date | null
+  dueDate: Date | null
+  source: string | null
   sortOrder: number | null
   createdById: number | null
   createdAt: Date | null
@@ -66,6 +69,9 @@ export type PlanItemMaxAggregateOutputType = {
   assigneeId: number | null
   tags: string | null
   customFields: string | null
+  startDate: Date | null
+  dueDate: Date | null
+  source: string | null
   sortOrder: number | null
   createdById: number | null
   createdAt: Date | null
@@ -81,6 +87,9 @@ export type PlanItemCountAggregateOutputType = {
   assigneeId: number
   tags: number
   customFields: number
+  startDate: number
+  dueDate: number
+  source: number
   sortOrder: number
   createdById: number
   createdAt: number
@@ -114,6 +123,9 @@ export type PlanItemMinAggregateInputType = {
   assigneeId?: true
   tags?: true
   customFields?: true
+  startDate?: true
+  dueDate?: true
+  source?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -129,6 +141,9 @@ export type PlanItemMaxAggregateInputType = {
   assigneeId?: true
   tags?: true
   customFields?: true
+  startDate?: true
+  dueDate?: true
+  source?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -144,6 +159,9 @@ export type PlanItemCountAggregateInputType = {
   assigneeId?: true
   tags?: true
   customFields?: true
+  startDate?: true
+  dueDate?: true
+  source?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -246,6 +264,9 @@ export type PlanItemGroupByOutputType = {
   assigneeId: number | null
   tags: string | null
   customFields: string | null
+  startDate: Date | null
+  dueDate: Date | null
+  source: string
   sortOrder: number
   createdById: number
   createdAt: Date
@@ -284,6 +305,9 @@ export type planItemWhereInput = {
   assigneeId?: Prisma.IntNullableFilter<"planItem"> | number | null
   tags?: Prisma.StringNullableFilter<"planItem"> | string | null
   customFields?: Prisma.StringNullableFilter<"planItem"> | string | null
+  startDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
+  dueDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
+  source?: Prisma.StringFilter<"planItem"> | string
   sortOrder?: Prisma.IntFilter<"planItem"> | number
   createdById?: Prisma.IntFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeFilter<"planItem"> | Date | string
@@ -299,6 +323,9 @@ export type planItemOrderByWithRelationInput = {
   assigneeId?: Prisma.SortOrderInput | Prisma.SortOrder
   tags?: Prisma.SortOrderInput | Prisma.SortOrder
   customFields?: Prisma.SortOrderInput | Prisma.SortOrder
+  startDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  dueDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  source?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -317,6 +344,9 @@ export type planItemWhereUniqueInput = Prisma.AtLeast<{
   assigneeId?: Prisma.IntNullableFilter<"planItem"> | number | null
   tags?: Prisma.StringNullableFilter<"planItem"> | string | null
   customFields?: Prisma.StringNullableFilter<"planItem"> | string | null
+  startDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
+  dueDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
+  source?: Prisma.StringFilter<"planItem"> | string
   sortOrder?: Prisma.IntFilter<"planItem"> | number
   createdById?: Prisma.IntFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeFilter<"planItem"> | Date | string
@@ -332,6 +362,9 @@ export type planItemOrderByWithAggregationInput = {
   assigneeId?: Prisma.SortOrderInput | Prisma.SortOrder
   tags?: Prisma.SortOrderInput | Prisma.SortOrder
   customFields?: Prisma.SortOrderInput | Prisma.SortOrder
+  startDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  dueDate?: Prisma.SortOrderInput | Prisma.SortOrder
+  source?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -355,6 +388,9 @@ export type planItemScalarWhereWithAggregatesInput = {
   assigneeId?: Prisma.IntNullableWithAggregatesFilter<"planItem"> | number | null
   tags?: Prisma.StringNullableWithAggregatesFilter<"planItem"> | string | null
   customFields?: Prisma.StringNullableWithAggregatesFilter<"planItem"> | string | null
+  startDate?: Prisma.DateTimeNullableWithAggregatesFilter<"planItem"> | Date | string | null
+  dueDate?: Prisma.DateTimeNullableWithAggregatesFilter<"planItem"> | Date | string | null
+  source?: Prisma.StringWithAggregatesFilter<"planItem"> | string
   sortOrder?: Prisma.IntWithAggregatesFilter<"planItem"> | number
   createdById?: Prisma.IntWithAggregatesFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"planItem"> | Date | string
@@ -369,6 +405,9 @@ export type planItemCreateInput = {
   assigneeId?: number | null
   tags?: string | null
   customFields?: string | null
+  startDate?: Date | string | null
+  dueDate?: Date | string | null
+  source?: string
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -384,6 +423,9 @@ export type planItemUncheckedCreateInput = {
   assigneeId?: number | null
   tags?: string | null
   customFields?: string | null
+  startDate?: Date | string | null
+  dueDate?: Date | string | null
+  source?: string
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -398,6 +440,9 @@ export type planItemUpdateInput = {
   assigneeId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   customFields?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  source?: Prisma.StringFieldUpdateOperationsInput | string
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -413,6 +458,9 @@ export type planItemUncheckedUpdateInput = {
   assigneeId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   customFields?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  source?: Prisma.StringFieldUpdateOperationsInput | string
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -428,6 +476,9 @@ export type planItemCreateManyInput = {
   assigneeId?: number | null
   tags?: string | null
   customFields?: string | null
+  startDate?: Date | string | null
+  dueDate?: Date | string | null
+  source?: string
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -442,6 +493,9 @@ export type planItemUpdateManyMutationInput = {
   assigneeId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   customFields?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  source?: Prisma.StringFieldUpdateOperationsInput | string
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -457,6 +511,9 @@ export type planItemUncheckedUpdateManyInput = {
   assigneeId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   customFields?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  startDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  source?: Prisma.StringFieldUpdateOperationsInput | string
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -472,6 +529,9 @@ export type planItemCountOrderByAggregateInput = {
   assigneeId?: Prisma.SortOrder
   tags?: Prisma.SortOrder
   customFields?: Prisma.SortOrder
+  startDate?: Prisma.SortOrder
+  dueDate?: Prisma.SortOrder
+  source?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -495,6 +555,9 @@ export type planItemMaxOrderByAggregateInput = {
   assigneeId?: Prisma.SortOrder
   tags?: Prisma.SortOrder
   customFields?: Prisma.SortOrder
+  startDate?: Prisma.SortOrder
+  dueDate?: Prisma.SortOrder
+  source?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -510,6 +573,9 @@ export type planItemMinOrderByAggregateInput = {
   assigneeId?: Prisma.SortOrder
   tags?: Prisma.SortOrder
   customFields?: Prisma.SortOrder
+  startDate?: Prisma.SortOrder
+  dueDate?: Prisma.SortOrder
+  source?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -535,6 +601,9 @@ export type planItemSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   assigneeId?: boolean
   tags?: boolean
   customFields?: boolean
+  startDate?: boolean
+  dueDate?: boolean
+  source?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -550,6 +619,9 @@ export type planItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   assigneeId?: boolean
   tags?: boolean
   customFields?: boolean
+  startDate?: boolean
+  dueDate?: boolean
+  source?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -565,6 +637,9 @@ export type planItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   assigneeId?: boolean
   tags?: boolean
   customFields?: boolean
+  startDate?: boolean
+  dueDate?: boolean
+  source?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -580,13 +655,16 @@ export type planItemSelectScalar = {
   assigneeId?: boolean
   tags?: boolean
   customFields?: boolean
+  startDate?: boolean
+  dueDate?: boolean
+  source?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type planItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "status" | "priority" | "assigneeId" | "tags" | "customFields" | "sortOrder" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["planItem"]>
+export type planItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "status" | "priority" | "assigneeId" | "tags" | "customFields" | "startDate" | "dueDate" | "source" | "sortOrder" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["planItem"]>
 
 export type $planItemPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "planItem"
@@ -600,6 +678,9 @@ export type $planItemPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     assigneeId: number | null
     tags: string | null
     customFields: string | null
+    startDate: Date | null
+    dueDate: Date | null
+    source: string
     sortOrder: number
     createdById: number
     createdAt: Date
@@ -1035,6 +1116,9 @@ export interface planItemFieldRefs {
   readonly assigneeId: Prisma.FieldRef<"planItem", 'Int'>
   readonly tags: Prisma.FieldRef<"planItem", 'String'>
   readonly customFields: Prisma.FieldRef<"planItem", 'String'>
+  readonly startDate: Prisma.FieldRef<"planItem", 'DateTime'>
+  readonly dueDate: Prisma.FieldRef<"planItem", 'DateTime'>
+  readonly source: Prisma.FieldRef<"planItem", 'String'>
   readonly sortOrder: Prisma.FieldRef<"planItem", 'Int'>
   readonly createdById: Prisma.FieldRef<"planItem", 'Int'>
   readonly createdAt: Prisma.FieldRef<"planItem", 'DateTime'>

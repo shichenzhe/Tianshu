@@ -416,7 +416,8 @@ export const ModelName = {
   project: 'project',
   projectMember: 'projectMember',
   projectBinding: 'projectBinding',
-  planItem: 'planItem'
+  planItem: 'planItem',
+  planView: 'planView'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -432,7 +433,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1916,6 +1917,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    planView: {
+      payload: Prisma.$planViewPayload<ExtArgs>
+      fields: Prisma.planViewFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.planViewFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.planViewFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        findFirst: {
+          args: Prisma.planViewFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.planViewFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        findMany: {
+          args: Prisma.planViewFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>[]
+        }
+        create: {
+          args: Prisma.planViewCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        createMany: {
+          args: Prisma.planViewCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.planViewCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>[]
+        }
+        delete: {
+          args: Prisma.planViewDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        update: {
+          args: Prisma.planViewUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        deleteMany: {
+          args: Prisma.planViewDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.planViewUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.planViewUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>[]
+        }
+        upsert: {
+          args: Prisma.planViewUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planViewPayload>
+        }
+        aggregate: {
+          args: Prisma.PlanViewAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlanView>
+        }
+        groupBy: {
+          args: Prisma.planViewGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanViewGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.planViewCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanViewCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2231,6 +2306,9 @@ export const PlanItemScalarFieldEnum = {
   assigneeId: 'assigneeId',
   tags: 'tags',
   customFields: 'customFields',
+  startDate: 'startDate',
+  dueDate: 'dueDate',
+  source: 'source',
   sortOrder: 'sortOrder',
   createdById: 'createdById',
   createdAt: 'createdAt',
@@ -2238,6 +2316,22 @@ export const PlanItemScalarFieldEnum = {
 } as const
 
 export type PlanItemScalarFieldEnum = (typeof PlanItemScalarFieldEnum)[keyof typeof PlanItemScalarFieldEnum]
+
+
+export const PlanViewScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  name: 'name',
+  type: 'type',
+  groupBy: 'groupBy',
+  filterJson: 'filterJson',
+  sortJson: 'sortJson',
+  sortOrder: 'sortOrder',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PlanViewScalarFieldEnum = (typeof PlanViewScalarFieldEnum)[keyof typeof PlanViewScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2467,6 +2561,7 @@ export type GlobalOmitConfig = {
   projectMember?: Prisma.projectMemberOmit
   projectBinding?: Prisma.projectBindingOmit
   planItem?: Prisma.planItemOmit
+  planView?: Prisma.planViewOmit
 }
 
 /* Types for Logging */

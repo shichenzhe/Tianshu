@@ -117,3 +117,8 @@ export type projectBinding = Prisma.projectBindingModel
  * 
  */
 export type planItem = Prisma.planItemModel
+/**
+ * Model planView
+ * 
+ */
+export type planView = Prisma.planViewModel

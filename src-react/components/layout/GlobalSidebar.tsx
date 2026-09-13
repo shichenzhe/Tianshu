@@ -107,8 +107,12 @@ export default function GlobalSidebar() {
         collapsed ? "w-0" : "w-64",
       )}
     >
-      {/* 内容层固定宽度 + 自带右边框（收起时随宽度动画一并裁掉，不留残线） */}
-      <div className="flex h-full w-64 shrink-0 flex-col border-r border-border/50">
+      {/* 内容层固定宽度 + 自带右边框（收起时随宽度动画一并裁掉，不留残线）；
+          data-sidebar-shell 供 skins.css 叠加壁纸侧栏图案 */}
+      <div
+        data-sidebar-shell=""
+        className="flex h-full w-64 shrink-0 flex-col border-r border-border/50"
+      >
         {/* macOS 顶部 Logo（Windows 标题在 TopBar） */}
         {isMac && (
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">

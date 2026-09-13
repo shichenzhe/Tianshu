@@ -1,10 +1,12 @@
 /**
  * 计划事项弹窗（新建/编辑共用，spec §6）：
- * 标题（必填 trim ≤100，空标题禁用提交、超长实时提示）/ 状态四态 Select /
- * 优先级 Select + Badge 预览（P0 destructive / P1 primary / P2 muted）/
- * 标签（Input 回车添加 → 可移除 Tag + planItems 缓存聚合的候选 chips 点击追加）/
- * 处理人只读「我」/ 自定义字段动态区（text=Input、number=Input[type=number]、
- * date=Input[type=date]；仅项目任务渲染，本地任务 projectId=null 无该区）。
+ * 标题（必填 trim ≤100，空标题禁用提交、超长实时提示）/ 状态四态 Select
+ * （新建态可经 defaultStatus 预置初始状态，编辑态忽略）/ 优先级 Select +
+ * Badge 预览（P0 destructive / P1 primary / P2 muted）/ 标签（Input 回车添加
+ * → 可移除 Tag + planItems 缓存聚合的候选 chips 点击追加；IME 组合中的回车
+ * 不触发）/ 处理人只读「我」/ 自定义字段动态区（text=Input、number=
+ * Input[type=number]、date=Input[type=date]；仅项目任务渲染，本地任务
+ * projectId=null 无该区）。
  * 保存：新建 → create（customFields 仅保留值非空键）、编辑 → update（全量字段）
  * → invalidate planItems + planItemsMine 双 key → toast(plan:saved) + onSaved +
  * 关闭；失败 toast mapIpcError 且弹窗保留。
@@ -53,6 +55,8 @@ interface PlanItemDialogProps {
   projectId: number | null;
   /** 编辑目标；缺省 = 新建 */
   item?: PlanItemRecord;
+  /** 新建态初始状态（看板列头快速新增预置；编辑态忽略） */
+  defaultStatus?: PlanStatus;
   /** 保存成功回调（父级刷新列表） */
   onSaved: () => void;
 }
@@ -96,6 +100,7 @@ export default function PlanItemDialog({
   onOpenChange,
   projectId,
   item,
+  defaultStatus,
   onSaved,
 }: PlanItemDialogProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -119,13 +124,13 @@ export default function PlanItemDialog({
     }
     setTitle(item?.title ?? "");
     setTitleTouched(false);
-    setStatus(item?.status ?? "not_started");
+    setStatus(item?.status ?? defaultStatus ?? "not_started");
     setPriority(item?.priority ?? "P1");
     setTags(item?.tags ? [...item.tags] : []);
     setTagInput("");
     setCustomFields(item ? { ...item.customFields } : {});
     setSaving(false);
-  }, [open, item]);
+  }, [open, item, defaultStatus]);
 
   // 候选标签：只消费计划 Tab 已有 planItems 缓存（enabled false 不主动拉取）
   const { data: projectItems = [] } = useQuery({
@@ -169,6 +174,10 @@ export default function PlanItemDialog({
   };
 
   const handleTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    // IME 组合中的 Enter 仅确认候选：不添加标签
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
     if (event.key !== "Enter") {
       return;
     }

@@ -365,7 +365,8 @@ describe("Tab 容器", () => {
         "/module/project/1?tab=plan&view=kanban",
       ),
     );
-    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
+    // 看板视图渲染计划卡片（细节断言在 plan-kanban.test）
+    expect(await screen.findByText("需求梳理")).toBeTruthy();
 
     // 切动态 Tab：只改 tab，view 保留（合并式写入）
     fireEvent.click(
@@ -386,7 +387,7 @@ describe("Tab 容器", () => {
         "/module/project/1?tab=plan&view=kanban",
       ),
     );
-    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
+    expect(await screen.findByText("需求梳理")).toBeTruthy();
   });
 
   it("getDetail 抛 PROJECT_NOT_FOUND → toast 提示并跳回 /module/project", async () => {

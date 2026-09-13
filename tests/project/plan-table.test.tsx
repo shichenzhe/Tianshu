@@ -456,9 +456,11 @@ describe("PlanPane 视图切换", () => {
         "/module/project/1?tab=plan&view=kanban",
       ),
     );
-    // 看板分支本期占位
-    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
-    expect(screen.queryByText("需求梳理")).toBeNull();
+    // 看板视图渲染卡片（四态泳道细节断言在 plan-kanban.test）
+    expect(await screen.findByText("需求梳理")).toBeTruthy();
+    expect(
+      screen.getByRole("region", { name: "project:plan.statusInProgress" }),
+    ).toBeTruthy();
 
     fireEvent.click(
       screen.getByRole("button", { name: "project:plan.viewTable" }),

@@ -1,11 +1,13 @@
 /**
  * 计划面板（spec §6 计划 Tab）：单表数据源 PLAN_ITEMS_KEY + 字段定义
  * PLAN_FIELDS_KEY；视图切换 ?view=table|kanban（缺省 table，非法回落，
- * 合并式写入保留 ?tab= 等既有参数；看板分支本期占位，四态看板后续任务替换）。
+ * 合并式写入保留 ?tab= 等既有参数）；表格/看板双视图（看板 = PlanKanbanView
+ * 四态泳道拖拽）。
  * 工具栏：状态/优先级/标签三组多选筛选（标签候选=当前事项 distinct）+
  * 标题搜索（客户端过滤）+「添加」（PlanItemDialog 新建态）。
- * 行内变更统一在本层处理（表格纯触发）：状态切换走 move 通道（目标列
- * sortOrder=max+1），优先级走 update，快速新增走 create——均乐观更新
+ * 行内变更统一在本层处理（表格/看板纯触发）：状态切换与看板落点走 move 通道
+ * （sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、有落点=与前一项后邻
+ * 均值，防筛选错序），优先级走 update，快速新增走 create——均乐观更新
  * setQueryData、失败 invalidate 回滚；create/remove 后失效
  * planItems + planItemsMine 双 key（T4 契约）；删除 AlertDialog 二次确认。
  */
@@ -55,6 +57,7 @@ import PlanItemDialog, {
   PRIORITY_LABEL_KEYS,
   STATUS_LABEL_KEYS,
 } from "./PlanItemDialog";
+import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
 import PlanTableView from "./PlanTableView";
 import {
   PLAN_PRIORITIES,
@@ -156,6 +159,9 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PlanItemRecord | undefined>();
+  /** 新建弹窗预置状态（看板列头快速新增；工具栏添加复位缺省） */
+  const [dialogDefaultStatus, setDialogDefaultStatus] =
+    useState<PlanStatus>("not_started");
   const [fieldEditorOpen, setFieldEditorOpen] = useState(false);
   const [deleting, setDeleting] = useState<PlanItemRecord | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -228,16 +234,25 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     });
   };
 
-  /** 行内状态切换走 move 通道：目标列 sortOrder=当前该状态最大值+1 */
-  const handleMove = async (id: number, status: PlanStatus) => {
+  /**
+   * 状态切换/看板落点走 move 通道：sortOrder 由全量缓存目标列推导（T6 决策，
+   * 防筛选错序）——无 afterId=列尾 max+1；有 afterId=与后一项均值（computeSortOrder）。
+   * 同状态且无落点（表格重选同值/看板拖回本列背景）no-op。
+   */
+  const handleMove = async (
+    id: number,
+    status: PlanStatus,
+    afterId?: number,
+  ) => {
     const target = items.find((item) => item.id === id);
-    if (!target || target.status === status) {
+    if (!target || (target.status === status && afterId === undefined)) {
       return;
     }
-    const sortOrder =
-      items
-        .filter((item) => item.status === status)
-        .reduce((max, item) => Math.max(max, item.sortOrder), 0) + 1;
+    // 目标列（排除被移动项自身，均值邻位不受其原位影响）
+    const column = items.filter(
+      (item) => item.status === status && item.id !== id,
+    );
+    const sortOrder = computeSortOrder(column, afterId);
     queryClient.setQueryData<PlanItemRecord[]>(
       PLAN_ITEMS_KEY(projectId),
       (prev) => patchItem(prev, id, { status, sortOrder }),
@@ -303,6 +318,14 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
 
   const openCreate = () => {
     setEditingItem(undefined);
+    setDialogDefaultStatus("not_started");
+    setDialogOpen(true);
+  };
+
+  /** 看板列头快速新增：预置该列状态打开新建弹窗 */
+  const openQuickCreateIn = (status: PlanStatus) => {
+    setEditingItem(undefined);
+    setDialogDefaultStatus(status);
     setDialogOpen(true);
   };
 
@@ -369,7 +392,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           className="h-8 w-44 text-sm"
         />
         <div className="ml-auto flex items-center gap-1.5">
-          {/* 视图切换：表格 / 看板（本期占位） */}
+          {/* 视图切换：表格 / 看板 */}
           <div className="flex items-center overflow-hidden rounded-md border border-border/50">
             <button
               type="button"
@@ -419,14 +442,13 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           </Button>
         </div>
       ) : view === "kanban" ? (
-        // 看板视图：本期占位（四态拖拽看板由后续任务替换）
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle text-primary">
-            <LayoutGrid className="h-6 w-6" />
-          </span>
-          <p className="text-sm">{t("project:plan.viewKanban")}</p>
-          <p className="text-xs">{t("project:workspace.comingSoon")}</p>
-        </div>
+        // 看板视图：四态泳道拖拽（可见项渲染，落点序号由 handleMove 全量推导）
+        <PlanKanbanView
+          items={visibleItems}
+          onMove={handleMove}
+          onQuickCreate={openQuickCreateIn}
+          onEdit={openEdit}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
           <PlanTableView
@@ -448,6 +470,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         onOpenChange={setDialogOpen}
         projectId={projectId}
         item={editingItem}
+        defaultStatus={dialogDefaultStatus}
         onSaved={() => setEditingItem(undefined)}
       />
       {/* 字段定义管理 */}

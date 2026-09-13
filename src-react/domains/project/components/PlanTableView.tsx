@@ -90,6 +90,10 @@ export default function PlanTableView({
   const handleQuickAddKeyDown = (
     event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
+    // IME 组合中的 Enter 仅确认候选：不触发快速新增
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
     if (event.key !== "Enter") {
       return;
     }

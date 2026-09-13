@@ -1,6 +1,6 @@
 # 外观模块 — 手动验收清单（Electron GUI 走查）
 
-> 适用分支：`worktree appearance-module`（4562b2d spec → 本清单共 9 个 commit：docs 2 个 + 功能 6 个 f4a8b9d → 4e606f7 + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1172 全绿（外观新增 47：skin-cards 14 + skins 11 + skin-store 14 + appearance-settings 8）
+> 适用分支：`worktree appearance-module`（4562b2d spec → 本清单共 9 个 commit：docs 2 个 + 功能 6 个 f4a8b9d → 4e606f7 + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1172 全绿（外观新增 47：skin-cards 14 + skins 11 + skin-store 15 + appearance-settings 7）
 > 对照文档：`docs/superpowers/specs/2026-09-13-appearance-module-design.md`（下称 spec）；来源 PRD `docs/外观 PRD.md`（设置面板-外观模块，差异裁定见附录）
 > 前置：`npm run dev` 启动应用；外观为纯前端模块（无数据库变更、无 IPC），皮肤状态存 localStorage key `tianshu-theme`（新结构 `{state:{skin,hue},version:1}`）；全新环境默认浅色+橙；第 2 项需已登录且有 AI 会话与项目数据；第 5/6 项需重启应用与 DevTools console；第 10 项需拖动窗口宽度
 

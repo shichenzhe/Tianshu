@@ -2,7 +2,8 @@
  * 计划事项弹窗（新建/编辑共用，spec §6）：
  * 标题（必填 trim ≤100，空标题禁用提交、超长实时提示）/ 状态四态 Select
  * （新建态可经 defaultStatus 预置初始状态，编辑态忽略）/ 优先级 Select +
- * Badge 预览（P0 destructive / P1 primary / P2 muted / P3 outline）/ 标签
+ * Badge 预览（P0 destructive / P1 primary / P2 muted / P3 outline；新建态
+ * 可经 defaultPriority 预置，看板优先级列头快速新增）/ 标签
  * （Input 回车添加 → 可移除 Tag + planItems 缓存聚合的候选 chips 点击追加；
  * IME 组合中的回车不触发）/ 排期 startDate/dueDate 日期框（仅项目任务，
  * 本地任务无日期语义）/ 处理人（项目任务 = 成员 Select 含「未指派」空值项，
@@ -63,6 +64,8 @@ interface PlanItemDialogProps {
   item?: PlanItemRecord;
   /** 新建态初始状态（看板列头快速新增预置；编辑态忽略） */
   defaultStatus?: PlanStatus;
+  /** 新建态初始优先级（看板优先级列头快速新增预置；编辑态忽略） */
+  defaultPriority?: PlanPriority;
   /** 保存成功回调（父级刷新列表） */
   onSaved: () => void;
 }
@@ -114,6 +117,7 @@ export default function PlanItemDialog({
   projectId,
   item,
   defaultStatus,
+  defaultPriority,
   onSaved,
 }: PlanItemDialogProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -142,7 +146,7 @@ export default function PlanItemDialog({
     setTitle(item?.title ?? "");
     setTitleTouched(false);
     setStatus(item?.status ?? defaultStatus ?? "not_started");
-    setPriority(item?.priority ?? "P1");
+    setPriority(item?.priority ?? defaultPriority ?? "P1");
     setTags(item?.tags ? [...item.tags] : []);
     setTagInput("");
     setStartDate(item?.startDate ? item.startDate.slice(0, 10) : "");
@@ -150,7 +154,7 @@ export default function PlanItemDialog({
     setAssigneeId(item?.assigneeId ?? user.id);
     setCustomFields(item ? { ...item.customFields } : {});
     setSaving(false);
-  }, [open, item, defaultStatus, user.id]);
+  }, [open, item, defaultStatus, defaultPriority, user.id]);
 
   // 候选标签：只消费计划 Tab 已有 planItems 缓存（enabled false 不主动拉取）
   const { data: projectItems = [] } = useQuery({

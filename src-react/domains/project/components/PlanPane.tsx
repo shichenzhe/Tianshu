@@ -5,16 +5,19 @@
  * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
  * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
  * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
- * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 四态
- * 泳道拖拽）；项目成员查询（处理人筛选候选/看板分组）。
+ * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 分组泳道拖拽，
+ * 分组依据 status/priority/assignee 由视图 draft.groupBy 驱动）；
+ * 项目成员查询（处理人筛选候选/看板分组与头像）。
  * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
  * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 + 视图设置（PlanViewSettings
  * Popover：类型切换立即保存 + 看板分组依据入 draft）+「添加」（PlanItemDialog
  * 新建态）。
- * 行内变更统一在本层处理（表格/看板纯触发）：状态切换与看板落点走 move 通道
- * （sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、有落点=与前一项后邻
- * 均值，防筛选错序），优先级走 update，快速新增走 create——均乐观更新
- * setQueryData、失败 invalidate 回滚；create/remove 后失效
+ * 行内变更统一在本层处理（表格/看板纯触发）：表格状态切换与 status 分组看板
+ * 落点走 move 通道（sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、
+ * 有落点=与前一项后邻均值，防筛选错序），优先级/处理人走 update，快速新增
+ * 走 create——均乐观更新 setQueryData、失败 invalidate 回滚；看板拖拽经
+ * handleMoveItem 按分组分发（status=move 含列内重排，priority/assignee
+ * 仅写对应字段，afterId 忽略）；create/remove 后失效
  * planItems + planItemsMine 双 key（T4 契约）；删除 AlertDialog 二次确认。
  */
 import { useMemo, useState } from "react";
@@ -107,6 +110,10 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   /** 新建弹窗预置状态（看板列头快速新增；工具栏添加复位缺省） */
   const [dialogDefaultStatus, setDialogDefaultStatus] =
     useState<PlanStatus>("not_started");
+  /** 新建弹窗预置优先级（看板优先级列头快速新增；工具栏添加复位缺省） */
+  const [dialogDefaultPriority, setDialogDefaultPriority] = useState<
+    PlanPriority | undefined
+  >(undefined);
   const [fieldEditorOpen, setFieldEditorOpen] = useState(false);
   const [deleting, setDeleting] = useState<PlanItemRecord | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -143,11 +150,11 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   };
 
   /**
-   * 状态切换/看板落点走 move 通道：sortOrder 由全量缓存目标列推导（T6 决策，
-   * 防筛选错序）——无 afterId=列尾 max+1；有 afterId=与后一项均值（computeSortOrder）。
-   * 同状态且无落点（表格重选同值/看板拖回本列背景）no-op。
+   * 状态切换/status 分组看板落点走 move 通道：sortOrder 由全量缓存目标列推导
+   * （T6 决策，防筛选错序）——无 afterId=列尾 max+1；有 afterId=与后一项均值
+   * （computeSortOrder）。同状态且无落点（表格重选同值/看板拖回本列背景）no-op。
    */
-  const handleMove = async (
+  const handleMoveStatus = async (
     id: number,
     status: PlanStatus,
     afterId?: number,
@@ -196,6 +203,47 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     }
   };
 
+  /** 看板处理人列拖拽走 update（局部键；null = 拖入未指派列） */
+  const handleSetAssignee = async (id: number, assigneeId: number | null) => {
+    const target = items.find((item) => item.id === id);
+    if (!target || target.assigneeId === assigneeId) {
+      return;
+    }
+    queryClient.setQueryData<PlanItemRecord[]>(
+      PLAN_ITEMS_KEY(projectId),
+      (prev) => patchItem(prev, id, { assigneeId }),
+    );
+    try {
+      await PlanItemApi.update({ id, assigneeId });
+    } catch (error) {
+      await queryClient.invalidateQueries({
+        queryKey: PLAN_ITEMS_KEY(projectId),
+      });
+      toast.error(mapIpcError(error));
+    }
+  };
+
+  /**
+   * 看板拖拽分发（spec 已批准的简化）：status 分组走 move（sortOrder 语义，
+   * 含列内重排）；priority/assignee 分组跨列仅写对应字段（afterId 忽略，
+   * 列内不重排——sortOrder 只属于状态列）。groupBy 缺省 null 视同 status。
+   */
+  const handleMoveItem = (id: number, columnKey: string, afterId?: number) => {
+    const groupBy = draft.groupBy ?? "status";
+    if (groupBy === "status") {
+      return handleMoveStatus(id, columnKey as PlanStatus, afterId);
+    }
+    if (groupBy === "priority") {
+      return handleSetPriority(id, columnKey as PlanPriority);
+    }
+    if (groupBy === "assignee") {
+      return handleSetAssignee(
+        id,
+        columnKey === "unassigned" ? null : Number(columnKey),
+      );
+    }
+  };
+
   /** 快速新增：与弹窗共用 create 链（缺省状态/优先级；创建即指派自己） */
   const handleQuickCreate = async (title: string) => {
     try {
@@ -232,13 +280,18 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const openCreate = () => {
     setEditingItem(undefined);
     setDialogDefaultStatus("not_started");
+    setDialogDefaultPriority(undefined);
     setDialogOpen(true);
   };
 
-  /** 看板列头快速新增：预置该列状态打开新建弹窗 */
-  const openQuickCreateIn = (status: PlanStatus) => {
+  /** 看板列头快速新增：按分组依据预置该列值（status/priority；assignee 缺省） */
+  const openQuickCreateIn = (preset: {
+    status?: PlanStatus;
+    priority?: PlanPriority;
+  }) => {
     setEditingItem(undefined);
-    setDialogDefaultStatus(status);
+    setDialogDefaultStatus(preset.status ?? "not_started");
+    setDialogDefaultPriority(preset.priority);
     setDialogOpen(true);
   };
 
@@ -329,10 +382,13 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           </Button>
         </div>
       ) : activeView?.type === "kanban" ? (
-        // 看板视图：四态泳道拖拽（可见项渲染，落点序号由 handleMove 全量推导）
+        // 看板视图：分组泳道拖拽（可见项渲染，status 分组序号由 move 通道全量推导）
         <PlanKanbanView
           items={visibleItems}
-          onMove={handleMove}
+          groupBy={draft.groupBy ?? "status"}
+          members={members}
+          currentUserId={user.id}
+          onMoveItem={handleMoveItem}
           onQuickCreate={openQuickCreateIn}
           onEdit={openEdit}
         />
@@ -342,7 +398,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             items={visibleItems}
             fields={fields}
             onOpenItem={openEdit}
-            onMoveItem={handleMove}
+            onMoveItem={handleMoveStatus}
             onSetPriority={handleSetPriority}
             onQuickCreate={handleQuickCreate}
             onOpenFieldEditor={() => setFieldEditorOpen(true)}
@@ -358,6 +414,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         projectId={projectId}
         item={editingItem}
         defaultStatus={dialogDefaultStatus}
+        defaultPriority={dialogDefaultPriority}
         onSaved={() => setEditingItem(undefined)}
       />
       {/* 字段定义管理 */}

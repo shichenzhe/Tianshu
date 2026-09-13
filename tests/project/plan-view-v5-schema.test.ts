@@ -102,4 +102,22 @@ describe("v5 增量脚本（planItem 排期/来源列 + planView 视图表）", 
     insert("我的看板", 2);
     expect(() => insert("我的看板", 3)).toThrow();
   });
+
+  it("存量库修复：已跑旧版 v5（全列唯一索引）重放后替换为部分索引，空名播种不再冲突", () => {
+    const db = createDb();
+    // 模拟旧版迁移产物：撤掉部分索引，换上旧全列唯一索引（直接 db.exec，真失败须浮出）
+    db.exec("DROP INDEX idx_plan_view_project_name");
+    db.exec(
+      "CREATE UNIQUE INDEX idx_plan_view_project_name ON planView (projectId, name)",
+    );
+    // 重放 v5 全量脚本：DROP 旧索引 + 重建部分索引
+    applyStatements(db, statements(readFileSync(scriptDir("5"), "utf8")));
+    const insert = (name: string, sortOrder: number) =>
+      db.exec(
+        `INSERT INTO planView (projectId, name, type, filterJson, sortJson, sortOrder, createdAt, updatedAt)
+         VALUES (1, '${name}', 'table', '{}', '[]', ${sortOrder}, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
+      );
+    expect(() => insert("", 0)).not.toThrow();
+    expect(() => insert("", 1)).not.toThrow();
+  });
 });

@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS planView (
     updatedAt DATETIME NOT NULL
 );
 --/ignore
+DROP INDEX IF EXISTS idx_plan_view_project_name;
+--/ignore
 CREATE UNIQUE INDEX IF NOT EXISTS idx_plan_view_project_name ON planView (projectId, name) WHERE name != '';
 --/ignore
 CREATE INDEX IF NOT EXISTS plan_view_projectId_index ON planView (projectId);

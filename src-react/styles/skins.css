@@ -110,7 +110,7 @@
    浅色系叠白、深色系叠黑；图片缺失时 overlay 仍提供完整底色。
    ===================================================== */
 
-/* 晨雾（light / 淡紫）— 紫薰衣草田与远山 */
+/* 晨雾（light / 淡紫）— 晨雾远山与柔光天空 */
 [data-wallpaper="dawn-mist"] {
   --skin-bg-image: url("../assets/skins/dawn-mist.jpg");
   --skin-body-overlay: linear-gradient(

@@ -3,8 +3,9 @@
  * 左列 Tab 容器（动态/计划/任务/资产，读写 ?tab= 缺省 activity）+ 筛选
  * 下拉（与我相关/成员动态——单成员等价，UI 预留）+ 配置面板开关；
  * 动态/计划/资产 Tab 分别渲染 ActivityPane（复用 ChatPane）/PlanPane/
- * AssetsPane，任务 Tab 居中空态（三期扩展点）；右列 ConfigPanel（w-80
- * border-l，可收起）。Tab 切换为合并式 query 写入（保留 ?view= 等既有参数）。
+ * AssetsPane，任务 Tab 渲染 TasksPane（个人聚合清单，自身拉取
+ * planItemsMine 不依赖 projectId）；右列 ConfigPanel（w-80 border-l，
+ * 可收起）。Tab 切换为合并式 query 写入（保留 ?view= 等既有参数）。
  * getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project。
  */
 import { useEffect, useState } from "react";
@@ -37,6 +38,7 @@ import ActivityPane from "../components/ActivityPane";
 import AssetsPane from "../components/AssetsPane";
 import ConfigPanel from "../components/ConfigPanel";
 import PlanPane from "../components/PlanPane";
+import TasksPane from "../components/TasksPane";
 
 const HUB_ROUTE = "/module/project";
 
@@ -104,7 +106,6 @@ export default function ProjectWorkspaceView() {
 
   const tabParam = searchParams.get("tab");
   const tab: WorkspaceTab = isWorkspaceTab(tabParam) ? tabParam : "activity";
-  const activeTab = TABS.find((entry) => entry.value === tab) ?? TABS[0];
 
   const switchTab = (value: WorkspaceTab) => {
     if (value !== tab) {
@@ -214,7 +215,7 @@ export default function ProjectWorkspaceView() {
           </div>
         </header>
 
-        {/* 内容区：动态/计划/资产 Tab 渲染对应面板，任务 Tab 居中空态（三期扩展点） */}
+        {/* 内容区：动态/计划/任务/资产 Tab 渲染对应面板 */}
         {tab === "activity" ? (
           <ActivityPane detail={detailQuery.data} />
         ) : tab === "plan" ? (
@@ -228,12 +229,8 @@ export default function ProjectWorkspaceView() {
             projectId={detailQuery.data.project.id}
           />
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle text-primary">
-              <activeTab.icon className="h-6 w-6" />
-            </span>
-            <p className="text-sm">{t("project:workspace.comingSoon")}</p>
-          </div>
+          /* 任务 Tab：个人聚合清单（自取 userId，无 projectId 切换重挂需求） */
+          <TasksPane />
         )}
       </div>
 

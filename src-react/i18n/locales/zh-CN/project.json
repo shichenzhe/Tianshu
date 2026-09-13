@@ -85,7 +85,6 @@
     "fieldNumber": "数字",
     "fieldDate": "日期",
     "saved": "已保存",
-    "moved": "已移动",
     "quickAddPlaceholder": "输入标题，回车快速创建",
     "titleRequired": "请输入标题",
     "titleTooLong": "标题不能超过 100 字",

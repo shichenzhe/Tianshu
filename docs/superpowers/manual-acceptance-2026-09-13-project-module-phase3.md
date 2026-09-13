@@ -1,6 +1,6 @@
 # 项目模块三期 — 手动验收清单（Electron GUI 走查）
 
-> 适用分支：`worktree-project-module-phase3`（147049c spec → 7752a66 共 10 个 commit：设计/计划 docs 2 个 + 功能 commit 8 个 9608adf → 7752a66）
+> 适用分支：`worktree-project-module-phase3`（147049c spec → 终审修复共 14 个 commit：设计/计划 docs 2 个 + 功能 commit 8 个 9608adf → 7752a66 + 验收清单/修复 4 个 8766283 → 8e1ce5e + 终审修复本 commit）
 > 对照文档：`docs/superpowers/specs/2026-09-13-project-module-phase3-design.md`（下称 spec）；二期对照 `docs/superpowers/manual-acceptance-2026-09-13-project-module-phase2.md`
 > 前置：`npm run dev` 启动应用；老库首启自动执行 `script/v4` 建 `planItem` 表（DATABASE_VERSION 3→4，无感升级，升级日志可在 `db_version` 表确认 v4）；第 1–10 项需一个已建项目并进入其「计划」Tab；第 11–17 项任务 Tab 在任一项目详情页可达；第 16/17 项会真实删除项目，建议用临建项目走查
 
@@ -87,7 +87,7 @@
 ### 13. assigned/created/来源筛选 + 搜索
 
 - **操作步骤**：依次切换范围下拉（全部任务/指派给我的/我创建的）、来源下拉（全部来源/仅本地/仅项目）、搜索框输入标题片段。
-- **预期结果**（spec §3.5/§2）：「我创建的」显示全部（UI 创建的事项 createdById 恒当前用户）；「指派给我的」按 assigneeId===me 谓词过滤——本期 UI 不落 assigneeId（处理人只读「我」为展示值、字段按 spec §2 预留），故单成员下切到该档恒为空态（裁定见附录 A9）；仅本地/仅项目切分正确；搜索包含过滤、清空恢复；无匹配显示空态引导（与真空态同节点，裁定见附录 A7）。
+- **预期结果**（spec §3.5/§2）：「我创建的」显示全部（UI 创建的事项 createdById 恒当前用户）；「指派给我的」按 assigneeId===me 谓词过滤——创建即指派给自己（assigneeId 落库，修复 ddcdee9），该档正常显示全部 UI 创建事项（单成员下与「我创建的」等价，见附录 A9）；仅本地/仅项目切分正确；搜索包含过滤、清空恢复；无匹配显示空态引导（与真空态同节点，裁定见附录 A7）。
 - **Commit 区域**：7752a66（三组筛选 + 搜索）。
 
 ### 14. 项目任务点击跳转项目计划 Tab
@@ -212,4 +212,4 @@
 | A6 | 计划表格无匹配无专门提示 | 已知裁定 | 8c7a568 |
 | A7 | 任务 Tab 无匹配与真空态同节点 | 已知裁定 | 7752a66 |
 | A8 | 任务行 click 无键盘可达（一期既有模式） | 已知裁定（既有） | 7752a66 |
-| A9 | 「指派给我的」恒空（assigneeId 预留未落库） | 已知裁定（§2 预留） | 7752a66, 827d420 |
+| A9 | 「指派给我的」正常显示（创建即指派给自己，assigneeId 落库，曾为缺陷已修复） | §2 单成员语义（已修复） | ddcdee9, 7752a66 |

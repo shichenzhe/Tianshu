@@ -85,7 +85,6 @@
     "fieldNumber": "Number",
     "fieldDate": "Date",
     "saved": "Saved",
-    "moved": "Moved",
     "quickAddPlaceholder": "Type a title and press Enter to add",
     "titleRequired": "Please enter a title",
     "titleTooLong": "Title cannot exceed 100 characters",

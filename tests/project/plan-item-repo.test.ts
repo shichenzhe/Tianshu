@@ -1,7 +1,8 @@
 /**
  * 计划事项仓储单测（项目模块三期 spec §3.2）：
  * create 空 title/非法枚举拒绝与 sortOrder=同状态列 max+1（本地任务 null 项目独立计数）、
- * list/listMine 双视图聚合谓词与排序、update 局部更新（未传键缺席）与 NOT_FOUND、
+ * list/listMine 双视图聚合谓词与排序、update 局部更新（未传键缺席、
+ * status 变更重算目标状态列尾 sortOrder、status 未变/未传不重算）与 NOT_FOUND、
  * move 拖拽落点、delete、toRecord JSON 列容错（畸形 → 空数组/空对象）；
  * fields:list/save 自定义字段（option 域 planFields:<projectId> 行、畸形行丢弃、
  * 空名/非法类型/重名拒绝、deleteMany+createMany 全量替换、消失字段行值逐行清理
@@ -234,6 +235,53 @@ describe("PlanItemRepository.update", () => {
         customFields: JSON.stringify({ 工作量: 5 }),
       },
     });
+  });
+
+  it("status 变更 → 重算目标状态列尾 sortOrder 落库（弹窗编辑路径不再残留旧列序号）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.planItem.findFirst.mockResolvedValue({ sortOrder: 7 });
+
+    await repo.update({ id: 1, status: "done" });
+
+    expect(prismaStub.planItem.findFirst).toHaveBeenCalledWith({
+      where: { projectId: 11, status: "done" },
+      orderBy: { sortOrder: "desc" },
+      select: { sortOrder: true },
+    });
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: "done", sortOrder: 8 },
+    });
+  });
+
+  it("status 传值但未变 → 不重算 sortOrder（data 无该键、不查列尾）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+
+    await repo.update({ id: 1, status: "in_progress" });
+
+    expect(prismaStub.planItem.findFirst).not.toHaveBeenCalled();
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { status: "in_progress" },
+    });
+    expect(prismaStub.planItem.update.mock.calls[0][0].data).not.toHaveProperty(
+      "sortOrder",
+    );
+  });
+
+  it("未传 status → 不重算 sortOrder（data 无该键）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+
+    await repo.update({ id: 1, title: "只改标题" });
+
+    expect(prismaStub.planItem.findFirst).not.toHaveBeenCalled();
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { title: "只改标题" },
+    });
+    expect(prismaStub.planItem.update.mock.calls[0][0].data).not.toHaveProperty(
+      "sortOrder",
+    );
   });
 
   it("title trim 后为空 → 抛「标题不能为空」", async () => {

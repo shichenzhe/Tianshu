@@ -2,7 +2,7 @@
  * 计划事项仓储（项目模块三期 spec §3.2）：单表双视图聚合——
  * list（项目维度，计划 Tab 数据源）/ listMine（个人维度，任务 Tab 数据源）、
  * create（title trim + 枚举校验 + sortOrder 置目标状态列尾）、
- * update（局部更新）/ move（看板拖拽落点）/ remove。
+ * update（局部更新；status 变更重算目标列 sortOrder）/ move（看板拖拽落点）/ remove。
  * tags/customFields 为 JSON 字符串列，读写经 parseJsonColumn/stringifyColumn 容错。
  * fields:list / fields:save 自定义字段定义（option 域复用，spec §3.2）。
  */
@@ -151,7 +151,9 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 局部更新：仅写入传入键（未传字段不覆盖）；title trim 非空 + 枚举校验
+   * 局部更新：仅写入传入键（未传字段不覆盖）；title trim 非空 + 枚举校验；
+   * status 变更时重算目标状态列尾 sortOrder（nextSortOrder），避免沿用旧列
+   * 序号——关闭弹窗编辑等裸 update 路径绕过 move 通道造成的落列错位
    * @param params 更新参数
    */
   async update(params: PlanItemUpdateParams): Promise<void> {
@@ -160,10 +162,11 @@ export default class PlanItemRepository {
       throw new Error(PLAN_ITEM_NOT_FOUND);
     }
     this.ensureUpdatable(params);
-    await prisma.planItem.update({
-      where: { id: params.id },
-      data: this.buildUpdateData(params),
-    });
+    const data = this.buildUpdateData(params);
+    if (params.status !== undefined && params.status !== row.status) {
+      data.sortOrder = await this.nextSortOrder(row.projectId, params.status);
+    }
+    await prisma.planItem.update({ where: { id: params.id }, data });
   }
 
   /**

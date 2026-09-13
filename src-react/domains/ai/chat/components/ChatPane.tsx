@@ -27,8 +27,11 @@ import { truncateMessagesForEdit } from "../lib/truncate-messages-for-edit";
 
 interface ChatPaneProps {
   session: SessionRecord;
-  /** 会话所属工作空间（即当前选中项），供审批横幅取 id 与写授权态 */
-  workspace: WorkspaceRecord | null;
+  /** 会话所属工作空间（即当前选中项），@ 文件联想/产物面板/审批均按 id 定位。
+   *  P2 起仅需 id：AI 视图传完整记录，项目动态流传资产空间
+   *  `{ id: assetWorkspaceId }`——资产空间被 workspace:list 过滤，项目侧
+   *  不经全局空间列表解析（spec §3.6） */
+  workspace: Pick<WorkspaceRecord, "id"> | null;
   hasModel: boolean;
   onOpenSettings: (target: "providers" | "assistants" | "mcp") => void;
   /** 项目动态流：仅展示已挂载专家；未传不过滤（AI 模块行为不变） */

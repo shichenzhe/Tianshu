@@ -70,10 +70,6 @@ vi.mock("@/domains/ai/api/model.api", () => ({
   ModelApi: { listAll: vi.fn() },
   default: { listAll: vi.fn() },
 }));
-vi.mock("@/domains/ai/api/workspace.api", () => ({
-  WorkspaceApi: { list: vi.fn() },
-  default: { list: vi.fn() },
-}));
 
 // 配置面板能力列表（同 CreateProjectDialog 三源）
 vi.mock("@/domains/ai/api/assistant.api", () => ({
@@ -124,7 +120,6 @@ import ProjectWorkspaceView from "../../src-react/domains/project/views/ProjectW
 import ProjectApi from "@/domains/project/api/project.api";
 import { ProviderApi } from "@/domains/ai/api/provider.api";
 import { ModelApi } from "@/domains/ai/api/model.api";
-import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
 import { AssistantApi } from "@/domains/ai/api/assistant.api";
 import SkillApi from "@/domains/ai/skills/api/skill.api";
 import { McpServerApi } from "@/domains/ai/api/mcp.api";
@@ -174,7 +169,9 @@ const DETAIL: ProjectDetail = {
   ],
   session: {
     id: 11,
-    workspaceId: 5,
+    // P2 语义：动态流会话挂在资产空间（getDetail 自愈重绑），
+    // workspaceId 恒等于 assetWorkspaceId（30）
+    workspaceId: 30,
     title: "alpha",
     mode: "agent",
     createdAt: "2026-09-12T00:00:00.000Z",
@@ -230,16 +227,6 @@ beforeEach(() => {
       },
     ]);
   vi.mocked(ModelApi.listAll).mockReset().mockResolvedValue([]);
-  vi.mocked(WorkspaceApi.list)
-    .mockReset()
-    .mockResolvedValue([
-      {
-        id: 5,
-        name: "默认空间",
-        createdAt: "2026-09-12T00:00:00.000Z",
-        updatedAt: "2026-09-12T00:00:00.000Z",
-      },
-    ]);
   // 失效挂载 itemId=2 的源已删：专家列表不含 id 2（与后端语义一致）
   vi.mocked(AssistantApi.list)
     .mockReset()
@@ -308,6 +295,10 @@ describe("Tab 容器", () => {
       session: DETAIL.session,
       hasModel: false,
     });
+    // 资产空间被 workspace:list 过滤（projectId 非空不进列表），动态流不经
+    // 全局空间列表解析，仍按 assetWorkspaceId 解析（@ 引用/产物面板定位
+    // 资产目录，spec §3.6）
+    expect(chatPaneProps.current?.workspace).toEqual({ id: 30 });
     // 失效挂载（itemId=2）不下发给输入过滤集；技能以 itemName 匹配
     expect(chatPaneProps.current?.boundAssistantIds).toEqual([1]);
     expect(chatPaneProps.current?.boundSkillNames).toEqual(["联网搜索"]);

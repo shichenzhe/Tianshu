@@ -19,7 +19,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { ProviderApi } from "@/domains/ai/api/provider.api";
 import { ModelApi } from "@/domains/ai/api/model.api";
-import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
 import ChatPane from "@/domains/ai/chat/components/ChatPane";
 import type { ProjectDetail } from "../../../../electron/domains/project/project.entity";
 
@@ -42,10 +41,6 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
     queryKey: ["models"],
     queryFn: () => ModelApi.listAll(),
   });
-  const workspacesQuery = useQuery({
-    queryKey: ["workspaces"],
-    queryFn: () => WorkspaceApi.list(),
-  });
 
   const providers = providersQuery.data ?? [];
   const models = modelsQuery.data ?? [];
@@ -60,10 +55,10 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
     return <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />;
   }
 
-  const workspace =
-    (workspacesQuery.data ?? []).find(
-      (entry) => entry.id === detail.session.workspaceId,
-    ) ?? null;
+  // P2：动态流会话挂在项目资产空间（getDetail 自愈重绑），资产空间被
+  // workspace:list 过滤（projectId 非空）——不经全局空间列表解析，直接按
+  // assetWorkspaceId 传 id（@ 引用/产物面板据此定位资产目录，spec §3.6）
+  const workspace = { id: detail.assetWorkspaceId };
 
   return (
     // 内容列限宽居中：右面板开合时输入框宽度稳定不挤压（聊天产品惯例布局）
@@ -72,9 +67,7 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
         key={detail.session.id}
         session={detail.session}
         workspace={workspace}
-        hasModel={Boolean(
-          detail.session.currentModelId ?? workspace?.defaultModelId,
-        )}
+        hasModel={Boolean(detail.session.currentModelId)}
         onOpenSettings={(target) =>
           navigate(
             target === "providers"

@@ -178,6 +178,9 @@ async function listModelCandidateIds(
   listModels: () => Promise<MemoryModelRow[]>,
 ): Promise<number[]> {
   const workspaces = await prisma.workspace.findMany({
+    // P2 遍历面核查：只取用户空间——资产空间（projectId 非空）的
+    // defaultModelId 恒空，显式过滤防未来语义漂移
+    where: { projectId: null },
     orderBy: { id: "asc" },
     select: { defaultModelId: true },
   });

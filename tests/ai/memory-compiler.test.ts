@@ -177,6 +177,12 @@ describe("resolveMemoryModel", () => {
     );
     expect(ctx).toEqual({ ...providerInfo, modelId: "default-model" });
     expect(getById).toHaveBeenCalledWith(2);
+    // P2 遍历面核查：默认模型候选不遍历项目资产空间（projectId 非空）
+    expect(workspaceStub.findMany).toHaveBeenCalledWith({
+      where: { projectId: null },
+      orderBy: { id: "asc" },
+      select: { defaultModelId: true },
+    });
   });
   it("默认模型缺失/禁用 → 回退任意启用模型；全部不可用 → null", async () => {
     workspaceStub.findMany.mockResolvedValue([{ defaultModelId: 2 }]);

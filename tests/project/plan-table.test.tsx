@@ -10,8 +10,9 @@
  *   不调 update）；优先级切换走 update({ id, priority })（不调 move）
  * - 快速新增回车 → create（createdById/assigneeId/projectId/title 缺省态）+ 双 key 失效；
  *   空标题回车忽略
- * - 筛选组合：标签/状态/优先级多选 checkbox 跨维度 AND 过滤（draft.conditions
- *   经引擎 filterItems 生效）；搜索标题包含过滤
+ * - 筛选组合：经组合筛选面板（PlanFilterPopover）施加标签(contains 输入)/
+ *   状态(多选)/优先级(多选)条件，跨维度 AND 过滤（draft.conditions 经引擎
+ *   filterItems 生效）；搜索标题包含过滤
  * - 视图切换：Tab 点击写 ?viewId= 且保留 ?tab=plan（URL 断言）；非法 ?view=
  *   回落表格；旧参数 ?view=kanban 初始渲染看板（resolveInitialViewId 映射）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
@@ -220,16 +221,27 @@ async function selectOption(trigger: HTMLElement, optionName: string) {
 }
 
 /**
- * 打开筛选下拉并勾选一项：多选菜单 onSelect preventDefault 保持展开，
- * 勾选后 Escape 关闭（模态展开期其余控件 aria-hidden，需先关再继续断言）
+ * 经组合筛选面板施加条件（PlanFilterPopover）：开面板 →「+ 添加筛选条件」
+ * 菜单选字段 →（枚举字段勾选值 checkbox / 文本字段输入 textbox）。面板为
+ * 非模态 Popover，操作期间表格持续可见可断言。
  */
-async function checkFilterItem(triggerName: string, itemName: string) {
-  fireEvent.pointerDown(screen.getByRole("button", { name: triggerName }));
-  const menu = await screen.findByRole("menu");
+async function openFilterPanel() {
   fireEvent.click(
-    within(menu).getByRole("menuitemcheckbox", { name: itemName }),
+    screen.getByRole("button", { name: "project:planView.filter" }),
   );
-  fireEvent.keyDown(menu, { key: "Escape" });
+  return screen.findByRole("dialog", { name: "project:planView.filter" });
+}
+
+/** 面板内添加一个字段条件（菜单选后自动关闭，面板保持展开） */
+async function addFilterCondition(panel: HTMLElement, fieldName: string) {
+  fireEvent.pointerDown(
+    within(panel).getByRole("button", {
+      name: "project:planView.addCondition",
+    }),
+    { button: 0, pointerType: "mouse" },
+  );
+  const menu = await screen.findByRole("menu");
+  fireEvent.click(within(menu).getByRole("menuitem", { name: fieldName }));
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
 }
 
@@ -470,24 +482,30 @@ describe("PlanPane 筛选与搜索", () => {
   it("标签/状态/优先级多选过滤，跨维度 AND", async () => {
     renderPlanPane();
     await screen.findByText("需求梳理");
+    const panel = await openFilterPanel();
 
-    // 标签=设计 → 仅需求梳理
-    await checkFilterItem("project:plan.filterTag", "设计");
+    // 标签 contains「设计」→ 仅需求梳理
+    await addFilterCondition(panel, "project:planView.fieldTags");
+    fireEvent.change(within(panel).getByRole("textbox"), {
+      target: { value: "设计" },
+    });
     await waitFor(() => expect(screen.queryByText("接口联调")).toBeNull());
     expect(screen.queryByText("编写文档")).toBeNull();
     expect(screen.getByText("需求梳理")).toBeTruthy();
 
-    // 叠加状态=进行中 → 仍只剩需求梳理（跨维度 AND）
-    await checkFilterItem(
-      "project:plan.filterStatus",
-      "project:plan.statusInProgress",
+    // 叠加状态 in[进行中] → 仍只剩需求梳理（跨维度 AND）
+    await addFilterCondition(panel, "project:planView.fieldStatus");
+    fireEvent.click(
+      within(panel).getByRole("checkbox", {
+        name: "project:plan.statusInProgress",
+      }),
     );
     expect(screen.getByText("需求梳理")).toBeTruthy();
 
-    // 叠加优先级=P2（需求梳理为 P0）→ 无匹配行
-    await checkFilterItem(
-      "project:plan.filterPriority",
-      "project:plan.priorityP2",
+    // 叠加优先级 in[P2]（需求梳理为 P0）→ 无匹配行
+    await addFilterCondition(panel, "project:planView.fieldPriority");
+    fireEvent.click(
+      within(panel).getByRole("checkbox", { name: "project:plan.priorityP2" }),
     );
     await waitFor(() => expect(screen.queryByText("需求梳理")).toBeNull());
   });

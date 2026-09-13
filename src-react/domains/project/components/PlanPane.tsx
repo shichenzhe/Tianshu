@@ -6,9 +6,9 @@
  * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
  * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
  * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 四态
- * 泳道拖拽）；项目成员预取共享缓存（处理人筛选/看板分组候选）。
- * 工具栏：状态/优先级/标签三组多选筛选（onToggle 改写 draft 同字段单条
- * 条件，标签候选=当前事项 distinct）+ 标题搜索 +「添加」（PlanItemDialog
+ * 泳道拖拽）；项目成员查询（处理人筛选候选/看板分组）。
+ * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
+ * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 +「添加」（PlanItemDialog
  * 新建态）。
  * 行内变更统一在本层处理（表格/看板纯触发）：状态切换与看板落点走 move 通道
  * （sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、有落点=与前一项后邻
@@ -20,13 +20,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  CalendarDays,
-  ChevronDown,
-  ListFilter,
-  Loader2,
-  Plus,
-} from "lucide-react";
+import { CalendarDays, Loader2, Plus } from "lucide-react";
 
 import {
   AlertDialog,
@@ -39,12 +33,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useUserStore } from "@/domains/user/store/user.store";
@@ -56,19 +44,12 @@ import PlanItemApi, {
 } from "../api/plan-item.api";
 import { usePlanViews } from "../model/use-plan-views";
 import { filterItems, sortItems } from "../model/plan-view-engine";
-import type { FilterCondition } from "../model/plan-view-engine";
 import CustomFieldsEditor from "./CustomFieldsEditor";
-import PlanItemDialog, {
-  PRIORITY_LABEL_KEYS,
-  STATUS_LABEL_KEYS,
-} from "./PlanItemDialog";
+import PlanFilterPopover from "./PlanFilterPopover";
+import PlanItemDialog from "./PlanItemDialog";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
 import PlanTableView from "./PlanTableView";
 import PlanViewTabs from "./PlanViewTabs";
-import {
-  PLAN_PRIORITIES,
-  PLAN_STATUSES,
-} from "../../../../electron/domains/project/plan-item.entity";
 import type {
   PlanItemRecord,
   PlanPriority,
@@ -77,53 +58,6 @@ import type {
 
 interface PlanPaneProps {
   projectId: number;
-}
-
-interface FilterOption {
-  value: string;
-  label: string;
-}
-
-interface FilterMenuProps {
-  label: string;
-  options: FilterOption[];
-  selected: string[];
-  onToggle: (value: string) => void;
-}
-
-/** 多选筛选下拉：checkbox 勾选即时生效，onSelect preventDefault 保持菜单展开 */
-function FilterMenu({ label, options, selected, onToggle }: FilterMenuProps) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label={label}
-          className="h-8 gap-1 px-2 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
-        >
-          <ListFilter className="h-3.5 w-3.5" />
-          {selected.length > 0 ? `${label} · ${selected.length}` : label}
-          <ChevronDown className="h-3 w-3" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="rounded-lg border border-border/50 shadow-lg"
-      >
-        {options.map((option) => (
-          <DropdownMenuCheckboxItem
-            key={option.value}
-            checked={selected.includes(option.value)}
-            onSelect={(event) => event.preventDefault()}
-            onCheckedChange={() => onToggle(option.value)}
-          >
-            {option.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }
 
 /** 列表项局部补丁写入缓存（乐观更新） */
@@ -151,12 +85,15 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     addView,
     renameView,
     removeView,
+    resetDraft,
+    saveOverwrite,
+    saveAsNew,
     draft,
     setDraft,
   } = usePlanViews(projectId);
 
-  // 项目成员预取（与弹窗共享 projectMembers 缓存；筛选/看板分组候选后续任务消费）
-  useQuery({
+  // 项目成员（处理人筛选候选；与弹窗共享 projectMembers 缓存）
+  const { data: members = [] } = useQuery({
     queryKey: ["projectMembers", projectId],
     queryFn: () => ProjectApi.listMembers(projectId),
   });
@@ -183,12 +120,6 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
   const fields = useMemo(() => fieldsQuery.data ?? [], [fieldsQuery.data]);
 
-  /** 标签候选 = 当前事项 distinct */
-  const tagOptions = useMemo(
-    () => [...new Set(items.flatMap((item) => item.tags))].sort(),
-    [items],
-  );
-
   const visibleItems = useMemo(
     () =>
       sortItems(
@@ -197,43 +128,6 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
       ),
     [items, draft.conditions, draft.sortRules, search, user.id],
   );
-
-  /** 多选维度 → draft 单条件（in）切换（tags 维度用 contains，数组值 OR） */
-  const toggleDraftIn = (
-    field: "status" | "priority" | "tags",
-    value: string,
-  ) => {
-    setDraft((prev) => {
-      const condition = prev.conditions.find((c) => c.field === field);
-      const current =
-        condition && Array.isArray(condition.value) ? condition.value : [];
-      const next = current.includes(value)
-        ? current.filter((v) => v !== value)
-        : [...current, value];
-      const rest = prev.conditions.filter((c) => c.field !== field);
-      return {
-        ...prev,
-        conditions:
-          next.length > 0
-            ? [
-                ...rest,
-                {
-                  field,
-                  op:
-                    field === "tags" ? ("contains" as const) : ("in" as const),
-                  value: next,
-                },
-              ]
-            : rest,
-      };
-    });
-  };
-
-  /** draft 对应字段条件的值数组（FilterMenu 选中态回显） */
-  const conditionValues = (field: FilterCondition["field"]): string[] => {
-    const condition = draft.conditions.find((c) => c.field === field);
-    return condition && Array.isArray(condition.value) ? condition.value : [];
-  };
 
   /** create/remove 后双失效（计划 Tab + 任务 Tab 数据源，T4 契约） */
   const invalidatePlanCaches = async () => {
@@ -369,34 +263,23 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         />
       )}
 
-      {/* 工具栏：筛选 + 搜索 + 添加 */}
+      {/* 工具栏：组合筛选面板 + 搜索 + 添加 */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-4 py-2">
-        <FilterMenu
-          label={t("project:plan.filterStatus")}
-          options={PLAN_STATUSES.map((status) => ({
-            value: status,
-            label: t(STATUS_LABEL_KEYS[status]),
-          }))}
-          selected={conditionValues("status")}
-          onToggle={(value) => toggleDraftIn("status", value)}
+        <PlanFilterPopover
+          conditions={draft.conditions}
+          isDirty={isDirty}
+          members={members}
+          currentUserId={user.id}
+          onChange={(updater) =>
+            setDraft((prev) => ({
+              ...prev,
+              conditions: updater(prev.conditions),
+            }))
+          }
+          onReset={resetDraft}
+          onSaveOverwrite={() => void saveOverwrite()}
+          onSaveAsNew={(name) => void saveAsNew(name)}
         />
-        <FilterMenu
-          label={t("project:plan.filterPriority")}
-          options={PLAN_PRIORITIES.map((priority) => ({
-            value: priority,
-            label: t(PRIORITY_LABEL_KEYS[priority]),
-          }))}
-          selected={conditionValues("priority")}
-          onToggle={(value) => toggleDraftIn("priority", value)}
-        />
-        {tagOptions.length > 0 && (
-          <FilterMenu
-            label={t("project:plan.filterTag")}
-            options={tagOptions.map((tag) => ({ value: tag, label: tag }))}
-            selected={conditionValues("tags")}
-            onToggle={(value) => toggleDraftIn("tags", value)}
-          />
-        )}
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}

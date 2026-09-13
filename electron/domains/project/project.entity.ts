@@ -100,13 +100,18 @@ export interface ProjectBindingItem {
 }
 
 /**
- * 项目详情：项目 + 能力挂载 + 动态流会话
+ * 项目详情：项目 + 资产空间 + 能力挂载 + 动态流会话
  */
 export interface ProjectDetail {
   /**
    * 项目记录
    */
   project: ProjectRecord;
+
+  /**
+   * 资产空间 workspace id（前端资产文件操作 / @ 引用定位用，二期 §3.2）
+   */
+  assetWorkspaceId: number;
 
   /**
    * 能力挂载列表

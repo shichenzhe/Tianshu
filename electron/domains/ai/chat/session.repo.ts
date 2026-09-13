@@ -170,9 +170,13 @@ export class SessionRepository {
     }
   }
 
+  /** AI 侧边栏空间列表：过滤项目资产空间（projectId 非空不进分组树，二期 §3.2） */
   async listWorkspaces(): Promise<WorkspaceRecord[]> {
     return (
-      await prisma.workspace.findMany({ orderBy: { createdAt: "asc" } })
+      await prisma.workspace.findMany({
+        where: { projectId: null },
+        orderBy: { createdAt: "asc" },
+      })
     ).map((row) => this.toWorkspace(row));
   }
 

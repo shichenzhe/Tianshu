@@ -1,14 +1,28 @@
 /**
- * 项目仓储单测：create 重名/欢迎消息/关联写入、remove 级联删除、
- * update 重名与不存在校验、setBindings 全量替换。
- * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用
- * personalization-repo.test.ts 的 mock 模式。
+ * 项目仓储单测：create 重名/资产空间挂接/模型全局继承/欢迎消息/关联写入、
+ * remove 级联删除（含资产目录树清理）、update 重名与不存在校验、
+ * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）。
+ * 依赖经 vi.mock 替换（electron ipcMain+app / Log / node:fs/promises /
+ * prisma client），沿用 personalization-repo.test.ts 的 mock 模式。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import path from "node:path";
+
+const { USER_DATA, fsStub } = vi.hoisted(() => ({
+  USER_DATA: "/tmp/tianshu-test-userdata",
+  fsStub: { mkdir: vi.fn(), rm: vi.fn() },
+}));
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
+  app: { getPath: vi.fn(() => USER_DATA) },
 }));
+// project.repo 引 commons/Log（Winston，模块加载即建 transport）——mock 掉避免测试写日志
+vi.mock("../../electron/commons/Log", () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+// fs stub：mkdir/rm 按 create/remove 生命周期断言（default 键兼容命名空间默认导入）
+vi.mock("node:fs/promises", () => ({ default: fsStub, ...fsStub }));
 
 // prisma stub：各测试按需覆写实现（vi.hoisted 使其在 vi.mock 工厂执行前初始化）
 const prismaStub = vi.hoisted(() => ({
@@ -32,10 +46,11 @@ const prismaStub = vi.hoisted(() => ({
     findUnique: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     deleteMany: vi.fn(),
   },
   message: { create: vi.fn(), deleteMany: vi.fn() },
-  workspace: { findFirst: vi.fn() },
+  workspace: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
   mcpServer: { findMany: vi.fn() },
@@ -54,6 +69,12 @@ import {
 
 const repo = new ProjectRepository();
 
+/** 期望中的资产目录/项目根目录（与实现 path.join 口径一致） */
+const assetsDir = (projectId: number) =>
+  path.join(USER_DATA, "projects", String(projectId), "assets");
+const projectRootDir = (projectId: number) =>
+  path.join(USER_DATA, "projects", String(projectId));
+
 describe("ProjectRepository.create", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -65,25 +86,26 @@ describe("ProjectRepository.create", () => {
     expect(prismaStub.project.create).not.toHaveBeenCalled();
   });
 
-  it("同空间最近选过模型 → 项目 session 继承该模型（hasModel 门控）", async () => {
+  it("全局最近选过模型 → 项目 session 继承该模型（继承查询不限空间）", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 11 });
+    prismaStub.project.create.mockResolvedValue({ id: 11, name: "t2" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 30 });
     prismaStub.session.findFirst.mockResolvedValueOnce({ currentModelId: 42 });
     prismaStub.session.create.mockResolvedValue({ id: 22, projectId: 11 });
 
     await repo.create({ ownerId: 1, name: "t2" });
 
-    expect(prismaStub.session.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { workspaceId: 7, currentModelId: { not: null } },
-      }),
-    );
+    expect(prismaStub.session.findFirst).toHaveBeenCalledTimes(1);
+    expect(prismaStub.session.findFirst).toHaveBeenCalledWith({
+      where: { currentModelId: { not: null } },
+      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+      select: { currentModelId: true },
+    });
     expect(prismaStub.session.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
           projectId: 11,
-          workspaceId: 7,
+          workspaceId: 30,
           title: "t2",
           currentModelId: 42,
         },
@@ -91,10 +113,10 @@ describe("ProjectRepository.create", () => {
     );
   });
 
-  it("同空间无选过模型的会话 → 项目 session 不带模型字段", async () => {
+  it("全局无选过模型的会话 → 项目 session 不带模型字段", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 12 });
+    prismaStub.project.create.mockResolvedValue({ id: 12, name: "t3" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 31 });
     prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 23, projectId: 12 });
 
@@ -102,15 +124,16 @@ describe("ProjectRepository.create", () => {
 
     expect(prismaStub.session.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { projectId: 12, workspaceId: 7, title: "t3" },
+        data: { projectId: 12, workspaceId: 31, title: "t3" },
       }),
     );
   });
 
-  it("正常创建 → 建 project + owner member + 项目 session + 欢迎消息", async () => {
+  it("正常创建 → 建 project + 资产目录 + 资产空间 + owner member + 项目 session + 欢迎消息", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 11 });
+    prismaStub.project.create.mockResolvedValue({ id: 11, name: "test" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 30 });
+    prismaStub.session.findFirst.mockResolvedValueOnce({ currentModelId: 42 });
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
 
     const result = await repo.create({
@@ -119,14 +142,36 @@ describe("ProjectRepository.create", () => {
       welcomeMessage: "欢迎",
     });
 
+    expect(fsStub.mkdir).toHaveBeenCalledWith(assetsDir(11), {
+      recursive: true,
+    });
+    expect(prismaStub.workspace.create).toHaveBeenCalledWith({
+      data: {
+        name: "资产 · test",
+        directoryPath: assetsDir(11),
+        projectId: 11,
+      },
+    });
     expect(prismaStub.projectMember.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { projectId: 11, userId: 1, role: "owner" },
       }),
     );
+    // 项目 session 挂资产空间（workspaceId=30），模型走全局继承（无 workspaceId 条件）
+    expect(prismaStub.session.findFirst).toHaveBeenCalledTimes(1);
+    expect(prismaStub.session.findFirst).toHaveBeenCalledWith({
+      where: { currentModelId: { not: null } },
+      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+      select: { currentModelId: true },
+    });
     expect(prismaStub.session.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { projectId: 11, workspaceId: 7, title: "test" },
+        data: {
+          projectId: 11,
+          workspaceId: 30,
+          title: "test",
+          currentModelId: 42,
+        },
       }),
     );
     expect(prismaStub.message.create).toHaveBeenCalledWith(
@@ -139,8 +184,9 @@ describe("ProjectRepository.create", () => {
 
   it("无欢迎消息 → 不写欢迎 message", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 12 });
+    prismaStub.project.create.mockResolvedValue({ id: 12, name: "t2" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 31 });
+    prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 22, projectId: 12 });
     await repo.create({ ownerId: 1, name: "t2" });
     expect(prismaStub.message.create).not.toHaveBeenCalled();
@@ -148,8 +194,9 @@ describe("ProjectRepository.create", () => {
 
   it("创建时携带 bindings → 写入挂载", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 11 });
+    prismaStub.project.create.mockResolvedValue({ id: 11, name: "b" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 30 });
+    prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
     await repo.create({
       ownerId: 1,
@@ -163,18 +210,35 @@ describe("ProjectRepository.create", () => {
 
   it("创建时不带 bindings → 不写挂载", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
-    prismaStub.project.create.mockResolvedValue({ id: 11 });
+    prismaStub.project.create.mockResolvedValue({ id: 11, name: "b" });
+    prismaStub.workspace.create.mockResolvedValue({ id: 30 });
+    prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
     await repo.create({ ownerId: 1, name: "b" });
     expect(prismaStub.projectBinding.createMany).not.toHaveBeenCalled();
   });
+
+  it("资产目录创建失败 → 抛中文错误，不落 workspace 行/项目会话", async () => {
+    prismaStub.project.findFirst.mockResolvedValue(null);
+    prismaStub.project.create.mockResolvedValue({ id: 11, name: "t" });
+    fsStub.mkdir.mockRejectedValueOnce(new Error("EACCES: permission denied"));
+    await expect(repo.create({ ownerId: 1, name: "t" })).rejects.toThrow(
+      /资产目录创建失败/,
+    );
+    expect(prismaStub.workspace.create).not.toHaveBeenCalled();
+    expect(prismaStub.session.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("ProjectRepository.remove", () => {
-  it("级联删除 bindings/members/messages/sessions/project", async () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("无资产空间（一期旧项目未自愈） → 跳过目录清理，级联删除不变", async () => {
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
     prismaStub.session.findMany.mockResolvedValue([{ id: 21 }, { id: 22 }]);
     await repo.remove(11);
+    expect(fsStub.rm).not.toHaveBeenCalled();
+    expect(prismaStub.workspace.delete).not.toHaveBeenCalled();
     expect(prismaStub.message.deleteMany).toHaveBeenCalledWith({
       where: { sessionId: { in: [21, 22] } },
     });
@@ -190,6 +254,132 @@ describe("ProjectRepository.remove", () => {
     expect(prismaStub.project.delete).toHaveBeenCalledWith({
       where: { id: 11 },
     });
+  });
+
+  it("命中资产空间 → 删整棵 projects/<id> 目录树 + workspace 行，先于会话级联", async () => {
+    prismaStub.workspace.findFirst.mockResolvedValueOnce({
+      id: 30,
+      directoryPath: assetsDir(11),
+    });
+    prismaStub.session.findMany.mockResolvedValue([{ id: 21 }]);
+    await repo.remove(11);
+    expect(fsStub.rm).toHaveBeenCalledWith(projectRootDir(11), {
+      recursive: true,
+      force: true,
+    });
+    expect(prismaStub.workspace.delete).toHaveBeenCalledWith({
+      where: { id: 30 },
+    });
+    // 资产清理先于 message 级联（invocationCallOrder 跨 mock 全局递增）
+    expect(
+      prismaStub.workspace.delete.mock.invocationCallOrder[0],
+    ).toBeLessThan(prismaStub.message.deleteMany.mock.invocationCallOrder[0]);
+    expect(prismaStub.project.delete).toHaveBeenCalledWith({
+      where: { id: 11 },
+    });
+  });
+
+  it("资产目录删除失败 → 记日志后仍删 workspace 行与项目（DB 级联不中断）", async () => {
+    prismaStub.workspace.findFirst.mockResolvedValueOnce({
+      id: 30,
+      directoryPath: assetsDir(11),
+    });
+    fsStub.rm.mockRejectedValueOnce(new Error("EACCES: permission denied"));
+    prismaStub.session.findMany.mockResolvedValue([]);
+    await expect(repo.remove(11)).resolves.toBeUndefined();
+    expect(prismaStub.workspace.delete).toHaveBeenCalledWith({
+      where: { id: 30 },
+    });
+    expect(prismaStub.project.delete).toHaveBeenCalledWith({
+      where: { id: 11 },
+    });
+  });
+});
+
+describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const projectRow = {
+    id: 11,
+    name: "旧项目",
+    systemPrompt: null,
+    templateKey: null,
+    ownerId: 1,
+    createdAt: new Date("2026-09-01T00:00:00Z"),
+    updatedAt: new Date("2026-09-02T00:00:00Z"),
+  };
+  const sessionRow = {
+    id: 21,
+    workspaceId: 7,
+    projectId: 11,
+    assistantId: null,
+    currentModelId: null,
+    title: "旧项目",
+    mode: null,
+    pinnedAt: null,
+    archivedAt: null,
+    createdAt: new Date("2026-09-01T00:00:00Z"),
+    updatedAt: new Date("2026-09-02T00:00:00Z"),
+    lastMessageAt: null,
+  };
+
+  it("项目无资产空间 → 补建目录 + workspace + 重绑 session，返回 assetWorkspaceId", async () => {
+    prismaStub.project.findUnique.mockResolvedValue(projectRow);
+    prismaStub.session.findFirst.mockResolvedValue(sessionRow);
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
+    prismaStub.workspace.create.mockResolvedValue({
+      id: 30,
+      name: "资产 · 旧项目",
+      directoryPath: assetsDir(11),
+      projectId: 11,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([]);
+
+    const detail = await repo.getDetail(11);
+
+    expect(fsStub.mkdir).toHaveBeenCalledWith(assetsDir(11), {
+      recursive: true,
+    });
+    expect(prismaStub.workspace.create).toHaveBeenCalledWith({
+      data: {
+        name: "资产 · 旧项目",
+        directoryPath: assetsDir(11),
+        projectId: 11,
+      },
+    });
+    expect(prismaStub.session.updateMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+      data: { workspaceId: 30 },
+    });
+    expect(detail.assetWorkspaceId).toBe(30);
+    // 响应内 session 立即反映重绑结果
+    expect(detail.session.workspaceId).toBe(30);
+    expect(detail.project.sessionId).toBe(21);
+  });
+
+  it("已有资产空间 → 幂等零副作用（不建目录/不建行/不重绑）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue(projectRow);
+    prismaStub.session.findFirst.mockResolvedValue(sessionRow);
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      id: 30,
+      directoryPath: assetsDir(11),
+      projectId: 11,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([]);
+
+    const detail = await repo.getDetail(11);
+
+    expect(fsStub.mkdir).not.toHaveBeenCalled();
+    expect(prismaStub.workspace.create).not.toHaveBeenCalled();
+    expect(prismaStub.session.updateMany).not.toHaveBeenCalled();
+    expect(detail.assetWorkspaceId).toBe(30);
+  });
+
+  it("项目或会话不存在 → 抛 PROJECT_NOT_FOUND", async () => {
+    prismaStub.project.findUnique.mockResolvedValue(null);
+    prismaStub.session.findFirst.mockResolvedValue(null);
+    await expect(repo.getDetail(99)).rejects.toThrow(PROJECT_NOT_FOUND);
+    expect(prismaStub.workspace.create).not.toHaveBeenCalled();
   });
 });
 

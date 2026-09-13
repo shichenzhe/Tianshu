@@ -1,8 +1,13 @@
 /**
- * 项目仓储：项目 CRUD + 成员/能力挂载/动态流会话管理（项目模块一期 spec §4）
+ * 项目仓储：项目 CRUD + 成员/能力挂载/动态流会话管理（项目模块一期 spec §4）；
+ * 二期起挂接资产空间生命周期——create/remove/getDetail 维护
+ * userData/projects/<id>/assets 目录与对应 workspace 行（二期 spec §3.2）
  */
-import { ipcMain } from "electron";
+import { app, ipcMain } from "electron";
 import prisma from "../../commons/prisma-client";
+import Log from "../../commons/Log";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
   PROJECT_NAME_EXISTS,
   PROJECT_NOT_FOUND,
@@ -38,6 +43,9 @@ type ProjectBindingRow = NonNullable<
 >;
 type SessionRow = NonNullable<
   Awaited<ReturnType<typeof prisma.session.findFirst>>
+>;
+type WorkspaceRow = NonNullable<
+  Awaited<ReturnType<typeof prisma.workspace.findFirst>>
 >;
 
 export default class ProjectRepository {
@@ -78,7 +86,7 @@ export default class ProjectRepository {
   }
 
   /**
-   * 项目详情：项目 + 能力挂载 + 动态流会话
+   * 项目详情：项目 + 资产空间（自愈） + 能力挂载 + 动态流会话
    * @param id 项目 id
    */
   async getDetail(id: number): Promise<ProjectDetail> {
@@ -89,16 +97,19 @@ export default class ProjectRepository {
     if (!row || !session) {
       throw new Error(PROJECT_NOT_FOUND);
     }
+    const workspace = await this.ensureAssetWorkspace(row);
     const bindings = await this.listBindingItems(id);
     return {
       project: this.toRecord(row, session.id),
+      assetWorkspaceId: workspace.id,
       bindings,
-      session: this.toSession(session),
+      // 响应内立即反映重绑后的资产空间（自愈当次即一致）
+      session: this.toSession({ ...session, workspaceId: workspace.id }),
     };
   }
 
   /**
-   * 创建项目：重名检查 → project + owner 成员 + 初始挂载 + 动态流会话（含欢迎消息）
+   * 创建项目：重名检查 → project + owner 成员 + 初始挂载 + 资产空间 + 动态流会话（含欢迎消息）
    * @param params 创建参数
    */
   async create(params: ProjectCreateParams): Promise<ProjectRecord> {
@@ -112,15 +123,22 @@ export default class ProjectRepository {
       },
     });
     await this.createOwnerAndBindings(row.id, params);
-    const session = await this.createProjectSession(row.id, params);
+    const workspace = await this.ensureAssetWorkspace(row);
+    const session = await this.createProjectSession(
+      row.id,
+      params,
+      workspace.id,
+    );
     return this.toRecord(row, session.id);
   }
 
   /**
-   * 删除项目：级联清 message → session → member → binding → project
+   * 删除项目：先清资产空间（目录树 + workspace 行），再级联清
+   * message → session → member → binding → project
    * @param id 项目 id
    */
   async remove(id: number): Promise<void> {
+    await this.removeAssetWorkspace(id);
     const sessions = await prisma.session.findMany({
       where: { projectId: id },
       select: { id: true },
@@ -289,28 +307,119 @@ export default class ProjectRepository {
     }
   }
 
-  /** 建动态流会话：挂默认工作空间（最早创建），非空欢迎消息落首条消息 */
+  /**
+   * 确保项目资产空间存在（幂等）：缺失时补建目录 + workspace 行，
+   * 并把项目会话重绑到资产空间。二期新建项目与一期旧项目自愈共用
+   * （升级后首个 getDetail 即完成迁移，无需 SQL 数据脚本，二期 §3.2）；
+   * 三期资产仓储经构造注入复用，故为公开方法
+   * @param project 项目行
+   */
+  async ensureAssetWorkspace(project: ProjectRow): Promise<WorkspaceRow> {
+    const existing = await prisma.workspace.findFirst({
+      where: { projectId: project.id },
+    });
+    if (existing) {
+      return existing;
+    }
+    const directoryPath = this.assetsDirOf(project.id);
+    await this.ensureAssetsDir(directoryPath);
+    const workspace = await prisma.workspace.create({
+      data: {
+        name: `资产 · ${project.name}`,
+        directoryPath,
+        projectId: project.id,
+      },
+    });
+    await this.rebindProjectSessions(project.id, workspace.id);
+    return workspace;
+  }
+
+  /** 建资产目录；失败转中文错误（附 cause，不落脏 workspace 行） */
+  private async ensureAssetsDir(directoryPath: string): Promise<void> {
+    try {
+      await fs.mkdir(directoryPath, { recursive: true });
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      throw new Error(`资产目录创建失败（${directoryPath}）：${cause}`, {
+        cause: error,
+      });
+    }
+  }
+
+  /** 项目会话整体重绑资产空间（updateMany：一期异常数据容错多行） */
+  private async rebindProjectSessions(
+    projectId: number,
+    workspaceId: number,
+  ): Promise<void> {
+    await prisma.session.updateMany({
+      where: { projectId },
+      data: { workspaceId },
+    });
+  }
+
+  /**
+   * 删除项目资产空间：rm 整个 projects/<id> 目录树（比只删 assets 干净）
+   * + workspace 行。fs 失败仅记日志不抛出——项目 DB 级联必须完成，
+   * 残留目录留待用户手动清理（记 concern，二期 §4 异常兜底）
+   * @param projectId 项目 id
+   */
+  private async removeAssetWorkspace(projectId: number): Promise<void> {
+    const workspace = await prisma.workspace.findFirst({
+      where: { projectId },
+    });
+    if (!workspace) {
+      return;
+    }
+    try {
+      await fs.rm(this.projectRootDir(projectId, workspace.directoryPath), {
+        recursive: true,
+        force: true,
+      });
+    } catch (error) {
+      Log.error(`删除项目资产目录失败（projectId=${projectId}）`, error);
+    }
+    await prisma.workspace.delete({ where: { id: workspace.id } });
+  }
+
+  /** 资产目录：userData/projects/<id>/assets（物理布局即目录树） */
+  private assetsDirOf(projectId: number): string {
+    return path.join(
+      app.getPath("userData"),
+      "projects",
+      String(projectId),
+      "assets",
+    );
+  }
+
+  /** 项目根目录：优先取 workspace 行记录目录的父级，缺记录按约定路径兜底 */
+  private projectRootDir(
+    projectId: number,
+    directoryPath: string | null,
+  ): string {
+    return directoryPath
+      ? path.dirname(directoryPath)
+      : path.dirname(this.assetsDirOf(projectId));
+  }
+
+  /**
+   * 建动态流会话：挂项目资产空间，非空欢迎消息落首条消息。
+   * 模型继承「全局最近一次选择」（二期口径：资产空间是新建空空间，
+   * 按空间查恒取不到值——spec §2；hasModel 门控沿用一期用户反馈）
+   */
   private async createProjectSession(
     projectId: number,
     params: ProjectCreateParams,
+    workspaceId: number,
   ): Promise<SessionRow> {
-    const workspace = await prisma.workspace.findFirst({
-      orderBy: { createdAt: "asc" },
-    });
-    if (!workspace) {
-      throw new Error("默认工作空间不存在，无法创建项目会话");
-    }
-    // 继承同空间最近一次选择的模型（口径同 SessionRepository.createSession，
-    // 用户反馈：项目会话无模型导致输入框回车静默无效——hasModel 门控）
     const latest = await prisma.session.findFirst({
-      where: { workspaceId: workspace.id, currentModelId: { not: null } },
+      where: { currentModelId: { not: null } },
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
       select: { currentModelId: true },
     });
     const session = await prisma.session.create({
       data: {
         projectId,
-        workspaceId: workspace.id,
+        workspaceId,
         title: params.name,
         currentModelId: latest?.currentModelId ?? undefined,
       },

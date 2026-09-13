@@ -132,7 +132,10 @@ export default function ProjectWorkspaceView() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* 顶栏：Tab 切换 + 筛选下拉 + 配置面板开关 */}
         <header className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-1.5">
-          <div className="flex items-center gap-1" role="tablist">
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
+            role="tablist"
+          >
             {TABS.map(({ value, icon: Icon, labelKey }) => (
               <button
                 key={value}
@@ -141,7 +144,7 @@ export default function ProjectWorkspaceView() {
                 aria-selected={tab === value}
                 onClick={() => switchTab(value)}
                 className={cn(
-                  "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
+                  "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-sm transition-colors",
                   tab === value
                     ? "border-primary text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground",
@@ -152,7 +155,7 @@ export default function ProjectWorkspaceView() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

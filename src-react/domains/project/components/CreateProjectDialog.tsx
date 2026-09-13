@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
 
@@ -90,6 +90,7 @@ export default function CreateProjectDialog({
   onCreated,
 }: CreateProjectDialogProps) {
   const { t } = useTranslation(["project", "common"]);
+  const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
@@ -226,6 +227,8 @@ export default function CreateProjectDialog({
         bindings: buildBindings(),
       });
       toast.success(t("project:toast.created"));
+      // 前缀失效：侧栏列表与 Hub 卡片共用 ["projects", ownerId] 缓存，一并刷新
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
       onCreated(record);
       onOpenChange(false);
     } catch (error) {

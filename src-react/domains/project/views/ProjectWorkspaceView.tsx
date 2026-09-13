@@ -236,7 +236,7 @@ export default function ProjectWorkspaceView() {
 
       {/* 右列配置面板：默认展开，收起后仅留开关按钮 */}
       {panelOpen && (
-        <aside className="w-80 shrink-0 border-l border-border/50">
+        <aside className="w-80 shrink-0 border-l border-border/50 bg-background">
           <ConfigPanel detail={detailQuery.data} />
         </aside>
       )}

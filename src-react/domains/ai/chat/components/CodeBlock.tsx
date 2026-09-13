@@ -5,7 +5,7 @@
  * - createHighlighter 的 langs 默认 []，后续语言用 highlighter.loadLanguage() 补充注册
  * - loadLanguage 参数类型不含裸 string，运行时先经 bundledLanguages 判存在再收窄调用
  * - codeToHtml({ themes: { light, dark } }) 为双主题形态：light 内联生效，dark 写入
- *   --shiki-dark CSS 变量（本项目无暗色模式，dark 变量暂不消费，保留供未来切换）
+ *   --shiki-dark CSS 变量（外观模块起由 skins.css 的 [data-mode=dark] 规则消费切换）
  */
 import { memo, useEffect, useState } from "react";
 import type { BundledLanguage, Highlighter } from "shiki";

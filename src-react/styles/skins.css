@@ -209,10 +209,18 @@
    ===================================================== */
 
 /* body：语义背景色（globals 未设，暗色模式下必须显式落底，亮色下与默认白一致）
-   + 壁纸渐变叠加（无壁纸时回落 none） */
+   + 壁纸渐变叠加（无壁纸时回落 none）+ 全局默认字体色（未显式设色的文本
+   随明暗切换，深色下白字——验收反馈：漏网文本黑底黑字看不清） */
 body {
   background-color: var(--color-background);
   background-image: var(--skin-bg-gradient, none);
+  color: var(--color-foreground);
+}
+
+/* shiki 代码块深色高亮切换：shiki 双主题输出 --shiki-dark CSS 变量，
+   此前无消费规则——深色下代码块仍亮色高亮（外观模块验收 A3 跟进票） */
+[data-mode="dark"] .shiki span {
+  color: var(--shiki-dark);
 }
 
 /* 全局侧边栏壳（GlobalSidebar 内层 div，data-sidebar-shell 标记）：

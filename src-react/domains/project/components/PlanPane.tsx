@@ -3,8 +3,9 @@
  * PLAN_FIELDS_KEY；视图驱动——usePlanViews 管 ?viewId= 激活路由（兼容旧
  * ?view=，合并式写入保留 ?tab= 等既有参数）与 draft 未保存调整态，
  * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
- * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部极简视图 Tab 行
- * （完整交互后续任务替换）；表格/看板双视图（看板 = PlanKanbanView 四态
+ * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
+ * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
+ * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 四态
  * 泳道拖拽）；项目成员预取共享缓存（处理人筛选/看板分组候选）。
  * 工具栏：状态/优先级/标签三组多选筛选（onToggle 改写 draft 同字段单条
  * 条件，标签候选=当前事项 distinct）+ 标题搜索 +「添加」（PlanItemDialog
@@ -45,7 +46,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useUserStore } from "@/domains/user/store/user.store";
 import ProjectApi from "../api/project.api";
@@ -64,6 +64,7 @@ import PlanItemDialog, {
 } from "./PlanItemDialog";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
 import PlanTableView from "./PlanTableView";
+import PlanViewTabs from "./PlanViewTabs";
 import {
   PLAN_PRIORITIES,
   PLAN_STATUSES,
@@ -141,8 +142,18 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
 
-  const { views, activeView, activeViewId, setActiveViewId, draft, setDraft } =
-    usePlanViews(projectId);
+  const {
+    views,
+    activeView,
+    activeViewId,
+    setActiveViewId,
+    isDirty,
+    addView,
+    renameView,
+    removeView,
+    draft,
+    setDraft,
+  } = usePlanViews(projectId);
 
   // 项目成员预取（与弹窗共享 projectMembers 缓存；筛选/看板分组候选后续任务消费）
   useQuery({
@@ -345,28 +356,18 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 视图 Tab（子系统 A：完整交互在 PlanViewTabs 任务替换） */}
-      <div className="flex items-center gap-1 border-b border-border/50 px-4 py-1.5">
-        {views.map((entry) => (
-          <button
-            key={entry.id}
-            type="button"
-            aria-pressed={entry.id === activeViewId}
-            onClick={() => setActiveViewId(entry.id)}
-            className={cn(
-              "rounded-md px-2.5 py-1 text-xs transition-colors",
-              entry.id === activeViewId
-                ? "bg-primary-subtle font-medium text-primary"
-                : "text-muted-foreground hover:bg-primary-subtle hover:text-primary",
-            )}
-          >
-            {entry.name ||
-              t(
-                `project:planView.type${entry.type.charAt(0).toUpperCase()}${entry.type.slice(1)}`,
-              )}
-          </button>
-        ))}
-      </div>
+      {/* 视图 Tab 栏（视图列表为空——加载失败等——整条不渲染） */}
+      {views.length > 0 && (
+        <PlanViewTabs
+          views={views}
+          activeViewId={activeViewId}
+          isDirty={isDirty}
+          onSelect={setActiveViewId}
+          onAdd={(type) => void addView(type)}
+          onRename={(id, name) => void renameView(id, name)}
+          onRemove={(id) => void removeView(id)}
+        />
+      )}
 
       {/* 工具栏：筛选 + 搜索 + 添加 */}
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-4 py-2">

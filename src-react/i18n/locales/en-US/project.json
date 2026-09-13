@@ -100,7 +100,11 @@
     "typeKanban": "Board",
     "typeList": "List",
     "typeGantt": "Gantt",
-    "typeCalendar": "Calendar"
+    "typeCalendar": "Calendar",
+    "rename": "Rename",
+    "addView": "Add view",
+    "tabMenu": "View actions",
+    "unsaved": "Unsaved changes"
   },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",

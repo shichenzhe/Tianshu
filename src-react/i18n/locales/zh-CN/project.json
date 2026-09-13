@@ -100,7 +100,11 @@
     "typeKanban": "看板",
     "typeList": "列表",
     "typeGantt": "甘特",
-    "typeCalendar": "日历"
+    "typeCalendar": "日历",
+    "rename": "重命名",
+    "addView": "添加视图",
+    "tabMenu": "视图操作",
+    "unsaved": "有未保存的修改"
   },
   "tasks": {
     "privateTip": "仅自己可见，不同步到项目",

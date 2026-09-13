@@ -12,7 +12,8 @@
  *   均值 ≤ 0 → 保底 1
  * - DOM（dnd-kit jsdom 不模拟 pointer 拖拽，落点语义由纯函数覆盖、集成由
  *   手动验收兜底）：四列渲染 + 计数 + 列头 +（onQuickCreate(status)）；
- *   卡片字段（优先级左色条 class / 标签截断 +N / 我头像点）；点击卡片 onEdit
+ *   卡片字段（优先级左色条 class 含 P3 border-l-border/40 / 标签截断 +N /
+ *   我头像点）；点击卡片 onEdit
  * - PlanPane 集成：列头 + 打开 PlanItemDialog 且 defaultStatus 预置该列
  *   状态；编辑卡片回填自身状态（defaultStatus 被忽略）
  * - T6 minor（IME）：PlanTableView 快速新增与 PlanItemDialog 标签输入，
@@ -93,12 +94,18 @@ vi.mock("@/domains/user/store/user.store", () => ({
       : { user: { id: 1, nickname: "测试用户" } },
 }));
 
+// ProjectApi.listMembers（PlanItemDialog 处理人选择器成员源）整体 mock
+vi.mock("@/domains/project/api/project.api", () => ({
+  default: { listMembers: vi.fn() },
+}));
+
 import PlanKanbanView, {
   computeDrop,
   computeSortOrder,
 } from "../../src-react/domains/project/components/PlanKanbanView";
 import PlanPane from "../../src-react/domains/project/components/PlanPane";
 import PlanItemApi from "@/domains/project/api/plan-item.api";
+import ProjectApi from "@/domains/project/api/project.api";
 import type { KanbanColumnData } from "../../src-react/domains/project/components/PlanKanbanView";
 import type {
   PlanItemRecord,
@@ -144,6 +151,7 @@ beforeEach(() => {
   vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue([]);
   vi.mocked(PlanItemApi.create).mockReset().mockResolvedValue(makeItem());
   vi.mocked(PlanItemApi.move).mockReset().mockResolvedValue(undefined);
+  vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue([]);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -356,6 +364,21 @@ describe("PlanKanbanView 渲染（DOM）", () => {
     const avatar = within(reviewCard).getByTitle("project:plan.me");
     expect(avatar.textContent).toBe("测");
     expect(avatar.className).toContain("rounded-full");
+  });
+
+  it("P3 卡片左色条 class 含 border-l-border/40（比 P2 更弱）", () => {
+    renderKanban([
+      makeItem({
+        id: 25,
+        title: "P3 事项",
+        status: "paused",
+        priority: "P3",
+        sortOrder: 1,
+      }),
+    ]);
+    const card = cardOf("P3 事项");
+    expect(card.className).toContain("border-l-border/40");
+    expect(card.className).toContain("border-l-4");
   });
 
   it("点击卡片 → onEdit(item)", () => {

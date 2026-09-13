@@ -5,11 +5,14 @@
  * QueryClientProvider；PlanItemApi 八静态方法 + useUserStore 整体 mock，
  * 候选标签经 setQueryData(PLAN_ITEMS_KEY) 预置缓存）：
  * - 标题校验：空标题禁用提交（blur 后 titleRequired 提示）；超 100 字 titleTooLong
- * - 编辑模式：回填 title/status/priority/tags/customFields/处理人「我」
+ * - 编辑模式：回填 title/status/priority/tags/customFields/处理人（成员昵称）
  * - 标签：回车添加（trim/去重/清空输入）、X 移除、候选 chips 来自 planItems
  *   缓存 distinct 聚合、选中后候选隐藏
  * - 自定义字段：text/number/date 三型 input type 断言；本地任务（projectId
  *   null）不渲染该区且不拉取字段定义
+ * - 排期与处理人（三期子系统 A）：编辑回填日期（ISO 前 10 位）/成员昵称；
+ *   update 携带 ISO/null 与 assigneeId；日期区与成员 Select 仅项目任务
+ *   （本地任务只读「我」、无日期框且 create 不带日期键）；优先级含 P3
  * - 保存链路：create 参数完整（createdById/projectId/title/status/priority/
  *   tags/customFields，number 型转数字）；本地任务 projectId/customFields 省略；
  *   update 传全量字段；成功 invalidate planItems + planItemsMine 双 key +
@@ -87,12 +90,19 @@ vi.mock("@/domains/user/store/user.store", () => ({
     selector ? selector({ user: { id: 1 } }) : { user: { id: 1 } },
 }));
 
+// ProjectApi.listMembers（处理人选择器成员源）整体 mock
+vi.mock("@/domains/project/api/project.api", () => ({
+  default: { listMembers: vi.fn() },
+}));
+
 import PlanItemDialog from "../../src-react/domains/project/components/PlanItemDialog";
 import CustomFieldsEditor from "../../src-react/domains/project/components/CustomFieldsEditor";
 import PlanItemApi, {
   PLAN_FIELDS_KEY,
   PLAN_ITEMS_KEY,
 } from "@/domains/project/api/plan-item.api";
+import ProjectApi from "@/domains/project/api/project.api";
+import type { ProjectMemberItem } from "../../../electron/domains/project/project.entity";
 import type {
   PlanFieldDef,
   PlanItemRecord,
@@ -102,6 +112,12 @@ const FIELD_DEFS: PlanFieldDef[] = [
   { name: "里程碑", type: "text" },
   { name: "预算", type: "number" },
   { name: "截止", type: "date" },
+];
+
+/** 处理人选择器成员源（成员 2 非当前用户，覆盖改派） */
+const MEMBERS: ProjectMemberItem[] = [
+  { userId: 1, nickname: "黄", username: "hjx", role: "owner" },
+  { userId: 2, nickname: "小美", username: "meimei", role: "member" },
 ];
 
 const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
@@ -184,8 +200,16 @@ const getTitleInput = () =>
   screen.getByLabelText("project:plan.title") as HTMLInputElement;
 const getTagInput = () =>
   screen.getByLabelText("project:plan.tags") as HTMLInputElement;
+/** 本地任务（projectId null）处理人只读框 */
 const getAssigneeInput = () =>
   screen.getByLabelText("project:plan.handleMan") as HTMLInputElement;
+/** 项目任务处理人成员 Select 触发器 */
+const getAssigneeTrigger = () =>
+  screen.getByRole("combobox", { name: "project:plan.handleMan" });
+const getStartDateInput = () =>
+  screen.getByLabelText("project:plan.startDate") as HTMLInputElement;
+const getDueDateInput = () =>
+  screen.getByLabelText("project:plan.dueDate") as HTMLInputElement;
 const getStatusTrigger = () =>
   screen.getByRole("combobox", { name: "project:plan.status" });
 const getPriorityTrigger = () =>
@@ -198,6 +222,7 @@ beforeEach(() => {
   vi.mocked(PlanItemApi.create).mockReset().mockResolvedValue(makeItem());
   vi.mocked(PlanItemApi.update).mockReset().mockResolvedValue(undefined);
   vi.mocked(PlanItemApi.saveFields).mockReset().mockResolvedValue(undefined);
+  vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue(MEMBERS);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -226,7 +251,7 @@ describe("PlanItemDialog 标题校验", () => {
 });
 
 describe("PlanItemDialog 编辑模式回填", () => {
-  it("回填 title/status/priority/tags/customFields，处理人只读「我」", async () => {
+  it("回填 title/status/priority/tags/customFields，处理人回填成员昵称", async () => {
     await renderPlanDialog({ item: makeItem() });
     expect(getTitleInput().value).toBe("既有事项");
     expect(getStatusTrigger().textContent).toContain(
@@ -236,8 +261,10 @@ describe("PlanItemDialog 编辑模式回填", () => {
       "project:plan.priorityP0",
     );
     expect(screen.getByText("设计")).toBeTruthy();
-    expect(getAssigneeInput().value).toBe("project:plan.me");
-    expect(getAssigneeInput().readOnly).toBe(true);
+    // 处理人回填 assigneeId=1 对应成员昵称（成员列表异步到达）
+    await waitFor(() =>
+      expect(getAssigneeTrigger().textContent).toContain("黄"),
+    );
     expect(
       ((await screen.findByLabelText("预算")) as HTMLInputElement).value,
     ).toBe("100");
@@ -331,6 +358,9 @@ describe("PlanItemDialog 保存链路", () => {
       priority: "P2",
       tags: ["urgent"],
       customFields: { 里程碑: "v1", 预算: 100 },
+      // 项目任务日期未填 → null（清空语义）
+      startDate: null,
+      dueDate: null,
     });
     expect(PlanItemApi.update).not.toHaveBeenCalled();
     await waitFor(() =>
@@ -349,8 +379,14 @@ describe("PlanItemDialog 保存链路", () => {
     invalidateSpy.mockRestore();
   });
 
-  it("本地任务新建：projectId 与空 customFields 省略", async () => {
+  it("本地任务新建：projectId 与空 customFields 省略，无日期键且处理人只读「我」", async () => {
     const { onSaved } = await renderPlanDialog({ projectId: null });
+    // 本地任务：处理人只读「我」、无日期框、不拉成员列表
+    expect(getAssigneeInput().value).toBe("project:plan.me");
+    expect(getAssigneeInput().readOnly).toBe(true);
+    expect(screen.queryByLabelText("project:plan.startDate")).toBeNull();
+    expect(screen.queryByLabelText("project:plan.dueDate")).toBeNull();
+    expect(ProjectApi.listMembers).not.toHaveBeenCalled();
     fireEvent.change(getTitleInput(), { target: { value: "本地任务" } });
     fireEvent.click(getSaveButton());
 
@@ -385,6 +421,9 @@ describe("PlanItemDialog 保存链路", () => {
       priority: "P0",
       tags: ["设计"],
       customFields: { 预算: 200 },
+      assigneeId: 1,
+      startDate: null,
+      dueDate: null,
     });
     expect(PlanItemApi.create).not.toHaveBeenCalled();
     await waitFor(() =>
@@ -414,6 +453,77 @@ describe("PlanItemDialog 保存链路", () => {
     );
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(onSaved).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
+  it("编辑回填日期与处理人；提交 update 携带 ISO/null 与 assigneeId", async () => {
+    await renderPlanDialog({
+      item: makeItem({
+        assigneeId: 2,
+        startDate: "2026-09-01T00:00:00.000Z",
+        dueDate: "",
+      }),
+    });
+    // 处理人回填成员 2 昵称；开始日期回填 ISO 前 10 位，空截止 = 空框
+    await waitFor(() =>
+      expect(getAssigneeTrigger().textContent).toContain("小美"),
+    );
+    expect(getStartDateInput().value).toBe("2026-09-01");
+    expect(getDueDateInput().value).toBe("");
+
+    // 改派成员 1 + 改开始日期后保存
+    await selectOption(getAssigneeTrigger(), "黄");
+    fireEvent.change(getStartDateInput(), { target: { value: "2026-09-05" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.update).toHaveBeenCalledWith({
+      id: 7,
+      title: "既有事项",
+      status: "in_progress",
+      priority: "P0",
+      tags: ["设计"],
+      customFields: { 预算: 100 },
+      assigneeId: 1,
+      // 日期框「YYYY-MM-DD」→ 本地零点 ISO；空截止 → null（清空）
+      startDate: new Date("2026-09-05T00:00:00").toISOString(),
+      dueDate: null,
+    });
+    expect(ProjectApi.listMembers).toHaveBeenCalledWith(1);
+  });
+
+  it("处理人可改选「未指派」；编辑提交 update 携带 assigneeId null（清空指派）", async () => {
+    await renderPlanDialog({ item: makeItem({ assigneeId: 2 }) });
+    await waitFor(() =>
+      expect(getAssigneeTrigger().textContent).toContain("小美"),
+    );
+    await selectOption(getAssigneeTrigger(), "project:plan.unassigned");
+    expect(getAssigneeTrigger().textContent).toContain(
+      "project:plan.unassigned",
+    );
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({ assigneeId: null }),
+    );
+  });
+
+  it("优先级下拉含 P3；选 P3 提交 create 带 priority P3", async () => {
+    await renderPlanDialog();
+    fireEvent.change(getTitleInput(), { target: { value: "P3 事项" } });
+    // 下拉展开后 P3 选项可选（findByRole option 隐含断言选项存在）
+    await selectOption(getPriorityTrigger(), "project:plan.priorityP3");
+    expect(getPriorityTrigger().textContent).toContain(
+      "project:plan.priorityP3",
+    );
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "P3 事项", priority: "P3" }),
+    );
   });
 });
 

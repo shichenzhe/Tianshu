@@ -1,7 +1,8 @@
 /**
  * 项目仓储单测：create 重名/资产空间挂接/模型全局继承/欢迎消息/关联写入、
  * remove 级联删除（含资产目录树清理）、update 重名与不存在校验、
- * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）。
+ * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）、
+ * listMembers 成员列表（joinedAt 序 + join user 昵称回退，三期子系统 A）。
  * 依赖经 vi.mock 替换（electron ipcMain+app / Log / node:fs/promises /
  * prisma client），沿用 personalization-repo.test.ts 的 mock 模式。
  */
@@ -34,7 +35,7 @@ const prismaStub = vi.hoisted(() => ({
     update: vi.fn(),
     delete: vi.fn(),
   },
-  projectMember: { create: vi.fn(), deleteMany: vi.fn() },
+  projectMember: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
   projectBinding: {
     createMany: vi.fn(),
     deleteMany: vi.fn(),
@@ -55,6 +56,7 @@ const prismaStub = vi.hoisted(() => ({
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
   mcpServer: { findMany: vi.fn() },
+  user: { findMany: vi.fn() },
   $transaction: vi.fn((fn) => fn(prismaStub)),
 }));
 
@@ -517,6 +519,34 @@ describe("ProjectRepository.getPromptContext", () => {
     expect(prismaStub.mcpServer.findMany).toHaveBeenCalledWith({
       where: { id: { in: [6, 7] }, enabled: true },
       select: { id: true, name: true },
+    });
+  });
+});
+
+describe("ProjectRepository.listMembers", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("返回成员列表（joinedAt 序）并 join user 取昵称（缺昵称回退用户名）", async () => {
+    const now = new Date("2026-09-01T00:00:00Z");
+    prismaStub.projectMember.findMany.mockResolvedValue([
+      { projectId: 11, userId: 2, role: "member", joinedAt: now },
+      { projectId: 11, userId: 1, role: "owner", joinedAt: now },
+    ]);
+    prismaStub.user.findMany.mockResolvedValue([
+      { id: 1, nickname: "黄", username: "hjx" },
+      { id: 2, nickname: "", username: "ai_bot" },
+    ]);
+    const members = await repo.listMembers(11);
+    expect(members).toEqual([
+      { userId: 2, nickname: "ai_bot", username: "ai_bot", role: "member" },
+      { userId: 1, nickname: "黄", username: "hjx", role: "owner" },
+    ]);
+    expect(prismaStub.projectMember.findMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+      orderBy: { joinedAt: "asc" },
+    });
+    expect(prismaStub.user.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [2, 1] } },
     });
   });
 });

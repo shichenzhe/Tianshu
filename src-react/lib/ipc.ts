@@ -110,6 +110,7 @@ export type IPCChannel =
   | "project:update"
   | "project:delete"
   | "project:setBindings"
+  | "project:listMembers"
   // 项目资产空间（二期）
   | "projectAsset:list"
   | "projectAsset:createFolder"

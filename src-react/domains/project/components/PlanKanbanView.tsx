@@ -2,8 +2,9 @@
  * 计划看板视图（spec §6 计划 Tab 看板分支，dnd-kit 四态泳道）：
  * 四列（PLAN_STATUSES 序）横向滚动，列头 = 状态名 + 计数 Badge + 列内 +（预置
  * 该列状态的新建弹窗，由 PlanPane 打开）；卡片 = 优先级左色条（P0 destructive /
- * P1 primary / P2 muted）+ 标题 + 标签 Badge（最多 3 个 + "+N"）+ "我"头像点，
- * 点击卡片 = onEdit（拖拽与点击由 PointerSensor 距离阈值区分）。
+ * P1 primary / P2 muted / P3 border 最弱）+ 标题 + 标签 Badge（最多 3 个 +
+ * "+N"）+ "我"头像点，点击卡片 = onEdit（拖拽与点击由 PointerSensor 距离阈值
+ * 区分）。
  * 拖拽落点语义抽为模块级纯函数（jsdom 不模拟 pointer 拖拽，单测直接覆盖语义）：
  * - computeDrop：active/over → 目标 status + afterId（落点前一项 id）或 null
  *   （同列原位 no-op）；sortOrder 由 PlanPane 以全量缓存目标列推导（防筛选错序）
@@ -44,11 +45,12 @@ import type {
 /** 卡片标签展示上限，超出折叠为 "+N" */
 const MAX_CARD_TAGS = 3;
 
-/** 优先级左色条：P0 警示 / P1 主题色 / P2 弱化 */
+/** 优先级左色条：P0 警示 / P1 主题色 / P2 弱化 / P3 最弱 */
 const PRIORITY_BORDER_CLASSES: Record<PlanPriority, string> = {
   P0: "border-l-destructive",
   P1: "border-l-primary",
   P2: "border-l-muted-foreground/40",
+  P3: "border-l-border/40",
 };
 
 /** 一列泳道（status + 该列可见事项，展示序） */

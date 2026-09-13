@@ -19,6 +19,7 @@ import {
   ProjectRecord,
   ProjectUpdateParams,
 } from "./project.entity";
+import type { ProjectMemberItem } from "./project.entity";
 import type { ProjectPromptContext } from "./project-prompt";
 import type {
   SessionMode,
@@ -70,6 +71,9 @@ export default class ProjectRepository {
       "project:setBindings",
       (_, projectId: number, items: ProjectBindingInput[]) =>
         this.setBindings(projectId, items),
+    );
+    ipcMain.handle("project:listMembers", (_, projectId: number) =>
+      this.listMembers(projectId),
     );
   }
 
@@ -196,6 +200,30 @@ export default class ProjectRepository {
         })),
       });
     }
+  }
+
+  /**
+   * 项目成员列表（joinedAt asc，owner 在前不保证——按加入序），
+   * join user 取昵称（缺昵称回退用户名）
+   */
+  async listMembers(projectId: number): Promise<ProjectMemberItem[]> {
+    const members = await prisma.projectMember.findMany({
+      where: { projectId },
+      orderBy: { joinedAt: "asc" },
+    });
+    const users = await prisma.user.findMany({
+      where: { id: { in: members.map((m) => m.userId) } },
+    });
+    const byId = new Map(users.map((u) => [u.id, u]));
+    return members.map((m) => {
+      const user = byId.get(m.userId);
+      return {
+        userId: m.userId,
+        nickname: user?.nickname || user?.username || "",
+        username: user?.username ?? "",
+        role: m.role,
+      };
+    });
   }
 
   /**

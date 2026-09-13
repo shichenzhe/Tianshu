@@ -8,6 +8,7 @@ import type {
   ProjectBindingInput,
   ProjectCreateParams,
   ProjectDetail,
+  ProjectMemberItem,
   ProjectRecord,
   ProjectUpdateParams,
 } from "../../../../electron/domains/project/project.entity";
@@ -44,5 +45,10 @@ export default abstract class ProjectApi {
     items: ProjectBindingInput[],
   ): Promise<void> {
     return invoke<void>("project:setBindings", projectId, items);
+  }
+
+  /** 项目成员列表（处理人选择器） */
+  static async listMembers(projectId: number): Promise<ProjectMemberItem[]> {
+    return invoke<ProjectMemberItem[]>("project:listMembers", projectId);
   }
 }

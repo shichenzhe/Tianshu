@@ -5,7 +5,7 @@
  * （allSource/local/project）+ 标题搜索 +「新建本地任务」（PlanItemDialog
  * projectId=null，无自定义字段区）。
  * 行式列表：状态徽标（四态配色：进行中 primary-subtle、done muted…）+
- * 标题 + 优先级色点（P0 destructive/P1 primary/P2 muted-foreground）+
+ * 标题 + 优先级色点（P0 destructive/P1 primary/P2 muted-foreground/P3 最弱）+
  * 来源 Badge（本地 → tasks.fromLocal；项目 → 项目名 secondary）+ 相对时间。
  * 行点击：本地任务 → PlanItemDialog 编辑；项目任务 → 跳项目工作台计划 Tab
  * （字符串模板拼 query，目标页只读无保留需求）。行内不提供删除/状态切换
@@ -67,11 +67,12 @@ const STATUS_BADGE_CLASSNAMES: Record<PlanStatus, string> = {
   done: "border-transparent bg-muted text-muted-foreground",
 };
 
-/** 优先级色点：P0 destructive / P1 primary / P2 muted-foreground */
+/** 优先级色点：P0 destructive / P1 primary / P2 muted-foreground / P3 最弱 */
 const PRIORITY_DOT_CLASSNAMES: Record<PlanPriority, string> = {
   P0: "bg-destructive",
   P1: "bg-primary",
   P2: "bg-muted-foreground",
+  P3: "bg-border/40",
 };
 
 /** 范围谓词：assigned=指派给我的，created=我创建的，mine=listMine 已聚合 */

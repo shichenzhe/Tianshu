@@ -188,3 +188,28 @@ export const PROJECT_NAME_EXISTS = "PROJECT_NAME_EXISTS";
  * 错误码：项目不存在
  */
 export const PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND";
+
+/**
+ * 项目成员列表项（计划模块处理人选择器用，子系统 A）
+ */
+export interface ProjectMemberItem {
+  /**
+   * 用户 id
+   */
+  userId: number;
+
+  /**
+   * 昵称（缺省回退用户名）
+   */
+  nickname: string;
+
+  /**
+   * 用户名
+   */
+  username: string;
+
+  /**
+   * 角色：owner | member
+   */
+  role: string;
+}

@@ -1,8 +1,7 @@
 /**
  * 设置面板对话框
- * 左栏固定宽导航（通用/个性化/记忆与进化/快捷键为可用页；外观占位禁用），
- * 右栏按导航切换：通用页四分组（常规/权限/存储/通知）、个性化页整页、
- * 记忆页整页或快捷键页整页
+ * 左栏固定宽导航（通用/个性化/记忆与进化/外观/快捷键五页），右栏按导航
+ * 整页切换：通用页四分组（常规/权限/存储/通知）、其余页各自整页
  */
 
 import { useEffect, useState } from "react";
@@ -31,6 +30,7 @@ import NotificationsGroup from "./NotificationsGroup";
 import ShortcutsGroup from "./ShortcutsGroup";
 import ProfileGroup from "./ProfileGroup";
 import MemoryGroup from "./MemoryGroup";
+import AppearanceSettings from "./AppearanceSettings";
 import {
   useSettingsUiStore,
   type SettingsTab,
@@ -41,17 +41,13 @@ interface SettingsDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/** 导航项（disabled = 占位，敬请期待） */
-const NAV_ITEMS: {
-  id: string;
-  icon: LucideIcon;
-  disabled: boolean;
-}[] = [
-  { id: "general", icon: Settings, disabled: false },
-  { id: "profile", icon: UserRound, disabled: false },
-  { id: "memory", icon: Lightbulb, disabled: false },
-  { id: "appearance", icon: Palette, disabled: true },
-  { id: "shortcuts", icon: Keyboard, disabled: false },
+/** 导航项 */
+const NAV_ITEMS: { id: SettingsTab; icon: LucideIcon }[] = [
+  { id: "general", icon: Settings },
+  { id: "profile", icon: UserRound },
+  { id: "memory", icon: Lightbulb },
+  { id: "appearance", icon: Palette },
+  { id: "shortcuts", icon: Keyboard },
 ];
 
 export default function SettingsDialog({
@@ -84,33 +80,24 @@ export default function SettingsDialog({
         <div className="flex flex-1 overflow-hidden">
           {/* 左栏导航 */}
           <nav className="w-44 shrink-0 border-r border-border/50 p-3 space-y-1">
-            {NAV_ITEMS.map(({ id, icon: Icon, disabled }) => (
+            {NAV_ITEMS.map(({ id, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
-                disabled={disabled}
-                title={disabled ? t("settings:nav.comingSoon") : undefined}
-                onClick={() => setActiveTab(id as SettingsTab)}
+                onClick={() => setActiveTab(id)}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-left transition-colors",
                   id === activeTab
                     ? "bg-primary-subtle text-primary font-medium"
                     : "cursor-pointer hover:bg-primary-subtle hover:text-primary",
-                  disabled &&
-                    "opacity-50 pointer-events-none hover:bg-transparent hover:text-foreground",
                 )}
               >
                 <Icon size={14} className="shrink-0" />
                 <span className="truncate">{t(`settings:nav.${id}`)}</span>
-                {disabled && (
-                  <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-                    {t("settings:nav.comingSoon")}
-                  </span>
-                )}
               </button>
             ))}
           </nav>
-          {/* 右栏：按导航切换通用页/个性化页/记忆页/快捷键页 */}
+          {/* 右栏：按导航整页切换通用页/个性化页/记忆页/外观页/快捷键页 */}
           {activeTab === "shortcuts" ? (
             <div className="flex-1 overflow-y-auto p-6">
               <ShortcutsGroup />
@@ -122,6 +109,10 @@ export default function SettingsDialog({
           ) : activeTab === "memory" ? (
             <div className="flex-1 overflow-y-auto p-6">
               <MemoryGroup />
+            </div>
+          ) : activeTab === "appearance" ? (
+            <div className="flex-1 overflow-y-auto p-6">
+              <AppearanceSettings />
             </div>
           ) : (
             <div className="flex-1 overflow-y-auto p-6 space-y-8">

@@ -2,9 +2,10 @@
 /**
  * SettingsDialog 组件测试（jsdom + testing-library）：
  * - 打开面板：渲染标题与四个分组标题（常规/权限/存储/通知）
- * - 导航占位：外观 disabled；通用/个性化/快捷键可交互（快捷键页
- *   交互见 settings-shortcuts.test.tsx；个性化页控件交互见
- *   personalization-group.test.tsx）
+ * - 导航：五项（含外观）均可交互，外观页可点进渲染预览卡与皮肤网格
+ *   （快捷键页交互见 settings-shortcuts.test.tsx；个性化页控件交互见
+ *   personalization-group.test.tsx；外观页控件交互见
+ *   appearance-settings.test.tsx）
  * - 常规组-语言：下拉选择调用 i18n.changeLanguage；字体：滑条/刻度即时生效
  * - 权限组：初始值一次性载入、开关即时保存与失败回滚、代理三态切换与
  *   自定义表单显隐/校验/保存参数
@@ -168,20 +169,36 @@ describe("SettingsDialog 骨架", () => {
     expect(screen.getByText("settings:groups.notification")).toBeTruthy();
   });
 
-  it("导航占位：外观禁用，通用/个性化/快捷键可交互", async () => {
+  it("导航五项均可交互：外观已解禁（无敬请期待占位）", async () => {
     await renderDialog();
-    for (const id of ["general", "profile", "shortcuts"]) {
+    for (const id of [
+      "general",
+      "profile",
+      "memory",
+      "appearance",
+      "shortcuts",
+    ]) {
       const item = screen.getByRole("button", {
         name: new RegExp(`settings:nav.${id}`),
       }) as HTMLButtonElement;
       expect(item.disabled).toBe(false);
       expect(item.title).toBe("");
     }
-    const appearance = screen.getByRole("button", {
-      name: /settings:nav.appearance/,
-    }) as HTMLButtonElement;
-    expect(appearance.disabled).toBe(true);
-    expect(appearance.title).toBe("settings:nav.comingSoon");
+    expect(screen.queryByText("settings:nav.comingSoon")).toBeNull();
+  });
+
+  it("导航切换：外观页可点击并渲染预览卡与全部皮肤网格", async () => {
+    await renderDialog();
+    fireEvent.click(
+      screen.getByRole("button", { name: /settings:nav.appearance/ }),
+    );
+    expect(screen.getByText("settings:appearance.title")).toBeTruthy();
+    expect(screen.getByText("settings:appearance.allSkins")).toBeTruthy();
+    expect(screen.getByRole("img")).toBeTruthy(); // 主题预览大卡
+    // 皮肤网格十卡（导航五项与弹窗关闭钮不计入）
+    expect(document.querySelectorAll(".grid > button")).toHaveLength(10);
+    // 通用页分组不再渲染（内容区整页切换）
+    expect(screen.queryByText("settings:groups.general")).toBeNull();
   });
 
   it("导航切换：个性化页可点击并渲染 ProfileGroup 四分组标题", async () => {

@@ -12,7 +12,7 @@
  * 任务渲染，本地任务 projectId=null 无该区）。
  * 保存：新建 → create（assigneeId 打开时缺省当前用户、显式「未指派」传
  * null；日期仅项目任务携带、空串归一 null；customFields 仅保留值非空键）、
- * 编辑 → update（全量字段，assigneeId null = 清空指派）
+ * 编辑 → update（全量字段，assigneeId 回填原值——null 保留「未指派」）
  * → invalidate planItems + planItemsMine 双 key
  * → toast(plan:saved) + onSaved + 关闭；失败 toast mapIpcError 且弹窗保留。
  */
@@ -138,7 +138,8 @@ export default function PlanItemDialog({
   const [saving, setSaving] = useState(false);
 
   // 打开时重置/回填：新建取缺省值，编辑回填 item 全字段
-  // （日期取 ISO 前 10 位回填日期框；处理人缺省指派自己）
+  // （日期取 ISO 前 10 位回填日期框；处理人新建缺省指派自己，编辑回填
+  //  原值——assigneeId null 保留「未指派」，不回落当前用户）
   useEffect(() => {
     if (!open) {
       return;
@@ -151,7 +152,7 @@ export default function PlanItemDialog({
     setTagInput("");
     setStartDate(item?.startDate ? item.startDate.slice(0, 10) : "");
     setDueDate(item?.dueDate ? item.dueDate.slice(0, 10) : "");
-    setAssigneeId(item?.assigneeId ?? user.id);
+    setAssigneeId(item ? item.assigneeId : user.id);
     setCustomFields(item ? { ...item.customFields } : {});
     setSaving(false);
   }, [open, item, defaultStatus, defaultPriority, user.id]);

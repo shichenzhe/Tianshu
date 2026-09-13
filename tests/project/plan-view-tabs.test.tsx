@@ -185,6 +185,11 @@ describe("+ 添加视图菜单", () => {
 describe("Tab `...` 操作菜单", () => {
   it("含重命名与删除；点删除 → onRemove(id)", async () => {
     const { onRemove } = renderTabs();
+    // 键盘可达：`...` 触发器除 group-hover 外 focus-visible 亦可见（a11y）
+    const trigger = screen.getAllByRole("button", {
+      name: "project:planView.tabMenu",
+    })[0];
+    expect(trigger.className).toContain("focus-visible:opacity-100");
     const menu = await openTabMenu(0);
     expect(
       within(menu).getByRole("menuitem", { name: "project:planView.rename" }),

@@ -13,8 +13,8 @@
  * - 排期与处理人（三期子系统 A）：编辑回填日期（ISO 前 10 位）/成员昵称；
  *   update 携带 ISO/null 与 assigneeId；日期区与成员 Select 仅项目任务
  *   （本地任务只读「我」、无日期框且 create 不带日期键）；日期为 UTC 零点
- *   存储、往返日历日不偏移；显式「未指派」→ create/update assigneeId null；
- *   优先级含 P3
+ *   存储且回往日历日不偏移；显式「未指派」→ create/update assigneeId null；
+ *   编辑未指派事项回填「未指派」不回落当前用户（保存保留 null）；优先级含 P3
  * - 保存链路：create 参数完整（createdById/projectId/title/status/priority/
  *   tags/customFields，number 型转数字）；本地任务 projectId/customFields 省略；
  *   update 传全量字段；成功 invalidate planItems + planItemsMine 双 key +
@@ -520,6 +520,25 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.update).toHaveBeenCalledWith(
       expect.objectContaining({ assigneeId: null }),
+    );
+  });
+
+  it("编辑未指派事项：回填「未指派」不回落当前用户，保存保留 assigneeId null", async () => {
+    await renderPlanDialog({ item: makeItem({ assigneeId: null }) });
+    // ?? 缺陷回归：编辑打开 assigneeId null 曾被回落当前用户（显示「我」）
+    await waitFor(() =>
+      expect(getAssigneeTrigger().textContent).toContain(
+        "project:plan.unassigned",
+      ),
+    );
+    expect(getAssigneeTrigger().textContent).not.toContain("project:plan.me");
+
+    fireEvent.change(getTitleInput(), { target: { value: "未指派事项" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "未指派事项", assigneeId: null }),
     );
   });
 

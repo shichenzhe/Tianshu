@@ -198,15 +198,18 @@ export function usePlanViews(projectId: number) {
     [activeView, draft, projectId, queryClient, setActiveViewId],
   );
 
-  /** 新建视图（+ 菜单）：type 直接建，激活之 */
+  /** 新建视图（+ 菜单）：type + 类型本地化名（非空名触发后端重名 (n) 后缀，
+   *  同类型多视图 Tab 可区分）；创建成功即激活 */
   const addView = useCallback(
-    async (type: PlanViewType) => {
-      const created = await PlanViewApi.create({ projectId, type }).catch(
-        async (error) => {
-          toast.error(mapIpcError(error));
-          return null;
-        },
-      );
+    async (type: PlanViewType, name?: string) => {
+      const created = await PlanViewApi.create({
+        projectId,
+        type,
+        name,
+      }).catch(async (error) => {
+        toast.error(mapIpcError(error));
+        return null;
+      });
       if (!created) {
         return;
       }

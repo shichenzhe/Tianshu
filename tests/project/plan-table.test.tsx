@@ -576,6 +576,37 @@ describe("PlanPane 视图切换", () => {
   });
 });
 
+describe("PlanPane 添加视图", () => {
+  it("+ 菜单点「看板」→ create 携带类型本地化名（后端重名 (n) 后缀，Tab 可区分）", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+    planViewMock.create
+      .mockReset()
+      .mockResolvedValue({ ...VIEWS[1], id: 12, name: "看板(2)" });
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "project:planView.addView" }),
+      { button: 0, pointerType: "mouse" },
+    );
+    const menu = await screen.findByRole("menu");
+    fireEvent.click(
+      within(menu).getByRole("menuitem", {
+        name: "project:planView.typeKanban",
+      }),
+    );
+
+    // t 返回 key：名称经 PlanPane 以 t(PLAN_VIEW_NAME_KEYS[type]) 传入，
+    // 非空名 → 后端 (n) 后缀机制生效（缺省空名则所有新增 Tab 同名不可区分）
+    await waitFor(() =>
+      expect(planViewMock.create).toHaveBeenCalledWith({
+        projectId: 1,
+        type: "kanban",
+        name: "project:planView.typeKanban",
+      }),
+    );
+  });
+});
+
 describe("PlanPane 删除", () => {
   it("行尾菜单 → AlertDialog 确认 → remove + 双 key 失效", async () => {
     const client = renderPlanPane();

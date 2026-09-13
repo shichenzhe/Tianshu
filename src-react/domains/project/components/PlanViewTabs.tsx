@@ -1,7 +1,7 @@
 /**
  * 视图 Tab 栏（子系统 A spec §UI）：Tab 切换（激活高亮、默认视图 name
- * 空串显示本地化类型名）、+ 添加视图（A 阶段仅看板）、Tab hover ... 菜单
- * （重命名/删除；最后一个视图不显示删除）、isDirty 圆点。
+ * 空串显示本地化类型名）、+ 添加视图（A 阶段仅看板）、Tab hover/键盘聚焦
+ * `...` 菜单（重命名/删除；最后一个视图不显示删除）、isDirty 圆点。
  * 命名弹窗（重命名）内聚在本组件；「保存为新视图」入口在筛选面板（Task 10）。
  */
 import { useState } from "react";
@@ -84,7 +84,7 @@ export default function PlanViewTabs({
                 aria-label={t("project:planView.tabMenu")}
                 className={cn(
                   "ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity",
-                  "hover:bg-primary-subtle hover:text-primary group-hover/tab:opacity-100",
+                  "hover:bg-primary-subtle hover:text-primary group-hover/tab:opacity-100 focus-visible:opacity-100",
                 )}
               >
                 <MoreHorizontal className="h-3 w-3" />

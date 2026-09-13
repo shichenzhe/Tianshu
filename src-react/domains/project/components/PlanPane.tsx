@@ -60,6 +60,7 @@ import type {
   PlanPriority,
   PlanStatus,
 } from "../../../../electron/domains/project/plan-item.entity";
+import { PLAN_VIEW_NAME_KEYS } from "../../../../electron/domains/project/plan-view.entity";
 
 interface PlanPaneProps {
   projectId: number;
@@ -308,12 +309,14 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     <div className="flex h-full min-h-0 flex-col">
       {/* 视图 Tab 栏（视图列表为空——加载失败等——整条不渲染） */}
       {views.length > 0 && (
+        /* 添加视图携带类型本地化名：非空名触发后端重名 (n) 后缀（缺省空名
+           会使所有新增 Tab 同名不可区分） */
         <PlanViewTabs
           views={views}
           activeViewId={activeViewId}
           isDirty={isDirty}
           onSelect={setActiveViewId}
-          onAdd={(type) => void addView(type)}
+          onAdd={(type) => void addView(type, t(PLAN_VIEW_NAME_KEYS[type]))}
           onRename={(id, name) => void renameView(id, name)}
           onRemove={(id) => void removeView(id)}
         />

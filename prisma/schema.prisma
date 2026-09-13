@@ -82,6 +82,9 @@ model workspace {
   writeApprovedAt DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  projectId       Int?
+
+  @@index([projectId], map: "workspace_projectId_index")
 }
 
 model session {

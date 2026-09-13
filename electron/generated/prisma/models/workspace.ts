@@ -29,11 +29,13 @@ export type AggregateWorkspace = {
 export type WorkspaceAvgAggregateOutputType = {
   id: number | null
   defaultModelId: number | null
+  projectId: number | null
 }
 
 export type WorkspaceSumAggregateOutputType = {
   id: number | null
   defaultModelId: number | null
+  projectId: number | null
 }
 
 export type WorkspaceMinAggregateOutputType = {
@@ -45,6 +47,7 @@ export type WorkspaceMinAggregateOutputType = {
   writeApprovedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  projectId: number | null
 }
 
 export type WorkspaceMaxAggregateOutputType = {
@@ -56,6 +59,7 @@ export type WorkspaceMaxAggregateOutputType = {
   writeApprovedAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
+  projectId: number | null
 }
 
 export type WorkspaceCountAggregateOutputType = {
@@ -67,6 +71,7 @@ export type WorkspaceCountAggregateOutputType = {
   writeApprovedAt: number
   createdAt: number
   updatedAt: number
+  projectId: number
   _all: number
 }
 
@@ -74,11 +79,13 @@ export type WorkspaceCountAggregateOutputType = {
 export type WorkspaceAvgAggregateInputType = {
   id?: true
   defaultModelId?: true
+  projectId?: true
 }
 
 export type WorkspaceSumAggregateInputType = {
   id?: true
   defaultModelId?: true
+  projectId?: true
 }
 
 export type WorkspaceMinAggregateInputType = {
@@ -90,6 +97,7 @@ export type WorkspaceMinAggregateInputType = {
   writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
+  projectId?: true
 }
 
 export type WorkspaceMaxAggregateInputType = {
@@ -101,6 +109,7 @@ export type WorkspaceMaxAggregateInputType = {
   writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
+  projectId?: true
 }
 
 export type WorkspaceCountAggregateInputType = {
@@ -112,6 +121,7 @@ export type WorkspaceCountAggregateInputType = {
   writeApprovedAt?: true
   createdAt?: true
   updatedAt?: true
+  projectId?: true
   _all?: true
 }
 
@@ -210,6 +220,7 @@ export type WorkspaceGroupByOutputType = {
   writeApprovedAt: Date | null
   createdAt: Date
   updatedAt: Date
+  projectId: number | null
   _count: WorkspaceCountAggregateOutputType | null
   _avg: WorkspaceAvgAggregateOutputType | null
   _sum: WorkspaceSumAggregateOutputType | null
@@ -244,6 +255,7 @@ export type workspaceWhereInput = {
   writeApprovedAt?: Prisma.DateTimeNullableFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
+  projectId?: Prisma.IntNullableFilter<"workspace"> | number | null
 }
 
 export type workspaceOrderByWithRelationInput = {
@@ -255,6 +267,7 @@ export type workspaceOrderByWithRelationInput = {
   writeApprovedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  projectId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type workspaceWhereUniqueInput = Prisma.AtLeast<{
@@ -269,6 +282,7 @@ export type workspaceWhereUniqueInput = Prisma.AtLeast<{
   writeApprovedAt?: Prisma.DateTimeNullableFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
+  projectId?: Prisma.IntNullableFilter<"workspace"> | number | null
 }, "id">
 
 export type workspaceOrderByWithAggregationInput = {
@@ -280,6 +294,7 @@ export type workspaceOrderByWithAggregationInput = {
   writeApprovedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  projectId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.workspaceCountOrderByAggregateInput
   _avg?: Prisma.workspaceAvgOrderByAggregateInput
   _max?: Prisma.workspaceMaxOrderByAggregateInput
@@ -299,6 +314,7 @@ export type workspaceScalarWhereWithAggregatesInput = {
   writeApprovedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"workspace"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
+  projectId?: Prisma.IntNullableWithAggregatesFilter<"workspace"> | number | null
 }
 
 export type workspaceCreateInput = {
@@ -309,6 +325,7 @@ export type workspaceCreateInput = {
   writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  projectId?: number | null
 }
 
 export type workspaceUncheckedCreateInput = {
@@ -320,6 +337,7 @@ export type workspaceUncheckedCreateInput = {
   writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  projectId?: number | null
 }
 
 export type workspaceUpdateInput = {
@@ -330,6 +348,7 @@ export type workspaceUpdateInput = {
   writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceUncheckedUpdateInput = {
@@ -341,6 +360,7 @@ export type workspaceUncheckedUpdateInput = {
   writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceCreateManyInput = {
@@ -352,6 +372,7 @@ export type workspaceCreateManyInput = {
   writeApprovedAt?: Date | string | null
   createdAt?: Date | string
   updatedAt?: Date | string
+  projectId?: number | null
 }
 
 export type workspaceUpdateManyMutationInput = {
@@ -362,6 +383,7 @@ export type workspaceUpdateManyMutationInput = {
   writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceUncheckedUpdateManyInput = {
@@ -373,6 +395,7 @@ export type workspaceUncheckedUpdateManyInput = {
   writeApprovedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceCountOrderByAggregateInput = {
@@ -384,11 +407,13 @@ export type workspaceCountOrderByAggregateInput = {
   writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type workspaceAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type workspaceMaxOrderByAggregateInput = {
@@ -400,6 +425,7 @@ export type workspaceMaxOrderByAggregateInput = {
   writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type workspaceMinOrderByAggregateInput = {
@@ -411,11 +437,13 @@ export type workspaceMinOrderByAggregateInput = {
   writeApprovedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type workspaceSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type NullableDateTimeFieldUpdateOperationsInput = {
@@ -433,6 +461,7 @@ export type workspaceSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  projectId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -444,6 +473,7 @@ export type workspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  projectId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -455,6 +485,7 @@ export type workspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  projectId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectScalar = {
@@ -466,9 +497,10 @@ export type workspaceSelectScalar = {
   writeApprovedAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  projectId?: boolean
 }
 
-export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "writeApprovedAt" | "createdAt" | "updatedAt", ExtArgs["result"]["workspace"]>
+export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "writeApprovedAt" | "createdAt" | "updatedAt" | "projectId", ExtArgs["result"]["workspace"]>
 
 export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "workspace"
@@ -482,6 +514,7 @@ export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalA
     writeApprovedAt: Date | null
     createdAt: Date
     updatedAt: Date
+    projectId: number | null
   }, ExtArgs["result"]["workspace"]>
   composites: {}
 }
@@ -913,6 +946,7 @@ export interface workspaceFieldRefs {
   readonly writeApprovedAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"workspace", 'DateTime'>
+  readonly projectId: Prisma.FieldRef<"workspace", 'Int'>
 }
     
 

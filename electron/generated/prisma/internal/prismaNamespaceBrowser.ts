@@ -171,7 +171,8 @@ export const WorkspaceScalarFieldEnum = {
   defaultModelId: 'defaultModelId',
   writeApprovedAt: 'writeApprovedAt',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  projectId: 'projectId'
 } as const
 
 export type WorkspaceScalarFieldEnum = (typeof WorkspaceScalarFieldEnum)[keyof typeof WorkspaceScalarFieldEnum]

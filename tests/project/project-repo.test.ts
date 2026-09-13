@@ -53,6 +53,7 @@ const prismaStub = vi.hoisted(() => ({
   message: { create: vi.fn(), deleteMany: vi.fn() },
   workspace: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
   planItem: { deleteMany: vi.fn() },
+  planView: { deleteMany: vi.fn() },
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
   mcpServer: { findMany: vi.fn() },
@@ -260,6 +261,9 @@ describe("ProjectRepository.remove", () => {
     });
     expect(prismaStub.project.delete).toHaveBeenCalledWith({
       where: { id: 11 },
+    });
+    expect(prismaStub.planView.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
     });
   });
 

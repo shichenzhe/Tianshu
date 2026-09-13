@@ -145,6 +145,8 @@ export default class ProjectRepository {
     await this.removeAssetWorkspace(id);
     // 级联清项目计划事项（projectId 精确匹配，本地任务 null 不受影响，三期 spec §3.1）
     await prisma.planItem.deleteMany({ where: { projectId: id } });
+    // 级联清项目视图配置（子系统 A）
+    await prisma.planView.deleteMany({ where: { projectId: id } });
     const sessions = await prisma.session.findMany({
       where: { projectId: id },
       select: { id: true },

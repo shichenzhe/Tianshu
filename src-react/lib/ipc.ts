@@ -130,6 +130,12 @@ export type IPCChannel =
   | "planItem:move"
   | "planItem:fields:list"
   | "planItem:fields:save"
+  // 计划视图（三期子系统 A）：5 通道 Task 4 注册 handler
+  | "planView:list"
+  | "planView:create"
+  | "planView:update"
+  | "planView:delete"
+  | "planView:reorder"
   // 个性化记忆（记忆与进化）
   | "personalization:applyMemoryInstruction"
   | "personalization:compileMemory"

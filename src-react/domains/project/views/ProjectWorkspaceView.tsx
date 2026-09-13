@@ -2,9 +2,9 @@
  * 项目工作台 /module/project/:projectId（spec §6.3）：
  * 左列 Tab 容器（动态/计划/任务/资产，读写 ?tab= 缺省 activity）+ 筛选
  * 下拉（与我相关/成员动态——单成员等价，UI 预留）+ 配置面板开关；
- * 动态 Tab 渲染 ActivityPane（复用 ChatPane），其余 Tab 居中空态；
- * 右列 ConfigPanel（w-80 border-l，可收起）。getDetail 抛
- * PROJECT_NOT_FOUND → toast + 跳回 /module/project。
+ * 动态/资产 Tab 分别渲染 ActivityPane（复用 ChatPane）/AssetsPane，
+ * 计划/任务 Tab 居中空态；右列 ConfigPanel（w-80 border-l，可收起）。
+ * getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project。
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import ProjectApi from "../api/project.api";
 import ActivityPane from "../components/ActivityPane";
+import AssetsPane from "../components/AssetsPane";
 import ConfigPanel from "../components/ConfigPanel";
 
 const HUB_ROUTE = "/module/project";
@@ -205,9 +206,11 @@ export default function ProjectWorkspaceView() {
           </div>
         </header>
 
-        {/* 内容区：动态 Tab 渲染动态流，其余 Tab 居中空态（二期/三期扩展点） */}
+        {/* 内容区：动态/资产 Tab 渲染对应面板，计划/任务 Tab 居中空态（三期扩展点） */}
         {tab === "activity" ? (
           <ActivityPane detail={detailQuery.data} />
+        ) : tab === "assets" ? (
+          <AssetsPane projectId={detailQuery.data.project.id} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle text-primary">

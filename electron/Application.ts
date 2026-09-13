@@ -18,6 +18,7 @@ import { SkillRepository } from "./domains/ai/skill/skill.repo";
 import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
 import ProjectRepository from "./domains/project/project.repo";
+import AssetRepository from "./domains/project/asset.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
@@ -133,6 +134,9 @@ export default class Application {
     // 项目模块：repo 供 chat 组装项目会话上下文（项目指令+挂载专家），
     // 须先于 ChatService 实例化传入（单实例，避免 IPC 重复注册）
     const projectRepo = new ProjectRepository();
+    // 资产仓储（二期 T3）：复用 projectRepo.ensureAssetWorkspace 定位资产根，
+    // 注册 projectAsset:list/createFolder/rename/delete IPC（upload 等 T4 补）
+    new AssetRepository(projectRepo);
     new ChatService(sessionRepo, skillRepo, projectRepo);
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）

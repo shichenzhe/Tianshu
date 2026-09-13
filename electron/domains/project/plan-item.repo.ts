@@ -1,8 +1,10 @@
 /**
  * 计划事项仓储（项目模块三期 spec §3.2）：单表双视图聚合——
  * list（项目维度，计划 Tab 数据源）/ listMine（个人维度，任务 Tab 数据源）、
- * create（title trim + 枚举校验 + sortOrder 置目标状态列尾）、
- * update（局部更新；status 变更重算目标列 sortOrder）/ move（看板拖拽落点）/ remove。
+ * create（title trim + 枚举校验 + 排期/来源透传 + 处理人成员资格校验 +
+ * sortOrder 置目标状态列尾）、
+ * update（局部更新；status 变更重算目标列 sortOrder；处理人须为项目成员）/
+ * move（看板拖拽落点）/ remove。
  * tags/customFields 为 JSON 字符串列，读写经 parseJsonColumn/stringifyColumn 容错。
  * fields:list / fields:save 自定义字段定义（option 域复用，spec §3.2）。
  */
@@ -12,12 +14,14 @@ import {
   PLAN_FIELD_TYPES,
   PLAN_ITEM_NOT_FOUND,
   PLAN_PRIORITIES,
+  PLAN_SOURCES,
   PLAN_STATUSES,
   type PlanFieldDef,
   type PlanFieldType,
   type PlanItemCreateParams,
   type PlanItemMoveParams,
   type PlanItemRecord,
+  type PlanItemSource,
   type PlanItemUpdateParams,
   type PlanPriority,
   type PlanStatus,
@@ -122,7 +126,9 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 创建事项：title trim 非空 + 枚举校验，sortOrder 置目标状态列尾（max+1）；
+   * 创建事项：title trim 非空 + 枚举校验（status/priority/source），
+   * 指派时校验处理人是该项目成员；sortOrder 置目标状态列尾（max+1），
+   * startDate/dueDate ISO 透传、source 缺省 manual；
    * 本地任务（projectId 缺省）与项目任务按 projectId 值分列独立计数
    * @param params 创建参数
    */
@@ -133,6 +139,11 @@ export default class PlanItemRepository {
     }
     this.ensureEnumOrThrow(params.status, PLAN_STATUSES, "无效的状态");
     this.ensureEnumOrThrow(params.priority, PLAN_PRIORITIES, "无效的优先级");
+    this.ensureEnumOrThrow(params.source, PLAN_SOURCES, "无效的来源");
+    await this.ensureAssigneeIsMember(
+      params.projectId ?? null,
+      params.assigneeId,
+    );
     const status = params.status ?? "not_started";
     const row = await prisma.planItem.create({
       data: {
@@ -141,6 +152,9 @@ export default class PlanItemRepository {
         status,
         priority: params.priority ?? "P1",
         assigneeId: params.assigneeId ?? null,
+        startDate: this.toDateOrNull(params.startDate),
+        dueDate: this.toDateOrNull(params.dueDate),
+        source: params.source ?? "manual",
         tags: this.stringifyColumn(params.tags),
         customFields: this.stringifyColumn(params.customFields),
         sortOrder: await this.nextSortOrder(params.projectId ?? null, status),
@@ -152,8 +166,9 @@ export default class PlanItemRepository {
 
   /**
    * 局部更新：仅写入传入键（未传字段不覆盖）；title trim 非空 + 枚举校验；
-   * status 变更时重算目标状态列尾 sortOrder（nextSortOrder），避免沿用旧列
-   * 序号——关闭弹窗编辑等裸 update 路径绕过 move 通道造成的落列错位
+   * 指派时校验处理人是该项目成员；status 变更时重算目标状态列尾
+   * sortOrder（nextSortOrder），避免沿用旧列序号——关闭弹窗编辑等裸
+   * update 路径绕过 move 通道造成的落列错位
    * @param params 更新参数
    */
   async update(params: PlanItemUpdateParams): Promise<void> {
@@ -162,6 +177,7 @@ export default class PlanItemRepository {
       throw new Error(PLAN_ITEM_NOT_FOUND);
     }
     this.ensureUpdatable(params);
+    await this.ensureAssigneeIsMember(row.projectId, params.assigneeId);
     const data = this.buildUpdateData(params);
     if (params.status !== undefined && params.status !== row.status) {
       data.sortOrder = await this.nextSortOrder(row.projectId, params.status);
@@ -251,13 +267,30 @@ export default class PlanItemRepository {
     }
   }
 
-  /** 局部更新参数校验：title trim 非空 + status/priority 枚举 */
+  /** 局部更新参数校验：title trim 非空 + status/priority/source 枚举 */
   private ensureUpdatable(params: PlanItemUpdateParams): void {
     if (params.title !== undefined && !params.title.trim()) {
       throw new Error("标题不能为空");
     }
     this.ensureEnumOrThrow(params.status, PLAN_STATUSES, "无效的状态");
     this.ensureEnumOrThrow(params.priority, PLAN_PRIORITIES, "无效的优先级");
+    this.ensureEnumOrThrow(params.source, PLAN_SOURCES, "无效的来源");
+  }
+
+  /** 指派校验：assigneeId 非空时必须是该项目成员（本地任务无项目，跳过校验） */
+  private async ensureAssigneeIsMember(
+    projectId: number | null,
+    assigneeId: number | null | undefined,
+  ): Promise<void> {
+    if (projectId === null || assigneeId === undefined || assigneeId === null) {
+      return;
+    }
+    const member = await prisma.projectMember.findFirst({
+      where: { projectId, userId: assigneeId },
+    });
+    if (!member) {
+      throw new Error("处理人必须是项目成员");
+    }
   }
 
   /**
@@ -336,7 +369,10 @@ export default class PlanItemRepository {
     });
   }
 
-  /** 组装局部更新 data：只含传入键（assigneeId null = 显式清空指派） */
+  /**
+   * 组装局部更新 data：只含传入键（assigneeId null = 显式清空指派；
+   * startDate/dueDate 传 null = 清空日期，未传不写该列）
+   */
   private buildUpdateData(
     params: PlanItemUpdateParams,
   ): Record<string, unknown> {
@@ -351,12 +387,30 @@ export default class PlanItemRepository {
       ...(params.customFields !== undefined && {
         customFields: this.stringifyColumn(params.customFields),
       }),
+      ...(params.source !== undefined && { source: params.source }),
+      ...(params.startDate !== undefined && {
+        startDate: this.toDateOrNull(params.startDate),
+      }),
+      ...(params.dueDate !== undefined && {
+        dueDate: this.toDateOrNull(params.dueDate),
+      }),
     };
   }
 
   /** JSON 列写入序列化：undefined 不写该列（留空），否则 JSON.stringify */
   private stringifyColumn(value: unknown): string | undefined {
     return value !== undefined ? JSON.stringify(value) : undefined;
+  }
+
+  /** ISO 字符串 → Date；null → null（清空）；undefined → undefined（不写该列） */
+  private toDateOrNull(
+    value: string | null | undefined,
+  ): Date | null | undefined {
+    return value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : new Date(value);
   }
 
   /** 目标状态列下一个列内序：取该列（projectId 精确匹配，null 为本地任务列）最大值 +1 */
@@ -383,6 +437,9 @@ export default class PlanItemRepository {
       assigneeId: row.assigneeId,
       tags: parseJsonColumn(row.tags, [], Array.isArray),
       customFields: parseJsonColumn(row.customFields, {}, isPlainObject),
+      startDate: this.toIso(row.startDate),
+      dueDate: this.toIso(row.dueDate),
+      source: row.source as PlanItemSource,
       sortOrder: row.sortOrder,
       createdById: row.createdById,
       createdAt: this.toIso(row.createdAt),

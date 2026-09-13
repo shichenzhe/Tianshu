@@ -17,10 +17,16 @@ export const PLAN_STATUSES = [
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 
 /**
- * 事项优先级枚举：P0 最高 / P1 默认 / P2 最低
+ * 事项优先级枚举：P0 最高 / P1 默认 / P2 低 / P3 最低
  */
-export const PLAN_PRIORITIES = ["P0", "P1", "P2"] as const;
+export const PLAN_PRIORITIES = ["P0", "P1", "P2", "P3"] as const;
 export type PlanPriority = (typeof PLAN_PRIORITIES)[number];
+
+/**
+ * 事项来源枚举：manual 手动创建 / ai AI 生成 / template 模版导入
+ */
+export const PLAN_SOURCES = ["manual", "ai", "template"] as const;
+export type PlanItemSource = (typeof PLAN_SOURCES)[number];
 
 /**
  * 计划事项记录（DateTime 已转 ISO 字符串，tags/customFields 已解析 JSON 列）
@@ -65,6 +71,21 @@ export interface PlanItemRecord {
    * 自定义字段值（DB JSON 字符串列解析；畸形容错空对象）
    */
   customFields: Record<string, string | number>;
+
+  /**
+   * 开始日期（ISO，空串 = 无）
+   */
+  startDate: string;
+
+  /**
+   * 截止日期（ISO，空串 = 无）
+   */
+  dueDate: string;
+
+  /**
+   * 来源
+   */
+  source: PlanItemSource;
 
   /**
    * 列内顺序（看板拖拽持久化）
@@ -130,6 +151,21 @@ export interface PlanItemCreateParams {
    * 自定义字段值
    */
   customFields?: Record<string, string | number>;
+
+  /**
+   * 来源（缺省 manual）
+   */
+  source?: PlanItemSource;
+
+  /**
+   * ISO 日期；null = 清空（仅 update）
+   */
+  startDate?: string | null;
+
+  /**
+   * ISO 日期；null = 清空（仅 update）
+   */
+  dueDate?: string | null;
 }
 
 /**
@@ -170,6 +206,21 @@ export interface PlanItemUpdateParams {
    * 新自定义字段值（全量替换）
    */
   customFields?: Record<string, string | number>;
+
+  /**
+   * 新来源
+   */
+  source?: PlanItemSource;
+
+  /**
+   * 新开始日期（ISO）；null = 清空
+   */
+  startDate?: string | null;
+
+  /**
+   * 新截止日期（ISO）；null = 清空
+   */
+  dueDate?: string | null;
 }
 
 /**

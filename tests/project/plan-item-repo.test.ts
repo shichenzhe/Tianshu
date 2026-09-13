@@ -6,7 +6,9 @@
  * move 拖拽落点、delete、toRecord JSON 列容错（畸形 → 空数组/空对象）；
  * fields:list/save 自定义字段（option 域 planFields:<projectId> 行、畸形行丢弃、
  * 空名/非法类型/重名拒绝、deleteMany+createMany 全量替换、消失字段行值逐行清理
- * + 失败收集汇总抛出）、8 通道自注册（fields 两通道补齐）。
+ * + 失败收集汇总抛出）、8 通道自注册（fields 两通道补齐）；
+ * 字段扩展（子系统 A）：source/startDate/dueDate 透传与 null 清空、
+ * 非法 source 拒绝、处理人必须是项目成员校验。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用 project-repo.test.ts 模式。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,6 +33,9 @@ const prismaStub = vi.hoisted(() => ({
     deleteMany: vi.fn(),
     createMany: vi.fn(),
   },
+  projectMember: {
+    findFirst: vi.fn(),
+  },
 }));
 
 vi.mock("../../electron/commons/prisma-client", () => ({
@@ -53,6 +58,9 @@ const projectRow = {
   assigneeId: 1,
   tags: JSON.stringify(["前端", "联调"]),
   customFields: JSON.stringify({ 工作量: 3 }),
+  startDate: null,
+  dueDate: null,
+  source: "manual",
   sortOrder: 2,
   createdById: 1,
   createdAt: now,
@@ -89,6 +97,7 @@ describe("PlanItemRepository.create", () => {
   it("正常创建（全参）→ title 去首尾空白、tags/customFields JSON 序列化落库、sortOrder=同列 max+1", async () => {
     prismaStub.planItem.findFirst.mockResolvedValue({ sortOrder: 5 });
     prismaStub.planItem.create.mockResolvedValue(projectRow);
+    prismaStub.projectMember.findFirst.mockResolvedValue({ id: 1 });
 
     await repo.create({
       createdById: 1,
@@ -101,6 +110,9 @@ describe("PlanItemRepository.create", () => {
       customFields: { 工作量: 3 },
     });
 
+    expect(prismaStub.projectMember.findFirst).toHaveBeenCalledWith({
+      where: { projectId: 11, userId: 1 },
+    });
     expect(prismaStub.planItem.findFirst).toHaveBeenCalledWith({
       where: { projectId: 11, status: "in_progress" },
       orderBy: { sortOrder: "desc" },
@@ -113,6 +125,7 @@ describe("PlanItemRepository.create", () => {
         status: "in_progress",
         priority: "P0",
         assigneeId: 1,
+        source: "manual",
         tags: JSON.stringify(["前端", "联调"]),
         customFields: JSON.stringify({ 工作量: 3 }),
         sortOrder: 6,
@@ -145,6 +158,7 @@ describe("PlanItemRepository.create", () => {
         status: "not_started",
         priority: "P1",
         assigneeId: null,
+        source: "manual",
         tags: undefined,
         customFields: undefined,
         sortOrder: 1,
@@ -179,6 +193,9 @@ describe("PlanItemRepository.list", () => {
         assigneeId: 1,
         tags: ["前端", "联调"],
         customFields: { 工作量: 3 },
+        startDate: "",
+        dueDate: "",
+        source: "manual",
         sortOrder: 2,
         createdById: 1,
         createdAt: now.toISOString(),
@@ -298,7 +315,7 @@ describe("PlanItemRepository.update", () => {
       repo.update({ id: 1, status: "cancelled" as never }),
     ).rejects.toThrow("无效的状态");
     await expect(
-      repo.update({ id: 1, priority: "P3" as never }),
+      repo.update({ id: 1, priority: "P9" as never }),
     ).rejects.toThrow("无效的优先级");
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
@@ -549,5 +566,56 @@ describe("PlanItemRepository IPC 注册", () => {
         expect.any(Function),
       );
     }
+  });
+});
+
+describe("PlanItemRepository.字段扩展（子系统 A）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("create 透传 source/startDate/dueDate：ISO 字符串转 Date，缺省 source=manual", async () => {
+    prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
+    await repo.create({
+      createdById: 1,
+      projectId: 11,
+      title: "t",
+      startDate: "2026-09-14T00:00:00.000Z",
+      dueDate: "2026-09-20T00:00:00.000Z",
+    });
+    expect(prismaStub.planItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        source: "manual",
+        startDate: new Date("2026-09-14T00:00:00.000Z"),
+        dueDate: new Date("2026-09-20T00:00:00.000Z"),
+      }),
+    });
+  });
+
+  it("create 非法 source → 抛「无效的来源」", async () => {
+    await expect(
+      repo.create({
+        createdById: 1,
+        title: "t",
+        source: "magic" as never,
+      }),
+    ).rejects.toThrow("无效的来源");
+  });
+
+  it("update 传 null 清空 startDate；合法 assigneeId（项目成员）通过", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.projectMember.findFirst.mockResolvedValue({ id: 1 });
+    await repo.update({ id: 1, startDate: null, assigneeId: 7 });
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { startDate: null, assigneeId: 7 },
+    });
+  });
+
+  it("update 指派非项目成员 → 抛「处理人必须是项目成员」不落库", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.projectMember.findFirst.mockResolvedValue(null);
+    await expect(repo.update({ id: 1, assigneeId: 99 })).rejects.toThrow(
+      "处理人必须是项目成员",
+    );
+    expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
 });

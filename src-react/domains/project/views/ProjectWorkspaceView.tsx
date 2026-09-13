@@ -2,8 +2,9 @@
  * 项目工作台 /module/project/:projectId（spec §6.3）：
  * 左列 Tab 容器（动态/计划/任务/资产，读写 ?tab= 缺省 activity）+ 筛选
  * 下拉（与我相关/成员动态——单成员等价，UI 预留）+ 配置面板开关；
- * 动态/资产 Tab 分别渲染 ActivityPane（复用 ChatPane）/AssetsPane，
- * 计划/任务 Tab 居中空态；右列 ConfigPanel（w-80 border-l，可收起）。
+ * 动态/计划/资产 Tab 分别渲染 ActivityPane（复用 ChatPane）/PlanPane/
+ * AssetsPane，任务 Tab 居中空态（三期扩展点）；右列 ConfigPanel（w-80
+ * border-l，可收起）。Tab 切换为合并式 query 写入（保留 ?view= 等既有参数）。
  * getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project。
  */
 import { useEffect, useState } from "react";
@@ -35,6 +36,7 @@ import ProjectApi from "../api/project.api";
 import ActivityPane from "../components/ActivityPane";
 import AssetsPane from "../components/AssetsPane";
 import ConfigPanel from "../components/ConfigPanel";
+import PlanPane from "../components/PlanPane";
 
 const HUB_ROUTE = "/module/project";
 
@@ -106,7 +108,13 @@ export default function ProjectWorkspaceView() {
 
   const switchTab = (value: WorkspaceTab) => {
     if (value !== tab) {
-      setSearchParams({ tab: value });
+      setSearchParams(
+        (prev) => {
+          prev.set("tab", value);
+          return prev;
+        },
+        { replace: true },
+      );
     }
   };
 
@@ -206,9 +214,14 @@ export default function ProjectWorkspaceView() {
           </div>
         </header>
 
-        {/* 内容区：动态/资产 Tab 渲染对应面板，计划/任务 Tab 居中空态（三期扩展点） */}
+        {/* 内容区：动态/计划/资产 Tab 渲染对应面板，任务 Tab 居中空态（三期扩展点） */}
         {tab === "activity" ? (
           <ActivityPane detail={detailQuery.data} />
+        ) : tab === "plan" ? (
+          <PlanPane
+            key={detailQuery.data.project.id}
+            projectId={detailQuery.data.project.id}
+          />
         ) : tab === "assets" ? (
           <AssetsPane
             key={detailQuery.data.project.id}

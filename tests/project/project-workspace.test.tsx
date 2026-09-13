@@ -6,7 +6,8 @@
  * mock 替代，MemoryRouter + LocationProbe 断言 ?tab 读写）：
  * - 默认动态 Tab（?tab 缺省）：ChatPane mock 渲染，且收到 valid 过滤后的
  *   boundAssistantIds / boundSkillNames（失效挂载不下发给输入过滤集）
- * - 点击计划 Tab → URL 变 ?tab=plan，渲染 comingSoon 空态且 ChatPane 卸载
+ * - 点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane（计划空态）且 ChatPane 卸载
+ * - switchTab 合并式写入（回归）：?view= 不随 Tab 切换丢失
  * - getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project
  * - 配置面板：点击收起按钮隐藏面板，再点展开
  * - 失效挂载语义（Task 6 裁定）：灰显 + invalid 徽标 + X 移除直接 setBindings；
@@ -59,6 +60,14 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 
 vi.mock("@/domains/project/api/project.api", () => ({
   default: { getDetail: vi.fn(), update: vi.fn(), setBindings: vi.fn() },
+}));
+
+// 计划 Tab（PlanPane）数据源：list/listFields，key 工厂形状与真实实现一致
+vi.mock("@/domains/project/api/plan-item.api", () => ({
+  default: { list: vi.fn(), listFields: vi.fn() },
+  PLAN_ITEMS_KEY: (projectId: number) => ["planItems", projectId],
+  PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
+  PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
 }));
 
 // 动态流能力查询（ActivityPane）：provider 非空避免落入服务商引导卡
@@ -118,6 +127,7 @@ vi.mock("../../src-react/domains/ai/chat/components/MarkdownView", async () => {
 
 import ProjectWorkspaceView from "../../src-react/domains/project/views/ProjectWorkspaceView";
 import ProjectApi from "@/domains/project/api/project.api";
+import PlanItemApi from "@/domains/project/api/plan-item.api";
 import { ProviderApi } from "@/domains/ai/api/provider.api";
 import { ModelApi } from "@/domains/ai/api/model.api";
 import { AssistantApi } from "@/domains/ai/api/assistant.api";
@@ -211,6 +221,8 @@ function LocationProbe() {
 
 beforeEach(() => {
   vi.mocked(ProjectApi.getDetail).mockReset().mockResolvedValue(DETAIL);
+  vi.mocked(PlanItemApi.list).mockReset().mockResolvedValue([]);
+  vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue([]);
   vi.mocked(ProjectApi.update).mockReset().mockResolvedValue(undefined);
   vi.mocked(ProjectApi.setBindings).mockReset().mockResolvedValue(undefined);
   vi.mocked(ProviderApi.list)
@@ -304,7 +316,7 @@ describe("Tab 容器", () => {
     expect(chatPaneProps.current?.boundSkillNames).toEqual(["联网搜索"]);
   });
 
-  it("点击计划 Tab → URL 变 ?tab=plan，显示占位文案且 ChatPane 卸载", async () => {
+  it("点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane 空态且 ChatPane 卸载", async () => {
     renderWorkspace();
     await screen.findByText("chat-pane-mock");
 
@@ -312,15 +324,69 @@ describe("Tab 容器", () => {
       screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
     );
 
-    expect(
-      await screen.findByText("project:workspace.comingSoon"),
-    ).toBeTruthy();
+    expect(await screen.findByText("project:plan.empty")).toBeTruthy();
     expect(screen.queryByText("chat-pane-mock")).toBeNull();
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
         "/module/project/1?tab=plan",
       ),
     );
+  });
+
+  it("switchTab 合并式写入：切 Tab 不丢 ?view=（回归）", async () => {
+    vi.mocked(PlanItemApi.list).mockResolvedValue([
+      {
+        id: 11,
+        projectId: 1,
+        title: "需求梳理",
+        status: "not_started",
+        priority: "P1",
+        assigneeId: 1,
+        tags: [],
+        customFields: {},
+        sortOrder: 0,
+        createdById: 1,
+        createdAt: "2026-09-01T00:00:00.000Z",
+        updatedAt: "2026-09-01T00:00:00.000Z",
+      },
+    ]);
+    renderWorkspace();
+    await screen.findByText("chat-pane-mock");
+
+    // 计划 Tab → 切看板视图：?tab=plan&view=kanban
+    fireEvent.click(
+      screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "project:plan.viewKanban" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/project/1?tab=plan&view=kanban",
+      ),
+    );
+    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
+
+    // 切动态 Tab：只改 tab，view 保留（合并式写入）
+    fireEvent.click(
+      screen.getByRole("tab", { name: "project:workspace.tabActivity" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/project/1?tab=activity&view=kanban",
+      ),
+    );
+
+    // 切回计划 Tab：仍处看板视图
+    fireEvent.click(
+      screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/project/1?tab=plan&view=kanban",
+      ),
+    );
+    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
   });
 
   it("getDetail 抛 PROJECT_NOT_FOUND → toast 提示并跳回 /module/project", async () => {

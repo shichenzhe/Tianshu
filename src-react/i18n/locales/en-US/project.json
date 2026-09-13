@@ -90,7 +90,8 @@
     "quickAddPlaceholder": "Type a title and press Enter to add",
     "titleRequired": "Please enter a title",
     "titleTooLong": "Title cannot exceed 100 characters",
-    "tagPlaceholder": "Type a tag and press Enter to add"
+    "tagPlaceholder": "Type a tag and press Enter to add",
+    "deleted": "Deleted"
   },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",

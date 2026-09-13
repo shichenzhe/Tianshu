@@ -90,7 +90,8 @@
     "quickAddPlaceholder": "输入标题，回车快速创建",
     "titleRequired": "请输入标题",
     "titleTooLong": "标题不能超过 100 字",
-    "tagPlaceholder": "输入标签，回车添加"
+    "tagPlaceholder": "输入标签，回车添加",
+    "deleted": "已删除"
   },
   "tasks": {
     "privateTip": "仅自己可见，不同步到项目",

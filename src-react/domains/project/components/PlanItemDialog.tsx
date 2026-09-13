@@ -62,27 +62,27 @@ const NO_PROJECT_CACHE_KEY = -1;
 
 const TITLE_MAX_LENGTH = 100;
 
-const STATUS_OPTIONS: PlanStatus[] = [
+export const STATUS_OPTIONS: PlanStatus[] = [
   "not_started",
   "in_progress",
   "paused",
   "done",
 ];
-const STATUS_LABEL_KEYS: Record<PlanStatus, string> = {
+export const STATUS_LABEL_KEYS: Record<PlanStatus, string> = {
   not_started: "project:plan.statusNotStarted",
   in_progress: "project:plan.statusInProgress",
   paused: "project:plan.statusPaused",
   done: "project:plan.statusDone",
 };
 
-const PRIORITY_OPTIONS: PlanPriority[] = ["P0", "P1", "P2"];
-const PRIORITY_LABEL_KEYS: Record<PlanPriority, string> = {
+export const PRIORITY_OPTIONS: PlanPriority[] = ["P0", "P1", "P2"];
+export const PRIORITY_LABEL_KEYS: Record<PlanPriority, string> = {
   P0: "project:plan.priorityP0",
   P1: "project:plan.priorityP1",
   P2: "project:plan.priorityP2",
 };
 /** 优先级徽章配色：P0 警示 / P1 主题色 / P2 弱化 */
-const PRIORITY_BADGE_VARIANTS: Record<
+export const PRIORITY_BADGE_VARIANTS: Record<
   PlanPriority,
   "destructive" | "default" | "secondary"
 > = {

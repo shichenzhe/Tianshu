@@ -1,0 +1,522 @@
+// @vitest-environment jsdom
+/**
+ * PlanPane / PlanTableView 计划表格视图测试（jsdom + testing-library，mock 骨架
+ * 同 tests/project/plan-item-dialog.test.tsx：t 返回 key、sonner、Radix 桩、
+ * QueryClientProvider；PlanItemApi 八静态方法 + key 工厂 + useUserStore 整体
+ * mock；MemoryRouter + LocationProbe 捕获 ?view= 写入）：
+ * - 表格渲染全列（标题/状态/处理人/优先级/标签 + 动态自定义字段列与缺值 --）
+ * - 行内状态 Select 切换走 move 通道（id + 目标状态 + sortOrder=目标列 max+1，
+ *   不调 update）；优先级切换走 update({ id, priority })（不调 move）
+ * - 快速新增回车 → create（createdById/projectId/title 缺省态）+ 双 key 失效；
+ *   空标题回车忽略
+ * - 筛选组合：标签/状态/优先级多选 checkbox 跨维度 AND 过滤；搜索标题包含过滤
+ * - 视图切换：?view= 写入保留 ?tab=plan（URL 断言）；非法 view 回落表格
+ * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
+ * - 空态：无任何事项居中 plan.empty
+ */
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+
+// Radix Select/DropdownMenu 在 jsdom 的最小桩：popper 定位依赖 ResizeObserver，
+// 触发器 pointerDown 分支依赖 hasPointerCapture/scrollIntoView
+beforeAll(() => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  window.HTMLElement.prototype.scrollIntoView = () => {};
+  window.HTMLElement.prototype.hasPointerCapture = () => false;
+  window.HTMLElement.prototype.releasePointerCapture = () => {};
+});
+
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-i18next")>();
+  return { ...actual, useTranslation: () => ({ t: (key: string) => key }) };
+});
+
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toastMock }));
+
+// mapIpcError 依赖 @/i18n 实例，最小桩避免拉起完整 i18n 栈
+vi.mock("@/i18n", () => ({
+  default: { t: (key: string) => key },
+}));
+
+// PlanItemApi 静态类 + 三个 query key 工厂整体 mock（key 形状与真实实现一致）
+vi.mock("@/domains/project/api/plan-item.api", () => ({
+  default: {
+    list: vi.fn(),
+    listMine: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    move: vi.fn(),
+    listFields: vi.fn(),
+    saveFields: vi.fn(),
+  },
+  PLAN_ITEMS_KEY: (projectId: number) => ["planItems", projectId],
+  PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
+  PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
+}));
+
+vi.mock("@/domains/user/store/user.store", () => ({
+  useUserStore: (selector?: (state: { user: { id: number } }) => unknown) =>
+    selector ? selector({ user: { id: 1 } }) : { user: { id: 1 } },
+}));
+
+import PlanPane from "../../src-react/domains/project/components/PlanPane";
+import PlanItemApi from "@/domains/project/api/plan-item.api";
+import type {
+  PlanFieldDef,
+  PlanItemRecord,
+} from "../../../electron/domains/project/plan-item.entity";
+
+const FIELD_DEFS: PlanFieldDef[] = [
+  { name: "里程碑", type: "text" },
+  { name: "预算", type: "number" },
+];
+
+const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
+  id: 1,
+  projectId: 1,
+  title: "事项",
+  status: "not_started",
+  priority: "P1",
+  assigneeId: 1,
+  tags: [],
+  customFields: {},
+  sortOrder: 0,
+  createdById: 1,
+  createdAt: "2026-09-01T00:00:00.000Z",
+  updatedAt: "2026-09-01T00:00:00.000Z",
+  ...overrides,
+});
+
+/**
+ * 三行覆盖度：需求梳理（in_progress/P0/设计/M1）、接口联调（done/P2/研发/全字段）、
+ * 编写文档（not_started/P1/无标签/无自定义值 → 缺值 -- 用例）
+ */
+const ITEMS: PlanItemRecord[] = [
+  makeItem({
+    id: 11,
+    title: "需求梳理",
+    status: "in_progress",
+    priority: "P0",
+    tags: ["设计"],
+    customFields: { 里程碑: "M1" },
+    sortOrder: 1,
+  }),
+  makeItem({
+    id: 12,
+    title: "接口联调",
+    status: "done",
+    priority: "P2",
+    tags: ["研发"],
+    customFields: { 里程碑: "M2", 预算: 100 },
+    sortOrder: 3,
+  }),
+  makeItem({
+    id: 13,
+    title: "编写文档",
+    status: "not_started",
+    priority: "P1",
+  }),
+];
+
+/** 位置探针：path + search 读写断言（?view= 切换） */
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
+}
+
+interface PlanPaneRenderProps {
+  initialEntry?: string;
+}
+
+/** 渲染计划面板（MemoryRouter 内 ?tab=plan 语境，返回 client 供失效断言） */
+function renderPlanPane({
+  initialEntry = "/module/project/1?tab=plan",
+}: PlanPaneRenderProps = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <LocationProbe />
+        <Routes>
+          <Route
+            path="/module/project/:projectId"
+            element={<PlanPane projectId={1} />}
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  return client;
+}
+
+/** Radix Select 选项切换：mouse pointerDown 展开 + click 选中 */
+async function selectOption(trigger: HTMLElement, optionName: string) {
+  fireEvent.pointerDown(trigger, {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
+  fireEvent.click(await screen.findByRole("option", { name: optionName }));
+}
+
+/**
+ * 打开筛选下拉并勾选一项：多选菜单 onSelect preventDefault 保持展开，
+ * 勾选后 Escape 关闭（模态展开期其余控件 aria-hidden，需先关再继续断言）
+ */
+async function checkFilterItem(triggerName: string, itemName: string) {
+  fireEvent.pointerDown(screen.getByRole("button", { name: triggerName }));
+  const menu = await screen.findByRole("menu");
+  fireEvent.click(
+    within(menu).getByRole("menuitemcheckbox", { name: itemName }),
+  );
+  fireEvent.keyDown(menu, { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+}
+
+/** 含指定标题文本的表格行 */
+const rowContaining = (title: string) =>
+  screen.getByText(title).closest("tr") as HTMLElement;
+
+/** 行内状态 Select（按行定位） */
+const statusSelectOf = (title: string) =>
+  within(rowContaining(title)).getByRole("combobox", {
+    name: "project:plan.status",
+  });
+
+/** 行内优先级 Select（按行定位） */
+const prioritySelectOf = (title: string) =>
+  within(rowContaining(title)).getByRole("combobox", {
+    name: "project:plan.priority",
+  });
+
+beforeEach(() => {
+  vi.mocked(PlanItemApi.list).mockReset().mockResolvedValue(ITEMS);
+  vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue(FIELD_DEFS);
+  vi.mocked(PlanItemApi.create).mockReset().mockResolvedValue(makeItem());
+  vi.mocked(PlanItemApi.update).mockReset().mockResolvedValue(undefined);
+  vi.mocked(PlanItemApi.remove).mockReset().mockResolvedValue(undefined);
+  vi.mocked(PlanItemApi.move).mockReset().mockResolvedValue(undefined);
+  toastMock.success.mockClear();
+  toastMock.error.mockClear();
+});
+
+afterEach(cleanup);
+
+describe("PlanPane 表格渲染", () => {
+  it("渲染全列：固定列 + 动态自定义字段列，缺值显示 --", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    // 表头：标题/状态/处理人/优先级/标签 + 自定义字段两列
+    for (const header of [
+      "project:plan.title",
+      "project:plan.status",
+      "project:plan.handleMan",
+      "project:plan.priority",
+      "project:plan.tags",
+      "里程碑",
+      "预算",
+    ]) {
+      expect(screen.getByRole("columnheader", { name: header })).toBeTruthy();
+    }
+
+    // 行值：处理人「我」、标签 Badge、自定义字段值/缺值
+    expect(screen.getAllByText("project:plan.me")).toHaveLength(3);
+    expect(screen.getByText("设计").className).toContain("bg-secondary");
+    expect(screen.getByText("M1")).toBeTruthy();
+    expect(screen.getByText("M2")).toBeTruthy();
+    expect(screen.getByText("100")).toBeTruthy();
+    // 优先级色徽标：P0 destructive / P1 primary / P2 muted（Select 触发器
+    // 文本同名，取行内匹配中带徽标 variant 类者）
+    const hasBadgeVariant = (title: string, key: string, variant: string) =>
+      within(rowContaining(title))
+        .getAllByText(key)
+        .some((el) => el.className.includes(variant));
+    expect(
+      hasBadgeVariant("需求梳理", "project:plan.priorityP0", "bg-destructive"),
+    ).toBe(true);
+    expect(
+      hasBadgeVariant("接口联调", "project:plan.priorityP2", "bg-secondary"),
+    ).toBe(true);
+    expect(
+      hasBadgeVariant("编写文档", "project:plan.priorityP1", "bg-primary"),
+    ).toBe(true);
+    const docRow = rowContaining("编写文档");
+    expect(within(docRow).getAllByText("--")).toHaveLength(2);
+    // 需求梳理缺「预算」值 → 该行 1 个 --
+    expect(within(rowContaining("需求梳理")).getAllByText("--")).toHaveLength(
+      1,
+    );
+  });
+
+  it("表头自定义字段列尾 + 打开字段定义管理弹窗", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.manageFields" }),
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "project:plan.manageFields" }),
+    ).toBeTruthy();
+  });
+});
+
+describe("PlanPane 行内编辑", () => {
+  it("状态 Select 切换走 move 通道（sortOrder=目标列 max+1）且不调 update", async () => {
+    renderPlanPane();
+    await screen.findByText("编写文档");
+
+    // done 列现有 max sortOrder=3（接口联调）→ 目标 4
+    await selectOption(statusSelectOf("编写文档"), "project:plan.statusDone");
+
+    await waitFor(() =>
+      expect(PlanItemApi.move).toHaveBeenCalledWith({
+        id: 13,
+        status: "done",
+        sortOrder: 4,
+      }),
+    );
+    expect(PlanItemApi.update).not.toHaveBeenCalled();
+    // 乐观更新：触发器立即显示新状态（不等失效重取）
+    expect(statusSelectOf("编写文档").textContent).toContain(
+      "project:plan.statusDone",
+    );
+  });
+
+  it("move 失败 → 回滚失效重取 + toast.error", async () => {
+    vi.mocked(PlanItemApi.move).mockRejectedValueOnce(new Error("IPC 断开"));
+    const client = renderPlanPane();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    await screen.findByText("编写文档");
+
+    await selectOption(statusSelectOf("编写文档"), "project:plan.statusDone");
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith("IPC 断开"),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItems", 1],
+      }),
+    );
+    // 回滚：状态恢复 not_started
+    await waitFor(() =>
+      expect(statusSelectOf("编写文档").textContent).toContain(
+        "project:plan.statusNotStarted",
+      ),
+    );
+    invalidateSpy.mockRestore();
+  });
+
+  it("优先级 Select 切换走 update({ id, priority }) 且不调 move", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    await selectOption(prioritySelectOf("需求梳理"), "project:plan.priorityP2");
+
+    await waitFor(() =>
+      expect(PlanItemApi.update).toHaveBeenCalledWith({
+        id: 11,
+        priority: "P2",
+      }),
+    );
+    expect(PlanItemApi.move).not.toHaveBeenCalled();
+    expect(prioritySelectOf("需求梳理").textContent).toContain(
+      "project:plan.priorityP2",
+    );
+  });
+});
+
+describe("PlanPane 快速新增", () => {
+  it("回车 → create 缺省态（createdById/projectId/title）+ 双 key 失效 + 清空输入", async () => {
+    const client = renderPlanPane();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    await screen.findByText("需求梳理");
+
+    const input = screen.getByPlaceholderText(
+      "project:plan.quickAddPlaceholder",
+    );
+    fireEvent.change(input, { target: { value: " 快速新增事项 " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() =>
+      expect(PlanItemApi.create).toHaveBeenCalledWith({
+        createdById: 1,
+        projectId: 1,
+        title: "快速新增事项",
+      }),
+    );
+    expect(input.value).toBe("");
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItems", 1],
+      }),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItemsMine", 1],
+      }),
+    );
+    invalidateSpy.mockRestore();
+  });
+
+  it("空标题回车忽略，不调 create", async () => {
+    renderPlanPane();
+    const input = await screen.findByPlaceholderText(
+      "project:plan.quickAddPlaceholder",
+    );
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(PlanItemApi.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlanPane 筛选与搜索", () => {
+  it("标签/状态/优先级多选过滤，跨维度 AND", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    // 标签=设计 → 仅需求梳理
+    await checkFilterItem("project:plan.filterTag", "设计");
+    await waitFor(() => expect(screen.queryByText("接口联调")).toBeNull());
+    expect(screen.queryByText("编写文档")).toBeNull();
+    expect(screen.getByText("需求梳理")).toBeTruthy();
+
+    // 叠加状态=进行中 → 仍只剩需求梳理（跨维度 AND）
+    await checkFilterItem(
+      "project:plan.filterStatus",
+      "project:plan.statusInProgress",
+    );
+    expect(screen.getByText("需求梳理")).toBeTruthy();
+
+    // 叠加优先级=P2（需求梳理为 P0）→ 无匹配行
+    await checkFilterItem(
+      "project:plan.filterPriority",
+      "project:plan.priorityP2",
+    );
+    await waitFor(() => expect(screen.queryByText("需求梳理")).toBeNull());
+  });
+
+  it("搜索按标题包含过滤，空串恢复全量", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    const search = screen.getByPlaceholderText("project:plan.search");
+    fireEvent.change(search, { target: { value: "接口" } });
+    await waitFor(() => expect(screen.queryByText("需求梳理")).toBeNull());
+    expect(screen.queryByText("编写文档")).toBeNull();
+    expect(screen.getByText("接口联调")).toBeTruthy();
+
+    fireEvent.change(search, { target: { value: "" } });
+    await waitFor(() => expect(screen.getByText("需求梳理")).toBeTruthy());
+  });
+});
+
+describe("PlanPane 视图切换", () => {
+  it("?view= 合并式写入且保留 ?tab=plan；切回表格恢复", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.viewKanban" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/project/1?tab=plan&view=kanban",
+      ),
+    );
+    // 看板分支本期占位
+    expect(screen.getByText("project:workspace.comingSoon")).toBeTruthy();
+    expect(screen.queryByText("需求梳理")).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.viewTable" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/project/1?tab=plan&view=table",
+      ),
+    );
+    expect(await screen.findByText("需求梳理")).toBeTruthy();
+  });
+
+  it("非法 ?view= 回落表格视图", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&view=bogus" });
+    expect(await screen.findByText("需求梳理")).toBeTruthy();
+  });
+});
+
+describe("PlanPane 删除", () => {
+  it("行尾菜单 → AlertDialog 确认 → remove + 双 key 失效", async () => {
+    const client = renderPlanPane();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+    await screen.findByText("接口联调");
+
+    fireEvent.pointerDown(
+      within(rowContaining("接口联调")).getByRole("button", {
+        name: "common:operation",
+      }),
+    );
+    const menu = await screen.findByRole("menu");
+    fireEvent.click(within(menu).getByText("project:plan.delete"));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("project:plan.confirmDelete")).toBeTruthy();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "common:delete" }),
+    );
+
+    await waitFor(() => expect(PlanItemApi.remove).toHaveBeenCalledWith(12));
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItems", 1],
+      }),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItemsMine", 1],
+      }),
+    );
+    invalidateSpy.mockRestore();
+  });
+});
+
+describe("PlanPane 空态", () => {
+  it("无任何事项 → 居中 plan.empty 引导，无表格行", async () => {
+    vi.mocked(PlanItemApi.list).mockResolvedValue([]);
+    renderPlanPane();
+    expect(await screen.findByText("project:plan.empty")).toBeTruthy();
+    expect(screen.queryByRole("row")).toBeNull();
+  });
+});

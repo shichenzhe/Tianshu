@@ -66,29 +66,32 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
     ) ?? null;
 
   return (
-    <ChatPane
-      key={detail.session.id}
-      session={detail.session}
-      workspace={workspace}
-      hasModel={Boolean(
-        detail.session.currentModelId ?? workspace?.defaultModelId,
-      )}
-      onOpenSettings={(target) =>
-        navigate(
-          target === "providers"
-            ? PROVIDERS_ROUTE
-            : target === "mcp"
-              ? CONNECTORS_ROUTE
-              : EXPERTS_ROUTE,
-        )
-      }
-      boundAssistantIds={detail.bindings
-        .filter((b) => b.itemType === "assistant" && b.valid)
-        .map((b) => b.itemId)}
-      boundSkillNames={detail.bindings
-        .filter((b) => b.itemType === "skill" && b.valid)
-        .map((b) => b.itemName)}
-    />
+    // 内容列限宽居中：右面板开合时输入框宽度稳定不挤压（聊天产品惯例布局）
+    <div className="mx-auto flex min-h-0 w-full max-w-3xl flex-1">
+      <ChatPane
+        key={detail.session.id}
+        session={detail.session}
+        workspace={workspace}
+        hasModel={Boolean(
+          detail.session.currentModelId ?? workspace?.defaultModelId,
+        )}
+        onOpenSettings={(target) =>
+          navigate(
+            target === "providers"
+              ? PROVIDERS_ROUTE
+              : target === "mcp"
+                ? CONNECTORS_ROUTE
+                : EXPERTS_ROUTE,
+          )
+        }
+        boundAssistantIds={detail.bindings
+          .filter((b) => b.itemType === "assistant" && b.valid)
+          .map((b) => b.itemId)}
+        boundSkillNames={detail.bindings
+          .filter((b) => b.itemType === "skill" && b.valid)
+          .map((b) => b.itemName)}
+      />
+    </div>
   );
 }
 

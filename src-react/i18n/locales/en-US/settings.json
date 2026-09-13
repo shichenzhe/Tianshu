@@ -23,6 +23,14 @@
     "fontDefault": "Default",
     "fontLarge": "Large"
   },
+  "appearance": {
+    "title": "Appearance",
+    "preview": "Theme Preview",
+    "allSkins": "All Themes",
+    "basicType": "Basic",
+    "premiumType": "Featured",
+    "selected": "Current"
+  },
   "permission": {
     "keepAwake": "Run When Locked",
     "keepAwakeDesc": "Keep the device awake while the screen is locked, so remote control and background agent tasks keep running",

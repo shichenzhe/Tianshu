@@ -23,6 +23,14 @@
     "fontDefault": "默认",
     "fontLarge": "大"
   },
+  "appearance": {
+    "title": "外观",
+    "preview": "主题预览",
+    "allSkins": "全部皮肤",
+    "basicType": "基础主题",
+    "premiumType": "精选皮肤",
+    "selected": "当前主题"
+  },
   "permission": {
     "keepAwake": "锁屏运行",
     "keepAwakeDesc": "锁屏后设备保持唤醒状态，保障远程控制与后台 Agent 任务持续执行",

@@ -14,34 +14,10 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { getSkin, type SkinDef } from "@/domains/app-settings/model/skins";
 
 export type ThemeType = "blue" | "red" | "green" | "orange";
 export type SkinMode = "light" | "dark";
-
-interface SkinAttrs {
-  mode: SkinMode;
-  hue: ThemeType;
-  wallpaper: string | null;
-}
-
-/**
- * 皮肤属性表（spec §3.1 十款）——T3 建 skins.ts 元数据后重构为 import
- * hue 为 spec 角度值就近映射现有 4 色系（blue 220 / red 355 / green 150 /
- * orange 18）：260→blue、190→blue、120→green、205→blue、35→orange、
- * 15→orange、150→green、225→blue
- */
-export const SKIN_ATTRS: Record<string, SkinAttrs> = {
-  light: { mode: "light", hue: "blue", wallpaper: null },
-  dark: { mode: "dark", hue: "blue", wallpaper: null },
-  "dawn-mist": { mode: "light", hue: "blue", wallpaper: "dawn-mist" },
-  ripple: { mode: "light", hue: "blue", wallpaper: "ripple" },
-  field: { mode: "light", hue: "green", wallpaper: "field" },
-  "ocean-sky": { mode: "light", hue: "blue", wallpaper: "ocean-sky" },
-  "warm-sand": { mode: "light", hue: "orange", wallpaper: "warm-sand" },
-  dusk: { mode: "dark", hue: "orange", wallpaper: "dusk" },
-  pine: { mode: "dark", hue: "green", wallpaper: "pine" },
-  ink: { mode: "dark", hue: "blue", wallpaper: "ink" },
-};
 
 const DEFAULT_SKIN = "light";
 const DEFAULT_HUE: ThemeType = "orange"; // 沿用现状默认橙色
@@ -54,9 +30,9 @@ type PersistedSkin = { skin?: string; hue?: string; theme?: string };
 /** 未知皮肤 id 告警去重（每个 id 只 warn 一次，避免重复切换刷屏） */
 const warnedSkins = new Set<string>();
 
-/** 皮肤 id 归一：未知 id（persist 脏数据等）回落 light + 告警 */
-function resolveSkin(skinId: string): { id: string; attrs: SkinAttrs } {
-  const attrs = SKIN_ATTRS[skinId];
+/** 皮肤 id 归一：未知 id（persist 脏数据等）回落 light + 告警（元数据源 skins.ts） */
+function resolveSkin(skinId: string): { id: string; attrs: SkinDef } {
+  const attrs = getSkin(skinId);
   if (attrs) return { id: skinId, attrs };
   if (!warnedSkins.has(skinId)) {
     warnedSkins.add(skinId);
@@ -64,7 +40,7 @@ function resolveSkin(skinId: string): { id: string; attrs: SkinAttrs } {
       `[skin.store] 未知皮肤 id "${skinId}"，回落 "${DEFAULT_SKIN}"`,
     );
   }
-  return { id: DEFAULT_SKIN, attrs: SKIN_ATTRS[DEFAULT_SKIN] };
+  return { id: DEFAULT_SKIN, attrs: getSkin(DEFAULT_SKIN)! };
 }
 
 function isValidHue(value: string | undefined): value is ThemeType {
@@ -77,7 +53,7 @@ function sanitizePersisted(persisted: unknown): {
   hue: ThemeType;
 } {
   const raw = (persisted ?? {}) as PersistedSkin;
-  const skin = SKIN_ATTRS[raw.skin ?? ""] ? raw.skin! : DEFAULT_SKIN;
+  const skin = getSkin(raw.skin ?? "") ? raw.skin! : DEFAULT_SKIN;
   const hue = isValidHue(raw.hue)
     ? raw.hue
     : isValidHue(raw.theme)

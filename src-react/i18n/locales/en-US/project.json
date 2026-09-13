@@ -120,7 +120,10 @@
     "saveAsNew": "Save as new view",
     "saveAsNewTitle": "Save as new view",
     "overwriteSave": "Overwrite",
-    "reset": "Reset"
+    "reset": "Reset",
+    "settings": "View settings",
+    "settingsType": "View type",
+    "settingsGroupBy": "Group by"
   },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",

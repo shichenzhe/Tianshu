@@ -8,7 +8,8 @@
  * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 四态
  * 泳道拖拽）；项目成员查询（处理人筛选候选/看板分组）。
  * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
- * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 +「添加」（PlanItemDialog
+ * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 + 视图设置（PlanViewSettings
+ * Popover：类型切换立即保存 + 看板分组依据入 draft）+「添加」（PlanItemDialog
  * 新建态）。
  * 行内变更统一在本层处理（表格/看板纯触发）：状态切换与看板落点走 move 通道
  * （sortOrder 由全量缓存目标列推导——无落点=列尾 max+1、有落点=与前一项后邻
@@ -49,6 +50,7 @@ import PlanFilterPopover from "./PlanFilterPopover";
 import PlanItemDialog from "./PlanItemDialog";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
 import PlanTableView from "./PlanTableView";
+import PlanViewSettingsPopover from "./PlanViewSettingsPopover";
 import PlanViewTabs from "./PlanViewTabs";
 import type {
   PlanItemRecord,
@@ -85,6 +87,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     addView,
     renameView,
     removeView,
+    changeType,
     resetDraft,
     saveOverwrite,
     saveAsNew,
@@ -286,6 +289,15 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           placeholder={t("project:plan.search")}
           aria-label={t("project:plan.search")}
           className="h-8 w-44 text-sm"
+        />
+        <PlanViewSettingsPopover
+          type={activeView?.type ?? "table"}
+          groupBy={draft.groupBy}
+          showGroupBy={activeView?.type === "kanban"}
+          onTypeChange={(type) => void changeType(type)}
+          onGroupByChange={(groupBy) =>
+            setDraft((prev) => ({ ...prev, groupBy }))
+          }
         />
         <div className="ml-auto flex items-center gap-1.5">
           <Button size="sm" onClick={openCreate} className={toolbarButtonClass}>

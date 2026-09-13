@@ -1,7 +1,7 @@
 // tests/project/plan-view-v5-schema.test.ts
 // @vitest-environment node
 /** v5 增量脚本测试（沿用 tests/ai/v1-fullschema.test.ts 的 node:sqlite 模式）：
- * 依赖 v4 建 planItem，故按序执行 v4+v5；断言新列、建表幂等、唯一约束、source 默认值 */
+ * 依赖 v4 建 planItem，故按序执行 v4+v5；断言新列、建表幂等、部分唯一索引（空名播种豁免）、source 默认值 */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -88,17 +88,18 @@ describe("v5 增量脚本（planItem 排期/来源列 + planView 视图表）", 
     ).not.toThrow();
   });
 
-  it("planView 表 (projectId, name) 唯一约束生效", () => {
+  it("planView 部分唯一索引：空名可多条（播种），非空名 (projectId, name) 冲突抛错", () => {
     const db = createDb();
-    db.exec(
-      `INSERT INTO planView (projectId, name, type, filterJson, sortJson, sortOrder, createdAt, updatedAt)
-       VALUES (1, '我的看板', 'kanban', '{}', '[]', 0, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
-    );
-    expect(() =>
+    const insert = (name: string, sortOrder: number) =>
       db.exec(
         `INSERT INTO planView (projectId, name, type, filterJson, sortJson, sortOrder, createdAt, updatedAt)
-         VALUES (1, '我的看板', 'table', '{}', '[]', 1, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
-      ),
-    ).toThrow();
+         VALUES (1, '${name}', 'table', '{}', '[]', ${sortOrder}, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
+      );
+    // 空串名 = 播种默认视图语义，同项目两条不冲突（部分索引 WHERE name != '' 不覆盖）
+    expect(() => insert("", 0)).not.toThrow();
+    expect(() => insert("", 1)).not.toThrow();
+    // 非空名同项目冲突 → 抛错
+    insert("我的看板", 2);
+    expect(() => insert("我的看板", 3)).toThrow();
   });
 });

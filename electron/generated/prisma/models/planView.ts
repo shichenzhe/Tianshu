@@ -281,7 +281,6 @@ export type planViewOrderByWithRelationInput = {
 
 export type planViewWhereUniqueInput = Prisma.AtLeast<{
   id?: number
-  projectId_name?: Prisma.planViewProjectIdNameCompoundUniqueInput
   AND?: Prisma.planViewWhereInput | Prisma.planViewWhereInput[]
   OR?: Prisma.planViewWhereInput[]
   NOT?: Prisma.planViewWhereInput | Prisma.planViewWhereInput[]
@@ -294,7 +293,7 @@ export type planViewWhereUniqueInput = Prisma.AtLeast<{
   sortOrder?: Prisma.IntFilter<"planView"> | number
   createdAt?: Prisma.DateTimeFilter<"planView"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"planView"> | Date | string
-}, "id" | "projectId_name">
+}, "id">
 
 export type planViewOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -416,11 +415,6 @@ export type planViewUncheckedUpdateManyInput = {
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-}
-
-export type planViewProjectIdNameCompoundUniqueInput = {
-  projectId: number
-  name: string
 }
 
 export type planViewCountOrderByAggregateInput = {

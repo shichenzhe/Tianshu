@@ -279,6 +279,6 @@ model planView {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([projectId, name], map: "idx_plan_view_project_name")
+  // 唯一性由 v5 部分索引（WHERE name != ''）保证，Prisma 无法表达故不在 schema 声明
   @@index([projectId], map: "plan_view_projectId_index")
 }

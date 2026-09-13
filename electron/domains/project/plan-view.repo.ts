@@ -61,7 +61,7 @@ export default class PlanViewRepository {
     );
   }
 
-  /** 项目全部视图（sortOrder asc + id asc）；空列表懒播种默认两条（事务幂等） */
+  /** 项目全部视图（sortOrder asc + id asc）；空列表懒播种默认两条（单进程 IPC 串行下并发首载不会发生） */
   async list(projectId: number): Promise<PlanViewRecord[]> {
     let rows = await prisma.planView.findMany({
       where: { projectId },
@@ -105,11 +105,15 @@ export default class PlanViewRepository {
     return this.toRecord(row);
   }
 
-  /** 局部更新：仅写入传入键；groupBy 传 null = 清除分组 */
+  /** 局部更新：仅写入传入键；type/groupBy 枚举校验；groupBy 传 null = 清除分组 */
   async update(params: PlanViewUpdateParams): Promise<void> {
     const row = await prisma.planView.findUnique({ where: { id: params.id } });
     if (!row) {
       throw new Error("视图不存在");
+    }
+    this.ensureEnumOrThrow(params.type, PLAN_VIEW_TYPES, "无效的视图类型");
+    if (params.groupBy !== undefined && params.groupBy !== null) {
+      this.ensureEnumOrThrow(params.groupBy, PLAN_GROUP_BYS, "无效的分组依据");
     }
     const data = this.buildUpdateData(params);
     await prisma.planView.update({ where: { id: params.id }, data });
@@ -153,7 +157,7 @@ export default class PlanViewRepository {
     }
   }
 
-  /** 重名 (n) 后缀：name 空串恒可用（默认视图语义不参与后缀） */
+  /** 重名 (n) 后缀：name 空串恒可用（默认视图语义不参与后缀）；后缀耗尽抛错兜底 */
   private async uniqueName(projectId: number, name: string): Promise<string> {
     if (name === "") {
       return name;
@@ -169,7 +173,7 @@ export default class PlanViewRepository {
       }
       candidate = `${name}(${n})`;
     }
-    return candidate;
+    throw new Error("视图名冲突，请换一个名称");
   }
 
   private async nextSortOrder(projectId: number): Promise<number> {

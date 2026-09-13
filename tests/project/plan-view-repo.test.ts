@@ -151,6 +151,14 @@ describe("PlanViewRepository.update/reorder", () => {
       "视图不存在",
     );
   });
+
+  it("update 非法 type → 抛「无效的视图类型」不落库", async () => {
+    prismaStub.planView.findUnique.mockResolvedValue(row());
+    await expect(
+      repo.update({ id: 1, type: "bogus" as never }),
+    ).rejects.toThrow("无效的视图类型");
+    expect(prismaStub.planView.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("planView 通道自注册", () => {

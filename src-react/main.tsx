@@ -9,14 +9,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "sonner";
 
 import router from "./routes";
-import { initTheme } from "./stores/theme.store";
+import { initSkin } from "./stores/skin.store";
 import { initFontScale } from "@/domains/app-settings/model/font-scale";
 import "./i18n";
 import { initLocale } from "./i18n";
 import "./styles/globals.css";
 
-// 初始化主题（必须在渲染前执行）
-initTheme();
+// 初始化皮肤主题（必须在渲染前执行）
+initSkin();
 
 // 初始化语言设置
 initLocale();

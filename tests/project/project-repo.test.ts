@@ -65,6 +65,48 @@ describe("ProjectRepository.create", () => {
     expect(prismaStub.project.create).not.toHaveBeenCalled();
   });
 
+  it("同空间最近选过模型 → 项目 session 继承该模型（hasModel 门控）", async () => {
+    prismaStub.project.findFirst.mockResolvedValue(null);
+    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
+    prismaStub.project.create.mockResolvedValue({ id: 11 });
+    prismaStub.session.findFirst.mockResolvedValueOnce({ currentModelId: 42 });
+    prismaStub.session.create.mockResolvedValue({ id: 22, projectId: 11 });
+
+    await repo.create({ ownerId: 1, name: "t2" });
+
+    expect(prismaStub.session.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workspaceId: 7, currentModelId: { not: null } },
+      }),
+    );
+    expect(prismaStub.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          projectId: 11,
+          workspaceId: 7,
+          title: "t2",
+          currentModelId: 42,
+        },
+      }),
+    );
+  });
+
+  it("同空间无选过模型的会话 → 项目 session 不带模型字段", async () => {
+    prismaStub.project.findFirst.mockResolvedValue(null);
+    prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });
+    prismaStub.project.create.mockResolvedValue({ id: 12 });
+    prismaStub.session.findFirst.mockResolvedValueOnce(null);
+    prismaStub.session.create.mockResolvedValue({ id: 23, projectId: 12 });
+
+    await repo.create({ ownerId: 1, name: "t3" });
+
+    expect(prismaStub.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { projectId: 12, workspaceId: 7, title: "t3" },
+      }),
+    );
+  });
+
   it("正常创建 → 建 project + owner member + 项目 session + 欢迎消息", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
     prismaStub.workspace.findFirst.mockResolvedValue({ id: 7 });

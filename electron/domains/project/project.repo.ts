@@ -300,8 +300,20 @@ export default class ProjectRepository {
     if (!workspace) {
       throw new Error("默认工作空间不存在，无法创建项目会话");
     }
+    // 继承同空间最近一次选择的模型（口径同 SessionRepository.createSession，
+    // 用户反馈：项目会话无模型导致输入框回车静默无效——hasModel 门控）
+    const latest = await prisma.session.findFirst({
+      where: { workspaceId: workspace.id, currentModelId: { not: null } },
+      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+      select: { currentModelId: true },
+    });
     const session = await prisma.session.create({
-      data: { projectId, workspaceId: workspace.id, title: params.name },
+      data: {
+        projectId,
+        workspaceId: workspace.id,
+        title: params.name,
+        currentModelId: latest?.currentModelId ?? undefined,
+      },
     });
     if (params.welcomeMessage) {
       await this.appendWelcomeMessage(session.id, params.welcomeMessage);

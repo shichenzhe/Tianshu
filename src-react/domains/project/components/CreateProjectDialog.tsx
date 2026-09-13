@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import {
   AlertDialog,
@@ -46,6 +46,7 @@ import { useUserStore } from "@/domains/user/store/user.store";
 import { getTemplate, PROJECT_TEMPLATES } from "../model/project-templates";
 import ProjectApi from "../api/project.api";
 import PickerDialog, { type PickerItem } from "./PickerDialog";
+import RemovableTag from "./RemovableTag";
 import type {
   ProjectBindingInput,
   ProjectBindingType,
@@ -432,28 +433,5 @@ function CapabilitySection({
         </div>
       )}
     </section>
-  );
-}
-
-interface RemovableTagProps {
-  name: string;
-  onRemove: () => void;
-}
-
-/** 可移除 Tag：名称 + X 按钮 */
-function RemovableTag({ name, onRemove }: RemovableTagProps) {
-  const { t } = useTranslation(["common"]);
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-primary-subtle px-2 py-0.5 text-xs text-primary">
-      {name}
-      <button
-        type="button"
-        aria-label={t("common:close")}
-        onClick={onRemove}
-        className="rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-      >
-        <X className="h-3 w-3" />
-      </button>
-    </span>
   );
 }

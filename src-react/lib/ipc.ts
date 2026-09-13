@@ -120,6 +120,15 @@ export type IPCChannel =
   | "projectAsset:openFile"
   | "projectAsset:revealFile"
   | "projectAsset:pickFiles"
+  // 计划事项（三期）：fields 两通道 Task 3 注册 handler
+  | "planItem:list"
+  | "planItem:listMine"
+  | "planItem:create"
+  | "planItem:update"
+  | "planItem:delete"
+  | "planItem:move"
+  | "planItem:fields:list"
+  | "planItem:fields:save"
   // 个性化记忆（记忆与进化）
   | "personalization:applyMemoryInstruction"
   | "personalization:compileMemory"

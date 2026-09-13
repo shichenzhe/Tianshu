@@ -51,6 +51,7 @@ const prismaStub = vi.hoisted(() => ({
   },
   message: { create: vi.fn(), deleteMany: vi.fn() },
   workspace: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
+  planItem: { deleteMany: vi.fn() },
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
   mcpServer: { findMany: vi.fn() },
@@ -239,6 +240,10 @@ describe("ProjectRepository.remove", () => {
     await repo.remove(11);
     expect(fsStub.rm).not.toHaveBeenCalled();
     expect(prismaStub.workspace.delete).not.toHaveBeenCalled();
+    // 三期级联：项目计划事项随项目删除（本地任务 projectId null 不受影响）
+    expect(prismaStub.planItem.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+    });
     expect(prismaStub.message.deleteMany).toHaveBeenCalledWith({
       where: { sessionId: { in: [21, 22] } },
     });

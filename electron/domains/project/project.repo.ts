@@ -139,6 +139,8 @@ export default class ProjectRepository {
    */
   async remove(id: number): Promise<void> {
     await this.removeAssetWorkspace(id);
+    // 级联清项目计划事项（projectId 精确匹配，本地任务 null 不受影响，三期 spec §3.1）
+    await prisma.planItem.deleteMany({ where: { projectId: id } });
     const sessions = await prisma.session.findMany({
       where: { projectId: id },
       select: { id: true },

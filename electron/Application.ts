@@ -19,6 +19,7 @@ import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
 import ProjectRepository from "./domains/project/project.repo";
 import AssetRepository from "./domains/project/asset.repo";
+import PlanItemRepository from "./domains/project/plan-item.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
@@ -137,6 +138,9 @@ export default class Application {
     // 资产仓储（二期 T3）：复用 projectRepo.ensureAssetWorkspace 定位资产根，
     // 注册 projectAsset:list/createFolder/rename/delete IPC（upload 等 T4 补）
     new AssetRepository(projectRepo);
+    // 计划事项仓储（三期 T2）：计划/任务双视图聚合 + 枚举校验 + 拖拽落点 IPC
+    // （fields 两通道 Task 3 注册）
+    new PlanItemRepository();
     new ChatService(sessionRepo, skillRepo, projectRepo);
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）

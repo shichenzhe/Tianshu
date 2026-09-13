@@ -64,3 +64,8 @@ export interface AssetStorage {
    */
   quotaBytes: number;
 }
+
+/**
+ * 资产空间软配额（5GiB）：仅 UI 用量提示，上传不做硬拦截（spec §4）
+ */
+export const ASSET_QUOTA_BYTES = 5 * 1024 ** 3;

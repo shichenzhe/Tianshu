@@ -110,7 +110,7 @@ export type IPCChannel =
   | "project:update"
   | "project:delete"
   | "project:setBindings"
-  // 项目资产空间（二期；upload/storage/openFile/revealFile 由 Task 4 补齐）
+  // 项目资产空间（二期）
   | "projectAsset:list"
   | "projectAsset:createFolder"
   | "projectAsset:rename"
@@ -119,6 +119,7 @@ export type IPCChannel =
   | "projectAsset:storage"
   | "projectAsset:openFile"
   | "projectAsset:revealFile"
+  | "projectAsset:pickFiles"
   // 个性化记忆（记忆与进化）
   | "personalization:applyMemoryInstruction"
   | "personalization:compileMemory"

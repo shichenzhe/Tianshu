@@ -1,10 +1,11 @@
 /**
- * 资产仓储：项目资产空间内文件/文件夹的列表/新建文件夹/重命名/删除（二期 spec §4）。
+ * 资产仓储：项目资产空间内文件/文件夹的列表/新建文件夹/重命名/删除（二期 spec §4），
+ * 以及上传（copyFile 逐文件）/用量统计（递归 du）/系统预览与定位（Task 4）。
  * 所有相对路径经 safeJoin 沙箱校验（resolve 后必须仍落在资产根内），
  * 名称经 sanitizeName 清洗 + uniqueName 重名序号；list 对缺失目录自愈重建。
  * fs 沿用 project.repo 的 node:fs/promises 默认导入 + node:fs existsSync 探测。
  */
-import { ipcMain } from "electron";
+import { dialog, ipcMain, shell } from "electron";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -13,7 +14,12 @@ import prisma from "../../commons/prisma-client";
 import Log from "../../commons/Log";
 import { PROJECT_NOT_FOUND } from "./project.entity";
 import type ProjectRepository from "./project.repo";
-import type { AssetEntry } from "./asset.entity";
+import {
+  ASSET_QUOTA_BYTES,
+  type AssetEntry,
+  type AssetStorage,
+  type AssetUploadResult,
+} from "./asset.entity";
 
 /** 名称非法字符：Windows 保留符号 + 控制字符（\p{Cc} 覆盖 C0/C1/DEL） */
 const ILLEGAL_NAME_CHARS = /[\\/:*?"<>|\p{Cc}]/gu;
@@ -101,9 +107,15 @@ export default class AssetRepository {
   }
 
   /**
-   * 注册IPC处理程序（projectAsset:upload 等 4 通道由 Task 4 补齐）
+   * 注册IPC处理程序：基础四通道（Task 3）+ 上传/用量/预览五通道（Task 4）
    */
   private registerHandlers() {
+    this.registerCrudHandlers();
+    this.registerTransferHandlers();
+  }
+
+  /** 基础通道：list/createFolder/rename/delete */
+  private registerCrudHandlers() {
     ipcMain.handle(
       "projectAsset:list",
       (_, projectId: number, folderPath?: string) =>
@@ -124,6 +136,29 @@ export default class AssetRepository {
       (_, projectId: number, targetPath: string) =>
         this.delete(projectId, targetPath),
     );
+  }
+
+  /** 传输通道：upload/storage/openFile/revealFile/pickFiles */
+  private registerTransferHandlers() {
+    ipcMain.handle(
+      "projectAsset:upload",
+      (_, projectId: number, folderPath: string, absPaths: string[]) =>
+        this.upload(projectId, folderPath, absPaths),
+    );
+    ipcMain.handle("projectAsset:storage", (_, projectId: number) =>
+      this.storage(projectId),
+    );
+    ipcMain.handle(
+      "projectAsset:openFile",
+      (_, projectId: number, targetPath: string) =>
+        this.openFile(projectId, targetPath),
+    );
+    ipcMain.handle(
+      "projectAsset:revealFile",
+      (_, projectId: number, targetPath: string) =>
+        this.revealFile(projectId, targetPath),
+    );
+    ipcMain.handle("projectAsset:pickFiles", () => this.pickFiles());
   }
 
   /**
@@ -221,6 +256,92 @@ export default class AssetRepository {
     await this.rmFolder(target);
   }
 
+  /**
+   * 批量上传：目标目录自愈后逐文件 basename → 清洗 → 重名序号 → copyFile。
+   * 单文件失败（源缺失/不可读/名称无效）收集进 failed 不中断循环（spec §4）；
+   * 逐文件串行保证同批次同名能拿到不同序号；仅沙箱/项目级错误抛出。
+   * 软配额仅 UI 提示，此处不做大小与总量拦截
+   */
+  async upload(
+    projectId: number,
+    folderPath: string,
+    absPaths: string[],
+  ): Promise<AssetUploadResult> {
+    const destDir = safeJoin(
+      (await this.resolveAssetRoot(projectId)).root,
+      folderPath,
+    );
+    await this.ensureDir(destDir);
+    const result: AssetUploadResult = { uploaded: [], failed: [] };
+    for (const absPath of absPaths) {
+      const baseName = path.basename(absPath);
+      try {
+        const destName = uniqueName(destDir, sanitizeName(baseName));
+        await fs.copyFile(absPath, path.join(destDir, destName));
+        result.uploaded.push(destName);
+      } catch {
+        result.failed.push(baseName);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 资产空间用量：根目录递归 du + 恒定软配额（5GiB）
+   */
+  async storage(projectId: number): Promise<AssetStorage> {
+    const { root } = await this.resolveAssetRoot(projectId);
+    return {
+      usedBytes: await this.walkDirSize(root),
+      quotaBytes: ASSET_QUOTA_BYTES,
+    };
+  }
+
+  /**
+   * 系统默认程序预览（仅文件）：stat 校验 + openPath；
+   * openPath 失败 resolve 错误串 → 转 reject 让渲染层 toast
+   */
+  async openFile(projectId: number, targetPath: string): Promise<void> {
+    const target = safeJoin(
+      (await this.resolveAssetRoot(projectId)).root,
+      targetPath,
+    );
+    const stat = await this.statOrNull(target);
+    if (!stat) {
+      throw new Error("文件不存在");
+    }
+    if (!stat.isFile()) {
+      throw new Error("仅支持预览文件");
+    }
+    const openError = await shell.openPath(target);
+    if (openError) {
+      throw new Error(openError);
+    }
+  }
+
+  /** Finder/资源管理器定位（文件与文件夹均可；无返回值不判错） */
+  async revealFile(projectId: number, targetPath: string): Promise<void> {
+    const target = safeJoin(
+      (await this.resolveAssetRoot(projectId)).root,
+      targetPath,
+    );
+    shell.showItemInFolder(target);
+  }
+
+  /**
+   * 系统文件多选（上传按钮入口）：取消/未选返回 null（渲染层静默处理）。
+   * 不做目录预选——所选文件落到 UI 当前浏览文件夹（由 upload 的 folderPath 决定），
+   * 通道多传的 folderPath 参数被忽略
+   */
+  async pickFiles(): Promise<string[] | null> {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+    });
+    return result.canceled || result.filePaths.length === 0
+      ? null
+      : result.filePaths;
+  }
+
   /** 读目录；缺失（ENOENT）自愈递归重建返回空，其他错误转中文 */
   private async readDirWithSelfHeal(dir: string): Promise<Dirent[]> {
     try {
@@ -259,6 +380,49 @@ export default class AssetRepository {
       updatedAt,
       ext: null,
     };
+  }
+
+  /**
+   * 递归 du（storage 专用，区别于 list 的 folderSize 一层懒统计）：
+   * 常规文件计大小、子目录递归、其余（符号链接/FIFO 等）跳过——
+   * withFileTypes 为 lstat 口径不跟随链接，天然防符号环死循环。
+   * 目录缺失/不可读按 0：用量面板不因缺失报错（自愈或零口径）
+   */
+  private async walkDirSize(dir: string): Promise<number> {
+    let dirents: Dirent[];
+    try {
+      dirents = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return 0;
+    }
+    let bytes = 0;
+    for (const dirent of dirents) {
+      const full = path.join(dir, dirent.name);
+      if (dirent.isDirectory()) {
+        bytes += await this.walkDirSize(full);
+      } else if (dirent.isFile()) {
+        bytes += await this.sizeOrZero(full);
+      }
+    }
+    return bytes;
+  }
+
+  /** 单文件大小：stat 失败（遍历竞态被删/无权限）按 0 计不连坐 */
+  private async sizeOrZero(file: string): Promise<number> {
+    try {
+      return (await fs.stat(file)).size;
+    } catch {
+      return 0;
+    }
+  }
+
+  /** 目标目录自愈（recursive 幂等；失败转中文——目录级错误属项目级，抛出） */
+  private async ensureDir(dir: string): Promise<void> {
+    try {
+      await fs.mkdir(dir, { recursive: true });
+    } catch (error) {
+      throw wrapFsError(error, `创建上传目录失败（${dir}）`);
+    }
   }
 
   /**

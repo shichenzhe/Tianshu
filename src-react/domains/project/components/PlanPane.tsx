@@ -5,11 +5,12 @@
  * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
  * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
  * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
- * 时整条不渲染）；表格/看板/列表/日历四视图（看板 = PlanKanbanView 分组
+ * 时整条不渲染）；表格/看板/列表/日历/甘特五视图（看板 = PlanKanbanView 分组
  * 泳道拖拽，分组依据 status/priority/assignee 由视图 draft.groupBy 驱动；
  * 列表 = PlanListView 状态四组折叠清单——勾选完成走 move、组内 + 携组状态
  * 快速新增；日历 = PlanCalendarView 月格视图——点格空白预置该日 dueDate
- * 开新建弹窗、点 chip 开编辑）；
+ * 开新建弹窗、点 chip 开编辑；甘特 = PlanGanttView 时间轴条形——pointer
+ * 拖拽平移/边缘拉伸调期走 handleChangeDates 乐观落库、点条开编辑）；
  * 项目成员查询（处理人筛选候选/看板分组与头像）。
  * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
  * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 + 视图设置（PlanViewSettings
@@ -50,10 +51,12 @@ import PlanItemApi, {
   PLAN_ITEMS_MINE_KEY,
 } from "../api/plan-item.api";
 import { usePlanViews } from "../model/use-plan-views";
+import { dateKeyToIso } from "../model/plan-date";
 import { filterItems, sortItems } from "../model/plan-view-engine";
 import CustomFieldsEditor from "./CustomFieldsEditor";
 import PlanFilterPopover from "./PlanFilterPopover";
 import PlanItemDialog from "./PlanItemDialog";
+import PlanGanttView from "./PlanGanttView";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
 import PlanCalendarView from "./PlanCalendarView";
 import PlanListView from "./PlanListView";
@@ -239,6 +242,27 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     }
   };
 
+  /** 甘特拖拽调期：乐观 patch 日期 → update；失败失效回滚（handleSetPriority 同构） */
+  const handleChangeDates = async (
+    id: number,
+    dates: { startKey: string; endKey: string },
+  ) => {
+    const startDate = dateKeyToIso(dates.startKey);
+    const dueDate = dateKeyToIso(dates.endKey);
+    queryClient.setQueryData<PlanItemRecord[]>(
+      PLAN_ITEMS_KEY(projectId),
+      (prev) => patchItem(prev, id, { startDate, dueDate }),
+    );
+    try {
+      await PlanItemApi.update({ id, startDate, dueDate });
+    } catch (error) {
+      await queryClient.invalidateQueries({
+        queryKey: PLAN_ITEMS_KEY(projectId),
+      });
+      toast.error(mapIpcError(error));
+    }
+  };
+
   /**
    * 看板拖拽分发（spec 已批准的简化）：status 分组走 move（sortOrder 语义，
    * 含列内重排）；priority/assignee 分组跨列仅写对应字段（afterId 忽略，
@@ -396,7 +420,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         </div>
       </div>
 
-      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 日历 / 表格 */}
+      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 日历 / 甘特 / 表格 */}
       {itemsQuery.isError ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {t("project:toast.operationFailed")}
@@ -454,6 +478,13 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             setDialogOpen(true);
           }}
           onEdit={openEdit}
+        />
+      ) : activeView?.type === "gantt" ? (
+        // 甘特视图：拖拽调期（乐观落库失败回滚）+ 点条/无日期行开编辑
+        <PlanGanttView
+          items={visibleItems}
+          onEdit={openEdit}
+          onChangeDates={handleChangeDates}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">

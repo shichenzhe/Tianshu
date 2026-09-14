@@ -6,8 +6,8 @@
  * 组件纯 props 无路由/查询依赖，直接渲染桩回调：
  * - Tab 渲染：默认视图 name 空串 → 本地化类型名兜底（typeTable/typeKanban）、
  *   自定义名优先、激活态 aria-pressed；点击非激活 Tab → onSelect(id)
- * - + 菜单：看板/列表/日历可添加（表格/甘特不在列），
- *   点选 → onAdd("kanban") / onAdd("list") / onAdd("calendar")
+ * - + 菜单：看板/列表/甘特/日历可添加（表格不在列），
+ *   点选 → onAdd("kanban") / onAdd("list") / onAdd("gantt") / onAdd("calendar")
  * - Tab `...` 菜单：重命名与删除；删除 → onRemove(id)；
  *   views.length === 1 时删除项不渲染（最后视图保护）
  * - 重命名流：菜单 → PlanViewNameDialog 打开（初始名=当前名），输入新名
@@ -181,25 +181,27 @@ describe("Tab 渲染与切换", () => {
 });
 
 describe("+ 添加视图菜单", () => {
-  it("含「看板/列表/日历」三项（无表格/甘特）；点击 → onAdd 对应类型", async () => {
+  it("含「看板/列表/甘特/日历」四项（无表格）；点击 → onAdd 对应类型", async () => {
     const { onAdd } = renderTabs();
     const menu = await openMenu(
       screen.getByRole("button", { name: "project:planView.addView" }),
     );
 
-    // 三菜单项 = 看板 + 列表 + 日历；其余类型不出现
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(3);
-    for (const type of ["typeKanban", "typeList", "typeCalendar"]) {
+    // 四菜单项 = 看板 + 列表 + 甘特 + 日历；表格不出现
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(4);
+    for (const type of [
+      "typeKanban",
+      "typeList",
+      "typeGantt",
+      "typeCalendar",
+    ]) {
       expect(
         within(menu).getByRole("menuitem", {
           name: `project:planView.${type}`,
         }),
       ).toBeTruthy();
     }
-    for (const absent of [
-      "project:planView.typeTable",
-      "project:planView.typeGantt",
-    ]) {
+    for (const absent of ["project:planView.typeTable"]) {
       expect(within(menu).queryByText(absent)).toBeNull();
     }
 
@@ -224,6 +226,20 @@ describe("+ 添加视图菜单", () => {
     );
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onAdd).toHaveBeenCalledWith("list");
+  });
+
+  it("点选「甘特」→ onAdd('gantt')", async () => {
+    const { onAdd } = renderTabs();
+    const menu = await openMenu(
+      screen.getByRole("button", { name: "project:planView.addView" }),
+    );
+    fireEvent.click(
+      within(menu).getByRole("menuitem", {
+        name: "project:planView.typeGantt",
+      }),
+    );
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenCalledWith("gantt");
   });
 
   it("点选「日历」→ onAdd('calendar')", async () => {

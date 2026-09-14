@@ -8,7 +8,12 @@
  * - 切「月」粒度 → 列头出现月份数字「10」
  * - 今天线 data-today-line 落在 diffDays × 28 天宽处
  * - 点 >> → 首列起点后移 60 天（08-15 → 10-14）
- * - 点条形 → onEdit(item)（渲染版无拖拽：onChangeDates 不触发）
+ * - 点条形 → onEdit(item)（纯点按不触发 onChangeDates）
+ * - dragEdgeFor 纯函数：条内相对 x 左右 6px 热区（start/end）与中段 move
+ * - 拖拽提交链：条 pointerDown（jsdom 无布局 rect.left=0 → offsetX=clientX）
+ *   + window pointermove（天粒度吸附 dayDelta，条形 left/width 实时预览）
+ *   + pointerup → onChangeDates 收 dragToDates 三边缘结果；原地点按不提交；
+ *   拖拽后拖尾 click 不触发 onEdit；未传 onChangeDates 不进入拖拽
  * jsdom 无布局且 div 无角色，列头/条形断言走 data 属性
  * （data-column-key/data-item-id）；vi.setSystemTime 固定 2026-09-14
  * 保证今天线/初始视口确定性。
@@ -56,6 +61,7 @@ vi.mock("@/i18n", () => ({
 
 import PlanGanttView, {
   barGeometry,
+  dragEdgeFor,
 } from "../../src-react/domains/project/components/PlanGanttView";
 import type { PlanItemRecord } from "../../../electron/domains/project/plan-item.entity";
 
@@ -207,12 +213,87 @@ describe("翻页", () => {
 });
 
 describe("条形交互", () => {
-  it("点 A 项条 → onEdit(item)；渲染版无拖拽（onChangeDates 不触发）", () => {
+  it("点 A 项条 → onEdit(item)（纯点按不触发 onChangeDates）", () => {
     const props = renderGantt();
 
     fireEvent.click(bar(1) as HTMLElement);
     expect(props.onEdit).toHaveBeenCalledTimes(1);
     expect(props.onEdit).toHaveBeenCalledWith(ITEMS[0]);
     expect(props.onChangeDates).not.toHaveBeenCalled();
+  });
+});
+
+describe("dragEdgeFor 纯函数（边缘热区）", () => {
+  it("x < 6 → start；x > width-6 → end；中间 move", () => {
+    expect(dragEdgeFor(2, 100)).toBe("start");
+    expect(dragEdgeFor(98, 100)).toBe("end");
+    expect(dragEdgeFor(50, 100)).toBe("move");
+    expect(dragEdgeFor(0, 8)).toBe("start"); // 窄条全热区
+  });
+});
+
+describe("拖拽调期（pointer 提交链）", () => {
+  // jsdom 无布局：bar.getBoundingClientRect().left 恒 0 → offsetX = clientX，
+  // 中点点按 = clientX = width/2；move/up 由实现的 window 监听器承接
+  const BAR_WIDTH = 5 * 28; // A 项 09-10~09-14 五天条（日粒度 dayWidth=28）
+
+  it("中点拖拽 +28px → onChangeDates(1, { 09-11, 09-15 })；拖拽中条形预览 left 平移一天", () => {
+    const props = renderGantt();
+    const barEl = bar(1) as HTMLElement;
+
+    fireEvent.pointerDown(barEl, { button: 0, clientX: BAR_WIDTH / 2 });
+    fireEvent.pointerMove(window, { clientX: BAR_WIDTH / 2 + 28 }); // +28px = +1 天
+    // 预览（move 边缘）：left 728 + 28 = 756，宽度不变
+    expect(barEl.style.left).toBe("756px");
+    expect(barEl.style.width).toBe("140px");
+
+    fireEvent.pointerUp(window);
+    expect(props.onChangeDates).toHaveBeenCalledTimes(1);
+    expect(props.onChangeDates).toHaveBeenCalledWith(1, {
+      startKey: "2026-09-11", // 09-10 + 1 天
+      endKey: "2026-09-15",
+    });
+  });
+
+  it("左缘热区拖拽 +28px → start 拉伸语义（起点 +1 天、终点不动）", () => {
+    const props = renderGantt();
+    fireEvent.pointerDown(bar(1) as HTMLElement, { button: 0, clientX: 2 });
+    fireEvent.pointerMove(window, { clientX: 2 + 28 });
+    fireEvent.pointerUp(window);
+    expect(props.onChangeDates).toHaveBeenCalledWith(1, {
+      startKey: "2026-09-11",
+      endKey: "2026-09-14",
+    });
+  });
+
+  it("原地点按（dayDelta=0）不提交 onChangeDates", () => {
+    const props = renderGantt();
+    fireEvent.pointerDown(bar(1) as HTMLElement, { button: 0, clientX: 70 });
+    fireEvent.pointerUp(window);
+    expect(props.onChangeDates).not.toHaveBeenCalled();
+  });
+
+  it("拖拽提交后的拖尾 click 不触发 onEdit；再原地点按恢复开编辑", () => {
+    const props = renderGantt();
+    const barEl = bar(1) as HTMLElement;
+
+    fireEvent.pointerDown(barEl, { button: 0, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 98 });
+    fireEvent.pointerUp(window);
+    fireEvent.click(barEl);
+    expect(props.onEdit).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(barEl, { button: 0, clientX: 70 });
+    fireEvent.pointerUp(window);
+    fireEvent.click(barEl);
+    expect(props.onEdit).toHaveBeenCalledWith(ITEMS[0]);
+  });
+
+  it("未传 onChangeDates → 条形不进入拖拽（pointerDown/move/up 无副作用）", () => {
+    const props = renderGantt({ onChangeDates: undefined });
+    fireEvent.pointerDown(bar(1) as HTMLElement, { button: 0, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 98 });
+    fireEvent.pointerUp(window);
+    expect(props.onEdit).not.toHaveBeenCalled();
   });
 });

@@ -15,7 +15,8 @@
  *   filterItems 生效）；搜索标题包含过滤
  * - 视图切换：Tab 点击写 ?viewId= 且保留 ?tab=plan（URL 断言）；非法 ?view=
  *   回落表格；旧参数 ?view=kanban 初始渲染看板（resolveInitialViewId 映射）；
- *   ?viewId=12（type list）渲染列表视图状态分组清单（组头出现、无表格行）
+ *   ?viewId=12（type list）渲染列表视图状态分组清单（组头出现、无表格行）；
+ *   ?viewId=13（type gantt）渲染甘特时间轴（列头出现、无表格行）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
  * - 空态：无任何事项居中 plan.empty
  */
@@ -265,7 +266,7 @@ const prioritySelectOf = (title: string) =>
     name: "project:plan.priority",
   });
 
-/** 视图播种：表格(10) + 看板(11) + 列表(12)，空名 = 默认视图（UI 类型名兜底显示） */
+/** 视图播种：表格(10) + 看板(11) + 列表(12) + 甘特(13)，空名 = 默认视图（UI 类型名兜底显示） */
 const VIEWS: PlanViewRecord[] = [
   {
     id: 10,
@@ -300,6 +301,18 @@ const VIEWS: PlanViewRecord[] = [
     filterJson: "{}",
     sortJson: "[]",
     sortOrder: 2,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: 13,
+    projectId: 1,
+    name: "",
+    type: "gantt",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 3,
     createdAt: "",
     updatedAt: "",
   },
@@ -605,6 +618,82 @@ describe("PlanPane 视图切换", () => {
     expect(screen.getByRole("button", { name: "需求梳理" })).toBeTruthy();
     expect(screen.queryByRole("row")).toBeNull();
     expect(screen.queryByRole("columnheader")).toBeNull();
+  });
+
+  it("gantt 类型视图渲染甘特时间轴（列头出现、无表格行）", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&viewId=13" });
+    // 甘特控制栏：粒度切换按钮出现（视图数据流换轨完成）
+    expect(
+      await screen.findByRole("button", {
+        name: "project:planView.granularityDay",
+      }),
+    ).toBeTruthy();
+    // 日粒度 60 列头（jsdom div 无角色，走 data 属性）
+    expect(document.querySelectorAll("[data-column-key]")).toHaveLength(60);
+    expect(screen.queryByRole("row")).toBeNull();
+    expect(screen.queryByRole("columnheader")).toBeNull();
+  });
+});
+
+describe("PlanPane 甘特拖拽调期", () => {
+  /** 播种单条带日期事项（09-10~09-14 五天条），渲染 gantt 视图返回条形与 client */
+  async function renderGanttWithDatedBar() {
+    vi.mocked(PlanItemApi.list).mockResolvedValue([
+      makeItem({
+        id: 21,
+        title: "排期事项",
+        startDate: "2026-09-10T00:00:00.000Z",
+        dueDate: "2026-09-14T00:00:00.000Z",
+      }),
+    ]);
+    const client = renderPlanPane({
+      initialEntry: "/module/project/1?tab=plan&viewId=13",
+    });
+    await screen.findByRole("button", {
+      name: "project:planView.granularityDay",
+    });
+    const barEl = document.querySelector('[data-item-id="21"]') as HTMLElement;
+    return { barEl, client };
+  }
+
+  it("条形中点拖 +28px → update 携 dateKeyToIso 起止（+1 天）+ 乐观平移", async () => {
+    const { barEl } = await renderGanttWithDatedBar();
+    const leftBefore = parseFloat(barEl.style.left);
+
+    // 五天条 140px；jsdom 无布局 rect.left=0 → 中点 clientX=70，+28px=+1 天
+    fireEvent.pointerDown(barEl, { button: 0, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 70 + 28 });
+    fireEvent.pointerUp(window);
+
+    await waitFor(() =>
+      expect(PlanItemApi.update).toHaveBeenCalledWith({
+        id: 21,
+        startDate: "2026-09-11T00:00:00.000Z",
+        dueDate: "2026-09-15T00:00:00.000Z",
+      }),
+    );
+    // 乐观更新：条形立即平移一天（不等失效重取）
+    expect(parseFloat(barEl.style.left)).toBe(leftBefore + 28);
+  });
+
+  it("update 失败 → 失效回滚 + toast.error", async () => {
+    vi.mocked(PlanItemApi.update).mockRejectedValueOnce(new Error("IPC 断开"));
+    const { barEl, client } = await renderGanttWithDatedBar();
+    const invalidateSpy = vi.spyOn(client, "invalidateQueries");
+
+    fireEvent.pointerDown(barEl, { button: 0, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 70 + 28 });
+    fireEvent.pointerUp(window);
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith("IPC 断开"),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItems", 1],
+      }),
+    );
+    invalidateSpy.mockRestore();
   });
 });
 

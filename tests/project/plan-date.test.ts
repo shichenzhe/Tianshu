@@ -6,11 +6,14 @@ import {
   addDaysToKey,
   dateKeyToIso,
   diffDays,
+  dragToDates,
+  ganttColumns,
   getLunarLabel,
   groupByDueDate,
   isoToDateKey,
   monthGrid,
   toDateKey,
+  toGanttBar,
 } from "../../src-react/domains/project/model/plan-date";
 import type { PlanItemRecord } from "../../electron/domains/project/plan-item.entity";
 
@@ -102,5 +105,105 @@ describe("groupByDueDate", () => {
     const byDay = groupByDueDate(grid, items);
     expect(byDay.get("2026-09-14")?.map((i) => i.id)).toEqual([1, 2]);
     expect([...byDay.values()].flat()).toHaveLength(items.length - 1);
+  });
+});
+
+describe("ganttColumns", () => {
+  it("day 粒度：中心前后各 30 天共 60 列，首列 key 正确", () => {
+    const cols = ganttColumns("2026-09-14", "day");
+    expect(cols).toHaveLength(60);
+    expect(cols[0].key).toBe("2026-08-15");
+    expect(cols[59].key).toBe("2026-10-13");
+    expect(cols[0].days).toBe(1);
+  });
+
+  it("week 粒度：24 列且每列周一为界", () => {
+    const cols = ganttColumns("2026-09-14", "week"); // 周一
+    expect(cols).toHaveLength(24);
+    expect(cols[12].startKey).toBe("2026-09-14"); // 中心所在周
+    const [y, m, d] = cols[0].startKey.split("-").map(Number);
+    expect(new Date(y, m - 1, d).getDay()).toBe(1);
+    expect(cols[0].days).toBe(7);
+  });
+
+  it("month 粒度 18 列（前 9 后 9）；year 粒度 6 列（前 3 后 3）", () => {
+    const months = ganttColumns("2026-09-14", "month");
+    expect(months).toHaveLength(18);
+    expect(months[9].startKey).toBe("2026-10-01");
+    const years = ganttColumns("2026-09-14", "year");
+    expect(years).toHaveLength(6);
+    expect(years[3].startKey).toBe("2027-01-01");
+  });
+});
+
+describe("toGanttBar", () => {
+  it("双端日期：days 含首尾", () => {
+    const bar = toGanttBar(
+      item({
+        startDate: "2026-09-10T00:00:00.000Z",
+        dueDate: "2026-09-14T00:00:00.000Z",
+      }),
+    );
+    expect(bar).toEqual({
+      id: 1,
+      startKey: "2026-09-10",
+      endKey: "2026-09-14",
+      days: 5,
+    });
+  });
+
+  it("单端日期钳 1 天；双空 null", () => {
+    expect(toGanttBar(item({ dueDate: "2026-09-20T00:00:00.000Z" }))).toEqual({
+      id: 1,
+      startKey: "2026-09-20",
+      endKey: "2026-09-20",
+      days: 1,
+    });
+    expect(toGanttBar(item({ startDate: "2026-09-20T00:00:00.000Z" }))).toEqual(
+      {
+        id: 1,
+        startKey: "2026-09-20",
+        endKey: "2026-09-20",
+        days: 1,
+      },
+    );
+    expect(toGanttBar(item())).toBeNull();
+  });
+});
+
+describe("dragToDates", () => {
+  const bar = { id: 1, startKey: "2026-09-10", endKey: "2026-09-14", days: 5 };
+
+  it("move：两端平移", () => {
+    expect(dragToDates(bar, 3, "move")).toEqual({
+      startKey: "2026-09-13",
+      endKey: "2026-09-17",
+    });
+    expect(dragToDates(bar, -5, "move")).toEqual({
+      startKey: "2026-09-05",
+      endKey: "2026-09-09",
+    });
+  });
+
+  it("start 边缘：拖过 endKey 钳到 endKey（1 天）", () => {
+    expect(dragToDates(bar, 2, "start")).toEqual({
+      startKey: "2026-09-12",
+      endKey: "2026-09-14",
+    });
+    expect(dragToDates(bar, 10, "start")).toEqual({
+      startKey: "2026-09-14",
+      endKey: "2026-09-14",
+    });
+  });
+
+  it("end 边缘：拖过 startKey 钳到 startKey", () => {
+    expect(dragToDates(bar, -2, "end")).toEqual({
+      startKey: "2026-09-10",
+      endKey: "2026-09-12",
+    });
+    expect(dragToDates(bar, -20, "end")).toEqual({
+      startKey: "2026-09-10",
+      endKey: "2026-09-10",
+    });
   });
 });

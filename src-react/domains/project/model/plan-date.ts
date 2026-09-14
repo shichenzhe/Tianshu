@@ -110,3 +110,141 @@ export function groupByDueDate(
   });
   return byDay;
 }
+
+/* ---------- 甘特时间轴 ---------- */
+
+export type GanttGranularity = "day" | "week" | "month" | "year";
+
+export interface GanttColumn {
+  key: string;
+  label: string;
+  startKey: string;
+  endKey: string;
+  days: number;
+}
+
+/** 中心 key 对齐到粒度起点的偏移（周=周一；月/年=自然首日） */
+function alignStart(key: string, granularity: GanttGranularity): string {
+  const [y, m, d] = key.split("-").map(Number);
+  if (granularity === "week") {
+    const date = new Date(y, m - 1, d);
+    return addDaysToKey(key, -((date.getDay() + 6) % 7));
+  }
+  if (granularity === "month") {
+    return `${y}-${String(m).padStart(2, "0")}-01`;
+  }
+  if (granularity === "year") {
+    return `${y}-01-01`;
+  }
+  return key;
+}
+
+/** 整屏列：日 60（前 30）/周 24/月 18/年 6；列起点对齐粒度 */
+export function ganttColumns(
+  centerKey: string,
+  granularity: GanttGranularity,
+): GanttColumn[] {
+  const aligned = alignStart(centerKey, granularity);
+  const [y, m] = aligned.split("-").map(Number);
+  if (granularity === "day") {
+    return Array.from({ length: 60 }, (_, index) => {
+      const startKey = addDaysToKey(aligned, -30 + index);
+      const [, , dd] = startKey.split("-").map(Number);
+      return {
+        key: startKey,
+        label: String(dd),
+        startKey,
+        endKey: startKey,
+        days: 1,
+      };
+    });
+  }
+  if (granularity === "week") {
+    return Array.from({ length: 24 }, (_, index) => {
+      const startKey = addDaysToKey(aligned, (index - 12) * 7);
+      const [, wm, wd] = startKey.split("-").map(Number);
+      return {
+        key: startKey,
+        label: `${wm}.${wd}`,
+        startKey,
+        endKey: addDaysToKey(startKey, 6),
+        days: 7,
+      };
+    });
+  }
+  if (granularity === "month") {
+    return Array.from({ length: 18 }, (_, index) => {
+      const base = new Date(y, m - 1 + index - 8, 1);
+      const startKey = toDateKey(base);
+      const next = new Date(y, m + index - 8, 1);
+      const endKey = addDaysToKey(toDateKey(next), -1);
+      return {
+        key: startKey,
+        label: `${base.getMonth() + 1}`,
+        startKey,
+        endKey,
+        days: diffDays(startKey, endKey) + 1,
+      };
+    });
+  }
+  return Array.from({ length: 6 }, (_, index) => {
+    const year = y + index - 2;
+    return {
+      key: String(year),
+      label: String(year),
+      startKey: `${year}-01-01`,
+      endKey: `${year}-12-31`,
+      days: diffDays(`${year}-01-01`, `${year}-12-31`) + 1,
+    };
+  });
+}
+
+/* ---------- 甘特条与拖拽语义 ---------- */
+
+export interface GanttBar {
+  id: number;
+  startKey: string;
+  endKey: string;
+  days: number;
+}
+
+/** 事项 → 甘特条（单端日期钳 1 天；双空 → null 无日期） */
+export function toGanttBar(entry: PlanItemRecord): GanttBar | null {
+  const start = isoToDateKey(entry.startDate);
+  const end = isoToDateKey(entry.dueDate);
+  if (!start && !end) {
+    return null;
+  }
+  const startKey = start || end;
+  const endKey = end || start;
+  return {
+    id: entry.id,
+    startKey,
+    endKey,
+    days: diffDays(startKey, endKey) + 1,
+  };
+}
+
+/** 拖拽三边缘 → 新起止（纯函数）：move 平移；start/end 拖过对端贴对端（恒 ≥1 天） */
+export function dragToDates(
+  bar: GanttBar,
+  dayDelta: number,
+  edge: "move" | "start" | "end",
+): { startKey: string; endKey: string } {
+  if (edge === "move") {
+    return {
+      startKey: addDaysToKey(bar.startKey, dayDelta),
+      endKey: addDaysToKey(bar.endKey, dayDelta),
+    };
+  }
+  if (edge === "start") {
+    const startKey = addDaysToKey(bar.startKey, dayDelta);
+    return startKey <= bar.endKey
+      ? { startKey, endKey: bar.endKey }
+      : { startKey: bar.endKey, endKey: bar.endKey };
+  }
+  const endKey = addDaysToKey(bar.endKey, dayDelta);
+  return endKey >= bar.startKey
+    ? { startKey: bar.startKey, endKey }
+    : { startKey: bar.startKey, endKey: bar.startKey };
+}

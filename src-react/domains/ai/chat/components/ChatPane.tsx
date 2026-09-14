@@ -3,6 +3,10 @@
  * 唯一实例在此，输入框与消息列表共享 sending 状态；key 取会话 id，
  * 切换会话时重建（流监听与节流缓冲随之隔离）。
  * 项目模块复用时可通过可选过滤集限定＋菜单可选能力（未传不过滤）
+ * 拆分说明：消息区子树（MessageList + artifacts 旁挂）已拆至 ChatMessages，
+ * 本组件为组合壳——发送/编辑/权限等状态与回调原位持有，经 props 透传，
+ * 底部插槽注入 AgentProgress + ChatInput；props 签名与导出名不变
+ * （AI 模块 ChatView 等消费方零改动），行为与拆分前一致
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,13 +16,12 @@ import { toast } from "sonner";
 import type { MessageRecord, SessionRecord } from "../../api/session.api";
 import ChatApi, { type ChatModelParams } from "../../api/chat.api";
 import type { WorkspaceRecord } from "../../api/workspace.api";
-import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
+import ChatMessages from "./ChatMessages";
 import { parseBlocks } from "../model/blocks";
 import type { PendingFile } from "../lib/pending-file";
 import type { AccessMode } from "./PermissionCapsule";
 import AgentProgress from "./AgentProgress";
-import ArtifactsPanel from "./artifacts/ArtifactsPanel";
 import { useChatSend } from "../hooks/use-chat-send";
 import { useChatStore } from "../store/chat.store";
 import { useAiUiStore } from "../../store/ai-ui.store";
@@ -230,45 +233,39 @@ export default function ChatPane({
   const handleEditCancel = () => setEditing(null);
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <MessageList
-          sessionId={session.id}
-          workspaceId={workspace?.id ?? null}
-          compactedUpToId={session.compactedUpToId ?? null}
-          onRegenerate={handleRegenerate}
-          onEdit={handleEdit}
-          editing={editing}
-          onEditSubmit={handleEditSubmit}
-          onEditCancel={handleEditCancel}
-        />
-        {sending && (
-          <AgentProgress stepCount={stepCount} activeTool={activeTool} />
-        )}
-        {/* 底部输入区常驻（编辑态在消息区原位，与发送态互不干扰） */}
-        <div className="p-4">
-          <ChatInput
-            hasModel={hasModel}
-            sending={sending}
-            sessionId={session.id}
-            accessMode={accessMode}
-            currentMode={session.mode}
-            currentAssistantId={session.assistantId}
-            currentModelId={session.currentModelId}
-            workspaceId={workspace?.id ?? null}
-            boundAssistantIds={boundAssistantIds}
-            boundSkillNames={boundSkillNames}
-            onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
-            onOpenMcp={() => onOpenSettings("mcp")}
-            onRunCommand={handleRunCommand}
-            onSend={handleSend}
-            onStop={stop}
-          />
-        </div>
-      </div>
-      {artifactsOpen && workspace && (
-        <ArtifactsPanel sessionId={session.id} workspaceId={workspace.id} />
+    <ChatMessages
+      session={session}
+      workspace={workspace}
+      artifactsOpen={artifactsOpen}
+      editing={editing}
+      onRegenerate={handleRegenerate}
+      onEdit={handleEdit}
+      onEditSubmit={handleEditSubmit}
+      onEditCancel={handleEditCancel}
+    >
+      {sending && (
+        <AgentProgress stepCount={stepCount} activeTool={activeTool} />
       )}
-    </div>
+      {/* 底部输入区常驻（编辑态在消息区原位，与发送态互不干扰） */}
+      <div className="p-4">
+        <ChatInput
+          hasModel={hasModel}
+          sending={sending}
+          sessionId={session.id}
+          accessMode={accessMode}
+          currentMode={session.mode}
+          currentAssistantId={session.assistantId}
+          currentModelId={session.currentModelId}
+          workspaceId={workspace?.id ?? null}
+          boundAssistantIds={boundAssistantIds}
+          boundSkillNames={boundSkillNames}
+          onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
+          onOpenMcp={() => onOpenSettings("mcp")}
+          onRunCommand={handleRunCommand}
+          onSend={handleSend}
+          onStop={stop}
+        />
+      </div>
+    </ChatMessages>
   );
 }

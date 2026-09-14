@@ -7,6 +7,8 @@
  * - submit：onSend 收到 PendingFile kind "todo" 且 content 含【待办】摘要
  *   （title/status/priority/dueDate；dueDate 空 → 无；查无 id 的 token 忽略）
  * - 未传 todoItems → # 无联想（AI 模块 ChatPane 回归锚点）
+ * - 占位回退：未传 placeholder 时按 hasModel 渲染 chat 默认/modelRequired
+ *   （项目底栏无生效模型时不传 placeholder，"未选模型"提示不被压制）
  * mock 骨架同 tests/project/plus-menu-filter.test.tsx：i18n 直返 key、
  * AssistantApi/SkillApi 空列表、PlusMenu/ModelPicker/ContextUsageButton/
  * PermissionCapsule 重依赖子组件 stub（联想/镜像/发送链路与它们无关）
@@ -247,5 +249,17 @@ describe("@ 待办引用（# 联想）", () => {
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
     expect(onSend).toHaveBeenCalledWith("#需", []);
+  });
+});
+
+describe("占位回退（未传 placeholder 时按 hasModel 渲染自身文案）", () => {
+  it("hasModel=false → 占位渲染 chat:input.modelRequired（未选模型提示不被调用方压制）", () => {
+    const textarea = renderInput({ hasModel: false });
+    expect(textarea.placeholder).toBe("chat:input.modelRequired");
+  });
+
+  it("hasModel=true → 占位渲染 chat 默认文案", () => {
+    const textarea = renderInput({ hasModel: true });
+    expect(textarea.placeholder).toBe("chat:input.placeholder");
   });
 });

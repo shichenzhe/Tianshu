@@ -57,6 +57,8 @@ export default function ProjectChatBar({
   const queryClient = useQueryClient();
   const session = detail.session;
   const { sending, send, stop } = useChatSend(session.id);
+  // 发送版本广播（引用稳定）：成功发送后 +1，动态流面板据此丢弃过期编辑态
+  const bumpSendVersion = useChatStore((state) => state.bumpSendVersion);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
   // 本地任务开关（T8）：＋菜单内切换，发送时按开关态追加指令
   const [localTask, setLocalTask] = useState(false);
@@ -153,6 +155,11 @@ export default function ProjectChatBar({
       : injected;
     try {
       await send(finalContent, undefined, overrides);
+      // 防呆（跨组件版 ChatPane handleSend 的 setEditing(null)）：成功发出
+      // 新消息后广播版本 +1——ActivityPane 持有的编辑态随之过期，否则随后
+      // 提交的编辑重发会经 editAndResend 截断其后的全部消息（刚发的往来
+      // 静默丢失）。发送与编辑态分属两组件，经 store 版本号传递信号
+      bumpSendVersion(session.id);
     } catch (e) {
       toast.error(mapIpcError(e));
       // rethrow：保持调用链 Promise 拒绝语义（ChatInput 已乐观清空，此处静默防双弹由其 catch 处理）
@@ -207,7 +214,14 @@ export default function ProjectChatBar({
           onRunCommand={handleRunCommand}
           onSend={handleSend}
           onStop={stop}
-          placeholder={t("project:chatBar.placeholder")}
+          placeholder={
+            // 无生效模型时不传项目文案：ChatInput 自身回退 modelRequired
+            // 占位提示（placeholder ?? t(hasModel ? ... : modelRequired)），
+            // 项目文案不得压制"未选模型"引导
+            session.currentModelId
+              ? t("project:chatBar.placeholder")
+              : undefined
+          }
         />
       </div>
     </div>

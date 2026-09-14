@@ -2,8 +2,9 @@
  * 卡片式输入框(P3 spec §1):textarea(文字与内联引用 token 交叉)居首,
  * 下行左 ＋菜单/权限胶囊/模式徽标、右 模型选择 + 发送/停止。
  * 引用即文字:@ 文件 / ⚡技能 / /命令 / #待办 以 token 形式留在输入流中,
- * 镜像层渲染 pill 高亮(textarea 文字透明),chips 机制已移除;#待办 的
- * 标题映射经输入区下方"已引用"chips 行可见(pill 正文保留 token 原文)。
+ * 镜像层渲染 pill 高亮(textarea 文字透明)——P3 期的输入流行内 chips
+ * 机制已移除;#待办 的标题映射另经输入区下方"已引用"chips 行可见
+ * (独立的只读展示行,非行内 chips;pill 正文保留 token 原文)。
  * 发送:命令 token 移出执行(onRunCommand);文件/技能/待办 token 读内容
  * 随 onSend 注入(消息文本保留 token 原样)。
  * 触发器:@ 文件、/ 命令+技能、# 待办(todoItems 传入时启用——项目底栏

@@ -6,9 +6,13 @@
  * - ChatInput stub 捕获 props：sessionId=detail.session.id、
  *   workspaceId=detail.assetWorkspaceId、boundAssistantIds/boundSkillNames
  *   过滤（同 ActivityPane 原逻辑——仅 valid 项、技能按 itemName）
- * - placeholder 传 project:chatBar.placeholder（t mock 返回 key）
+ * - placeholder 有生效模型传 project:chatBar.placeholder、无模型不传
+ *   （ChatInput 自身回退 modelRequired 提示，渲染断言在
+ *   tests/ai/chat-input-todo.test.tsx 占位回退用例）（t mock 返回 key）
  * - onSend('hi', []) → ChatApi.send 被调（经 useChatSend 真实例链路）；
  *   文件/技能引用按 ChatPane 同语义注入前缀块
+ * - 成功发送 → chat.store 发送版本 +1（ActivityPane 订阅丢弃过期编辑态）；
+ *   失败不递增 + toast 兜底
  * - sending（chat.store isStreaming）→ AgentProgress stub 出现/消失
  * ChatApi 模块级 mock（含 onChatStream 空订阅），chat.store 用真实实现
  */
@@ -189,14 +193,14 @@ const DETAIL: ProjectDetail = {
   },
 };
 
-function renderBar() {
+function renderBar(detail: ProjectDetail = DETAIL) {
   render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <ProjectChatBar detail={DETAIL} onOpenSettings={() => {}} />
+      <ProjectChatBar detail={detail} onOpenSettings={() => {}} />
     </QueryClientProvider>,
   );
 }
@@ -241,11 +245,48 @@ describe("ProjectChatBar 底栏", () => {
     expect(chatApiMock.getPermission).toHaveBeenCalledWith(SESSION_ID);
   });
 
-  it("placeholder 传 project:chatBar.placeholder 文案 key", async () => {
+  it("placeholder：有生效模型传 project:chatBar.placeholder，无模型不传（ChatInput 回退 modelRequired 提示）", async () => {
+    // 有生效模型：项目占位文案生效
+    renderBar({
+      ...DETAIL,
+      session: { ...DETAIL.session, currentModelId: 7 },
+    });
+    await screen.findByTestId("chat-input-stub");
+    expect(inputProps.current?.placeholder).toBe("project:chatBar.placeholder");
+    cleanup();
+
+    // 无生效模型：不传项目文案（undefined）——ChatInput 自身按
+    // placeholder ?? t(hasModel ? chat:input.placeholder
+    //   : chat:input.modelRequired) 回退"未选模型"提示，项目文案不得
+    // 压制该引导（modelRequired 渲染断言见 chat-input-todo.test.tsx）
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+    expect(inputProps.current?.hasModel).toBe(false);
+    expect(inputProps.current?.placeholder).toBeUndefined();
+  });
+
+  it("成功发送 → 发送版本 +1（ActivityPane 据此丢弃过期编辑态）；失败不递增并 toast", async () => {
     renderBar();
     await screen.findByTestId("chat-input-stub");
 
-    expect(inputProps.current?.placeholder).toBe("project:chatBar.placeholder");
+    // 成功路径：send resolve 后广播版本 +1（sendVersions 为持久计数，非流式态）
+    const before = useChatStore.getState().sendVersions[SESSION_ID] ?? 0;
+    fireEvent.click(screen.getByTestId("stub-send"));
+    await waitFor(() => expect(chatApiMock.send).toHaveBeenCalled());
+    await act(async () => {});
+    expect(useChatStore.getState().sendVersions[SESSION_ID] ?? 0).toBe(
+      before + 1,
+    );
+
+    // 失败路径：版本不递增（编辑态保留）+ toast 兜底恰一次
+    chatApiMock.send.mockRejectedValueOnce(new Error("no model"));
+    await act(async () => {
+      await inputProps.current?.onSend("再试", []).catch(() => {});
+    });
+    expect(useChatStore.getState().sendVersions[SESSION_ID] ?? 0).toBe(
+      before + 1,
+    );
+    expect(toastMock.error).toHaveBeenCalledTimes(1);
   });
 
   it("onSend('hi', []) → ChatApi.send；文件/技能引用按 ChatPane 语义注入前缀块", async () => {

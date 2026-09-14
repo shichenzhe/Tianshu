@@ -5,9 +5,11 @@
  * ProjectWorkspaceView 渲染贯穿四 Tab），本面板只承载消息与产物旁挂。
  * 消息编辑接线（editing 态 + 重新生成/编辑重发）由本面板自持，语义自
  * ChatPane 复制；发送链 useChatSend 唯一实例在 ProjectChatBar（流订阅
- * 单一来源），此处经 ChatApi 直调 + chat.store 标记流式态，不二次订阅。
+ * 单一来源），此处经 ChatApi 直调 + chat.store 标记流式态，不二次订阅；
+ * 底栏成功发送经 chat.store 发送版本号广播，本面板订阅以丢弃过期编辑态
+ * （跨组件版的 ChatPane handleSend setEditing 防呆）。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -81,6 +83,16 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
   // 此处仅为重发/重新生成标记 sending 态与失败收尾，不订阅流事件
   const startStream = useChatStore((s) => s.startStream);
   const finishStream = useChatStore((s) => s.finishStream);
+  // 发送版本信号（底栏成功发送后 +1）：本面板编辑态随之过期——提交会经
+  // editAndResend 截断其后全部消息（含刚发的往来，静默丢失）。版本 0 =
+  // 该会话尚无成功发送（含初始挂载/刚切入），跳过；session.id 入依赖，
+  // 切会话时旧会话的编辑态（messageId 语义已失效）一并丢弃
+  const sendVersion = useChatStore((s) => s.sendVersions[session.id]) ?? 0;
+  useEffect(() => {
+    if (sendVersion > 0) {
+      setEditing(null);
+    }
+  }, [sendVersion, session.id]);
 
   const providersQuery = useQuery({
     queryKey: ["providers"],

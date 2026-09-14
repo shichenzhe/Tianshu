@@ -140,12 +140,15 @@ export default class ProjectRepository {
    * 删除项目：先清资产空间（目录树 + workspace 行），再级联清
    * 附件关联 → 计划事项 → planView → message → session → member →
    * binding → project（附件关联表无 projectId 列，按事项 id 集先删；
-   * 文件实体随资产目录树删除/保留在资产空间）
+   * 双语义：删项目时文件实体随资产目录树一并销毁，仅删除单个计划事项
+   * 路径的附件关联解绑会保留文件实体在资产空间）
    * @param id 项目 id
    */
   async remove(id: number): Promise<void> {
     await this.removeAssetWorkspace(id);
-    // 级联清计划事项附件关联（v6 附件表无 projectId 列，按事项 id 集删；文件实体保留资产空间）
+    // 级联清计划事项附件关联（v6 附件表无 projectId 列，按事项 id 集删；
+    // 文件实体已随上面的资产目录树销毁——"保留在资产空间"仅是删除单个
+    // 事项/解绑附件路径的语义，此处不再成立）
     const itemIds = await prisma.planItem.findMany({
       where: { projectId: id },
       select: { id: true },

@@ -10,7 +10,14 @@
 import { forwardRef, useState } from "react";
 import type { ComponentPropsWithoutRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ListFilter, MoreHorizontal, Plus, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ListFilter,
+  MoreHorizontal,
+  Plus,
+  X,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,7 +49,11 @@ import {
   PLAN_STATUSES,
 } from "../../../../electron/domains/project/plan-item.entity";
 import type { PlanItemSource } from "../../../../electron/domains/project/plan-item.entity";
-import type { FilterCondition } from "../model/plan-view-engine";
+import type {
+  FilterCondition,
+  SortField,
+  SortRule,
+} from "../model/plan-view-engine";
 import PlanViewNameDialog from "./PlanViewNameDialog";
 import { PRIORITY_LABEL_KEYS, STATUS_LABEL_KEYS } from "./PlanItemDialog";
 
@@ -52,12 +63,14 @@ type Translate = (key: string) => string;
 
 interface PlanFilterPopoverProps {
   conditions: FilterCondition[];
+  sortRules: SortRule[];
   isDirty: boolean;
   members: ProjectMemberItem[];
   currentUserId: number;
   /** 标签候选（当前事项 distinct，PlanPane 传入；缺省空） */
   tagOptions?: string[];
   onChange: (updater: (prev: FilterCondition[]) => FilterCondition[]) => void;
+  onSortChange: (updater: (prev: SortRule[]) => SortRule[]) => void;
   onReset: () => void;
   onSaveOverwrite: () => void;
   onSaveAsNew: (name: string) => void;
@@ -123,6 +136,43 @@ const SOURCE_LABEL_KEYS: Record<PlanItemSource, string> = {
   ai: "project:planView.sourceAi",
   template: "project:planView.sourceTemplate",
 };
+
+/** 可排序字段（添加菜单顺序；字段唯一，同条件逻辑） */
+const SORT_FIELD_OPTIONS: SortField[] = [
+  "status",
+  "priority",
+  "dueDate",
+  "createdAt",
+  "title",
+];
+
+const SORT_FIELD_LABEL_KEYS: Record<SortField, string> = {
+  status: "project:planView.fieldStatus",
+  priority: "project:planView.fieldPriority",
+  dueDate: "project:planView.sortFieldDueDate",
+  createdAt: "project:planView.sortFieldCreatedAt",
+  title: "project:planView.fieldTitle",
+};
+
+/** 排序规则上限（多级排序场景足够） */
+const MAX_SORT_RULES = 3;
+
+/** onChange updater 工厂（纯函数）：新增排序规则（字段唯一、缺省升序） */
+const addSortRuleUpdater =
+  (field: SortField) =>
+  (prev: SortRule[]): SortRule[] => [...prev, { field, dir: "asc" }];
+
+/** 删除指定字段的排序规则 */
+const removeSortRuleUpdater =
+  (field: SortField) =>
+  (prev: SortRule[]): SortRule[] =>
+    prev.filter((rule) => rule.field !== field);
+
+/** 局部补丁指定字段规则（切换字段/方向） */
+const patchSortRuleUpdater =
+  (field: SortField, patch: Partial<SortRule>) =>
+  (prev: SortRule[]): SortRule[] =>
+    prev.map((rule) => (rule.field === field ? { ...rule, ...patch } : rule));
 
 /** 操作符对应的空值（列表操作符空数组，其余空串） */
 const emptyValueOf = (op: ConditionOp): string | string[] =>
@@ -481,9 +531,7 @@ function TagsValueControl({
         </button>
       ))}
       {tagOptions.length === 0 && (
-        <span className="text-xs text-muted-foreground">
-          {label}
-        </span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       )}
     </div>
   );
@@ -567,13 +615,146 @@ function ConditionRow({
   );
 }
 
+/** 排序规则行：字段 Select（可切换）+ 方向切换按钮 + 删除 */
+function SortRuleRow({
+  rule,
+  usedFields,
+  onChange,
+}: {
+  rule: SortRule;
+  usedFields: SortField[];
+  onChange: PlanFilterPopoverProps["onSortChange"];
+}) {
+  const { t } = useTranslation(["project", "common"]);
+  const dirLabelKey =
+    rule.dir === "asc"
+      ? "project:planView.sortAsc"
+      : "project:planView.sortDesc";
+  return (
+    <div className="flex items-center gap-1.5">
+      <Select
+        value={rule.field}
+        onValueChange={(field) =>
+          onChange(
+            patchSortRuleUpdater(rule.field, { field: field as SortField }),
+          )
+        }
+      >
+        <SelectTrigger
+          aria-label={t(SORT_FIELD_LABEL_KEYS[rule.field])}
+          className="h-7 flex-1 border-transparent bg-secondary/40 text-xs"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {SORT_FIELD_OPTIONS.map((field) => (
+            <SelectItem
+              key={field}
+              value={field}
+              disabled={usedFields.includes(field) && field !== rule.field}
+            >
+              {t(SORT_FIELD_LABEL_KEYS[field])}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={t(dirLabelKey)}
+        onClick={() =>
+          onChange(
+            patchSortRuleUpdater(rule.field, {
+              dir: rule.dir === "asc" ? "desc" : "asc",
+            }),
+          )
+        }
+        className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+      >
+        {rule.dir === "asc" ? (
+          <ArrowUp className="h-3.5 w-3.5" />
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5" />
+        )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label={t("common:delete")}
+        onClick={() => onChange(removeSortRuleUpdater(rule.field))}
+        className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+      >
+        <X className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+/** 排序区：小节标题 + 规则行 + 「添加排序」菜单（已用字段禁用/上限禁用） */
+function SortSection({
+  sortRules,
+  onChange,
+}: {
+  sortRules: SortRule[];
+  onChange: PlanFilterPopoverProps["onSortChange"];
+}) {
+  const { t } = useTranslation(["project", "common"]);
+  const usedFields = sortRules.map((rule) => rule.field);
+  return (
+    <div className="mt-3 border-t border-border/50 pt-2">
+      <span className="text-xs font-medium text-muted-foreground">
+        {t("project:planView.sort")}
+      </span>
+      <div className="mt-1.5 flex flex-col gap-1.5">
+        {sortRules.map((rule) => (
+          <SortRuleRow
+            key={rule.field}
+            rule={rule}
+            usedFields={usedFields}
+            onChange={onChange}
+          />
+        ))}
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={sortRules.length >= MAX_SORT_RULES}
+            className="mt-1.5 h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("project:planView.addSort")}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="start"
+          className="rounded-lg border border-border/50 shadow-lg"
+        >
+          {SORT_FIELD_OPTIONS.map((field) => (
+            <DropdownMenuItem
+              key={field}
+              disabled={usedFields.includes(field)}
+              onSelect={() => onChange(addSortRuleUpdater(field))}
+            >
+              {t(SORT_FIELD_LABEL_KEYS[field])}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
 export default function PlanFilterPopover({
   conditions,
+  sortRules,
   isDirty,
   members,
   currentUserId,
   tagOptions = [],
   onChange,
+  onSortChange,
   onReset,
   onSaveOverwrite,
   onSaveAsNew,
@@ -626,6 +807,7 @@ export default function PlanFilterPopover({
             usedFields={conditions.map((condition) => condition.field)}
             onAdd={(field) => onChange(addConditionUpdater(field))}
           />
+          <SortSection sortRules={sortRules} onChange={onSortChange} />
         </PopoverContent>
       </Popover>
       <PlanViewNameDialog

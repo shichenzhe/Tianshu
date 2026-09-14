@@ -58,7 +58,10 @@ vi.mock("@/i18n", () => ({
 }));
 
 import PlanFilterPopover from "../../src-react/domains/project/components/PlanFilterPopover";
-import type { FilterCondition } from "../../src-react/domains/project/model/plan-view-engine";
+import type {
+  FilterCondition,
+  SortRule,
+} from "../../src-react/domains/project/model/plan-view-engine";
 import type { ProjectMemberItem } from "../../../electron/domains/project/project.entity";
 
 const MEMBERS: ProjectMemberItem[] = [
@@ -71,6 +74,7 @@ type PopoverProps = ComponentProps<typeof PlanFilterPopover>;
 
 interface RenderOverrides {
   initialConditions?: FilterCondition[];
+  initialSortRules?: SortRule[];
   overrides?: Partial<PopoverProps>;
 }
 
@@ -80,9 +84,11 @@ interface RenderOverrides {
  */
 function renderPopover({
   initialConditions = [],
+  initialSortRules = [],
   overrides = {},
 }: RenderOverrides = {}) {
   const onChange = vi.fn();
+  const onSortChange = vi.fn();
   const props = {
     isDirty: false,
     members: MEMBERS,
@@ -92,20 +98,28 @@ function renderPopover({
     onSaveAsNew: vi.fn(),
     ...overrides,
     onChange,
+    onSortChange,
   } as PopoverProps & Record<string, ReturnType<typeof vi.fn>>;
   function Harness() {
     const [conditions, setConditions] = useState(initialConditions);
+    const [sortRules, setSortRules] = useState(initialSortRules);
     const applyChange = (
       updater: (prev: FilterCondition[]) => FilterCondition[],
     ) => {
       onChange(updater);
       setConditions((prev) => updater(prev));
     };
+    const applySortChange = (updater: (prev: SortRule[]) => SortRule[]) => {
+      onSortChange(updater);
+      setSortRules((prev) => updater(prev));
+    };
     return (
       <PlanFilterPopover
         {...props}
         conditions={conditions}
         onChange={applyChange}
+        sortRules={sortRules}
+        onSortChange={applySortChange}
       />
     );
   }
@@ -120,6 +134,17 @@ function lastApplied(
 ): FilterCondition[] {
   const calls = props.onChange.mock.calls as [
     (prev: FilterCondition[]) => FilterCondition[],
+  ][];
+  return calls[calls.length - 1][0](prev);
+}
+
+/** onSortChange 最近一次 updater 应用到 prev 快照的产出 */
+function lastAppliedSorts(
+  props: ReturnType<typeof renderPopover>,
+  prev: SortRule[],
+): SortRule[] {
+  const calls = props.onSortChange.mock.calls as [
+    (prev: SortRule[]) => SortRule[],
   ][];
   return calls[calls.length - 1][0](prev);
 }
@@ -145,6 +170,15 @@ async function addCondition(panel: HTMLElement, fieldName: string) {
     within(panel).getByRole("button", {
       name: "project:planView.addCondition",
     }),
+  );
+  fireEvent.click(within(menu).getByRole("menuitem", { name: fieldName }));
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+}
+
+/** 打开「添加排序」菜单点字段（同 addCondition 模式） */
+async function addSortRule(panel: HTMLElement, fieldName: string) {
+  const menu = await openMenu(
+    within(panel).getByRole("button", { name: "project:planView.addSort" }),
   );
   fireEvent.click(within(menu).getByRole("menuitem", { name: fieldName }));
   await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
@@ -330,6 +364,65 @@ describe("条件增删与值控件", () => {
     await waitFor(() =>
       expect(within(panel).queryByRole("checkbox")).toBeNull(),
     );
+  });
+});
+
+describe("排序规则区", () => {
+  it("添加排序默认 asc；点方向按钮切 desc", async () => {
+    const props = renderPopover();
+    const panel = await openPanel();
+
+    await addSortRule(panel, "project:planView.fieldPriority");
+    expect(lastAppliedSorts(props, [])).toEqual([
+      { field: "priority", dir: "asc" },
+    ]);
+
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "project:planView.sortAsc" }),
+    );
+    expect(
+      lastAppliedSorts(props, [{ field: "priority", dir: "asc" }]),
+    ).toEqual([{ field: "priority", dir: "desc" }]);
+  });
+
+  it("排序字段可切换；删除规则清空", async () => {
+    const initial: SortRule[] = [{ field: "title", dir: "asc" }];
+    const props = renderPopover({ initialSortRules: initial });
+    const panel = await openPanel();
+
+    await selectOption(
+      within(panel).getByRole("combobox", {
+        name: "project:planView.fieldTitle",
+      }),
+      "project:planView.sortFieldDueDate",
+    );
+    expect(lastAppliedSorts(props, initial)).toEqual([
+      { field: "dueDate", dir: "asc" },
+    ]);
+
+    const deleteButtons = within(panel).getAllByRole("button", {
+      name: "common:delete",
+    });
+    fireEvent.click(deleteButtons[deleteButtons.length - 1]);
+    expect(lastAppliedSorts(props, [{ field: "dueDate", dir: "asc" }])).toEqual(
+      [],
+    );
+  });
+
+  it("已用字段禁用；3 条上限后添加入口禁用", async () => {
+    renderPopover({
+      initialSortRules: [
+        { field: "status", dir: "asc" },
+        { field: "priority", dir: "desc" },
+        { field: "title", dir: "asc" },
+      ],
+    });
+    const panel = await openPanel();
+
+    const addSort = within(panel).getByRole("button", {
+      name: "project:planView.addSort",
+    });
+    expect(addSort).toHaveProperty("disabled", true);
   });
 });
 

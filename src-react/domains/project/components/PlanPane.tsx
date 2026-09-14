@@ -130,11 +130,11 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
 
-/** 标签候选 = 当前事项 distinct（筛选面板 chips 数据源） */
-const tagOptions = useMemo(
-  () => [...new Set(items.flatMap((item) => item.tags))].sort(),
-  [items],
-);
+  /** 标签候选 = 当前事项 distinct（筛选面板 chips 数据源） */
+  const tagOptions = useMemo(
+    () => [...new Set(items.flatMap((item) => item.tags))].sort(),
+    [items],
+  );
   const fields = useMemo(() => fieldsQuery.data ?? [], [fieldsQuery.data]);
 
   const visibleItems = useMemo(
@@ -332,6 +332,7 @@ const tagOptions = useMemo(
       <div className="flex flex-wrap items-center gap-1.5 border-b border-border/50 px-4 py-2">
         <PlanFilterPopover
           conditions={draft.conditions}
+          sortRules={draft.sortRules}
           isDirty={isDirty}
           members={members}
           currentUserId={user.id}
@@ -340,6 +341,12 @@ const tagOptions = useMemo(
             setDraft((prev) => ({
               ...prev,
               conditions: updater(prev.conditions),
+            }))
+          }
+          onSortChange={(updater) =>
+            setDraft((prev) => ({
+              ...prev,
+              sortRules: updater(prev.sortRules),
             }))
           }
           onReset={resetDraft}

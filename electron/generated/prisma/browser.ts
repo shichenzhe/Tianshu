@@ -122,3 +122,8 @@ export type planItem = Prisma.planItemModel
  * 
  */
 export type planView = Prisma.planViewModel
+/**
+ * Model planItemAttachment
+ * 
+ */
+export type planItemAttachment = Prisma.planItemAttachmentModel

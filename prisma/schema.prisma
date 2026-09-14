@@ -258,6 +258,7 @@ model planItem {
   startDate   DateTime? // 排期开始（甘特/日历视图）
   dueDate     DateTime? // 截止日期
   source      String   @default("manual") // manual|ai|template
+  description String? // Markdown 原文（弹窗编辑/预览）
   sortOrder    Int      @default(0)
   createdById  Int
   createdAt    DateTime @default(now())
@@ -281,4 +282,14 @@ model planView {
 
   // 唯一性由 v5 部分索引（WHERE name != ''）保证，Prisma 无法表达故不在 schema 声明
   @@index([projectId], map: "plan_view_projectId_index")
+}
+
+model planItemAttachment {
+  id        Int      @id @default(autoincrement())
+  planItemId Int
+  fileName  String
+  assetPath String
+  createdAt DateTime @default(now())
+
+  @@index([planItemId], map: "plan_item_attachment_planItemId_index")
 }

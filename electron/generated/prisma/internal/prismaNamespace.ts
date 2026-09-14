@@ -417,7 +417,8 @@ export const ModelName = {
   projectMember: 'projectMember',
   projectBinding: 'projectBinding',
   planItem: 'planItem',
-  planView: 'planView'
+  planView: 'planView',
+  planItemAttachment: 'planItemAttachment'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -433,7 +434,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -1991,6 +1992,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    planItemAttachment: {
+      payload: Prisma.$planItemAttachmentPayload<ExtArgs>
+      fields: Prisma.planItemAttachmentFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.planItemAttachmentFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.planItemAttachmentFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        findFirst: {
+          args: Prisma.planItemAttachmentFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.planItemAttachmentFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        findMany: {
+          args: Prisma.planItemAttachmentFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>[]
+        }
+        create: {
+          args: Prisma.planItemAttachmentCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        createMany: {
+          args: Prisma.planItemAttachmentCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.planItemAttachmentCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>[]
+        }
+        delete: {
+          args: Prisma.planItemAttachmentDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        update: {
+          args: Prisma.planItemAttachmentUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        deleteMany: {
+          args: Prisma.planItemAttachmentDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.planItemAttachmentUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.planItemAttachmentUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>[]
+        }
+        upsert: {
+          args: Prisma.planItemAttachmentUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$planItemAttachmentPayload>
+        }
+        aggregate: {
+          args: Prisma.PlanItemAttachmentAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregatePlanItemAttachment>
+        }
+        groupBy: {
+          args: Prisma.planItemAttachmentGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanItemAttachmentGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.planItemAttachmentCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.PlanItemAttachmentCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2309,6 +2384,7 @@ export const PlanItemScalarFieldEnum = {
   startDate: 'startDate',
   dueDate: 'dueDate',
   source: 'source',
+  description: 'description',
   sortOrder: 'sortOrder',
   createdById: 'createdById',
   createdAt: 'createdAt',
@@ -2332,6 +2408,17 @@ export const PlanViewScalarFieldEnum = {
 } as const
 
 export type PlanViewScalarFieldEnum = (typeof PlanViewScalarFieldEnum)[keyof typeof PlanViewScalarFieldEnum]
+
+
+export const PlanItemAttachmentScalarFieldEnum = {
+  id: 'id',
+  planItemId: 'planItemId',
+  fileName: 'fileName',
+  assetPath: 'assetPath',
+  createdAt: 'createdAt'
+} as const
+
+export type PlanItemAttachmentScalarFieldEnum = (typeof PlanItemAttachmentScalarFieldEnum)[keyof typeof PlanItemAttachmentScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2562,6 +2649,7 @@ export type GlobalOmitConfig = {
   projectBinding?: Prisma.projectBindingOmit
   planItem?: Prisma.planItemOmit
   planView?: Prisma.planViewOmit
+  planItemAttachment?: Prisma.planItemAttachmentOmit
 }
 
 /* Types for Logging */

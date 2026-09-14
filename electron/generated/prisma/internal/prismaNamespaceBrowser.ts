@@ -71,7 +71,8 @@ export const ModelName = {
   projectMember: 'projectMember',
   projectBinding: 'projectBinding',
   planItem: 'planItem',
-  planView: 'planView'
+  planView: 'planView',
+  planItemAttachment: 'planItemAttachment'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -369,6 +370,7 @@ export const PlanItemScalarFieldEnum = {
   startDate: 'startDate',
   dueDate: 'dueDate',
   source: 'source',
+  description: 'description',
   sortOrder: 'sortOrder',
   createdById: 'createdById',
   createdAt: 'createdAt',
@@ -392,6 +394,17 @@ export const PlanViewScalarFieldEnum = {
 } as const
 
 export type PlanViewScalarFieldEnum = (typeof PlanViewScalarFieldEnum)[keyof typeof PlanViewScalarFieldEnum]
+
+
+export const PlanItemAttachmentScalarFieldEnum = {
+  id: 'id',
+  planItemId: 'planItemId',
+  fileName: 'fileName',
+  assetPath: 'assetPath',
+  createdAt: 'createdAt'
+} as const
+
+export type PlanItemAttachmentScalarFieldEnum = (typeof PlanItemAttachmentScalarFieldEnum)[keyof typeof PlanItemAttachmentScalarFieldEnum]
 
 
 export const SortOrder = {

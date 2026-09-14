@@ -242,6 +242,37 @@ export function usePlanViews(projectId: number) {
     [runViewMutation, views, activeViewId, setActiveViewId],
   );
 
+  /** Tab 拖拽排序：乐观按新序重排缓存 → reorder 通道写 sortOrder；失败失效回滚 */
+  const reorderViews = useCallback(
+    async (orderedIds: number[]) => {
+      const byId = new Map(views.map((view) => [view.id, view]));
+      const next = orderedIds
+        .map((id, index) => {
+          const view = byId.get(id);
+          return view ? { ...view, sortOrder: index } : null;
+        })
+        .filter((view): view is PlanViewRecord => view !== null);
+      if (next.length !== views.length) {
+        return;
+      }
+      queryClient.setQueryData<PlanViewRecord[]>(
+        PLAN_VIEWS_KEY(projectId),
+        () => next,
+      );
+      try {
+        await PlanViewApi.reorder(
+          orderedIds.map((id, sortOrder) => ({ id, sortOrder })),
+        );
+      } catch (error) {
+        await queryClient.invalidateQueries({
+          queryKey: PLAN_VIEWS_KEY(projectId),
+        });
+        toast.error(mapIpcError(error));
+      }
+    },
+    [views, projectId, queryClient],
+  );
+
   const changeType = useCallback(
     async (type: PlanViewType) => {
       if (!activeView || activeView.type === type) {
@@ -270,6 +301,7 @@ export function usePlanViews(projectId: number) {
     addView,
     renameView,
     removeView,
+    reorderViews,
     changeType,
   };
 }

@@ -94,6 +94,7 @@ afterEach(() => {
   planViewMock.create.mockReset();
   planViewMock.update.mockReset();
   planViewMock.remove.mockReset();
+  planViewMock.reorder.mockReset();
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -194,6 +195,27 @@ describe("usePlanViews 变更动作", () => {
     expect(result.current.views).toHaveLength(3);
     expect(result.current.activeViewId).toBe(12);
     expect(result.current.activeView?.name).toBe("我的视图");
+  });
+
+  it("reorderViews 重排 → reorder 通道收到 0..n-1 载荷且 views 按新序重排", async () => {
+    planViewMock.list.mockResolvedValue(TWO_VIEWS);
+    planViewMock.reorder.mockResolvedValue(undefined);
+    const { result } = renderPlanViews();
+    await waitFor(() => expect(result.current.views).toHaveLength(2));
+
+    await act(async () => {
+      await result.current.reorderViews([11, 10]);
+    });
+
+    expect(planViewMock.reorder).toHaveBeenCalledWith([
+      { id: 11, sortOrder: 0 },
+      { id: 10, sortOrder: 1 },
+    ]);
+    // setQueryData 乐观写入经订阅通知重渲染（异步传播），waitFor 到位
+    await waitFor(() =>
+      expect(result.current.views.map((v) => v.id)).toEqual([11, 10]),
+    );
+    expect(result.current.views.map((v) => v.sortOrder)).toEqual([0, 1]);
   });
 
   it("removeView 失败（mock reject）→ invalidateQueries + toast.error，激活视图不变", async () => {

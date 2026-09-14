@@ -57,7 +57,9 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
 }));
 
-import PlanViewTabs from "../../src-react/domains/project/components/PlanViewTabs";
+import PlanViewTabs, {
+  reorderTabViews,
+} from "../../src-react/domains/project/components/PlanViewTabs";
 import PlanViewNameDialog from "../../src-react/domains/project/components/PlanViewNameDialog";
 import type { PlanViewRecord } from "../../../electron/domains/project/plan-view.entity";
 
@@ -81,6 +83,34 @@ const VIEWS: PlanViewRecord[] = [
   makeView({ id: 11, type: "kanban", sortOrder: 1 }),
 ];
 
+describe("reorderTabViews 纯函数（拖拽落点语义）", () => {
+  const views = [
+    makeView({ id: 10, sortOrder: 0 }),
+    makeView({ id: 11, sortOrder: 1 }),
+    makeView({ id: 12, sortOrder: 2 }),
+  ];
+
+  it("把 active 移到 over 位置（其余顺延）", () => {
+    expect(reorderTabViews(views, 10, 12)?.map((v) => v.id)).toEqual([
+      11, 10, 12,
+    ]);
+    expect(reorderTabViews(views, 12, 10)?.map((v) => v.id)).toEqual([
+      12, 10, 11,
+    ]);
+  });
+
+  it("原位（active===over）与未知 id → null（no-op）", () => {
+    expect(reorderTabViews(views, 11, 11)).toBeNull();
+    expect(reorderTabViews(views, 99, 10)).toBeNull();
+    expect(reorderTabViews(views, 10, 99)).toBeNull();
+  });
+
+  it("返回的 sortOrder 重排为 0..n-1（落库载荷序）", () => {
+    const next = reorderTabViews(views, 10, 12) ?? [];
+    expect(next.map((v) => v.sortOrder)).toEqual([0, 1, 2]);
+  });
+});
+
 /** 渲染 Tab 栏（缺省两默认视图 + 激活 10），返回回调桩 */
 function renderTabs(
   overrides: Partial<ComponentProps<typeof PlanViewTabs>> = {},
@@ -93,6 +123,7 @@ function renderTabs(
     onAdd: vi.fn(),
     onRename: vi.fn(),
     onRemove: vi.fn(),
+    onReorder: vi.fn(),
     ...overrides,
   };
   render(<PlanViewTabs {...props} />);

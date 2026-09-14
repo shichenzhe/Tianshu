@@ -91,6 +91,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     addView,
     renameView,
     removeView,
+    reorderViews,
     changeType,
     resetDraft,
     saveOverwrite,
@@ -325,6 +326,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           onAdd={(type) => void addView(type, t(PLAN_VIEW_NAME_KEYS[type]))}
           onRename={(id, name) => void renameView(id, name)}
           onRemove={(id) => void removeView(id)}
+          onReorder={(orderedIds) => void reorderViews(orderedIds)}
         />
       )}
 

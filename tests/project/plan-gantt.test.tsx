@@ -289,6 +289,23 @@ describe("拖拽调期（pointer 提交链）", () => {
     expect(props.onEdit).toHaveBeenCalledWith(ITEMS[0]);
   });
 
+  it("非主键（右键）pointerDown 不开会话，随后的 up 不提交", () => {
+    const props = renderGantt();
+    fireEvent.pointerDown(bar(1) as HTMLElement, { button: 2, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 98 });
+    fireEvent.pointerUp(window);
+    expect(props.onChangeDates).not.toHaveBeenCalled();
+  });
+
+  it("pointercancel 中断会话 → 后续全局 up 不提交（陈旧态防护）", () => {
+    const props = renderGantt();
+    fireEvent.pointerDown(bar(1) as HTMLElement, { button: 0, clientX: 70 });
+    fireEvent.pointerMove(window, { clientX: 98 }); // dayDelta=1
+    fireEvent.pointerCancel(window);
+    fireEvent.pointerUp(window); // 取消后的杂散 up：不得误写
+    expect(props.onChangeDates).not.toHaveBeenCalled();
+  });
+
   it("未传 onChangeDates → 条形不进入拖拽（pointerDown/move/up 无副作用）", () => {
     const props = renderGantt({ onChangeDates: undefined });
     fireEvent.pointerDown(bar(1) as HTMLElement, { button: 0, clientX: 70 });

@@ -188,11 +188,17 @@ export default function PlanGanttView({
       }
       setDrag(null);
     };
+    /** 会话被系统取消（OS 手势/窗口失焦）：清会话不提交，防陈旧态在下次全局 up 误写 */
+    const handleCancel = () => {
+      setDrag(null);
+    };
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleCancel);
     return () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleCancel);
     };
   }, [drag, dayWidth, itemBars, onChangeDates]);
 
@@ -252,7 +258,7 @@ export default function PlanGanttView({
 
       <div className="flex min-h-0 flex-1 overflow-auto">
         {/* 左列：任务名 */}
-        <div className="w-52 shrink-0 border-r border-border/50">
+        <div className="sticky left-0 z-10 w-52 shrink-0 border-r border-border/50 bg-background">
           <div className="h-7 border-b border-border/50" />
           {itemBars.map(({ item, bar }) => (
             <button
@@ -321,6 +327,9 @@ export default function PlanGanttView({
                     onPointerDown={
                       onChangeDates
                         ? (event) => {
+                            if (event.button !== 0) {
+                              return;
+                            }
                             event.preventDefault();
                             suppressClickRef.current = false;
                             const rect =

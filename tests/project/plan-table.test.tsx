@@ -316,6 +316,18 @@ const VIEWS: PlanViewRecord[] = [
     createdAt: "",
     updatedAt: "",
   },
+  {
+    id: 14,
+    projectId: 1,
+    name: "",
+    type: "calendar",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 4,
+    createdAt: "",
+    updatedAt: "",
+  },
 ];
 
 /** 项目成员（处理人筛选/看板分组候选） */
@@ -632,6 +644,26 @@ describe("PlanPane 视图切换", () => {
     expect(document.querySelectorAll("[data-column-key]")).toHaveLength(60);
     expect(screen.queryByRole("row")).toBeNull();
     expect(screen.queryByRole("columnheader")).toBeNull();
+  });
+
+  it("calendar 类型视图：周表头渲染；点今日格 → 新建弹窗预置截止日", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&viewId=14" });
+    expect(await screen.findByText("project:planView.weekday1")).toBeTruthy();
+
+    const todayCell = document.querySelector('[data-today="true"]');
+    expect(todayCell).toBeTruthy();
+    fireEvent.click(todayCell as HTMLElement);
+
+    const dialog = await screen.findByRole("dialog");
+    const now = new Date();
+    const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    expect(
+      (
+        within(dialog).getByLabelText(
+          "project:plan.dueDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe(todayKey);
   });
 });
 

@@ -169,6 +169,16 @@ describe("分组依据（仅看板）", () => {
     }
   });
 
+  it("groupBy=null（未设置分组）触发按钮回显「状态」（与渲染实际对齐，非 —）", async () => {
+    renderSettings({ type: "kanban", groupBy: null, showGroupBy: true });
+    const panel = await openPanel();
+    const trigger = within(panel).getByRole("button", {
+      name: "project:planView.settingsGroupBy",
+    });
+    expect(trigger.textContent).toContain("project:plan.status");
+    expect(trigger.textContent).not.toContain("—");
+  });
+
   it("点选分组「优先级」→ onGroupByChange('priority')；当前分组 checked 回显", async () => {
     const props = renderSettings({
       type: "kanban",

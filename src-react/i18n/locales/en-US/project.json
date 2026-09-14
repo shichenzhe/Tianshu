@@ -129,6 +129,7 @@
     "sortFieldCreatedAt": "Created time",
     "overwriteSave": "Overwrite",
     "reset": "Reset",
+    "loadFailed": "Failed to load views, please retry",
     "settings": "View settings",
     "settingsType": "View type",
     "settingsGroupBy": "Group by"

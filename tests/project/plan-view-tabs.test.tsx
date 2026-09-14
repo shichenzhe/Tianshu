@@ -272,6 +272,32 @@ describe("重命名（PlanViewNameDialog）", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("表单提交（Enter）= 确认；空白名提交不触发", async () => {
+    const { onRename } = renderTabs({
+      views: [
+        makeView({ id: 10, name: "原名" }),
+        makeView({ id: 11, type: "kanban" }),
+      ],
+    });
+    const menu = await openTabMenu(0);
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "project:planView.rename" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    const input = within(dialog).getByRole("textbox");
+    const form = dialog.querySelector("form");
+    expect(form).toBeTruthy();
+
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.submit(form);
+    expect(onRename).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "回车名" } });
+    fireEvent.submit(form);
+    expect(onRename).toHaveBeenCalledWith(10, "回车名");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("纯空白名确认按钮禁用；取消关闭不动数据", async () => {
     const { onRename } = renderTabs({
       views: [

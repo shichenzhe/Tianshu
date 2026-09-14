@@ -129,6 +129,7 @@
     "sortFieldCreatedAt": "创建时间",
     "overwriteSave": "覆盖保存",
     "reset": "重置",
+    "loadFailed": "视图加载失败，请重试",
     "settings": "视图设置",
     "settingsType": "视图类型",
     "settingsGroupBy": "分组依据"

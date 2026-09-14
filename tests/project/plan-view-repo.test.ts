@@ -7,6 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
 
+// Log 依赖 electron app.getPath（userData 建 winston 文件传输），测试用内存桩
+vi.mock("../../electron/commons/Log", () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
 const prismaStub = vi.hoisted(() => ({
   planView: {
     findMany: vi.fn(),

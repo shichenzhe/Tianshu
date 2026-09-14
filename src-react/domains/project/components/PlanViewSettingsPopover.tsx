@@ -83,7 +83,7 @@ function RadioGroupRow({
             aria-label={label}
             className="h-7 gap-1 px-2 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
           >
-            {current?.label ?? "—"}
+            {current?.label ?? items[0]?.label ?? "—"}
             <ChevronDown className="h-3 w-3 text-muted-foreground" />
           </Button>
         </DropdownMenuTrigger>
@@ -142,7 +142,8 @@ export default function PlanViewSettingsPopover({
           {showGroupBy && (
             <RadioGroupRow
               label={t("project:planView.settingsGroupBy")}
-              value={groupBy ?? ""}
+              /* null = 未设置分组：渲染实际按状态分组，回显对齐显示「状态」 */
+              value={groupBy ?? "status"}
               items={PLAN_GROUP_BYS.map((value) => ({
                 value,
                 label: t(GROUP_BY_LABEL_KEYS[value]),

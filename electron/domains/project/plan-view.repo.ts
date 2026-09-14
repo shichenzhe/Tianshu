@@ -6,6 +6,7 @@
  */
 import { ipcMain } from "electron";
 import prisma from "../../commons/prisma-client";
+import Log from "../../commons/Log";
 import {
   PLAN_GROUP_BYS,
   PLAN_VIEW_LAST_ONE,
@@ -34,7 +35,7 @@ function parseJsonOr(raw: string | null, fallback: string): string {
   } catch {
     // 落入下方降级
   }
-  console.warn("planView JSON 列畸形已降级", raw);
+  Log.warn("planView JSON 列畸形已降级", raw);
   return fallback;
 }
 

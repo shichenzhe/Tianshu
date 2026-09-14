@@ -88,6 +88,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     activeViewId,
     setActiveViewId,
     isDirty,
+    isError: isViewsError,
     addView,
     renameView,
     removeView,
@@ -328,6 +329,12 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           onRemove={(id) => void removeView(id)}
           onReorder={(orderedIds) => void reorderViews(orderedIds)}
         />
+      )}
+      {/* 视图列表加载失败：可见错误提示（否则静默空白） */}
+      {views.length === 0 && isViewsError && (
+        <div className="border-b border-border/50 px-4 py-2 text-xs text-muted-foreground">
+          {t("project:planView.loadFailed")}
+        </div>
       )}
 
       {/* 工具栏：组合筛选面板 + 搜索 + 添加 */}

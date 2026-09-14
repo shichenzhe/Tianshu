@@ -152,6 +152,22 @@ describe("toGanttBar", () => {
     });
   });
 
+  it("起止倒置归一：startDate > dueDate → startKey/endKey 取 min/max，days 恒正", () => {
+    expect(
+      toGanttBar(
+        item({
+          startDate: "2026-09-14T00:00:00.000Z",
+          dueDate: "2026-09-10T00:00:00.000Z",
+        }),
+      ),
+    ).toEqual({
+      id: 1,
+      startKey: "2026-09-10",
+      endKey: "2026-09-14",
+      days: 5,
+    });
+  });
+
   it("单端日期钳 1 天；双空 null", () => {
     expect(toGanttBar(item({ dueDate: "2026-09-20T00:00:00.000Z" }))).toEqual({
       id: 1,

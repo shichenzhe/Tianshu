@@ -144,7 +144,14 @@
     "weekday4": "Thu",
     "weekday5": "Fri",
     "weekday6": "Sat",
-    "weekday7": "Sun"
+    "weekday7": "Sun",
+    "granularityDay": "Day",
+    "granularityWeek": "Week",
+    "granularityMonth": "Month",
+    "granularityYear": "Year",
+    "prevPage": "Previous page",
+    "nextPage": "Next page",
+    "noDates": "Click to set dates"
   },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",

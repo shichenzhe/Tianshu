@@ -208,20 +208,22 @@ export interface GanttBar {
   days: number;
 }
 
-/** 事项 → 甘特条（单端日期钳 1 天；双空 → null 无日期） */
+/** 事项 → 甘特条（单端日期钳 1 天；双空 → null 无日期；起止倒置归一为 min/max） */
 export function toGanttBar(entry: PlanItemRecord): GanttBar | null {
   const start = isoToDateKey(entry.startDate);
   const end = isoToDateKey(entry.dueDate);
   if (!start && !end) {
     return null;
   }
-  const startKey = start || end;
-  const endKey = end || start;
+  const first = start || end;
+  const last = end || start;
+  const startKey = first <= last ? first : last;
+  const endKey = first <= last ? last : first;
   return {
     id: entry.id,
     startKey,
     endKey,
-    days: diffDays(startKey, endKey) + 1,
+    days: Math.abs(diffDays(first, last)) + 1,
   };
 }
 

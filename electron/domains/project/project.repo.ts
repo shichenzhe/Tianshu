@@ -138,11 +138,21 @@ export default class ProjectRepository {
 
   /**
    * 删除项目：先清资产空间（目录树 + workspace 行），再级联清
-   * message → session → member → binding → project
+   * 附件关联 → 计划事项 → planView → message → session → member →
+   * binding → project（附件关联表无 projectId 列，按事项 id 集先删；
+   * 文件实体随资产目录树删除/保留在资产空间）
    * @param id 项目 id
    */
   async remove(id: number): Promise<void> {
     await this.removeAssetWorkspace(id);
+    // 级联清计划事项附件关联（v6 附件表无 projectId 列，按事项 id 集删；文件实体保留资产空间）
+    const itemIds = await prisma.planItem.findMany({
+      where: { projectId: id },
+      select: { id: true },
+    });
+    await prisma.planItemAttachment.deleteMany({
+      where: { planItemId: { in: itemIds.map((item) => item.id) } },
+    });
     // 级联清项目计划事项（projectId 精确匹配，本地任务 null 不受影响，三期 spec §3.1）
     await prisma.planItem.deleteMany({ where: { projectId: id } });
     // 级联清项目视图配置（子系统 A）

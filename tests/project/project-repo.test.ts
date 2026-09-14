@@ -2,7 +2,8 @@
  * 项目仓储单测：create 重名/资产空间挂接/模型全局继承/欢迎消息/关联写入、
  * remove 级联删除（含资产目录树清理）、update 重名与不存在校验、
  * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）、
- * listMembers 成员列表（joinedAt 序 + join user 昵称回退，三期子系统 A）。
+ * listMembers 成员列表（joinedAt 序 + join user 昵称回退，三期子系统 A）、
+ * remove 级联清计划事项附件关联（v6：按事项 id 集删，先于 planItem 删除）。
  * 依赖经 vi.mock 替换（electron ipcMain+app / Log / node:fs/promises /
  * prisma client），沿用 personalization-repo.test.ts 的 mock 模式。
  */
@@ -52,7 +53,8 @@ const prismaStub = vi.hoisted(() => ({
   },
   message: { create: vi.fn(), deleteMany: vi.fn() },
   workspace: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
-  planItem: { deleteMany: vi.fn() },
+  planItem: { findMany: vi.fn(), deleteMany: vi.fn() },
+  planItemAttachment: { deleteMany: vi.fn() },
   planView: { deleteMany: vi.fn() },
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
@@ -239,6 +241,7 @@ describe("ProjectRepository.remove", () => {
 
   it("无资产空间（一期旧项目未自愈） → 跳过目录清理，级联删除不变", async () => {
     prismaStub.workspace.findFirst.mockResolvedValue(null);
+    prismaStub.planItem.findMany.mockResolvedValue([{ id: 101 }, { id: 102 }]);
     prismaStub.session.findMany.mockResolvedValue([{ id: 21 }, { id: 22 }]);
     await repo.remove(11);
     expect(fsStub.rm).not.toHaveBeenCalled();
@@ -265,6 +268,17 @@ describe("ProjectRepository.remove", () => {
     expect(prismaStub.planView.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 11 },
     });
+    // v6 附件关联级联：附件表无 projectId 列，按事项 id 集删（先于 planItem 删除）
+    expect(prismaStub.planItem.findMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+      select: { id: true },
+    });
+    expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { planItemId: { in: [101, 102] } },
+    });
+    expect(
+      prismaStub.planItemAttachment.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(prismaStub.planItem.deleteMany.mock.invocationCallOrder[0]);
   });
 
   it("命中资产空间 → 删整棵 projects/<id> 目录树 + workspace 行，先于会话级联", async () => {
@@ -272,6 +286,7 @@ describe("ProjectRepository.remove", () => {
       id: 30,
       directoryPath: assetsDir(11),
     });
+    prismaStub.planItem.findMany.mockResolvedValue([]);
     prismaStub.session.findMany.mockResolvedValue([{ id: 21 }]);
     await repo.remove(11);
     expect(fsStub.rm).toHaveBeenCalledWith(projectRootDir(11), {
@@ -296,6 +311,7 @@ describe("ProjectRepository.remove", () => {
       directoryPath: assetsDir(11),
     });
     fsStub.rm.mockRejectedValueOnce(new Error("EACCES: permission denied"));
+    prismaStub.planItem.findMany.mockResolvedValue([]);
     prismaStub.session.findMany.mockResolvedValue([]);
     await expect(repo.remove(11)).resolves.toBeUndefined();
     expect(prismaStub.workspace.delete).toHaveBeenCalledWith({

@@ -48,6 +48,11 @@ export interface PlanItemRecord {
   title: string;
 
   /**
+   * 描述正文（Markdown 原文，空串 = 无）
+   */
+  description: string;
+
+  /**
    * 状态
    */
   status: PlanStatus;
@@ -109,6 +114,29 @@ export interface PlanItemRecord {
 }
 
 /**
+ * 附件关联记录（文件实体在项目资产空间，删事项级联删关联保留文件）
+ */
+export interface PlanItemAttachmentRecord {
+  id: number;
+
+  /**
+   * 所属事项 id
+   */
+  planItemId: number;
+
+  /** 展示名（含扩展） */
+  fileName: string;
+
+  /** 项目 workspace 相对路径（attachments/xxx 或资产树已有文件） */
+  assetPath: string;
+
+  /**
+   * 创建时间（ISO）
+   */
+  createdAt: string;
+}
+
+/**
  * 创建参数：title 必填；其余可选（缺省 not_started/P1/未指派）
  */
 export interface PlanItemCreateParams {
@@ -121,6 +149,11 @@ export interface PlanItemCreateParams {
    * 标题（trim 后不得为空）
    */
   title: string;
+
+  /**
+   * 描述（Markdown 原文）；缺省存 null（读侧归一空串）
+   */
+  description?: string | null;
 
   /**
    * 所属项目 id；缺省 = 本地任务
@@ -181,6 +214,11 @@ export interface PlanItemUpdateParams {
    * 新标题（trim 后不得为空）
    */
   title?: string;
+
+  /**
+   * 新描述（Markdown 原文）；null = 清空
+   */
+  description?: string | null;
 
   /**
    * 新状态

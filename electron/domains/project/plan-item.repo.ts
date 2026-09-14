@@ -7,6 +7,8 @@
  * move（看板拖拽落点）/ remove。
  * tags/customFields 为 JSON 字符串列，读写经 parseJsonColumn/stringifyColumn 容错。
  * fields:list / fields:save 自定义字段定义（option 域复用，spec §3.2）。
+ * attachments:list|create|delete 附件关联三通道 + remove 级联清关联
+ * （文件实体保留在项目资产空间，v6）。
  */
 import { ipcMain } from "electron";
 import prisma from "../../commons/prisma-client";
@@ -18,6 +20,7 @@ import {
   PLAN_STATUSES,
   type PlanFieldDef,
   type PlanFieldType,
+  type PlanItemAttachmentRecord,
   type PlanItemCreateParams,
   type PlanItemMoveParams,
   type PlanItemRecord,
@@ -72,7 +75,7 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 注册IPC处理程序（8 通道：事项 6 + 自定义字段定义 2）
+   * 注册IPC处理程序（11 通道：事项 6 + 自定义字段定义 2 + 附件 3）
    */
   private registerHandlers() {
     ipcMain.handle("planItem:list", (_, projectId: number) =>
@@ -98,6 +101,17 @@ export default class PlanItemRepository {
       "planItem:fields:save",
       (_, projectId: number, fields: PlanFieldDef[]) =>
         this.saveFields(projectId, fields),
+    );
+    ipcMain.handle("planItem:attachments:list", (_, planItemId: number) =>
+      this.listAttachments(planItemId),
+    );
+    ipcMain.handle(
+      "planItem:attachments:create",
+      (_, planItemId: number, input: { fileName: string; assetPath: string }) =>
+        this.createAttachment(planItemId, input),
+    );
+    ipcMain.handle("planItem:attachments:delete", (_, id: number) =>
+      this.removeAttachment(id),
     );
   }
 
@@ -148,6 +162,7 @@ export default class PlanItemRepository {
     const row = await prisma.planItem.create({
       data: {
         title,
+        description: params.description ?? null,
         projectId: params.projectId ?? null,
         status,
         priority: params.priority ?? "P1",
@@ -186,10 +201,11 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 删除事项
+   * 删除事项：级联删附件关联行（文件实体保留在项目资产空间）
    * @param id 事项 id
    */
   async remove(id: number): Promise<void> {
+    await prisma.planItemAttachment.deleteMany({ where: { planItemId: id } });
     await prisma.planItem.delete({ where: { id } });
   }
 
@@ -207,6 +223,48 @@ export default class PlanItemRepository {
       where: { id: params.id },
       data: { status: params.status, sortOrder: params.sortOrder },
     });
+  }
+
+  /**
+   * 事项附件关联列表（id asc）
+   * @param planItemId 事项 id
+   */
+  async listAttachments(
+    planItemId: number,
+  ): Promise<PlanItemAttachmentRecord[]> {
+    const rows = await prisma.planItemAttachment.findMany({
+      where: { planItemId },
+      orderBy: { id: "asc" },
+    });
+    return rows.map((row) => this.toAttachmentRecord(row));
+  }
+
+  /**
+   * 建附件关联（上传/挑选同构：一行关联记录）
+   * @param planItemId 事项 id
+   * @param input 展示名 + 项目 workspace 相对路径（trim 后均不得为空）
+   */
+  async createAttachment(
+    planItemId: number,
+    input: { fileName: string; assetPath: string },
+  ): Promise<PlanItemAttachmentRecord> {
+    const fileName = input.fileName.trim();
+    const assetPath = input.assetPath.trim();
+    if (!fileName || !assetPath) {
+      throw new Error("附件名与路径不能为空");
+    }
+    const row = await prisma.planItemAttachment.create({
+      data: { planItemId, fileName, assetPath },
+    });
+    return this.toAttachmentRecord(row);
+  }
+
+  /**
+   * 删附件关联（文件实体保留在资产空间）
+   * @param id 附件关联行 id
+   */
+  async removeAttachment(id: number): Promise<void> {
+    await prisma.planItemAttachment.delete({ where: { id } });
   }
 
   /**
@@ -378,6 +436,9 @@ export default class PlanItemRepository {
   ): Record<string, unknown> {
     return {
       ...(params.title !== undefined && { title: params.title.trim() }),
+      ...(params.description !== undefined && {
+        description: params.description,
+      }),
       ...(params.status !== undefined && { status: params.status }),
       ...(params.priority !== undefined && { priority: params.priority }),
       ...(params.assigneeId !== undefined && { assigneeId: params.assigneeId }),
@@ -438,6 +499,7 @@ export default class PlanItemRepository {
       id: row.id,
       projectId: row.projectId,
       title: row.title,
+      description: row.description ?? "",
       status: row.status as PlanStatus,
       priority: row.priority as PlanPriority,
       assigneeId: row.assigneeId,
@@ -456,5 +518,16 @@ export default class PlanItemRepository {
   /** DateTime → ISO 字符串；缺省值兜底空串 */
   private toIso(date: Date | null | undefined): string {
     return date ? date.toISOString() : "";
+  }
+
+  /** planItemAttachment 行 → PlanItemAttachmentRecord（DateTime → ISO） */
+  private toAttachmentRecord(row: {
+    id: number;
+    planItemId: number;
+    fileName: string;
+    assetPath: string;
+    createdAt: Date;
+  }): PlanItemAttachmentRecord {
+    return { ...row, createdAt: row.createdAt.toISOString() };
   }
 }

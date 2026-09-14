@@ -6,9 +6,12 @@
  * move 拖拽落点、delete、toRecord JSON 列容错（畸形 → 空数组/空对象）；
  * fields:list/save 自定义字段（option 域 planFields:<projectId> 行、畸形行丢弃、
  * 空名/非法类型/重名拒绝、deleteMany+createMany 全量替换、消失字段行值逐行清理
- * + 失败收集汇总抛出）、8 通道自注册（fields 两通道补齐）；
+ * + 失败收集汇总抛出）、11 通道自注册（fields 两通道 + 附件三通道补齐）；
  * 字段扩展（子系统 A）：source/startDate/dueDate 透传、null/空串清空、
- * 非法日期串拒绝、非法 source 拒绝、处理人必须是项目成员校验。
+ * 非法日期串拒绝、非法 source 拒绝、处理人必须是项目成员校验；
+ * 字段扩展（子系统 D）：description 透传（create/update，null = 清空）与
+ * toRecord null→空串归一、attachments 三通道（list/create/delete）与
+ * 事项删除级联清附件关联（文件实体保留）。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用 project-repo.test.ts 模式。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,6 +35,12 @@ const prismaStub = vi.hoisted(() => ({
     findMany: vi.fn(),
     deleteMany: vi.fn(),
     createMany: vi.fn(),
+  },
+  planItemAttachment: {
+    findMany: vi.fn(),
+    create: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
   },
   projectMember: {
     findFirst: vi.fn(),
@@ -122,6 +131,7 @@ describe("PlanItemRepository.create", () => {
       data: {
         title: "事项A",
         projectId: 11,
+        description: null,
         status: "in_progress",
         priority: "P0",
         assigneeId: 1,
@@ -155,6 +165,7 @@ describe("PlanItemRepository.create", () => {
       data: {
         title: "本地任务",
         projectId: null,
+        description: null,
         status: "not_started",
         priority: "P1",
         assigneeId: null,
@@ -188,6 +199,7 @@ describe("PlanItemRepository.list", () => {
         id: 1,
         projectId: 11,
         title: "事项A",
+        description: "",
         status: "in_progress",
         priority: "P0",
         assigneeId: 1,
@@ -547,10 +559,10 @@ describe("PlanItemRepository.saveFields", () => {
 });
 
 describe("PlanItemRepository IPC 注册", () => {
-  it("八个 planItem 通道自注册（fields 两通道补齐，union 不再占位）", () => {
+  it("十一个 planItem 通道自注册（fields 两通道 + 附件三通道补齐）", () => {
     new PlanItemRepository();
 
-    expect(ipcMain.handle).toHaveBeenCalledTimes(8);
+    expect(ipcMain.handle).toHaveBeenCalledTimes(11);
     for (const channel of [
       "planItem:list",
       "planItem:listMine",
@@ -560,6 +572,9 @@ describe("PlanItemRepository IPC 注册", () => {
       "planItem:move",
       "planItem:fields:list",
       "planItem:fields:save",
+      "planItem:attachments:list",
+      "planItem:attachments:create",
+      "planItem:attachments:delete",
     ]) {
       expect(ipcMain.handle).toHaveBeenCalledWith(
         channel,
@@ -634,5 +649,91 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
       "无效的日期格式",
     );
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlanItemRepository.description 透传", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("create 透传 description；缺省空串语义经 DB null 由 toRecord 归一", async () => {
+    prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
+    await repo.create({
+      createdById: 1,
+      projectId: 11,
+      title: "t",
+      description: "# 计划",
+    });
+    expect(prismaStub.planItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ description: "# 计划" }),
+    });
+  });
+
+  it("toRecord：DB null → 空串（list 断言）", async () => {
+    prismaStub.planItem.findMany.mockResolvedValue([
+      { ...projectRow, description: null },
+    ]);
+    const rows = await repo.list(11);
+    expect(rows[0].description).toBe("");
+  });
+
+  it("update description null = 清空", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    await repo.update({ id: 1, description: null });
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { description: null },
+    });
+  });
+});
+
+describe("PlanItemRepository.attachments 三通道", () => {
+  const attRow = {
+    id: 5,
+    planItemId: 1,
+    fileName: "a.pdf",
+    assetPath: "attachments/a.pdf",
+    createdAt: now,
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("list 按 planItemId 查询并转 ISO", async () => {
+    prismaStub.planItemAttachment.findMany.mockResolvedValue([attRow]);
+    const rows = await repo.listAttachments(1);
+    expect(prismaStub.planItemAttachment.findMany).toHaveBeenCalledWith({
+      where: { planItemId: 1 },
+      orderBy: { id: "asc" },
+    });
+    expect(rows[0]).toEqual({ ...attRow, createdAt: now.toISOString() });
+  });
+
+  it("create 建关联；delete 按 id 删", async () => {
+    prismaStub.planItemAttachment.create.mockResolvedValue(attRow);
+    const created = await repo.createAttachment(1, {
+      fileName: "a.pdf",
+      assetPath: "attachments/a.pdf",
+    });
+    expect(prismaStub.planItemAttachment.create).toHaveBeenCalledWith({
+      data: {
+        planItemId: 1,
+        fileName: "a.pdf",
+        assetPath: "attachments/a.pdf",
+      },
+    });
+    expect(created.id).toBe(5);
+    await repo.removeAttachment(5);
+    expect(prismaStub.planItemAttachment.delete).toHaveBeenCalledWith({
+      where: { id: 5 },
+    });
+  });
+
+  it("remove 事项级联删附件关联（保留文件）", async () => {
+    await repo.remove(1);
+    expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { planItemId: 1 },
+    });
+    expect(
+      prismaStub.planItemAttachment.deleteMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(prismaStub.planItem.delete.mock.invocationCallOrder[0]);
   });
 });

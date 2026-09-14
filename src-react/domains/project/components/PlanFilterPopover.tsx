@@ -90,16 +90,17 @@ const OP_LABEL_KEYS: Record<ConditionOp, string> = {
   in: "project:planView.opIn",
   notIn: "project:planView.opNotIn",
   isMe: "project:planView.opIsMe",
+  notMe: "project:planView.opNotMe",
 };
 
-/** 字段可用操作符（title/tags 固定 contains；枚举 in|notIn；处理人 isMe|in） */
+/** 字段可用操作符（title/tags 固定 contains；枚举 in|notIn；处理人 isMe|notMe|in） */
 const FIELD_OPS: Record<ConditionField, ConditionOp[]> = {
   title: ["contains"],
   tags: ["contains"],
   status: ["in", "notIn"],
   priority: ["in", "notIn"],
   source: ["in", "notIn"],
-  assigneeId: ["isMe", "in"],
+  assigneeId: ["isMe", "notMe", "in"],
 };
 
 /** 新增条件的缺省操作符 */
@@ -466,7 +467,7 @@ function ConditionValueControl({
         <CheckboxValueControl {...shared} options={sourceValueOptions(t)} />
       );
     case "assigneeId":
-      return condition.op === "isMe" ? null : (
+      return condition.op === "isMe" || condition.op === "notMe" ? null : (
         <CheckboxValueControl
           {...shared}
           options={memberValueOptions(members, currentUserId, t)}

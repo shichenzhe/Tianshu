@@ -270,6 +270,21 @@ describe("条件增删与值控件", () => {
     ).toContainEqual({ field: "assigneeId", op: "in", value: ["2"] });
   });
 
+  it("「处理人」切「不是我」→ onChange 携带 notMe 且无值控件", async () => {
+    const props = renderPopover();
+    const panel = await openPanel();
+    await addCondition(panel, "project:planView.fieldAssignee");
+
+    await selectOption(
+      within(panel).getByRole("combobox", { name: "project:planView.opIsMe" }),
+      "project:planView.opNotMe",
+    );
+    expect(
+      lastApplied(props, [{ field: "assigneeId", op: "isMe", value: "" }]),
+    ).toContainEqual({ field: "assigneeId", op: "notMe", value: "" });
+    expect(within(panel).queryByRole("checkbox")).toBeNull();
+  });
+
   it("条件行删除按钮 → onChange 后该条件消失", async () => {
     const initial: FilterCondition[] = [
       { field: "priority", op: "in", value: ["P0"] },

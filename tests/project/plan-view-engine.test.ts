@@ -108,6 +108,17 @@ describe("filterItems", () => {
     ).toEqual([items[0]]);
   });
 
+  it("assigneeId notMe 排除当前用户（未指派与他人命中）", () => {
+    expect(
+      filterItems(
+        items,
+        [{ field: "assigneeId", op: "notMe" as never, value: "" }],
+        "",
+        7,
+      ),
+    ).toEqual([items[1], items[2]]);
+  });
+
   it("assigneeId in 按 id 字符串匹配", () => {
     expect(
       filterItems(

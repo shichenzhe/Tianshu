@@ -13,7 +13,7 @@ import {
 
 export interface FilterCondition {
   field: "title" | "status" | "assigneeId" | "source" | "priority" | "tags";
-  op: "contains" | "in" | "notIn" | "isMe";
+  op: "contains" | "in" | "notIn" | "isMe" | "notMe";
   value: string | string[];
 }
 
@@ -43,6 +43,7 @@ const FILTER_OPS: ReadonlySet<string> = new Set([
   "in",
   "notIn",
   "isMe",
+  "notMe",
 ]);
 const SORT_FIELDS: ReadonlySet<string> = new Set([
   "status",
@@ -88,6 +89,8 @@ function matchCondition(
       );
     case "assigneeId:isMe":
       return item.assigneeId === currentUserId;
+    case "assigneeId:notMe":
+      return item.assigneeId !== currentUserId;
     case "tags:contains":
       return values.some((tag) => item.tags.includes(tag));
     default:

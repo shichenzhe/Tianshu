@@ -111,6 +111,7 @@
     "fieldPriority": "优先级",
     "fieldTags": "标签",
     "opIsMe": "是我",
+    "opNotMe": "不是我",
     "opIn": "是以下任一",
     "opNotIn": "不是以下任一",
     "opContains": "包含",

@@ -111,6 +111,7 @@
     "fieldPriority": "Priority",
     "fieldTags": "Tags",
     "opIsMe": "Is me",
+    "opNotMe": "Is not me",
     "opIn": "Is any of",
     "opNotIn": "Is not",
     "opContains": "Contains",

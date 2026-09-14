@@ -110,6 +110,7 @@
     "fieldSource": "来源",
     "fieldPriority": "优先级",
     "fieldTags": "标签",
+    "tagsNoCandidates": "暂无可选标签",
     "opIsMe": "是我",
     "opNotMe": "不是我",
     "opIn": "是以下任一",

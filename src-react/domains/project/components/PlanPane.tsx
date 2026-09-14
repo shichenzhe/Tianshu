@@ -129,6 +129,12 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   });
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);
+
+/** 标签候选 = 当前事项 distinct（筛选面板 chips 数据源） */
+const tagOptions = useMemo(
+  () => [...new Set(items.flatMap((item) => item.tags))].sort(),
+  [items],
+);
   const fields = useMemo(() => fieldsQuery.data ?? [], [fieldsQuery.data]);
 
   const visibleItems = useMemo(
@@ -329,6 +335,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           isDirty={isDirty}
           members={members}
           currentUserId={user.id}
+          tagOptions={tagOptions}
           onChange={(updater) =>
             setDraft((prev) => ({
               ...prev,

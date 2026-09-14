@@ -484,11 +484,9 @@ describe("PlanPane 筛选与搜索", () => {
     await screen.findByText("需求梳理");
     const panel = await openFilterPanel();
 
-    // 标签 contains「设计」→ 仅需求梳理
+    // 标签 contains「设计」（chips 多选）→ 仅需求梳理
     await addFilterCondition(panel, "project:planView.fieldTags");
-    fireEvent.change(within(panel).getByRole("textbox"), {
-      target: { value: "设计" },
-    });
+    fireEvent.click(within(panel).getByRole("button", { name: "设计" }));
     await waitFor(() => expect(screen.queryByText("接口联调")).toBeNull());
     expect(screen.queryByText("编写文档")).toBeNull();
     expect(screen.getByText("需求梳理")).toBeTruthy();

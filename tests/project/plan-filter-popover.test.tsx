@@ -285,6 +285,37 @@ describe("条件增删与值控件", () => {
     expect(within(panel).queryByRole("checkbox")).toBeNull();
   });
 
+  it("标签条件渲染 chips 多选：遗留单值容错选中；点选追加成数组；再点取消其一", async () => {
+    const legacy: FilterCondition[] = [
+      { field: "tags", op: "contains", value: "前端" },
+    ];
+    const props = renderPopover({
+      initialConditions: legacy,
+      overrides: { tagOptions: ["前端", "产品", "联调"] },
+    });
+    const panel = await openPanel();
+
+    expect(
+      within(panel)
+        .getAllByRole("button", { pressed: true })
+        .map((chip) => chip.textContent),
+    ).toEqual(["前端"]);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "产品" }));
+    expect(lastApplied(props, legacy)).toContainEqual({
+      field: "tags",
+      op: "contains",
+      value: ["前端", "产品"],
+    });
+
+    fireEvent.click(within(panel).getByRole("button", { name: "前端" }));
+    expect(
+      lastApplied(props, [
+        { field: "tags", op: "contains", value: ["前端", "产品"] },
+      ]),
+    ).toContainEqual({ field: "tags", op: "contains", value: ["产品"] });
+  });
+
   it("条件行删除按钮 → onChange 后该条件消失", async () => {
     const initial: FilterCondition[] = [
       { field: "priority", op: "in", value: ["P0"] },

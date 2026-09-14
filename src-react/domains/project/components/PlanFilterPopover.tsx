@@ -1,9 +1,10 @@
 /**
- * 组合筛选面板（子系统 A spec §UI）：条件式组合筛选（AND），
+ * 组合筛选面板（子系统 A spec §UI + B 阶段扩展）：条件式组合筛选（AND），
  * 字段（标题/状态/处理人/来源/优先级/标签）× 操作符 × 值控件；
  * 顶部 `...` 菜单：保存为新视图（PlanViewNameDialog 命名弹窗）/ 覆盖保存 /
- * 重置；isDirty 圆点。值控件：标题/标签 = Input；状态/优先级/来源 = 枚举
- * 多选 checkbox；处理人 = isMe 无值控件 + in 成员多选（成员候选父层传入）。
+ * 重置；isDirty 圆点。值控件：标题 = Input；状态/优先级/来源 = 枚举
+ * 多选 checkbox；标签 = 候选 chips 多选（B 阶段，候选父层传入）；处理人 =
+ * isMe/notMe 无值控件 + in 成员多选（成员候选父层传入）。
  * conditions 受控：一切增删改经 onChange(updater) 上抛，由 PlanPane 写入 draft。
  */
 import { forwardRef, useState } from "react";
@@ -21,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverContent,
@@ -53,6 +55,8 @@ interface PlanFilterPopoverProps {
   isDirty: boolean;
   members: ProjectMemberItem[];
   currentUserId: number;
+  /** 标签候选（当前事项 distinct，PlanPane 传入；缺省空） */
+  tagOptions?: string[];
   onChange: (updater: (prev: FilterCondition[]) => FilterCondition[]) => void;
   onReset: () => void;
   onSaveOverwrite: () => void;
@@ -63,6 +67,7 @@ interface ConditionRowProps {
   condition: FilterCondition;
   members: ProjectMemberItem[];
   currentUserId: number;
+  tagOptions: string[];
   onChange: PlanFilterPopoverProps["onChange"];
 }
 
@@ -145,7 +150,7 @@ const patchConditionUpdater =
       condition.field === field ? { ...condition, ...patch } : condition,
     );
 
-/** 多选值切换（checkbox 组勾选/取消；非数组遗留值容错为空） */
+/** 多选值切换（checkbox 组勾选/取消；遗留单值字符串容错归一为单选） */
 const toggleConditionValueUpdater =
   (field: ConditionField, value: string) =>
   (prev: FilterCondition[]): FilterCondition[] =>
@@ -153,7 +158,8 @@ const toggleConditionValueUpdater =
       if (condition.field !== field) {
         return condition;
       }
-      const list = Array.isArray(condition.value) ? condition.value : [];
+      const raw = condition.value;
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
       return {
         ...condition,
         value: list.includes(value)
@@ -440,11 +446,55 @@ function CheckboxValueControl({
   );
 }
 
-/** 单条件值控件分发：isMe 无控件，处理人 in = 成员多选，其余按字段映射 */
+/** 标签多选 chips（候选父层传入；选中 primary、未选 muted；遗留单值容错选中） */
+function TagsValueControl({
+  condition,
+  tagOptions,
+  label,
+  onChange,
+}: {
+  condition: FilterCondition;
+  tagOptions: string[];
+  label: string;
+  onChange: PlanFilterPopoverProps["onChange"];
+}) {
+  const raw = condition.value;
+  const selected = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return (
+    <div className="flex flex-wrap gap-1.5" aria-label={label}>
+      {tagOptions.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          aria-pressed={selected.includes(tag)}
+          onClick={() =>
+            onChange(toggleConditionValueUpdater(condition.field, tag))
+          }
+          className={cn(
+            "rounded-md border px-2 py-0.5 text-xs transition-colors",
+            selected.includes(tag)
+              ? "border-primary/30 bg-primary-subtle text-primary"
+              : "border-border/50 text-muted-foreground hover:border-primary/30 hover:bg-primary-subtle hover:text-primary",
+          )}
+        >
+          {tag}
+        </button>
+      ))}
+      {tagOptions.length === 0 && (
+        <span className="text-xs text-muted-foreground">
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** 单条件值控件分发：isMe/notMe 无控件，处理人 in = 成员多选，标签 = chips 多选 */
 function ConditionValueControl({
   condition,
   members,
   currentUserId,
+  tagOptions,
   onChange,
 }: ConditionRowProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -453,7 +503,13 @@ function ConditionValueControl({
     case "title":
       return <TextValueControl {...shared} label={t(FIELD_LABEL_KEYS.title)} />;
     case "tags":
-      return <TextValueControl {...shared} label={t(FIELD_LABEL_KEYS.tags)} />;
+      return (
+        <TagsValueControl
+          {...shared}
+          tagOptions={tagOptions}
+          label={t("project:planView.tagsNoCandidates")}
+        />
+      );
     case "status":
       return (
         <CheckboxValueControl {...shared} options={statusValueOptions(t)} />
@@ -481,6 +537,7 @@ function ConditionRow({
   condition,
   members,
   currentUserId,
+  tagOptions,
   onChange,
 }: ConditionRowProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -503,6 +560,7 @@ function ConditionRow({
         condition={condition}
         members={members}
         currentUserId={currentUserId}
+        tagOptions={tagOptions}
         onChange={onChange}
       />
     </div>
@@ -514,6 +572,7 @@ export default function PlanFilterPopover({
   isDirty,
   members,
   currentUserId,
+  tagOptions = [],
   onChange,
   onReset,
   onSaveOverwrite,
@@ -558,6 +617,7 @@ export default function PlanFilterPopover({
                 condition={condition}
                 members={members}
                 currentUserId={currentUserId}
+                tagOptions={tagOptions}
                 onChange={onChange}
               />
             ))}

@@ -110,6 +110,7 @@
     "fieldSource": "Source",
     "fieldPriority": "Priority",
     "fieldTags": "Tags",
+    "tagsNoCandidates": "No tags available",
     "opIsMe": "Is me",
     "opNotMe": "Is not me",
     "opIn": "Is any of",

@@ -3,6 +3,8 @@
  * AssetApi.upload 至 attachments/ 子目录 / 从资产挑选 = listWorkspaceFiles
  * 列表选择）；chips = 文件名 + 删除（已挂记录删走 removeAttachment 通道并
  * 上抛移除，暂存项仅上抛）。本地任务（projectId null）不渲染。
+ * 追加去重：按 assetPath 幂等（挑选/上传遇既有路径跳过，挑选行禁用可辨），
+ * 防重复挂库关联与 chips 重复 key。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -64,12 +66,14 @@ function MenuButton({
   );
 }
 
-/** 资产挑选列表：过滤搜索框 + workspace 递归相对路径行，点选上抛路径 */
+/** 资产挑选列表：过滤搜索框 + workspace 递归相对路径行（已挂路径禁用），点选上抛 */
 function AssetPickerList({
   workspaceId,
+  attachedPaths,
   onPick,
 }: {
   workspaceId?: number;
+  attachedPaths: string[];
   onPick: (path: string) => void;
 }) {
   const { t } = useTranslation(["project"]);
@@ -100,8 +104,9 @@ function AssetPickerList({
           <button
             key={path}
             type="button"
+            disabled={attachedPaths.includes(path)}
             onClick={() => onPick(path)}
-            className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-normal transition-colors hover:bg-primary-subtle hover:text-primary"
+            className="block w-full truncate rounded-md px-2 py-1 text-left text-xs font-normal transition-colors hover:bg-primary-subtle hover:text-primary disabled:pointer-events-none disabled:opacity-50"
           >
             {path}
           </button>
@@ -132,18 +137,21 @@ export default function PlanItemAttachments({
     return null;
   }
 
-  /** 上传成功条目（后端返回含重名序号的最终名）→ 暂存 chips（无 id） */
+  /** 上传成功条目（后端返回含重名序号的最终名）→ 暂存 chips（无 id，同路径去重） */
   const appendUploaded = (names: string[]) => {
-    if (names.length === 0) {
-      return;
-    }
-    onChange([
-      ...value,
-      ...names.map((name) => ({
+    const additions = names
+      .map((name) => ({
         fileName: name,
         assetPath: `${ATTACHMENT_FOLDER}/${name}`,
-      })),
-    ]);
+      }))
+      .filter(
+        (entry) =>
+          !value.some((existing) => existing.assetPath === entry.assetPath),
+      );
+    if (additions.length === 0) {
+      return;
+    }
+    onChange([...value, ...additions]);
   };
 
   /** 上传文件：系统多选 → 拷入资产空间 attachments/ 子目录 */
@@ -168,8 +176,11 @@ export default function PlanItemAttachments({
     }
   };
 
-  /** 从资产挑选：挂 workspace 相对路径（fileName = 路径末段） */
+  /** 从资产挑选：挂 workspace 相对路径（fileName = 路径末段；同路径幂等） */
   const handlePick = (path: string) => {
+    if (value.some((entry) => entry.assetPath === path)) {
+      return;
+    }
     onChange([
       ...value,
       { fileName: path.split("/").pop() ?? path, assetPath: path },
@@ -232,7 +243,11 @@ export default function PlanItemAttachments({
             className="w-64 rounded-lg border border-border/50 p-2 shadow-lg"
           >
             {picking ? (
-              <AssetPickerList workspaceId={workspaceId} onPick={handlePick} />
+              <AssetPickerList
+                workspaceId={workspaceId}
+                attachedPaths={value.map((entry) => entry.assetPath)}
+                onPick={handlePick}
+              />
             ) : (
               <div className="flex flex-col gap-0.5">
                 <MenuButton

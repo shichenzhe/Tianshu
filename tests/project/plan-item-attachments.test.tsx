@@ -224,6 +224,24 @@ describe("PlanItemAttachments 上传", () => {
     expect(AssetApi.upload).not.toHaveBeenCalled();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("上传返回名与既有附件同 assetPath → 跳过不追加（防重复关联）", async () => {
+    vi.mocked(AssetApi.pickFiles).mockResolvedValue(["/tmp/a.pdf"]);
+    vi.mocked(AssetApi.upload).mockResolvedValue({
+      uploaded: ["a.pdf"],
+      failed: [],
+    });
+    const { onChange } = renderAttachments({
+      value: [{ fileName: "a.pdf", assetPath: "attachments/a.pdf" }],
+    });
+    const panel = await openMenu();
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "project:plan.upload" }),
+    );
+
+    await waitFor(() => expect(AssetApi.upload).toHaveBeenCalledTimes(1));
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("PlanItemAttachments 从资产挑选", () => {
@@ -262,6 +280,37 @@ describe("PlanItemAttachments 从资产挑选", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "docs/b.md" }));
     expect(onChange).toHaveBeenCalledWith([
       { fileName: "b.md", assetPath: "docs/b.md" },
+    ]);
+  });
+
+  it("重复挑选已在 value 中的路径 → 行禁用且不追加（无重复关联）", async () => {
+    invokeMock.mockResolvedValue(["docs/b.md", "attachments/a.pdf"]);
+    const { onChange } = renderAttachments({
+      value: [{ fileName: "b.md", assetPath: "docs/b.md" }],
+    });
+    const panel = await openMenu();
+    fireEvent.click(
+      within(panel).getByRole("button", {
+        name: "project:plan.pickFromAssets",
+      }),
+    );
+
+    const duplicateRow = await within(panel).findByRole("button", {
+      name: "docs/b.md",
+    });
+    // 已在附件列表中的行禁用（视觉可辨）+ 点选不上抛（防重复挂库）
+    expect((duplicateRow as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(duplicateRow);
+    expect(onChange).not.toHaveBeenCalled();
+
+    // 非重复行照常追加（证明 handler 未整体失效）
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "attachments/a.pdf" }),
+    );
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith([
+      { fileName: "b.md", assetPath: "docs/b.md" },
+      { fileName: "a.pdf", assetPath: "attachments/a.pdf" },
     ]);
   });
 });

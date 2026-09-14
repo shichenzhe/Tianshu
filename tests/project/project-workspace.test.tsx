@@ -366,7 +366,7 @@ describe("Tab 容器", () => {
     expect(chatPaneProps.current?.boundSkillNames).toEqual(["联网搜索"]);
   });
 
-  it("点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane 空态且 ChatPane 卸载", async () => {
+  it("点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane 骨架（空数据表格表头）且 ChatPane 卸载", async () => {
     renderWorkspace();
     await screen.findByText("chat-pane-mock");
 
@@ -374,7 +374,9 @@ describe("Tab 容器", () => {
       screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
     );
 
-    expect(await screen.findByText("project:plan.empty")).toBeTruthy();
+    expect(
+      await screen.findByRole("columnheader", { name: "project:plan.title" }),
+    ).toBeTruthy();
     expect(screen.queryByText("chat-pane-mock")).toBeNull();
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(

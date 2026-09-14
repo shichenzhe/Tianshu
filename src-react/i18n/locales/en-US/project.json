@@ -64,7 +64,6 @@
     "addField": "Add Field",
     "edit": "Edit",
     "delete": "Delete",
-    "empty": "No items yet",
     "confirmDelete": "Delete this item? This action cannot be undone",
     "search": "Search items",
     "statusNotStarted": "Not Started",

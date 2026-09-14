@@ -18,7 +18,7 @@
  *   ?viewId=12（type list）渲染列表视图状态分组清单（组头出现、无表格行）；
  *   ?viewId=13（type gantt）渲染甘特时间轴（列头出现、无表格行）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
- * - 空态：无任何事项居中 plan.empty
+ * - 空数据：五视图渲染各自骨架（表格表头+快速新增行/看板列/列表组头/日历月格/甘特时间轴），无空态拦截
  */
 import {
   afterEach,
@@ -795,11 +795,50 @@ describe("PlanPane 删除", () => {
   });
 });
 
-describe("PlanPane 空态", () => {
-  it("无任何事项 → 居中 plan.empty 引导，无表格行", async () => {
+describe("PlanPane 空数据渲染视图骨架", () => {
+  beforeEach(() => {
     vi.mocked(PlanItemApi.list).mockResolvedValue([]);
-    renderPlanPane();
-    expect(await screen.findByText("project:plan.empty")).toBeTruthy();
-    expect(screen.queryByRole("row")).toBeNull();
   });
+
+  it("默认表格视图：渲染表头与快速新增行骨架（无空态居中提示）", async () => {
+    renderPlanPane();
+    expect(
+      await screen.findByRole("columnheader", { name: "project:plan.title" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByPlaceholderText("project:plan.quickAddPlaceholder"),
+    ).toBeTruthy();
+    expect(screen.queryByText("project:plan.empty")).toBeNull();
+  });
+
+  it.each([
+    [
+      "看板",
+      "11",
+      async () => screen.findByLabelText("project:plan.statusNotStarted"),
+    ],
+    [
+      "列表",
+      "12",
+      async () => screen.findByText("project:plan.statusNotStarted"),
+    ],
+    ["日历", "14", async () => screen.findByText("project:planView.weekday1")],
+    [
+      "甘特",
+      "13",
+      async () =>
+        screen.findByRole("button", {
+          name: "project:planView.granularityDay",
+        }),
+    ],
+  ])(
+    "%s视图空数据渲染骨架（无 plan.empty）",
+    async (_name, viewId, findAnchor) => {
+      renderPlanPane({
+        initialEntry: `/module/project/1?tab=plan&viewId=${viewId}`,
+      });
+      expect(await findAnchor()).toBeTruthy();
+      expect(screen.queryByText("project:plan.empty")).toBeNull();
+    },
+  );
 });

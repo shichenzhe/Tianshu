@@ -28,8 +28,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { CalendarDays, Loader2, Plus } from "lucide-react";
-
+import { Loader2, Plus } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -420,7 +419,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         </div>
       </div>
 
-      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 日历 / 甘特 / 表格 */}
+      {/* 内容区：加载 / 错误 / 看板 / 列表 / 日历 / 甘特 / 表格（空数据渲染各视图骨架） */}
       {itemsQuery.isError ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {t("project:toast.operationFailed")}
@@ -429,17 +428,6 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           {t("common:loading")}
-        </div>
-      ) : items.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-subtle text-primary">
-            <CalendarDays className="h-6 w-6" />
-          </span>
-          <p className="text-sm">{t("project:plan.empty")}</p>
-          <Button size="sm" onClick={openCreate} className={toolbarButtonClass}>
-            <Plus className="h-3.5 w-3.5" />
-            {t("project:plan.add")}
-          </Button>
         </div>
       ) : activeView?.type === "kanban" ? (
         // 看板视图：分组泳道拖拽（可见项渲染，status 分组序号由 move 通道全量推导）

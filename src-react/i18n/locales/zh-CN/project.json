@@ -64,7 +64,6 @@
     "addField": "添加字段",
     "edit": "编辑",
     "delete": "删除",
-    "empty": "暂无事项",
     "confirmDelete": "确定删除该事项吗？此操作不可撤销",
     "search": "搜索事项",
     "statusNotStarted": "待开始",

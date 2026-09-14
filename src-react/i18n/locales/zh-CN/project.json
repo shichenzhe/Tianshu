@@ -223,6 +223,9 @@
     "automationTip": "让 AI 按计划自动执行任务",
     "goAutomation": "前往自动化"
   },
+  "chatBar": {
+    "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能"
+  },
   "sidebar": {
     "projects": "项目",
     "myProjects": "我的项目",

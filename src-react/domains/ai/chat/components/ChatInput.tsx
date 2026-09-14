@@ -88,6 +88,8 @@ interface ChatInputProps {
     overrides?: ChatModelParams,
   ) => Promise<void>;
   onStop: () => void;
+  /** 自定义占位文案（项目底栏传项目文案）；缺省沿用 chat 默认（AI 模块不变） */
+  placeholder?: string;
 }
 
 /** 光标前最近的 @token：返回 @ 起始下标与 token 文本；无有效 token 返回 null */
@@ -131,6 +133,7 @@ export default function ChatInput({
   onRunCommand,
   onSend,
   onStop,
+  placeholder,
 }: ChatInputProps) {
   const { t } = useTranslation(["chat"]);
   const [content, setContent] = useState("");
@@ -594,9 +597,10 @@ export default function ChatInput({
           onScroll={handleScroll}
           rows={1}
           autoFocus
-          placeholder={t(
-            hasModel ? "chat:input.placeholder" : "chat:input.modelRequired",
-          )}
+          placeholder={
+            placeholder ??
+            t(hasModel ? "chat:input.placeholder" : "chat:input.modelRequired")
+          }
           className="relative min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-56 outline-none text-transparent caret-foreground placeholder:text-muted-foreground [&::-webkit-scrollbar]:hidden"
         />
       </div>

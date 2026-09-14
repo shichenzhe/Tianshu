@@ -2,11 +2,14 @@
 /**
  * ProjectWorkspaceView 项目工作台测试（jsdom + testing-library，mock 骨架同
  * tests/project/project-hub.test.tsx + tests/ai/chat-view-edit-optimistic.test.tsx，
- * t 直接返回 key；ProjectApi/ChatPane/MarkdownView/能力 api/用户 store 以模块级
- * mock 替代，MemoryRouter + LocationProbe 断言 ?tab 读写）：
- * - 默认动态 Tab（?tab 缺省）：ChatPane mock 渲染，且收到 valid 过滤后的
- *   boundAssistantIds / boundSkillNames（失效挂载不下发给输入过滤集）
- * - 点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane（计划空态）且 ChatPane 卸载
+ * t 直接返回 key；ProjectApi/ChatMessages/ProjectChatBar/MarkdownView/能力 api/
+ * 用户 store 以模块级 mock 替代，MemoryRouter + LocationProbe 断言 ?tab 读写）：
+ * - 默认动态 Tab（?tab 缺省）：ChatMessages mock 渲染，收到 session 与资产空间
+ *   workspace（{ id: assetWorkspaceId }）；底栏 ProjectChatBar mock 收到 detail
+ * - 底部全局操作栏（spec §3）：四 Tab 任意切换底栏恒在（计划 Tab 下输入占位仍在）
+ * - 动态流 Tab：ChatMessages 在、无第二 ChatInput（底栏的输入占位唯一）
+ * - providers/models 双空：SetupGuide 渲染且无底栏
+ * - 点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane（计划空态）且 ChatMessages 卸载
  * - switchTab 合并式写入（回归）：?viewId= 不随 Tab 切换丢失
  * - getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project
  * - 配置面板：点击收起按钮隐藏面板，再点展开
@@ -125,19 +128,42 @@ vi.mock("@/domains/user/store/user.store", () => ({
       : { user: { id: 1, nickname: "小明" } },
 }));
 
-// ChatPane stub：占位 div + 捕获 props（断言 boundAssistantIds/过滤语义）
-const chatPaneProps = vi.hoisted(() => ({
+// ChatMessages stub：占位 div + 捕获 props（断言 session/workspace 接线）
+const chatMessagesProps = vi.hoisted(() => ({
   current: null as Record<string, unknown> | null,
 }));
-vi.mock("../../src-react/domains/ai/chat/components/ChatPane", async () => {
+vi.mock("../../src-react/domains/ai/chat/components/ChatMessages", async () => {
   const { createElement } = await import("react");
   return {
     default: (props: Record<string, unknown>) => {
-      chatPaneProps.current = props;
-      return createElement("div", null, "chat-pane-mock");
+      chatMessagesProps.current = props;
+      return createElement("div", null, "chat-messages-mock");
     },
   };
 });
+
+// ProjectChatBar stub：占位（内含输入占位——底栏恒在断言锚点）+ 捕获 props
+// （断言 detail 下发；真实底栏行为在 project-chat-bar.test.tsx 覆盖）
+const chatBarProps = vi.hoisted(() => ({
+  current: null as Record<string, unknown> | null,
+}));
+vi.mock(
+  "../../src-react/domains/project/components/ProjectChatBar",
+  async () => {
+    const { createElement } = await import("react");
+    return {
+      default: (props: Record<string, unknown>) => {
+        chatBarProps.current = props;
+        return createElement(
+          "div",
+          null,
+          "project-chat-bar-mock",
+          createElement("div", null, "chat-input-mock"),
+        );
+      },
+    };
+  },
+);
 
 // MarkdownView stub：透传原文（断言指令只读渲染，隔离 markdown 渲染管道）
 vi.mock("../../src-react/domains/ai/chat/components/MarkdownView", async () => {
@@ -342,7 +368,8 @@ beforeEach(() => {
         updatedAt: "2026-09-01T00:00:00.000Z",
       },
     ]);
-  chatPaneProps.current = null;
+  chatMessagesProps.current = null;
+  chatBarProps.current = null;
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -350,29 +377,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Tab 容器", () => {
-  it("?tab 缺省 → 动态 Tab：ChatPane 渲染并收到 valid 过滤后的能力集", async () => {
+  it("?tab 缺省 → 动态 Tab：ChatMessages 渲染并收到 session/资产空间 workspace，底栏收到 detail", async () => {
     renderWorkspace();
 
-    expect(await screen.findByText("chat-pane-mock")).toBeTruthy();
+    expect(await screen.findByText("chat-messages-mock")).toBeTruthy();
     expect(screen.getByTestId("location").textContent).toBe(
       "/module/project/1",
     );
-    expect(chatPaneProps.current).toMatchObject({
+    expect(chatMessagesProps.current).toMatchObject({
       session: DETAIL.session,
-      hasModel: false,
     });
     // 资产空间被 workspace:list 过滤（projectId 非空不进列表），动态流不经
     // 全局空间列表解析，仍按 assetWorkspaceId 解析（@ 引用/产物面板定位
     // 资产目录，spec §3.6）
-    expect(chatPaneProps.current?.workspace).toEqual({ id: 30 });
-    // 失效挂载（itemId=2）不下发给输入过滤集；技能以 itemName 匹配
-    expect(chatPaneProps.current?.boundAssistantIds).toEqual([1]);
-    expect(chatPaneProps.current?.boundSkillNames).toEqual(["联网搜索"]);
+    expect(chatMessagesProps.current?.workspace).toEqual({ id: 30 });
+    // 底栏（输入过滤集在 ProjectChatBar 内部下发，见 project-chat-bar.test）
+    expect(chatBarProps.current).toMatchObject({ detail: DETAIL });
   });
 
-  it("点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane 骨架（空数据表格表头）且 ChatPane 卸载", async () => {
+  it("点击计划 Tab → URL 变 ?tab=plan，渲染 PlanPane 骨架（空数据表格表头）且 ChatMessages 卸载，底栏仍在", async () => {
     renderWorkspace();
-    await screen.findByText("chat-pane-mock");
+    await screen.findByText("chat-messages-mock");
 
     fireEvent.click(
       screen.getByRole("tab", { name: "project:workspace.tabPlan" }),
@@ -381,12 +406,52 @@ describe("Tab 容器", () => {
     expect(
       await screen.findByRole("columnheader", { name: "project:plan.title" }),
     ).toBeTruthy();
-    expect(screen.queryByText("chat-pane-mock")).toBeNull();
+    expect(screen.queryByText("chat-messages-mock")).toBeNull();
+    // 底部全局操作栏贯穿非动态 Tab（spec §3）
+    expect(screen.getByText("project-chat-bar-mock")).toBeTruthy();
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
         "/module/project/1?tab=plan",
       ),
     );
+  });
+
+  it("底部全局操作栏四 Tab 恒在（计划 Tab 下输入占位仍存在）", async () => {
+    renderWorkspace();
+    await screen.findByText("project-chat-bar-mock");
+
+    // 逐 Tab 切换（动态 → 计划 → 任务 → 资产 → 动态），底栏与输入占位恒在
+    for (const labelKey of [
+      "project:workspace.tabPlan",
+      "project:workspace.tabTasks",
+      "project:workspace.tabAssets",
+      "project:workspace.tabActivity",
+    ]) {
+      fireEvent.click(screen.getByRole("tab", { name: labelKey }));
+      await waitFor(() =>
+        expect(screen.getByText("project-chat-bar-mock")).toBeTruthy(),
+      );
+      expect(screen.getByText("chat-input-mock")).toBeTruthy();
+    }
+  });
+
+  it("动态流 Tab：ChatMessages 在、无第二 ChatInput（底栏的输入唯一）", async () => {
+    renderWorkspace();
+    await screen.findByText("chat-messages-mock");
+
+    expect(screen.getAllByText("chat-input-mock")).toHaveLength(1);
+  });
+
+  it("providers/models 双空：SetupGuide 渲染且无底栏", async () => {
+    // 持久覆盖（非 Once）：双观察者挂载时 staleTime=0 会触发二次拉取，
+    // Once 值被首拉消费后回填非空会让引导态闪回
+    vi.mocked(ProviderApi.list).mockResolvedValue([]);
+    renderWorkspace();
+
+    expect(await screen.findByText("chat:setupProviders")).toBeTruthy();
+    // 引导态不渲染底部操作栏（与 ActivityPane 的 SetupGuide 条件同源取反）
+    expect(screen.queryByText("project-chat-bar-mock")).toBeNull();
+    expect(screen.queryByText("chat-messages-mock")).toBeNull();
   });
 
   it("switchTab 合并式写入：切 Tab 不丢 ?viewId=（回归）", async () => {
@@ -407,7 +472,7 @@ describe("Tab 容器", () => {
       },
     ]);
     renderWorkspace();
-    await screen.findByText("chat-pane-mock");
+    await screen.findByText("chat-messages-mock");
 
     // 计划 Tab → 切看板视图：?tab=plan&viewId=11
     fireEvent.click(

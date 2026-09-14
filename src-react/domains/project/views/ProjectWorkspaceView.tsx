@@ -2,10 +2,12 @@
  * 项目工作台 /module/project/:projectId（spec §6.3）：
  * 左列 Tab 容器（动态/计划/任务/资产，读写 ?tab= 缺省 activity）+ 筛选
  * 下拉（与我相关/成员动态——单成员等价，UI 预留）+ 配置面板开关；
- * 动态/计划/资产 Tab 分别渲染 ActivityPane（复用 ChatPane）/PlanPane/
+ * 动态/计划/资产 Tab 分别渲染 ActivityPane（ChatMessages 消息区）/PlanPane/
  * AssetsPane，任务 Tab 渲染 TasksPane（个人聚合清单，自身拉取
- * planItemsMine 不依赖 projectId）；右列 ConfigPanel（w-80 border-l，
- * 可收起）。Tab 切换为合并式 query 写入（保留 ?view= 等既有参数）。
+ * planItemsMine 不依赖 projectId）；左列底部为全局操作栏 ProjectChatBar
+ * （ChatInput 贯穿四 Tab，providers/models 双空引导态不渲染）；右列
+ * ConfigPanel（w-80 border-l，可收起）。Tab 切换为合并式 query 写入
+ * （保留 ?view= 等既有参数）。
  * getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project。
  */
 import { useEffect, useState } from "react";
@@ -33,11 +35,17 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ProviderApi } from "@/domains/ai/api/provider.api";
+import { ModelApi } from "@/domains/ai/api/model.api";
 import ProjectApi from "../api/project.api";
-import ActivityPane from "../components/ActivityPane";
+import ActivityPane, {
+  chatSettingsRoute,
+  needsChatSetup,
+} from "../components/ActivityPane";
 import AssetsPane from "../components/AssetsPane";
 import ConfigPanel from "../components/ConfigPanel";
 import PlanPane from "../components/PlanPane";
+import ProjectChatBar from "../components/ProjectChatBar";
 import TasksPane from "../components/TasksPane";
 
 const HUB_ROUTE = "/module/project";
@@ -94,6 +102,18 @@ export default function ProjectWorkspaceView() {
     enabled: Number.isInteger(id) && id > 0,
     retry: false,
   });
+
+  // 底栏渲染判据：镜像 ActivityPane 的 SetupGuide 条件（同 key 共享缓存），
+  // 引导态（providers/models 双成功且双空）不渲染输入框
+  const providersQuery = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => ProviderApi.list(),
+  });
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: () => ModelApi.listAll(),
+  });
+  const chatReady = !needsChatSetup(providersQuery, modelsQuery);
 
   // 404：项目不存在/已删除 → toast + 跳回列表（其余错误落下方错误态）
   useEffect(() => {
@@ -215,23 +235,34 @@ export default function ProjectWorkspaceView() {
           </div>
         </header>
 
-        {/* 内容区：动态/计划/任务/资产 Tab 渲染对应面板 */}
-        {tab === "activity" ? (
-          <ActivityPane detail={detailQuery.data} />
-        ) : tab === "plan" ? (
-          <PlanPane
-            key={detailQuery.data.project.id}
-            projectId={detailQuery.data.project.id}
-            assetWorkspaceId={detailQuery.data.assetWorkspaceId}
+        {/* 内容区：动态/计划/任务/资产 Tab 渲染对应面板（flex-1 满高，底栏外置） */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {tab === "activity" ? (
+            <ActivityPane detail={detailQuery.data} />
+          ) : tab === "plan" ? (
+            <PlanPane
+              key={detailQuery.data.project.id}
+              projectId={detailQuery.data.project.id}
+              assetWorkspaceId={detailQuery.data.assetWorkspaceId}
+            />
+          ) : tab === "assets" ? (
+            <AssetsPane
+              key={detailQuery.data.project.id}
+              projectId={detailQuery.data.project.id}
+            />
+          ) : (
+            /* 任务 Tab：个人聚合清单（自取 userId，无 projectId 切换重挂需求） */
+            <TasksPane />
+          )}
+        </div>
+
+        {/* 底部全局操作栏（spec §3）：贯穿四 Tab，key 取会话 id 保证切换重建 */}
+        {chatReady && (
+          <ProjectChatBar
+            key={detailQuery.data.session.id}
+            detail={detailQuery.data}
+            onOpenSettings={(target) => navigate(chatSettingsRoute(target))}
           />
-        ) : tab === "assets" ? (
-          <AssetsPane
-            key={detailQuery.data.project.id}
-            projectId={detailQuery.data.project.id}
-          />
-        ) : (
-          /* 任务 Tab：个人聚合清单（自取 userId，无 projectId 切换重挂需求） */
-          <TasksPane />
         )}
       </div>
 

@@ -223,6 +223,9 @@
     "automationTip": "Let AI run tasks automatically on a schedule",
     "goAutomation": "Go to Automation"
   },
+  "chatBar": {
+    "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills"
+  },
   "sidebar": {
     "projects": "Projects",
     "myProjects": "My Projects",

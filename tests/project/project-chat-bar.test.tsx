@@ -86,6 +86,11 @@ interface CapturedInputProps {
   boundAssistantIds?: number[];
   boundSkillNames?: string[];
   placeholder?: string;
+  localTask?: {
+    enabled: boolean;
+    label: string;
+    onToggle: (next: boolean) => void;
+  };
   onSend: (
     content: string,
     files: Array<{ path: string; content: string; kind?: string }>,
@@ -286,5 +291,55 @@ describe("ProjectChatBar 底栏", () => {
       useChatStore.getState().finishStream(SESSION_ID);
     });
     expect(screen.queryByTestId("agent-progress-stub")).toBeNull();
+  });
+
+  it("本地任务开关默认关闭并透传 ChatInput（label 为 project:chatBar.localTask）；关闭发送 content 无 [用户要求]", async () => {
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    // 开关接线：默认 enabled=false，label 用 project 域文案 key
+    expect(inputProps.current?.localTask).toMatchObject({
+      enabled: false,
+      label: "project:chatBar.localTask",
+    });
+
+    fireEvent.click(screen.getByTestId("stub-send"));
+    await waitFor(() => expect(chatApiMock.send).toHaveBeenCalled());
+    const content = chatApiMock.send.mock.calls[0]?.[0]?.content;
+    expect(content).toBe("hi");
+    expect(content).not.toContain("[用户要求]");
+  });
+
+  it("开关开启（onToggle(true)）→ 发送 content 末尾追加本地任务指令", async () => {
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    act(() => {
+      inputProps.current?.localTask?.onToggle(true);
+    });
+    fireEvent.click(screen.getByTestId("stub-send"));
+    await waitFor(() => expect(chatApiMock.send).toHaveBeenCalled());
+
+    const content = chatApiMock.send.mock.calls[0]?.[0]?.content;
+    expect(content).toBe(
+      "hi\n\n[用户要求] 本次创建或更新的待办事项请存储为本地任务（projectId 置空，不出现在项目计划中）。",
+    );
+  });
+
+  it("todo 引用文件用专属前缀 [引用待办 待办#N]（T7 收尾：不复用 [引用文件]）", async () => {
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    await act(async () => {
+      await inputProps.current?.onSend("正文", [
+        { path: "待办#5", content: "【待办】调研｜状态:待开始", kind: "todo" },
+      ]);
+    });
+    expect(chatApiMock.send).toHaveBeenLastCalledWith({
+      sessionId: SESSION_ID,
+      content: "[引用待办 待办#5]\n【待办】调研｜状态:待开始\n\n正文",
+      modelId: undefined,
+      overrides: undefined,
+    });
   });
 });

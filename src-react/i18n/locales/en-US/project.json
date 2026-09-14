@@ -224,7 +224,8 @@
     "goAutomation": "Go to Automation"
   },
   "chatBar": {
-    "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills"
+    "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills",
+    "localTask": "Local tasks"
   },
   "sidebar": {
     "projects": "Projects",

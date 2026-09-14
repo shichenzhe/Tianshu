@@ -1,5 +1,6 @@
 /**
- * ＋扩展菜单（P3 spec §4）：添加文件 / 模式 / 专家 / 技能 / 连接器 五项
+ * ＋扩展菜单（P3 spec §4）：添加文件 / 模式 / 专家 / 技能 / 连接器 五项；
+ * 可选 localTask 开关项（项目底栏 T8，未传不渲染——AI 模块零改动）
  * 模式为二级子菜单（✓ 当前项），专家/技能二级浮层拆至独立组件
  * （搜索 + 列表 + 底部操作）。技能本地导入复用 SkillImportDialog：
  * 先经系统选择器取路径，再开弹窗自动预检。管理入口就近收纳：
@@ -44,6 +45,14 @@ interface PickedFile {
   error?: string;
 }
 
+/** 本地任务开关项数据（项目底栏 T8）：label 由调用方传入——
+    PlusMenu 属 ai 域共享组件，不直接依赖 project 命名空间文案 */
+export interface LocalTaskToggle {
+  enabled: boolean;
+  label: string;
+  onToggle: (next: boolean) => void;
+}
+
 interface PlusMenuProps {
   sessionId: number;
   currentMode: SessionMode;
@@ -52,6 +61,9 @@ interface PlusMenuProps {
   boundAssistantIds?: number[];
   /** 项目动态流：仅展示已挂载技能（透传为技能子菜单 allowedNames）；未传不过滤 */
   boundSkillNames?: string[];
+  /** 项目底栏本地任务开关（T8）：传入时在模式子菜单后渲染开关项；
+      未传不渲染（AI 模块 ChatView 零改动） */
+  localTask?: LocalTaskToggle;
   /** 选中的文件路径回传 ChatInput 以内联 @token 插入(内容发送时再读) */
   onPickPaths: (paths: string[]) => void;
   onOpenMcp: () => void;
@@ -70,6 +82,7 @@ export default function PlusMenu({
   currentAssistantId,
   boundAssistantIds,
   boundSkillNames,
+  localTask,
   onPickPaths,
   onOpenMcp,
 }: PlusMenuProps) {
@@ -179,6 +192,18 @@ export default function PlusMenu({
               ))}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
+          {localTask && (
+            <DropdownMenuItem
+              // 开关项：切换勾选不关闭菜单（同技能子菜单多选），允许反复切换
+              onSelect={(e) => e.preventDefault()}
+              onClick={() => localTask.onToggle(!localTask.enabled)}
+            >
+              <span className="truncate">{localTask.label}</span>
+              {localTask.enabled && (
+                <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
+              )}
+            </DropdownMenuItem>
+          )}
           <ExpertSubMenu
             sessionId={sessionId}
             currentAssistantId={currentAssistantId}

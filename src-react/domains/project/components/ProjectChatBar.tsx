@@ -32,6 +32,23 @@ interface ProjectChatBarProps {
   onOpenSettings: (target: "providers" | "assistants" | "mcp") => void;
 }
 
+/** 本地任务开关指令（T8）：开启时追加到消息末尾，引导 AI 建的待办
+    落为本地任务（projectId 置空，不进项目计划） */
+const LOCAL_TASK_DIRECTIVE =
+  "\n\n[用户要求] 本次创建或更新的待办事项请存储为本地任务（projectId 置空，不出现在项目计划中）。";
+
+/** 引用注入前缀：技能/待办/文件各自专属前缀（待办为 T7 收尾——
+    与普通文件区分，便于模型分辨引用来源语义） */
+function referencePrefix(file: PendingFile): string {
+  if (file.kind === "skill") {
+    return `[引用技能 ${file.path}]`;
+  }
+  if (file.kind === "todo") {
+    return `[引用待办 ${file.path}]`;
+  }
+  return `[引用文件 ${file.path}]`;
+}
+
 export default function ProjectChatBar({
   detail,
   onOpenSettings,
@@ -41,6 +58,8 @@ export default function ProjectChatBar({
   const session = detail.session;
   const { sending, send, stop } = useChatSend(session.id);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
+  // 本地任务开关（T8）：＋菜单内切换，发送时按开关态追加指令
+  const [localTask, setLocalTask] = useState(false);
 
   // 项目计划事项（# 待办联想数据源；与计划 Tab 单表数据源同缓存，
   // 组件仅在会话可用时渲染——即探索口径的 enabled hasChat 门控）
@@ -116,7 +135,8 @@ export default function ProjectChatBar({
     return tools.order.length + 1;
   });
 
-  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动 */
+  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动；
+      本地任务开关开启时末尾追加指令 */
   const handleSend = async (
     content: string,
     files: PendingFile[],
@@ -125,15 +145,14 @@ export default function ProjectChatBar({
     const injected =
       files.length > 0
         ? `${files
-            .map((file) =>
-              file.kind === "skill"
-                ? `[引用技能 ${file.path}]\n${file.content}`
-                : `[引用文件 ${file.path}]\n${file.content}`,
-            )
+            .map((file) => `${referencePrefix(file)}\n${file.content}`)
             .join("\n\n")}\n\n${content}`
         : content;
+    const finalContent = localTask
+      ? `${injected}${LOCAL_TASK_DIRECTIVE}`
+      : injected;
     try {
-      await send(injected, undefined, overrides);
+      await send(finalContent, undefined, overrides);
     } catch (e) {
       toast.error(mapIpcError(e));
       // rethrow：保持调用链 Promise 拒绝语义（ChatInput 已乐观清空，此处静默防双弹由其 catch 处理）
@@ -178,6 +197,11 @@ export default function ProjectChatBar({
             .filter((b) => b.itemType === "skill" && b.valid)
             .map((b) => b.itemName)}
           todoItems={planItems}
+          localTask={{
+            enabled: localTask,
+            label: t("project:chatBar.localTask"),
+            onToggle: setLocalTask,
+          }}
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
           onOpenMcp={() => onOpenSettings("mcp")}
           onRunCommand={handleRunCommand}

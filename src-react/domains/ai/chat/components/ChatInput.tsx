@@ -58,7 +58,7 @@ import type { PendingFile } from "../lib/pending-file";
 import ModelPicker from "./ModelPicker";
 import ContextUsageButton from "./context-usage-button";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
-import PlusMenu from "./PlusMenu";
+import PlusMenu, { type LocalTaskToggle } from "./PlusMenu";
 
 /** @token 允许字符（@ 后连续输入的部分） */
 const MENTION_TOKEN_RE = /[\w\-./]/;
@@ -100,6 +100,8 @@ interface ChatInputProps {
   boundSkillNames?: string[];
   /** 项目待办引用（# 联想数据源）；缺省不启用 # 触发（AI 模块行为不变） */
   todoItems?: TodoSuggestItem[];
+  /** 项目底栏本地任务开关（T8）：透传 ＋菜单开关项；缺省不渲染（AI 模块行为不变） */
+  localTask?: LocalTaskToggle;
   /** 跳转连接器（MCP）管理页 */
   onOpenMcp: () => void;
   /** 斜杠命令执行(/compact 等);ChatView 接压缩等实现 */
@@ -178,6 +180,7 @@ export default function ChatInput({
   boundAssistantIds,
   boundSkillNames,
   todoItems,
+  localTask,
   onOpenMcp,
   onRunCommand,
   onSend,
@@ -783,6 +786,7 @@ export default function ChatInput({
             currentAssistantId={currentAssistantId}
             boundAssistantIds={boundAssistantIds}
             boundSkillNames={boundSkillNames}
+            localTask={localTask}
             onPickPaths={(paths) => {
               for (const filePath of paths) {
                 insertAtCaret(`@${filePath} `);

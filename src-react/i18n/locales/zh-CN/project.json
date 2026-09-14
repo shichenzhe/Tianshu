@@ -224,7 +224,8 @@
     "goAutomation": "前往自动化"
   },
   "chatBar": {
-    "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能"
+    "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能",
+    "localTask": "本地任务"
   },
   "sidebar": {
     "projects": "项目",

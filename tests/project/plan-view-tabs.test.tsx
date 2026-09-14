@@ -6,8 +6,8 @@
  * 组件纯 props 无路由/查询依赖，直接渲染桩回调：
  * - Tab 渲染：默认视图 name 空串 → 本地化类型名兜底（typeTable/typeKanban）、
  *   自定义名优先、激活态 aria-pressed；点击非激活 Tab → onSelect(id)
- * - + 菜单：A 阶段仅「看板」可添加（表格/列表/甘特/日历不在列），
- *   点选 → onAdd("kanban")
+ * - + 菜单：看板/列表可添加（表格/甘特/日历不在列），
+ *   点选 → onAdd("kanban") / onAdd("list")
  * - Tab `...` 菜单：重命名与删除；删除 → onRemove(id)；
  *   views.length === 1 时删除项不渲染（最后视图保护）
  * - 重命名流：菜单 → PlanViewNameDialog 打开（初始名=当前名），输入新名
@@ -181,22 +181,23 @@ describe("Tab 渲染与切换", () => {
 });
 
 describe("+ 添加视图菜单", () => {
-  it("仅含「看板」项（A 阶段无列表/甘特/日历）；点击 → onAdd('kanban')", async () => {
+  it("含「看板/列表」两项（无表格/甘特/日历）；点击 → onAdd 对应类型", async () => {
     const { onAdd } = renderTabs();
     const menu = await openMenu(
       screen.getByRole("button", { name: "project:planView.addView" }),
     );
 
-    // 唯一菜单项 = 看板；其余类型不出现
-    expect(within(menu).getAllByRole("menuitem")).toHaveLength(1);
-    expect(
-      within(menu).getByRole("menuitem", {
-        name: "project:planView.typeKanban",
-      }),
-    ).toBeTruthy();
+    // 两菜单项 = 看板 + 列表；其余类型不出现
+    expect(within(menu).getAllByRole("menuitem")).toHaveLength(2);
+    for (const type of ["typeKanban", "typeList"]) {
+      expect(
+        within(menu).getByRole("menuitem", {
+          name: `project:planView.${type}`,
+        }),
+      ).toBeTruthy();
+    }
     for (const absent of [
       "project:planView.typeTable",
-      "project:planView.typeList",
       "project:planView.typeGantt",
       "project:planView.typeCalendar",
     ]) {
@@ -210,6 +211,20 @@ describe("+ 添加视图菜单", () => {
     );
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onAdd).toHaveBeenCalledWith("kanban");
+  });
+
+  it("点选「列表」→ onAdd('list')", async () => {
+    const { onAdd } = renderTabs();
+    const menu = await openMenu(
+      screen.getByRole("button", { name: "project:planView.addView" }),
+    );
+    fireEvent.click(
+      within(menu).getByRole("menuitem", {
+        name: "project:planView.typeList",
+      }),
+    );
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(onAdd).toHaveBeenCalledWith("list");
   });
 });
 

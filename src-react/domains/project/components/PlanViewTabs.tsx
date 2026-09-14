@@ -2,7 +2,7 @@
  * 视图 Tab 栏（子系统 A spec §UI + B 阶段拖拽排序）：Tab 切换（激活高亮、
  * 默认视图 name 空串显示本地化类型名）、dnd-kit 横向拖拽排序（落点语义抽
  * reorderTabViews 纯函数：把 active 移到 over 位置并重排 sortOrder，原位/
- * 未知 no-op）、+ 添加视图（A 阶段仅看板）、Tab hover/键盘聚焦 `...` 菜单
+ * 未知 no-op）、+ 添加视图（看板/列表）、Tab hover/键盘聚焦 `...` 菜单
  * （重命名/删除；最后一个视图不显示删除）、isDirty 圆点。命名弹窗（重命名）
  * 内聚在本组件；「保存为新视图」入口在筛选面板。
  */
@@ -50,8 +50,8 @@ interface PlanViewTabsProps {
   onReorder: (orderedIds: number[]) => void;
 }
 
-/** A 阶段可添加的视图类型（列表/甘特/日历 C 阶段点亮） */
-const ADDABLE_TYPES: PlanViewType[] = ["kanban"];
+/** 可添加的视图类型（C 阶段列表已点亮；甘特/日历待 T5/T6） */
+const ADDABLE_TYPES: PlanViewType[] = ["kanban", "list"];
 
 /**
  * Tab 拖拽落点（纯函数）：把 active 移到 over 位置，重排 sortOrder 为

@@ -5,8 +5,9 @@
  * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
  * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
  * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
- * 时整条不渲染）；表格/看板双视图（看板 = PlanKanbanView 分组泳道拖拽，
- * 分组依据 status/priority/assignee 由视图 draft.groupBy 驱动）；
+ * 时整条不渲染）；表格/看板/列表三视图（看板 = PlanKanbanView 分组泳道拖拽，
+ * 分组依据 status/priority/assignee 由视图 draft.groupBy 驱动；列表 =
+ * PlanListView 状态四组折叠清单——勾选完成走 move、组内 + 携组状态快速新增）；
  * 项目成员查询（处理人筛选候选/看板分组与头像）。
  * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
  * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 + 视图设置（PlanViewSettings
@@ -52,6 +53,7 @@ import CustomFieldsEditor from "./CustomFieldsEditor";
 import PlanFilterPopover from "./PlanFilterPopover";
 import PlanItemDialog from "./PlanItemDialog";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
+import PlanListView from "./PlanListView";
 import PlanTableView from "./PlanTableView";
 import PlanViewSettingsPopover from "./PlanViewSettingsPopover";
 import PlanViewTabs from "./PlanViewTabs";
@@ -253,14 +255,15 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     }
   };
 
-  /** 快速新增：与弹窗共用 create 链（缺省状态/优先级；创建即指派自己） */
-  const handleQuickCreate = async (title: string) => {
+  /** 快速新增（带状态预置；列表组内 + / 表格表头共用）：创建即指派自己 */
+  const handleQuickCreateIn = async (status: PlanStatus, title: string) => {
     try {
       await PlanItemApi.create({
         createdById: user.id,
         assigneeId: user.id,
         projectId,
         title,
+        status,
       });
       await invalidatePlanCaches();
     } catch (error) {
@@ -386,7 +389,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         </div>
       </div>
 
-      {/* 内容区：加载 / 错误 / 空态 / 看板占位 / 表格 */}
+      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 表格 */}
       {itemsQuery.isError ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {t("project:toast.operationFailed")}
@@ -418,6 +421,20 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           onQuickCreate={openQuickCreateIn}
           onEdit={openEdit}
         />
+      ) : activeView?.type === "list" ? (
+        // 列表视图：状态分组折叠清单（勾选完成走 move；组内 + 携组状态快速新增）
+        <PlanListView
+          items={visibleItems}
+          members={members}
+          currentUserId={user.id}
+          onToggleDone={(id, done) =>
+            void handleMoveStatus(id, done ? "done" : "not_started")
+          }
+          onQuickCreate={(status, title) =>
+            void handleQuickCreateIn(status, title)
+          }
+          onEdit={openEdit}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
           <PlanTableView
@@ -426,7 +443,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
             onOpenItem={openEdit}
             onMoveItem={handleMoveStatus}
             onSetPriority={handleSetPriority}
-            onQuickCreate={handleQuickCreate}
+            onQuickCreate={(title) => handleQuickCreateIn("not_started", title)}
             onOpenFieldEditor={() => setFieldEditorOpen(true)}
             onDeleteItem={setDeleting}
           />

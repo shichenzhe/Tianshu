@@ -14,7 +14,8 @@
  *   状态(多选)/优先级(多选)条件，跨维度 AND 过滤（draft.conditions 经引擎
  *   filterItems 生效）；搜索标题包含过滤
  * - 视图切换：Tab 点击写 ?viewId= 且保留 ?tab=plan（URL 断言）；非法 ?view=
- *   回落表格；旧参数 ?view=kanban 初始渲染看板（resolveInitialViewId 映射）
+ *   回落表格；旧参数 ?view=kanban 初始渲染看板（resolveInitialViewId 映射）；
+ *   ?viewId=12（type list）渲染列表视图状态分组清单（组头出现、无表格行）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
  * - 空态：无任何事项居中 plan.empty
  */
@@ -137,6 +138,9 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   assigneeId: 1,
   tags: [],
   customFields: {},
+  startDate: "",
+  dueDate: "",
+  source: "manual",
   sortOrder: 0,
   createdById: 1,
   createdAt: "2026-09-01T00:00:00.000Z",
@@ -261,7 +265,7 @@ const prioritySelectOf = (title: string) =>
     name: "project:plan.priority",
   });
 
-/** 视图播种：表格(10) + 看板(11)，空名 = 默认视图（UI 类型名兜底显示） */
+/** 视图播种：表格(10) + 看板(11) + 列表(12)，空名 = 默认视图（UI 类型名兜底显示） */
 const VIEWS: PlanViewRecord[] = [
   {
     id: 10,
@@ -284,6 +288,18 @@ const VIEWS: PlanViewRecord[] = [
     filterJson: "{}",
     sortJson: "[]",
     sortOrder: 1,
+    createdAt: "",
+    updatedAt: "",
+  },
+  {
+    id: 12,
+    projectId: 1,
+    name: "",
+    type: "list",
+    groupBy: null,
+    filterJson: "{}",
+    sortJson: "[]",
+    sortOrder: 2,
     createdAt: "",
     updatedAt: "",
   },
@@ -434,7 +450,7 @@ describe("PlanPane 行内编辑", () => {
 });
 
 describe("PlanPane 快速新增", () => {
-  it("回车 → create 缺省态（createdById/assigneeId/projectId/title）+ 双 key 失效 + 清空输入", async () => {
+  it("回车 → create 缺省态（createdById/assigneeId/projectId/title/status 预置 not_started）+ 双 key 失效 + 清空输入", async () => {
     const client = renderPlanPane();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
     await screen.findByText("需求梳理");
@@ -451,6 +467,7 @@ describe("PlanPane 快速新增", () => {
         assigneeId: 1,
         projectId: 1,
         title: "快速新增事项",
+        status: "not_started",
       }),
     );
     expect(input.value).toBe("");
@@ -571,6 +588,23 @@ describe("PlanPane 视图切换", () => {
     expect(screen.queryByRole("row")).toBeNull();
     // 视图数据流已换轨：激活视图经 PlanViewApi 解析（而非 ?view= 直读）
     expect(planViewMock.list).toHaveBeenCalledWith(1);
+  });
+
+  it("list 类型视图渲染分组清单（状态组头出现）", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&viewId=12" });
+    // PlanListView 状态分组清单：组头为折叠按钮（状态名 i18n key）
+    expect(
+      await screen.findByRole("button", {
+        name: "project:plan.statusNotStarted",
+      }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "project:plan.statusPaused" }),
+    ).toBeTruthy();
+    // 可见项按组渲染（清单行，非表格）
+    expect(screen.getByRole("button", { name: "需求梳理" })).toBeTruthy();
+    expect(screen.queryByRole("row")).toBeNull();
+    expect(screen.queryByRole("columnheader")).toBeNull();
   });
 });
 

@@ -634,8 +634,9 @@ describe("PlanPane 看板集成", () => {
       }),
     );
     const dialog = await screen.findByRole("dialog");
+    // 属性控件迁入胶囊（子系统 D）：状态胶囊摘要承载预置值
     expect(
-      within(dialog).getByRole("combobox", { name: "project:plan.status" })
+      within(dialog).getByRole("button", { name: "project:plan.status" })
         .textContent,
     ).toContain("project:plan.statusInProgress");
   });
@@ -658,7 +659,7 @@ describe("PlanPane 看板集成", () => {
     );
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByRole("combobox", { name: "project:plan.priority" })
+      within(dialog).getByRole("button", { name: "project:plan.priority" })
         .textContent,
     ).toContain("project:plan.priorityP1");
   });
@@ -672,7 +673,7 @@ describe("PlanPane 看板集成", () => {
     fireEvent.click(cardOf("发布上线"));
     const dialog = await screen.findByRole("dialog");
     expect(
-      within(dialog).getByRole("combobox", { name: "project:plan.status" })
+      within(dialog).getByRole("button", { name: "project:plan.status" })
         .textContent,
     ).toContain("project:plan.statusDone");
   });
@@ -701,17 +702,24 @@ describe("IME 组合输入（T6 minor 修复）", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "project:plan.add" }));
     const dialog = await screen.findByRole("dialog");
-    const tagInput = within(dialog).getByPlaceholderText(
+    // 标签输入迁入胶囊 Popover（子系统 D）：先点开标签胶囊
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "project:plan.tags" }),
+    );
+    const tagsPanel = await screen.findByRole("dialog", {
+      name: "project:plan.tags",
+    });
+    const tagInput = within(tagsPanel).getByPlaceholderText(
       "project:plan.tagPlaceholder",
     );
 
     fireEvent.change(tagInput, { target: { value: "新标签" } });
     fireEvent.keyDown(tagInput, { key: "Enter", isComposing: true });
     expect(tagInput.value).toBe("新标签");
-    expect(within(dialog).queryByText("新标签")).toBeNull();
+    expect(within(tagsPanel).queryByText("新标签")).toBeNull();
 
     fireEvent.keyDown(tagInput, { key: "Enter" });
-    expect(within(dialog).getByText("新标签")).toBeTruthy();
+    expect(within(tagsPanel).getByText("新标签")).toBeTruthy();
     expect(tagInput.value).toBe("");
   });
 });

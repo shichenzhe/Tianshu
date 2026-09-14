@@ -1,28 +1,27 @@
 /**
- * 计划事项弹窗（新建/编辑共用，spec §6）：
- * 标题（必填 trim ≤100，空标题禁用提交、超长实时提示）/ 状态四态 Select
- * （新建态可经 defaultStatus 预置初始状态，编辑态忽略）/ 优先级 Select +
- * Badge 预览（P0 destructive / P1 primary / P2 muted / P3 outline；新建态
- * 可经 defaultPriority 预置，看板优先级列头快速新增）/ 标签
- * （Input 回车添加 → 可移除 Tag + planItems 缓存聚合的候选 chips 点击追加；
- * IME 组合中的回车不触发）/ 排期 startDate/dueDate 日期框（仅项目任务，
- * 本地任务无日期语义；新建态可经 defaultDueDate 预置截止日，日历点格
- * 快速新增）/ 处理人（项目任务 = 成员 Select 含「未指派」空值项，
- * project:listMembers 拉取；本地任务只读「我」）/ 自定义字段动态区
- * （text=Input、number=Input[type=number]、date=Input[type=date]；仅项目
- * 任务渲染，本地任务 projectId=null 无该区）。
+ * 计划事项弹窗（新建/编辑共用，spec §6；子系统 D 改版 spec §2）：
+ * 标题（必填 trim ≤100，空标题禁用提交、超长实时提示；新建态可经
+ * defaultStatus/defaultPriority/defaultDueDate 预置——看板列头/优先级列头/
+ * 日历点格快速新增，编辑态忽略）/ 描述（textarea 4 行 ⇄ 右上「预览」开关
+ * MarkdownView 渲染；空串保存归一 null，读侧归一空串）/ 属性胶囊行
+ * PlanItemCapsuleRow（状态/处理人/优先级/标签/时间规划五胶囊收纳原控件；
+ * 标签候选来自 planItems 缓存聚合；本地任务处理人只读「我」、无时间胶囊）/
+ * 自定义字段动态区（text=Input、number=Input[type=number]、date=Input[type=date]；
+ * 仅项目任务渲染）/ 右上全屏切换（maximized：DialogContent 全屏类；
+ * Esc 分层——全屏态（非预览态）Esc 仅退全屏不关弹窗，非全屏态照常关闭）。
  * 保存：新建 → create（assigneeId 打开时缺省当前用户、显式「未指派」传
- * null；日期仅项目任务携带、空串归一 null；customFields 仅保留值非空键）、
- * 编辑 → update（全量字段，assigneeId 回填原值——null 保留「未指派」）
+ * null；description 空串归一 null；日期仅项目任务携带、dateKeyToIso 构造
+ * UTC 零点 ISO、空串归一 null；customFields 仅保留值非空键）、编辑 →
+ * update（全量字段，assigneeId 回填原值——null 保留「未指派」）
  * → invalidate planItems + planItemsMine 双 key
  * → toast(plan:saved) + onSaved + 关闭；失败 toast mapIpcError 且弹窗保留。
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,13 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import MarkdownView from "@/domains/ai/chat/components/MarkdownView";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useUserStore } from "@/domains/user/store/user.store";
 import PlanItemApi, {
@@ -48,7 +41,8 @@ import PlanItemApi, {
   PLAN_ITEMS_MINE_KEY,
 } from "../api/plan-item.api";
 import ProjectApi from "../api/project.api";
-import RemovableTag from "./RemovableTag";
+import { dateKeyToIso } from "../model/plan-date";
+import PlanItemCapsuleRow, { type CapsulePatch } from "./PlanItemCapsuleRow";
 import type { ProjectMemberItem } from "../../../../electron/domains/project/project.entity";
 import type {
   PlanItemRecord,
@@ -77,11 +71,6 @@ interface PlanItemDialogProps {
 const NO_PROJECT_CACHE_KEY = -1;
 
 const TITLE_MAX_LENGTH = 100;
-
-/** 「YYYY-MM-DD」日历日 → UTC 零点 ISO（与回填 slice(0,10) 精确往返，
- *  不受本地时区偏移影响）；空串 = 未填（null 清空） */
-const toIsoOrNull = (value: string): string | null =>
-  value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null;
 
 export const STATUS_OPTIONS: PlanStatus[] = [
   "not_started",
@@ -129,10 +118,10 @@ export default function PlanItemDialog({
   const user = useUserStore((state) => state.user);
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
+  const [description, setDescription] = useState("");
   const [status, setStatus] = useState<PlanStatus>("not_started");
   const [priority, setPriority] = useState<PlanPriority>("P1");
   const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [assigneeId, setAssigneeId] = useState<number | null>(null);
@@ -140,20 +129,23 @@ export default function PlanItemDialog({
     Record<string, string | number>
   >({});
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [maximized, setMaximized] = useState(false);
 
   // 打开时重置/回填：新建取缺省值，编辑回填 item 全字段
   // （日期取 ISO 前 10 位回填日期框；处理人新建缺省指派自己，编辑回填
-  //  原值——assigneeId null 保留「未指派」，不回落当前用户）
+  //  原值——assigneeId null 保留「未指派」，不回落当前用户；
+  //  预览/全屏为会话态，重开归位编辑态/普通窗口）
   useEffect(() => {
     if (!open) {
       return;
     }
     setTitle(item?.title ?? "");
     setTitleTouched(false);
+    setDescription(item?.description ?? "");
     setStatus(item?.status ?? defaultStatus ?? "not_started");
     setPriority(item?.priority ?? defaultPriority ?? "P1");
     setTags(item?.tags ? [...item.tags] : []);
-    setTagInput("");
     setStartDate(item?.startDate ? item.startDate.slice(0, 10) : "");
     setDueDate(
       item
@@ -165,6 +157,8 @@ export default function PlanItemDialog({
     setAssigneeId(item ? item.assigneeId : user.id);
     setCustomFields(item ? { ...item.customFields } : {});
     setSaving(false);
+    setPreviewing(false);
+    setMaximized(false);
   }, [open, item, defaultStatus, defaultPriority, defaultDueDate, user.id]);
 
   // 候选标签：只消费计划 Tab 已有 planItems 缓存（enabled false 不主动拉取）
@@ -178,8 +172,6 @@ export default function PlanItemDialog({
     projectItems.forEach((entry) => entry.tags.forEach((tag) => seen.add(tag)));
     return [...seen].sort();
   }, [projectItems]);
-  // 已选中标签不再出现在候选区
-  const selectableTags = candidateTags.filter((tag) => !tags.includes(tag));
 
   // 自定义字段定义：仅项目任务且弹窗打开时拉取
   const { data: fieldDefs = [] } = useQuery({
@@ -188,7 +180,7 @@ export default function PlanItemDialog({
     enabled: open && projectId !== null,
   });
 
-  // 项目成员（处理人选择器）：仅项目任务且弹窗打开时拉取
+  // 项目成员（处理人胶囊）：仅项目任务且弹窗打开时拉取
   const { data: members = [] } = useQuery<ProjectMemberItem[]>({
     queryKey: ["projectMembers", projectId],
     queryFn: () => ProjectApi.listMembers(projectId as number),
@@ -206,25 +198,14 @@ export default function PlanItemDialog({
   const canSubmit =
     trimmedTitle !== "" && trimmedTitle.length <= TITLE_MAX_LENGTH && !saving;
 
-  const addTag = (raw: string) => {
-    const tag = raw.trim();
-    if (!tag || tags.includes(tag)) {
-      return;
-    }
-    setTags((prev) => [...prev, tag]);
-    setTagInput("");
-  };
-
-  const handleTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    // IME 组合中的 Enter 仅确认候选：不添加标签
-    if (event.nativeEvent.isComposing) {
-      return;
-    }
-    if (event.key !== "Enter") {
-      return;
-    }
-    event.preventDefault();
-    addTag(tagInput);
+  /** 胶囊行 patch 上抛 → 分发到各字段本地态 */
+  const handleCapsuleChange = (patch: Partial<CapsulePatch>) => {
+    if (patch.status !== undefined) setStatus(patch.status);
+    if (patch.priority !== undefined) setPriority(patch.priority);
+    if (patch.tags !== undefined) setTags(patch.tags);
+    if (patch.assigneeId !== undefined) setAssigneeId(patch.assigneeId);
+    if (patch.startDate !== undefined) setStartDate(patch.startDate);
+    if (patch.dueDate !== undefined) setDueDate(patch.dueDate);
   };
 
   const handleCustomFieldChange = (name: string, value: string) => {
@@ -261,18 +242,20 @@ export default function PlanItemDialog({
     setSaving(true);
     try {
       const customFieldValues = buildCustomFields();
-      // 排期载荷：本地任务无日期语义，仅项目任务携带（空串归一 null = 清空）
+      // 排期载荷：本地任务无日期语义，仅项目任务携带
+      // （dateKeyToIso 构造 UTC 零点 ISO，空串归一 null = 清空）
       const datePayload =
         projectId !== null
           ? {
-              startDate: toIsoOrNull(startDate),
-              dueDate: toIsoOrNull(dueDate),
+              startDate: startDate ? dateKeyToIso(startDate) : null,
+              dueDate: dueDate ? dateKeyToIso(dueDate) : null,
             }
           : {};
       if (item) {
         await PlanItemApi.update({
           id: item.id,
           title: trimmedTitle,
+          description: description || null,
           status,
           priority,
           tags,
@@ -284,10 +267,11 @@ export default function PlanItemDialog({
         await PlanItemApi.create({
           createdById: user.id,
           // 处理人：打开时缺省指派自己（任务 Tab「指派给我的」依赖），
-          // 成员选择器可改派；显式选「未指派」传 null 原样透传
+          // 胶囊可改派；显式选「未指派」传 null 原样透传
           assigneeId,
           projectId: projectId ?? undefined,
           title: trimmedTitle,
+          description: description || null,
           status,
           priority,
           tags,
@@ -309,19 +293,49 @@ export default function PlanItemDialog({
     }
   };
 
+  /** Esc 分层（radix 只有关闭语义）：全屏态（非预览态）拦下默认关闭仅退全屏 */
+  const handleEscapeKeyDown = (event: KeyboardEvent) => {
+    if (!maximized || previewing) {
+      return;
+    }
+    event.preventDefault();
+    setMaximized(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         aria-describedby={undefined}
-        className="max-h-[85vh] overflow-y-auto rounded-lg border-border/50 shadow-lg sm:max-w-lg"
+        onEscapeKeyDown={handleEscapeKeyDown}
+        className={
+          maximized
+            ? "h-[100dvh] w-screen max-w-none overflow-y-auto rounded-none sm:max-w-none"
+            : "max-h-[85vh] overflow-y-auto rounded-lg border-border/50 shadow-lg sm:max-w-lg"
+        }
       >
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between space-y-0">
           <DialogTitle>
             {item ? t("project:plan.edit") : t("project:plan.add")}
           </DialogTitle>
+          {/* 全屏切换（mr-8 避让右上角内置关闭 X） */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setMaximized((value) => !value)}
+            aria-label={
+              maximized ? t("project:plan.restore") : t("project:plan.maximize")
+            }
+            className="mr-8 h-7 w-7 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+          >
+            {maximized ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="space-y-1.5">
             <Label htmlFor="plan-item-title">{t("project:plan.title")}</Label>
             <Input
@@ -336,164 +350,52 @@ export default function PlanItemDialog({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>{t("project:plan.status")}</Label>
-              <Select
-                value={status}
-                onValueChange={(value) => setStatus(value as PlanStatus)}
+          {/* 描述：textarea ⇄ MarkdownView 预览 */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="plan-item-description">
+                {t("project:plan.description")}
+              </Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setPreviewing((value) => !value)}
+                className="h-6 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
               >
-                <SelectTrigger aria-label={t("project:plan.status")}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {t(STATUS_LABEL_KEYS[option])}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {previewing
+                  ? t("project:plan.editMode")
+                  : t("project:plan.preview")}
+              </Button>
             </div>
-            <div className="space-y-1.5">
-              <Label>{t("project:plan.priority")}</Label>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={priority}
-                  onValueChange={(value) => setPriority(value as PlanPriority)}
-                >
-                  <SelectTrigger
-                    aria-label={t("project:plan.priority")}
-                    className="flex-1"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITY_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option}>
-                        {t(PRIORITY_LABEL_KEYS[option])}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {/* 选中优先级徽章预览：P0 红 / P1 主题色 / P2 灰 / P3 弱描边 */}
-                <Badge variant={PRIORITY_BADGE_VARIANTS[priority]}>
-                  {t(PRIORITY_LABEL_KEYS[priority])}
-                </Badge>
+            {previewing ? (
+              <div className="min-h-24 rounded-md border border-border/50 p-2">
+                <MarkdownView text={description} />
               </div>
-            </div>
-          </div>
-
-          {/* 排期：本地任务无日期语义，仅项目任务录入 */}
-          {projectId !== null && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="plan-item-start-date">
-                  {t("project:plan.startDate")}
-                </Label>
-                <Input
-                  id="plan-item-start-date"
-                  type="date"
-                  value={startDate}
-                  onChange={(event) => setStartDate(event.target.value)}
-                  aria-label={t("project:plan.startDate")}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="plan-item-due-date">
-                  {t("project:plan.dueDate")}
-                </Label>
-                <Input
-                  id="plan-item-due-date"
-                  type="date"
-                  value={dueDate}
-                  onChange={(event) => setDueDate(event.target.value)}
-                  aria-label={t("project:plan.dueDate")}
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-item-tags">{t("project:plan.tags")}</Label>
-            <Input
-              id="plan-item-tags"
-              value={tagInput}
-              onChange={(event) => setTagInput(event.target.value)}
-              onKeyDown={handleTagKeyDown}
-              placeholder={t("project:plan.tagPlaceholder")}
-            />
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {tags.map((tag) => (
-                  <RemovableTag
-                    key={tag}
-                    name={tag}
-                    onRemove={() =>
-                      setTags((prev) => prev.filter((entry) => entry !== tag))
-                    }
-                  />
-                ))}
-              </div>
-            )}
-            {selectableTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {selectableTags.map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => addTag(tag)}
-                    className="rounded-md border border-border/50 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="plan-item-assignee">
-              {t("project:plan.handleMan")}
-            </Label>
-            {projectId === null ? (
-              /* 本地任务：处理人恒当前用户，只读展示 */
-              <Input
-                id="plan-item-assignee"
-                readOnly
-                value={t("project:plan.me")}
-                className="bg-muted/50"
-              />
             ) : (
-              /* 项目任务：成员选择器（含「未指派」空值项，null = 清空指派） */
-              <Select
-                value={assigneeId === null ? "none" : String(assigneeId)}
-                onValueChange={(value) =>
-                  setAssigneeId(value === "none" ? null : Number(value))
-                }
-              >
-                <SelectTrigger
-                  aria-label={t("project:plan.handleMan")}
-                  className="w-full"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    {t("project:plan.unassigned")}
-                  </SelectItem>
-                  {members.map((member) => (
-                    <SelectItem
-                      key={member.userId}
-                      value={String(member.userId)}
-                    >
-                      {member.nickname}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <textarea
+                id="plan-item-description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                rows={4}
+                aria-label={t("project:plan.description")}
+                className="w-full resize-y rounded-md border border-border/50 bg-transparent p-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             )}
           </div>
+
+          {/* 属性胶囊行（替代表单 grid 与标签/处理人/日期区） */}
+          <PlanItemCapsuleRow
+            status={status}
+            priority={priority}
+            tags={tags}
+            assigneeId={assigneeId}
+            startDate={startDate}
+            dueDate={dueDate}
+            members={members}
+            candidateTags={candidateTags}
+            projectIdIsNull={projectId === null}
+            onChange={handleCapsuleChange}
+          />
 
           {projectId !== null && fieldDefs.length > 0 && (
             <div className="space-y-3 border-t border-border/50 pt-3">

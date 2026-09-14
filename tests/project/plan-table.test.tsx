@@ -657,9 +657,16 @@ describe("PlanPane 视图切换", () => {
     const dialog = await screen.findByRole("dialog");
     const now = new Date();
     const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    // 时间输入迁入胶囊 Popover（子系统 D）：先点开时间规划胶囊
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "project:plan.timeRange" }),
+    );
+    const timePanel = await screen.findByRole("dialog", {
+      name: "project:plan.timeRange",
+    });
     expect(
       (
-        within(dialog).getByLabelText(
+        within(timePanel).getByLabelText(
           "project:plan.dueDate",
         ) as HTMLInputElement
       ).value,

@@ -5,20 +5,32 @@
  * QueryClientProvider；PlanItemApi 八静态方法 + useUserStore 整体 mock，
  * 候选标签经 setQueryData(PLAN_ITEMS_KEY) 预置缓存）：
  * - 标题校验：空标题禁用提交（blur 后 titleRequired 提示）；超 100 字 titleTooLong
- * - 编辑模式：回填 title/status/priority/tags/customFields/处理人（成员昵称）
- * - 标签：回车添加（trim/去重/清空输入）、X 移除、候选 chips 来自 planItems
- *   缓存 distinct 聚合、选中后候选隐藏
+ * - 编辑模式：回填 title/status/priority/tags/customFields/description/处理人
+ *   （成员昵称，经胶囊摘要断言）
+ * - 描述（子系统 D）：textarea 输入 Markdown → 预览 MarkdownView 真实渲染
+ *   （h1/ul-li）⇄ 编辑态切换值保留；create/update 携带 description（空串归
+ *   null）
+ * - 属性胶囊行（子系统 D）：五胶囊摘要规则（状态/优先级 = t(labelKey)、
+ *   处理人 = 昵称/未指派、标签 = 首标签(+n)、时间 = `9.14 ~ 9.20` 双端/单端
+ *   箭头/无值字段名）；Popover 内四态选项、成员列表（含未指派）、双 date
+ *   Input、标签回车添加（trim/去重/清空输入）/X 移除/候选 chips 来自
+ *   planItems 缓存 distinct 聚合（IME 组合回车不触发）；本地任务处理人只读
+ *   『我』不可开且无时间胶囊
+ * - 全屏模式（子系统 D）：maximize → DialogContent class 含 w-screen，再点
+ *   还原；Esc 分层——全屏态仅退全屏（onOpenChange 不触发）、非全屏态照常关闭
  * - 自定义字段：text/number/date 三型 input type 断言；本地任务（projectId
  *   null）不渲染该区且不拉取字段定义
- * - 排期与处理人（三期子系统 A）：编辑回填日期（ISO 前 10 位）/成员昵称；
- *   update 携带 ISO/null 与 assigneeId；日期区与成员 Select 仅项目任务
- *   （本地任务只读「我」、无日期框且 create 不带日期键）；日期为 UTC 零点
- *   存储且回往日历日不偏移；显式「未指派」→ create/update assigneeId null；
- *   编辑未指派事项回填「未指派」不回落当前用户（保存保留 null）；优先级含 P3
- * - defaultDueDate 预置（四期日历点格）：新建态 dueDate Input 值 = 预置日，
- *   提交 create 携带预置日 UTC 零点 ISO（与 defaultStatus 同构，编辑态忽略）
- * - 保存链路：create 参数完整（createdById/projectId/title/status/priority/
- *   tags/customFields，number 型转数字）；本地任务 projectId/customFields 省略；
+ * - 排期与处理人（三期子系统 A，子系统 D 胶囊化回归）：编辑回填日期（ISO
+ *   前 10 位）/成员昵称；update 携带 ISO/null 与 assigneeId；显式「未指派」→
+ *   create/update assigneeId null；编辑未指派事项回填「未指派」不回落当前
+ *   用户（保存保留 null）；日期为 UTC 零点存储（dateKeyToIso）回往日历日不
+ *   偏移；优先级含 P3
+ * - defaultDueDate 预置（四期日历点格）：新建态时间胶囊内 dueDate 值 =
+ *   预置日，提交 create 携带预置日 UTC 零点 ISO（与 defaultStatus 同构，
+ *   编辑态忽略）
+ * - 保存链路：create 参数完整（createdById/projectId/title/description/
+ *   status/priority/tags/customFields，number 型转数字）；本地任务
+ *   projectId/customFields 省略、无日期键；
  *   update 传全量字段；成功 invalidate planItems + planItemsMine 双 key +
  *   toast(plan:saved) + onSaved + 关闭；失败 toast.error 透传且弹窗保留
  * - CustomFieldsEditor：打开回填行、添加/删除/改名/改型、保存 saveFields +
@@ -128,11 +140,15 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   id: 7,
   projectId: 1,
   title: "既有事项",
+  description: "",
   status: "in_progress",
   priority: "P0",
   assigneeId: 1,
   tags: ["设计"],
   customFields: { 预算: 100 },
+  startDate: "",
+  dueDate: "",
+  source: "manual",
   sortOrder: 1,
   createdById: 1,
   createdAt: "2026-09-01T00:00:00.000Z",
@@ -205,24 +221,39 @@ async function selectOption(trigger: HTMLElement, optionName: string) {
 
 const getTitleInput = () =>
   screen.getByLabelText("project:plan.title") as HTMLInputElement;
-const getTagInput = () =>
-  screen.getByLabelText("project:plan.tags") as HTMLInputElement;
-/** 本地任务（projectId null）处理人只读框 */
-const getAssigneeInput = () =>
-  screen.getByLabelText("project:plan.handleMan") as HTMLInputElement;
-/** 项目任务处理人成员 Select 触发器 */
-const getAssigneeTrigger = () =>
-  screen.getByRole("combobox", { name: "project:plan.handleMan" });
-const getStartDateInput = () =>
-  screen.getByLabelText("project:plan.startDate") as HTMLInputElement;
-const getDueDateInput = () =>
-  screen.getByLabelText("project:plan.dueDate") as HTMLInputElement;
-const getStatusTrigger = () =>
-  screen.getByRole("combobox", { name: "project:plan.status" });
-const getPriorityTrigger = () =>
-  screen.getByRole("combobox", { name: "project:plan.priority" });
 const getSaveButton = () =>
   screen.getByRole("button", { name: "common:save" }) as HTMLButtonElement;
+
+/* ---------- 属性胶囊行（子系统 D）：触发按钮 + Popover 开合 ---------- */
+
+const getStatusCapsule = () =>
+  screen.getByRole("button", { name: "project:plan.status" });
+const getPriorityCapsule = () =>
+  screen.getByRole("button", { name: "project:plan.priority" });
+const getAssigneeCapsule = () =>
+  screen.getByRole("button", { name: "project:plan.handleMan" });
+const getTagsCapsule = () =>
+  screen.getByRole("button", { name: "project:plan.tags" });
+const getTimeCapsule = () =>
+  screen.getByRole("button", { name: "project:plan.timeRange" });
+/** 描述输入框（编辑态 textarea；预览态不存在） */
+const getDescriptionTextarea = () =>
+  screen.getByLabelText("project:plan.description") as HTMLTextAreaElement;
+
+/** 点开属性胶囊 Popover，返回内容元素（选项按钮/日期框均在其内） */
+async function openCapsule(capsuleName: string) {
+  fireEvent.click(screen.getByRole("button", { name: capsuleName }));
+  return screen.findByRole("dialog", { name: capsuleName });
+}
+
+/** 胶囊内点选选项（点击后胶囊收起） */
+async function pickCapsuleOption(capsuleName: string, optionName: string) {
+  const panel = await openCapsule(capsuleName);
+  fireEvent.click(within(panel).getByRole("button", { name: optionName }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog", { name: capsuleName })).toBeNull(),
+  );
+}
 
 beforeEach(() => {
   vi.mocked(PlanItemApi.listFields).mockReset().mockResolvedValue(FIELD_DEFS);
@@ -258,19 +289,21 @@ describe("PlanItemDialog 标题校验", () => {
 });
 
 describe("PlanItemDialog 编辑模式回填", () => {
-  it("回填 title/status/priority/tags/customFields，处理人回填成员昵称", async () => {
+  it("回填 title/status/priority/tags/customFields/description，处理人回填成员昵称", async () => {
     await renderPlanDialog({ item: makeItem() });
     expect(getTitleInput().value).toBe("既有事项");
-    expect(getStatusTrigger().textContent).toContain(
+    expect(getDescriptionTextarea().value).toBe("");
+    // 属性胶囊摘要承载回填值（状态/优先级 = t(labelKey)）
+    expect(getStatusCapsule().textContent).toContain(
       "project:plan.statusInProgress",
     );
-    expect(getPriorityTrigger().textContent).toContain(
+    expect(getPriorityCapsule().textContent).toContain(
       "project:plan.priorityP0",
     );
-    expect(screen.getByText("设计")).toBeTruthy();
+    expect(getTagsCapsule().textContent).toContain("设计");
     // 处理人回填 assigneeId=1 对应成员昵称（成员列表异步到达）
     await waitFor(() =>
-      expect(getAssigneeTrigger().textContent).toContain("黄"),
+      expect(getAssigneeCapsule().textContent).toContain("黄"),
     );
     expect(
       ((await screen.findByLabelText("预算")) as HTMLInputElement).value,
@@ -287,32 +320,38 @@ describe("PlanItemDialog 标签编辑", () => {
         makeItem({ id: 2, tags: ["design", "bug"] }),
       ],
     });
+    // 标签编辑迁入胶囊 Popover（子系统 D）
+    const panel = await openCapsule("project:plan.tags");
     // 候选 = 缓存 distinct 聚合
-    expect(screen.getByRole("button", { name: "bug" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "design" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "urgent" })).toBeTruthy();
+    ["bug", "design", "urgent"].forEach((name) =>
+      expect(within(panel).getByRole("button", { name })).toBeTruthy(),
+    );
 
     // 回车添加：trim 后入列、输入清空
-    const tagInput = getTagInput();
+    const tagInput = within(panel).getByLabelText(
+      "project:plan.tags",
+    ) as HTMLInputElement;
     fireEvent.change(tagInput, { target: { value: " 新标签 " } });
     fireEvent.keyDown(tagInput, { key: "Enter" });
-    expect(screen.getByText("新标签")).toBeTruthy();
+    expect(within(panel).getByText("新标签")).toBeTruthy();
     expect(tagInput.value).toBe("");
 
     // 重复输入已存在标签不重复添加
     fireEvent.change(tagInput, { target: { value: "新标签" } });
     fireEvent.keyDown(tagInput, { key: "Enter" });
-    expect(screen.getAllByText("新标签")).toHaveLength(1);
+    expect(within(panel).getAllByText("新标签")).toHaveLength(1);
 
     // 候选 chip 点击追加，选中后该候选隐藏
-    fireEvent.click(screen.getByRole("button", { name: "design" }));
-    expect(screen.getAllByText("design")).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "design" })).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "design" }));
+    expect(within(panel).getAllByText("design")).toHaveLength(1);
+    expect(within(panel).queryByRole("button", { name: "design" })).toBeNull();
 
     // X 移除
-    const chip = screen.getByText("新标签").closest("span") as HTMLElement;
+    const chip = within(panel)
+      .getByText("新标签")
+      .closest("span") as HTMLElement;
     fireEvent.click(within(chip).getByRole("button", { name: "common:close" }));
-    expect(screen.queryByText("新标签")).toBeNull();
+    expect(within(panel).queryByText("新标签")).toBeNull();
   });
 });
 
@@ -342,16 +381,21 @@ describe("PlanItemDialog 保存链路", () => {
     const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     const { onSaved, onOpenChange } = await renderPlanDialog();
     fireEvent.change(getTitleInput(), { target: { value: "新事项" } });
-    fireEvent.change(getTagInput(), { target: { value: "urgent" } });
-    fireEvent.keyDown(getTagInput(), { key: "Enter" });
+    // 标签经胶囊 Popover 回车添加
+    const tagsPanel = await openCapsule("project:plan.tags");
+    const tagInput = within(tagsPanel).getByLabelText(
+      "project:plan.tags",
+    ) as HTMLInputElement;
+    fireEvent.change(tagInput, { target: { value: "urgent" } });
+    fireEvent.keyDown(tagInput, { key: "Enter" });
     fireEvent.change(await screen.findByLabelText("里程碑"), {
       target: { value: "v1" },
     });
     fireEvent.change(screen.getByLabelText("预算"), {
       target: { value: "100" },
     });
-    await selectOption(getStatusTrigger(), "project:plan.statusDone");
-    await selectOption(getPriorityTrigger(), "project:plan.priorityP2");
+    await pickCapsuleOption("project:plan.status", "project:plan.statusDone");
+    await pickCapsuleOption("project:plan.priority", "project:plan.priorityP2");
 
     fireEvent.click(getSaveButton());
 
@@ -361,6 +405,7 @@ describe("PlanItemDialog 保存链路", () => {
       assigneeId: 1,
       projectId: 1,
       title: "新事项",
+      description: null,
       status: "done",
       priority: "P2",
       tags: ["urgent"],
@@ -388,11 +433,11 @@ describe("PlanItemDialog 保存链路", () => {
 
   it("本地任务新建：projectId 与空 customFields 省略，无日期键且处理人只读「我」", async () => {
     const { onSaved } = await renderPlanDialog({ projectId: null });
-    // 本地任务：处理人只读「我」、无日期框、不拉成员列表
-    expect(getAssigneeInput().value).toBe("project:plan.me");
-    expect(getAssigneeInput().readOnly).toBe(true);
-    expect(screen.queryByLabelText("project:plan.startDate")).toBeNull();
-    expect(screen.queryByLabelText("project:plan.dueDate")).toBeNull();
+    // 本地任务：处理人只读「我」、无时间胶囊、不拉成员列表
+    expect(getAssigneeCapsule().textContent).toContain("project:plan.me");
+    expect(
+      screen.queryByRole("button", { name: "project:plan.timeRange" }),
+    ).toBeNull();
     expect(ProjectApi.listMembers).not.toHaveBeenCalled();
     fireEvent.change(getTitleInput(), { target: { value: "本地任务" } });
     fireEvent.click(getSaveButton());
@@ -402,6 +447,7 @@ describe("PlanItemDialog 保存链路", () => {
       createdById: 1,
       assigneeId: 1,
       title: "本地任务",
+      description: null,
       status: "not_started",
       priority: "P1",
       tags: [],
@@ -424,6 +470,7 @@ describe("PlanItemDialog 保存链路", () => {
     expect(PlanItemApi.update).toHaveBeenCalledWith({
       id: 7,
       title: "改名后",
+      description: null,
       status: "in_progress",
       priority: "P0",
       tags: ["设计"],
@@ -463,7 +510,7 @@ describe("PlanItemDialog 保存链路", () => {
   });
 });
 
-describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
+describe("PlanItemDialog 排期与处理人（三期子系统 A，子系统 D 胶囊化）", () => {
   it("编辑回填日期与处理人；提交 update 携带 ISO/null 与 assigneeId", async () => {
     await renderPlanDialog({
       item: makeItem({
@@ -474,20 +521,38 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     });
     // 处理人回填成员 2 昵称；开始日期回填 ISO 前 10 位，空截止 = 空框
     await waitFor(() =>
-      expect(getAssigneeTrigger().textContent).toContain("小美"),
+      expect(getAssigneeCapsule().textContent).toContain("小美"),
     );
-    expect(getStartDateInput().value).toBe("2026-09-01");
-    expect(getDueDateInput().value).toBe("");
+    let timePanel = await openCapsule("project:plan.timeRange");
+    expect(
+      (
+        within(timePanel).getByLabelText(
+          "project:plan.startDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("2026-09-01");
+    expect(
+      (
+        within(timePanel).getByLabelText(
+          "project:plan.dueDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("");
 
     // 改派成员 1 + 改开始日期后保存
-    await selectOption(getAssigneeTrigger(), "黄");
-    fireEvent.change(getStartDateInput(), { target: { value: "2026-09-05" } });
+    await pickCapsuleOption("project:plan.handleMan", "黄");
+    timePanel = await openCapsule("project:plan.timeRange");
+    fireEvent.change(
+      within(timePanel).getByLabelText("project:plan.startDate"),
+      { target: { value: "2026-09-05" } },
+    );
     fireEvent.click(getSaveButton());
 
     await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.update).toHaveBeenCalledWith({
       id: 7,
       title: "既有事项",
+      description: null,
       status: "in_progress",
       priority: "P0",
       tags: ["设计"],
@@ -502,7 +567,11 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
 
   it("日期时区往返：选 2026-09-14 → update 载荷 startDate 以 2026-09-14 开头", async () => {
     await renderPlanDialog({ item: makeItem({ assigneeId: 1 }) });
-    fireEvent.change(getStartDateInput(), { target: { value: "2026-09-14" } });
+    const timePanel = await openCapsule("project:plan.timeRange");
+    fireEvent.change(
+      within(timePanel).getByLabelText("project:plan.startDate"),
+      { target: { value: "2026-09-14" } },
+    );
     fireEvent.click(getSaveButton());
 
     await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
@@ -514,10 +583,13 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
   it("处理人可改选「未指派」；编辑提交 update 携带 assigneeId null（清空指派）", async () => {
     await renderPlanDialog({ item: makeItem({ assigneeId: 2 }) });
     await waitFor(() =>
-      expect(getAssigneeTrigger().textContent).toContain("小美"),
+      expect(getAssigneeCapsule().textContent).toContain("小美"),
     );
-    await selectOption(getAssigneeTrigger(), "project:plan.unassigned");
-    expect(getAssigneeTrigger().textContent).toContain(
+    await pickCapsuleOption(
+      "project:plan.handleMan",
+      "project:plan.unassigned",
+    );
+    expect(getAssigneeCapsule().textContent).toContain(
       "project:plan.unassigned",
     );
     fireEvent.click(getSaveButton());
@@ -532,11 +604,11 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     await renderPlanDialog({ item: makeItem({ assigneeId: null }) });
     // ?? 缺陷回归：编辑打开 assigneeId null 曾被回落当前用户（显示「我」）
     await waitFor(() =>
-      expect(getAssigneeTrigger().textContent).toContain(
+      expect(getAssigneeCapsule().textContent).toContain(
         "project:plan.unassigned",
       ),
     );
-    expect(getAssigneeTrigger().textContent).not.toContain("project:plan.me");
+    expect(getAssigneeCapsule().textContent).not.toContain("project:plan.me");
 
     fireEvent.change(getTitleInput(), { target: { value: "未指派事项" } });
     fireEvent.click(getSaveButton());
@@ -551,9 +623,12 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     await renderPlanDialog();
     // 打开缺省指派自己（成员 1），显式改选「未指派」后保存
     await waitFor(() =>
-      expect(getAssigneeTrigger().textContent).toContain("黄"),
+      expect(getAssigneeCapsule().textContent).toContain("黄"),
     );
-    await selectOption(getAssigneeTrigger(), "project:plan.unassigned");
+    await pickCapsuleOption(
+      "project:plan.handleMan",
+      "project:plan.unassigned",
+    );
     fireEvent.change(getTitleInput(), { target: { value: "无主事项" } });
     fireEvent.click(getSaveButton());
 
@@ -563,12 +638,12 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     );
   });
 
-  it("优先级下拉含 P3；选 P3 提交 create 带 priority P3", async () => {
+  it("优先级胶囊含 P3；选 P3 提交 create 带 priority P3", async () => {
     await renderPlanDialog();
     fireEvent.change(getTitleInput(), { target: { value: "P3 事项" } });
-    // 下拉展开后 P3 选项可选（findByRole option 隐含断言选项存在）
-    await selectOption(getPriorityTrigger(), "project:plan.priorityP3");
-    expect(getPriorityTrigger().textContent).toContain(
+    // 胶囊展开后 P3 选项可选（findByRole 隐含断言选项存在）
+    await pickCapsuleOption("project:plan.priority", "project:plan.priorityP3");
+    expect(getPriorityCapsule().textContent).toContain(
       "project:plan.priorityP3",
     );
     fireEvent.click(getSaveButton());
@@ -583,9 +658,22 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
 describe("PlanItemDialog defaultDueDate 预置（四期日历点格）", () => {
   it("新建态 dueDate Input 值 = 预置日；提交 create 携带预置日 UTC 零点 ISO", async () => {
     await renderPlanDialog({ defaultDueDate: "2026-09-20" });
-    expect(getDueDateInput().value).toBe("2026-09-20");
+    const timePanel = await openCapsule("project:plan.timeRange");
+    expect(
+      (
+        within(timePanel).getByLabelText(
+          "project:plan.dueDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("2026-09-20");
     // 预置只作用于截止日，开始日不连带
-    expect(getStartDateInput().value).toBe("");
+    expect(
+      (
+        within(timePanel).getByLabelText(
+          "project:plan.startDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("");
 
     fireEvent.change(getTitleInput(), { target: { value: "日历预置事项" } });
     fireEvent.click(getSaveButton());
@@ -607,7 +695,210 @@ describe("PlanItemDialog defaultDueDate 预置（四期日历点格）", () => {
       }),
       defaultDueDate: "2026-09-20",
     });
-    expect(getDueDateInput().value).toBe("2026-10-08");
+    const timePanel = await openCapsule("project:plan.timeRange");
+    expect(
+      (
+        within(timePanel).getByLabelText(
+          "project:plan.dueDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("2026-10-08");
+  });
+});
+
+describe("PlanItemDialog 描述与 Markdown 预览（子系统 D）", () => {
+  it("输入 Markdown → 点『预览』出现 MarkdownView 渲染（标题/条目），再点回编辑态 textarea 值保留", async () => {
+    await renderPlanDialog();
+    fireEvent.change(getDescriptionTextarea(), {
+      target: { value: "# 标题\n- 条目" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.preview" }),
+    );
+
+    // 预览态：textarea 隐藏，MarkdownView 真实管道渲染 h1 + ul/li
+    expect(screen.queryByLabelText("project:plan.description")).toBeNull();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "标题" }),
+    ).toBeTruthy();
+    // listitem 非内容命名角色（ARIA），经列表容器内文本断言
+    expect(within(screen.getByRole("list")).getByText("条目")).toBeTruthy();
+
+    // 切回编辑态：textarea 值原样保留
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.editMode" }),
+    );
+    expect(getDescriptionTextarea().value).toBe("# 标题\n- 条目");
+  });
+
+  it("描述保存：create 携带 description 原文", async () => {
+    await renderPlanDialog();
+    fireEvent.change(getTitleInput(), { target: { value: "带描述事项" } });
+    fireEvent.change(getDescriptionTextarea(), {
+      target: { value: "# 目标\n- 拆解" },
+    });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({ description: "# 目标\n- 拆解" }),
+    );
+  });
+
+  it("编辑回填描述；清空后 update 携带 description null（清空语义）", async () => {
+    await renderPlanDialog({ item: makeItem({ description: "旧描述" }) });
+    expect(getDescriptionTextarea().value).toBe("旧描述");
+    fireEvent.change(getDescriptionTextarea(), { target: { value: "" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({ description: null }),
+    );
+  });
+});
+
+describe("PlanItemDialog 属性胶囊行（子系统 D）", () => {
+  it("五胶囊各显示当前值摘要（无值显示字段名）；状态胶囊点开四态选项，选中后摘要更新且收起", async () => {
+    await renderPlanDialog({ item: makeItem({ tags: ["设计", "研发"] }) });
+    // 摘要规则：状态/优先级 = t(labelKey)；处理人 = 昵称；标签 = 首标签(+n)；
+    // 时间无值显示字段名（muted）
+    expect(getStatusCapsule().textContent).toContain(
+      "project:plan.statusInProgress",
+    );
+    expect(getPriorityCapsule().textContent).toContain(
+      "project:plan.priorityP0",
+    );
+    expect(getTagsCapsule().textContent).toContain("设计(+1)");
+    await waitFor(() =>
+      expect(getAssigneeCapsule().textContent).toContain("黄"),
+    );
+    expect(getTimeCapsule().textContent).toContain("project:plan.timeRange");
+
+    fireEvent.click(getStatusCapsule());
+    const panel = await screen.findByRole("dialog", {
+      name: "project:plan.status",
+    });
+    [
+      "project:plan.statusNotStarted",
+      "project:plan.statusInProgress",
+      "project:plan.statusPaused",
+      "project:plan.statusDone",
+    ].forEach((optionName) =>
+      expect(
+        within(panel).getByRole("button", { name: optionName }),
+      ).toBeTruthy(),
+    );
+
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "project:plan.statusDone" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "project:plan.status" }),
+      ).toBeNull(),
+    );
+    expect(getStatusCapsule().textContent).toContain("project:plan.statusDone");
+  });
+
+  it("时间规划胶囊：Popover 内双 date Input，改截止日保存 payload dueDate 正确；摘要 `a ~ b`", async () => {
+    await renderPlanDialog({
+      item: makeItem({ startDate: "2026-09-14T00:00:00.000Z" }),
+    });
+    const panel = await openCapsule("project:plan.timeRange");
+    expect(
+      (
+        within(panel).getByLabelText(
+          "project:plan.startDate",
+        ) as HTMLInputElement
+      ).value,
+    ).toBe("2026-09-14");
+    expect(
+      (within(panel).getByLabelText("project:plan.dueDate") as HTMLInputElement)
+        .value,
+    ).toBe("");
+
+    fireEvent.change(within(panel).getByLabelText("project:plan.dueDate"), {
+      target: { value: "2026-09-20" },
+    });
+    await waitFor(() =>
+      expect(getTimeCapsule().textContent).toContain("9.14 ~ 9.20"),
+    );
+
+    fireEvent.click(getSaveButton());
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startDate: "2026-09-14T00:00:00.000Z",
+        dueDate: "2026-09-20T00:00:00.000Z",
+      }),
+    );
+  });
+
+  it("处理人胶囊：项目任务 Popover 弹成员列表（含「未指派」）", async () => {
+    await renderPlanDialog({ item: makeItem({ assigneeId: 2 }) });
+    await waitFor(() =>
+      expect(getAssigneeCapsule().textContent).toContain("小美"),
+    );
+    const panel = await openCapsule("project:plan.handleMan");
+    ["project:plan.unassigned", "黄", "小美"].forEach((optionName) =>
+      expect(
+        within(panel).getByRole("button", { name: optionName }),
+      ).toBeTruthy(),
+    );
+  });
+
+  it("本地任务（projectId null）：处理人为只读触发按钮『我』且点击不开 Popover；无时间规划胶囊", async () => {
+    await renderPlanDialog({ projectId: null });
+    expect(getAssigneeCapsule().textContent).toContain("project:plan.me");
+    fireEvent.click(getAssigneeCapsule());
+    // 主弹窗仍在，但无以「处理人」命名的 Popover 弹出
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(
+      screen.queryByRole("dialog", { name: "project:plan.handleMan" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "project:plan.timeRange" }),
+    ).toBeNull();
+  });
+});
+
+describe("PlanItemDialog 全屏模式（子系统 D）", () => {
+  it("点右上按钮 → DialogContent class 含 w-screen；再点还原；Esc 全屏态仅退全屏、非全屏态关弹窗", async () => {
+    const { onOpenChange } = await renderPlanDialog();
+    expect(screen.getByRole("dialog").className).not.toContain("w-screen");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.maximize" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").className).toContain("w-screen"),
+    );
+
+    // 全屏态 Esc：拦下 radix 关闭语义（onOpenChange 不触发），仅退全屏
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").className).not.toContain("w-screen"),
+    );
+
+    // 再次全屏后按钮切换为「还原」，点击回到普通宽度
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.maximize" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").className).toContain("w-screen"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:plan.restore" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").className).not.toContain("w-screen"),
+    );
+
+    // 非全屏态 Esc：正常关闭语义
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
 

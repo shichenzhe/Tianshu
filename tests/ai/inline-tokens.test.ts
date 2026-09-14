@@ -20,6 +20,7 @@ describe("parseInlineTokens token 提取", () => {
       fileTokens: ["docs/readme.md"],
       skillTokens: ["morse"],
       commands: ["compact"],
+      todoTokens: [],
     });
   });
 
@@ -41,6 +42,7 @@ describe("parseInlineTokens token 提取", () => {
       fileTokens: [],
       skillTokens: [],
       commands: ["compact"],
+      todoTokens: [],
     });
   });
 
@@ -95,5 +97,43 @@ describe("detectSlash / 触发检测", () => {
 describe("SLASH_COMMANDS", () => {
   it("compact 在词表", () => {
     expect(SLASH_COMMANDS).toContain("compact");
+  });
+});
+
+describe("todo token（#<id>）", () => {
+  it("解析与边界：#12 独立成 token；#1234 不被截断；普通文本 # 不误伤", () => {
+    const { todoTokens, text } = parseInlineTokens(
+      "看 #12 和 #1234，还有 # 号",
+    );
+    expect(todoTokens).toEqual(["#12", "#1234"]);
+    expect(text).not.toContain("#12");
+  });
+
+  it("token 携 # 前缀原文收集（消费方按 id 解析）；与 @/⚡/命令混排互不干扰", () => {
+    const result = parseInlineTokens("@a.md ⚡s #7 /compact");
+    expect(result.todoTokens).toEqual(["#7"]);
+    expect(result.fileTokens).toEqual(["a.md"]);
+    expect(result.skillTokens).toEqual(["s"]);
+    expect(result.commands).toEqual(["compact"]);
+  });
+
+  it("文字后的 # 与非数字 # 不识别（话题标记防误触）", () => {
+    expect(parseInlineTokens("x#12 #tag").todoTokens).toEqual([]);
+  });
+
+  it("renderTokenSegments：#12 渲染为 pill 段（kind todo），既有段形状不变", () => {
+    expect(renderTokenSegments("看 #12")).toEqual([
+      { text: "看 ", isToken: false },
+      { text: "#12", isToken: true, kind: "todo" },
+    ]);
+  });
+
+  it("renderTokenSegments：file/skill 段不带 kind（todo 专属标注）", () => {
+    const segments = renderTokenSegments("@a.md ⚡s");
+    expect(segments).toEqual([
+      { text: "@a.md", isToken: true },
+      { text: " ", isToken: false },
+      { text: "⚡s", isToken: true },
+    ]);
   });
 });

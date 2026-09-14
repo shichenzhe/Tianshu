@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import ChatApi, { type ChatModelParams } from "@/domains/ai/api/chat.api";
@@ -22,6 +22,9 @@ import type { PendingFile } from "@/domains/ai/chat/lib/pending-file";
 import { useChatSend } from "@/domains/ai/chat/hooks/use-chat-send";
 import { useChatStore } from "@/domains/ai/chat/store/chat.store";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
+import PlanItemApi, {
+  PLAN_ITEMS_KEY,
+} from "@/domains/project/api/plan-item.api";
 import type { ProjectDetail } from "../../../../electron/domains/project/project.entity";
 
 interface ProjectChatBarProps {
@@ -38,6 +41,13 @@ export default function ProjectChatBar({
   const session = detail.session;
   const { sending, send, stop } = useChatSend(session.id);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
+
+  // 项目计划事项（# 待办联想数据源；与计划 Tab 单表数据源同缓存，
+  // 组件仅在会话可用时渲染——即探索口径的 enabled hasChat 门控）
+  const { data: planItems = [] } = useQuery({
+    queryKey: PLAN_ITEMS_KEY(detail.project.id),
+    queryFn: () => PlanItemApi.list(detail.project.id),
+  });
 
   // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
   // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底
@@ -167,6 +177,7 @@ export default function ProjectChatBar({
           boundSkillNames={detail.bindings
             .filter((b) => b.itemType === "skill" && b.valid)
             .map((b) => b.itemName)}
+          todoItems={planItems}
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
           onOpenMcp={() => onOpenSettings("mcp")}
           onRunCommand={handleRunCommand}

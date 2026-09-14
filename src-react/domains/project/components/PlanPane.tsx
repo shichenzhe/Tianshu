@@ -71,6 +71,8 @@ import { PLAN_VIEW_NAME_KEYS } from "../../../../electron/domains/project/plan-v
 
 interface PlanPaneProps {
   projectId: number;
+  /** 资产空间 workspace id（事项弹窗附件「从资产挑选」数据源） */
+  assetWorkspaceId?: number;
 }
 
 /** 列表项局部补丁写入缓存（乐观更新） */
@@ -84,7 +86,10 @@ function patchItem(
   );
 }
 
-export default function PlanPane({ projectId }: PlanPaneProps) {
+export default function PlanPane({
+  projectId,
+  assetWorkspaceId,
+}: PlanPaneProps) {
   const { t } = useTranslation(["project", "common"]);
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
@@ -498,6 +503,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         defaultStatus={dialogDefaultStatus}
         defaultPriority={dialogDefaultPriority}
         defaultDueDate={dialogDefaultDueDate}
+        assetWorkspaceId={assetWorkspaceId}
         onSaved={() => setEditingItem(undefined)}
       />
       {/* 字段定义管理 */}

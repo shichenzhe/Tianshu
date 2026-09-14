@@ -222,6 +222,7 @@ export default function ProjectWorkspaceView() {
           <PlanPane
             key={detailQuery.data.project.id}
             projectId={detailQuery.data.project.id}
+            assetWorkspaceId={detailQuery.data.assetWorkspaceId}
           />
         ) : tab === "assets" ? (
           <AssetsPane

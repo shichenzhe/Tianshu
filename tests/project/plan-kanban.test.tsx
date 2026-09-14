@@ -83,10 +83,17 @@ vi.mock("@/domains/project/api/plan-item.api", () => ({
     move: vi.fn(),
     listFields: vi.fn(),
     saveFields: vi.fn(),
+    listAttachments: vi.fn().mockResolvedValue([]),
+    createAttachment: vi.fn(),
+    removeAttachment: vi.fn(),
   },
   PLAN_ITEMS_KEY: (projectId: number) => ["planItems", projectId],
   PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
   PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
+  PLAN_ITEM_ATTACHMENTS_KEY: (planItemId: number) => [
+    "planItemAttachments",
+    planItemId,
+  ],
 }));
 
 vi.mock("@/domains/user/store/user.store", () => ({

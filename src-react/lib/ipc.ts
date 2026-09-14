@@ -130,6 +130,9 @@ export type IPCChannel =
   | "planItem:move"
   | "planItem:fields:list"
   | "planItem:fields:save"
+  | "planItem:attachments:list"
+  | "planItem:attachments:create"
+  | "planItem:attachments:delete"
   // 计划视图（三期子系统 A）：5 通道 Task 4 注册 handler
   | "planView:list"
   | "planView:create"

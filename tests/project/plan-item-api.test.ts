@@ -13,6 +13,7 @@ import PlanItemApi, {
   PLAN_FIELDS_KEY,
   PLAN_ITEMS_KEY,
   PLAN_ITEMS_MINE_KEY,
+  PLAN_ITEM_ATTACHMENTS_KEY,
 } from "@/domains/project/api/plan-item.api";
 
 describe("PlanItemApi", () => {
@@ -90,6 +91,33 @@ describe("PlanItemApi", () => {
     );
   });
 
+  it("listAttachments 走 planItem:attachments:list 并透传事项 id", async () => {
+    invokeMock.mockResolvedValue([]);
+    await PlanItemApi.listAttachments(12);
+    expect(invokeMock).toHaveBeenCalledExactlyOnceWith(
+      "planItem:attachments:list",
+      12,
+    );
+  });
+
+  it("createAttachment 走 planItem:attachments:create 并透传事项 id 与附件输入", async () => {
+    const input = { fileName: "a.pdf", assetPath: "attachments/a.pdf" };
+    await PlanItemApi.createAttachment(12, input);
+    expect(invokeMock).toHaveBeenCalledExactlyOnceWith(
+      "planItem:attachments:create",
+      12,
+      input,
+    );
+  });
+
+  it("removeAttachment 走 planItem:attachments:delete 并透传关联 id", async () => {
+    await PlanItemApi.removeAttachment(31);
+    expect(invokeMock).toHaveBeenCalledExactlyOnceWith(
+      "planItem:attachments:delete",
+      31,
+    );
+  });
+
   it("invoke 返回值原样透传给调用方", async () => {
     const rows = [{ id: 1, title: "联调" }];
     invokeMock.mockResolvedValue(rows);
@@ -108,5 +136,9 @@ describe("计划事项 query key 工厂", () => {
 
   it("PLAN_FIELDS_KEY 以项目 id 区分自定义字段定义缓存", () => {
     expect(PLAN_FIELDS_KEY(7)).toEqual(["planFields", 7]);
+  });
+
+  it("PLAN_ITEM_ATTACHMENTS_KEY 以事项 id 区分附件关联缓存", () => {
+    expect(PLAN_ITEM_ATTACHMENTS_KEY(12)).toEqual(["planItemAttachments", 12]);
   });
 });

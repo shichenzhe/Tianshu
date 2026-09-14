@@ -84,7 +84,7 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
 }));
 
-// PlanItemApi 静态类 + 三个 query key 工厂整体 mock（key 形状与真实实现一致）
+// PlanItemApi 静态类 + 四个 query key 工厂整体 mock（key 形状与真实实现一致）
 vi.mock("@/domains/project/api/plan-item.api", () => ({
   default: {
     list: vi.fn(),
@@ -95,10 +95,25 @@ vi.mock("@/domains/project/api/plan-item.api", () => ({
     move: vi.fn(),
     listFields: vi.fn(),
     saveFields: vi.fn(),
+    listAttachments: vi.fn(),
+    createAttachment: vi.fn(),
+    removeAttachment: vi.fn(),
   },
   PLAN_ITEMS_KEY: (projectId: number) => ["planItems", projectId],
   PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
   PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
+  PLAN_ITEM_ATTACHMENTS_KEY: (planItemId: number) => [
+    "planItemAttachments",
+    planItemId,
+  ],
+}));
+
+// AssetApi 静态类整体 mock（附件上传链路 pickFiles/upload）
+vi.mock("@/domains/project/api/asset.api", () => ({
+  default: {
+    pickFiles: vi.fn(),
+    upload: vi.fn(),
+  },
 }));
 
 vi.mock("@/domains/user/store/user.store", () => ({
@@ -118,9 +133,11 @@ import PlanItemApi, {
   PLAN_ITEMS_KEY,
 } from "@/domains/project/api/plan-item.api";
 import ProjectApi from "@/domains/project/api/project.api";
+import AssetApi from "@/domains/project/api/asset.api";
 import type { ProjectMemberItem } from "../../../electron/domains/project/project.entity";
 import type {
   PlanFieldDef,
+  PlanItemAttachmentRecord,
   PlanItemRecord,
 } from "../../../electron/domains/project/plan-item.entity";
 
@@ -153,6 +170,18 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   createdById: 1,
   createdAt: "2026-09-01T00:00:00.000Z",
   updatedAt: "2026-09-01T00:00:00.000Z",
+  ...overrides,
+});
+
+/** 已挂附件关联记录（编辑态回填源） */
+const makeAttachment = (
+  overrides: Partial<PlanItemAttachmentRecord> = {},
+): PlanItemAttachmentRecord => ({
+  id: 5,
+  planItemId: 7,
+  fileName: "spec.pdf",
+  assetPath: "attachments/spec.pdf",
+  createdAt: "2026-09-01T00:00:00.000Z",
   ...overrides,
 });
 
@@ -246,6 +275,25 @@ async function openCapsule(capsuleName: string) {
   return screen.findByRole("dialog", { name: capsuleName });
 }
 
+/** 经回形针菜单上传一个暂存附件（AssetApi 预置 mock → chip 出现） */
+async function uploadPendingAttachment(fileName: string, absPath: string) {
+  vi.mocked(AssetApi.pickFiles).mockResolvedValue([absPath]);
+  vi.mocked(AssetApi.upload).mockResolvedValue({
+    uploaded: [fileName],
+    failed: [],
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "project:plan.attachments" }),
+  );
+  const panel = await screen.findByRole("dialog", {
+    name: "project:plan.attachments",
+  });
+  fireEvent.click(
+    within(panel).getByRole("button", { name: "project:plan.upload" }),
+  );
+  await waitFor(() => expect(screen.getByText(fileName)).toBeTruthy());
+}
+
 /** 胶囊内点选选项（点击后胶囊收起） */
 async function pickCapsuleOption(capsuleName: string, optionName: string) {
   const panel = await openCapsule(capsuleName);
@@ -260,6 +308,15 @@ beforeEach(() => {
   vi.mocked(PlanItemApi.create).mockReset().mockResolvedValue(makeItem());
   vi.mocked(PlanItemApi.update).mockReset().mockResolvedValue(undefined);
   vi.mocked(PlanItemApi.saveFields).mockReset().mockResolvedValue(undefined);
+  vi.mocked(PlanItemApi.listAttachments).mockReset().mockResolvedValue([]);
+  vi.mocked(PlanItemApi.createAttachment)
+    .mockReset()
+    .mockResolvedValue(makeAttachment());
+  vi.mocked(AssetApi.pickFiles).mockReset().mockResolvedValue(null);
+  vi.mocked(AssetApi.upload).mockReset().mockResolvedValue({
+    uploaded: [],
+    failed: [],
+  });
   vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue(MEMBERS);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
@@ -899,6 +956,89 @@ describe("PlanItemDialog 全屏模式（子系统 D）", () => {
     // 非全屏态 Esc：正常关闭语义
     fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+});
+
+describe("PlanItemDialog 附件区（子系统 D）", () => {
+  it("编辑态：listAttachments 回填 chips 文件名；保存不动已挂记录（createAttachment 不调用）", async () => {
+    vi.mocked(PlanItemApi.listAttachments)
+      .mockReset()
+      .mockResolvedValue([makeAttachment()]);
+    const { onSaved } = await renderPlanDialog({ item: makeItem() });
+    expect(await screen.findByText("spec.pdf")).toBeTruthy();
+    expect(PlanItemApi.listAttachments).toHaveBeenCalledWith(7);
+
+    fireEvent.click(getSaveButton());
+    await waitFor(() => expect(PlanItemApi.update).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.createAttachment).not.toHaveBeenCalled();
+  });
+
+  it("新建暂存→保存后批量挂：create 返回 id 逐条 createAttachment + 附件 key 失效 + 正常关闭", async () => {
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    const { onSaved, onOpenChange } = await renderPlanDialog();
+    fireEvent.change(getTitleInput(), { target: { value: "带附件事项" } });
+    await uploadPendingAttachment("a.pdf", "/tmp/a.pdf");
+
+    fireEvent.click(getSaveButton());
+    await waitFor(() =>
+      expect(PlanItemApi.createAttachment).toHaveBeenCalledWith(7, {
+        fileName: "a.pdf",
+        assetPath: "attachments/a.pdf",
+      }),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["planItemAttachments", 7],
+      }),
+    );
+    expect(toastMock.success).toHaveBeenCalledWith("project:plan.saved");
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    invalidateSpy.mockRestore();
+  });
+
+  it("编辑态新增暂存：update 后 createAttachment 携带 item.id（已挂记录不重复挂）", async () => {
+    vi.mocked(PlanItemApi.listAttachments)
+      .mockReset()
+      .mockResolvedValue([makeAttachment()]);
+    await renderPlanDialog({ item: makeItem() });
+    await screen.findByText("spec.pdf");
+    await uploadPendingAttachment("draft.md", "/tmp/draft.md");
+
+    fireEvent.click(getSaveButton());
+    await waitFor(() =>
+      expect(PlanItemApi.createAttachment).toHaveBeenCalledTimes(1),
+    );
+    expect(PlanItemApi.createAttachment).toHaveBeenCalledWith(7, {
+      fileName: "draft.md",
+      assetPath: "attachments/draft.md",
+    });
+  });
+
+  it("批量挂失败 → toast.error(attachFailed) 但不阻断关闭（onSaved + 关闭照常）", async () => {
+    vi.mocked(PlanItemApi.createAttachment).mockRejectedValue(
+      new Error("挂载失败"),
+    );
+    const { onSaved, onOpenChange } = await renderPlanDialog();
+    fireEvent.change(getTitleInput(), { target: { value: "附件失败事项" } });
+    await uploadPendingAttachment("a.pdf", "/tmp/a.pdf");
+
+    fireEvent.click(getSaveButton());
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith("project:plan.attachFailed"),
+    );
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("本地任务（projectId null）：附件区不渲染（无回形针按钮）且不拉附件列表", async () => {
+    await renderPlanDialog({ projectId: null });
+    expect(
+      screen.queryByRole("button", { name: "project:plan.attachments" }),
+    ).toBeNull();
+    expect(screen.queryByText("project:plan.attachments")).toBeNull();
+    expect(PlanItemApi.listAttachments).not.toHaveBeenCalled();
   });
 });
 

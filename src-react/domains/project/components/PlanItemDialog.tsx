@@ -7,7 +7,10 @@
  * PlanItemCapsuleRow（状态/处理人/优先级/标签/时间规划五胶囊收纳原控件；
  * 标签候选来自 planItems 缓存聚合；本地任务处理人只读「我」、无时间胶囊）/
  * 自定义字段动态区（text=Input、number=Input[type=number]、date=Input[type=date]；
- * 仅项目任务渲染）/ 右上全屏切换（maximized：DialogContent 全屏类；
+ * 仅项目任务渲染）/ 附件区 PlanItemAttachments（回形针菜单上传入资产空间
+ * attachments/ 子目录或从资产挑选；新建态本地暂存、保存成功后按 create 返回
+ * id 批量挂库——失败仅 toast 不阻断关闭；编辑态直连：删已挂走 removeAttachment
+ * 通道；本地任务不渲染）/ 右上全屏切换（maximized：DialogContent 全屏类；
  * Esc 分层——全屏态（非预览态）Esc 仅退全屏不关弹窗，非全屏态照常关闭）。
  * 保存：新建 → create（assigneeId 打开时缺省当前用户、显式「未指派」传
  * null；description 空串归一 null；日期仅项目任务携带、dateKeyToIso 构造
@@ -39,9 +42,13 @@ import PlanItemApi, {
   PLAN_FIELDS_KEY,
   PLAN_ITEMS_KEY,
   PLAN_ITEMS_MINE_KEY,
+  PLAN_ITEM_ATTACHMENTS_KEY,
 } from "../api/plan-item.api";
 import ProjectApi from "../api/project.api";
 import { dateKeyToIso } from "../model/plan-date";
+import PlanItemAttachments, {
+  type PendingAttachment,
+} from "./PlanItemAttachments";
 import PlanItemCapsuleRow, { type CapsulePatch } from "./PlanItemCapsuleRow";
 import type { ProjectMemberItem } from "../../../../electron/domains/project/project.entity";
 import type {
@@ -63,12 +70,17 @@ interface PlanItemDialogProps {
   defaultPriority?: PlanPriority;
   /** 新建态初始截止日（日历点格预置 "YYYY-MM-DD"；编辑态忽略） */
   defaultDueDate?: string;
+  /** 项目资产空间 workspace id（附件「从资产挑选」数据源） */
+  assetWorkspaceId?: number;
   /** 保存成功回调（父级刷新列表） */
   onSaved: () => void;
 }
 
 /** 本地任务（projectId null）不参与项目级缓存：-1 永不与真实自增 id 碰撞 */
 const NO_PROJECT_CACHE_KEY = -1;
+
+/** 附件关联空列表常量：作 useQuery 缺省值保持引用稳定（防回填 effect 死循环） */
+const NO_ATTACHMENTS: PendingAttachment[] = [];
 
 const TITLE_MAX_LENGTH = 100;
 
@@ -111,6 +123,7 @@ export default function PlanItemDialog({
   defaultStatus,
   defaultPriority,
   defaultDueDate,
+  assetWorkspaceId,
   onSaved,
 }: PlanItemDialogProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -131,6 +144,8 @@ export default function PlanItemDialog({
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  // 附件：新建/编辑同构本地态（已挂记录带 id，暂存项无 id 保存后补挂）
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
 
   // 打开时重置/回填：新建取缺省值，编辑回填 item 全字段
   // （日期取 ISO 前 10 位回填日期框；处理人新建缺省指派自己，编辑回填
@@ -156,6 +171,7 @@ export default function PlanItemDialog({
     );
     setAssigneeId(item ? item.assigneeId : user.id);
     setCustomFields(item ? { ...item.customFields } : {});
+    setAttachments([]);
     setSaving(false);
     setPreviewing(false);
     setMaximized(false);
@@ -186,6 +202,30 @@ export default function PlanItemDialog({
     queryFn: () => ProjectApi.listMembers(projectId as number),
     enabled: open && projectId !== null,
   });
+
+  // 已挂附件关联（编辑态回填源）：仅项目任务编辑且弹窗打开时拉取
+  const editingItemId = item?.id ?? NO_PROJECT_CACHE_KEY;
+  const { data: attachmentRecords = NO_ATTACHMENTS } = useQuery({
+    queryKey: PLAN_ITEM_ATTACHMENTS_KEY(editingItemId),
+    queryFn: () => PlanItemApi.listAttachments(editingItemId),
+    enabled: open && item !== undefined && projectId !== null,
+  });
+
+  // 编辑态回填：服务端关联列表 → 本地态（保留用户暂存项，防失效重取冲掉）
+  useEffect(() => {
+    if (!open || !item) {
+      return;
+    }
+    const attached: PendingAttachment[] = attachmentRecords.map((record) => ({
+      id: record.id,
+      fileName: record.fileName,
+      assetPath: record.assetPath,
+    }));
+    setAttachments((prev) => [
+      ...attached,
+      ...prev.filter((entry) => entry.id === undefined),
+    ]);
+  }, [open, item, attachmentRecords]);
 
   const trimmedTitle = title.trim();
   // 超长实时提示；空标题 blur 后提示（提交按钮本身已按空标题禁用）
@@ -235,6 +275,28 @@ export default function PlanItemDialog({
     });
   };
 
+  /** 暂存附件批量挂库：失败仅 toast 不阻断关闭（附件可重挂） */
+  const attachPendingAttachments = async (planItemId: number) => {
+    const pending = attachments.filter((entry) => entry.id === undefined);
+    if (pending.length === 0) {
+      return;
+    }
+    const results = await Promise.allSettled(
+      pending.map((entry) =>
+        PlanItemApi.createAttachment(planItemId, {
+          fileName: entry.fileName,
+          assetPath: entry.assetPath,
+        }),
+      ),
+    );
+    if (results.some((result) => result.status === "rejected")) {
+      toast.error(t("project:plan.attachFailed"));
+    }
+    await queryClient.invalidateQueries({
+      queryKey: PLAN_ITEM_ATTACHMENTS_KEY(planItemId),
+    });
+  };
+
   const handleSave = async () => {
     if (!canSubmit) {
       return;
@@ -251,6 +313,8 @@ export default function PlanItemDialog({
               dueDate: dueDate ? dateKeyToIso(dueDate) : null,
             }
           : {};
+      // 保存后事项 id（create 返回 record；update 沿 item.id）供附件补挂
+      let savedItemId = item?.id ?? 0;
       if (item) {
         await PlanItemApi.update({
           id: item.id,
@@ -264,7 +328,7 @@ export default function PlanItemDialog({
           ...datePayload,
         });
       } else {
-        await PlanItemApi.create({
+        const created = await PlanItemApi.create({
           createdById: user.id,
           // 处理人：打开时缺省指派自己（任务 Tab「指派给我的」依赖），
           // 胶囊可改派；显式选「未指派」传 null 原样透传
@@ -281,8 +345,10 @@ export default function PlanItemDialog({
               : undefined,
           ...datePayload,
         });
+        savedItemId = created.id;
       }
       await invalidatePlanCaches();
+      await attachPendingAttachments(savedItemId);
       toast.success(t("project:plan.saved"));
       onSaved();
       onOpenChange(false);
@@ -416,6 +482,15 @@ export default function PlanItemDialog({
               ))}
             </div>
           )}
+
+          {/* 附件区（自定义字段区之后；本地任务由组件内部隐藏） */}
+          <PlanItemAttachments
+            projectId={projectId}
+            workspaceId={assetWorkspaceId}
+            planItemId={item?.id}
+            value={attachments}
+            onChange={setAttachments}
+          />
         </div>
 
         <DialogFooter>

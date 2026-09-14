@@ -73,6 +73,10 @@ vi.mock("@/domains/project/api/plan-item.api", () => ({
   PLAN_ITEMS_KEY: (projectId: number) => ["planItems", projectId],
   PLAN_ITEMS_MINE_KEY: (userId: number) => ["planItemsMine", userId],
   PLAN_FIELDS_KEY: (projectId: number) => ["planFields", projectId],
+  PLAN_ITEM_ATTACHMENTS_KEY: (planItemId: number) => [
+    "planItemAttachments",
+    planItemId,
+  ],
 }));
 
 // 计划 Tab 视图数据源（PlanPane usePlanViews）：仅 list 消费，key 工厂保留

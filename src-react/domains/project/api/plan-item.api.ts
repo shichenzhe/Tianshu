@@ -8,6 +8,7 @@
 import { invoke } from "@/lib/ipc";
 import type {
   PlanFieldDef,
+  PlanItemAttachmentRecord,
   PlanItemCreateParams,
   PlanItemMoveParams,
   PlanItemRecord,
@@ -25,6 +26,10 @@ export const PLAN_ITEMS_MINE_KEY = (userId: number) =>
 /** 项目自定义字段定义 query key */
 export const PLAN_FIELDS_KEY = (projectId: number) =>
   ["planFields", projectId] as const;
+
+/** 事项附件关联 query key */
+export const PLAN_ITEM_ATTACHMENTS_KEY = (planItemId: number) =>
+  ["planItemAttachments", planItemId] as const;
 
 export default abstract class PlanItemApi {
   /** 项目全部事项（计划 Tab 数据源，projectId null 的本地任务不可见） */
@@ -68,5 +73,32 @@ export default abstract class PlanItemApi {
     fields: PlanFieldDef[],
   ): Promise<void> {
     return invoke<void>("planItem:fields:save", projectId, fields);
+  }
+
+  /** 事项附件关联列表 */
+  static async listAttachments(
+    planItemId: number,
+  ): Promise<PlanItemAttachmentRecord[]> {
+    return invoke<PlanItemAttachmentRecord[]>(
+      "planItem:attachments:list",
+      planItemId,
+    );
+  }
+
+  /** 建附件关联（上传/挑选同构） */
+  static async createAttachment(
+    planItemId: number,
+    input: { fileName: string; assetPath: string },
+  ): Promise<PlanItemAttachmentRecord> {
+    return invoke<PlanItemAttachmentRecord>(
+      "planItem:attachments:create",
+      planItemId,
+      input,
+    );
+  }
+
+  /** 删附件关联（保留实体文件） */
+  static async removeAttachment(id: number): Promise<void> {
+    return invoke<void>("planItem:attachments:delete", id);
   }
 }

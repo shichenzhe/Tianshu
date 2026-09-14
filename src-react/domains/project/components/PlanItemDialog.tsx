@@ -6,7 +6,8 @@
  * 可经 defaultPriority 预置，看板优先级列头快速新增）/ 标签
  * （Input 回车添加 → 可移除 Tag + planItems 缓存聚合的候选 chips 点击追加；
  * IME 组合中的回车不触发）/ 排期 startDate/dueDate 日期框（仅项目任务，
- * 本地任务无日期语义）/ 处理人（项目任务 = 成员 Select 含「未指派」空值项，
+ * 本地任务无日期语义；新建态可经 defaultDueDate 预置截止日，日历点格
+ * 快速新增）/ 处理人（项目任务 = 成员 Select 含「未指派」空值项，
  * project:listMembers 拉取；本地任务只读「我」）/ 自定义字段动态区
  * （text=Input、number=Input[type=number]、date=Input[type=date]；仅项目
  * 任务渲染，本地任务 projectId=null 无该区）。
@@ -66,6 +67,8 @@ interface PlanItemDialogProps {
   defaultStatus?: PlanStatus;
   /** 新建态初始优先级（看板优先级列头快速新增预置；编辑态忽略） */
   defaultPriority?: PlanPriority;
+  /** 新建态初始截止日（日历点格预置 "YYYY-MM-DD"；编辑态忽略） */
+  defaultDueDate?: string;
   /** 保存成功回调（父级刷新列表） */
   onSaved: () => void;
 }
@@ -118,6 +121,7 @@ export default function PlanItemDialog({
   item,
   defaultStatus,
   defaultPriority,
+  defaultDueDate,
   onSaved,
 }: PlanItemDialogProps) {
   const { t } = useTranslation(["project", "common"]);
@@ -151,11 +155,17 @@ export default function PlanItemDialog({
     setTags(item?.tags ? [...item.tags] : []);
     setTagInput("");
     setStartDate(item?.startDate ? item.startDate.slice(0, 10) : "");
-    setDueDate(item?.dueDate ? item.dueDate.slice(0, 10) : "");
+    setDueDate(
+      item
+        ? item.dueDate
+          ? item.dueDate.slice(0, 10)
+          : ""
+        : (defaultDueDate ?? ""),
+    );
     setAssigneeId(item ? item.assigneeId : user.id);
     setCustomFields(item ? { ...item.customFields } : {});
     setSaving(false);
-  }, [open, item, defaultStatus, defaultPriority, user.id]);
+  }, [open, item, defaultStatus, defaultPriority, defaultDueDate, user.id]);
 
   // 候选标签：只消费计划 Tab 已有 planItems 缓存（enabled false 不主动拉取）
   const { data: projectItems = [] } = useQuery({

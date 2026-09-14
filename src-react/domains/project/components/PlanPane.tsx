@@ -5,9 +5,11 @@
  * visibleItems = 引擎 filterItems（条件 AND + 标题搜索叠加）→ sortItems
  * （空规则沿用缺省序：状态四态 → sortOrder → id）；顶部视图 Tab 栏
  * （PlanViewTabs：切换/添加看板/重命名/删除保护/未保存圆点，视图列表为空
- * 时整条不渲染）；表格/看板/列表三视图（看板 = PlanKanbanView 分组泳道拖拽，
- * 分组依据 status/priority/assignee 由视图 draft.groupBy 驱动；列表 =
- * PlanListView 状态四组折叠清单——勾选完成走 move、组内 + 携组状态快速新增）；
+ * 时整条不渲染）；表格/看板/列表/日历四视图（看板 = PlanKanbanView 分组
+ * 泳道拖拽，分组依据 status/priority/assignee 由视图 draft.groupBy 驱动；
+ * 列表 = PlanListView 状态四组折叠清单——勾选完成走 move、组内 + 携组状态
+ * 快速新增；日历 = PlanCalendarView 月格视图——点格空白预置该日 dueDate
+ * 开新建弹窗、点 chip 开编辑）；
  * 项目成员查询（处理人筛选候选/看板分组与头像）。
  * 工具栏：组合筛选面板（PlanFilterPopover 六字段条件增删 + 保存为新视图/
  * 覆盖保存/重置，条件变更写 draft）+ 标题搜索 + 视图设置（PlanViewSettings
@@ -53,6 +55,7 @@ import CustomFieldsEditor from "./CustomFieldsEditor";
 import PlanFilterPopover from "./PlanFilterPopover";
 import PlanItemDialog from "./PlanItemDialog";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
+import PlanCalendarView from "./PlanCalendarView";
 import PlanListView from "./PlanListView";
 import PlanTableView from "./PlanTableView";
 import PlanViewSettingsPopover from "./PlanViewSettingsPopover";
@@ -119,6 +122,8 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
   const [dialogDefaultPriority, setDialogDefaultPriority] = useState<
     PlanPriority | undefined
   >(undefined);
+  /** 新建弹窗预置截止日（日历点格快速新增；工具栏添加复位空） */
+  const [dialogDefaultDueDate, setDialogDefaultDueDate] = useState<string>("");
   const [fieldEditorOpen, setFieldEditorOpen] = useState(false);
   const [deleting, setDeleting] = useState<PlanItemRecord | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -293,6 +298,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     setEditingItem(undefined);
     setDialogDefaultStatus("not_started");
     setDialogDefaultPriority(undefined);
+    setDialogDefaultDueDate("");
     setDialogOpen(true);
   };
 
@@ -304,6 +310,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
     setEditingItem(undefined);
     setDialogDefaultStatus(preset.status ?? "not_started");
     setDialogDefaultPriority(preset.priority);
+    setDialogDefaultDueDate("");
     setDialogOpen(true);
   };
 
@@ -389,7 +396,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         </div>
       </div>
 
-      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 表格 */}
+      {/* 内容区：加载 / 错误 / 空态 / 看板 / 列表 / 日历 / 表格 */}
       {itemsQuery.isError ? (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           {t("project:toast.operationFailed")}
@@ -435,6 +442,19 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
           }
           onEdit={openEdit}
         />
+      ) : activeView?.type === "calendar" ? (
+        // 日历视图：点格空白预置该日 dueDate 开新建弹窗（其余预置复位），点 chip 开编辑
+        <PlanCalendarView
+          items={visibleItems}
+          onCreateAt={(dateKey) => {
+            setEditingItem(undefined);
+            setDialogDefaultStatus("not_started");
+            setDialogDefaultPriority(undefined);
+            setDialogDefaultDueDate(dateKey);
+            setDialogOpen(true);
+          }}
+          onEdit={openEdit}
+        />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
           <PlanTableView
@@ -458,6 +478,7 @@ export default function PlanPane({ projectId }: PlanPaneProps) {
         item={editingItem}
         defaultStatus={dialogDefaultStatus}
         defaultPriority={dialogDefaultPriority}
+        defaultDueDate={dialogDefaultDueDate}
         onSaved={() => setEditingItem(undefined)}
       />
       {/* 字段定义管理 */}

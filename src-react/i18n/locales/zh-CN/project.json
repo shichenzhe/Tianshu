@@ -132,7 +132,19 @@
     "loadFailed": "视图加载失败，请重试",
     "settings": "视图设置",
     "settingsType": "视图类型",
-    "settingsGroupBy": "分组依据"
+    "settingsGroupBy": "分组依据",
+    "calendarTitle": "{{year}}年{{month}}月",
+    "prevMonth": "上个月",
+    "nextMonth": "下个月",
+    "today": "今天",
+    "noDueDateCount": "无日期记录：{{count}}",
+    "weekday1": "一",
+    "weekday2": "二",
+    "weekday3": "三",
+    "weekday4": "四",
+    "weekday5": "五",
+    "weekday6": "六",
+    "weekday7": "日"
   },
   "tasks": {
     "privateTip": "仅自己可见，不同步到项目",

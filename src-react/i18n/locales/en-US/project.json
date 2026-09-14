@@ -132,7 +132,19 @@
     "loadFailed": "Failed to load views, please retry",
     "settings": "View settings",
     "settingsType": "View type",
-    "settingsGroupBy": "Group by"
+    "settingsGroupBy": "Group by",
+    "calendarTitle": "{{year}}-{{month}}",
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "noDueDateCount": "No date: {{count}}",
+    "weekday1": "Mon",
+    "weekday2": "Tue",
+    "weekday3": "Wed",
+    "weekday4": "Thu",
+    "weekday5": "Fri",
+    "weekday6": "Sat",
+    "weekday7": "Sun"
   },
   "tasks": {
     "privateTip": "Visible only to you, not synced to the project",

@@ -1,6 +1,6 @@
 /**
  * 视图设置 Popover（子系统 A spec §UI）：齿轮触发按钮，面板两组单选——
- * 视图类型（表格/看板/列表，SELECTABLE_TYPES 与 PlanViewTabs 添加菜单
+ * 视图类型（表格/看板/列表/日历，SELECTABLE_TYPES 与 PlanViewTabs 添加菜单
  * 同策略；类型是持久化枚举，切换走 onTypeChange 立即保存、不经 draft）与
  * 分组依据（仅看板 showGroupBy 渲染；状态/优先级/处理人，变更走
  * onGroupByChange 进 draft，随覆盖保存/保存为新视图持久化）。
@@ -31,8 +31,13 @@ import type {
   PlanViewType,
 } from "../../../../electron/domains/project/plan-view.entity";
 
-/** 类型菜单可选值（C 阶段列表已点亮；gantt/calendar 待 T5/T6；同 ADDABLE_TYPES 策略） */
-const SELECTABLE_TYPES: PlanViewType[] = ["table", "kanban", "list"];
+/** 类型菜单可选值（C 阶段列表/日历已点亮；gantt 待 T6；同 ADDABLE_TYPES 策略） */
+const SELECTABLE_TYPES: PlanViewType[] = [
+  "table",
+  "kanban",
+  "list",
+  "calendar",
+];
 
 /** 分组依据选项 label（复用既有 plan.* 字段 key） */
 const GROUP_BY_LABEL_KEYS: Record<PlanGroupBy, string> = {

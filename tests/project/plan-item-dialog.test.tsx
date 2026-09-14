@@ -15,6 +15,8 @@
  *   （本地任务只读「我」、无日期框且 create 不带日期键）；日期为 UTC 零点
  *   存储且回往日历日不偏移；显式「未指派」→ create/update assigneeId null；
  *   编辑未指派事项回填「未指派」不回落当前用户（保存保留 null）；优先级含 P3
+ * - defaultDueDate 预置（四期日历点格）：新建态 dueDate Input 值 = 预置日，
+ *   提交 create 携带预置日 UTC 零点 ISO（与 defaultStatus 同构，编辑态忽略）
  * - 保存链路：create 参数完整（createdById/projectId/title/status/priority/
  *   tags/customFields，number 型转数字）；本地任务 projectId/customFields 省略；
  *   update 传全量字段；成功 invalidate planItems + planItemsMine 双 key +
@@ -142,6 +144,7 @@ interface PlanDialogRenderProps {
   projectId?: number | null;
   item?: PlanItemRecord;
   cacheItems?: PlanItemRecord[];
+  defaultDueDate?: string;
 }
 
 /** 渲染打开态事项弹窗（可预置 planItems 缓存供候选标签聚合） */
@@ -149,6 +152,7 @@ async function renderPlanDialog({
   projectId = 1,
   item,
   cacheItems,
+  defaultDueDate,
 }: PlanDialogRenderProps = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -165,6 +169,7 @@ async function renderPlanDialog({
         onOpenChange={onOpenChange}
         projectId={projectId}
         item={item}
+        defaultDueDate={defaultDueDate}
         onSaved={onSaved}
       />
     </QueryClientProvider>,
@@ -572,6 +577,37 @@ describe("PlanItemDialog 排期与处理人（三期子系统 A）", () => {
     expect(PlanItemApi.create).toHaveBeenCalledWith(
       expect.objectContaining({ title: "P3 事项", priority: "P3" }),
     );
+  });
+});
+
+describe("PlanItemDialog defaultDueDate 预置（四期日历点格）", () => {
+  it("新建态 dueDate Input 值 = 预置日；提交 create 携带预置日 UTC 零点 ISO", async () => {
+    await renderPlanDialog({ defaultDueDate: "2026-09-20" });
+    expect(getDueDateInput().value).toBe("2026-09-20");
+    // 预置只作用于截止日，开始日不连带
+    expect(getStartDateInput().value).toBe("");
+
+    fireEvent.change(getTitleInput(), { target: { value: "日历预置事项" } });
+    fireEvent.click(getSaveButton());
+
+    await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
+    expect(PlanItemApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "日历预置事项",
+        dueDate: "2026-09-20T00:00:00.000Z",
+        startDate: null,
+      }),
+    );
+  });
+
+  it("编辑态忽略 defaultDueDate：回填 item 自身 dueDate", async () => {
+    await renderPlanDialog({
+      item: makeItem({
+        dueDate: "2026-10-08T00:00:00.000Z",
+      }),
+      defaultDueDate: "2026-09-20",
+    });
+    expect(getDueDateInput().value).toBe("2026-10-08");
   });
 });
 

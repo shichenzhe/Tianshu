@@ -5,7 +5,7 @@
  * Radix 弹层 ResizeObserver/scrollIntoView/hasPointerCapture 桩）。
  * 组件纯受控 props，直接渲染桩回调：
  * - 触发按钮：齿轮图标 + aria-label=视图设置；点击开面板（role=dialog）
- * - 视图类型组：表格/看板/列表 三 radio 项（gantt/calendar 不在列），
+ * - 视图类型组：表格/看板/列表/日历 四 radio 项（gantt 不在列），
  *   当前类型 checked 回显；点选「看板」→ onTypeChange("kanban")
  * - 分组依据组：showGroupBy=false（表格）整组不渲染；true（看板）渲染
  *   状态/优先级/处理人 三 radio 项
@@ -87,7 +87,7 @@ async function openMenu(trigger: HTMLElement) {
 afterEach(cleanup);
 
 describe("触发按钮与视图类型", () => {
-  it("触发按钮含齿轮图标；类型菜单含 表格/看板/列表 三项，当前项 checked；点选看板 → onTypeChange('kanban')", async () => {
+  it("触发按钮含齿轮图标；类型菜单含 表格/看板/列表/日历 四项，当前项 checked；点选看板 → onTypeChange('kanban')", async () => {
     const props = renderSettings();
     const gear = screen.getByRole("button", {
       name: "project:planView.settings",
@@ -104,18 +104,15 @@ describe("触发按钮与视图类型", () => {
       name: "project:planView.typeTable",
     });
     expect(tableItem.getAttribute("aria-checked")).toBe("true");
-    for (const type of ["typeKanban", "typeList"]) {
+    for (const type of ["typeKanban", "typeList", "typeCalendar"]) {
       expect(
         within(menu).getByRole("menuitemradio", {
           name: `project:planView.${type}`,
         }),
       ).toBeTruthy();
     }
-    // gantt/calendar 不点亮（持久化枚举仅展示可选子集，同 Tab 添加菜单策略）
-    for (const absent of [
-      "project:planView.typeGantt",
-      "project:planView.typeCalendar",
-    ]) {
+    // gantt 不点亮（持久化枚举仅展示可选子集，同 Tab 添加菜单策略）
+    for (const absent of ["project:planView.typeGantt"]) {
       expect(within(menu).queryByText(absent)).toBeNull();
     }
 

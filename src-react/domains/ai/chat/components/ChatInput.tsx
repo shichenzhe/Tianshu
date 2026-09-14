@@ -2,7 +2,8 @@
  * 卡片式输入框(P3 spec §1):textarea(文字与内联引用 token 交叉)居首,
  * 下行左 ＋菜单/权限胶囊/模式徽标、右 模型选择 + 发送/停止。
  * 引用即文字:@ 文件 / ⚡技能 / /命令 / #待办 以 token 形式留在输入流中,
- * 镜像层渲染 pill 高亮(textarea 文字透明),chips 机制已移除。
+ * 镜像层渲染 pill 高亮(textarea 文字透明),chips 机制已移除;#待办 的
+ * 标题映射经输入区下方"已引用"chips 行可见(pill 正文保留 token 原文)。
  * 发送:命令 token 移出执行(onRunCommand);文件/技能/待办 token 读内容
  * 随 onSend 注入(消息文本保留 token 原样)。
  * 触发器:@ 文件、/ 命令+技能、# 待办(todoItems 传入时启用——项目底栏
@@ -278,7 +279,7 @@ export default function ChatInput({
       .map((file) => ({ kind: "file" as const, path: file }));
   }, [suggest, skillsQuery.data, workspaceFilesQuery.data, todoItems]);
 
-  // 镜像 pill 标题映射:#<id> → 待办标题(未命中回退 token 原文)
+  // 待办标题映射:#<id> → 待办标题(已引用 chips 行数据源)
   const todoTitleById = useMemo(() => {
     const map = new Map<number, string>();
     for (const item of todoItems ?? []) {
@@ -599,6 +600,28 @@ export default function ChatInput({
   // 镜像层分段:token 渲染 pill(主题色),普通文本与 textarea 同度量
   const segments = useMemo(() => renderTokenSegments(content), [content]);
 
+  // 已引用待办 chips:草稿 todo token 去重后查 todoTitleById 取标题
+  // (查无 id 跳过——与 submit 注入口径一致;未传 todoItems 恒空)
+  const todoChips = useMemo(() => {
+    if (!todoItems) {
+      return [];
+    }
+    const chips: Array<{ id: number; title: string }> = [];
+    const seen = new Set<number>();
+    for (const segment of segments) {
+      if (!segment.isToken || segment.kind !== "todo") {
+        continue;
+      }
+      const id = Number(segment.text.slice(1));
+      const title = todoTitleById.get(id);
+      if (title !== undefined && !seen.has(id)) {
+        seen.add(id);
+        chips.push({ id, title });
+      }
+    }
+    return chips;
+  }, [segments, todoItems, todoTitleById]);
+
   return (
     <div
       data-testid="chat-input"
@@ -705,14 +728,9 @@ export default function ChatInput({
             segment.isToken ? (
               <span
                 key={index}
-                // 待办 pill：正文保留 token 原文（镜像层与透明 textarea 须逐
-                // 字符同宽对齐，替换为标题会使光标错位），标题经 title 悬停展示
-                title={
-                  segment.kind === "todo"
-                    ? (todoTitleById.get(Number(segment.text.slice(1))) ??
-                      segment.text)
-                    : undefined
-                }
+                // 待办 pill 正文保留 token 原文（镜像层与透明 textarea 须逐
+                // 字符同宽对齐，替换为标题会使光标错位）；标题映射走下方
+                // 已引用 chips 行（镜像层 pointer-events-none 悬停不可达）
                 className="rounded-md bg-primary-subtle px-0 py-0.5 text-primary"
               >
                 {segment.text}
@@ -740,6 +758,22 @@ export default function ChatInput({
           className="relative min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-56 outline-none text-transparent caret-foreground placeholder:text-muted-foreground [&::-webkit-scrollbar]:hidden"
         />
       </div>
+      {/* 已引用待办 chips：草稿 #<id> token 解析出的标题可见通道
+          （镜像 pill 正文须保留 token 原文保证光标对齐；查无 id 跳过） */}
+      {todoChips.length > 0 && (
+        <div data-testid="todo-ref-chips" className="flex flex-wrap gap-1 pt-2">
+          {todoChips.map((chip) => (
+            <span
+              key={chip.id}
+              title={chip.title}
+              className="inline-flex max-w-48 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary"
+            >
+              <ListTodo className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{chip.title}</span>
+            </span>
+          ))}
+        </div>
+      )}
       {/* 下行：左 ＋菜单 + 权限胶囊 + 模式徽标，右 模型 + 发送/停止 */}
       <div className="flex items-center pt-2">
         <div className="flex items-center gap-2">

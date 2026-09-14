@@ -2,7 +2,8 @@
 /**
  * @ 项目待办引用测试（真实 ChatInput 直渲染 + todoItems fixture）：
  * - 输入 `#需` → 联想面板出现标题含『需』的待办项（大小写不敏感过滤）
- * - 选中 → content 含 `#<id> `，pill 镜像层出现（title 映射待办标题）
+ * - 选中 → content 含 `#<id> `，pill 镜像层保留 token 原文 + 已引用
+ *   chips 行显示映射标题（镜像层 pointer-events-none 悬停不可达）
  * - submit：onSend 收到 PendingFile kind "todo" 且 content 含【待办】摘要
  *   （title/status/priority/dueDate；dueDate 空 → 无；查无 id 的 token 忽略）
  * - 未传 todoItems → # 无联想（AI 模块 ChatPane 回归锚点）
@@ -169,18 +170,27 @@ describe("@ 待办引用（# 联想）", () => {
     expect(onSend).toHaveBeenCalledWith("#不存在的词", []);
   });
 
-  it("选中 → content 含 `#<id> `，pill 镜像层出现并映射待办标题", async () => {
+  it("选中 → content 含 `#<id> `，pill 镜像层 + 已引用 chips 行出现", async () => {
     const textarea = renderInput({ todoItems: TODO_ITEMS });
     type(textarea, "#需");
     const option = await screen.findByText("梳理需求文档");
     fireEvent.mouseDown(option.closest("button"));
 
     expect(textarea.value).toBe("#3 ");
-    // 镜像 pill：正文保留 token 原文（与透明 textarea 逐字符对齐），
-    // 待办标题经 title 属性映射展示（未命中回退 token 原文）
-    const mirror = screen.getByTestId("chat-input-mirror");
-    expect(within(mirror).getByText("#3")).toBeTruthy();
-    expect(within(mirror).getByTitle("梳理需求文档")).toBeTruthy();
+    // 镜像 pill：正文保留 token 原文（与透明 textarea 逐字符对齐）
+    expect(
+      within(screen.getByTestId("chat-input-mirror")).getByText("#3"),
+    ).toBeTruthy();
+    // 已引用 chips 行：映射标题的可见通道（镜像层 pointer-events-none，
+    // 标题不能走悬停提示）；chip 显示 todoItems 命中的标题
+    const chips = screen.getByTestId("todo-ref-chips");
+    expect(within(chips).getByText("梳理需求文档")).toBeTruthy();
+
+    // token 从草稿移除 → chips 行消失
+    type(textarea, "没有待办引用了");
+    await waitFor(() =>
+      expect(screen.queryByTestId("todo-ref-chips")).toBeNull(),
+    );
   });
 
   it("submit：Enter 发送 → onSend 收到 kind todo 的 PendingFile 与【待办】摘要", async () => {
@@ -218,9 +228,10 @@ describe("@ 待办引用（# 联想）", () => {
     ]);
   });
 
-  it("查无 id 的 token 忽略（不注入、不报错、原样留在文本）", async () => {
+  it("查无 id 的 token 忽略（不注入、不报错、不生成 chip、原样留在文本）", async () => {
     const textarea = renderInput({ todoItems: TODO_ITEMS });
     type(textarea, "#99 其他");
+    expect(screen.queryByTestId("todo-ref-chips")).toBeNull();
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));

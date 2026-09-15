@@ -1,0 +1,204 @@
+/**
+ * 审计日志服务（SP1 spec §6.2）：append 同步入队（调用方零成本），
+ * ≥50 条或 500ms 触发 flush——逐条编 sequence/hash 批量落库、
+ * 超 5000 条裁剪最旧；clear 全清后留痕 audit.cleared 为新链头
+ * （sequence 全程单调，仅链首 prevHash 归零）。
+ * 查询倒序分页 + keyword（截 200 字符）。
+ */
+import { app, ipcMain } from "electron";
+import prisma from "../../../commons/prisma-client";
+import type {
+  AuditCategory,
+  AuditEntry,
+  AuditListParams,
+  AuditListResult,
+  SecurityEvent,
+} from "../../../../src-react/domains/security/model/types";
+import { computeEntryHash } from "./hash-chain";
+
+const FLUSH_BATCH = 50;
+const FLUSH_INTERVAL_MS = 500;
+const MAX_ENTRIES = 5000;
+const KEYWORD_SLICE = 200;
+const PAGE_SIZE_DEFAULT = 100;
+const PAGE_SIZE_MAX = 500;
+
+/** eventType 前缀 → category 映射（缺省 config） */
+function categoryOf(eventType: string): AuditCategory {
+  const prefix = eventType.split(".")[0] as AuditCategory;
+  const known: AuditCategory[] = [
+    "command-safety",
+    "file-safety",
+    "network",
+    "data-safety",
+    "config",
+  ];
+  return known.includes(prefix) ? prefix : "config";
+}
+
+export interface AuditPrismaLike {
+  createMany(args: {
+    data: Array<Record<string, unknown>>;
+  }): Promise<{ count: number }>;
+  findMany(args: {
+    where?: Record<string, unknown>;
+    orderBy?: Array<Record<string, string>>;
+    take?: number;
+    skip?: number;
+  }): Promise<Array<Record<string, unknown>>>;
+  count(args?: { where?: Record<string, unknown> }): Promise<number>;
+  deleteMany(args?: {
+    where?: Record<string, unknown>;
+  }): Promise<{ count: number }>;
+}
+
+/** 查询参数规范化（spec §12：纯函数可单测） */
+export function normalizeAuditListParams(params: AuditListParams): {
+  page: number;
+  pageSize: number;
+  keyword: string | undefined;
+} {
+  const page =
+    Number.isInteger(params.page) && (params.page ?? 0) >= 1
+      ? (params.page as number)
+      : 1;
+  const rawSize = params.pageSize ?? PAGE_SIZE_DEFAULT;
+  const pageSize = Math.min(
+    Math.max(1, Number(rawSize) || PAGE_SIZE_DEFAULT),
+    PAGE_SIZE_MAX,
+  );
+  const keyword = params.keyword?.trim().slice(0, KEYWORD_SLICE) || undefined;
+  return { page, pageSize, keyword };
+}
+
+export default class AuditLogService {
+  private queue: SecurityEvent[] = [];
+  private chain = { sequence: 0, lastHash: null as string | null };
+  private timer: ReturnType<typeof setInterval> | null = null;
+  private writeTail: Promise<void> = Promise.resolve();
+
+  constructor(private dbOverride?: AuditPrismaLike) {
+    app.on("quit", () => void this.flush());
+    ipcMain.handle("security:auditList", (_, params: AuditListParams) =>
+      this.list(params),
+    );
+    ipcMain.handle("security:auditClear", () => this.clear());
+  }
+
+  private get db(): AuditPrismaLike {
+    // delegate 的泛型签名与宽松参数的 AuditPrismaLike 互不可赋值，运行时兼容
+    return (
+      this.dbOverride ?? (prisma.securityAuditLog as unknown as AuditPrismaLike)
+    );
+  }
+
+  /** 启动恢复链尾（空表 = 新链） */
+  async init(): Promise<void> {
+    const rows = (await this.db.findMany({
+      orderBy: [{ sequence: "desc" }],
+      take: 1,
+    })) as Array<{ sequence: number; hash: string }>;
+    if (rows.length > 0) {
+      this.chain = { sequence: rows[0].sequence, lastHash: rows[0].hash };
+    }
+  }
+
+  /** 同步入队；满批立即 flush，否则起 500ms 定时 */
+  append(event: SecurityEvent): void {
+    this.queue.push(event);
+    if (this.queue.length >= FLUSH_BATCH) {
+      void this.flush();
+    } else if (this.timer === null) {
+      this.timer = setInterval(() => void this.flush(), FLUSH_INTERVAL_MS);
+    }
+  }
+
+  /** 落库队列（失败保留重试，spec §11）；链式串行避免并发批次打乱编链 */
+  flush(): Promise<void> {
+    this.writeTail = this.writeTail.then(() => this.doFlush());
+    return this.writeTail;
+  }
+
+  private async doFlush(): Promise<void> {
+    if (this.queue.length === 0) return;
+    this.stopTimer();
+    const batch = this.queue.splice(0, this.queue.length);
+    try {
+      await this.db.createMany({ data: this.buildEntries(batch) });
+      await this.prune();
+    } catch {
+      this.queue.unshift(...batch);
+    }
+  }
+
+  private buildEntries(batch: SecurityEvent[]): Array<Record<string, unknown>> {
+    return batch.map((event) => {
+      const base = {
+        sequence: ++this.chain.sequence,
+        category: categoryOf(event.eventType),
+        eventType: event.eventType,
+        decision: event.decision,
+        detail: event.detail ? JSON.stringify(event.detail) : null,
+        commandPreview: event.commandPreview ?? null,
+        commandHash: event.commandHash ?? null,
+        sessionId: event.sessionId ?? null,
+        prevHash: this.chain.lastHash,
+        createdAt: new Date().toISOString(),
+      };
+      const hash = computeEntryHash(base, this.chain.lastHash);
+      this.chain.lastHash = hash;
+      return { ...base, hash };
+    });
+  }
+
+  /** 超 5000 条裁最旧（按 sequence 保留最近 MAX_ENTRIES 条） */
+  private async prune(): Promise<void> {
+    const total = await this.db.count();
+    if (total <= MAX_ENTRIES) return;
+    const cutoff = this.chain.sequence - MAX_ENTRIES + 1;
+    await this.db.deleteMany({ where: { sequence: { lt: cutoff } } });
+  }
+
+  /** 倒序分页 + keyword（detail/commandPreview LIKE） */
+  async list(params: AuditListParams): Promise<AuditListResult> {
+    const { page, pageSize, keyword } = normalizeAuditListParams(params);
+    const where = keyword
+      ? {
+          OR: [
+            { detail: { contains: keyword } },
+            { commandPreview: { contains: keyword } },
+          ],
+        }
+      : undefined;
+    const [rows, total] = await Promise.all([
+      this.db.findMany({
+        where,
+        orderBy: [{ sequence: "desc" }],
+        take: pageSize,
+        skip: (page - 1) * pageSize,
+      }),
+      this.db.count({ where }),
+    ]);
+    return {
+      entries: rows.map((row) => row as unknown as AuditEntry),
+      total,
+      page,
+      pageSize,
+    };
+  }
+
+  /** 全清并留痕（清空动作自己成为新链头，sequence 不重置保持单调） */
+  async clear(): Promise<void> {
+    await this.db.deleteMany();
+    this.chain.lastHash = null;
+    this.append({ eventType: "audit.cleared", decision: "info" });
+    await this.flush();
+  }
+
+  private stopTimer(): void {
+    if (this.timer !== null) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+  }
+}

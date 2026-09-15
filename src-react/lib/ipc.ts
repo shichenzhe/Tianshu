@@ -166,6 +166,13 @@ export type IPCChannel =
   | "log:info"
   | "log:warn"
   | "log:error"
+  // 安全中心（SP1）
+  | "security:getConfig"
+  | "security:setConfig"
+  | "security:auditList"
+  | "security:auditExport"
+  | "security:auditClear"
+  | "security:openBackupDir"
   // 更新日志
   | "update-log:getContent"
   | "update-log:getConfig";

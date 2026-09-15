@@ -1,0 +1,65 @@
+{
+  "title": "Security Center",
+  "loadFailed": "Failed to load, please retry",
+  "sandbox": {
+    "title": "Sandbox Security",
+    "enabled": "Sandbox security",
+    "enabledDesc": "When enabled, all AI execution is governed by file, command, and network security rules",
+    "file": "File Security",
+    "fileDesc": "Manage file read/write permissions and allow/block lists",
+    "command": "Command Security",
+    "commandDesc": "Manage allow/ask/block lists for shell commands",
+    "network": "Network Security",
+    "networkDesc": "Manage network requests and domain lists",
+    "comingSoon": "Coming soon"
+  },
+  "dataSafety": {
+    "title": "Data Safety",
+    "backup": "Auto backup",
+    "backupDesc": "Automatically back up files before each conversational modification",
+    "quota": "Backup quota {{size}} MB",
+    "openBackupDir": "Open backup folder",
+    "deleteProtection": "Delete protection",
+    "deleteProtectionDesc": "Deleted files go to the trash instead of being permanently removed",
+    "bulkThreshold": "Bulk delete approval threshold",
+    "bulkThresholdDesc": "Pause and ask for confirmation when deleting more files than this threshold",
+    "invalidThreshold": "Threshold must be an integer between 1 and 99999"
+  },
+  "audit": {
+    "title": "Audit Center",
+    "empty": "No records",
+    "viewAll": "View all",
+    "back": "Back",
+    "refresh": "Refresh",
+    "export": "Export log",
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "clear": "Clear records",
+    "clearTitle": "Clear audit records?",
+    "clearDesc": "This deletes all security operation logs and cannot be undone.",
+    "searchPlaceholder": "Search commands or paths…",
+    "pageInfo": "Page {{page}} / {{totalPages}} · {{total}} entries",
+    "prev": "Previous",
+    "next": "Next",
+    "categories": {
+      "command-safety": "Command Safety",
+      "file-safety": "File Safety",
+      "network": "Network Security",
+      "data-safety": "Data Safety",
+      "config": "Config"
+    },
+    "events": {
+      "command-safety_blocked": "Blocked dangerous command: {{command}}",
+      "command-safety_approved": "Command approved: {{summary}}",
+      "command-safety_rejected": "Command rejected: {{summary}}",
+      "command-safety_cwd-fallback": "Working directory out of bounds, fell back: {{requested}}",
+      "file-safety_approved": "File operation approved: {{summary}}",
+      "file-safety_rejected": "File operation rejected: {{summary}}",
+      "config_updated": "Security config updated: {{key}}",
+      "audit_cleared": "Audit records cleared"
+    }
+  },
+  "error": {
+    "saveFailed": "Save failed, please retry"
+  }
+}

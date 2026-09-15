@@ -5,7 +5,8 @@
     "profile": "Personalization",
     "memory": "Memory & Evolution",
     "appearance": "Appearance",
-    "shortcuts": "Shortcuts"
+    "shortcuts": "Shortcuts",
+    "security": "Security Center"
   },
   "groups": {
     "general": "General",

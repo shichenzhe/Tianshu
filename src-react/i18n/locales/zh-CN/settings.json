@@ -5,7 +5,8 @@
     "profile": "个性化",
     "memory": "记忆与进化",
     "appearance": "外观",
-    "shortcuts": "快捷键"
+    "shortcuts": "快捷键",
+    "security": "安全中心"
   },
   "groups": {
     "general": "常规",

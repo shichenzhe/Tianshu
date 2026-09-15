@@ -15,6 +15,7 @@ import zhAI from "./locales/zh-CN/ai.json";
 import zhChat from "./locales/zh-CN/chat.json";
 import zhSettings from "./locales/zh-CN/settings.json";
 import zhProject from "./locales/zh-CN/project.json";
+import zhSecurity from "./locales/zh-CN/security.json";
 
 // en-US
 import enCommon from "./locales/en-US/common.json";
@@ -24,6 +25,7 @@ import enAI from "./locales/en-US/ai.json";
 import enChat from "./locales/en-US/chat.json";
 import enSettings from "./locales/en-US/settings.json";
 import enProject from "./locales/en-US/project.json";
+import enSecurity from "./locales/en-US/security.json";
 
 const resources = {
   "zh-CN": {
@@ -34,6 +36,7 @@ const resources = {
     chat: zhChat,
     settings: zhSettings,
     project: zhProject,
+    security: zhSecurity,
   },
   "en-US": {
     common: enCommon,
@@ -43,6 +46,7 @@ const resources = {
     chat: enChat,
     settings: enSettings,
     project: enProject,
+    security: enSecurity,
   },
 };
 
@@ -53,7 +57,16 @@ i18n
     resources,
     fallbackLng: "zh-CN",
     defaultNS: "common",
-    ns: ["common", "layout", "user", "ai", "chat", "settings", "project"],
+    ns: [
+      "common",
+      "layout",
+      "user",
+      "ai",
+      "chat",
+      "settings",
+      "project",
+      "security",
+    ],
     interpolation: {
       escapeValue: false,
     },

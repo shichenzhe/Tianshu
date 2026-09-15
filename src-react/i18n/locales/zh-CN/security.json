@@ -1,0 +1,65 @@
+{
+  "title": "安全中心",
+  "loadFailed": "加载失败，请重试",
+  "sandbox": {
+    "title": "沙箱安全",
+    "enabled": "沙箱安全",
+    "enabledDesc": "开启后，AI 的所有执行操作均受文件、命令、网络安全规则约束",
+    "file": "文件安全",
+    "fileDesc": "管理文件读写权限与黑白名单",
+    "command": "命令安全",
+    "commandDesc": "管理 Shell 命令的放行、询问与禁止名单",
+    "network": "网络安全",
+    "networkDesc": "管理网络出入站请求与域名名单",
+    "comingSoon": "即将上线"
+  },
+  "dataSafety": {
+    "title": "数据安全",
+    "backup": "自动备份",
+    "backupDesc": "每次对话修改文件前，自动创建备份",
+    "quota": "备份总上限 {{size}} MB",
+    "openBackupDir": "打开备份目录",
+    "deleteProtection": "删除保护",
+    "deleteProtectionDesc": "开启后文件删除操作移入回收站，而非永久删除",
+    "bulkThreshold": "批量删除审批阈值",
+    "bulkThresholdDesc": "单次操作删除文件数量超过该阈值时，暂停并请求确认",
+    "invalidThreshold": "阈值需为 1–99999 的整数"
+  },
+  "audit": {
+    "title": "审计中心",
+    "empty": "暂无记录",
+    "viewAll": "查看全部",
+    "back": "返回",
+    "refresh": "刷新",
+    "export": "导出日志",
+    "exportJson": "导出 JSON",
+    "exportCsv": "导出 CSV",
+    "clear": "清空记录",
+    "clearTitle": "清空审计记录？",
+    "clearDesc": "将删除全部安全操作日志，且不可恢复。",
+    "searchPlaceholder": "搜索命令或路径…",
+    "pageInfo": "第 {{page}} / {{totalPages}} 页 · 共 {{total}} 条",
+    "prev": "上一页",
+    "next": "下一页",
+    "categories": {
+      "command-safety": "命令安全",
+      "file-safety": "文件安全",
+      "network": "网络安全",
+      "data-safety": "数据安全",
+      "config": "配置"
+    },
+    "events": {
+      "command-safety_blocked": "拦截危险命令: {{command}}",
+      "command-safety_approved": "命令已获批准: {{summary}}",
+      "command-safety_rejected": "命令被拒绝: {{summary}}",
+      "command-safety_cwd-fallback": "工作目录越界已回退: {{requested}}",
+      "file-safety_approved": "文件操作已获批准: {{summary}}",
+      "file-safety_rejected": "文件操作被拒绝: {{summary}}",
+      "config_updated": "安全配置已更新: {{key}}",
+      "audit_cleared": "审计记录已清空"
+    }
+  },
+  "error": {
+    "saveFailed": "保存失败，请重试"
+  }
+}

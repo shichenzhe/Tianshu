@@ -24,6 +24,8 @@ import PlanViewRepository from "./domains/project/plan-view.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
+import AuditLogService from "./domains/security/audit/audit-log.service";
+import SecurityService from "./domains/security/security.service";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -143,6 +145,14 @@ export default class Application {
     // （fields 两通道 Task 3 注册）
     new PlanItemRepository();
     new PlanViewRepository();
+    // 安全中心（SP1）：审计链服务先行（SecurityService 写审计依赖），
+    // 均注入 prisma 单例；init 恢复审计链尾，失败仅日志不阻塞启动
+    const auditLogService = new AuditLogService();
+    await auditLogService.init().catch((e) => Log.error("审计链恢复失败", e));
+    const securityService = new SecurityService({
+      audit: (event) => auditLogService.append(event),
+    });
+    await securityService.init().catch((e) => Log.error("安全配置加载失败", e));
     new ChatService(sessionRepo, skillRepo, projectRepo);
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）

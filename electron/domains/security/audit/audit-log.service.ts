@@ -5,7 +5,7 @@
  * （sequence 全程单调，仅链首 prevHash 归零）。
  * 查询倒序分页 + keyword（截 200 字符）。
  */
-import { app, ipcMain } from "electron";
+import { app, dialog, ipcMain, shell } from "electron";
 import Log from "../../../commons/Log";
 import prisma from "../../../commons/prisma-client";
 import type {
@@ -16,6 +16,7 @@ import type {
   SecurityEvent,
 } from "../../../../src-react/domains/security/model/types";
 import { computeEntryHash } from "./hash-chain";
+import { writeAuditExport } from "./audit-export";
 
 const FLUSH_BATCH = 50;
 const FLUSH_INTERVAL_MS = 500;
@@ -84,6 +85,9 @@ export default class AuditLogService {
       this.list(params),
     );
     ipcMain.handle("security:auditClear", () => this.clear());
+    ipcMain.handle("security:auditExport", (_, format: "json" | "csv") =>
+      this.exportToFile(format),
+    );
   }
 
   private get db(): AuditPrismaLike {
@@ -197,6 +201,20 @@ export default class AuditLogService {
       page,
       pageSize,
     };
+  }
+
+  /** 保存框选路径 → 流式写 → 打开所在目录（取消 = ok:false 静默） */
+  async exportToFile(
+    format: "json" | "csv",
+  ): Promise<{ ok: boolean; filePath?: string }> {
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const result = await dialog.showSaveDialog({
+      defaultPath: `security-audit-log-${date}.${format}`,
+    });
+    if (result.canceled || !result.filePath) return { ok: false };
+    await writeAuditExport(this.db, format, result.filePath);
+    shell.showItemInFolder(result.filePath);
+    return { ok: true, filePath: result.filePath };
   }
 
   /** 全清并留痕（清空动作自己成为新链头，sequence 不重置保持单调）。

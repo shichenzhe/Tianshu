@@ -6,10 +6,14 @@ import {
   pickStringArray,
   parseSecurityConfig,
   serializeSecurityValue,
+  setSecurityOption,
   stripBuiltinItems,
   mergeRuleList,
 } from "../../electron/domains/security/config-store";
-import { SECURITY_DEFAULTS } from "../../electron/domains/security/defaults";
+import {
+  SECURITY_DEFAULTS,
+  defaultFileBlocklist,
+} from "../../electron/domains/security/defaults";
 
 describe("normalize 族", () => {
   it("备份配额钳制 ≥1000 并取整", () => {
@@ -72,5 +76,29 @@ describe("序列化与内置项处理", () => {
       "~/.ssh/",
       "/tmp",
     ]);
+  });
+});
+
+describe("Task3 补测（reviewer 建议）", () => {
+  it("win32 过滤内置清单", () => {
+    const win = defaultFileBlocklist("win32");
+    expect(win).not.toContain("~/Library/Keychains/");
+    expect(defaultFileBlocklist("darwin")).toContain("~/Library/Keychains/");
+  });
+  it("setSecurityOption upsert：未命中则 create", async () => {
+    const calls: string[] = [];
+    const db = {
+      findMany: async () => [],
+      updateMany: async () => {
+        calls.push("updateMany");
+        return { count: 0 };
+      },
+      create: async ({ data }: { data: { name: string; value: string } }) => {
+        calls.push("create:" + data.name);
+        return {};
+      },
+    };
+    await setSecurityOption(db as never, "sandboxEnabled", "true");
+    expect(calls).toEqual(["updateMany", "create:sandboxEnabled"]);
   });
 });

@@ -20,6 +20,7 @@ import type { ToolContext, ToolDefinition } from "./file-tools";
 interface PlanItemDbRow {
   id: number;
   projectId: number | null;
+  title: string;
   status: string;
   aiSummary: string | null;
 }
@@ -49,6 +50,10 @@ interface PlanItemPrismaLike {
     orderBy: { sortOrder: "desc" };
     select: { sortOrder: true };
   }): Promise<{ sortOrder: number } | null>;
+  findMany(args: {
+    where: { projectId: number };
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }];
+  }): Promise<PlanItemDbRow[]>;
   create(args: { data: PlanItemCreateData }): Promise<{ id: number }>;
   update(args: {
     where: { id: number };
@@ -136,6 +141,36 @@ const appendSummarySchema = z.object({
   id: z.number().describe("任务 id（#<id> 引用）"),
   text: z.string().describe("一行进展描述"),
 });
+
+const listItemsSchema = z.object({});
+
+/** plan_list_items：项目内全量任务 → 行摘要（跨项目行不可见，只增数据不加幻觉） */
+async function listItems(
+  deps: PlanToolsDeps,
+  ctx: ToolContext,
+): Promise<string> {
+  if (ctx.projectId == null) {
+    return fail("当前会话未关联项目");
+  }
+  const rows = await deps.prisma.planItem.findMany({
+    where: { projectId: ctx.projectId },
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+  });
+  if (rows.length === 0) {
+    return "当前项目计划清单为空（共 0 项）";
+  }
+  const lines = rows.map((row) => {
+    const lastSummary = row.aiSummary
+      ? row.aiSummary.split("\n").filter(Boolean).at(-1)
+      : undefined;
+    return `#${row.id}《${row.title}》｜${STATUS_LABELS[row.status as PlanStatus]}${
+      lastSummary
+        ? `｜最近进展: ${lastSummary.replace(/^\[[^\]]+\]\s*/, "")}`
+        : ""
+    }`;
+  });
+  return `当前项目计划清单（共 ${rows.length} 项）：\n${lines.join("\n")}`;
+}
 
 /** plan_create_item：ctx.projectId/标题/日期校验 → source=ai 建行（未指派） */
 async function createItem(
@@ -236,10 +271,13 @@ async function appendSummary(
 export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
   // 逐工具显式 ToolDefinition<z.infer<...>> 注解（execute args 得到类型；
   // 方法签名保持到 ToolDefinition<unknown> 的可赋值性，file-tools 先例）
+  // 心智模型锚点：计划清单是结构化数据（非文件系统），读取一律走
+  // plan_list_items——掐掉模型在文件系统里找任务文件的错误路径
+  const GROUNDING_NOTE =
+    "计划清单是结构化数据（不在文件系统），全量查看用 plan_list_items";
   const createItemTool: ToolDefinition<z.infer<typeof createItemSchema>> = {
     name: "plan_create_item",
-    description:
-      "在当前项目的计划清单中创建任务（AI 驱动）。推进任务后应调用 plan_append_summary 记录进展；任务以 #<id> 引用。",
+    description: `在当前项目的计划清单中创建任务（AI 驱动）。${GROUNDING_NOTE}。推进任务后应调用 plan_append_summary 记录进展；任务以 #<id> 引用。`,
     parameters: createItemSchema,
     kind: "write",
     execute: async (ctx, args) => {
@@ -252,8 +290,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
   };
   const updateStatusTool: ToolDefinition<z.infer<typeof updateStatusSchema>> = {
     name: "plan_update_status",
-    description:
-      "流转当前项目计划清单中的任务状态（待开始/进行中/已暂停/已完成）。推进任务后应调用 plan_append_summary 记录进展；任务以 #<id> 引用。",
+    description: `流转当前项目计划清单中的任务状态（待开始/进行中/已暂停/已完成）。${GROUNDING_NOTE}。推进任务后应调用 plan_append_summary 记录进展；任务以 #<id> 引用。`,
     parameters: updateStatusSchema,
     kind: "write",
     execute: async (ctx, args) => {
@@ -267,8 +304,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
   const appendSummaryTool: ToolDefinition<z.infer<typeof appendSummarySchema>> =
     {
       name: "plan_append_summary",
-      description:
-        "为当前项目计划清单中的任务追加一行 AI 进展摘要（自动带 [yyyy-MM-dd] 日期前缀，只增不改）。每次推进任务后应调用本工具记录进展；任务以 #<id> 引用。",
+      description: `为当前项目计划清单中的任务追加一行 AI 进展摘要（自动带 [yyyy-MM-dd] 日期前缀，只增不改）。${GROUNDING_NOTE}。每次推进任务后应调用本工具记录进展；任务以 #<id> 引用。`,
       parameters: appendSummarySchema,
       kind: "write",
       execute: async (ctx, args) => {
@@ -279,5 +315,18 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
         }
       },
     };
-  return [createItemTool, updateStatusTool, appendSummaryTool];
+  const listItemsTool: ToolDefinition<z.infer<typeof listItemsSchema>> = {
+    name: "plan_list_items",
+    description: `查看当前项目的全量计划清单（#id｜标题｜状态｜最近进展）。${GROUNDING_NOTE}——不确定任务是否存在、或需要了解项目全貌时先调用本工具，不要去文件系统寻找任务文件。`,
+    parameters: listItemsSchema,
+    kind: "read",
+    execute: async (ctx) => {
+      try {
+        return await listItems(deps, ctx);
+      } catch (e) {
+        return fail(toMessage(e));
+      }
+    },
+  };
+  return [createItemTool, updateStatusTool, appendSummaryTool, listItemsTool];
 }

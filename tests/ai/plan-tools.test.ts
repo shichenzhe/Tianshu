@@ -44,6 +44,7 @@ function makeDeps(rows: StubRow[] = []) {
         findUnique: async ({ where }: { where: { id: number } }) =>
           rows.find((row) => row.id === where.id) ?? null,
         findFirst: async () => null,
+        findMany: async () => rows.filter((row) => row.projectId === 11),
         create: async (args: { data: Record<string, unknown> }) => {
           calls.create.push(args.data);
           const row: StubRow = {
@@ -98,17 +99,20 @@ afterEach(() => {
 });
 
 describe("plan 工具组元信息", () => {
-  it("三工具 name/kind=write/描述含 #<id> 引用（建/流转含 plan_append_summary 教学）", () => {
+  it("四工具 name/kind（三写一读）/描述含 #<id> 引用与结构化清单锚点（建/流转含 plan_append_summary 教学）", () => {
     const tools = makePlanTools(makeDeps().deps);
     expect(tools.map((tool) => tool.name)).toEqual([
       "plan_create_item",
       "plan_update_status",
       "plan_append_summary",
+      "plan_list_items",
     ]);
-    for (const tool of tools) {
+    for (const tool of tools.slice(0, 3)) {
       expect(tool.kind).toBe("write");
       expect(tool.description).toContain("#<id>");
     }
+    expect(tools[3]?.kind).toBe("read");
+    expect(tools[3]?.description).toContain("不要去文件系统寻找任务文件");
     expect(tools[0]?.description).toContain("plan_append_summary");
     expect(tools[1]?.description).toContain("plan_append_summary");
   });
@@ -326,4 +330,66 @@ describe("plan_append_summary", () => {
       expect(calls.update).toEqual([]);
     },
   );
+});
+
+describe("plan_list_items（读工具：AI 查看全量清单）", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-15T03:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("非项目会话 → 错误兜底（与其他工具同口径）", async () => {
+    const { deps } = makeDeps();
+    await expect(
+      toolOf(deps, "plan_list_items").execute(omitCtx(), {}),
+    ).resolves.toBe("错误: 当前会话未关联项目");
+  });
+
+  it("kind=read（免审批）且无参数 schema 消费", async () => {
+    const { deps } = makeDeps();
+    const tool = toolOf(deps, "plan_list_items");
+    expect(tool?.kind).toBe("read");
+    expect(tool?.name).toBe("plan_list_items");
+  });
+
+  it("返回项目内任务行（#id｜标题｜状态中文｜优先级｜截止｜来源｜末行进展），跨项目行排除", async () => {
+    const { deps } = makeDeps([
+      {
+        id: 3,
+        projectId: 11,
+        title: "t2 联调",
+        status: "not_started",
+        aiSummary: "[2026-09-14] 启动\n[2026-09-15] 接口调研完成",
+        sortOrder: 1,
+      },
+      {
+        id: 4,
+        projectId: 11,
+        title: "无进展任务",
+        status: "in_progress",
+        aiSummary: null,
+        sortOrder: 1,
+      },
+      {
+        id: 9,
+        projectId: 99,
+        title: "他项目",
+        status: "done",
+        aiSummary: null,
+        sortOrder: 1,
+      },
+    ]);
+    const out = await toolOf(deps, "plan_list_items").execute(ctx(), {});
+    expect(out).toContain("#3《t2 联调》｜待开始｜最近进展: 接口调研完成");
+    expect(out).toContain("#4《无进展任务》｜进行中");
+    expect(out).not.toContain("他项目");
+    expect(out).toContain("共 2 项");
+  });
+
+  it("空清单 → 明确空态文本（AI 不再怀疑清单缺失）", async () => {
+    const { deps } = makeDeps();
+    const out = await toolOf(deps, "plan_list_items").execute(ctx(), {});
+    expect(out).toContain("当前项目计划清单为空");
+  });
 });

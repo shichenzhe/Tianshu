@@ -136,6 +136,11 @@ vi.mock("@/domains/ai/chat/components/AgentProgress", async () => {
 
 import ProjectChatBar from "../../src-react/domains/project/components/ProjectChatBar";
 import { useChatStore } from "../../src-react/domains/ai/chat/store/chat.store";
+import { useUserStore } from "../../src-react/domains/user/store/user.store";
+import {
+  PLAN_ITEMS_KEY,
+  PLAN_ITEMS_MINE_KEY,
+} from "@/domains/project/api/plan-item.api";
 import type { ProjectDetail } from "../../../electron/domains/project/project.entity";
 
 const SESSION_ID = 11;
@@ -266,8 +271,13 @@ describe("ProjectChatBar 底栏", () => {
   });
 
   it("成功发送 → 发送版本 +1（ActivityPane 据此丢弃过期编辑态）；失败不递增并 toast", async () => {
+    // 当前用户 id 固定 1（MINE key 断言锚点；store 初始 id=0）
+    useUserStore.setState({
+      user: { ...useUserStore.getState().user, id: 1 },
+    });
     renderBar();
     await screen.findByTestId("chat-input-stub");
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
 
     // 成功路径：send resolve 后广播版本 +1（sendVersions 为持久计数，非流式态）
     const before = useChatStore.getState().sendVersions[SESSION_ID] ?? 0;
@@ -277,6 +287,18 @@ describe("ProjectChatBar 底栏", () => {
     expect(useChatStore.getState().sendVersions[SESSION_ID] ?? 0).toBe(
       before + 1,
     );
+    // 模拟流结束（真实链路由流事件 finishStream；mock 无流）→ sending
+    // true→false 转换触发计划缓存双失效（AI 工具写入渲染侧传播）
+    act(() => {
+      useChatStore.getState().finishStream(SESSION_ID);
+    });
+    await act(async () => {});
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: PLAN_ITEMS_KEY(DETAIL.project.id),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: PLAN_ITEMS_MINE_KEY(1),
+    });
 
     // 失败路径：版本不递增（编辑态保留）+ toast 兜底恰一次
     chatApiMock.send.mockRejectedValueOnce(new Error("no model"));

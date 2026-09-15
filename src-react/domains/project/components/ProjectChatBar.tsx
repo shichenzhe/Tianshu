@@ -9,7 +9,7 @@
  * sending 单一来源，动态流消息区（ChatMessages，由 ActivityPane 渲染）的
  * 编辑/重发接线经 ChatApi 直调，不在此二次订阅。
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -22,8 +22,10 @@ import type { PendingFile } from "@/domains/ai/chat/lib/pending-file";
 import { useChatSend } from "@/domains/ai/chat/hooks/use-chat-send";
 import { useChatStore } from "@/domains/ai/chat/store/chat.store";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
+import { useUserStore } from "@/domains/user/store/user.store";
 import PlanItemApi, {
   PLAN_ITEMS_KEY,
+  PLAN_ITEMS_MINE_KEY,
 } from "@/domains/project/api/plan-item.api";
 import type { ProjectDetail } from "../../../../electron/domains/project/project.entity";
 
@@ -69,6 +71,22 @@ export default function ProjectChatBar({
     queryKey: PLAN_ITEMS_KEY(detail.project.id),
     queryFn: () => PlanItemApi.list(detail.project.id),
   });
+
+  // AI 工具可能已在主进程直写计划清单（plan_* 工具）——发送结束失效
+  // 计划缓存，驱动五视图/徽标/#待办建议实时反映（spec 决策 6 渲染侧补完）
+  const userId = useUserStore((state) => state.user.id);
+  const prevSendingRef = useRef(false);
+  useEffect(() => {
+    if (prevSendingRef.current && !sending) {
+      void queryClient.invalidateQueries({
+        queryKey: PLAN_ITEMS_KEY(detail.project.id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: PLAN_ITEMS_MINE_KEY(userId),
+      });
+    }
+    prevSendingRef.current = sending;
+  }, [sending, queryClient, detail.project.id, userId]);
 
   // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
   // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底

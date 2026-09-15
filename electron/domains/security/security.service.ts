@@ -3,7 +3,9 @@
  * 读走缓存零 DB 开销（SP2-SP6 执行层消费）；写 = normalize → 剔内置 →
  * upsert option → 更新缓存 → 审计 config.<key>.updated。
  */
-import { ipcMain } from "electron";
+import { app, ipcMain, shell } from "electron";
+import fs from "node:fs/promises";
+import path from "node:path";
 import prisma from "../../commons/prisma-client";
 import type {
   SecurityConfig,
@@ -113,5 +115,13 @@ export default class SecurityService {
       "security:setConfig",
       (_, key: SecurityConfigKey, value: unknown) => this.setConfig(key, value),
     );
+    ipcMain.handle("security:openBackupDir", async (): Promise<void> => {
+      const dir = path.join(app.getPath("userData"), "file-history");
+      await fs.mkdir(dir, { recursive: true });
+      const openError = await shell.openPath(dir);
+      if (openError) {
+        throw new Error(openError);
+      }
+    });
   }
 }

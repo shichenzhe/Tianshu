@@ -231,6 +231,7 @@
   },
   "chatBar": {
     "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能",
+    "viewContext": "查看上下文（动态流）",
     "localTask": "本地任务"
   },
   "sidebar": {

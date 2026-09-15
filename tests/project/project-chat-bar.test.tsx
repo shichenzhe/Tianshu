@@ -26,6 +26,13 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MemoryRouter, useLocation } from "react-router-dom";
+
+/** 位置探针：读取当前 search（「查看上下文」跳转断言用） */
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{location.search}</div>;
+}
 
 // localStorage stub：模块加载链上的 store 在 Node 环境访问原生全局会打
 // ExperimentalWarning，先行替换为内存 stub 消除噪音
@@ -207,7 +214,10 @@ function renderBar(detail: ProjectDetail = DETAIL) {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <ProjectChatBar detail={detail} onOpenSettings={() => {}} />
+      <MemoryRouter initialEntries={["/module/project/1?tab=plan"]}>
+        <LocationProbe />
+        <ProjectChatBar detail={detail} onOpenSettings={() => {}} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -436,6 +446,13 @@ describe("ProjectChatBar 底栏", () => {
 
     // 横幅出现（argSummary 可见）+ 三按钮（工作空间 30 非空 → 含记住）
     expect(screen.getByText("更新任务 #3 状态为进行中")).toBeTruthy();
+    // 查看上下文链接：点击合并式切 ?tab=activity（保留其余参数语义，replace）
+    fireEvent.click(
+      screen.getByRole("button", { name: "project:chatBar.viewContext" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe("?tab=activity"),
+    );
     fireEvent.click(screen.getByRole("button", { name: "chat:tool.approve" }));
     await waitFor(() =>
       expect(chatApiMock.approveToolCall).toHaveBeenCalledWith("tc1", true),

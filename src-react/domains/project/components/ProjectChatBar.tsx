@@ -11,6 +11,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -59,6 +60,8 @@ function BarApprovalBanner({
   sessionId: number;
   workspaceId: number | null;
 }) {
+  const { t } = useTranslation(["chat", "project"]);
+  const [, setSearchParams] = useSearchParams();
   const pending = usePendingApprovals(sessionId);
   if (pending.length === 0) {
     return null;
@@ -75,6 +78,23 @@ function BarApprovalBanner({
           onDecided={() => {}}
         />
       ))}
+      {/* 查看上下文：跳动态流 Tab 看 AI 完整推理消息流（流仍挂起等决议，非强制）。
+          合并式写入与 switchTab 同构（保留 viewId 等既有参数） */}
+      <button
+        type="button"
+        onClick={() =>
+          setSearchParams(
+            (prev) => {
+              prev.set("tab", "activity");
+              return prev;
+            },
+            { replace: true },
+          )
+        }
+        className="mt-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+      >
+        {t("project:chatBar.viewContext")}
+      </button>
     </div>
   );
 }

@@ -231,6 +231,7 @@
   },
   "chatBar": {
     "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills",
+    "viewContext": "View context (activity)",
     "localTask": "Local tasks"
   },
   "sidebar": {

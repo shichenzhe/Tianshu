@@ -31,7 +31,6 @@
     "viewAll": "View all",
     "back": "Back",
     "refresh": "Refresh",
-    "export": "Export log",
     "exportJson": "Export JSON",
     "exportCsv": "Export CSV",
     "clear": "Clear records",

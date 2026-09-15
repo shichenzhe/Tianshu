@@ -5,8 +5,13 @@
  */
 import { createHash } from "node:crypto";
 
-/** 规范化 JSON：对象 key 递归排序、undefined 值剔除 */
+/** 规范化 JSON：对象 key 递归排序、undefined 值剔除；
+ *  Date 序列化为 ISO 串——Prisma 读回 createdAt 为 Date 对象，
+ *  与写入时的 ISO 字符串保持同构，复算 hash 不因类型漂移失配 */
 export function stableStringify(value: unknown): string {
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value ?? null);
   }
@@ -22,13 +27,15 @@ export function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-/** 条目 hash：sha256(prevHash + 规范化内容)；entry 自身的 hash 字段不参与 */
+/** 条目 hash：sha256(prevHash + 规范化内容)；entry 自身的 hash 与库端
+ *  自增 id（写入时不可知、读回/导出才有）不参与——已落库行可直接复算 */
 export function computeEntryHash(
   entry: Record<string, unknown>,
   prevHash: string | null,
 ): string {
   const rest: Record<string, unknown> = { ...entry };
   delete rest.hash;
+  delete rest.id;
   return createHash("sha256")
     .update(prevHash ?? "")
     .update(stableStringify(rest))

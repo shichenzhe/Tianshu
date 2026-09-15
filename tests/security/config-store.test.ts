@@ -79,7 +79,7 @@ describe("序列化与内置项处理", () => {
   });
 });
 
-describe("Task3 补测（reviewer 建议）", () => {
+describe("defaults 平台差异与 upsert 兜底", () => {
   it("win32 过滤内置清单", () => {
     const win = defaultFileBlocklist("win32");
     expect(win).not.toContain("~/Library/Keychains/");

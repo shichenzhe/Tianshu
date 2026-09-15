@@ -89,7 +89,7 @@ electron/domains/security/                    ← 新后端域
 
 ### 5.2 内置清单（代码常量，永不落盘）
 
-`DEFAULT_FILE_BLOCKLIST`（照抄 WorkBuddy 清单 A，18 条，PRD 同源）：
+`DEFAULT_FILE_BLOCKLIST`（照抄 WorkBuddy 清单 A，17 条，PRD 同源）：
 
 ```
 ~/.ssh/  ~/.aws/  ~/.gnupg/  ~/.gpg/  ~/.kube/config

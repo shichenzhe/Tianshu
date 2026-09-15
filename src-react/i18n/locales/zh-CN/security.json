@@ -31,7 +31,6 @@
     "viewAll": "查看全部",
     "back": "返回",
     "refresh": "刷新",
-    "export": "导出日志",
     "exportJson": "导出 JSON",
     "exportCsv": "导出 CSV",
     "clear": "清空记录",

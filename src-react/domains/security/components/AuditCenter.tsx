@@ -1,6 +1,6 @@
 /**
  * 审计中心（SP1 spec §9.2）：卡片态（embedded，最近 8 条 + 查看全部/
- * 导出/清空）与全量态（分页 + keyword + 30s 轮询 + 手动刷新）。
+ * 导出/清空）与全量态（分页 + keyword + 手动刷新），两态均 30s 轮询。
  * eventType → i18n messageKey：events.<点换下划线>，detail JSON 插值；
  * 缺失 key 回落 eventType 原文（旧版本数据向前兼容）。
  */
@@ -30,8 +30,12 @@ import type { AuditEntry, AuditListResult } from "../model/types";
 const CARD_PAGE_SIZE = 8;
 const POLL_INTERVAL_MS = 30_000;
 
-/** eventType → messageKey（command-safety.blocked → command-safety_blocked） */
-function eventMessageKey(eventType: string): string {
+/** eventType → messageKey（command-safety.blocked → command-safety_blocked）；
+ *  config.<key>.updated 无逐键词条，统一映射 config_updated（{{key}} 插值） */
+export function eventMessageKey(eventType: string): string {
+  if (/^config\.(.+)\.updated$/.test(eventType)) {
+    return "security:audit.events.config_updated";
+  }
   return `security:audit.events.${eventType.replace(/\./g, "_")}`;
 }
 
@@ -106,7 +110,7 @@ export default function AuditCenter({
 
   useEffect(() => {
     load(page, keyword);
-    if (embedded) return;
+    // 两态均 30s 轮询（spec §9.2：面板打开期间保持刷新）
     const timer = setInterval(() => load(page, keyword), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [load, page, keyword, embedded]);

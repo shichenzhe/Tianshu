@@ -78,9 +78,19 @@ export default class AuditLogService {
   private chain = { sequence: 0, lastHash: null as string | null };
   private timer: ReturnType<typeof setInterval> | null = null;
   private writeTail: Promise<void> = Promise.resolve();
+  private quitting = false;
 
   constructor(private dbOverride?: AuditPrismaLike) {
-    app.on("quit", () => void this.flush());
+    // 队列有待写事件时阻止退出、冲刷后再 quit（quitting 标记防
+    // preventDefault→quit→will-quit 重入循环）
+    app.on("will-quit", (event) => {
+      if (this.quitting || this.queue.length === 0) return;
+      this.quitting = true;
+      event.preventDefault();
+      this.flush()
+        .catch(() => {})
+        .finally(() => app.quit());
+    });
     ipcMain.handle("security:auditList", (_, params: AuditListParams) =>
       this.list(params),
     );
@@ -167,11 +177,17 @@ export default class AuditLogService {
     });
   }
 
-  /** 超 5000 条裁最旧（按 sequence 保留最近 MAX_ENTRIES 条） */
+  /** 超 5000 条裁最旧（按 sequence 保留最近 MAX_ENTRIES 条）。
+   *  cutoff 由最旧行 + 溢出量推导：clear 跨清空保持 sequence 单调，
+   *  行号与链尾不再连续，不能从 chain.sequence 倒推 */
   private async prune(): Promise<void> {
     const total = await this.db.count();
     if (total <= MAX_ENTRIES) return;
-    const cutoff = this.chain.sequence - MAX_ENTRIES + 1;
+    const oldest = (
+      await this.db.findMany({ orderBy: [{ sequence: "asc" }], take: 1 })
+    )[0];
+    if (!oldest) return;
+    const cutoff = Number(oldest.sequence) + (total - MAX_ENTRIES);
     await this.db.deleteMany({ where: { sequence: { lt: cutoff } } });
   }
 

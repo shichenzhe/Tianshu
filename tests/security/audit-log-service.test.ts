@@ -17,7 +17,9 @@ vi.mock("../../electron/commons/prisma-client", () => ({
   default: {},
 }));
 
-import AuditLogService from "../../electron/domains/security/audit/audit-log.service";
+import AuditLogService, {
+  normalizeAuditListParams,
+} from "../../electron/domains/security/audit/audit-log.service";
 import { computeEntryHash } from "../../electron/domains/security/audit/hash-chain";
 
 /** 内存 stub：AuditPrismaLike 最小实现（行按 sequence 排序取出，支持 skip/where.OR/sequence 范围） */
@@ -127,13 +129,12 @@ describe("AuditLogService", () => {
     });
   });
 
-  it("落库条目 hash 可被 computeEntryHash 复算验证", async () => {
+  it("落库条目 hash 可被 computeEntryHash 复算验证（stub 行含自增 id）", async () => {
     svc.append({ eventType: "audit.cleared", decision: "info" });
     await svc.flush();
     const row = db.rows[0];
-    const content: Record<string, unknown> = { ...row };
-    delete content.id; // id 由库端自增分配，落库时不可知，不参与 hash
-    expect(computeEntryHash(content, null)).toBe(row.hash);
+    // id 由库端自增分配，落库时不可知；computeEntryHash 自行剔除不参与
+    expect(computeEntryHash({ ...row }, null)).toBe(row.hash);
   });
 
   it("init 从既有行恢复链尾（新条目接续 sequence）", async () => {
@@ -188,6 +189,24 @@ describe("AuditLogService", () => {
     expect(hit.total).toBe(1);
   });
 
+  it("keyword 超 200 字符截断：normalize 钳制长度且超长查询不炸", async () => {
+    svc.append({
+      eventType: "command-safety.blocked",
+      decision: "blocked",
+      commandPreview: "rm -rf " + "a".repeat(300),
+    });
+    await svc.flush();
+    const long = "rm -rf " + "a".repeat(250);
+    expect(normalizeAuditListParams({ keyword: long }).keyword).toHaveLength(
+      200,
+    );
+    expect(
+      normalizeAuditListParams({ keyword: "   " }).keyword,
+    ).toBeUndefined();
+    const hit = await svc.list({ keyword: long });
+    expect(hit.total).toBe(1);
+  });
+
   it("超上限裁剪最旧（>5000）", async () => {
     for (let i = 0; i < 5010; i++) {
       svc.append({
@@ -198,6 +217,45 @@ describe("AuditLogService", () => {
     }
     await svc.flush();
     expect(db.rows.length).toBeLessThanOrEqual(5000);
+    expect(Number(db.rows[0].sequence)).toBe(11);
+  });
+
+  it("clear 后跨清空滚动裁剪仍生效（cutoff 由最旧行推导）", async () => {
+    for (let i = 0; i < 3000; i++) {
+      svc.append({ eventType: "command-safety.blocked", decision: "blocked" });
+    }
+    await svc.flush(); // sequence 1..3000
+    await svc.clear(); // 旧行全清，marker sequence 3001 为唯一行
+    for (let i = 0; i < 5010; i++) {
+      svc.append({
+        eventType: "command-safety.blocked",
+        decision: "blocked",
+        detail: { i },
+      });
+    }
+    await svc.flush(); // sequence 3002..8011，总数 5011 > 5000 触发裁剪
+    expect(db.rows.length).toBe(5000);
+    // 最旧行仍在清空 marker 之后的实存区间，未越过 marker 裁到空号
+    expect(Number(db.rows[0].sequence)).toBeGreaterThanOrEqual(3002);
+  });
+
+  it("行号存在空洞时按实存行数裁剪（不从链尾倒推）", async () => {
+    for (let i = 0; i < 200; i++) {
+      svc.append({ eventType: "command-safety.blocked", decision: "blocked" });
+    }
+    await svc.flush(); // sequence 1..200，chain.sequence = 200
+    // 模拟外部 DB 维护/手工修复抽走中段行：151..160 缺失，
+    // 留下 190 行 + 链尾 200——若 cutoff 从 chain.sequence 倒推会越界多裁
+    // （原地删减：stub 闭包持有 rows 引用，重赋值会断开）
+    for (let i = db.rows.length - 1; i >= 0; i--) {
+      const seq = Number(db.rows[i].sequence);
+      if (seq > 150 && seq < 161) db.rows.splice(i, 1);
+    }
+    for (let i = 0; i < 4820; i++) {
+      svc.append({ eventType: "command-safety.blocked", decision: "blocked" });
+    }
+    await svc.flush(); // sequence 201..5020，总数 5010，应裁掉最旧 10 行
+    expect(db.rows.length).toBe(5000);
     expect(Number(db.rows[0].sequence)).toBe(11);
   });
 });

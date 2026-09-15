@@ -296,3 +296,21 @@ model planItemAttachment {
 
   @@index([planItemId], map: "plan_item_attachment_planItemId_index")
 }
+
+model securityAuditLog {
+  id             Int      @id @default(autoincrement())
+  sequence       Int      @unique(map: "idx_audit_sequence")
+  category       String
+  eventType      String
+  decision       String
+  detail         String?
+  commandPreview String?
+  commandHash    String?
+  sessionId      Int?
+  prevHash       String?
+  hash           String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt], map: "idx_audit_createdAt")
+  @@index([category], map: "idx_audit_category")
+}

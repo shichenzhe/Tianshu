@@ -8,7 +8,7 @@ import { create } from "zustand";
 
 /** 右栏可用页 id（null = 默认 general；与 SettingsDialog 导航对应） */
 export type SettingsTab =
-  "general" | "profile" | "memory" | "appearance" | "shortcuts";
+  "general" | "profile" | "memory" | "appearance" | "shortcuts" | "security";
 
 interface SettingsUiState {
   settingsOpen: boolean;

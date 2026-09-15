@@ -1,6 +1,6 @@
 /**
  * 设置面板对话框
- * 左栏固定宽导航（通用/个性化/记忆与进化/外观/快捷键五页），右栏按导航
+ * 左栏固定宽导航（通用/个性化/记忆与进化/外观/快捷键/安全中心六页），右栏按导航
  * 整页切换：通用页四分组（常规/权限/存储/通知）、其余页各自整页
  */
 
@@ -11,6 +11,7 @@ import {
   Lightbulb,
   Palette,
   Settings,
+  Shield,
   UserRound,
   type LucideIcon,
 } from "lucide-react";
@@ -22,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import SecurityCenter from "@/domains/security/components/SecurityCenter";
 import SettingsGroup from "./SettingsGroup";
 import GeneralGroup from "./GeneralGroup";
 import PermissionsGroup from "./PermissionsGroup";
@@ -48,6 +50,7 @@ const NAV_ITEMS: { id: SettingsTab; icon: LucideIcon }[] = [
   { id: "memory", icon: Lightbulb },
   { id: "appearance", icon: Palette },
   { id: "shortcuts", icon: Keyboard },
+  { id: "security", icon: Shield },
 ];
 
 export default function SettingsDialog({
@@ -97,8 +100,12 @@ export default function SettingsDialog({
               </button>
             ))}
           </nav>
-          {/* 右栏：按导航整页切换通用页/个性化页/记忆页/外观页/快捷键页 */}
-          {activeTab === "shortcuts" ? (
+          {/* 右栏：按导航整页切换安全中心页/快捷键页/个性化页/记忆页/外观页/通用页 */}
+          {activeTab === "security" ? (
+            <div className="flex-1 overflow-y-auto p-6">
+              <SecurityCenter />
+            </div>
+          ) : activeTab === "shortcuts" ? (
             <div className="flex-1 overflow-y-auto p-6">
               <ShortcutsGroup />
             </div>

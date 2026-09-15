@@ -26,7 +26,8 @@ export default function MainLayout() {
   const shouldShowNav =
     location.pathname !== "/" && !location.pathname.includes("/login");
 
-  // AI 模块在顶栏左侧注入折叠/搜索/筛选按钮
+  // 折叠/全局搜索/时间筛选三按钮作用于全局侧边栏（所有 /module 路由共用），
+  // 项目等非 AI 路由同样注入；会话内搜索仍为 AI 会话专属
   const isAiRoute = location.pathname.startsWith("/module/ai");
 
   // 验证登录状态
@@ -61,7 +62,7 @@ export default function MainLayout() {
     <div className="app-container">
       {shouldShowNav && (
         <TopBar
-          leftSlot={isAiRoute ? <AiTopbarActions /> : undefined}
+          leftSlot={<AiTopbarActions />}
           rightLeadingSlot={isAiRoute ? <SessionSearchBox /> : undefined}
         />
       )}

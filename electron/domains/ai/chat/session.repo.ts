@@ -369,8 +369,16 @@ export class SessionRepository {
   }
 
   async deleteSession(id: number): Promise<void> {
-    await prisma.message.deleteMany({ where: { sessionId: id } });
-    await prisma.session.delete({ where: { id } });
+    // automationRun.sessionId 为裸列（无外键级联）——先置空再删会话，
+    // 避免运行记录残留指向已删会话的死链（历史 run 保留供任务统计）
+    await prisma.$transaction([
+      prisma.automationRun.updateMany({
+        where: { sessionId: id },
+        data: { sessionId: null },
+      }),
+      prisma.message.deleteMany({ where: { sessionId: id } }),
+      prisma.session.delete({ where: { id } }),
+    ]);
   }
 
   async setSessionModel(id: number, modelId: number | null): Promise<void> {

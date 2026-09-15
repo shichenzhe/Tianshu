@@ -13,7 +13,16 @@ const prismaStub = vi.hoisted(() => ({
     findMany: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
+    delete: vi.fn(),
   },
+  message: { findMany: vi.fn(), deleteMany: vi.fn() },
+  automationRun: { updateMany: vi.fn() },
+  // $transaction 数组形态：顺序执行（deleteSession 原子清理用）
+  $transaction: vi.fn(async (ops: Array<Promise<unknown>>) => {
+    for (const op of ops) {
+      await op;
+    }
+  }),
 }));
 
 vi.mock("electron", () => ({
@@ -117,6 +126,22 @@ describe("SessionRepository v5 扩展", () => {
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
       where: { workspaceId: 2, archivedAt: null, projectId: null },
       orderBy: { lastMessageAt: "desc" },
+    });
+  });
+
+  it("deleteSession 事务内先置空 automationRun.sessionId 再删消息与会话（孤儿 run 不残留死链）", async () => {
+    await repo.deleteSession(7);
+    // 三操作经同一事务数组提交（先 run 置空、再消息、后会话）
+    expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
+    expect(prismaStub.automationRun.updateMany).toHaveBeenCalledWith({
+      where: { sessionId: 7 },
+      data: { sessionId: null },
+    });
+    expect(prismaStub.message.deleteMany).toHaveBeenCalledWith({
+      where: { sessionId: 7 },
+    });
+    expect(prismaStub.session.delete).toHaveBeenCalledWith({
+      where: { id: 7 },
     });
   });
 });

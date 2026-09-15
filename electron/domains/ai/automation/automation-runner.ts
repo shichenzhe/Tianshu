@@ -3,7 +3,8 @@
  * 内容前缀 + 技能聚焦 + 变量替换)→ 静默 runChatStream(权限按任务
  * accessMode 分流,无人值守)→ 落 message 与 run(调度字段仅 schedule/
  * catchUp/retry 触发推进,手动测试运行不消耗调度)。不经渲染层(onChunk 不传)，产物在
- * 聊天页可回看。
+ * 聊天页可回看。项目任务(子系统 E):会话归属 projectId;项目 systemPrompt
+ * (trim 后非空)作为 buildSystemPrompt base 注入。
  */
 import { format } from "date-fns";
 import prisma from "../../../commons/prisma-client";
@@ -137,6 +138,14 @@ export async function executeTask(
         opts.triggerType,
       );
     }
+    /** 项目任务：读项目指令注入 system prompt（子系统 E） */
+    const projectRow = task.projectId
+      ? await prisma.project.findUnique({
+          where: { id: task.projectId },
+          select: { systemPrompt: true },
+        })
+      : null;
+    const projectPrompt = projectRow?.systemPrompt?.trim() || undefined;
     sessionId = await createSession(task);
     return await streamAndRecord(task, opts, {
       runId: run.id,
@@ -151,6 +160,7 @@ export async function executeTask(
         ? normalizeWorkspacePath(workspace.directoryPath)
         : undefined,
       workspaceId: workspace.id,
+      projectPrompt,
     });
   } catch (e) {
     Log.error("自动化任务执行异常", task.id, e);
@@ -172,6 +182,8 @@ async function createSession(task: AutomationTaskRow): Promise<number> {
       currentModelId: task.modelId,
       title: task.name,
       mode: "agent",
+      // 项目任务会话归属项目（子系统 E）；全局任务显式 null
+      projectId: task.projectId ?? null,
     },
   });
   return session.id;
@@ -188,6 +200,8 @@ interface StreamContext {
   modelSdkId: string;
   workspacePath?: string;
   workspaceId: number;
+  /** 项目指令（trim 后非空；子系统 E），作 buildSystemPrompt base */
+  projectPrompt?: string;
 }
 
 async function streamAndRecord(
@@ -230,7 +244,7 @@ async function streamAndRecord(
       },
       ctx.modelSdkId,
     ),
-    system: buildSystemPrompt(undefined, skills),
+    system: buildSystemPrompt(ctx.projectPrompt, skills),
     history: [
       {
         role: "user",

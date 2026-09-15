@@ -3,7 +3,8 @@
  * remove 级联删除（含资产目录树清理）、update 重名与不存在校验、
  * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）、
  * listMembers 成员列表（joinedAt 序 + join user 昵称回退，三期子系统 A）、
- * remove 级联清计划事项附件关联（v6：按事项 id 集删，先于 planItem 删除）。
+ * remove 级联清计划事项附件关联（v6：按事项 id 集删，先于 planItem 删除）、
+ * remove 级联清项目定时任务（子系统 E：projectId 精确匹配，全局任务不受影响）。
  * 依赖经 vi.mock 替换（electron ipcMain+app / Log / node:fs/promises /
  * prisma client），沿用 personalization-repo.test.ts 的 mock 模式。
  */
@@ -55,6 +56,8 @@ const prismaStub = vi.hoisted(() => ({
   workspace: { findFirst: vi.fn(), create: vi.fn(), delete: vi.fn() },
   planItem: { findMany: vi.fn(), deleteMany: vi.fn() },
   planItemAttachment: { deleteMany: vi.fn() },
+  // 子系统 E：删项目级联清项目定时任务
+  automationTask: { deleteMany: vi.fn() },
   planView: { deleteMany: vi.fn() },
   assistant: { findMany: vi.fn() },
   skillRecord: { findMany: vi.fn() },
@@ -279,6 +282,10 @@ describe("ProjectRepository.remove", () => {
     expect(
       prismaStub.planItemAttachment.deleteMany.mock.invocationCallOrder[0],
     ).toBeLessThan(prismaStub.planItem.deleteMany.mock.invocationCallOrder[0]);
+    // 子系统 E 级联：项目定时任务随项目删除（全局任务 projectId null 不受影响）
+    expect(prismaStub.automationTask.deleteMany).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+    });
   });
 
   it("命中资产空间 → 删整棵 projects/<id> 目录树 + workspace 行，先于会话级联", async () => {

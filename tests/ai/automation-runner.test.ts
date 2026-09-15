@@ -11,6 +11,8 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     workspace: { findUnique: vi.fn() },
     model: { findUnique: vi.fn() },
     provider: { findUnique: vi.fn() },
+    // 子系统 E：项目指令查询（全局任务不触达，项目任务按需 stub）
+    project: { findUnique: vi.fn() },
     session: { create: vi.fn(), update: vi.fn() },
     message: { create: vi.fn() },
     automationRun: { create: vi.fn(), update: vi.fn() },
@@ -53,6 +55,7 @@ import fs from "node:fs/promises";
 import prisma from "../../electron/commons/prisma-client";
 import { runChatStream } from "../../electron/domains/ai/chat/chat.service";
 import { loadSkills } from "../../electron/domains/ai/agent/skill-loader";
+import { buildSystemPrompt } from "../../electron/domains/ai/agent/skill-prompt";
 import { readWorkspaceFile } from "../../electron/domains/ai/chat/workspace-files";
 import {
   replaceVariables,
@@ -453,5 +456,94 @@ describe("executeTask 引用注入", () => {
     });
     const call = vi.mocked(runChatStream).mock.calls[0]![0]!;
     expect(call.system).not.toContain("B 技能");
+  });
+});
+
+describe("executeTask 项目化(子系统 E:会话归属+项目指令注入)", () => {
+  /** 项目任务行(clone 共用行,projectId=11;不动既有用例的 taskRow) */
+  const projectTask = { ...taskRow, projectId: 11 };
+
+  it("项目任务:session.create 带 projectId 且 system prompt 注入项目指令", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      systemPrompt: "# 角色：项目经理",
+    } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    // mock 跨用例累积,清 calls 保证断言只看本次调用
+    vi.mocked(prisma.project.findUnique).mockClear();
+    vi.mocked(prisma.session.create).mockClear();
+    await executeTask(projectTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).toHaveBeenCalledWith({
+      where: { id: 11 },
+      select: { systemPrompt: true },
+    });
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: 11 }),
+      }),
+    );
+    expect(runChatStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("# 角色：项目经理"),
+      }),
+    );
+  });
+
+  it("全局任务(projectId null):不查 project,会话 projectId 归一 null(行为不变)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(prisma.project.findUnique).mockClear();
+    vi.mocked(prisma.session.create).mockClear();
+    await executeTask({ ...taskRow, projectId: null } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).not.toHaveBeenCalled();
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: null }),
+      }),
+    );
+  });
+
+  it("项目存在但指令空白:system 仅技能段(空白指令 trim 后不作 base)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      systemPrompt: "   ",
+    } as never);
+    // 无 ⚡ 引用 → skills=全量清单;system 应恰等于 buildSystemPrompt(undefined, skills)
+    const skills = [
+      {
+        name: "A",
+        description: "用途说明",
+        dir: "/s/a",
+        bodyPath: "/s/a/SKILL.md",
+      },
+    ];
+    vi.mocked(loadSkills).mockReturnValue(skills as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(runChatStream).mockClear();
+    await executeTask(projectTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).toHaveBeenCalledWith({
+      where: { id: 11 },
+      select: { systemPrompt: true },
+    });
+    const call = vi.mocked(runChatStream).mock.calls[0]![0]!;
+    expect(call.system).toBe(buildSystemPrompt(undefined, skills));
   });
 });

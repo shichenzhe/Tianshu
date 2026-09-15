@@ -138,7 +138,7 @@ export default class ProjectRepository {
 
   /**
    * 删除项目：先清资产空间（目录树 + workspace 行），再级联清
-   * 附件关联 → 计划事项 → planView → message → session → member →
+   * 附件关联 → 定时任务 → 计划事项 → planView → message → session → member →
    * binding → project（附件关联表无 projectId 列，按事项 id 集先删；
    * 双语义：删项目时文件实体随资产目录树一并销毁，仅删除单个计划事项
    * 路径的附件关联解绑会保留文件实体在资产空间）
@@ -156,6 +156,8 @@ export default class ProjectRepository {
     await prisma.planItemAttachment.deleteMany({
       where: { planItemId: { in: itemIds.map((item) => item.id) } },
     });
+    // 级联清项目定时任务（子系统 E）
+    await prisma.automationTask.deleteMany({ where: { projectId: id } });
     // 级联清项目计划事项（projectId 精确匹配，本地任务 null 不受影响，三期 spec §3.1）
     await prisma.planItem.deleteMany({ where: { projectId: id } });
     // 级联清项目视图配置（子系统 A）

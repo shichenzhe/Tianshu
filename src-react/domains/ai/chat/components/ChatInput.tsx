@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 
 import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store";
+import { usePlanAdvanceStore } from "../../../project/store/plan-advance.store";
 import SkillApi from "../../skills/api/skill.api";
 import AssistantApi from "../../api/assistant.api";
 import { mapIpcError } from "../lib/error-message";
@@ -79,6 +80,8 @@ interface TodoSuggestItem {
   status: string;
   priority: string;
   dueDate?: string | null;
+  /** AI 进展摘要(PlanItemRecord;空串/缺省 = 无,发送时不附 [进展] 块) */
+  aiSummary?: string;
 }
 
 interface ChatInputProps {
@@ -213,6 +216,20 @@ export default function ChatInput({
       textareaRef.current?.focus();
     }
   }, []);
+
+  // 计划推进预填(计划视图「AI 推进」入口):底栏常驻仅挂载一次,挂载式
+  // 消费不可达——订阅 prompt 值变化运行期消费(读后即清,二次消费得
+  // null 天然防重复预填),预填后聚焦输入框
+  const planPrompt = usePlanAdvanceStore((s) => s.prompt);
+  useEffect(() => {
+    if (planPrompt) {
+      const prompt = usePlanAdvanceStore.getState().consume();
+      if (prompt) {
+        setContent(prompt);
+        textareaRef.current?.focus();
+      }
+    }
+  }, [planPrompt]);
 
   // 工作空间文件清单（@ 文件联想数据源；5 分钟内复用缓存;未绑定时不可用）
   const workspaceFilesQuery = useQuery({
@@ -393,15 +410,19 @@ export default function ChatInput({
           failures.push(name);
         }
       }
-      // 待办引用:token id 在 todoItems 命中即组摘要注入(查无 id 静默忽略)
+      // 待办引用:token id 在 todoItems 命中即组摘要注入(查无 id 静默忽略);
+      // aiSummary 非空时附 [进展] 块(末 10 行——长进展截尾保最新)
       for (const token of new Set(todoTokens)) {
         const item = todoItems?.find(
           (todo) => todo.id === Number(token.slice(1)),
         );
         if (item) {
+          const summary = `【待办】${item.title}｜状态:${item.status}｜优先级:${item.priority}｜截止:${item.dueDate || "无"}`;
           files.push({
             path: `待办#${item.id}`,
-            content: `【待办】${item.title}｜状态:${item.status}｜优先级:${item.priority}｜截止:${item.dueDate || "无"}`,
+            content: item.aiSummary
+              ? `${summary}\n[进展]\n${item.aiSummary.split("\n").slice(-10).join("\n")}`
+              : summary,
             kind: "todo",
           });
         }

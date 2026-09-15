@@ -15,6 +15,7 @@
  */
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -86,6 +87,8 @@ vi.mock("../../src-react/domains/ai/chat/components/PermissionCapsule", () => ({
 }));
 
 import ChatInput from "../../src-react/domains/ai/chat/components/ChatInput";
+import type { PendingFile } from "../../src-react/domains/ai/chat/lib/pending-file";
+import { usePlanAdvanceStore } from "../../src-react/domains/project/store/plan-advance.store";
 
 const TODO_ITEMS = [
   {
@@ -143,6 +146,7 @@ function type(textarea: HTMLTextAreaElement, value: string): void {
 
 beforeEach(() => {
   onSend.mockClear();
+  usePlanAdvanceStore.setState({ prompt: null });
 });
 afterEach(cleanup);
 
@@ -261,5 +265,70 @@ describe("占位回退（未传 placeholder 时按 hasModel 渲染自身文案�
   it("hasModel=true → 占位渲染 chat 默认文案", () => {
     const textarea = renderInput({ hasModel: true });
     expect(textarea.placeholder).toBe("chat:input.placeholder");
+  });
+});
+
+describe("#待办引用携带 AI 进展（aiSummary）", () => {
+  it("待办带 aiSummary → onSend 的 PendingFile content 含 [进展] 块（末 10 行，首 2 行截去）", async () => {
+    // 12 行 aiSummary → 注入块只保留末 10 行（首 2 行排除）
+    const lines = Array.from({ length: 12 }, (_, i) => `进展第${i + 1}行`);
+    const textarea = renderInput({
+      todoItems: [{ ...TODO_ITEMS[0], aiSummary: lines.join("\n") }],
+    });
+    type(textarea, "#3 请推进");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    const files = onSend.mock.calls[0][1] as PendingFile[];
+    expect(files).toEqual([
+      {
+        path: "待办#3",
+        content: `【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20\n[进展]\n${lines
+          .slice(2)
+          .join("\n")}`,
+        kind: "todo",
+      },
+    ]);
+    expect(files[0].content).not.toContain("进展第1行");
+    expect(files[0].content).not.toContain("进展第2行");
+    expect(files[0].content).toContain("进展第12行");
+  });
+
+  it("aiSummary 空串（''=无）→ content 与原格式一致（无 [进展]）", async () => {
+    const textarea = renderInput({
+      todoItems: [{ ...TODO_ITEMS[0], aiSummary: "" }],
+    });
+    type(textarea, "#3 请推进");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
+    expect(onSend).toHaveBeenCalledWith("#3 请推进", [
+      {
+        path: "待办#3",
+        content:
+          "【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20",
+        kind: "todo",
+      },
+    ]);
+  });
+});
+
+describe("计划推进预填（plan-advance store 运行期消费）", () => {
+  it("setPrompt 后 → textarea 值 = prompt 且获焦（读后即清，二次消费为 null）", () => {
+    const textarea = renderInput({ todoItems: TODO_ITEMS });
+    // 先移开焦点，验证消费动作本身带回焦点（非 autoFocus 残留）——
+    // jsdom 的 fireEvent.blur 不迁移 activeElement，需原生 blur()
+    textarea.blur();
+    expect(document.activeElement).not.toBe(textarea);
+
+    act(() => {
+      usePlanAdvanceStore.getState().setPrompt("请推进 #3《梳理需求文档》");
+    });
+
+    expect(textarea.value).toBe("请推进 #3《梳理需求文档》");
+    expect(document.activeElement).toBe(textarea);
+    // 读后即清：store 已清空，二次消费得 null（底栏不重挂也不会重复预填）
+    expect(usePlanAdvanceStore.getState().prompt).toBeNull();
+    expect(usePlanAdvanceStore.getState().consume()).toBeNull();
   });
 });

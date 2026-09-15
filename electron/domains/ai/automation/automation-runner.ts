@@ -50,7 +50,11 @@ export function extractUsage(
 
 /** 工具集组装(对齐 chat.service collectToolDefinitions:read_skill 常驻) */
 function collectTools(workspacePath: string | undefined, skills: SkillInfo[]) {
-  const registered = registry.getDefinitions();
+  // plan_* 仅项目会话可用(依赖 ctx.projectId);定时任务 agent 不带 projectId,
+  // 带上只会得到「未关联项目」拒绝——剔除,避免污染模型的工具列表
+  const registered = registry
+    .getDefinitions()
+    .filter((def) => !def.name.startsWith("plan_"));
   const injected = workspacePath
     ? registered
     : registered.filter(

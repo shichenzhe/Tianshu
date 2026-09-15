@@ -1,5 +1,6 @@
 // tests/ai/automation-runner.test.ts
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 // 传递依赖 resolve-attachments 的 skillsRootDir 惰性读 app.getPath
 // ("userData")，照 chat.service.test.ts 先例 mock electron（无断言涉及）
@@ -206,6 +207,70 @@ describe("executeTask 成功路径", () => {
       }),
     );
     expect(prisma.message.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("工具装配剔除 plan_*（定时任务无 projectId，注册表有也不进模型上下文）", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    const {
+      registerTools,
+      unregisterTools,
+    } = await import("../../electron/domains/ai/agent/tool-registry");
+    const probeTool = {
+      name: "zz_probe_read",
+      description: "探针",
+      parameters: z.object({}),
+      kind: "read",
+      execute: async () => "",
+    } as never;
+    const planStub = {
+      name: "plan_list_items",
+      description: "项目计划",
+      parameters: z.object({}),
+      kind: "read",
+      execute: async () => "",
+    } as never;
+    unregisterTools("plan_");
+    registerTools([probeTool, planStub]);
+    try {
+      vi.mocked(prisma.automationRun.create).mockResolvedValue({
+        id: 1,
+      } as never);
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        id: 9,
+        // 非空目录路径 → collectTools 全量注入分支（mcp-only 分支会滤掉探针）
+        directoryPath: "/tmp/probe-ws",
+      } as never);
+      vi.mocked(prisma.model.findUnique).mockResolvedValue({
+        id: 1,
+        providerId: 2,
+        modelId: "gpt-test",
+      } as never);
+      vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+        type: "openai-compatible",
+        baseUrl: "https://api.test/v1",
+        apiKey: "k",
+        extraHeaders: null,
+      } as never);
+      vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+      vi.mocked(runChatStream).mockResolvedValue({
+        blocks: [{ type: "text", text: "ok" }],
+      } as never);
+      await executeTask(taskRow as never, {
+        triggerType: "schedule",
+        attempt: 1,
+        abort: new AbortController().signal,
+      });
+      const names = vi
+        .mocked(runChatStream)
+        .mock.calls.at(-1)?.[0].toolDefinitions.map((def) => def.name);
+      expect(names).toContain("zz_probe_read");
+      expect(names?.filter((name) => name.startsWith("plan_"))).toEqual([]);
+    } finally {
+      // 清理探针注册，避免污染后续用例/其他测试文件的注册表
+      unregisterTools("zz_probe_");
+      unregisterTools("plan_");
+    }
   });
 });
 

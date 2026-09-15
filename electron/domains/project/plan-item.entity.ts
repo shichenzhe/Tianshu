@@ -3,6 +3,7 @@
  * 单表双视图：一张 planItem 表支撑计划 Tab（项目全部事项）与
  * 任务 Tab（assigneeId=me OR createdById=me 个人聚合，projectId null 为本地任务）
  */
+import { format } from "date-fns";
 
 /**
  * 事项状态枚举：not_started 待开始 / in_progress 进行中 / paused 已暂停 / done 已完成
@@ -312,3 +313,17 @@ export interface PlanFieldDef {
  * 错误码：事项不存在（update/move 目标行缺失）
  */
 export const PLAN_ITEM_NOT_FOUND = "PLAN_ITEM_NOT_FOUND";
+
+/**
+ * AI 进展摘要追加一行（纯函数，repo 工具通道与 plan_append_summary 工具
+ * 共用——格式单点生效）：已有摘要尾接「[yyyy-MM-dd] text」，空摘要首行
+ * 无前导换行。返回新行与追加后全文（工具返回文案用 line，回写载荷用 next）
+ */
+export function appendAiSummaryLine(
+  current: string | null,
+  text: string,
+  now: Date,
+): { line: string; next: string } {
+  const line = `[${format(now, "yyyy-MM-dd")}] ${text}`;
+  return { line, next: current ? `${current}\n${line}` : line };
+}

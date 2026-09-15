@@ -10,6 +10,7 @@
 import { format } from "date-fns";
 import { z } from "zod";
 import {
+  appendAiSummaryLine,
   PLAN_PRIORITIES,
   PLAN_STATUSES,
   type PlanStatus,
@@ -295,12 +296,11 @@ async function appendSummary(
   if (!row) {
     return fail("任务不存在或不属于当前项目");
   }
-  const line = `[${format(new Date(), "yyyy-MM-dd")}] ${text}`;
+  // 格式与 repo 工具通道共用 entity 纯函数（单点生效）
+  const { line, next } = appendAiSummaryLine(row.aiSummary, text, new Date());
   await deps.prisma.planItem.update({
     where: { id: args.id },
-    data: {
-      aiSummary: `${row.aiSummary ? row.aiSummary + "\n" : ""}${line}`,
-    },
+    data: { aiSummary: next },
   });
   return `已记录进展 #${args.id}：${line}`;
 }

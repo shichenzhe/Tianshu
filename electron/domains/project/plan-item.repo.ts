@@ -12,9 +12,9 @@
  * appendAiSummary AI 进展摘要追加（工具专用通道，只增不改；v8，子系统 F）。
  */
 import { ipcMain } from "electron";
-import { format } from "date-fns";
 import prisma from "../../commons/prisma-client";
 import {
+  appendAiSummaryLine,
   PLAN_FIELD_TYPES,
   PLAN_ITEM_NOT_FOUND,
   PLAN_PRIORITIES,
@@ -227,13 +227,14 @@ export default class PlanItemRepository {
     });
   }
 
-  /** AI 追加进展（工具专用通道；只增不改） */
+  /** AI 追加进展（工具专用通道；只增不改，格式与 plan_append_summary 工具
+      共用 entity 纯函数 appendAiSummaryLine） */
   async appendAiSummary(id: number, text: string): Promise<string | null> {
     const row = await prisma.planItem.findUnique({ where: { id } });
     if (!row) {
       return null;
     }
-    const next = `${row.aiSummary ? row.aiSummary + "\n" : ""}[${format(new Date(), "yyyy-MM-dd")}] ${text}`;
+    const { next } = appendAiSummaryLine(row.aiSummary, text, new Date());
     await prisma.planItem.update({ where: { id }, data: { aiSummary: next } });
     return next;
   }

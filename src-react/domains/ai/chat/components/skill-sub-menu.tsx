@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, FolderOpen, Search, Upload } from "lucide-react";
+import { Check, FolderOpen, Search, Upload, Zap } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -73,7 +73,11 @@ export default function SkillSubMenu({
 
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger>{t("chat:plus.skill")}</DropdownMenuSubTrigger>
+      <DropdownMenuSubTrigger>
+        {/* Zap 同 ChatInput 技能标签 ⚡ 前缀先例（Sparkles 已被模式项占用） */}
+        <Zap />
+        {t("chat:plus.skill")}
+      </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-64 border border-border/50 rounded-lg shadow-lg">
         <div className="p-1.5 pb-1">
           <div className="relative">

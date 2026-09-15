@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, Search, Users } from "lucide-react";
+import { Bot, Check, Search, Users } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import {
@@ -83,7 +83,11 @@ export default function ExpertSubMenu({
 
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger>{t("chat:plus.expert")}</DropdownMenuSubTrigger>
+      <DropdownMenuSubTrigger>
+        {/* Bot 同专家管理页/全局侧边栏专家入口图标先例 */}
+        <Bot />
+        {t("chat:plus.expert")}
+      </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-64 border border-border/50 rounded-lg shadow-lg">
         <div className="p-1.5 pb-1">
           <div className="relative">

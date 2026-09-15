@@ -45,6 +45,7 @@ const row = {
   lastRunAt: null,
   nextRunAt: new Date("2026-09-07T01:00:00Z"),
   templateSlug: null,
+  projectId: null,
   createdAt: new Date("2026-09-06T00:00:00Z"),
   updatedAt: new Date("2026-09-06T00:00:00Z"),
 };
@@ -154,6 +155,24 @@ describe("accessMode 落库与派生", () => {
     expect(
       toTaskRecord({ ...row, accessMode: "bogus" as never }, null).accessMode,
     ).toBe("default");
+  });
+});
+
+describe("projectId 贯通（子系统 E）", () => {
+  it("buildTaskData：create 路径缺省 null；显式传入透传", () => {
+    const data = buildTaskData(baseParams, new Date("2026-09-07T00:00:00"));
+    expect(data.projectId).toBeNull();
+    const withId = buildTaskData(
+      { ...baseParams, projectId: 11 },
+      new Date("2026-09-07T00:00:00"),
+    );
+    expect(withId.projectId).toBe(11);
+  });
+
+  it("toTaskRecord：row.projectId 透出（null 容错）", () => {
+    const ws = { id: 1, name: "空间", directoryPath: "/x" };
+    expect(toTaskRecord({ ...row, projectId: 11 }, ws).projectId).toBe(11);
+    expect(toTaskRecord({ ...row, projectId: null }, ws).projectId).toBeNull();
   });
 });
 

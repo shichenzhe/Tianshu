@@ -31,6 +31,7 @@ export type AutomationTaskAvgAggregateOutputType = {
   workspaceId: number | null
   modelId: number | null
   temperature: number | null
+  projectId: number | null
 }
 
 export type AutomationTaskSumAggregateOutputType = {
@@ -38,6 +39,7 @@ export type AutomationTaskSumAggregateOutputType = {
   workspaceId: number | null
   modelId: number | null
   temperature: number | null
+  projectId: number | null
 }
 
 export type AutomationTaskMinAggregateOutputType = {
@@ -59,6 +61,7 @@ export type AutomationTaskMinAggregateOutputType = {
   lastRunAt: Date | null
   nextRunAt: Date | null
   templateSlug: string | null
+  projectId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -82,6 +85,7 @@ export type AutomationTaskMaxAggregateOutputType = {
   lastRunAt: Date | null
   nextRunAt: Date | null
   templateSlug: string | null
+  projectId: number | null
   createdAt: Date | null
   updatedAt: Date | null
 }
@@ -105,6 +109,7 @@ export type AutomationTaskCountAggregateOutputType = {
   lastRunAt: number
   nextRunAt: number
   templateSlug: number
+  projectId: number
   createdAt: number
   updatedAt: number
   _all: number
@@ -116,6 +121,7 @@ export type AutomationTaskAvgAggregateInputType = {
   workspaceId?: true
   modelId?: true
   temperature?: true
+  projectId?: true
 }
 
 export type AutomationTaskSumAggregateInputType = {
@@ -123,6 +129,7 @@ export type AutomationTaskSumAggregateInputType = {
   workspaceId?: true
   modelId?: true
   temperature?: true
+  projectId?: true
 }
 
 export type AutomationTaskMinAggregateInputType = {
@@ -144,6 +151,7 @@ export type AutomationTaskMinAggregateInputType = {
   lastRunAt?: true
   nextRunAt?: true
   templateSlug?: true
+  projectId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -167,6 +175,7 @@ export type AutomationTaskMaxAggregateInputType = {
   lastRunAt?: true
   nextRunAt?: true
   templateSlug?: true
+  projectId?: true
   createdAt?: true
   updatedAt?: true
 }
@@ -190,6 +199,7 @@ export type AutomationTaskCountAggregateInputType = {
   lastRunAt?: true
   nextRunAt?: true
   templateSlug?: true
+  projectId?: true
   createdAt?: true
   updatedAt?: true
   _all?: true
@@ -300,6 +310,7 @@ export type AutomationTaskGroupByOutputType = {
   lastRunAt: Date | null
   nextRunAt: Date | null
   templateSlug: string | null
+  projectId: number | null
   createdAt: Date
   updatedAt: Date
   _count: AutomationTaskCountAggregateOutputType | null
@@ -346,6 +357,7 @@ export type automationTaskWhereInput = {
   lastRunAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   nextRunAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   templateSlug?: Prisma.StringNullableFilter<"automationTask"> | string | null
+  projectId?: Prisma.IntNullableFilter<"automationTask"> | number | null
   createdAt?: Prisma.DateTimeFilter<"automationTask"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"automationTask"> | Date | string
 }
@@ -369,6 +381,7 @@ export type automationTaskOrderByWithRelationInput = {
   lastRunAt?: Prisma.SortOrderInput | Prisma.SortOrder
   nextRunAt?: Prisma.SortOrderInput | Prisma.SortOrder
   templateSlug?: Prisma.SortOrderInput | Prisma.SortOrder
+  projectId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -395,6 +408,7 @@ export type automationTaskWhereUniqueInput = Prisma.AtLeast<{
   lastRunAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   nextRunAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   templateSlug?: Prisma.StringNullableFilter<"automationTask"> | string | null
+  projectId?: Prisma.IntNullableFilter<"automationTask"> | number | null
   createdAt?: Prisma.DateTimeFilter<"automationTask"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"automationTask"> | Date | string
 }, "id">
@@ -418,6 +432,7 @@ export type automationTaskOrderByWithAggregationInput = {
   lastRunAt?: Prisma.SortOrderInput | Prisma.SortOrder
   nextRunAt?: Prisma.SortOrderInput | Prisma.SortOrder
   templateSlug?: Prisma.SortOrderInput | Prisma.SortOrder
+  projectId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.automationTaskCountOrderByAggregateInput
@@ -449,6 +464,7 @@ export type automationTaskScalarWhereWithAggregatesInput = {
   lastRunAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   nextRunAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   templateSlug?: Prisma.StringNullableWithAggregatesFilter<"automationTask"> | string | null
+  projectId?: Prisma.IntNullableWithAggregatesFilter<"automationTask"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"automationTask"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"automationTask"> | Date | string
 }
@@ -471,6 +487,7 @@ export type automationTaskCreateInput = {
   lastRunAt?: Date | string | null
   nextRunAt?: Date | string | null
   templateSlug?: string | null
+  projectId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -494,6 +511,7 @@ export type automationTaskUncheckedCreateInput = {
   lastRunAt?: Date | string | null
   nextRunAt?: Date | string | null
   templateSlug?: string | null
+  projectId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -516,6 +534,7 @@ export type automationTaskUpdateInput = {
   lastRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   nextRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   templateSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -539,6 +558,7 @@ export type automationTaskUncheckedUpdateInput = {
   lastRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   nextRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   templateSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -562,6 +582,7 @@ export type automationTaskCreateManyInput = {
   lastRunAt?: Date | string | null
   nextRunAt?: Date | string | null
   templateSlug?: string | null
+  projectId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
 }
@@ -584,6 +605,7 @@ export type automationTaskUpdateManyMutationInput = {
   lastRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   nextRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   templateSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -607,6 +629,7 @@ export type automationTaskUncheckedUpdateManyInput = {
   lastRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   nextRunAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   templateSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -630,6 +653,7 @@ export type automationTaskCountOrderByAggregateInput = {
   lastRunAt?: Prisma.SortOrder
   nextRunAt?: Prisma.SortOrder
   templateSlug?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -639,6 +663,7 @@ export type automationTaskAvgOrderByAggregateInput = {
   workspaceId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   temperature?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 export type automationTaskMaxOrderByAggregateInput = {
@@ -660,6 +685,7 @@ export type automationTaskMaxOrderByAggregateInput = {
   lastRunAt?: Prisma.SortOrder
   nextRunAt?: Prisma.SortOrder
   templateSlug?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -683,6 +709,7 @@ export type automationTaskMinOrderByAggregateInput = {
   lastRunAt?: Prisma.SortOrder
   nextRunAt?: Prisma.SortOrder
   templateSlug?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -692,6 +719,7 @@ export type automationTaskSumOrderByAggregateInput = {
   workspaceId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   temperature?: Prisma.SortOrder
+  projectId?: Prisma.SortOrder
 }
 
 
@@ -715,6 +743,7 @@ export type automationTaskSelect<ExtArgs extends runtime.Types.Extensions.Intern
   lastRunAt?: boolean
   nextRunAt?: boolean
   templateSlug?: boolean
+  projectId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["automationTask"]>
@@ -738,6 +767,7 @@ export type automationTaskSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   lastRunAt?: boolean
   nextRunAt?: boolean
   templateSlug?: boolean
+  projectId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["automationTask"]>
@@ -761,6 +791,7 @@ export type automationTaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   lastRunAt?: boolean
   nextRunAt?: boolean
   templateSlug?: boolean
+  projectId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["automationTask"]>
@@ -784,11 +815,12 @@ export type automationTaskSelectScalar = {
   lastRunAt?: boolean
   nextRunAt?: boolean
   templateSlug?: boolean
+  projectId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "accessMode" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
+export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "accessMode" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "projectId" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
 
 export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "automationTask"
@@ -812,6 +844,7 @@ export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.Inte
     lastRunAt: Date | null
     nextRunAt: Date | null
     templateSlug: string | null
+    projectId: number | null
     createdAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["automationTask"]>
@@ -1255,6 +1288,7 @@ export interface automationTaskFieldRefs {
   readonly lastRunAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly nextRunAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly templateSlug: Prisma.FieldRef<"automationTask", 'String'>
+  readonly projectId: Prisma.FieldRef<"automationTask", 'Int'>
   readonly createdAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"automationTask", 'DateTime'>
 }

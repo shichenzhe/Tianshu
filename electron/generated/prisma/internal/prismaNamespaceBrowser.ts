@@ -288,6 +288,7 @@ export const AutomationTaskScalarFieldEnum = {
   lastRunAt: 'lastRunAt',
   nextRunAt: 'nextRunAt',
   templateSlug: 'templateSlug',
+  projectId: 'projectId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

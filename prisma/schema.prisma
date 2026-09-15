@@ -182,10 +182,12 @@ model automationTask {
   lastRunAt    DateTime?
   nextRunAt    DateTime?
   templateSlug String?
+  projectId    Int?      // NULL = 全局任务（子系统 E）
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@index([enabled])
+  @@index([projectId], map: "automation_task_projectId_index")
 }
 
 model automationRun {

@@ -36,6 +36,8 @@ export interface TaskRecord {
   lastRunAt?: string;
   nextRunAt?: string;
   templateSlug?: string;
+  /** 所属项目 id，null = 全局任务（子系统 E） */
+  projectId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +55,8 @@ export interface TaskCreateParams {
   missedPolicy: MissedPolicy;
   accessMode?: AccessMode;
   templateSlug?: string;
+  /** 所属项目 id；缺省/null = 全局任务（子系统 E） */
+  projectId?: number | null;
 }
 
 export type TaskUpdateParams = TaskCreateParams;

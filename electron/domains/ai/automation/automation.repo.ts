@@ -66,13 +66,15 @@ export function toTaskRecord(
     lastRunAt: row.lastRunAt?.toISOString(),
     nextRunAt: row.nextRunAt?.toISOString(),
     templateSlug: row.templateSlug ?? undefined,
+    projectId: row.projectId ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
 }
 
 /** 创建/更新共用:create params → prisma data(nextRunAt 初算)。不含
- * enabled/status——编辑已暂停任务不得重置用户开关 */
+ * enabled/status——编辑已暂停任务不得重置用户开关。projectId 未传时写
+ * null = 解除项目关联（TaskUpdateParams 全量更新语义，子系统 E） */
 export function buildTaskData(params: TaskCreateParams, now: Date) {
   const schedule = scheduleSchema.parse(params.schedule) as ScheduleConfig;
   const startAt = params.startAt ? new Date(params.startAt) : null;
@@ -93,6 +95,7 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     missedPolicy: params.missedPolicy,
     accessMode: params.accessMode ?? "default",
     templateSlug: params.templateSlug ?? null,
+    projectId: params.projectId ?? null,
     nextRunAt: next,
   };
 }

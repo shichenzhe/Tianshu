@@ -473,6 +473,7 @@ describe("Tab 容器", () => {
         id: 11,
         projectId: 1,
         title: "需求梳理",
+        aiSummary: "",
         status: "not_started",
         priority: "P1",
         assigneeId: 1,

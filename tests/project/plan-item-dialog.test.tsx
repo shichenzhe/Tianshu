@@ -35,6 +35,8 @@
  *   toast(plan:saved) + onSaved + 关闭；失败 toast.error 透传且弹窗保留
  * - CustomFieldsEditor：打开回填行、添加/删除/改名/改型、保存 saveFields +
  *   planFields/planItems 双失效 + toast + 关闭；空名/重名禁用保存
+ * - AI 进展折叠区（子系统 F）：item.aiSummary 非空才渲染，默认收起、点开显
+ *   pre-wrap 只读全文（恒 item 原值，人路径不可编辑）；空串不渲染
  */
 import {
   afterEach,
@@ -158,6 +160,7 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   projectId: 1,
   title: "既有事项",
   description: "",
+  aiSummary: "",
   status: "in_progress",
   priority: "P0",
   assigneeId: 1,
@@ -1127,5 +1130,42 @@ describe("CustomFieldsEditor 字段定义管理", () => {
     fireEvent.change(inputs[1], { target: { value: "预算" } });
     expect(save.disabled).toBe(false);
     expect(PlanItemApi.saveFields).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlanItemDialog AI 进展折叠区（子系统 F）", () => {
+  const SUMMARY = "[2026-09-14] 启动\n[2026-09-15] 完成联调";
+
+  /** 折叠区正文 p（textContent 全文精确匹配——多行文本规避 getByText 归一化） */
+  const summaryBody = () =>
+    screen.getByText(
+      (_, element) =>
+        element?.tagName === "P" && element.textContent === SUMMARY,
+    );
+
+  it("aiSummary 非空：头行渲染默认收起，点开显示 pre-wrap 全文", async () => {
+    await renderPlanDialog({ item: makeItem({ aiSummary: SUMMARY }) });
+
+    // 头行（Sparkles + 标签）渲染；默认收起无正文
+    expect(screen.getByText("project:plan.aiSummary")).toBeTruthy();
+    const toggle = screen.getByRole("button", {
+      name: "project:plan.aiSummary",
+    });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      screen.queryByText((_, element) => element?.tagName === "P"),
+    ).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(summaryBody().className).toContain("whitespace-pre-wrap");
+  });
+
+  it("aiSummary 空 → 折叠区整块不渲染", async () => {
+    await renderPlanDialog({ item: makeItem() });
+    expect(screen.queryByText("project:plan.aiSummary")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "project:plan.aiSummary" }),
+    ).toBeNull();
   });
 });

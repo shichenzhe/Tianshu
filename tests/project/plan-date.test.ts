@@ -21,6 +21,7 @@ const item = (over: Partial<PlanItemRecord>): PlanItemRecord => ({
   id: 1,
   projectId: 11,
   title: "任务",
+  aiSummary: "",
   status: "not_started",
   priority: "P1",
   assigneeId: 7,

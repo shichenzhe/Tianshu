@@ -2,12 +2,15 @@
  * 列表视图（子系统 C spec §2，Todo 式紧凑清单）：引擎 groupItems 按状态四组
  * 折叠（组头 = 折叠箭头 + 状态名 + 计数 + 组内 +，空组保留）；行 = 完成
  * checkbox + 标题（点击编辑）+ 标签（2+N）+ 优先级色点 + 截止日（超期
- * destructive）+ 处理人头像点；组内 + 展开行内 Input 回车快速新增（预置
- * 该组状态）。纯展示+回调，变更逻辑在 PlanPane；折叠态本地 useState。
+ * destructive）+ 处理人头像点 + 行尾 AI 推进 hover 渐显按钮（子系统 F：
+ * onAiAdvance 通道，AssetFileTable hover 先例）+ aiSummary 常驻 Sparkles
+ * 徽标（title=末行进展）+ source ai 标题前 AI Badge；组内 + 展开行内
+ * Input 回车快速新增（预置该组状态）。纯展示+回调，变更逻辑在 PlanPane；
+ * 折叠态本地 useState。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,6 +37,15 @@ const PRIORITY_DOT_CLASSES: Record<PlanPriority, string> = {
 /** 行内标签展示上限，超出折叠为 "+N" */
 const MAX_ROW_TAGS = 2;
 
+/** aiSummary 末行（徽标 tooltip = 最新一条进展；跳过空行） */
+function lastSummaryLine(summary: string): string {
+  const lines = summary
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines[lines.length - 1] : summary.trim();
+}
+
 interface PlanListViewProps {
   /** 过滤排序后的可见事项（PlanPane 计算传入） */
   items: PlanItemRecord[];
@@ -47,6 +59,8 @@ interface PlanListViewProps {
   onQuickCreate: (status: PlanStatus, title: string) => void;
   /** 点击标题 → 父层打开编辑弹窗 */
   onEdit: (item: PlanItemRecord) => void;
+  /** 行尾「AI 推进」→ 父层写底栏预填（子系统 F） */
+  onAiAdvance: (item: PlanItemRecord) => void;
 }
 
 /** 单行：紧凑布局（纯展示） */
@@ -55,11 +69,13 @@ function ListRow({
   members,
   onToggleDone,
   onEdit,
+  onAiAdvance,
 }: {
   item: PlanItemRecord;
   members: ProjectMemberItem[];
   onToggleDone: (id: number, done: boolean) => void;
   onEdit: (item: PlanItemRecord) => void;
+  onAiAdvance: (item: PlanItemRecord) => void;
 }) {
   const { t } = useTranslation(["project", "common"]);
   const done = item.status === "done";
@@ -74,6 +90,11 @@ function ListRow({
         aria-label={t("project:plan.statusDone")}
         className="h-4 w-4"
       />
+      {item.source === "ai" && (
+        <Badge variant="secondary" className="shrink-0 px-1 text-[9px]">
+          AI
+        </Badge>
+      )}
       <button
         type="button"
         onClick={() => onEdit(item)}
@@ -115,12 +136,30 @@ function ListRow({
           {dueKey}
         </span>
       )}
+      {item.aiSummary !== "" && (
+        // 进展徽标（常驻非渐显）：title 携带最新一条进展末行
+        <span
+          title={lastSummaryLine(item.aiSummary)}
+          className="shrink-0 text-primary"
+        >
+          <Sparkles className="h-3 w-3" />
+        </span>
+      )}
       <span
         title={assignee?.nickname ?? t("project:plan.unassigned")}
         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary-subtle text-[10px] font-medium text-primary"
       >
         {assignee ? assignee.nickname.charAt(0) : "?"}
       </span>
+      {/* AI 推进入口：hover 渐显（AssetFileTable 先例） */}
+      <button
+        type="button"
+        aria-label={t("project:plan.aiAdvance")}
+        onClick={() => onAiAdvance(item)}
+        className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-primary focus-visible:opacity-100 group-hover/row:opacity-100"
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -131,6 +170,7 @@ export default function PlanListView({
   onToggleDone,
   onQuickCreate,
   onEdit,
+  onAiAdvance,
 }: PlanListViewProps) {
   const { t } = useTranslation(["project", "common"]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -205,6 +245,7 @@ export default function PlanListView({
                   members={members}
                   onToggleDone={onToggleDone}
                   onEdit={onEdit}
+                  onAiAdvance={onAiAdvance}
                 />
               ))}
               {addingIn === group.key && (

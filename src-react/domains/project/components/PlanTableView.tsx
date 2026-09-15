@@ -5,13 +5,14 @@
  * 走 move 通道由父层重算目标列内序）| 处理人（单成员恒「我」）| 优先级行内
  * Select + 色徽标（P0 destructive / P1 primary / P2 muted → onSetPriority）|
  * 标签 Badge 组 | fields 动态列（值缺失 --）| 表头自定义字段列尾 +
- * （onOpenFieldEditor）| 行尾 ... 菜单（编辑 onOpenItem / 删除 onDeleteItem，
- * 二次确认与 API 调用在 PlanPane 统一处理）。
+ * （onOpenFieldEditor）| 行尾 ... 菜单（编辑 onOpenItem / AI 推进
+ * onAiAdvance / 删除 onDeleteItem，二次确认与 API 调用在 PlanPane 统一
+ * 处理）；source ai 标题旁 AI Badge（子系统 F）。
  * 过滤/排序由父层（PlanPane）计算后传入；本组件只触发回调不持有数据。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,6 +69,8 @@ interface PlanTableViewProps {
   onOpenFieldEditor: () => void;
   /** 行尾删除 → 父层二次确认后 remove */
   onDeleteItem: (item: PlanItemRecord) => void;
+  /** 行尾菜单「AI 推进」→ 父层写底栏预填（子系统 F） */
+  onAiAdvance: (item: PlanItemRecord) => void;
 }
 
 /** 自定义字段单元格缺值占位 */
@@ -82,6 +85,7 @@ export default function PlanTableView({
   onQuickCreate,
   onOpenFieldEditor,
   onDeleteItem,
+  onAiAdvance,
 }: PlanTableViewProps) {
   const { t } = useTranslation(["project", "common"]);
   const [quickAdd, setQuickAdd] = useState("");
@@ -149,14 +153,24 @@ export default function PlanTableView({
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="max-w-0">
-                <button
-                  type="button"
-                  onClick={() => onOpenItem(item)}
-                  title={item.title}
-                  className="block max-w-full truncate text-left transition-colors hover:text-primary"
-                >
-                  {item.title}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onOpenItem(item)}
+                    title={item.title}
+                    className="min-w-0 max-w-full flex-1 truncate text-left transition-colors hover:text-primary"
+                  >
+                    {item.title}
+                  </button>
+                  {item.source === "ai" && (
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 px-1 text-[9px]"
+                    >
+                      AI
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell>
                 <Select
@@ -259,6 +273,11 @@ export default function PlanTableView({
                   >
                     <DropdownMenuItem onClick={() => onOpenItem(item)}>
                       {t("project:plan.edit")}
+                    </DropdownMenuItem>
+                    {/* AI 推进入口（子系统 F）：编辑与删除之间 */}
+                    <DropdownMenuItem onClick={() => onAiAdvance(item)}>
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {t("project:plan.aiAdvance")}
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => onDeleteItem(item)}

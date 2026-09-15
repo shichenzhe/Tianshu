@@ -102,7 +102,10 @@
     "titleRequired": "请输入标题",
     "titleTooLong": "标题不能超过 100 字",
     "tagPlaceholder": "输入标签，回车添加",
-    "deleted": "已删除"
+    "deleted": "已删除",
+    "aiAdvance": "AI 推进",
+    "aiSummary": "AI 进展",
+    "advancePrompt": "请推进 #{{id}}《{{title}}》：结合项目上下文与此任务的进展记录，推进下一步工作，并更新任务状态与进展。"
   },
   "planView": {
     "typeTable": "表格",

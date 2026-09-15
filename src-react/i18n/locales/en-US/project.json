@@ -102,7 +102,10 @@
     "titleRequired": "Please enter a title",
     "titleTooLong": "Title cannot exceed 100 characters",
     "tagPlaceholder": "Type a tag and press Enter to add",
-    "deleted": "Deleted"
+    "deleted": "Deleted",
+    "aiAdvance": "AI advance",
+    "aiSummary": "AI progress",
+    "advancePrompt": "Please advance #{{id}} \"{{title}}\": with project context and this task's progress history, drive the next step, then update its status and progress."
   },
   "planView": {
     "typeTable": "Table",

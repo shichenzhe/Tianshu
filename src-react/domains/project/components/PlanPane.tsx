@@ -23,6 +23,9 @@
  * handleMoveItem 按分组分发（status=move 含列内重排，priority/assignee
  * 仅写对应字段，afterId 忽略）；create/remove 后失效
  * planItems + planItemsMine 双 key（T4 契约）；删除 AlertDialog 二次确认。
+ * AI 推进入口（子系统 F）：列表行 hover 按钮与表格行尾菜单统一
+ * handleAiAdvance → usePlanAdvanceStore.setPrompt 预填插值引导语
+ * （#id《标题》+ 模板），项目底栏 ChatInput 订阅运行期消费聚焦。
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,6 +54,7 @@ import PlanItemApi, {
 } from "../api/plan-item.api";
 import { usePlanViews } from "../model/use-plan-views";
 import { dateKeyToIso } from "../model/plan-date";
+import { usePlanAdvanceStore } from "../store/plan-advance.store";
 import { filterItems, sortItems } from "../model/plan-view-engine";
 import CustomFieldsEditor from "./CustomFieldsEditor";
 import PlanFilterPopover from "./PlanFilterPopover";
@@ -93,6 +97,7 @@ export default function PlanPane({
   const { t } = useTranslation(["project", "common"]);
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
+  const setAdvancePrompt = usePlanAdvanceStore((state) => state.setPrompt);
 
   const {
     views,
@@ -347,6 +352,13 @@ export default function PlanPane({
     setDialogOpen(true);
   };
 
+  /** AI 推进入口统一回调（列表 hover 按钮/表格菜单）：预填底栏引导语 */
+  const handleAiAdvance = (item: PlanItemRecord) => {
+    setAdvancePrompt(
+      t("project:plan.advancePrompt", { id: item.id, title: item.title }),
+    );
+  };
+
   /** 工具栏按钮共用样式 */
   const toolbarButtonClass =
     "h-8 gap-1 px-2 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary";
@@ -458,6 +470,7 @@ export default function PlanPane({
             void handleQuickCreateIn(status, title)
           }
           onEdit={openEdit}
+          onAiAdvance={handleAiAdvance}
         />
       ) : activeView?.type === "calendar" ? (
         // 日历视图：点格空白预置该日 dueDate 开新建弹窗（其余预置复位），点 chip 开编辑
@@ -490,6 +503,7 @@ export default function PlanPane({
             onQuickCreate={(title) => handleQuickCreateIn("not_started", title)}
             onOpenFieldEditor={() => setFieldEditorOpen(true)}
             onDeleteItem={setDeleting}
+            onAiAdvance={handleAiAdvance}
           />
         </div>
       )}

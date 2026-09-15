@@ -10,7 +10,9 @@
  * 仅项目任务渲染）/ 附件区 PlanItemAttachments（回形针菜单上传入资产空间
  * attachments/ 子目录或从资产挑选；新建态本地暂存、保存成功后按 create 返回
  * id 批量挂库——失败仅 toast 不阻断关闭；编辑态直连：删已挂走 removeAttachment
- * 通道；本地任务不渲染）/ 右上全屏切换（maximized：DialogContent 全屏类；
+ * 通道；本地任务不渲染）/「AI 进展」只读折叠区（子系统 F：item.aiSummary
+ * 非空才渲染，默认收起，展开 pre-wrap 全文——恒 item 原值，人路径不可编辑）/
+ * 右上全屏切换（maximized：DialogContent 全屏类；
  * Esc 分层——全屏态（非预览态）Esc 仅退全屏不关弹窗，非全屏态照常关闭）。
  * 保存：新建 → create（assigneeId 打开时缺省当前用户、显式「未指派」传
  * null；description 空串归一 null；日期仅项目任务携带、dateKeyToIso 构造
@@ -22,7 +24,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Maximize2, Minimize2 } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -144,6 +152,8 @@ export default function PlanItemDialog({
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [maximized, setMaximized] = useState(false);
+  // AI 进展折叠区开关（子系统 F；重开弹窗复位收起）
+  const [summaryOpen, setSummaryOpen] = useState(false);
   // 附件：新建/编辑同构本地态（已挂记录带 id，暂存项无 id 保存后补挂）
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
 
@@ -175,6 +185,7 @@ export default function PlanItemDialog({
     setSaving(false);
     setPreviewing(false);
     setMaximized(false);
+    setSummaryOpen(false);
   }, [open, item, defaultStatus, defaultPriority, defaultDueDate, user.id]);
 
   // 候选标签：只消费计划 Tab 已有 planItems 缓存（enabled false 不主动拉取）
@@ -462,6 +473,37 @@ export default function PlanItemDialog({
             projectIdIsNull={projectId === null}
             onChange={handleCapsuleChange}
           />
+
+          {/* AI 进展折叠区（子系统 F）：只读展示工具追加的 aiSummary 原文 */}
+          {item?.aiSummary ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  {t("project:plan.aiSummary")}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t("project:plan.aiSummary")}
+                  aria-expanded={summaryOpen}
+                  onClick={() => setSummaryOpen((value) => !value)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                >
+                  {summaryOpen ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                </Button>
+              </div>
+              {summaryOpen && (
+                <p className="whitespace-pre-wrap rounded-md border border-border/50 p-2 text-xs text-muted-foreground">
+                  {item.aiSummary}
+                </p>
+              )}
+            </div>
+          ) : null}
 
           {projectId !== null && fieldDefs.length > 0 && (
             <div className="space-y-3 border-t border-border/50 pt-3">

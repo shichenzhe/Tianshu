@@ -152,6 +152,7 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   id: 1,
   projectId: 1,
   title: "事项",
+  aiSummary: "",
   status: "not_started",
   priority: "P1",
   assigneeId: 1,

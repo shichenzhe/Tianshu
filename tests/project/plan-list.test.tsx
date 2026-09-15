@@ -6,6 +6,8 @@
  * - 组头折叠/展开；组内 + 展开行内快速新增 Input，回车 onQuickCreate(status, title)
  * - 行：checkbox 勾选 → onToggleDone(id, true)；已勾选项再点 → onToggleDone(id, false)
  * - 行字段：标题（点击 onEdit）、优先级色点、标签（2+N）、截止日、处理人头像
+ * - AI 执行闭环（子系统 F）：行尾 hover「AI 推进」渐显按钮 → onAiAdvance(item)、
+ *   aiSummary 非空常驻 Sparkles 徽标（title=末行进展）、source ai 行标题前 AI Badge
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
@@ -54,6 +56,7 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   id: 1,
   projectId: 1,
   title: "事项",
+  aiSummary: "",
   status: "not_started",
   priority: "P1",
   assigneeId: 1,
@@ -106,6 +109,7 @@ function renderList(overrides: Partial<ListProps> = {}) {
     onToggleDone: vi.fn(),
     onQuickCreate: vi.fn(),
     onEdit: vi.fn(),
+    onAiAdvance: vi.fn(),
     ...overrides,
   } as ListProps & Record<string, ReturnType<typeof vi.fn>>;
   render(<PlanListView {...props} />);
@@ -249,5 +253,60 @@ describe("截止日渲染", () => {
     expect(screen.getByText("2030-01-01").className).not.toContain(
       "text-destructive",
     );
+  });
+});
+
+describe("AI 推进入口与呈现（子系统 F）", () => {
+  it("行尾 hover AI 推进按钮（渐显类）→ 点击 onAiAdvance(item)", () => {
+    const props = renderList();
+
+    const button = within(rowContaining("需求梳理")).getByRole("button", {
+      name: "project:plan.aiAdvance",
+    });
+    // AssetFileTable 先例：默认 opacity-0，行 hover 渐显
+    expect(button.className).toContain("opacity-0");
+    expect(button.className).toContain("group-hover/row:opacity-100");
+
+    fireEvent.click(button);
+    expect(props.onAiAdvance).toHaveBeenCalledTimes(1);
+    expect(props.onAiAdvance).toHaveBeenCalledWith(ITEMS[0]);
+  });
+
+  it("aiSummary 非空 → Sparkles 徽标常驻且 title=末行；空 → 无徽标", () => {
+    renderList({
+      items: [
+        makeItem({
+          id: 1,
+          title: "有进展",
+          aiSummary: "[2026-09-14] 启动\n[2026-09-15] 完成联调",
+        }),
+        makeItem({ id: 2, title: "无进展" }),
+      ],
+    });
+
+    const badge = within(rowContaining("有进展")).getByTitle(
+      "[2026-09-15] 完成联调",
+    );
+    expect(badge.className).toContain("text-primary");
+    // 常驻：非 hover 渐显（无 opacity-0）
+    expect(badge.className).not.toContain("opacity-0");
+
+    expect(
+      within(rowContaining("无进展")).queryByTitle("[2026-09-15] 完成联调"),
+    ).toBeNull();
+  });
+
+  it("source ai → 标题前 AI Badge；manual → 无", () => {
+    renderList({
+      items: [
+        makeItem({ id: 1, title: "AI 生成项", source: "ai" }),
+        makeItem({ id: 2, title: "手动项" }),
+      ],
+    });
+
+    expect(within(rowContaining("AI 生成项")).getAllByText("AI")).toHaveLength(
+      1,
+    );
+    expect(within(rowContaining("手动项")).queryByText("AI")).toBeNull();
   });
 });

@@ -19,6 +19,8 @@
  *   ?viewId=13（type gantt）渲染甘特时间轴（列头出现、无表格行）
  * - 删除：行尾菜单 → AlertDialog 确认 → remove + planItems/planItemsMine 双失效
  * - 空数据：五视图渲染各自骨架（表格表头+快速新增行/看板列/列表组头/日历月格/甘特时间轴），无空态拦截
+ * - AI 执行闭环（子系统 F）：行尾菜单三项（编辑/AI 推进/删除）与列表行 hover 按钮
+ *   → usePlanAdvanceStore 预填插值引导语（#id《标题》+模板）；source ai 标题旁 AI Badge
  */
 import {
   afterEach,
@@ -40,6 +42,9 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 
+// advancePrompt 插值断言用真实模板（i18next 语义最小实现；其余 key 原样返回）
+import zhProject from "../../src-react/i18n/locales/zh-CN/project.json";
+
 // Radix Select/DropdownMenu 在 jsdom 的最小桩：popper 定位依赖 ResizeObserver，
 // 触发器 pointerDown 分支依赖 hasPointerCapture/scrollIntoView
 beforeAll(() => {
@@ -58,7 +63,20 @@ beforeAll(() => {
 
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
-  return { ...actual, useTranslation: () => ({ t: (key: string) => key }) };
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, options?: Record<string, string | number>) => {
+        if (key !== "project:plan.advancePrompt" || !options) {
+          return key;
+        }
+        return zhProject.plan.advancePrompt.replace(
+          /\{\{(\w+)\}\}/g,
+          (_, name: string) => String(options[name]),
+        );
+      },
+    }),
+  };
 });
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -125,6 +143,7 @@ vi.mock("@/domains/project/api/project.api", () => ({
 }));
 
 import PlanPane from "../../src-react/domains/project/components/PlanPane";
+import { usePlanAdvanceStore } from "../../src-react/domains/project/store/plan-advance.store";
 import PlanItemApi from "@/domains/project/api/plan-item.api";
 import type {
   PlanFieldDef,
@@ -141,6 +160,7 @@ const makeItem = (overrides: Partial<PlanItemRecord> = {}): PlanItemRecord => ({
   id: 1,
   projectId: 1,
   title: "事项",
+  aiSummary: "",
   status: "not_started",
   priority: "P1",
   assigneeId: 1,
@@ -855,4 +875,69 @@ describe("PlanPane 空数据渲染视图骨架", () => {
       expect(screen.queryByText("project:plan.empty")).toBeNull();
     },
   );
+});
+
+describe("PlanPane AI 推进入口与呈现（子系统 F）", () => {
+  beforeEach(() => {
+    usePlanAdvanceStore.setState({ prompt: null });
+  });
+
+  it("表格行尾菜单三项（编辑/AI 推进/删除），点「AI 推进」→ 预填 store 写入插值引导语", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    fireEvent.pointerDown(
+      within(rowContaining("需求梳理")).getByRole("button", {
+        name: "common:operation",
+      }),
+      { button: 0, pointerType: "mouse" },
+    );
+    const menu = await screen.findByRole("menu");
+    // 三项有序：编辑 / AI 推进 / 删除
+    expect(
+      within(menu)
+        .getAllByRole("menuitem")
+        .map((el) => el.textContent),
+    ).toEqual([
+      "project:plan.edit",
+      "project:plan.aiAdvance",
+      "project:plan.delete",
+    ]);
+
+    fireEvent.click(within(menu).getByText("project:plan.aiAdvance"));
+    expect(usePlanAdvanceStore.getState().prompt).toBe(
+      "请推进 #11《需求梳理》：结合项目上下文与此任务的进展记录，推进下一步工作，并更新任务状态与进展。",
+    );
+  });
+
+  it("列表视图行 hover「AI 推进」按钮 → 同款预填（#id《标题》插值 + 模板文案）", async () => {
+    renderPlanPane({ initialEntry: "/module/project/1?tab=plan&viewId=12" });
+    const row = (
+      await screen.findByRole("button", { name: "接口联调" })
+    ).closest("div") as HTMLElement;
+    const advanceButton = within(row).getByRole("button", {
+      name: "project:plan.aiAdvance",
+    });
+    // AssetFileTable 先例：hover 渐显类
+    expect(advanceButton.className).toContain("group-hover/row:opacity-100");
+
+    fireEvent.click(advanceButton);
+    expect(usePlanAdvanceStore.getState().prompt).toBe(
+      "请推进 #12《接口联调》：结合项目上下文与此任务的进展记录，推进下一步工作，并更新任务状态与进展。",
+    );
+  });
+
+  it("source ai → 标题旁 AI Badge；manual → 无", async () => {
+    vi.mocked(PlanItemApi.list).mockResolvedValueOnce([
+      makeItem({ id: 11, title: "AI 生成项", source: "ai" }),
+      makeItem({ id: 12, title: "手动项" }),
+    ]);
+    renderPlanPane();
+    await screen.findByText("AI 生成项");
+
+    expect(within(rowContaining("AI 生成项")).getAllByText("AI")).toHaveLength(
+      1,
+    );
+    expect(within(rowContaining("手动项")).queryByText("AI")).toBeNull();
+  });
 });

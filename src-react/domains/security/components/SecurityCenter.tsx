@@ -2,6 +2,7 @@
  * 安全中心首页（SP1 spec §9）：Dialog 内视图栈（首页 ↔ 审计全列表；
  * SP2-SP5 的三个二级页后续并入同一视图栈）。配置一次拉取、子卡片
  * 乐观保存（useSaveOrRevert 兜底回滚），照 app-settings 惯例。
+ * 加载三态：null=拉取中（显示 loading）、loadFailed=失败、否则渲染。
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,12 +20,13 @@ export default function SecurityCenter() {
   const { t } = useTranslation(["security"]);
   const saveOrRevert = useSaveOrRevert();
   const [config, setConfig] = useState<SecurityConfig | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [view, setView] = useState<SecurityView>("home");
 
   useEffect(() => {
     SecurityApi.getConfig()
       .then((state) => setConfig(state.config))
-      .catch(() => setConfig(null));
+      .catch(() => setLoadFailed(true));
   }, []);
 
   /** 单 key 乐观保存：本地先改，失败回滚并 toast（useSaveOrRevert） */
@@ -41,11 +43,17 @@ export default function SecurityCenter() {
     [config, saveOrRevert],
   );
 
-  if (config === null) {
+  if (loadFailed) {
     return (
       <p className="text-sm text-muted-foreground">
         {t("security:loadFailed")}
       </p>
+    );
+  }
+
+  if (config === null) {
+    return (
+      <p className="text-sm text-muted-foreground">{t("common:loading")}</p>
     );
   }
 

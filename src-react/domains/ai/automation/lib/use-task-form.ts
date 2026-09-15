@@ -4,6 +4,9 @@
  * 模型联动(从 CreateTaskDialog 抽出,弹窗与任务详情页共用)。
  * resetKey 为源变化信号(弹窗 open 派生 key 或路由 id),变化时重置
  * 表单值、脏快照与 pickerKey;纯逻辑见同目录 task-form.ts。
+ * 项目预设(子系统 E):source.project 透传 buildInitialValues,锁定
+ * template/空初值的空间与项目归属(锁定空间不在 workspaces 列表内,
+ * 默认模型联动对其查无命中,不预填模型)。
  */
 import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -29,6 +32,8 @@ import {
 export interface TaskFormSource {
   task?: TaskRecord;
   template?: TemplateRecord;
+  /** 项目预设:锁定 template/空初值的空间与项目归属(弹窗项目模块传入) */
+  project?: { id: number; workspaceId: number };
   /** 源变化信号(弹窗 open 派生 key 或路由 id):变化时重置表单与脏快照 */
   resetKey: string | number;
   workspaces: WorkspaceRecord[];
@@ -68,7 +73,11 @@ export function useTaskForm(source: TaskFormSource): UseTaskFormResult {
 
   const reset = (src: TaskFormSource) => {
     const next = buildInitialValues(
-      { task: src.task, template: src.template },
+      {
+        task: src.task,
+        template: src.template,
+        project: src.project,
+      },
       t,
     );
     setValues(next);

@@ -5,6 +5,10 @@
  * 工作空间/SchedulePicker。表单状态/脏快照/校验/参数组装由
  * useTaskForm 承载(与任务详情页共用);模板复用同表单,
  * 初始值优先级 template > 空;任务编辑走任务详情页。
+ * 项目预设(子系统 E):可选 project prop——传入时资产空间锁定为
+ * project.workspaceId(禁选/不渲染候选/跳过 ["workspaces"] 查询),
+ * projectId 经表单初值注入保存载荷;未传时各路径行为与 AI 模块
+ * 原实现完全一致。
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -45,6 +49,9 @@ export interface CreateTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   template?: TemplateRecord;
   onSaved?: () => void;
+  /** 项目预设(项目模块调用方传入):锁定资产空间并把 projectId 写入
+   * 保存载荷(workspaceName 供锁定态显示);未传时行为零变化 */
+  project?: { id: number; workspaceId: number; workspaceName: string };
 }
 
 export function CreateTaskDialog({
@@ -52,6 +59,7 @@ export function CreateTaskDialog({
   onOpenChange,
   template,
   onSaved,
+  project,
 }: CreateTaskDialogProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
@@ -59,7 +67,8 @@ export function CreateTaskDialog({
   const { data: workspaces = [] } = useQuery({
     queryKey: ["workspaces"],
     queryFn: () => WorkspaceApi.list(),
-    enabled: open,
+    // 项目预设:空间已锁定,无需拉取候选列表
+    enabled: open && !project,
   });
 
   const [saving, setSaving] = useState(false);
@@ -72,6 +81,7 @@ export function CreateTaskDialog({
     // remount 回填已存配置
     resetKey: open ? (template ? `tpl-${template.slug}` : "new") : "closed",
     workspaces,
+    project: project && { id: project.id, workspaceId: project.workspaceId },
   });
   const { values, patch } = form;
 
@@ -157,19 +167,28 @@ export function CreateTaskDialog({
                 values.workspaceId ? String(values.workspaceId) : undefined
               }
               onValueChange={(v) => patch({ workspaceId: Number(v) })}
+              disabled={Boolean(project)}
             >
-              <SelectTrigger>
+              <SelectTrigger aria-label={t("chat:automation.create.workspace")}>
+                {/* 项目锁定:候选列表不渲染,选中项文本无处注入
+                    (Radix 仅空值显 placeholder),以 children 直显
+                    项目空间名;未锁定时 children 为 undefined,
+                    仍由选中 SelectItemText 注入,行为不变 */}
                 <SelectValue
                   placeholder={t("chat:automation.create.workspacePlaceholder")}
-                />
+                >
+                  {project?.workspaceName}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent className="border border-border/50 rounded-lg shadow-lg">
-                {workspaces.map((w) => (
-                  <SelectItem key={w.id} value={String(w.id)}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
+              {!project && (
+                <SelectContent className="border border-border/50 rounded-lg shadow-lg">
+                  {workspaces.map((w) => (
+                    <SelectItem key={w.id} value={String(w.id)}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              )}
             </Select>
           </div>
 

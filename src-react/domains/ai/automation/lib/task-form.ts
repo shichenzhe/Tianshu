@@ -3,7 +3,9 @@
  * 任务表单纯函数(弹窗/详情页共享):初值/脏检测/参数组装/可提交判定。
  * t 注入保持可测(不依赖 react-i18next);日期口径与原弹窗一致:
  * TaskRecord 的 ISO 串按本地时区 format 回显,DatePicker 的 yyyy-MM-dd
- * 串按本地零点解析(见 buildTaskParams)。
+ * 串按本地零点解析(见 buildTaskParams)。项目预设(子系统 E):
+ * source.project 锁定 template/空初值的空间与项目归属,buildTaskParams
+ * 恒输出 projectId(null = 全局任务,未选项目的 AI 模块路径同值)。
  */
 import { format } from "date-fns";
 import type {
@@ -30,6 +32,8 @@ export interface TaskFormValues {
   modelId: number | null;
   temperature: number;
   workspaceId: number | null;
+  /** 所属项目 id(项目预设注入/任务回填);null = 全局任务 */
+  projectId?: number | null;
   missedPolicy: "skip" | "catchUpOnce";
   schedule: ScheduleConfig | null;
   validity: { startAt?: string; endAt?: string };
@@ -47,10 +51,16 @@ const DEFAULT_SCHEDULE: ScheduleConfig = {
  * 表单初值,优先级 task > template > 空(与弹窗原 open 初始化一致)。
  * task 日期为 UTC ISO(repo toISOString),validity 消费方按本地日期
  * slice(0,10) 解释,须 date-fns format 本地化回显,否则回显漂移一天
- * 且保存循环累积。
+ * 且保存循环累积。project 预设仅作用于 template/空分支(锁定空间与
+ * 项目归属);task 回填分支始终取任务自身字段,不受预设影响。
  */
 export function buildInitialValues(
-  source: { task?: TaskRecord; template?: TemplateRecord },
+  source: {
+    task?: TaskRecord;
+    template?: TemplateRecord;
+    /** 项目预设:template/空初值锁定 workspaceId/projectId */
+    project?: { id: number; workspaceId: number };
+  },
   t: TFunc,
 ): TaskFormValues {
   if (source.task) {
@@ -61,6 +71,7 @@ export function buildInitialValues(
       modelId: e.modelId,
       temperature: e.temperature ?? 0.7,
       workspaceId: e.workspaceId,
+      projectId: e.projectId ?? null,
       missedPolicy: e.missedPolicy,
       schedule: JSON.parse(e.scheduleJson) as ScheduleConfig,
       validity: {
@@ -78,7 +89,8 @@ export function buildInitialValues(
     prompt: "",
     modelId: null,
     temperature: 0.7,
-    workspaceId: null,
+    workspaceId: source.project?.workspaceId ?? null,
+    projectId: source.project?.id ?? null,
     missedPolicy: "skip",
     schedule: DEFAULT_SCHEDULE,
     validity: {},
@@ -122,6 +134,8 @@ export function buildTaskParams(v: TaskFormValues, t: TFunc): TaskCreateParams {
     name: v.name.trim(),
     prompt: v.prompt,
     workspaceId: v.workspaceId!,
+    // 项目归属(子系统 E):null = 全局任务;AI 模块路径未选项目时同值
+    projectId: v.projectId ?? null,
     modelId: v.modelId!,
     temperature: v.temperature,
     schedule,

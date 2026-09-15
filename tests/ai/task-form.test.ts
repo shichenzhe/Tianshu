@@ -17,6 +17,7 @@ const task = {
   workspaceId: 2,
   workspaceName: "w",
   source: "local",
+  projectId: null,
   modelId: 3,
   temperature: 0.5,
   scheduleJson: JSON.stringify({
@@ -72,6 +73,35 @@ describe("task-form 纯函数", () => {
       time: "09:00",
     });
     expect(v.accessMode).toBe("default");
+  });
+});
+
+describe("项目预设（子系统 E）", () => {
+  it("buildTaskParams：projectId 透传；缺省 null", () => {
+    const base = buildInitialValues({ task }, t);
+    expect(buildTaskParams({ ...base, projectId: 11 }, t).projectId).toBe(11);
+    expect(buildTaskParams(base, t).projectId).toBeNull();
+  });
+
+  it("buildInitialValues：project 预设锁定空初值空间与归属；task 回填优先；未传零变化", () => {
+    // 空初值 + project：workspaceId/projectId 双锁定
+    const locked = buildInitialValues(
+      { project: { id: 11, workspaceId: 30 } },
+      t,
+    );
+    expect(locked.workspaceId).toBe(30);
+    expect(locked.projectId).toBe(11);
+    // 未传 project：初值与 AI 模块原路径一致（零 diff 回归）
+    const empty = buildInitialValues({}, t);
+    expect(empty.workspaceId).toBeNull();
+    expect(empty.projectId).toBeNull();
+    // task 回填优先于 project 预设（编辑路径取任务自身归属）
+    const fromTask = buildInitialValues(
+      { task, project: { id: 11, workspaceId: 30 } },
+      t,
+    );
+    expect(fromTask.workspaceId).toBe(task.workspaceId);
+    expect(fromTask.projectId).toBe(task.projectId);
   });
 });
 

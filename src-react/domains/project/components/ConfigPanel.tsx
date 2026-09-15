@@ -453,6 +453,7 @@ function TaskListItem({ task, onOpen }: TaskListItemProps) {
       <Switch
         checked={task.enabled}
         onCheckedChange={(next) => void handleToggle(next)}
+        aria-label={t("chat:automation.toggleEnabled")}
       />
       <Button
         type="button"

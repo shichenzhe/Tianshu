@@ -732,6 +732,8 @@ function WorkspaceGroup({
           )}
           onClick={onToggleGroup}
           title={workspace.name}
+          aria-expanded={!collapsedGroup}
+          aria-controls={`workspace-group-${workspace.id}`}
         >
           {collapsedGroup ? (
             <ChevronRight
@@ -767,7 +769,7 @@ function WorkspaceGroup({
         )}
       </div>
       {!collapsedGroup && !collapsed && (
-        <div className="ml-2">
+        <div id={`workspace-group-${workspace.id}`} className="ml-2">
           {sessions.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">
               {t("chat:sidebar.emptyTask")}

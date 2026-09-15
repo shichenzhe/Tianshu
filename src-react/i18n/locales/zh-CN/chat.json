@@ -191,6 +191,7 @@
   },
   "automation": {
     "title": "自动化",
+    "toggleEnabled": "启用或停用任务",
     "tabs": { "tasks": "定时任务", "runs": "运行记录" },
     "toolbar": {
       "searchPlaceholder": "搜索任务名称",
@@ -360,13 +361,34 @@
       "loadFailed": "读取失败：{{message}}"
     },
     "templateData": {
-      "dailyAiNews": { "title": "每日 AI 新闻推送", "desc": "关注当天 AI 领域的重要动态，每天早上 9 点生成三分类早报与趋势点评。" },
-      "weeklyReport": { "title": "每周工作周报", "desc": "每周一 18:00 汇总本周产出，自动生成四段式周报。" },
-      "biweeklyReview": { "title": "双周代码回顾", "desc": "每两周对工作空间做一次亮点与技术债盘点。" },
-      "monthlyBilling": { "title": "每月账单汇总", "desc": "每月 1 号汇总上月模型调用费用，输出费用月报与异常预警。" },
-      "yearlyReminder": { "title": "跨年回顾提醒", "desc": "每年 12 月 31 日 23:59 生成本年度使用回顾与展望。" },
-      "workdirMonitor": { "title": "工作空间巡检", "desc": "工作日每小时检查目录状态：占用 TOP5 与最近变更。" },
-      "standupPrep": { "title": "站会准备", "desc": "工作日 9:30 依据昨日产出准备站会三条。" }
+      "dailyAiNews": {
+        "title": "每日 AI 新闻推送",
+        "desc": "关注当天 AI 领域的重要动态，每天早上 9 点生成三分类早报与趋势点评。"
+      },
+      "weeklyReport": {
+        "title": "每周工作周报",
+        "desc": "每周一 18:00 汇总本周产出，自动生成四段式周报。"
+      },
+      "biweeklyReview": {
+        "title": "双周代码回顾",
+        "desc": "每两周对工作空间做一次亮点与技术债盘点。"
+      },
+      "monthlyBilling": {
+        "title": "每月账单汇总",
+        "desc": "每月 1 号汇总上月模型调用费用，输出费用月报与异常预警。"
+      },
+      "yearlyReminder": {
+        "title": "跨年回顾提醒",
+        "desc": "每年 12 月 31 日 23:59 生成本年度使用回顾与展望。"
+      },
+      "workdirMonitor": {
+        "title": "工作空间巡检",
+        "desc": "工作日每小时检查目录状态：占用 TOP5 与最近变更。"
+      },
+      "standupPrep": {
+        "title": "站会准备",
+        "desc": "工作日 9:30 依据昨日产出准备站会三条。"
+      }
     }
   },
   "panel": {

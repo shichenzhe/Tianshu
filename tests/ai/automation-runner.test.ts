@@ -212,10 +212,8 @@ describe("executeTask 成功路径", () => {
   it("工具装配剔除 plan_*（定时任务无 projectId，注册表有也不进模型上下文）", async () => {
     const { executeTask } =
       await import("../../electron/domains/ai/automation/automation-runner");
-    const {
-      registerTools,
-      unregisterTools,
-    } = await import("../../electron/domains/ai/agent/tool-registry");
+    const { registerTools, unregisterTools } =
+      await import("../../electron/domains/ai/agent/tool-registry");
     const probeTool = {
       name: "zz_probe_read",
       description: "探针",
@@ -263,7 +261,8 @@ describe("executeTask 成功路径", () => {
       });
       const names = vi
         .mocked(runChatStream)
-        .mock.calls.at(-1)?.[0].toolDefinitions.map((def) => def.name);
+        .mock.calls.at(-1)?.[0]
+        .toolDefinitions.map((def) => def.name);
       expect(names).toContain("zz_probe_read");
       expect(names?.filter((name) => name.startsWith("plan_"))).toEqual([]);
     } finally {

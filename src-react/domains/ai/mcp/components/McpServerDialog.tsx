@@ -232,7 +232,11 @@ export default function McpServerDialog({
             </>
           )}
           <div className="flex items-center gap-2">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
+            <Switch
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              aria-label={t("ai:mcp.enabled")}
+            />
             <Label>{t("ai:mcp.enabled")}</Label>
           </div>
         </div>

@@ -201,7 +201,11 @@ export default function ProviderDialog({
             />
           </div>
           <div className="flex items-center gap-2">
-            <Switch checked={enabled} onCheckedChange={setEnabled} />
+            <Switch
+              checked={enabled}
+              onCheckedChange={setEnabled}
+              aria-label={t("ai:provider.enabled")}
+            />
             <Label>{t("ai:provider.enabled")}</Label>
           </div>
         </div>

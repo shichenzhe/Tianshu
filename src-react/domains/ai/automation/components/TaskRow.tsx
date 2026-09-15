@@ -90,6 +90,7 @@ export function TaskRow({
         checked={task.enabled}
         onCheckedChange={handleToggle}
         onClick={(e) => e.stopPropagation()}
+        aria-label={t("chat:automation.toggleEnabled")}
       />
     </div>
   );

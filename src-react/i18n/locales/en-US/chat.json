@@ -191,6 +191,7 @@
   },
   "automation": {
     "title": "Automation",
+    "toggleEnabled": "Toggle task enabled",
     "tabs": { "tasks": "Scheduled Tasks", "runs": "Run History" },
     "toolbar": {
       "searchPlaceholder": "Search task names",
@@ -360,13 +361,34 @@
       "loadFailed": "Failed to load: {{message}}"
     },
     "templateData": {
-      "dailyAiNews": { "title": "Daily AI News Briefing", "desc": "Stay on top of the day's major AI developments. Every morning at 9:00, generates a three-category briefing with trend commentary." },
-      "weeklyReport": { "title": "Weekly Work Report", "desc": "Every Monday at 18:00, summarizes the week's output and auto-generates a four-section weekly report." },
-      "biweeklyReview": { "title": "Biweekly Code Review", "desc": "Every two weeks, reviews the workspace for highlights and technical debt." },
-      "monthlyBilling": { "title": "Monthly Billing Summary", "desc": "On the 1st of each month, summarizes the previous month's model usage costs and produces a monthly cost report with anomaly alerts." },
-      "yearlyReminder": { "title": "Year-End Review Reminder", "desc": "On December 31 at 23:59 each year, generates a year-in-review and outlook." },
-      "workdirMonitor": { "title": "Workspace Monitor", "desc": "On workdays, checks directory status every hour: top 5 space consumers and recent changes." },
-      "standupPrep": { "title": "Standup Prep", "desc": "On workdays at 9:30, prepares three standup points from yesterday's output." }
+      "dailyAiNews": {
+        "title": "Daily AI News Briefing",
+        "desc": "Stay on top of the day's major AI developments. Every morning at 9:00, generates a three-category briefing with trend commentary."
+      },
+      "weeklyReport": {
+        "title": "Weekly Work Report",
+        "desc": "Every Monday at 18:00, summarizes the week's output and auto-generates a four-section weekly report."
+      },
+      "biweeklyReview": {
+        "title": "Biweekly Code Review",
+        "desc": "Every two weeks, reviews the workspace for highlights and technical debt."
+      },
+      "monthlyBilling": {
+        "title": "Monthly Billing Summary",
+        "desc": "On the 1st of each month, summarizes the previous month's model usage costs and produces a monthly cost report with anomaly alerts."
+      },
+      "yearlyReminder": {
+        "title": "Year-End Review Reminder",
+        "desc": "On December 31 at 23:59 each year, generates a year-in-review and outlook."
+      },
+      "workdirMonitor": {
+        "title": "Workspace Monitor",
+        "desc": "On workdays, checks directory status every hour: top 5 space consumers and recent changes."
+      },
+      "standupPrep": {
+        "title": "Standup Prep",
+        "desc": "On workdays at 9:30, prepares three standup points from yesterday's output."
+      }
     }
   },
   "panel": {

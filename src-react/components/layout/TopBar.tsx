@@ -39,6 +39,9 @@ export default function TopBar({ leftSlot, rightLeadingSlot }: TopBarProps) {
             <span className="text-sm font-semibold text-foreground tracking-tight select-none">
               {t("common:appName")}
             </span>
+            <span className="text-xs text-muted-foreground select-none">
+              {__APP_VERSION__}
+            </span>
           </div>
         )}
         {leftSlot}

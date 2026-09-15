@@ -249,6 +249,9 @@ export default function LoginView() {
         <span className="text-xl font-bold text-primary tracking-tight select-none">
           {t("common:appName")}
         </span>
+        <span className="text-xs text-muted-foreground select-none">
+          {__APP_VERSION__}
+        </span>
       </div>
 
       {/* 登录卡片 */}

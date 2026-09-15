@@ -72,7 +72,8 @@ export const ModelName = {
   projectBinding: 'projectBinding',
   planItem: 'planItem',
   planView: 'planView',
-  planItemAttachment: 'planItemAttachment'
+  planItemAttachment: 'planItemAttachment',
+  securityAuditLog: 'securityAuditLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -407,6 +408,24 @@ export const PlanItemAttachmentScalarFieldEnum = {
 } as const
 
 export type PlanItemAttachmentScalarFieldEnum = (typeof PlanItemAttachmentScalarFieldEnum)[keyof typeof PlanItemAttachmentScalarFieldEnum]
+
+
+export const SecurityAuditLogScalarFieldEnum = {
+  id: 'id',
+  sequence: 'sequence',
+  category: 'category',
+  eventType: 'eventType',
+  decision: 'decision',
+  detail: 'detail',
+  commandPreview: 'commandPreview',
+  commandHash: 'commandHash',
+  sessionId: 'sessionId',
+  prevHash: 'prevHash',
+  hash: 'hash',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityAuditLogScalarFieldEnum = (typeof SecurityAuditLogScalarFieldEnum)[keyof typeof SecurityAuditLogScalarFieldEnum]
 
 
 export const SortOrder = {

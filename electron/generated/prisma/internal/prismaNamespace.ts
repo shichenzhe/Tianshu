@@ -418,7 +418,8 @@ export const ModelName = {
   projectBinding: 'projectBinding',
   planItem: 'planItem',
   planView: 'planView',
-  planItemAttachment: 'planItemAttachment'
+  planItemAttachment: 'planItemAttachment',
+  securityAuditLog: 'securityAuditLog'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -434,7 +435,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2066,6 +2067,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    securityAuditLog: {
+      payload: Prisma.$securityAuditLogPayload<ExtArgs>
+      fields: Prisma.securityAuditLogFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.securityAuditLogFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.securityAuditLogFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        findFirst: {
+          args: Prisma.securityAuditLogFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.securityAuditLogFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        findMany: {
+          args: Prisma.securityAuditLogFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>[]
+        }
+        create: {
+          args: Prisma.securityAuditLogCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        createMany: {
+          args: Prisma.securityAuditLogCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.securityAuditLogCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>[]
+        }
+        delete: {
+          args: Prisma.securityAuditLogDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        update: {
+          args: Prisma.securityAuditLogUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        deleteMany: {
+          args: Prisma.securityAuditLogDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.securityAuditLogUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.securityAuditLogUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>[]
+        }
+        upsert: {
+          args: Prisma.securityAuditLogUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$securityAuditLogPayload>
+        }
+        aggregate: {
+          args: Prisma.SecurityAuditLogAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateSecurityAuditLog>
+        }
+        groupBy: {
+          args: Prisma.securityAuditLogGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SecurityAuditLogGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.securityAuditLogCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.SecurityAuditLogCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2423,6 +2498,24 @@ export const PlanItemAttachmentScalarFieldEnum = {
 export type PlanItemAttachmentScalarFieldEnum = (typeof PlanItemAttachmentScalarFieldEnum)[keyof typeof PlanItemAttachmentScalarFieldEnum]
 
 
+export const SecurityAuditLogScalarFieldEnum = {
+  id: 'id',
+  sequence: 'sequence',
+  category: 'category',
+  eventType: 'eventType',
+  decision: 'decision',
+  detail: 'detail',
+  commandPreview: 'commandPreview',
+  commandHash: 'commandHash',
+  sessionId: 'sessionId',
+  prevHash: 'prevHash',
+  hash: 'hash',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityAuditLogScalarFieldEnum = (typeof SecurityAuditLogScalarFieldEnum)[keyof typeof SecurityAuditLogScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2652,6 +2745,7 @@ export type GlobalOmitConfig = {
   planItem?: Prisma.planItemOmit
   planView?: Prisma.planViewOmit
   planItemAttachment?: Prisma.planItemAttachmentOmit
+  securityAuditLog?: Prisma.securityAuditLogOmit
 }
 
 /* Types for Logging */

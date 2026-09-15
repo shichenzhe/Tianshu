@@ -151,3 +151,8 @@ export type planView = Prisma.planViewModel
  * 
  */
 export type planItemAttachment = Prisma.planItemAttachmentModel
+/**
+ * Model securityAuditLog
+ * 
+ */
+export type securityAuditLog = Prisma.securityAuditLogModel

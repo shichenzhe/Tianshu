@@ -59,7 +59,8 @@ export default function ProjectHubView() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6">
+      {/* 全宽（同项目详情页口径，去 max-w 限宽） */}
+      <div className="flex w-full flex-col gap-8 p-6">
         {/* 头部：标题 + 副标题 + 新建按钮 + 右侧本地装饰（lucide 图标组合，无外链） */}
         <header className="relative overflow-hidden rounded-lg border border-border/50 bg-card p-6 shadow-sm">
           <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

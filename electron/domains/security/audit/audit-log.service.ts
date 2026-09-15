@@ -6,6 +6,7 @@
  * 查询倒序分页 + keyword（截 200 字符）。
  */
 import { app, ipcMain } from "electron";
+import Log from "../../../commons/Log";
 import prisma from "../../../commons/prisma-client";
 import type {
   AuditCategory,
@@ -123,11 +124,22 @@ export default class AuditLogService {
     if (this.queue.length === 0) return;
     this.stopTimer();
     const batch = this.queue.splice(0, this.queue.length);
+    const chainSnapshot = { ...this.chain };
     try {
       await this.db.createMany({ data: this.buildEntries(batch) });
-      await this.prune();
-    } catch {
+    } catch (e) {
+      // 落库失败（原子事务，未落任何行）：还原链状态后批次原样回队重试，
+      // 避免重试时以新 sequence 重复写入或 prevHash 接到未落库的幽灵 hash
+      this.chain = chainSnapshot;
       this.queue.unshift(...batch);
+      Log.error("审计落库失败", e);
+      return;
+    }
+    try {
+      await this.prune();
+    } catch (e) {
+      // 批次已落库：裁剪失败不回滚批次（回滚会重复写入），下轮 flush 再裁
+      Log.error("审计裁剪失败", e);
     }
   }
 
@@ -187,12 +199,22 @@ export default class AuditLogService {
     };
   }
 
-  /** 全清并留痕（清空动作自己成为新链头，sequence 不重置保持单调） */
-  async clear(): Promise<void> {
+  /** 全清并留痕（清空动作自己成为新链头，sequence 不重置保持单调）。
+   *  串行到写入链：在途批次先落库再清，未落库队列丢弃，marker 必为唯一新链头 */
+  clear(): Promise<void> {
+    const done = this.writeTail.then(() => this.doClear());
+    this.writeTail = done.catch(() => {
+      /* 链保活：失败结果仅通知本次调用方 */
+    });
+    return done;
+  }
+
+  private async doClear(): Promise<void> {
     await this.db.deleteMany();
     this.chain.lastHash = null;
+    this.queue.length = 0; // 清空窗内的未落库事件一并丢弃，避免复活在 marker 之后
     this.append({ eventType: "audit.cleared", decision: "info" });
-    await this.flush();
+    await this.doFlush();
   }
 
   private stopTimer(): void {

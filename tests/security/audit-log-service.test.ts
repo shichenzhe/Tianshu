@@ -161,6 +161,17 @@ describe("AuditLogService", () => {
     });
   });
 
+  it("append 后未 flush 直接 clear：待写队列被丢弃，仅剩 marker 新链头", async () => {
+    svc.append({ eventType: "command-safety.blocked", decision: "blocked" });
+    await svc.clear();
+    expect(db.rows).toHaveLength(1);
+    expect(db.rows[0]).toMatchObject({
+      eventType: "audit.cleared",
+      sequence: 1, // 陈旧事件未落库，未消耗 sequence
+      prevHash: null,
+    });
+  });
+
   it("list 分页 + keyword 过滤 + 参数钳制", async () => {
     for (let i = 0; i < 3; i++) {
       svc.append({

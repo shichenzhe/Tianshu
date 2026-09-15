@@ -221,6 +221,10 @@
     "me": "Me",
     "automation": "Scheduled Tasks",
     "automationTip": "Let AI run tasks automatically on a schedule",
+    "automationNew": "New",
+    "automationEmpty": "No scheduled tasks yet",
+    "projectWorkspace": "Project assets",
+    "taskRunning": "Task is already running",
     "goAutomation": "Go to Automation"
   },
   "chatBar": {

@@ -119,6 +119,16 @@ vi.mock("@/domains/ai/api/mcp.api", () => ({
   default: { list: vi.fn() },
 }));
 
+// 配置面板定时任务区块（子系统 E）：任务列表数据源 + 新建弹窗桩化
+// （区块行为在 tests/project/config-panel-automation.test.tsx 覆盖）
+vi.mock("@/domains/ai/automation/api/automation.api", () => ({
+  AutomationApi: { list: vi.fn(), toggle: vi.fn(), runNow: vi.fn() },
+}));
+vi.mock(
+  "../../src-react/domains/ai/automation/components/CreateTaskDialog",
+  () => ({ CreateTaskDialog: () => null }),
+);
+
 vi.mock("@/domains/user/store/user.store", () => ({
   useUserStore: (
     selector?: (state: { user: { id: number; nickname: string } }) => unknown,
@@ -182,6 +192,7 @@ import { ModelApi } from "@/domains/ai/api/model.api";
 import { AssistantApi } from "@/domains/ai/api/assistant.api";
 import SkillApi from "@/domains/ai/skills/api/skill.api";
 import { McpServerApi } from "@/domains/ai/api/mcp.api";
+import { AutomationApi } from "@/domains/ai/automation/api/automation.api";
 import type { ProjectDetail } from "../../../electron/domains/project/project.entity";
 import type { PlanViewRecord } from "../../../electron/domains/project/plan-view.entity";
 
@@ -368,6 +379,8 @@ beforeEach(() => {
         updatedAt: "2026-09-01T00:00:00.000Z",
       },
     ]);
+  // 配置面板定时任务区块：本项目任务为空（过滤逻辑在专项测试覆盖）
+  vi.mocked(AutomationApi.list).mockReset().mockResolvedValue([]);
   chatMessagesProps.current = null;
   chatBarProps.current = null;
   toastMock.success.mockClear();

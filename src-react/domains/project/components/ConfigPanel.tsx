@@ -4,23 +4,35 @@
  * - 能力挂载：三行（连接器/专家/技能）CapabilityRow + PickerDialog；
  *   失效挂载灰显 + X 显式移除，Picker 确认只替换该类型 valid 集，
  *   失效项原样保留（Task 6 裁定：编辑不静默丢弃）
- * - 定时任务：Clock 图标 + 提示 + 前往自动化入口
+ * - 定时任务：本项目任务行列表（名称/频率/状态/上次运行/启停/立即运行，
+ *   projectId 前端过滤）+ 新建（CreateTaskDialog 项目预设：资产空间锁定）
+ *   + 前往自动化入口 + 空态文案
  * - 成员：头像占位（昵称首字符）+ 昵称 + owner 徽标 + me 标记（单成员）
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { Bot, Clock, Pencil, Plug, Sparkles } from "lucide-react";
+import { Bot, Pencil, Play, Plug, Plus, Sparkles } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { getDateFnsLocale } from "@/i18n";
 import MarkdownView from "@/domains/ai/chat/components/MarkdownView";
+import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { AssistantApi } from "@/domains/ai/api/assistant.api";
 import { McpServerApi } from "@/domains/ai/api/mcp.api";
 import SkillApi from "@/domains/ai/skills/api/skill.api";
+import {
+  AutomationApi,
+  type AutomationStatus,
+  type TaskRecord,
+} from "@/domains/ai/automation/api/automation.api";
+import { CreateTaskDialog } from "@/domains/ai/automation/components/CreateTaskDialog";
 import { useUserStore } from "@/domains/user/store/user.store";
 import ProjectApi from "../api/project.api";
 import CapabilityRow from "./CapabilityRow";
@@ -50,7 +62,7 @@ interface ConfigPanelProps {
 }
 
 export default function ConfigPanel({ detail }: ConfigPanelProps) {
-  const { t } = useTranslation(["project"]);
+  const { t } = useTranslation(["project", "chat"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
@@ -70,6 +82,16 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
     queryKey: ["mcpServers"],
     queryFn: () => McpServerApi.list(),
   });
+  const { data: allTasks = [] } = useQuery({
+    queryKey: ["automation", "tasks"],
+    queryFn: () => AutomationApi.list(),
+  });
+  /** 本项目任务（projectId 前端过滤） */
+  const projectTasks = useMemo(
+    () => allTasks.filter((task) => task.projectId === detail.project.id),
+    [allTasks, detail.project.id],
+  );
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
 
   // Picker 条目映射（同 CreateProjectDialog 三源口径）
   const pickerItemsByKind: Record<ProjectBindingType, PickerItem[]> = {
@@ -211,31 +233,54 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
           />
         ))}
 
-        {/* 区块3 定时任务：提示 + 前往自动化 */}
+        {/* 区块3 定时任务：本项目任务列表 + 新建/前往自动化 */}
         <section
           aria-label={t("project:panel.automation")}
           className="space-y-2"
         >
-          <h3 className="text-sm font-medium text-foreground">
-            {t("project:panel.automation")}
-          </h3>
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-border/50 p-3">
-            <span className="flex items-start gap-2">
-              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span className="text-xs leading-relaxed text-muted-foreground">
-                {t("project:panel.automationTip")}
-              </span>
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => navigate(AUTOMATION_ROUTE)}
-              className="h-7 shrink-0 px-2.5 hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
-            >
-              {t("project:panel.goAutomation")}
-            </Button>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-medium text-muted-foreground">
+              {t("project:panel.automation")}
+            </h3>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setTaskDialogOpen(true)}
+                className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {t("project:panel.automationNew")}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate(AUTOMATION_ROUTE)}
+                className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+              >
+                {t("project:panel.goAutomation")}
+              </Button>
+            </div>
           </div>
+          {projectTasks.length === 0 ? (
+            <p className="rounded-lg border border-border/50 p-3 text-xs text-muted-foreground">
+              {t("project:panel.automationEmpty")}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1.5">
+              {projectTasks.map((task) => (
+                <TaskListItem
+                  key={task.id}
+                  task={task}
+                  onOpen={() =>
+                    navigate(`/module/ai/automation/task/${task.id}`)
+                  }
+                />
+              ))}
+            </ul>
+          )}
         </section>
 
         {/* 区块4 成员：单成员（当前用户）+ owner/me 标记 */}
@@ -273,6 +318,16 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
         open={instructionOpen}
         onOpenChange={setInstructionOpen}
       />
+      {/* 新建任务弹窗（项目预设：资产空间锁定 + projectId 注入保存载荷） */}
+      <CreateTaskDialog
+        open={taskDialogOpen}
+        onOpenChange={setTaskDialogOpen}
+        project={{
+          id: detail.project.id,
+          workspaceId: detail.assetWorkspaceId,
+          workspaceName: t("project:panel.projectWorkspace"),
+        }}
+      />
       {pickerKind && (
         <PickerDialog
           open
@@ -289,5 +344,126 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
         />
       )}
     </div>
+  );
+}
+
+/** 相对时间（locale 跟随界面语言，TasksPane 同款惯例） */
+const formatRelative = (iso: string) =>
+  formatDistanceToNow(new Date(iso), {
+    addSuffix: true,
+    locale: getDateFnsLocale(),
+  });
+
+/** 状态显示：error/expired 走徽标，运行中/暂停为纯文本（TaskRow 同口径） */
+function TaskStatus({
+  status,
+  enabled,
+}: {
+  status: AutomationStatus;
+  enabled: boolean;
+}) {
+  const { t } = useTranslation(["chat"]);
+  if (status === "error") {
+    return (
+      <Badge variant="destructive">{t("chat:automation.status.error")}</Badge>
+    );
+  }
+  if (status === "expired") {
+    return (
+      <Badge variant="secondary">{t("chat:automation.status.expired")}</Badge>
+    );
+  }
+  return (
+    <span className="shrink-0 text-xs text-muted-foreground">
+      {enabled
+        ? t("chat:automation.status.running")
+        : t("chat:automation.status.paused")}
+    </span>
+  );
+}
+
+interface TaskListItemProps {
+  task: TaskRecord;
+  onOpen: () => void;
+}
+
+/** 单行项目任务：名称（点击进详情）+ 频率 + 上次运行 + 状态 + 启停/立即运行 */
+function TaskListItem({ task, onOpen }: TaskListItemProps) {
+  const { t } = useTranslation(["project", "chat"]);
+  const queryClient = useQueryClient();
+
+  async function handleToggle(next: boolean) {
+    try {
+      await AutomationApi.toggle(task.id, next);
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", "tasks"],
+      });
+      toast.success(
+        t(
+          next
+            ? "chat:automation.toast.enabled"
+            : "chat:automation.toast.disabled",
+        ),
+      );
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  }
+
+  async function handleRun() {
+    try {
+      await AutomationApi.runNow(task.id);
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", "tasks"],
+      });
+      toast.success(t("chat:automation.detail.playing"));
+    } catch (e) {
+      // runNow 互斥拒发（TASK_ALREADY_RUNNING）单独文案，其余 mapIpcError 透传
+      const message = mapIpcError(e);
+      toast.error(
+        message.includes("TASK_ALREADY_RUNNING")
+          ? t("project:panel.taskRunning")
+          : message,
+      );
+    }
+  }
+
+  return (
+    <li className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="min-w-0 flex-1 text-left"
+      >
+        <span className="block truncate text-sm font-medium text-foreground">
+          {task.name}
+        </span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {task.scheduleText}
+        </span>
+        {task.lastRunAt && (
+          <span className="block truncate text-xs text-muted-foreground">
+            {t("chat:automation.list.lastRun", {
+              time: formatRelative(task.lastRunAt),
+            })}
+          </span>
+        )}
+      </button>
+      <TaskStatus status={task.status} enabled={task.enabled} />
+      <Switch
+        checked={task.enabled}
+        onCheckedChange={(next) => void handleToggle(next)}
+      />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        aria-label={t("chat:automation.detail.play")}
+        onClick={() => void handleRun()}
+        className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+      >
+        <Play className="h-3.5 w-3.5" />
+      </Button>
+    </li>
   );
 }

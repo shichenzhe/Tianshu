@@ -7,7 +7,9 @@ import {
 
 describe("stableStringify", () => {
   it("对象 key 顺序无关，结果稳定", () => {
-    expect(stableStringify({ a: 1, b: 2 })).toBe(stableStringify({ b: 2, a: 1 }));
+    expect(stableStringify({ a: 1, b: 2 })).toBe(
+      stableStringify({ b: 2, a: 1 }),
+    );
   });
   it("剔除 undefined 值", () => {
     expect(stableStringify({ a: 1, b: undefined })).toBe('{"a":1}');
@@ -21,7 +23,7 @@ describe("computeEntryHash", () => {
   it("同一 prevHash + 同内容 → 同 hash", () => {
     const e = { sequence: 1, category: "config", hash: "旧值应被忽略" };
     expect(computeEntryHash(e, null)).toBe(
-      computeEntryHash({ ...e, hash: "另一个旧值" }, null)
+      computeEntryHash({ ...e, hash: "另一个旧值" }, null),
     );
   });
   it("prevHash 不同 → hash 不同（链式依赖）", () => {
@@ -31,7 +33,11 @@ describe("computeEntryHash", () => {
 });
 
 describe("verifyChain", () => {
-  const mk = (seq: number, prevHash: string | null, e: Record<string, unknown> = {}) => {
+  const mk = (
+    seq: number,
+    prevHash: string | null,
+    e: Record<string, unknown> = {},
+  ) => {
     const entry = { sequence: seq, category: "config", ...e, prevHash };
     return { ...entry, hash: computeEntryHash(entry, prevHash) };
   };

@@ -27,7 +27,8 @@ export function computeEntryHash(
   entry: Record<string, unknown>,
   prevHash: string | null,
 ): string {
-  const { hash: _omit, ...rest } = entry;
+  const rest: Record<string, unknown> = { ...entry };
+  delete rest.hash;
   return createHash("sha256")
     .update(prevHash ?? "")
     .update(stableStringify(rest))
@@ -36,7 +37,9 @@ export function computeEntryHash(
 
 /** 链完整性校验：逐条重算 hash 并比对 prevHash 接续（entries 须按链序传入） */
 export function verifyChain(
-  entries: Array<Record<string, unknown> & { prevHash: string | null; hash: string }>,
+  entries: Array<
+    Record<string, unknown> & { prevHash: string | null; hash: string }
+  >,
 ): boolean {
   let prev: string | null = null;
   for (const entry of entries) {

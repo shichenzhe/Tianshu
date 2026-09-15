@@ -220,7 +220,6 @@
     "owner": "创建者",
     "me": "我",
     "automation": "定时任务",
-    "automationTip": "让 AI 按计划自动执行任务",
     "automationNew": "新建",
     "automationEmpty": "暂无定时任务",
     "projectWorkspace": "项目资产空间",

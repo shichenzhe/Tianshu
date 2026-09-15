@@ -9,8 +9,10 @@
  * fields:list / fields:save 自定义字段定义（option 域复用，spec §3.2）。
  * attachments:list|create|delete 附件关联三通道 + remove 级联清关联
  * （文件实体保留在项目资产空间，v6）。
+ * appendAiSummary AI 进展摘要追加（工具专用通道，只增不改；v8，子系统 F）。
  */
 import { ipcMain } from "electron";
+import { format } from "date-fns";
 import prisma from "../../commons/prisma-client";
 import {
   PLAN_FIELD_TYPES,
@@ -223,6 +225,17 @@ export default class PlanItemRepository {
       where: { id: params.id },
       data: { status: params.status, sortOrder: params.sortOrder },
     });
+  }
+
+  /** AI 追加进展（工具专用通道；只增不改） */
+  async appendAiSummary(id: number, text: string): Promise<string | null> {
+    const row = await prisma.planItem.findUnique({ where: { id } });
+    if (!row) {
+      return null;
+    }
+    const next = `${row.aiSummary ? row.aiSummary + "\n" : ""}[${format(new Date(), "yyyy-MM-dd")}] ${text}`;
+    await prisma.planItem.update({ where: { id }, data: { aiSummary: next } });
+    return next;
   }
 
   /**
@@ -500,6 +513,7 @@ export default class PlanItemRepository {
       projectId: row.projectId,
       title: row.title,
       description: row.description ?? "",
+      aiSummary: row.aiSummary ?? "",
       status: row.status as PlanStatus,
       priority: row.priority as PlanPriority,
       assigneeId: row.assigneeId,

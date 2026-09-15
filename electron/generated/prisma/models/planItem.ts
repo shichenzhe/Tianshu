@@ -55,6 +55,7 @@ export type PlanItemMinAggregateOutputType = {
   dueDate: Date | null
   source: string | null
   description: string | null
+  aiSummary: string | null
   sortOrder: number | null
   createdById: number | null
   createdAt: Date | null
@@ -74,6 +75,7 @@ export type PlanItemMaxAggregateOutputType = {
   dueDate: Date | null
   source: string | null
   description: string | null
+  aiSummary: string | null
   sortOrder: number | null
   createdById: number | null
   createdAt: Date | null
@@ -93,6 +95,7 @@ export type PlanItemCountAggregateOutputType = {
   dueDate: number
   source: number
   description: number
+  aiSummary: number
   sortOrder: number
   createdById: number
   createdAt: number
@@ -130,6 +133,7 @@ export type PlanItemMinAggregateInputType = {
   dueDate?: true
   source?: true
   description?: true
+  aiSummary?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -149,6 +153,7 @@ export type PlanItemMaxAggregateInputType = {
   dueDate?: true
   source?: true
   description?: true
+  aiSummary?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -168,6 +173,7 @@ export type PlanItemCountAggregateInputType = {
   dueDate?: true
   source?: true
   description?: true
+  aiSummary?: true
   sortOrder?: true
   createdById?: true
   createdAt?: true
@@ -274,6 +280,7 @@ export type PlanItemGroupByOutputType = {
   dueDate: Date | null
   source: string
   description: string | null
+  aiSummary: string | null
   sortOrder: number
   createdById: number
   createdAt: Date
@@ -316,6 +323,7 @@ export type planItemWhereInput = {
   dueDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
   source?: Prisma.StringFilter<"planItem"> | string
   description?: Prisma.StringNullableFilter<"planItem"> | string | null
+  aiSummary?: Prisma.StringNullableFilter<"planItem"> | string | null
   sortOrder?: Prisma.IntFilter<"planItem"> | number
   createdById?: Prisma.IntFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeFilter<"planItem"> | Date | string
@@ -335,6 +343,7 @@ export type planItemOrderByWithRelationInput = {
   dueDate?: Prisma.SortOrderInput | Prisma.SortOrder
   source?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
+  aiSummary?: Prisma.SortOrderInput | Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -357,6 +366,7 @@ export type planItemWhereUniqueInput = Prisma.AtLeast<{
   dueDate?: Prisma.DateTimeNullableFilter<"planItem"> | Date | string | null
   source?: Prisma.StringFilter<"planItem"> | string
   description?: Prisma.StringNullableFilter<"planItem"> | string | null
+  aiSummary?: Prisma.StringNullableFilter<"planItem"> | string | null
   sortOrder?: Prisma.IntFilter<"planItem"> | number
   createdById?: Prisma.IntFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeFilter<"planItem"> | Date | string
@@ -376,6 +386,7 @@ export type planItemOrderByWithAggregationInput = {
   dueDate?: Prisma.SortOrderInput | Prisma.SortOrder
   source?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
+  aiSummary?: Prisma.SortOrderInput | Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -403,6 +414,7 @@ export type planItemScalarWhereWithAggregatesInput = {
   dueDate?: Prisma.DateTimeNullableWithAggregatesFilter<"planItem"> | Date | string | null
   source?: Prisma.StringWithAggregatesFilter<"planItem"> | string
   description?: Prisma.StringNullableWithAggregatesFilter<"planItem"> | string | null
+  aiSummary?: Prisma.StringNullableWithAggregatesFilter<"planItem"> | string | null
   sortOrder?: Prisma.IntWithAggregatesFilter<"planItem"> | number
   createdById?: Prisma.IntWithAggregatesFilter<"planItem"> | number
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"planItem"> | Date | string
@@ -421,6 +433,7 @@ export type planItemCreateInput = {
   dueDate?: Date | string | null
   source?: string
   description?: string | null
+  aiSummary?: string | null
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -440,6 +453,7 @@ export type planItemUncheckedCreateInput = {
   dueDate?: Date | string | null
   source?: string
   description?: string | null
+  aiSummary?: string | null
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -458,6 +472,7 @@ export type planItemUpdateInput = {
   dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   source?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -477,6 +492,7 @@ export type planItemUncheckedUpdateInput = {
   dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   source?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -496,6 +512,7 @@ export type planItemCreateManyInput = {
   dueDate?: Date | string | null
   source?: string
   description?: string | null
+  aiSummary?: string | null
   sortOrder?: number
   createdById: number
   createdAt?: Date | string
@@ -514,6 +531,7 @@ export type planItemUpdateManyMutationInput = {
   dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   source?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -533,6 +551,7 @@ export type planItemUncheckedUpdateManyInput = {
   dueDate?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   source?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiSummary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sortOrder?: Prisma.IntFieldUpdateOperationsInput | number
   createdById?: Prisma.IntFieldUpdateOperationsInput | number
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -552,6 +571,7 @@ export type planItemCountOrderByAggregateInput = {
   dueDate?: Prisma.SortOrder
   source?: Prisma.SortOrder
   description?: Prisma.SortOrder
+  aiSummary?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -579,6 +599,7 @@ export type planItemMaxOrderByAggregateInput = {
   dueDate?: Prisma.SortOrder
   source?: Prisma.SortOrder
   description?: Prisma.SortOrder
+  aiSummary?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -598,6 +619,7 @@ export type planItemMinOrderByAggregateInput = {
   dueDate?: Prisma.SortOrder
   source?: Prisma.SortOrder
   description?: Prisma.SortOrder
+  aiSummary?: Prisma.SortOrder
   sortOrder?: Prisma.SortOrder
   createdById?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -627,6 +649,7 @@ export type planItemSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   dueDate?: boolean
   source?: boolean
   description?: boolean
+  aiSummary?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -646,6 +669,7 @@ export type planItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   dueDate?: boolean
   source?: boolean
   description?: boolean
+  aiSummary?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -665,6 +689,7 @@ export type planItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   dueDate?: boolean
   source?: boolean
   description?: boolean
+  aiSummary?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
@@ -684,13 +709,14 @@ export type planItemSelectScalar = {
   dueDate?: boolean
   source?: boolean
   description?: boolean
+  aiSummary?: boolean
   sortOrder?: boolean
   createdById?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type planItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "status" | "priority" | "assigneeId" | "tags" | "customFields" | "startDate" | "dueDate" | "source" | "description" | "sortOrder" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["planItem"]>
+export type planItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "title" | "status" | "priority" | "assigneeId" | "tags" | "customFields" | "startDate" | "dueDate" | "source" | "description" | "aiSummary" | "sortOrder" | "createdById" | "createdAt" | "updatedAt", ExtArgs["result"]["planItem"]>
 
 export type $planItemPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "planItem"
@@ -708,6 +734,7 @@ export type $planItemPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     dueDate: Date | null
     source: string
     description: string | null
+    aiSummary: string | null
     sortOrder: number
     createdById: number
     createdAt: Date
@@ -1147,6 +1174,7 @@ export interface planItemFieldRefs {
   readonly dueDate: Prisma.FieldRef<"planItem", 'DateTime'>
   readonly source: Prisma.FieldRef<"planItem", 'String'>
   readonly description: Prisma.FieldRef<"planItem", 'String'>
+  readonly aiSummary: Prisma.FieldRef<"planItem", 'String'>
   readonly sortOrder: Prisma.FieldRef<"planItem", 'Int'>
   readonly createdById: Prisma.FieldRef<"planItem", 'Int'>
   readonly createdAt: Prisma.FieldRef<"planItem", 'DateTime'>

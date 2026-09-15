@@ -12,9 +12,12 @@
  * 字段扩展（子系统 D）：description 透传（create/update，null = 清空）与
  * toRecord null→空串归一、attachments 三通道（list/create/delete）与
  * 事项删除级联清附件关联（文件实体保留）。
+ * v8（子系统 F）：aiSummary 读侧 null→空串归一、人路径负向（create/update
+ * 输出永不含 aiSummary 键）、appendAiSummary 工具专用追加通道（换行 + 日期前缀、
+ * 只增不改、id 不存在返回 null）。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用 project-repo.test.ts 模式。
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
@@ -70,6 +73,7 @@ const projectRow = {
   startDate: null,
   dueDate: null,
   source: "manual",
+  aiSummary: null,
   sortOrder: 2,
   createdById: 1,
   createdAt: now,
@@ -200,6 +204,7 @@ describe("PlanItemRepository.list", () => {
         projectId: 11,
         title: "事项A",
         description: "",
+        aiSummary: "",
         status: "in_progress",
         priority: "P0",
         assigneeId: 1,
@@ -735,5 +740,72 @@ describe("PlanItemRepository.attachments 三通道", () => {
     expect(
       prismaStub.planItemAttachment.deleteMany.mock.invocationCallOrder[0],
     ).toBeLessThan(prismaStub.planItem.delete.mock.invocationCallOrder[0]);
+  });
+});
+
+describe("PlanItemRepository.aiSummary（v8，子系统 F）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("toRecord：aiSummary null 容错归一空串", async () => {
+    prismaStub.planItem.findMany.mockResolvedValue([
+      { ...projectRow, aiSummary: "[2026-09-15] 完成" },
+    ]);
+    expect((await repo.list(11))[0].aiSummary).toBe("[2026-09-15] 完成");
+    prismaStub.planItem.findMany.mockResolvedValue([
+      { ...projectRow, aiSummary: null },
+    ]);
+    expect((await repo.list(11))[0].aiSummary).toBe("");
+  });
+
+  it("人路径负向：buildUpdateData/create 输出永不含 aiSummary 键", async () => {
+    prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
+    await repo.create({ createdById: 1, projectId: 11, title: "t" } as never);
+    const data = prismaStub.planItem.create.mock.calls[0][0].data;
+    expect("aiSummary" in data).toBe(false);
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    await repo.update({ id: 1, title: "x", aiSummary: "hack" } as never);
+    expect(
+      "aiSummary" in prismaStub.planItem.update.mock.calls[0][0].data,
+    ).toBe(false);
+  });
+});
+
+describe("PlanItemRepository.appendAiSummary（工具专用通道，v8）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-15T10:30:00"));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("已有摘要 → 换行追加带日期前缀的新行并回写，返回拼接结果（只增不改）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue({
+      ...projectRow,
+      aiSummary: "[2026-09-14] 启动",
+    });
+    const next = await repo.appendAiSummary(1, "完成联调");
+    expect(next).toBe("[2026-09-14] 启动\n[2026-09-15] 完成联调");
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { aiSummary: "[2026-09-14] 启动\n[2026-09-15] 完成联调" },
+    });
+  });
+
+  it("摘要为 null → 无前导换行直接落首行；id 不存在 → 返回 null 不写库", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValueOnce({
+      ...projectRow,
+      aiSummary: null,
+    });
+    const next = await repo.appendAiSummary(1, "开始");
+    expect(next).toBe("[2026-09-15] 开始");
+    expect(prismaStub.planItem.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { aiSummary: "[2026-09-15] 开始" },
+    });
+    prismaStub.planItem.findUnique.mockResolvedValueOnce(null);
+    expect(await repo.appendAiSummary(99, "x")).toBeNull();
+    expect(prismaStub.planItem.update).toHaveBeenCalledTimes(1);
   });
 });

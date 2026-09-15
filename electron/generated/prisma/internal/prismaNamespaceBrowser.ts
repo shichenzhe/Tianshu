@@ -372,6 +372,7 @@ export const PlanItemScalarFieldEnum = {
   dueDate: 'dueDate',
   source: 'source',
   description: 'description',
+  aiSummary: 'aiSummary',
   sortOrder: 'sortOrder',
   createdById: 'createdById',
   createdAt: 'createdAt',

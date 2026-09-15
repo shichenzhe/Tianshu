@@ -261,6 +261,7 @@ model planItem {
   dueDate     DateTime? // 截止日期
   source      String   @default("manual") // manual|ai|template
   description String? // Markdown 原文（弹窗编辑/预览）
+  aiSummary   String? // AI 进展摘要（只经工具追加）
   sortOrder    Int      @default(0)
   createdById  Int
   createdAt    DateTime @default(now())

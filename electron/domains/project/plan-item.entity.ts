@@ -53,6 +53,11 @@ export interface PlanItemRecord {
   description: string;
 
   /**
+   * AI 进展摘要（空串 = 无，只经 plan_append_summary 工具写入；人路径不可编辑）
+   */
+  aiSummary: string;
+
+  /**
    * 状态
    */
   status: PlanStatus;

@@ -185,11 +185,13 @@ function scriptedModel(scripts: Array<{ steps: ScriptStep[] }>) {
 
 // ---------- 夹具 ----------
 
-/** 会话/工作空间仓储 stub（directoryPath=null 即未绑定目录；mode 透传 DB 列原值）。
- * appendMessage 落回 prismaStub：流历史非空是 streamText 的硬性要求 */
+/** 会话/工作空间仓储 stub（directoryPath=null 即未绑定目录；mode 透传 DB 列原值；
+ * projectId 非 null 即项目会话）。appendMessage 落回 prismaStub：
+ * 流历史非空是 streamText 的硬性要求 */
 const sessionsStub = (
   directoryPath: string | null,
   mode: string | null = null,
+  projectId: number | null = null,
 ): SessionRepository =>
   ({
     getSession: vi.fn(async () => ({
@@ -198,6 +200,7 @@ const sessionsStub = (
       assistantId: prismaStub.assistantRow ? 1 : null,
       title: "新会话",
       mode,
+      projectId,
     })),
     getEffectiveModelId: vi.fn(async () => 11),
     appendMessage: vi.fn(
@@ -551,5 +554,50 @@ describe("run_command 注册（registry 接线）", () => {
     await expect(def.execute(ctx, { command: "rm -rf /" })).resolves.toBe(
       "错误: 该命令被安全策略拦截（高风险破坏性操作）",
     );
+  });
+});
+
+describe("plan 工具组暴露门槛（项目会话专属，子系统 F）", () => {
+  /** 项目仓储 stub：非空项目上下文（空挂载集）→ allowedMcpServers 非 null 分支 */
+  const projectRepoStub = {
+    getPromptContext: vi.fn(async () => ({
+      projectName: "测试项目",
+      systemPrompt: null,
+      boundAssistantPrompts: [],
+      boundSkillNames: [],
+      boundConnectorNames: [],
+    })),
+  };
+
+  it("项目会话：plan_* 三工具随流注入（chat.service 模块级注册 + 非空隔离分支保留）", async () => {
+    const { model, calls } = scriptedModel([
+      { steps: [{ kind: "text", delta: "好" }] },
+    ]);
+    mockFactory.current = () => model;
+    const service = new ChatService(
+      sessionsStub("/tmp/ws", null, 11),
+      undefined,
+      projectRepoStub as never,
+    );
+
+    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+
+    expect(calls[0]?.toolNames).toContain("plan_create_item");
+    expect(calls[0]?.toolNames).toContain("plan_update_status");
+    expect(calls[0]?.toolNames).toContain("plan_append_summary");
+  });
+
+  it("全局会话（projectId null）：tools 数组无 plan_ 前缀工具", async () => {
+    const { model, calls } = scriptedModel([
+      { steps: [{ kind: "text", delta: "好" }] },
+    ]);
+    mockFactory.current = () => model;
+    const service = new ChatService(sessionsStub("/tmp/ws"));
+
+    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+
+    expect(
+      (calls[0]?.toolNames ?? []).some((name) => name.startsWith("plan_")),
+    ).toBe(false);
   });
 });

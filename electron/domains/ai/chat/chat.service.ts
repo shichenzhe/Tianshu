@@ -33,10 +33,11 @@ import {
 import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
-import { registry } from "../agent/tool-registry";
+import { registry, registerTools } from "../agent/tool-registry";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
+import { makePlanTools } from "../agent/plan-tools";
 import { filterDisabledSkills } from "../skill/skill-sync";
 import type { ToolDefinition } from "../agent/file-tools";
 import { resolveSafePath } from "../agent/file-tools";
@@ -62,6 +63,11 @@ type AssistantRow = NonNullable<
 type ChatMessageRow = Awaited<
   ReturnType<typeof prisma.message.findMany>
 >[number];
+
+// plan_* 工具组静态注册进聚合 registry（模块加载一次；create_skill 经
+// SkillRepository 构造注册先例）。项目会话专属——collectToolDefinitions
+// 按会话归属过滤，非项目会话剔除；三工具均 write → 走统一两级审批门禁
+registerTools(makePlanTools({ prisma }));
 
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 const COMPACT_DIRECTIVE =
@@ -110,6 +116,11 @@ export interface AgentStreamOptions {
    * 文件四件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
    */
   workspacePath?: string;
+  /**
+   * 会话归属项目 id（项目模块子系统 F）：plan_* 工具组的属地依据，
+   * 非项目会话为 null（该工具组在 collectToolDefinitions 侧已被剔除）
+   */
+  projectId?: number | null;
   /**
    * 完全访问实时判定（P3 spec §2）：每次 write 工具判定与执行前查询，
    * 撤回立即生效；P4 反馈 2.1：完全访问同时豁免 MCP 写工具
@@ -303,11 +314,13 @@ async function executeToolSafe(
   try {
     return await def.execute(
       // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）；
-      // fullAccess 供文件四件边界放开与 run_command cwd 放开（P3 spec §6）
+      // fullAccess 供文件四件边界放开与 run_command cwd 放开（P3 spec §6）；
+      // projectId 供 plan_* 工具属地校验（子系统 F，非项目会话 null）
       {
         workspacePath: agent.workspacePath ?? "",
         sessionId: agent.sessionId,
         fullAccess: agent.fullAccess(),
+        projectId: agent.projectId ?? null,
       },
       input,
     );
@@ -1158,7 +1171,7 @@ export default class ChatService {
    * P4 反馈 2：isToolAllowed 查 toolPermission 表（工作空间级 allowed-tools）
    */
   private async resolveAgentOptions(
-    session: { workspaceId: number },
+    session: { workspaceId: number; projectId?: number | null },
     sessionId: number,
   ): Promise<AgentStreamOptions> {
     const workspace = session.workspaceId
@@ -1171,6 +1184,7 @@ export default class ChatService {
       workspacePath: directoryPath
         ? normalizeWorkspacePath(directoryPath)
         : undefined,
+      projectId: session.projectId ?? null,
       fullAccess: () => this.permissions.get(sessionId) === "full",
       isToolAllowed: async (toolName: string) => {
         if (workspaceId === null) {
@@ -1192,7 +1206,8 @@ export default class ChatService {
    * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 透传——
    * 项目会话工具硬隔离（二期 §3.7）：allowedMcpServers 非 null 时仅保留
    * 挂载连接器前缀的工具（前缀 `mcp__<server>__` 精确到 server 边界），
-   * 非 mcp 工具不受影响；null = 非项目/ask 会话，全量；
+   * 非 mcp 工具不受影响；null = 非项目/ask 会话，全量（plan_* 除外——
+   * 项目专属工具，全局会话无计划上下文，子系统 F）；
    * create_skill 落盘到用户技能目录、不依赖工作空间，未绑定目录也放行（P-D）；
    * 文件四件依赖工作空间路径，仅绑定目录后注入
    */
@@ -1215,7 +1230,7 @@ export default class ChatService {
               def.name.startsWith(`mcp__${server}__`),
             ),
         )
-      : workspaceScoped;
+      : workspaceScoped.filter((def) => !def.name.startsWith("plan_"));
     return [makeReadSkillTool(skills), ...injected];
   }
 

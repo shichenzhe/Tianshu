@@ -12,6 +12,8 @@ export interface ToolContext {
   sessionId: number;
   /** 完全访问（P3）：true 时文件工具跳过工作空间边界校验（缺省 false=现状） */
   fullAccess?: boolean;
+  /** 会话归属项目 id（子系统 F）：plan_* 工具属地依据，非项目会话 null */
+  projectId?: number | null;
 }
 
 export interface ToolDefinition<TArgs = unknown> {

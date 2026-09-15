@@ -9,7 +9,7 @@
  * sending 单一来源，动态流消息区（ChatMessages，由 ActivityPane 渲染）的
  * 编辑/重发接线经 ChatApi 直调，不在此二次订阅。
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import ChatApi, { type ChatModelParams } from "@/domains/ai/api/chat.api";
 import ChatInput from "@/domains/ai/chat/components/ChatInput";
 import AgentProgress from "@/domains/ai/chat/components/AgentProgress";
+import ApprovalBanner from "@/domains/ai/chat/components/ApprovalBanner";
 import type { AccessMode } from "@/domains/ai/chat/components/PermissionCapsule";
 import type { PendingFile } from "@/domains/ai/chat/lib/pending-file";
 import { useChatSend } from "@/domains/ai/chat/hooks/use-chat-send";
@@ -28,6 +29,55 @@ import PlanItemApi, {
   PLAN_ITEMS_MINE_KEY,
 } from "@/domains/project/api/plan-item.api";
 import type { ProjectDetail } from "../../../../electron/domains/project/project.entity";
+
+/** 挂起审批的工具（输入区上方横幅数据源，与 MessageList 的门控同口径） */
+function usePendingApprovals(
+  sessionId: number,
+): Array<{ toolCallId: string; toolName: string; argSummary: string }> {
+  const tools = useChatStore((state) => state.streams[sessionId]?.tools);
+  return useMemo(() => {
+    if (!tools) {
+      return [];
+    }
+    return tools.order.flatMap((toolCallId) => {
+      const tool = tools.map[toolCallId];
+      if (tool?.state !== "awaiting-approval" || !tool.argSummary) {
+        return [];
+      }
+      return [
+        { toolCallId, toolName: tool.toolName, argSummary: tool.argSummary },
+      ];
+    });
+  }, [tools]);
+}
+
+/** 审批横幅行：write 工具挂起时于底栏输入区上方渲染（可见性跟输入框走） */
+function BarApprovalBanner({
+  sessionId,
+  workspaceId,
+}: {
+  sessionId: number;
+  workspaceId: number | null;
+}) {
+  const pending = usePendingApprovals(sessionId);
+  if (pending.length === 0) {
+    return null;
+  }
+  return (
+    <div className="px-4 pt-3">
+      {pending.map((entry) => (
+        <ApprovalBanner
+          key={entry.toolCallId}
+          toolCallId={entry.toolCallId}
+          toolName={entry.toolName}
+          argSummary={entry.argSummary}
+          workspaceId={workspaceId}
+          onDecided={() => {}}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface ProjectChatBarProps {
   detail: ProjectDetail;
@@ -205,6 +255,12 @@ export default function ProjectChatBar({
       {sending && (
         <AgentProgress stepCount={stepCount} activeTool={activeTool} />
       )}
+      {/* 审批可见性跟输入框走：write 工具挂起审批时横幅渲染于输入区上方，
+          否则非动态 Tab（无 MessageList）下流将永久挂起（sending 卡死） */}
+      <BarApprovalBanner
+        sessionId={session.id}
+        workspaceId={detail.assetWorkspaceId}
+      />
       <div className="p-4 pt-3">
         <ChatInput
           hasModel={Boolean(session.currentModelId)}

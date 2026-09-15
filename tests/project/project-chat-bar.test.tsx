@@ -70,6 +70,8 @@ const chatApiMock = vi.hoisted(() => ({
   compact: vi.fn(),
   getPermission: vi.fn(),
   setPermission: vi.fn(),
+  approveToolCall: vi.fn(),
+  rememberTool: vi.fn(),
 }));
 vi.mock("@/domains/ai/api/chat.api", async (importOriginal) => {
   const actual =
@@ -404,5 +406,58 @@ describe("ProjectChatBar 底栏", () => {
       modelId: undefined,
       overrides: undefined,
     });
+  });
+
+  it("审批横幅：awaiting-approval 工具在输入区上方渲染（非动态 Tab 可见），决议走 approveToolCall；允许并记住写 toolPermission", async () => {
+    chatApiMock.approveToolCall.mockResolvedValue(undefined);
+    chatApiMock.rememberTool.mockResolvedValue(undefined);
+    toastMock.error.mockClear();
+    // store 预置挂起审批的工具流（approval-request chunk 的 updateTool 终态形状）
+    useChatStore.setState({
+      streams: {
+        [SESSION_ID]: {
+          text: "",
+          thinking: "",
+          tools: {
+            order: ["tc1"],
+            map: {
+              tc1: {
+                toolName: "plan_update_status",
+                state: "awaiting-approval",
+                argSummary: "更新任务 #3 状态为进行中",
+              },
+            },
+          },
+        },
+      },
+    });
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    // 横幅出现（argSummary 可见）+ 三按钮（工作空间 30 非空 → 含记住）
+    expect(screen.getByText("更新任务 #3 状态为进行中")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "chat:tool.approve" }));
+    await waitFor(() =>
+      expect(chatApiMock.approveToolCall).toHaveBeenCalledWith("tc1", true),
+    );
+
+    // 允许并记住：先写工作空间记忆再放行（顺序）
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:tool.approveRemember" }),
+    );
+    await waitFor(() =>
+      expect(chatApiMock.rememberTool).toHaveBeenCalledWith(
+        ASSET_WORKSPACE_ID,
+        "plan_update_status",
+      ),
+    );
+    expect(chatApiMock.approveToolCall).toHaveBeenCalledTimes(2);
+    expect(toastMock.error).not.toHaveBeenCalled();
+
+    // 无挂起审批（终态 chunk 后 state 离开 awaiting）→ 横幅消失
+    useChatStore.getState().updateTool(SESSION_ID, "tc1", { state: "done" });
+    await waitFor(() =>
+      expect(screen.queryByText("更新任务 #3 状态为进行中")).toBeNull(),
+    );
   });
 });

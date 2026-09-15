@@ -5,14 +5,18 @@
  * 纯 Node 实现（node:child_process + node:path），可被 vitest 直接测试
  */
 import { exec } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import type { ToolDefinition } from "./file-tools";
+import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface CommandContext {
   workspacePath: string;
   sessionId: number;
   fullAccess?: boolean;
+  /** 安全事件上报（SP1 审计接入）：由 ChatService 装配注入，保持本模块纯函数可测 */
+  onSecurityEvent?: SecurityEventSink;
 }
 
 const EXEC_TIMEOUT_MS = 60_000;
@@ -64,6 +68,11 @@ export function isDangerousCommand(command: string): boolean {
   );
 }
 
+/** 命令指纹（SP1 审计）：sha256 hex——脱敏留痕（preview 截断 + hash 可对账） */
+function commandSha256(command: string): string {
+  return createHash("sha256").update(command).digest("hex");
+}
+
 // ---------- run_command 工具 ----------
 
 const runCommandSchema = z.object({
@@ -97,6 +106,14 @@ function resolveCwd(ctx: CommandContext, rel?: string): string | undefined {
   const inBounds =
     resolved === ctx.workspacePath ||
     resolved.startsWith(ctx.workspacePath + path.sep);
+  if (!inBounds) {
+    ctx.onSecurityEvent?.({
+      eventType: "command-safety.cwd-fallback",
+      decision: "info",
+      detail: { requested: resolved, fallback: ctx.workspacePath },
+      sessionId: ctx.sessionId,
+    });
+  }
   return inBounds ? resolved : ctx.workspacePath;
 }
 
@@ -146,6 +163,14 @@ const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
   kind: "write",
   execute: async (ctx: CommandContext, args) => {
     if (isDangerousCommand(args.command)) {
+      ctx.onSecurityEvent?.({
+        eventType: "command-safety.blocked",
+        decision: "blocked",
+        detail: { command: args.command.slice(0, 200) },
+        commandPreview: args.command.slice(0, 100),
+        commandHash: commandSha256(args.command),
+        sessionId: ctx.sessionId,
+      });
       return "错误: 该命令被安全策略拦截（高风险破坏性操作）";
     }
     try {

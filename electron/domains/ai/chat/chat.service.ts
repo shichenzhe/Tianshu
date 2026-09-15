@@ -54,6 +54,7 @@ import type {
   ChatStreamChunk,
 } from "../../../../src-react/domains/ai/api/chat.api";
 import type { WorkspaceRecord } from "../../../../src-react/domains/ai/api/workspace.api";
+import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
@@ -133,6 +134,14 @@ export interface AgentStreamOptions {
   isToolAllowed: (toolName: string) => Promise<boolean>;
   /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
+  /** 安全事件上报（SP1）：透传给工具 ctx（run_command 拦截/cwd 回退） */
+  onSecurityEvent?: SecurityEventSink;
+  /** 审批决议审计（SP1）：approved/denied 由 runToolCall 决议分支回调 */
+  onApprovalResolved?: (
+    toolName: string,
+    decision: "approved" | "denied",
+    argSummary: string,
+  ) => void;
 }
 
 export interface ChatStreamOptions {
@@ -315,12 +324,14 @@ async function executeToolSafe(
     return await def.execute(
       // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）；
       // fullAccess 供文件四件边界放开与 run_command cwd 放开（P3 spec §6）；
-      // projectId 供 plan_* 工具属地校验（子系统 F，非项目会话 null）
+      // projectId 供 plan_* 工具属地校验（子系统 F，非项目会话 null）；
+      // onSecurityEvent 供 run_command 拦截/cwd 回退上报（SP1 审计）
       {
         workspacePath: agent.workspacePath ?? "",
         sessionId: agent.sessionId,
         fullAccess: agent.fullAccess(),
         projectId: agent.projectId ?? null,
+        onSecurityEvent: agent.onSecurityEvent,
       },
       input,
     );
@@ -395,8 +406,19 @@ async function runToolCall(
         state: "denied",
         output: TOOL_DENIED_OUTPUT,
       });
+      agent.onApprovalResolved?.(
+        def.name,
+        decision,
+        summarizeArgs(def.name, input),
+      );
       return TOOL_DENIED_OUTPUT;
     }
+    // aborted/denied 均已 return，此处必为 approved（SP1 审计：批准决议）
+    agent.onApprovalResolved?.(
+      def.name,
+      decision,
+      summarizeArgs(def.name, input),
+    );
   }
   onChunk?.({
     type: "tool-update",
@@ -715,6 +737,9 @@ export default class ChatService {
     // 项目模块一期：项目会话 base 注入项目上下文（项目指令+挂载专家）；
     // repo 缺席（测试）时回退助手 prompt，行为与非项目会话一致
     private projectRepo?: ProjectRepository,
+    // 审计事件出口（SP1）：Application 注入 auditLogService.append；
+    // 缺席（测试/未接线）时全部回调静默空转，行为与接入前一致
+    private auditSink?: SecurityEventSink,
   ) {
     this.registerHandlers();
   }
@@ -1169,6 +1194,7 @@ export default class ChatService {
    * workspacePath 仅在绑定目录后有值；fullAccess 实时查 PermissionStore
    * （P3 两级审批：workspace.writeApprovedAt 读取路径已废弃，spec R2）。
    * P4 反馈 2：isToolAllowed 查 toolPermission 表（工作空间级 allowed-tools）
+   * SP1 安全中心：onSecurityEvent/onApprovalResolved 桥接 auditSink 审计出口
    */
   private async resolveAgentOptions(
     session: { workspaceId: number; projectId?: number | null },
@@ -1198,6 +1224,19 @@ export default class ChatService {
       },
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
+      onSecurityEvent: (event) => this.auditSink?.(event),
+      onApprovalResolved: (toolName, decision, argSummary) => {
+        // 决议词汇对齐审计侧：内部 denied 记 rejected（AuditDecision 与 UI i18n 词汇）
+        const audited = decision === "approved" ? "approved" : "rejected";
+        const category =
+          toolName === "run_command" ? "command-safety" : "file-safety";
+        this.auditSink?.({
+          eventType: `${category}.${audited}`,
+          decision: audited,
+          detail: { tool: toolName, summary: argSummary },
+          sessionId,
+        });
+      },
     };
   }
 

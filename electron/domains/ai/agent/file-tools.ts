@@ -6,6 +6,7 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface ToolContext {
   workspacePath: string;
@@ -14,6 +15,8 @@ export interface ToolContext {
   fullAccess?: boolean;
   /** 会话归属项目 id（子系统 F）：plan_* 工具属地依据，非项目会话 null */
   projectId?: number | null;
+  /** 安全事件上报（SP1 审计）：ChatService 装配透传，工具按需消费（如 run_command） */
+  onSecurityEvent?: SecurityEventSink;
 }
 
 export interface ToolDefinition<TArgs = unknown> {

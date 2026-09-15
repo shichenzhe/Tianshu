@@ -153,7 +153,10 @@ export default class Application {
       audit: (event) => auditLogService.append(event),
     });
     await securityService.init().catch((e) => Log.error("安全配置加载失败", e));
-    new ChatService(sessionRepo, skillRepo, projectRepo);
+    // SP1 事件源接入：命令拦截/审批决议经 ChatService 第 4 参汇入审计链
+    new ChatService(sessionRepo, skillRepo, projectRepo, (event) =>
+      auditLogService.append(event),
+    );
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）
     void skillRepo

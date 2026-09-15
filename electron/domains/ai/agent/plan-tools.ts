@@ -21,7 +21,11 @@ interface PlanItemDbRow {
   id: number;
   projectId: number | null;
   title: string;
+  description: string | null;
   status: string;
+  priority: string;
+  dueDate: Date | null;
+  source: string;
   aiSummary: string | null;
 }
 
@@ -144,6 +148,10 @@ const appendSummarySchema = z.object({
 
 const listItemsSchema = z.object({});
 
+const getItemSchema = z.object({
+  id: z.number().describe("任务 id（#<id> 引用）"),
+});
+
 /** plan_list_items：项目内全量任务 → 行摘要（跨项目行不可见，只增数据不加幻觉） */
 async function listItems(
   deps: PlanToolsDeps,
@@ -170,6 +178,35 @@ async function listItems(
     }`;
   });
   return `当前项目计划清单（共 ${rows.length} 项）：\n${lines.join("\n")}`;
+}
+
+/** plan_get_item：属地校验 → 完整详情（含描述/全文进展——AI 推进的内容依据） */
+async function getItem(
+  deps: PlanToolsDeps,
+  ctx: ToolContext,
+  id: number,
+): Promise<string> {
+  if (ctx.projectId == null) {
+    return fail("当前会话未关联项目");
+  }
+  const row = await findOwnedItem(deps, ctx, id);
+  if (!row) {
+    return fail("任务不存在或不属于当前项目");
+  }
+  const parts = [
+    `#${row.id}《${row.title}》`,
+    `状态: ${STATUS_LABELS[row.status as PlanStatus]}`,
+    `优先级: ${row.priority}`,
+    `截止: ${row.dueDate ? format(row.dueDate, "yyyy-MM-dd") : "无"}`,
+    `来源: ${row.source}`,
+  ];
+  if (row.description) {
+    parts.push(`[描述]\n${row.description}`);
+  }
+  if (row.aiSummary) {
+    parts.push(`[进展]\n${row.aiSummary}`);
+  }
+  return parts.join("\n");
 }
 
 /** plan_create_item：ctx.projectId/标题/日期校验 → source=ai 建行（未指派） */
@@ -317,7 +354,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
     };
   const listItemsTool: ToolDefinition<z.infer<typeof listItemsSchema>> = {
     name: "plan_list_items",
-    description: `查看当前项目的全量计划清单（#id｜标题｜状态｜最近进展）。${GROUNDING_NOTE}——不确定任务是否存在、或需要了解项目全貌时先调用本工具，不要去文件系统寻找任务文件。`,
+    description: `查看当前项目的全量计划清单（#id｜标题｜状态｜最近进展）。${GROUNDING_NOTE}——不确定任务是否存在、或需要了解项目全貌时先调用本工具，不要去文件系统寻找任务文件。清单只含摘要，推进某任务前用 plan_get_item 看完整描述。`,
     parameters: listItemsSchema,
     kind: "read",
     execute: async (ctx) => {
@@ -328,5 +365,24 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
       }
     },
   };
-  return [createItemTool, updateStatusTool, appendSummaryTool, listItemsTool];
+  const getItemTool: ToolDefinition<z.infer<typeof getItemSchema>> = {
+    name: "plan_get_item",
+    description: `按 id 查看单个任务的完整详情（状态/优先级/截止/来源/描述/全部进展）。${GROUNDING_NOTE}。推进任务前应调用本工具了解任务描述与历史进展。`,
+    parameters: getItemSchema,
+    kind: "read",
+    execute: async (ctx, args) => {
+      try {
+        return await getItem(deps, ctx, args.id);
+      } catch (e) {
+        return fail(toMessage(e));
+      }
+    },
+  };
+  return [
+    createItemTool,
+    updateStatusTool,
+    appendSummaryTool,
+    listItemsTool,
+    getItemTool,
+  ];
 }

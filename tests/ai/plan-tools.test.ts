@@ -12,7 +12,11 @@ interface StubRow {
   id: number;
   projectId: number | null;
   title: string;
+  description?: string | null;
   status: string;
+  priority?: string;
+  dueDate?: Date | null;
+  source?: string;
   aiSummary: string | null;
   sortOrder: number;
 }
@@ -99,13 +103,14 @@ afterEach(() => {
 });
 
 describe("plan 工具组元信息", () => {
-  it("四工具 name/kind（三写一读）/描述含 #<id> 引用与结构化清单锚点（建/流转含 plan_append_summary 教学）", () => {
+  it("五工具 name/kind（三写二读）/描述含 #<id> 引用与结构化清单锚点（建/流转含 plan_append_summary 教学）", () => {
     const tools = makePlanTools(makeDeps().deps);
     expect(tools.map((tool) => tool.name)).toEqual([
       "plan_create_item",
       "plan_update_status",
       "plan_append_summary",
       "plan_list_items",
+      "plan_get_item",
     ]);
     for (const tool of tools.slice(0, 3)) {
       expect(tool.kind).toBe("write");
@@ -113,6 +118,7 @@ describe("plan 工具组元信息", () => {
     }
     expect(tools[3]?.kind).toBe("read");
     expect(tools[3]?.description).toContain("不要去文件系统寻找任务文件");
+    expect(tools[4]?.kind).toBe("read");
     expect(tools[0]?.description).toContain("plan_append_summary");
     expect(tools[1]?.description).toContain("plan_append_summary");
   });
@@ -391,5 +397,63 @@ describe("plan_list_items（读工具：AI 查看全量清单）", () => {
     const { deps } = makeDeps();
     const out = await toolOf(deps, "plan_list_items").execute(ctx(), {});
     expect(out).toContain("当前项目计划清单为空");
+  });
+});
+
+describe("plan_get_item（详情工具：描述/全文进展进入 AI 通道）", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-15T03:00:00Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("kind=read；本项目任务返回完整详情（含 [描述] 与全文 [进展]）", async () => {
+    const { deps } = makeDeps([
+      {
+        id: 3,
+        projectId: 11,
+        title: "t2 联调",
+        description: "# 目标\n打通登录联调链路",
+        status: "not_started",
+        priority: "P1",
+        dueDate: new Date("2026-09-16T00:00:00.000Z"),
+        source: "manual",
+        aiSummary: "[2026-09-14] 启动",
+        sortOrder: 1,
+      },
+    ]);
+    const tool = toolOf(deps, "plan_get_item");
+    expect(tool?.kind).toBe("read");
+    const out = await tool?.execute(ctx(), { id: 3 });
+    expect(out).toContain("#3《t2 联调》");
+    expect(out).toContain("状态: 待开始");
+    expect(out).toContain("优先级: P1");
+    expect(out).toContain("截止: 2026-09-16");
+    expect(out).toContain("[描述]\n# 目标\n打通登录联调链路");
+    expect(out).toContain("[进展]\n[2026-09-14] 启动");
+  });
+
+  it("无描述/无进展 → 两块不渲染；跨项目/不存在 → 错误；非项目会话拒绝", async () => {
+    const { deps } = makeDeps([
+      {
+        id: 4,
+        projectId: 11,
+        title: "裸任务",
+        status: "in_progress",
+        aiSummary: null,
+        sortOrder: 1,
+      },
+    ]);
+    const out = await toolOf(deps, "plan_get_item").execute(ctx(), { id: 4 });
+    expect(out).toContain("#4《裸任务》");
+    expect(out).not.toContain("[描述]");
+    expect(out).not.toContain("[进展]");
+
+    await expect(
+      toolOf(deps, "plan_get_item").execute(ctx(), { id: 99 }),
+    ).resolves.toBe("错误: 任务不存在或不属于当前项目");
+    await expect(
+      toolOf(deps, "plan_get_item").execute(omitCtx(), { id: 4 }),
+    ).resolves.toBe("错误: 当前会话未关联项目");
   });
 });

@@ -97,6 +97,7 @@ const TODO_ITEMS = [
     status: "todo",
     priority: "high",
     dueDate: "2026-09-20",
+    description: "# 目标\n完成 PRD 的需求梳理",
   },
   {
     id: 5,
@@ -209,17 +210,18 @@ describe("@ 待办引用（# 联想）", () => {
 
     await waitFor(() => expect(onSend).toHaveBeenCalledTimes(1));
     // 消息文本保留 token 原样（同 @ 文件/⚡技能口径）；注入块携带待办摘要
+    // 与 [描述] 块（AI 推进的内容依据——描述缺省时不附块）
     expect(onSend).toHaveBeenCalledWith("#3", [
       {
         path: "待办#3",
         content:
-          "【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20",
+          "【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20\n[描述]\n# 目标\n完成 PRD 的需求梳理",
         kind: "todo",
       },
     ]);
   });
 
-  it("手输 #5（未走面板）可发送；dueDate 空 → 截止:无", async () => {
+  it("手输 #5（未走面板）可发送；dueDate 空 → 截止:无；无描述 → 不附 [描述] 块", async () => {
     const textarea = renderInput({ todoItems: TODO_ITEMS });
     type(textarea, "#5 请关注");
     fireEvent.keyDown(textarea, { key: "Enter" });
@@ -283,7 +285,7 @@ describe("#待办引用携带 AI 进展（aiSummary）", () => {
     expect(files).toEqual([
       {
         path: "待办#3",
-        content: `【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20\n[进展]\n${lines
+        content: `【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20\n[描述]\n# 目标\n完成 PRD 的需求梳理\n[进展]\n${lines
           .slice(2)
           .join("\n")}`,
         kind: "todo",
@@ -294,7 +296,7 @@ describe("#待办引用携带 AI 进展（aiSummary）", () => {
     expect(files[0].content).toContain("进展第12行");
   });
 
-  it("aiSummary 空串（''=无）→ content 与原格式一致（无 [进展]）", async () => {
+  it("aiSummary 空串（''=无）→ 无 [进展]（[描述] 块仍在）", async () => {
     const textarea = renderInput({
       todoItems: [{ ...TODO_ITEMS[0], aiSummary: "" }],
     });
@@ -306,7 +308,7 @@ describe("#待办引用携带 AI 进展（aiSummary）", () => {
       {
         path: "待办#3",
         content:
-          "【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20",
+          "【待办】梳理需求文档｜状态:todo｜优先级:high｜截止:2026-09-20\n[描述]\n# 目标\n完成 PRD 的需求梳理",
         kind: "todo",
       },
     ]);

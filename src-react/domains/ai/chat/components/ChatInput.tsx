@@ -80,6 +80,8 @@ interface TodoSuggestItem {
   status: string;
   priority: string;
   dueDate?: string | null;
+  /** 任务描述(PlanItemRecord Markdown 原文;发送时附 [描述] 块,AI 推进的内容依据) */
+  description?: string;
   /** AI 进展摘要(PlanItemRecord;空串/缺省 = 无,发送时不附 [进展] 块) */
   aiSummary?: string;
 }
@@ -418,11 +420,14 @@ export default function ChatInput({
         );
         if (item) {
           const summary = `【待办】${item.title}｜状态:${item.status}｜优先级:${item.priority}｜截止:${item.dueDate || "无"}`;
+          const withDescription = item.description
+            ? `${summary}\n[描述]\n${item.description}`
+            : summary;
           files.push({
             path: `待办#${item.id}`,
             content: item.aiSummary
-              ? `${summary}\n[进展]\n${item.aiSummary.split("\n").slice(-10).join("\n")}`
-              : summary,
+              ? `${withDescription}\n[进展]\n${item.aiSummary.split("\n").slice(-10).join("\n")}`
+              : withDescription,
             kind: "todo",
           });
         }

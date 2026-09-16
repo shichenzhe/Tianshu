@@ -43,6 +43,7 @@ import { Constants } from "./Constants";
 import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
 import { buildExemptDomains } from "./domains/security/domain-policy";
 import { installNetworkGate } from "./domains/security/network-gate";
+import { LocalConnectProxy } from "./domains/security/local-proxy";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -178,10 +179,56 @@ export default class Application {
       }
       return providerDomains;
     };
+    // 网络安全门（SP5）：单例安装——policyProvider 保持同步（undici dispatch
+    // 同步路径）：TTL 内用豁免域缓存，过期由异步刷新。声明先于 SecurityService
+    // 与代理生命周期函数：init 尾部即触 onConfigChange，晚声明会 TDZ ReferenceError
+    const networkGate = installNetworkGate({
+      policyProvider: () => {
+        const config = securityService.getConfigValue();
+        if (!config.sandboxEnabled) return null;
+        return {
+          exemptDomains: buildExemptDomains(
+            providerDomains,
+            Constants.UPGRADE_URL,
+          ),
+          domainAllow: config.domainAllow,
+          domainDeny: config.domainDeny,
+          blockAllNetwork: config.blockAllNetwork,
+          maliciousDomainProtection: config.maliciousDomainProtection,
+        };
+      },
+      audit: (event) => auditLogService.append(event),
+    });
+    // 本地 CONNECT 代理（SP5）：按配置需要启停（spec §5 生命周期）——
+    // 声明须先于 SecurityService（TDZ 同上）；securityService/networkGate
+    // 均为闭包引用，onConfigChange 触发时两者已就绪
+    const localProxy = new LocalConnectProxy(() => networkGate);
+    const syncProxyLifecycle = async (): Promise<void> => {
+      const config = securityService.getConfigValue();
+      const needed =
+        config.sandboxEnabled &&
+        (config.domainAllow.length > 0 ||
+          config.domainDeny.length > 0 ||
+          config.blockAllNetwork ||
+          config.maliciousDomainProtection);
+      const running = localProxy.port !== undefined;
+      if (needed && !running) {
+        try {
+          const port = await localProxy.start();
+          networkGate.setProxyUrl(`http://127.0.0.1:${port}`);
+        } catch (e) {
+          Log.error("本地网络代理启动失败，子进程网络维持现状", e);
+        }
+      } else if (!needed && running) {
+        networkGate.setProxyUrl(undefined);
+        await localProxy.stop();
+      }
+    };
     const securityService = new SecurityService({
       audit: (event) => auditLogService.append(event),
       onConfigChange: () => {
         void readProviderDomains();
+        void syncProxyLifecycle();
       },
     });
     await securityService.init().catch((e) => Log.error("安全配置加载失败", e));
@@ -201,32 +248,18 @@ export default class Application {
         [app.getPath("userData")],
       ),
     );
-    // 网络安全门（SP5）：单例安装 + undici 代理槽接线——policyProvider
-    // 保持同步（undici dispatch 同步路径）：TTL 内用豁免域缓存，过期由异步刷新；
-    // 本地代理生命周期接线在 Task 4，此处先只接豁免域刷新与全局策略层
-    const networkGate = installNetworkGate({
-      policyProvider: () => {
-        const config = securityService.getConfigValue();
-        if (!config.sandboxEnabled) return null;
-        return {
-          exemptDomains: buildExemptDomains(
-            providerDomains,
-            Constants.UPGRADE_URL,
-          ),
-          domainAllow: config.domainAllow,
-          domainDeny: config.domainDeny,
-          blockAllNetwork: config.blockAllNetwork,
-          maliciousDomainProtection: config.maliciousDomainProtection,
-        };
-      },
-      audit: (event) => auditLogService.append(event),
-    });
+    // undici 全局策略槽（SP5）：主进程 fetch 层判定接线（门已在上方安装）
     setPolicyHook({
       judgeHost: (host) => networkGate.judgeHost(host),
       onBlocked: (host, rule) => networkGate.blockedAudit(host, rule, "fetch"),
     });
-    // TTL 异步刷新（首启动即拉一次）
+    // TTL 异步刷新（首启动即拉一次）+ 代理生命周期初对齐（配置变更时经
+    // onConfigChange 重触发）；退出时停本地代理释放端口
     void readProviderDomains();
+    await syncProxyLifecycle().catch((e) =>
+      Log.error("网络代理生命周期初始化失败", e),
+    );
+    app.on("quit", () => void localProxy.stop());
     // SP4 数据安全：备份服务 + ChatService 数据安全装配（闭包实时读配置）
     const fileHistory = new FileHistoryService(
       path.join(app.getPath("userData"), "file-history"),

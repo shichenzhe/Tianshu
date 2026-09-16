@@ -10,6 +10,7 @@ import path from "node:path";
 import { z } from "zod";
 import type { ToolDefinition } from "./file-tools";
 import { watchCommandTree } from "../../security/child-monitor";
+import { getNetworkGate } from "../../security/network-gate";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface CommandContext {
@@ -76,6 +77,12 @@ function commandSha256(command: string): string {
   return createHash("sha256").update(command).digest("hex");
 }
 
+/** 子进程 env（SP5）：网络安全门装且本地代理启动时注入 proxy 指向，缺省继承 */
+function buildChildEnv(): NodeJS.ProcessEnv | undefined {
+  const proxyEnv = getNetworkGate()?.childProxyEnv();
+  return proxyEnv ? { ...process.env, ...proxyEnv } : undefined;
+}
+
 // ---------- run_command 工具 ----------
 
 const runCommandSchema = z.object({
@@ -133,7 +140,12 @@ function runExec(
   const promise = new Promise<ExecOutcome>((resolve, reject) => {
     child = exec(
       command,
-      { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER },
+      {
+        cwd,
+        timeout: EXEC_TIMEOUT_MS,
+        maxBuffer: EXEC_MAX_BUFFER,
+        env: buildChildEnv(),
+      },
       (error, stdout, stderr) => {
         if (!error) {
           resolve({ code: 0, label: "", stdout, stderr });

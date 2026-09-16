@@ -63,6 +63,16 @@ describe("NetworkGate", () => {
     expect(gate.judgeUrl("::bad::")).toEqual({ ok: true });
   });
 
+  it("policyProvider 抛错 → judgeHost fail-open 放行（终审加固）", () => {
+    const gate = installNetworkGate({
+      policyProvider: () => {
+        throw new Error("provider boom");
+      },
+      audit: () => {},
+    });
+    expect(gate.judgeHost("evil.com")).toEqual({ ok: true });
+  });
+
   it("blockedAudit 走 audit sink（network.blocked）", () => {
     const audit = vi.fn();
     const gate = installNetworkGate({ policyProvider: () => null, audit });

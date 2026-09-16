@@ -9,6 +9,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { ToolDefinition } from "./file-tools";
 import { registerTools, unregisterTools } from "./tool-registry";
+import { getNetworkGate } from "../../security/network-gate";
+import type { NetworkVerdict } from "../../security/domain-policy";
 
 export interface McpServerConfig {
   id: number;
@@ -106,6 +108,34 @@ export function parseMcpRow(row: McpServerRow): McpServerConfig {
   };
 }
 
+/**
+ * MCP http 入口预判（SP5 spec §6）：deny 抛错（含 host 与规则，回喂状态机
+ * error 文案）——SDK transport 构造之前拦截，未装门或缺省 url 零行为
+ */
+export function assertMcpUrlAllowed(
+  row: McpServerConfig,
+  checkUrl?: (url: string) => NetworkVerdict,
+): void {
+  if (row.transport !== "http" || !row.url) return;
+  const verdict: NetworkVerdict = checkUrl
+    ? checkUrl(row.url)
+    : (getNetworkGate()?.judgeUrl(row.url) ?? { ok: true });
+  if (!verdict.ok) {
+    getNetworkGate()?.blockedAudit(verdict.host, verdict.rule, "mcp");
+    throw new Error(
+      `网络安全策略已拒绝 ${verdict.host}（规则：${verdict.rule}）`,
+    );
+  }
+}
+
+/** stdio 子进程 env（SP5）：合并 proxy 注入（门未装/代理未启动原样返回） */
+export function mergeStdioEnv(
+  row: McpServerConfig,
+): Record<string, string> | undefined {
+  const proxyEnv = getNetworkGate()?.childProxyEnv();
+  return proxyEnv ? { ...row.env, ...proxyEnv } : row.env;
+}
+
 /** 生产 client 工厂：SDK 唯一 import/构造点（其余仅依赖 McpClientLike） */
 export async function createDefaultClient(
   row: McpServerConfig,
@@ -113,6 +143,7 @@ export async function createDefaultClient(
   let transport: StdioClientTransport | StreamableHTTPClientTransport;
   if (row.transport === "http") {
     if (!row.url) throw new Error(`MCP 服务 ${row.name} 缺少 url`);
+    assertMcpUrlAllowed(row);
     transport = new StreamableHTTPClientTransport(new URL(row.url), {
       requestInit: { headers: row.headers ?? {} },
     });
@@ -121,7 +152,7 @@ export async function createDefaultClient(
     transport = new StdioClientTransport({
       command: row.command,
       args: row.args,
-      env: row.env,
+      env: mergeStdioEnv(row),
     });
   }
   const client = new Client({ name: "tianshu", version: "1.0.0" });

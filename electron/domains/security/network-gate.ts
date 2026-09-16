@@ -39,7 +39,11 @@ export class PolicyDispatcher extends Dispatcher {
     if (host) {
       const verdict = this.judge(host);
       if (!verdict.ok) {
-        this.onBlocked(verdict.host, verdict.rule);
+        try {
+          this.onBlocked(verdict.host, verdict.rule);
+        } catch {
+          // 审计发射失败不影响判定路径（fail-open 不制造新故障）
+        }
         try {
           // undici 8 v2 handler 同步错误惯例（照 DispatcherBase 先例：
           // 传 null controller，.d.ts 未建模故需断言；fetch/Legacy 包装层均忽略）
@@ -97,12 +101,12 @@ export class NetworkGate {
   ) {}
 
   judgeHost(host: string): NetworkVerdict {
-    const policy = this.policyProvider();
-    if (policy === null) return { ok: true }; // sandboxEnabled=false 旁路（裁定 3）
     try {
+      const policy = this.policyProvider();
+      if (policy === null) return { ok: true }; // sandboxEnabled=false 旁路（裁定 3）
       return judgeDomain(normalizeDomain(host), policy);
     } catch {
-      return { ok: true }; // fail-open（spec §9）
+      return { ok: true }; // fail-open（spec §9，含 provider 抛错——照 makeCommandDecider 先例）
     }
   }
 

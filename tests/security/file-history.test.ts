@@ -19,6 +19,7 @@ import {
   FileHistoryService,
 } from "../../electron/domains/security/file-history";
 import {
+  ESTIMATE_COUNT_LIMIT,
   snapshotName,
   type BackupEntry,
 } from "../../electron/domains/security/backup-policy";
@@ -129,4 +130,18 @@ describe("countFilesForEstimate", () => {
     expect(await countFilesForEstimate(path.join(WS, "tree", "1.txt"))).toBe(1);
     expect(await countFilesForEstimate(path.join(WS, "nope"))).toBe(0);
   });
+  it("真实达限：超上限文件数 → 恰返回 ESTIMATE_COUNT_LIMIT（达限即停）", async () => {
+    const huge = path.join(WS, "huge");
+    fs.mkdirSync(huge, { recursive: true });
+    const total = ESTIMATE_COUNT_LIMIT + 1;
+    const batch = 500; // 空文件分批并发创建
+    for (let i = 0; i < total; i += batch) {
+      await Promise.all(
+        Array.from({ length: Math.min(batch, total - i) }, (_, j) =>
+          fs.promises.writeFile(path.join(huge, `f${i + j}.txt`), ""),
+        ),
+      );
+    }
+    expect(await countFilesForEstimate(huge)).toBe(ESTIMATE_COUNT_LIMIT);
+  }, 20000);
 });

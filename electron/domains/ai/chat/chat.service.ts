@@ -475,7 +475,8 @@ async function resolveBulkDelete(
       agent.bulkDeleteThreshold ?? BULK_DELETE_THRESHOLD_DEFAULT;
     const count = await countFilesForEstimate(abs);
     return count >= threshold ? count : null;
-  } catch {
+  } catch (e) {
+    Log.error(`批量删除预估失败 toolName=${toolName} path=${rel}`, e);
     return null;
   }
 }

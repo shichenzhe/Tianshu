@@ -23,7 +23,7 @@
     "deleteProtectionDesc": "开启后文件删除操作移入回收站，而非永久删除",
     "bulkThreshold": "批量删除审批阈值",
     "bulkThresholdDesc": "单次操作删除文件数量超过该阈值时，暂停并请求确认",
-    "invalidThreshold": "阈值需为 1–99999 的整数"
+    "invalidThreshold": "阈值需为 1–10000 的整数"
   },
   "audit": {
     "title": "审计中心",

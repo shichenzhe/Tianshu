@@ -56,10 +56,11 @@ export default function DataSafetyCard({
   );
   const thresholdRef = useRef(config.bulkDeleteThreshold);
 
-  /** 失焦保存：1–99999 整数，非法还原 + toast；保存后以服务端 normalize 回显 */
+  /** 失焦保存：1–10000 整数，非法还原 + toast；保存后以服务端 normalize 回显 */
   const saveThreshold = () => {
     const n = Number(threshold);
-    if (!Number.isInteger(n) || n < 1 || n > 99999) {
+    // 上限 10000：与 electron/domains/security/backup-policy.ts 的 ESTIMATE_COUNT_LIMIT 保持同步
+    if (!Number.isInteger(n) || n < 1 || n > 10000) {
       setThreshold(String(thresholdRef.current));
       toast.error(t("security:dataSafety.invalidThreshold"));
       return;

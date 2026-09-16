@@ -23,7 +23,7 @@
     "deleteProtectionDesc": "Deleted files go to the trash instead of being permanently removed",
     "bulkThreshold": "Bulk delete approval threshold",
     "bulkThresholdDesc": "Pause and ask for confirmation when deleting more files than this threshold",
-    "invalidThreshold": "Threshold must be an integer between 1 and 99999"
+    "invalidThreshold": "Threshold must be an integer between 1 and 10000"
   },
   "audit": {
     "title": "Audit Center",

@@ -107,7 +107,9 @@ export class FileHistoryService {
       await this.enforceNow();
       return { ok: true, size: stat.size };
     } catch (e) {
-      return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+      const reason = e instanceof Error ? e.message : String(e);
+      Log.error(`文件备份失败 absPath=${absPath} reason=${reason}`);
+      return { ok: false, reason };
     }
   }
 

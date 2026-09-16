@@ -9,6 +9,7 @@ import type {
   SecurityConfigKey,
 } from "../../../src-react/domains/security/model/types";
 import { parseBoolOption } from "../app-settings/option-store";
+import { ESTIMATE_COUNT_LIMIT } from "./backup-policy";
 import { SECURITY_DEFAULTS } from "./defaults";
 
 export const SECURITY_OPTION_TYPE = "security";
@@ -60,11 +61,16 @@ export function normalizeFileBackupMaxSizeMB(v: unknown): number {
   return Math.max(1000, Math.round(n));
 }
 
+/**
+ * 批量删除阈值：整数钳制到 [1, ESTIMATE_COUNT_LIMIT]——上限与预估计数封顶
+ * 一致（>上限时 count 恒 ≤ 上限 < 阈值会致批量门静默失效）；非法回落默认。
+ */
 export function normalizeBulkDeleteThreshold(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
-  return Number.isInteger(n) && n >= 1 && n <= 99999
-    ? n
-    : SECURITY_DEFAULTS.bulkDeleteThreshold;
+  if (!Number.isInteger(n) || n < 1) {
+    return SECURITY_DEFAULTS.bulkDeleteThreshold;
+  }
+  return Math.min(n, ESTIMATE_COUNT_LIMIT);
 }
 
 /** 命令规则校验：prefix 非空字符串数组（空 token 剔除），reason 可选 */

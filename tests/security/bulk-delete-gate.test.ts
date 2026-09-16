@@ -15,6 +15,7 @@ import {
   type AgentStreamOptions,
 } from "../../electron/domains/ai/chat/chat.service";
 import { makeFileTool } from "../../electron/domains/ai/agent/file-tools";
+import { ESTIMATE_COUNT_LIMIT } from "../../electron/domains/security/backup-policy";
 import type { SecurityEvent } from "../../src-react/domains/security/model/types";
 
 let WS = "";
@@ -140,4 +141,35 @@ describe("批量删除预估门", () => {
     expect(agent.approvals).toHaveLength(0);
     expect(out).toContain("x");
   });
+  it("阈值 10000（钳制后上限）+ 超上限文件目录 → 仍强制审批（无 dead-zone）", async () => {
+    const huge = path.join(WS, "huge");
+    fs.mkdirSync(huge, { recursive: true });
+    const total = ESTIMATE_COUNT_LIMIT + 1; // 预估恰返回 10000 = 钳制后阈值上限
+    const batch = 500; // 空文件分批并发创建
+    for (let i = 0; i < total; i += batch) {
+      await Promise.all(
+        Array.from({ length: Math.min(batch, total - i) }, (_, j) =>
+          fs.promises.writeFile(path.join(huge, `f${i + j}.txt`), ""),
+        ),
+      );
+    }
+    const agent = makeAgent({
+      fullAccess: () => true,
+      bulkDeleteThreshold: ESTIMATE_COUNT_LIMIT,
+    });
+    const out = await runToolCall(
+      makeFileTool("delete_file"),
+      agent,
+      "b6",
+      { path: "huge" },
+      undefined,
+    );
+    expect(agent.approvals).toHaveLength(1);
+    expect(
+      agent.events.some(
+        (e) => e.eventType === "data-safety.bulk-delete-needs-approval",
+      ),
+    ).toBe(true);
+    expect(out).toContain("回收站"); // 审批通过后执行（mock trashItem）
+  }, 20000);
 });

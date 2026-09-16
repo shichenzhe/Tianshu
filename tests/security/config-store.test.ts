@@ -21,10 +21,13 @@ describe("normalize 族", () => {
     expect(normalizeFileBackupMaxSizeMB(2500.7)).toBe(2501);
     expect(normalizeFileBackupMaxSizeMB("3000")).toBe(3000);
   });
-  it("批量删除阈值：整数 1–99999 保留，非法回落 50", () => {
+  it("批量删除阈值：1–10000 保留，>10000 钳至预估计数上限，非法回落 50", () => {
     expect(normalizeBulkDeleteThreshold(120)).toBe(120);
+    expect(normalizeBulkDeleteThreshold(10000)).toBe(10000);
     expect(normalizeBulkDeleteThreshold(0)).toBe(50);
-    expect(normalizeBulkDeleteThreshold(100000)).toBe(50);
+    expect(normalizeBulkDeleteThreshold(20000)).toBe(10000); // 钳制：封堵 >10000 静默失效区
+    expect(normalizeBulkDeleteThreshold(100000)).toBe(10000);
+    expect(normalizeBulkDeleteThreshold(20000.5)).toBe(50); // 非整数仍非法
     expect(normalizeBulkDeleteThreshold("abc")).toBe(50);
   });
   it("命令规则：剔除空 token、剔除非法条目", () => {

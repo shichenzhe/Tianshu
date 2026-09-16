@@ -65,9 +65,9 @@ describe("SecurityService", () => {
     });
     await svc.init();
     const updated = await svc.setConfig("bulkDeleteThreshold", 999999999);
-    expect(updated.bulkDeleteThreshold).toBe(50); // 非法回落
-    expect(db.rows.get("bulkDeleteThreshold")).toBe("50");
-    expect(svc.getConfigValue().bulkDeleteThreshold).toBe(50);
+    expect(updated.bulkDeleteThreshold).toBe(10000); // 超上限钳至预估计数上限
+    expect(db.rows.get("bulkDeleteThreshold")).toBe("10000");
+    expect(svc.getConfigValue().bulkDeleteThreshold).toBe(10000);
     expect(events).toEqual([
       expect.objectContaining({
         eventType: "config.bulkDeleteThreshold.updated",

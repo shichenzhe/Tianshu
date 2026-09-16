@@ -305,7 +305,7 @@ describe("LocalConnectProxy", () => {
     }
   });
 
-  it("stop 清 idle 隧道：closeAllConnections 生效，close 不被悬挂连接卡死", async () => {
+  it("stop 清 idle 隧道：tunnels 集显式 destroy，close 不被悬挂连接卡死", async () => {
     const { server, port } = await echoServer();
     const proxy = new LocalConnectProxy(() => getNetworkGate());
     const proxyPort = await proxy.start();

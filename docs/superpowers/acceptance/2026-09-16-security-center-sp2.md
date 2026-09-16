@@ -47,7 +47,7 @@
 ### 6. 三类新审计事件可见 + en-US 文案跟随
 
 - **操作步骤**：完成第 4/5 项后打开审计中心（卡片态 + 「查看全部」全量视图），确认存在「命令需审批」「命令已放行」「拦截危险命令」记录；切语言到 en-US 重开审计中心与二级页，再切回 zh-CN。
-- **预期结果**（spec §8）：三类事件（command-safety.needs-approval / allow-listed / blocked）均带「命令安全」类别徽标与时间戳；en-US 下事件文案跟随（如 "Command needs approval: …"/"Command allowed: …"/"Blocked dangerous command: …"），二级页三名单标题/说明/按钮全部切换，无硬编码中文残留。
+- **预期结果**（spec §8）：三类事件（command-safety.needs-approval / allow-listed / blocked）均带「命令安全」类别徽标与时间戳；en-US 下事件文案跟随（如 "Command requires approval: …"/"Command allow-listed: …"/"Blocked dangerous command: …"），二级页三名单标题/说明/按钮全部切换，无硬编码中文残留。
 - **Commit 区域**：ac5ee04（6 个审计事件 key + commandDetail 双语文案）、f515423（key 勘误）、0686f48（事件源写入）。
 
 ## 四、子进程穿透监控
@@ -55,7 +55,7 @@
 ### 7. 黑名单程序藏于 `sh -c` 内被终止
 
 - **操作步骤**：先到二级页把 `sleep` 临时加入「程序黑名单」；回会话让 AI 执行 `sh -c 'sleep 30'`；观察命令的执行过程与最终输出，再到二级页把 `sleep` 从黑名单删除、到审计中心刷新查看。
-- **预期结果**（spec §5）：数秒内（250ms 轮询快照）`sleep 30` 子进程被 SIGKILL 连同其子树终止——命令未等满 30s 即异常结束（输出异常退出而非正常返回），模型收到执行失败回喂；审计中心出现「已终止黑名单子进程: sleep」（command-safety.child-blocked）；`sh` 本身不在黑名单故顶层命令放行，仅穿透的子进程被拦。
+- **预期结果**（spec §5）：数秒内（250ms 轮询快照）`sleep 30` 子进程被 SIGKILL 连同其子树终止——命令未等满 30s 即异常结束（输出异常退出而非正常返回），模型收到执行失败回喂；审计中心出现「已终止黑名单子进程: sleep」（command-safety.child-blocked）；`sh` 本身不在黑名单、不受黑名单拦截（仍走常规审批链），仅穿透的子进程被拦。
 - **Commit 区域**：46e81aa（ps 快照进程树轮询 + SIGKILL 子树）、0686f48（黑名单经装配挂载到 command-tool）。
 
 ## 五、automation 无人值守

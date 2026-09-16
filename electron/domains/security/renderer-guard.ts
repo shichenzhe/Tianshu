@@ -24,7 +24,15 @@ export function shouldAllowNavigation(
   devServerOrigin: string | undefined,
 ): boolean {
   if (url.startsWith("file://")) return true;
-  return devServerOrigin !== undefined && url.startsWith(devServerOrigin);
+  if (devServerOrigin === undefined) return false;
+  try {
+    // origin 精确比较（fix round 1）：两侧同经 URL 归一，消除 devServerOrigin
+    // 尾斜杠隐式不变量；前缀同形域（…5173.evil.com）与 userinfo 伪装
+    // （http://5173@evil.com）的 origin 不等即拒
+    return new URL(url).origin === new URL(devServerOrigin).origin;
+  } catch {
+    return false; // 非法 URL fail-closed（导航白名单拒绝比放行安全）
+  }
 }
 
 /** session 级判定（Application 装配一次）：仅 http(s) 过门，拒则 cancel */

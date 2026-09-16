@@ -80,4 +80,43 @@ describe("shouldAllowNavigation", () => {
       false,
     );
   });
+  it("fix round 1：origin 精确比较——无尾斜杠时前缀同形域/userinfo 伪装即原绕过面", () => {
+    expect(
+      shouldAllowNavigation(
+        "http://localhost:5173.evil.com/x",
+        "http://localhost:5173",
+      ),
+    ).toBe(false);
+    expect(
+      shouldAllowNavigation(
+        "http://localhost:5173@evil.com/",
+        "http://localhost:5173",
+      ),
+    ).toBe(false);
+  });
+  it("fix round 1：origin 精确比较——带尾斜杠的 review 用例同样拒", () => {
+    expect(
+      shouldAllowNavigation(
+        "http://localhost:5173.evil.com/x",
+        "http://localhost:5173/",
+      ),
+    ).toBe(false);
+    expect(
+      shouldAllowNavigation("http://5173@evil.com/", "http://localhost:5173/"),
+    ).toBe(false);
+  });
+  it("fix round 1：devServerOrigin 带不带尾斜杠等价（消除隐式不变量）", () => {
+    expect(
+      shouldAllowNavigation(
+        "http://localhost:5173/x",
+        "http://localhost:5173/",
+      ),
+    ).toBe(true);
+  });
+  it("fix round 1：非法 URL fail-closed 返回 false", () => {
+    expect(shouldAllowNavigation("not a url", "http://localhost:5173")).toBe(
+      false,
+    );
+    expect(shouldAllowNavigation("", "http://localhost:5173")).toBe(false);
+  });
 });

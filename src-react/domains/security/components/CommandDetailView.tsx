@@ -2,6 +2,7 @@
  * 命令安全二级页（SP2 spec §7）：三名单 CRUD（PRD 附录交互——添加行
  * → 输入框 → 对勾/叉号）+ 优先级说明 + 重置为默认。
  * CRUD 走 setConfig 整组替换；黑名单仅接受裸程序名。
+ * 输入框 Escape 阻止冒泡——避免冒泡到外层设置 Dialog 误关整个对话框。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -36,20 +37,24 @@ function RuleSection(props: {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
 
+  /** 关闭内联编辑并清空草稿（取消/保存/重复静默关闭共用） */
+  const closeEditor = () => {
+    setEditing(false);
+    setDraft("");
+  };
+
   const add = async () => {
     const normalized = props.validate(draft);
     if (normalized === null) {
       toast.error(t(props.invalidKey));
       return;
     }
-    if (props.items.includes(normalized)) {
-      setEditing(false);
-      setDraft("");
+    if (props.items.some((it) => sameTokens(it, normalized))) {
+      closeEditor();
       return;
     }
     await props.onSave([...props.items, normalized]);
-    setEditing(false);
-    setDraft("");
+    closeEditor();
   };
 
   const remove = async (item: string) => {
@@ -92,7 +97,11 @@ function RuleSection(props: {
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void add();
-                if (e.key === "Escape") setEditing(false);
+                if (e.key === "Escape") {
+                  // 仅取消本行编辑；不冒泡到外层设置 Dialog 的 Esc 关闭
+                  e.stopPropagation();
+                  closeEditor();
+                }
               }}
               className="h-8"
             />
@@ -108,7 +117,7 @@ function RuleSection(props: {
               variant="ghost"
               size="sm"
               aria-label={t("security:commandDetail.cancel")}
-              onClick={() => setEditing(false)}
+              onClick={closeEditor}
             >
               <X size={14} />
             </Button>
@@ -133,6 +142,11 @@ function RuleSection(props: {
 function validateProgram(raw: string): string | null {
   const v = raw.trim();
   return v !== "" && !/[/\\\s]/.test(v) ? v : null;
+}
+
+/** 空白分词归一化比较：避免多空格变体（"git  status" vs "git status"）存成重复规则 */
+function sameTokens(a: string, b: string): boolean {
+  return a.split(/\s+/).join(" ") === b.split(/\s+/).join(" ");
 }
 
 export default function CommandDetailView({

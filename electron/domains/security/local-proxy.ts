@@ -17,9 +17,9 @@ export class LocalConnectProxy {
   /** 启动中/已启动的端口 Promise：并发 start（启动期 onConfigChange 与显式
    * 初对齐同时触发）复用同一 Promise，避免读到未就绪的端口值 */
   private starting?: Promise<number>;
-  /** CONNECT 隧道 socket 集：升级态连接脱离 server 连接追踪
-   * （closeAllConnections 不覆盖，Node 已知行为），stop 须显式终结，
-   * 否则 idle 隧道卡死 close 回调 */
+  /** CONNECT 接管 socket 集（放行隧道 + 403 拒绝端）：升级/拒绝态连接脱离
+   * server 连接追踪（closeAllConnections 不覆盖，Node 已知行为），stop 须
+   * 显式终结，否则 idle 隧道或被持有的拒绝端可卡死 close 回调 */
   private readonly tunnels = new Set<Duplex>();
 
   constructor(
@@ -64,12 +64,21 @@ export class LocalConnectProxy {
     this.portValue = undefined;
     this.starting = undefined;
     // 存量连接会卡死 close 回调——先全部终结：普通/在途连接由
-    // closeAllConnections 清（含 idle 隧道在内的升级态连接脱离 server
-    // 追踪，须由本类隧道集显式 destroy）
+    // closeAllConnections 清（CONNECT 接管连接脱离 server 追踪——升级/
+    // 拒绝态，由本类隧道集显式 destroy 兜底）
     for (const socket of this.tunnels) socket.destroy();
     this.tunnels.clear();
     server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+
+  /** 登记 CONNECT 接管 socket 供 stop() 兜底终结（end 只半关，能否真正
+   * 关闭取决于对端）；登记时已销毁（getGate await 期间客户端断开，close
+   * 先于登记触发）则跳过，防死 socket 驻留集合 */
+  private trackConnectSocket(socket: Duplex): void {
+    if (socket.destroyed) return;
+    this.tunnels.add(socket);
+    socket.on("close", () => this.tunnels.delete(socket));
   }
 
   /** CONNECT host:port → 判定 → 管道（照 Node 官方 proxy 示例模式）；
@@ -85,14 +94,15 @@ export class LocalConnectProxy {
     const verdict: NetworkVerdict = gate ? gate.judgeHost(host) : { ok: true };
     if (!verdict.ok) {
       gate?.blockedAudit(verdict.host, verdict.rule, "proxy");
+      // end 前登记：403 只半关，异常客户端持有不关时由 stop() 兜底终结
+      this.trackConnectSocket(clientSocket);
       clientSocket.end(
         `HTTP/1.1 403 Forbidden\r\nX-Block-Reason: ${verdict.rule}\r\nConnection: close\r\n\r\n`,
       );
       return;
     }
     const port = Number(target.split(":")[1] ?? 443);
-    this.tunnels.add(clientSocket);
-    clientSocket.on("close", () => this.tunnels.delete(clientSocket));
+    this.trackConnectSocket(clientSocket);
     const upstream = net.connect(port, host, () => {
       clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       upstream.write(head);

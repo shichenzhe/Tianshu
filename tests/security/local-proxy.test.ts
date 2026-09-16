@@ -318,4 +318,48 @@ describe("LocalConnectProxy", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it("stop 兜底清被拒 CONNECT socket：客户端持有 403 连接不关，stop 仍完成", async () => {
+    // 拒绝路径只 end()（回 403 + Connection: close）半关：异常本地客户端
+    // 收到 403 仍持有 socket 不关（allowHalfOpen 收 FIN 后不自动回关）——
+    // 拒绝端与升级态同样脱离 server 追踪，closeAllConnections 不及，
+    // 须入 tunnels 集由 stop() 兜底终结
+    installNetworkGate({
+      policyProvider: () => policy({ domainDeny: ["evil.com"] }),
+      audit: () => {},
+    });
+    const proxy = new LocalConnectProxy(() => getNetworkGate());
+    const proxyPort = await proxy.start();
+    const client = net.connect({
+      port: proxyPort,
+      host: "127.0.0.1",
+      allowHalfOpen: true,
+    });
+    const resp = await new Promise<string>((resolve, reject) => {
+      client.on("connect", () => {
+        client.write(
+          "CONNECT evil.com:443 HTTP/1.1\r\nHost: evil.com:443\r\n\r\n",
+        );
+      });
+      client.on("data", (c) => resolve(c.toString()));
+      client.on("error", reject);
+    });
+    expect(resp).toContain("403");
+    try {
+      // 异常客户端续写（代理侧未读队列非空）：destroy 必得 RST——
+      // 否则已 end() 过的 socket 平滑关对 CLOSE_WAIT 持有端不可观测。
+      // 终结监听先于 stop 挂载（终结事件可在 stop resolve 前触发）
+      client.write("hold");
+      const terminated = new Promise<void>((resolve) => {
+        client.once("close", () => resolve());
+        client.once("error", () => resolve());
+      });
+      // 旧实现该 socket 脱离追踪且不入 tunnels → stop() 被卡死直至超时
+      await withTimeout(proxy.stop(), 2000, "stop() 被拒绝端持有 socket 卡死");
+      // 终结断言（RST 的 error/close 均收口，防用例悬挂）
+      await withTimeout(terminated, 2000, "被拒 socket 未被 stop() 终结");
+    } finally {
+      client.destroy();
+    }
+  });
 });

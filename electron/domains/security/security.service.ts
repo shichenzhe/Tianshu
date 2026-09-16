@@ -20,13 +20,18 @@ import {
   normalizeFileBackupMaxSizeMB,
   parseSecurityConfig,
   pickCommandRuleArray,
+  pickDomainArray,
   pickStringArray,
   serializeSecurityValue,
   setSecurityOption,
   stripBuiltinItems,
   type SecurityOptionPrismaLike,
 } from "./config-store";
-import { SECURITY_DEFAULTS, defaultFileBlocklist } from "./defaults";
+import {
+  BUILTIN_MALICIOUS_DOMAINS,
+  SECURITY_DEFAULTS,
+  defaultFileBlocklist,
+} from "./defaults";
 
 /** 各 key 写入时的校验/清洗：bool 严格真、名单重校验、数值钳制 */
 const NORMALIZERS: Record<SecurityConfigKey, (v: unknown) => unknown> = {
@@ -38,8 +43,8 @@ const NORMALIZERS: Record<SecurityConfigKey, (v: unknown) => unknown> = {
   fileAllowlist: pickStringArray,
   fileBlocklist: pickStringArray,
   programBlacklist: pickStringArray,
-  domainAllow: pickStringArray,
-  domainDeny: pickStringArray,
+  domainAllow: pickDomainArray,
+  domainDeny: pickDomainArray,
   cmdAllow: pickCommandRuleArray,
   cmdAsk: pickCommandRuleArray,
   fileBackupMaxSizeMB: normalizeFileBackupMaxSizeMB,
@@ -72,7 +77,10 @@ export default class SecurityService {
   /** 读接口（含内置清单分离，spec §5.2） */
   getConfig(): SecurityConfigState {
     return {
-      defaults: { fileBlocklist: [...this.builtinBlocklist] },
+      defaults: {
+        fileBlocklist: [...this.builtinBlocklist],
+        maliciousDomains: [...BUILTIN_MALICIOUS_DOMAINS],
+      },
       config: copySecurityConfig(this.config),
     };
   }

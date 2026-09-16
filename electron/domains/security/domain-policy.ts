@@ -35,7 +35,7 @@ function wildcardToRegExpSource(pattern: string): string {
   return pattern
     .split(".")
     .map((seg) =>
-      seg === "*" ? "[^.]+" : seg.replace(/[.+^${}()|[\]\\]/g, "\\$&"),
+      seg === "*" ? "[^.]+" : seg.replace(/[.+*?^${}()|[\]\\]/g, "\\$&"),
     )
     .join("\\.");
 }

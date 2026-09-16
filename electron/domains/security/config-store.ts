@@ -10,6 +10,7 @@ import type {
 } from "../../../src-react/domains/security/model/types";
 import { parseBoolOption } from "../app-settings/option-store";
 import { ESTIMATE_COUNT_LIMIT } from "./backup-policy";
+import { normalizeDomain } from "./domain-policy";
 import { SECURITY_DEFAULTS } from "./defaults";
 
 export const SECURITY_OPTION_TYPE = "security";
@@ -94,6 +95,16 @@ export function pickStringArray(v: unknown): string[] {
   );
 }
 
+/** 域名单清洗（SP5）：字符串数组逐条归一化，剔空去重（保序） */
+export function pickDomainArray(raw: unknown): string[] {
+  const seen = new Set<string>();
+  for (const item of pickStringArray(raw)) {
+    const norm = normalizeDomain(item);
+    if (norm) seen.add(norm);
+  }
+  return [...seen];
+}
+
 function parseJsonArray(v: string): unknown {
   try {
     return JSON.parse(v);
@@ -126,8 +137,8 @@ const FIELD_PARSERS: {
     pickStringArray(
       parseJsonArray(raw ?? JSON.stringify(SECURITY_DEFAULTS.programBlacklist)),
     ),
-  domainAllow: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
-  domainDeny: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
+  domainAllow: (raw) => pickDomainArray(parseJsonArray(raw ?? "[]")),
+  domainDeny: (raw) => pickDomainArray(parseJsonArray(raw ?? "[]")),
   blockAllNetwork: (raw) => parseBoolOption(raw, false),
   maliciousDomainProtection: (raw) => parseBoolOption(raw, true),
   fileBackupEnabled: (raw) => parseBoolOption(raw, true),

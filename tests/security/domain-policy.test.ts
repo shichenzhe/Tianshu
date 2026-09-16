@@ -54,6 +54,10 @@ describe("domainMatches", () => {
     expect(domainMatches("example.*", "example.org")).toBe(true);
     expect(domainMatches("example.*", "example.evil.com")).toBe(false);
   });
+  it("段内 * 为字面量（ReDoS 防回退）", () => {
+    expect(domainMatches("a*a*b", "aaaaaab")).toBe(false);
+    expect(domainMatches("a*a*b", "a*a*b")).toBe(true);
+  });
 });
 
 describe("hostFromUrl", () => {

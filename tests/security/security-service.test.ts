@@ -15,6 +15,7 @@ vi.mock("../../electron/commons/prisma-client", () => ({
 }));
 
 import SecurityService from "../../electron/domains/security/security.service";
+import { BUILTIN_MALICIOUS_DOMAINS } from "../../electron/domains/security/defaults";
 
 /** 内存 stub：SecurityOptionPrismaLike 最小实现（updateMany 命中已存在行时需写入新值） */
 function makeDb() {
@@ -86,5 +87,22 @@ describe("SecurityService", () => {
     const svc = new SecurityService({ db: makeDb() as never });
     await svc.init();
     await expect(svc.setConfig("nope" as never, 1)).rejects.toThrow();
+  });
+  it("getConfig defaults 含内置恶意域清单（SP5）", async () => {
+    const svc = new SecurityService({ db: makeDb() as never });
+    await svc.init();
+    const state = svc.getConfig();
+    expect(state.defaults.maliciousDomains.length).toBeGreaterThan(0);
+    expect(state.defaults.maliciousDomains).toContain(
+      BUILTIN_MALICIOUS_DOMAINS[0],
+    );
+  });
+  it("setConfig domainAllow 归一化落库（SP5）", async () => {
+    const db = makeDb();
+    const svc = new SecurityService({ db: db as never });
+    await svc.init();
+    const saved = await svc.setConfig("domainAllow", ["Evil.COM."]);
+    expect(saved.domainAllow).toEqual(["evil.com"]);
+    expect(db.rows.get("domainAllow")).toBe('["evil.com"]');
   });
 });

@@ -26,7 +26,7 @@ export type SecurityConfigKey = keyof SecurityConfig;
 
 /** 读接口：内置清单（只读常量）与用户配置分离（spec §5.2） */
 export type SecurityConfigState = {
-  defaults: { fileBlocklist: string[] };
+  defaults: { fileBlocklist: string[]; maliciousDomains: string[] };
   config: SecurityConfig;
 };
 

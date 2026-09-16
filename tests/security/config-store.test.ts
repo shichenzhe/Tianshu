@@ -10,6 +10,7 @@ import {
   stripBuiltinItems,
   mergeRuleList,
 } from "../../electron/domains/security/config-store";
+import { pickDomainArray } from "../../electron/domains/security/config-store";
 import {
   SECURITY_DEFAULTS,
   defaultFileBlocklist,
@@ -116,5 +117,13 @@ describe("SP2 默认值演进", () => {
       { prefix: ["git", "push"] },
       { prefix: ["npm", "install"] },
     ]);
+  });
+});
+
+describe("pickDomainArray（SP5 域名单写路径归一化）", () => {
+  it("归一化 + 去重 + 去空", () => {
+    expect(
+      pickDomainArray(["Example.COM.", "example.com", "  ", "*.a.com", 1]),
+    ).toEqual(["example.com", "*.a.com"]);
   });
 });

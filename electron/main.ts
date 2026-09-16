@@ -67,6 +67,10 @@ if (!isDevelopment) {
 }
 
 import { initUpdater } from "./init-updater.js";
+import {
+  handleWindowOpen,
+  shouldAllowNavigation,
+} from "./domains/security/renderer-guard.js";
 function createWindow() {
   win = new BrowserWindow({
     title: "天枢",
@@ -102,6 +106,17 @@ function createWindow() {
   // Test active push message to Renderer-process.
   win.webContents.on("did-finish-load", () => {
     win?.webContents.send("main-process-message", new Date().toLocaleString());
+  });
+
+  // 外开动作已在 handleWindowOpen 内完成（放行域经 shell.openExternal），此处恒拒 Electron 内开窗
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    handleWindowOpen(url);
+    return { action: "deny" };
+  });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (!shouldAllowNavigation(url, VITE_DEV_SERVER_URL)) {
+      event.preventDefault();
+    }
   });
 
   if (VITE_DEV_SERVER_URL) {

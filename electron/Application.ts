@@ -43,6 +43,7 @@ import { Constants } from "./Constants";
 import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
 import { buildExemptDomains } from "./domains/security/domain-policy";
 import { installNetworkGate } from "./domains/security/network-gate";
+import { installSessionGuard } from "./domains/security/renderer-guard";
 import { LocalConnectProxy } from "./domains/security/local-proxy";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -253,6 +254,7 @@ export default class Application {
       judgeHost: (host) => networkGate.judgeHost(host),
       onBlocked: (host, rule) => networkGate.blockedAudit(host, rule, "fetch"),
     });
+    installSessionGuard(); // SP5：渲染层 webRequest 判定
     // TTL 异步刷新（首启动即拉一次）+ 代理生命周期初对齐（配置变更时经
     // onConfigChange 重触发）；退出时停本地代理释放端口
     void readProviderDomains();

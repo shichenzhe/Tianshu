@@ -11,7 +11,7 @@ import type {
 import { parseBoolOption } from "../app-settings/option-store";
 import { ESTIMATE_COUNT_LIMIT } from "./backup-policy";
 import { normalizeDomain } from "./domain-policy";
-import { SECURITY_DEFAULTS } from "./defaults";
+import { BUILTIN_TOOL_NAMES, SECURITY_DEFAULTS } from "./defaults";
 
 export const SECURITY_OPTION_TYPE = "security";
 
@@ -105,6 +105,16 @@ export function pickDomainArray(raw: unknown): string[] {
   return [...seen];
 }
 
+/** 禁用工具清洗（SP6）：只收内置已知名，去重保注册表序；防配置漂移 */
+export function pickDisabledTools(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const seen = new Set<string>();
+  for (const name of pickStringArray(v)) {
+    if (BUILTIN_TOOL_NAMES.includes(name)) seen.add(name);
+  }
+  return [...seen];
+}
+
 function parseJsonArray(v: string): unknown {
   try {
     return JSON.parse(v);
@@ -145,6 +155,7 @@ const FIELD_PARSERS: {
   fileBackupMaxSizeMB: (raw) => normalizeFileBackupMaxSizeMB(raw),
   deleteProtection: (raw) => parseBoolOption(raw, true),
   bulkDeleteThreshold: (raw) => normalizeBulkDeleteThreshold(raw),
+  disabledTools: (raw) => pickDisabledTools(parseJsonArray(raw ?? "[]")),
 };
 
 /** 行集 → 完整安全配置（read-time fallback）：缺行逐字段回退默认 */
@@ -193,5 +204,6 @@ export function copySecurityConfig(config: SecurityConfig): SecurityConfig {
     programBlacklist: [...config.programBlacklist],
     domainAllow: [...config.domainAllow],
     domainDeny: [...config.domainDeny],
+    disabledTools: [...config.disabledTools],
   };
 }

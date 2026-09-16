@@ -28,3 +28,12 @@ export function unregisterTools(prefix: string): number {
   }
   return before - definitions.length;
 }
+
+/** 注入层过滤（SP6 裁定 1）：禁用=对模型不存在；只作用于内置工具名 */
+export function filterDisabledTools<T extends { name: string }>(
+  defs: T[],
+  disabled: Iterable<string>,
+): T[] {
+  const disabledSet = new Set(disabled);
+  return defs.filter((def) => !disabledSet.has(def.name));
+}

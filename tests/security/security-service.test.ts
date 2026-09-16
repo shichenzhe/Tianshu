@@ -105,4 +105,22 @@ describe("SecurityService", () => {
     expect(saved.domainAllow).toEqual(["evil.com"]);
     expect(db.rows.get("domainAllow")).toBe('["evil.com"]');
   });
+  it("getConfig defaults 含 builtinTools 13 项（SP6）", async () => {
+    const svc = new SecurityService({ db: makeDb() as never });
+    await svc.init();
+    const state = svc.getConfig();
+    expect(state.defaults.builtinTools).toHaveLength(13);
+  });
+  it("setConfig disabledTools 归一化落库（未知名剔除）（SP6）", async () => {
+    const db = makeDb();
+    const svc = new SecurityService({ db: db as never });
+    await svc.init();
+    const saved = await svc.setConfig("disabledTools", [
+      "run_command",
+      "nope",
+      "mcp__a__b",
+    ]);
+    expect(saved.disabledTools).toEqual(["run_command"]);
+    expect(db.rows.get("disabledTools")).toBe('["run_command"]');
+  });
 });

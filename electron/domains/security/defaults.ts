@@ -5,7 +5,7 @@
  */
 import type { SecurityConfig } from "../../../src-react/domains/security/model/types";
 
-/** 14 项安全配置默认值（read-time fallback 的唯一事实源） */
+/** 15 项安全配置默认值（read-time fallback 的唯一事实源） */
 export const SECURITY_DEFAULTS: SecurityConfig = {
   sandboxEnabled: true,
   fileAllowlist: [],
@@ -21,6 +21,7 @@ export const SECURITY_DEFAULTS: SecurityConfig = {
   fileBackupMaxSizeMB: 3000,
   deleteProtection: true,
   bulkDeleteThreshold: 50,
+  disabledTools: [],
 };
 
 /** 内置文件黑名单全量清单（照 WorkBuddy 默认文件安全规则，PRD 同源） */
@@ -176,3 +177,29 @@ export const BUILTIN_MALICIOUS_DOMAINS = [
   "zenithclient.com",
   "zoomeventlive.com",
 ];
+
+/** 内置工具注册表（SP6 spec §3.1）：运行时开关的展示与白名单双源 */
+export const BUILTIN_TOOLS: ReadonlyArray<{
+  name: string;
+  group: "file" | "command" | "skill" | "plan";
+  kind: "read" | "write";
+}> = [
+  { name: "read_file", group: "file", kind: "read" },
+  { name: "list_dir", group: "file", kind: "read" },
+  { name: "search_files", group: "file", kind: "read" },
+  { name: "write_file", group: "file", kind: "write" },
+  { name: "delete_file", group: "file", kind: "write" },
+  { name: "run_command", group: "command", kind: "write" },
+  { name: "read_skill", group: "skill", kind: "read" },
+  { name: "create_skill", group: "skill", kind: "write" },
+  { name: "plan_create_item", group: "plan", kind: "write" },
+  { name: "plan_update_status", group: "plan", kind: "write" },
+  { name: "plan_append_summary", group: "plan", kind: "write" },
+  { name: "plan_list_items", group: "plan", kind: "read" },
+  { name: "plan_get_item", group: "plan", kind: "read" },
+];
+
+/** disabledTools 白名单（BUILTIN_TOOLS 名单序） */
+export const BUILTIN_TOOL_NAMES: readonly string[] = BUILTIN_TOOLS.map(
+  (t) => t.name,
+);

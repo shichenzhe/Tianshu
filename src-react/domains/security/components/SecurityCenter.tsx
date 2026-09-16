@@ -108,7 +108,13 @@ export default function SecurityCenter() {
       <div className="p-1">
         <NetworkDetailView
           config={config}
-          defaults={defaults ?? { fileBlocklist: [], maliciousDomains: [] }}
+          defaults={
+            defaults ?? {
+              fileBlocklist: [],
+              maliciousDomains: [],
+              builtinTools: [],
+            }
+          }
           onBack={() => setView("home")}
           onRulesChange={setConfig}
           onToggle={updateConfig}

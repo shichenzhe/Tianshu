@@ -127,3 +127,18 @@ describe("pickDomainArray（SP5 域名单写路径归一化）", () => {
     ).toEqual(["example.com", "*.a.com"]);
   });
 });
+
+describe("disabledTools（SP6 配置清洗）", () => {
+  it("缺行回落空数组", () => {
+    expect(parseSecurityConfig([]).disabledTools).toEqual([]);
+  });
+  it("未知名与 mcp__ 前缀剔除，去重", () => {
+    const parsed = parseSecurityConfig([
+      {
+        name: "disabledTools",
+        value: '["run_command","nope","mcp__x__y","run_command"]',
+      },
+    ]);
+    expect(parsed.disabledTools).toEqual(["run_command"]);
+  });
+});

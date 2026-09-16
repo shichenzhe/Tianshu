@@ -20,13 +20,25 @@ export type SecurityConfig = {
   fileBackupMaxSizeMB: number;
   deleteProtection: boolean;
   bulkDeleteThreshold: number;
+  disabledTools: string[];
 };
 
 export type SecurityConfigKey = keyof SecurityConfig;
 
+/** 内置工具元信息（SP6）：结构类型字面量，避免 types.ts 反向 import electron */
+export type BuiltinToolMeta = {
+  name: string;
+  group: "file" | "command" | "skill" | "plan";
+  kind: "read" | "write";
+};
+
 /** 读接口：内置清单（只读常量）与用户配置分离（spec §5.2） */
 export type SecurityConfigState = {
-  defaults: { fileBlocklist: string[]; maliciousDomains: string[] };
+  defaults: {
+    fileBlocklist: string[];
+    maliciousDomains: string[];
+    builtinTools: BuiltinToolMeta[];
+  };
   config: SecurityConfig;
 };
 

@@ -20,6 +20,7 @@ import {
   normalizeFileBackupMaxSizeMB,
   parseSecurityConfig,
   pickCommandRuleArray,
+  pickDisabledTools,
   pickDomainArray,
   pickStringArray,
   serializeSecurityValue,
@@ -29,6 +30,7 @@ import {
 } from "./config-store";
 import {
   BUILTIN_MALICIOUS_DOMAINS,
+  BUILTIN_TOOLS,
   SECURITY_DEFAULTS,
   defaultFileBlocklist,
 } from "./defaults";
@@ -49,6 +51,7 @@ const NORMALIZERS: Record<SecurityConfigKey, (v: unknown) => unknown> = {
   cmdAsk: pickCommandRuleArray,
   fileBackupMaxSizeMB: normalizeFileBackupMaxSizeMB,
   bulkDeleteThreshold: normalizeBulkDeleteThreshold,
+  disabledTools: pickDisabledTools,
 };
 
 export default class SecurityService {
@@ -83,6 +86,7 @@ export default class SecurityService {
       defaults: {
         fileBlocklist: [...this.builtinBlocklist],
         maliciousDomains: [...BUILTIN_MALICIOUS_DOMAINS],
+        builtinTools: [...BUILTIN_TOOLS],
       },
       config: copySecurityConfig(this.config),
     };

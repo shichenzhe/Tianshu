@@ -39,6 +39,10 @@ import Log from "./commons/Log";
 import AppInfoService from "./commons/app-info.service";
 import UpdateLogService from "./commons/update-log.service";
 import prisma from "./commons/prisma-client";
+import { Constants } from "./Constants";
+import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
+import { buildExemptDomains } from "./domains/security/domain-policy";
+import { installNetworkGate } from "./domains/security/network-gate";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -156,8 +160,29 @@ export default class Application {
     // 均注入 prisma 单例；init 恢复审计链尾，失败仅日志不阻塞启动
     const auditLogService = new AuditLogService();
     await auditLogService.init().catch((e) => Log.error("审计链恢复失败", e));
+    // provider 豁免域 30s TTL 缓存（SP5 网络安全门消费）——声明须先于
+    // SecurityService：init 尾部即触 onConfigChange，晚声明会 TDZ ReferenceError
+    const providerDomains: string[] = [];
+    let providerDomainsAt = 0;
+    const readProviderDomains = async (): Promise<string[]> => {
+      if (Date.now() - providerDomainsAt < 30_000) return providerDomains;
+      try {
+        const rows = await prisma.provider.findMany({
+          select: { baseUrl: true },
+        });
+        providerDomains.length = 0;
+        providerDomains.push(...rows.map((r) => r.baseUrl));
+        providerDomainsAt = Date.now();
+      } catch (e) {
+        Log.error("provider 豁免域读取失败，豁免面退化为 loopback+升级域", e);
+      }
+      return providerDomains;
+    };
     const securityService = new SecurityService({
       audit: (event) => auditLogService.append(event),
+      onConfigChange: () => {
+        void readProviderDomains();
+      },
     });
     await securityService.init().catch((e) => Log.error("安全配置加载失败", e));
     // 命令安全判定门（SP2）：install 后 chat/automation 两处装配共享
@@ -176,6 +201,32 @@ export default class Application {
         [app.getPath("userData")],
       ),
     );
+    // 网络安全门（SP5）：单例安装 + undici 代理槽接线——policyProvider
+    // 保持同步（undici dispatch 同步路径）：TTL 内用豁免域缓存，过期由异步刷新；
+    // 本地代理生命周期接线在 Task 4，此处先只接豁免域刷新与全局策略层
+    const networkGate = installNetworkGate({
+      policyProvider: () => {
+        const config = securityService.getConfigValue();
+        if (!config.sandboxEnabled) return null;
+        return {
+          exemptDomains: buildExemptDomains(
+            providerDomains,
+            Constants.UPGRADE_URL,
+          ),
+          domainAllow: config.domainAllow,
+          domainDeny: config.domainDeny,
+          blockAllNetwork: config.blockAllNetwork,
+          maliciousDomainProtection: config.maliciousDomainProtection,
+        };
+      },
+      audit: (event) => auditLogService.append(event),
+    });
+    setPolicyHook({
+      judgeHost: (host) => networkGate.judgeHost(host),
+      onBlocked: (host, rule) => networkGate.blockedAudit(host, rule, "fetch"),
+    });
+    // TTL 异步刷新（首启动即拉一次）
+    void readProviderDomains();
     // SP4 数据安全：备份服务 + ChatService 数据安全装配（闭包实时读配置）
     const fileHistory = new FileHistoryService(
       path.join(app.getPath("userData"), "file-history"),

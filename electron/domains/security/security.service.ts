@@ -59,6 +59,7 @@ export default class SecurityService {
     private opts: {
       db?: SecurityOptionPrismaLike;
       audit?: SecurityEventSink;
+      onConfigChange?: (key: SecurityConfigKey) => void;
     } = {},
   ) {
     this.registerHandlers();
@@ -72,6 +73,8 @@ export default class SecurityService {
   async init(): Promise<void> {
     const rows = await listSecurityOptions(this.db);
     this.config = parseSecurityConfig(rows);
+    // 装配侧读取全部网络配置后决策（key 仅作触发器）
+    this.opts.onConfigChange?.("sandboxEnabled");
   }
 
   /** 读接口（含内置清单分离，spec §5.2） */
@@ -102,6 +105,7 @@ export default class SecurityService {
     const cleaned = this.cleanValue(key, normalized);
     await setSecurityOption(this.db, key, serializeSecurityValue(key, cleaned));
     (this.config as Record<SecurityConfigKey, unknown>)[key] = cleaned;
+    this.opts.onConfigChange?.(key);
     this.opts.audit?.({
       eventType: `config.${key}.updated`,
       decision: "info",

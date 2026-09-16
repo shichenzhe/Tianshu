@@ -11,26 +11,57 @@ import {
   EnvHttpProxyAgent,
   ProxyAgent,
   setGlobalDispatcher,
+  type Dispatcher,
 } from "undici";
+import { PolicyDispatcher } from "../security/network-gate";
+import type { NetworkVerdict } from "../security/domain-policy";
 import {
   toDispatcherSpec,
   type DispatcherSpec,
   type ProxyParams,
 } from "./proxy-config";
 
-/** 按代理参数设置全局 dispatcher（幂等：整体替换，无残留旧实例状态） */
-export function applyProxyDispatcher(params: ProxyParams): void {
-  setGlobalDispatcher(buildDispatcher(toDispatcherSpec(params)));
+/** 网络策略钩子（SP5 network-gate 注入）：null = 未装策略（现状行为） */
+export interface PolicyHook {
+  judgeHost: (host: string) => NetworkVerdict;
+  onBlocked: (host: string, rule: string) => void;
 }
 
-/** 形态 → undici Agent 实例 */
-function buildDispatcher(spec: DispatcherSpec) {
+let policyHook: PolicyHook | null = null;
+let lastSpec: DispatcherSpec = { kind: "direct" };
+
+export function setPolicyHook(hook: PolicyHook | null): void {
+  policyHook = hook;
+  replay(); // 槽位变化即按最近代理形态重包
+}
+
+/** 按代理参数设置全局 dispatcher（幂等：整体替换，无残留旧实例状态） */
+export function applyProxyDispatcher(params: ProxyParams): void {
+  lastSpec = toDispatcherSpec(params);
+  replay();
+}
+
+function replay(): void {
+  setGlobalDispatcher(buildDispatcher(lastSpec));
+}
+
+/** 形态 → undici Agent 实例（策略已装则外包 PolicyDispatcher） */
+function buildDispatcher(spec: DispatcherSpec): Dispatcher {
+  let inner: Dispatcher;
   switch (spec.kind) {
     case "proxy":
-      return new ProxyAgent({ uri: spec.uri });
+      inner = new ProxyAgent({ uri: spec.uri });
+      break;
     case "env":
-      return new EnvHttpProxyAgent();
+      inner = new EnvHttpProxyAgent();
+      break;
     default:
-      return new Agent();
+      inner = new Agent();
   }
+  if (!policyHook) return inner;
+  return new PolicyDispatcher(
+    inner,
+    policyHook.judgeHost,
+    policyHook.onBlocked,
+  );
 }

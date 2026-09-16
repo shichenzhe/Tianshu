@@ -42,6 +42,9 @@ vi.mock("undici", () => ({
   EnvHttpProxyAgent: vi.fn(),
   ProxyAgent: vi.fn(),
   setGlobalDispatcher: vi.fn(),
+  // proxy-dispatcher 静态引入 network-gate（PolicyDispatcher extends Dispatcher），
+  // 模块加载即需该基类；测试内策略槽恒空，PolicyDispatcher 不会被实例化
+  Dispatcher: class {},
 }));
 
 vi.mock("../../electron/commons/Log", () => ({

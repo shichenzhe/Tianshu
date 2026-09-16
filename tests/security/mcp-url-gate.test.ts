@@ -1,13 +1,23 @@
 /**
  * MCP 入口预判与 stdio env 单测（SP5 Task 4）：
  * http url deny 抛错（不触 SDK 构造）、放行与 stdio 缺省不判、
+ * checkUrl 抛错 fail-open 放行（终审 S2：客户端照常创建 + winston error）、
  * mergeStdioEnv 门未装/门装+代理两态。
+ * mcp-manager/network-gate 传递依赖 Log（→ electron），经 vi.mock 替换。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
+
+import Log from "../../electron/commons/Log";
 import type { NetworkPolicyState } from "../../electron/domains/security/domain-policy";
 import {
   assertMcpUrlAllowed,
+  McpManager,
   mergeStdioEnv,
+  type McpClientLike,
 } from "../../electron/domains/ai/agent/mcp-manager";
 import {
   installNetworkGate,
@@ -62,6 +72,39 @@ describe("MCP 入口预判与 stdio env（SP5）", () => {
         command: "npx",
       }),
     ).not.toThrow();
+    uninstallNetworkGateForTest();
+  });
+
+  it("checkUrl 抛错 → 客户端照常创建（fail-open 放行）+ winston error（终审 S2）", async () => {
+    installNetworkGate({
+      policyProvider: () => policy({}),
+      audit: () => {},
+    });
+    const client: McpClientLike = {
+      listTools: async () => ({ tools: [] }),
+      callTool: async () => ({ content: [] }),
+      close: async () => {},
+    };
+    const manager = new McpManager({
+      // 生产 createClient 内嵌 assertMcpUrlAllowed：注入抛错的 checkUrl 须被吸收
+      createClient: async (row) => {
+        assertMcpUrlAllowed(row, () => {
+          throw new Error("check boom");
+        });
+        return client;
+      },
+      prisma: { mcpServer: { findMany: async () => [] } },
+    });
+    await manager.connect({
+      id: 1,
+      name: "s",
+      transport: "http",
+      url: "https://ok.com/mcp",
+    });
+    expect(manager.getStatuses()[0]).toMatchObject({ state: "connected" });
+    expect(vi.mocked(Log.error)).toHaveBeenCalledWith(
+      expect.stringContaining("https://ok.com/mcp"),
+    );
     uninstallNetworkGateForTest();
   });
 

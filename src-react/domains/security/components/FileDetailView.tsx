@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import type { SecurityConfig, SecurityConfigKey } from "../model/types";
 import { SecurityApi } from "../api/security.api";
 import RuleSection from "./RuleSection";
+import { validateNonEmpty } from "./validators";
 
 interface FileDetailViewProps {
   config: SecurityConfig;
@@ -89,7 +90,7 @@ export default function FileDetailView({
         placeholderKey="security:fileDetail.blocklist.placeholder"
         invalidKey="security:invalidEntry"
         items={config.fileBlocklist}
-        validate={(raw) => (raw.trim() !== "" ? raw.trim() : null)}
+        validate={validateNonEmpty}
         onSave={(items) => save("fileBlocklist", items)}
       />
       <RuleSection
@@ -98,7 +99,7 @@ export default function FileDetailView({
         placeholderKey="security:fileDetail.allowlist.placeholder"
         invalidKey="security:invalidEntry"
         items={config.fileAllowlist}
-        validate={(raw) => (raw.trim() !== "" ? raw.trim() : null)}
+        validate={validateNonEmpty}
         onSave={(items) => save("fileAllowlist", items)}
       />
     </div>

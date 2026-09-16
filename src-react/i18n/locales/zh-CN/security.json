@@ -10,8 +10,7 @@
     "command": "命令安全",
     "commandDesc": "管理 Shell 命令的放行、询问与禁止名单",
     "network": "网络安全",
-    "networkDesc": "管理网络出入站请求与域名名单",
-    "comingSoon": "即将上线"
+    "networkDesc": "管理网络出入站请求与域名名单"
   },
   "dataSafety": {
     "title": "数据安全",

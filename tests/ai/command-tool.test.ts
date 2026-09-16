@@ -7,6 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // execFile：command-tool 传递依赖 child-monitor 顶层 promisify 需要
 // （本文件不触子进程监控，watchCommandTree 不被调用）
 vi.mock("node:child_process", () => ({ exec: vi.fn(), execFile: vi.fn() }));
+// network-gate 传递依赖 Log（→ electron，终审 S2），经 vi.mock 替换
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
 
 import {
   isDangerousCommand,

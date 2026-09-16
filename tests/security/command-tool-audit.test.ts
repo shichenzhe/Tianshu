@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// command-tool 传递依赖 network-gate → Log（→ electron，终审 S2），mock Log
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
+
 import { makeRunCommandTool } from "../../electron/domains/ai/agent/command-tool";
 import type { SecurityEvent } from "../../src-react/domains/security/model/types";
 

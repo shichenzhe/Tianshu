@@ -3,10 +3,17 @@
  * blockedAudit 审计形态、childProxyEnv 子进程 env、
  * PolicyDispatcher 拒绝/放行双路径（undici 8 v2 handler 形态：
  * Dispatcher.DispatchOptions / Dispatcher.DispatchHandler / onResponseError）。
- * network-gate 零 electron import（vitest 直测，无需 mock electron）。
+ * network-gate 传递依赖 Log（→ electron，终审 S2 fail-open 记 winston error），
+ * 经 vi.mock 替换（照 settings.service.test 先例，无需 mock electron）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dispatcher, getGlobalDispatcher } from "undici";
+
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
+
+import Log from "../../electron/commons/Log";
 import type { NetworkPolicyState } from "../../electron/domains/security/domain-policy";
 import {
   getNetworkGate,
@@ -63,7 +70,8 @@ describe("NetworkGate", () => {
     expect(gate.judgeUrl("::bad::")).toEqual({ ok: true });
   });
 
-  it("policyProvider 抛错 → judgeHost fail-open 放行（终审加固）", () => {
+  it("policyProvider 抛错 → judgeHost fail-open 放行 + winston error（终审 S2）", () => {
+    vi.mocked(Log.error).mockClear();
     const gate = installNetworkGate({
       policyProvider: () => {
         throw new Error("provider boom");
@@ -71,6 +79,9 @@ describe("NetworkGate", () => {
       audit: () => {},
     });
     expect(gate.judgeHost("evil.com")).toEqual({ ok: true });
+    expect(vi.mocked(Log.error)).toHaveBeenCalledWith(
+      expect.stringContaining("evil.com"),
+    );
   });
 
   it("blockedAudit 走 audit sink（network.blocked）", () => {
@@ -149,6 +160,27 @@ describe("NetworkGate", () => {
     );
     expect(passed).toBe(true);
     expect(calls).toHaveLength(1);
+  });
+
+  it("PolicyDispatcher：origin 非法 → fail-open 透传 inner + winston error（终审 S2）", async () => {
+    const { PolicyDispatcher } =
+      await import("../../electron/domains/security/network-gate");
+    const { inner, calls } = fakeInner();
+    vi.mocked(Log.error).mockClear();
+    const pd = new PolicyDispatcher(
+      inner,
+      () => ({ ok: true }),
+      () => {},
+    );
+    const dispatched = pd.dispatch(
+      { origin: "::bad::", path: "/", method: "GET" },
+      {} as unknown as Dispatcher.DispatchHandler,
+    );
+    expect(dispatched).toBe(true); // 放行透传，不因 origin 解析失败拒网
+    expect(calls).toHaveLength(1);
+    expect(vi.mocked(Log.error)).toHaveBeenCalledWith(
+      expect.stringContaining("::bad::"),
+    );
   });
 
   it("代理重放不丢策略：applyProxyDispatcher 二次调用仍带 PolicyDispatcher wrap", async () => {

@@ -2,8 +2,14 @@
  * run_command 子进程 proxy env 注入单测（SP5 Task 4）：
  * 门装且代理启动时子进程 env 含 HTTPS_PROXY；门未装零注入（缺省继承）。
  * 真实子进程 node -e 回显 env（命令本身零网络行为）。
+ * network-gate 传递依赖 Log（→ electron，终审 S2），经 vi.mock 替换。
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
+
 import type { NetworkPolicyState } from "../../electron/domains/security/domain-policy";
 import { makeRunCommandTool } from "../../electron/domains/ai/agent/command-tool";
 import {

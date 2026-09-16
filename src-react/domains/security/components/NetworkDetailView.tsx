@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import type { SecurityConfig, SecurityConfigKey } from "../model/types";
 import { SecurityApi } from "../api/security.api";
 import RuleSection from "./RuleSection";
+import { validateNonEmpty } from "./validators";
 
 interface NetworkDetailViewProps {
   config: SecurityConfig;
@@ -20,12 +21,6 @@ interface NetworkDetailViewProps {
   onRulesChange: (config: SecurityConfig) => void;
   onToggle: (key: SecurityConfigKey, value: unknown) => void;
 }
-
-/** 域名条目校验（SP5）：非空即收（服务端 pickDomainArray 归一化兜底） */
-const validateDomain = (raw: string): string | null => {
-  const trimmed = raw.trim();
-  return trimmed !== "" ? trimmed : null;
-};
 
 export default function NetworkDetailView({
   config,
@@ -89,7 +84,7 @@ export default function NetworkDetailView({
         placeholderKey="security:networkDetail.denylist.placeholder"
         invalidKey="security:invalidEntry"
         items={config.domainDeny}
-        validate={validateDomain}
+        validate={validateNonEmpty}
         onSave={(items) => save("domainDeny", items)}
       />
       <RuleSection
@@ -98,7 +93,7 @@ export default function NetworkDetailView({
         placeholderKey="security:networkDetail.allowlist.placeholder"
         invalidKey="security:invalidEntry"
         items={config.domainAllow}
-        validate={validateDomain}
+        validate={validateNonEmpty}
         onSave={(items) => save("domainAllow", items)}
       />
       <section className="space-y-2">

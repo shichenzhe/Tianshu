@@ -3,9 +3,11 @@
  * ① PolicyDispatcher 包全局 undici dispatcher（proxy-dispatcher 槽）
  * ② 渲染层 session/window（renderer-guard，Task 5）
  * ③ 本地 CONNECT 代理与子进程 env 注入（local-proxy/command-tool/mcp-manager，Task 4）
- * 模块单例安装照 installCommandGate 先例；electron-free（vitest 直测）。
+ * 模块单例安装照 installCommandGate 先例；fail-open 路径记 winston error（spec §9），
+ * Log（→ electron）在单测经 vi.mock 替换（照 file-history 先例）。
  */
 import { Dispatcher } from "undici";
+import Log from "../../commons/Log";
 import type { SecurityEventSink } from "../../../src-react/domains/security/model/types";
 import {
   hostFromUrl,
@@ -33,8 +35,13 @@ export class PolicyDispatcher extends Dispatcher {
     let host = "";
     try {
       host = options.origin ? new URL(String(options.origin)).hostname : "";
-    } catch {
-      // 非 URL origin（unix socket 等）透传——fail-open（spec §9）
+    } catch (e) {
+      // 非 URL origin（unix socket 等）透传——fail-open（spec §9）+ 可观测（终审 S2）
+      const reason = e instanceof Error ? e.message : String(e);
+      const origin = String(options.origin);
+      Log.error(
+        `origin 解析异常 fail-open 透传 origin=${origin} reason=${reason}`,
+      );
     }
     if (host) {
       const verdict = this.judge(host);
@@ -105,8 +112,12 @@ export class NetworkGate {
       const policy = this.policyProvider();
       if (policy === null) return { ok: true }; // sandboxEnabled=false 旁路（裁定 3）
       return judgeDomain(normalizeDomain(host), policy);
-    } catch {
-      return { ok: true }; // fail-open（spec §9，含 provider 抛错——照 makeCommandDecider 先例）
+    } catch (e) {
+      // fail-open（spec §9，含 provider 抛错——照 makeCommandDecider 先例）；
+      // 日志只收字符串（非 Error 对象经 JSON.stringify 可能再抛），不制造新故障
+      const reason = e instanceof Error ? e.message : String(e);
+      Log.error(`网络判定异常 fail-open 放行 host=${host} reason=${reason}`);
+      return { ok: true };
     }
   }
 

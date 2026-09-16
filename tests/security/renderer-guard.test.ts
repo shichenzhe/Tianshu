@@ -9,6 +9,11 @@ vi.mock("electron", () => ({
   shell: { openExternal },
   session: { defaultSession: { webRequest: { onBeforeRequest: vi.fn() } } },
 }));
+// network-gate 传递依赖 Log（→ electron，终审 S2）；本文件 electron mock 无
+// app.getPath，故直接 mock Log（照 settings.service.test 先例）
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
 vi.mock(
   "../../electron/domains/security/network-gate",
   async (importOriginal) => {

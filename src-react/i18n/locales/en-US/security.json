@@ -10,8 +10,7 @@
     "command": "Command Security",
     "commandDesc": "Manage allow/ask/block lists for shell commands",
     "network": "Network Security",
-    "networkDesc": "Manage network requests and domain lists",
-    "comingSoon": "Coming soon"
+    "networkDesc": "Manage network requests and domain lists"
   },
   "dataSafety": {
     "title": "Data Safety",

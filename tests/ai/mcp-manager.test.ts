@@ -1,4 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// mcp-manager 传递依赖 Log（→ electron，终审 S2），经 vi.mock 替换
+vi.mock("../../electron/commons/Log", () => ({
+  default: { error: vi.fn() },
+}));
+
 import {
   McpManager,
   parseMcpRow,

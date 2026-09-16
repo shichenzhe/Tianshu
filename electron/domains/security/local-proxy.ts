@@ -130,10 +130,21 @@ export class LocalConnectProxy {
         upRes.pipe(res);
       },
     );
-    upstream.on("error", () => {
-      res.writeHead(502);
-      res.end();
-    });
+    upstream.on("error", () => endUpstreamError(res));
     req.pipe(upstream);
+  }
+}
+
+/**
+ * 明文转发上游错误收口（终审 S1）：未发响应头回 502；已发（部分响应已在
+ * 回写流中）不可再写状态行——销毁连接终结客户端，否则 writeHead 抛
+ * ERR_HTTP_HEADERS_SENT 且客户端连接悬置
+ */
+function endUpstreamError(res: http.ServerResponse): void {
+  if (!res.headersSent) {
+    res.writeHead(502);
+    res.end();
+  } else {
+    res.destroy();
   }
 }

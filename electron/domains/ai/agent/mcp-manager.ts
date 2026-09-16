@@ -1,7 +1,8 @@
 /**
  * MCP 服务器生命周期管理与工具注册（P2）：
  * 连接 → listTools → 以 `mcp__<server>__<tool>` 前缀注册进 tool-registry。
- * prisma 与 client 工厂全部依赖注入，可零 mock 测试；SDK 仅在本文件的生产工厂触碰。
+ * prisma 与 client 工厂全部依赖注入；SDK 仅在本文件的生产工厂触碰，
+ * 传递依赖 Log（→ electron）在单测经 vi.mock 替换（仓库既有模式）。
  */
 import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -11,6 +12,7 @@ import type { ToolDefinition } from "./file-tools";
 import { registerTools, unregisterTools } from "./tool-registry";
 import { getNetworkGate } from "../../security/network-gate";
 import type { NetworkVerdict } from "../../security/domain-policy";
+import Log from "../../../commons/Log";
 
 export interface McpServerConfig {
   id: number;
@@ -110,21 +112,37 @@ export function parseMcpRow(row: McpServerRow): McpServerConfig {
 
 /**
  * MCP http 入口预判（SP5 spec §6）：deny 抛错（含 host 与规则，回喂状态机
- * error 文案）——SDK transport 构造之前拦截，未装门或缺省 url 零行为
+ * error 文案）——SDK transport 构造之前拦截，未装门或缺省 url 零行为；
+ * 判定本身抛错视为放行 + winston error（spec §9，终审 S2——生产注入
+ * judgeUrl 为 total 函数，缺口仅测试注入面可达）
  */
 export function assertMcpUrlAllowed(
   row: McpServerConfig,
   checkUrl?: (url: string) => NetworkVerdict,
 ): void {
   if (row.transport !== "http" || !row.url) return;
-  const verdict: NetworkVerdict = checkUrl
-    ? checkUrl(row.url)
-    : (getNetworkGate()?.judgeUrl(row.url) ?? { ok: true });
+  const verdict = safeCheckUrl(row.url, checkUrl);
   if (!verdict.ok) {
     getNetworkGate()?.blockedAudit(verdict.host, verdict.rule, "mcp");
     throw new Error(
       `网络安全策略已拒绝 ${verdict.host}（规则：${verdict.rule}）`,
     );
+  }
+}
+
+/** 判定抛错 → 放行 + winston error（fail-open）；日志只收字符串防二次抛错 */
+function safeCheckUrl(
+  url: string,
+  checkUrl?: (url: string) => NetworkVerdict,
+): NetworkVerdict {
+  const viaGate = (): NetworkVerdict =>
+    getNetworkGate()?.judgeUrl(url) ?? { ok: true };
+  try {
+    return (checkUrl ?? viaGate)(url);
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    Log.error(`MCP url 预判异常，视为放行 url=${url} reason=${reason}`);
+    return { ok: true };
   }
 }
 

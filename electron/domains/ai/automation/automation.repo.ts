@@ -133,7 +133,9 @@ function toTemplateRecord(
 }
 
 export default class AutomationRepository {
-  constructor() {
+  /** 工具禁用清单闭包（SP6 裁定 2）：Application 注入（实时读安全配置），
+   * 缺省不滤（测试）；runNow 手动触发与调度执行走同一过滤 */
+  constructor(private disabledTools: () => string[] = () => []) {
     this.registerHandlers();
   }
 
@@ -188,6 +190,8 @@ export default class AutomationRepository {
           triggerType: "manual",
           attempt: 1,
           abort: abort.signal,
+          // SP6 裁定 2：手动触发同样受注入层工具禁用约束
+          disabledTools: this.disabledTools,
         })
           .catch((e) => Log.error("自动化执行失败", task.id, e))
           .finally(() => {

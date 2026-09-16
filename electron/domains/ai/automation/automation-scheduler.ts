@@ -87,8 +87,15 @@ export function pickRetryTaskIds(
 export default class AutomationScheduler {
   private timer?: NodeJS.Timeout;
   private processStartTime = new Date();
+  // 工具禁用清单闭包（SP6 裁定 2）：Application 在 start 时注入（scheduler
+  // 类字段初始化早于 registerServices 建 securityService，构造注入不可行）；
+  // 缺省不滤（测试），调度执行与 runNow 手动触发同一过滤
+  private disabledTools: () => string[] = () => [];
 
-  start(): void {
+  start(disabledTools?: () => string[]): void {
+    if (disabledTools) {
+      this.disabledTools = disabledTools;
+    }
     // 崩溃残留:running 的 run 全部置 failed(interrupted)(spec §7)
     void this.recoverInterruptedRuns();
     this.timer = setInterval(() => {
@@ -274,7 +281,12 @@ export default class AutomationScheduler {
     }
     const abort = new AbortController();
     inflight.set(task.id, abort);
-    void executeTask(task, { triggerType, attempt, abort: abort.signal })
+    void executeTask(task, {
+      triggerType,
+      attempt,
+      abort: abort.signal,
+      disabledTools: this.disabledTools,
+    })
       .catch((e) => Log.error("自动化执行失败", task.id, e))
       .finally(() => {
         inflight.delete(task.id);

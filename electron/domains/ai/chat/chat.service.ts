@@ -33,7 +33,11 @@ import {
 import { classifyError } from "./error-classify";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
-import { registry, registerTools } from "../agent/tool-registry";
+import {
+  registry,
+  registerTools,
+  filterDisabledTools,
+} from "../agent/tool-registry";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
@@ -999,6 +1003,9 @@ export default class ChatService {
     // 数据安全装配（SP4）：Application 注入备份/删除保护/批量阈值闭包；
     // 缺席（测试/未接线）时走缺省值，行为与接入前一致
     private dataSafety?: ChatDataSafety,
+    // 运行时工具过滤（SP6 裁定 2）：Application 注入安全配置禁用清单闭包；
+    // 缺席（测试）不滤，行为与接入前一致
+    private runtimeFilter?: () => string[],
   ) {
     this.registerHandlers();
   }
@@ -1548,7 +1555,12 @@ export default class ChatService {
             ),
         )
       : workspaceScoped.filter((def) => !def.name.startsWith("plan_"));
-    return [makeReadSkillTool(skills), ...injected];
+    // 注入层过滤（SP6 裁定 2）：禁用=对模型不存在；闭包实时读配置，
+    // runtimeFilter 缺席（测试）不滤
+    return filterDisabledTools(
+      [makeReadSkillTool(skills), ...injected],
+      this.runtimeFilter?.() ?? [],
+    );
   }
 
   /**

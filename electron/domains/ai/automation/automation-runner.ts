@@ -16,7 +16,7 @@ import {
 } from "../chat/chat.service";
 import { serializeBlocks, type MessageBlock } from "../chat/blocks";
 import { createLanguageModel } from "../provider/provider-factory";
-import { registry } from "../agent/tool-registry";
+import { registry, filterDisabledTools } from "../agent/tool-registry";
 import type { SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
@@ -54,8 +54,14 @@ export function extractUsage(
     : undefined;
 }
 
-/** 工具集组装(对齐 chat.service collectToolDefinitions:read_skill 常驻) */
-function collectTools(workspacePath: string | undefined, skills: SkillInfo[]) {
+/** 工具集组装(对齐 chat.service collectToolDefinitions:read_skill 常驻)。
+ * 第三参(SP6 裁定 2):注入层禁用=对模型不存在;闭包实时读配置,缺省不滤
+ * (行为与接入前一致) */
+export async function collectTools(
+  workspacePath: string | undefined,
+  skills: SkillInfo[],
+  disabled: () => string[] = () => [],
+) {
   // plan_* 仅项目会话可用(依赖 ctx.projectId);定时任务 agent 不带 projectId,
   // 带上只会得到「未关联项目」拒绝——剔除,避免污染模型的工具列表
   const registered = registry
@@ -66,7 +72,10 @@ function collectTools(workspacePath: string | undefined, skills: SkillInfo[]) {
     : registered.filter(
         (def) => def.name.startsWith("mcp__") || def.name === "create_skill",
       );
-  return [makeReadSkillTool(skills), ...injected];
+  return filterDisabledTools(
+    [makeReadSkillTool(skills), ...injected],
+    disabled(),
+  );
 }
 
 export interface AutomationPermissions {
@@ -98,6 +107,9 @@ export interface ExecuteTaskOptions {
    * SecurityService/FileHistoryService 依赖，不注入即走缺省值
    * （unattended 流对批量删除已有强拒兜底） */
   dataSafety?: ChatDataSafety;
+  /** 工具禁用清单（SP6 裁定 2）：可选透传闭包（Application 注入实时读
+   * 安全配置），缺省不滤——注入层过滤，禁用=对模型不存在 */
+  disabledTools?: () => string[];
 }
 
 /**
@@ -267,7 +279,11 @@ async function streamAndRecord(
     ],
     params: { temperature: task.temperature ?? undefined },
     abortSignal: opts.abort,
-    toolDefinitions: collectTools(ctx.workspacePath, skills),
+    toolDefinitions: await collectTools(
+      ctx.workspacePath,
+      skills,
+      opts.disabledTools,
+    ),
     agent: {
       sessionId: ctx.sessionId,
       workspacePath: ctx.workspacePath,

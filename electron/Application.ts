@@ -67,7 +67,6 @@ export default class Application {
   async execute() {
     await this.initDatabase();
     await this.registerServices();
-    this.scheduler.start();
     this.memoryScheduler?.start();
     console.info("register dbservice success");
   }
@@ -286,6 +285,9 @@ export default class Application {
         bulkDeleteThreshold: () =>
           securityService.getConfigValue().bulkDeleteThreshold,
       },
+      // SP6 工具禁用（裁定 2）：闭包实时读配置——注入层过滤，禁用=对模型
+      // 不存在（collectToolDefinitions 组装尾统一收口）
+      () => securityService.getConfigValue().disabledTools,
     );
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）
@@ -326,6 +328,12 @@ export default class Application {
       logFilePath: path.join(path.join(__dirname, "docs"), "update-log.md"),
     });
     // 自动化模块:repo 注册 IPC;调度器随应用生命周期启停
-    new AutomationRepository();
+    new AutomationRepository(
+      // SP6 裁定 2：runNow 手动触发同样受注入层工具禁用约束
+      () => securityService.getConfigValue().disabledTools,
+    );
+    // 调度器启动（原在 execute 注册完成后首行，等价前移至接线尾——securityService
+    // 为本方法局部闭包，跨方法不可达）：SP6 裁定 2，注入工具禁用闭包实时读配置
+    this.scheduler.start(() => securityService.getConfigValue().disabledTools);
   }
 }

@@ -50,4 +50,33 @@ export class SecurityApi {
   static openBackupDir(): Promise<void> {
     return invoke<void>("security:openBackupDir");
   }
+
+  static listFullGrants(): Promise<
+    Array<{ sessionId: number; title: string }>
+  > {
+    return invoke("permission:listFullGrants");
+  }
+
+  static revokeAllFull(): Promise<void> {
+    return invoke<void>("permission:revokeAllFull");
+  }
+
+  static listRemembered(): Promise<
+    Array<{
+      id: number;
+      workspaceName: string;
+      toolName: string;
+      createdAt: string;
+    }>
+  > {
+    return invoke("permission:listRemembered");
+  }
+
+  static revokeRemembered(id: number): Promise<void> {
+    return invoke<void>("permission:revokeRemembered", id);
+  }
+
+  static revokeAllRemembered(): Promise<void> {
+    return invoke<void>("permission:revokeAllRemembered");
+  }
 }

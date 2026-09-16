@@ -15,13 +15,16 @@ import { SecurityApi } from "../api/security.api";
 import { useSaveOrRevert } from "@/domains/app-settings/model/use-save-or-revert";
 import SandboxCard from "./SandboxCard";
 import DataSafetyCard from "./DataSafetyCard";
+import SystemGrantCard from "./SystemGrantCard";
 import AuditCenter from "./AuditCenter";
 import CommandDetailView from "./CommandDetailView";
 import FileDetailView from "./FileDetailView";
 import NetworkDetailView from "./NetworkDetailView";
+import RuntimeDetailView from "./RuntimeDetailView";
 import SettingsGroup from "@/domains/app-settings/components/SettingsGroup";
 
-type SecurityView = "home" | "audit-all" | "command" | "file" | "network";
+type SecurityView =
+  "home" | "audit-all" | "command" | "file" | "network" | "runtime";
 
 export default function SecurityCenter() {
   const { t } = useTranslation(["security"]);
@@ -123,6 +126,25 @@ export default function SecurityCenter() {
     );
   }
 
+  if (view === "runtime") {
+    return (
+      <div className="p-1">
+        <RuntimeDetailView
+          config={config}
+          defaults={
+            defaults ?? {
+              fileBlocklist: [],
+              maliciousDomains: [],
+              builtinTools: [],
+            }
+          }
+          onBack={() => setView("home")}
+          onToggle={updateConfig}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <SettingsGroup title={t("security:sandbox.title")}>
@@ -132,10 +154,14 @@ export default function SecurityCenter() {
           onOpenCommand={() => setView("command")}
           onOpenFile={() => setView("file")}
           onOpenNetwork={() => setView("network")}
+          onOpenRuntime={() => setView("runtime")}
         />
       </SettingsGroup>
       <SettingsGroup title={t("security:dataSafety.title")}>
         <DataSafetyCard config={config} onUpdate={updateConfig} />
+      </SettingsGroup>
+      <SettingsGroup title={t("security:systemGrant.title")}>
+        <SystemGrantCard />
       </SettingsGroup>
       <SettingsGroup title={t("security:audit.title")}>
         <AuditCenter embedded onOpenAll={() => setView("audit-all")} />

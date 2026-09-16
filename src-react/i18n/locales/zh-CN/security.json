@@ -10,7 +10,9 @@
     "command": "命令安全",
     "commandDesc": "管理 Shell 命令的放行、询问与禁止名单",
     "network": "网络安全",
-    "networkDesc": "管理网络出入站请求与域名名单"
+    "networkDesc": "管理网络出入站请求与域名名单",
+    "runtime": "运行时工具",
+    "runtimeDesc": "控制 AI 可用的内置工具"
   },
   "dataSafety": {
     "title": "数据安全",
@@ -71,7 +73,10 @@
       "data-safety_delete-failed": "删除失败: {{path}}（{{error}}）",
       "data-safety_bulk-delete-needs-approval": "批量删除需审批: {{path}}（预估 {{estimated}} 个文件）",
       "data-safety_bulk-delete-rejected": "批量删除已拒绝: {{path}}（预估 {{estimated}} 个文件）",
-      "network_blocked": "已拦截网络请求：{{host}}（规则：{{rule}}，层：{{source}}）"
+      "network_blocked": "已拦截网络请求：{{host}}（规则：{{rule}}，层：{{source}}）",
+      "permission_full-revoked": "收回全部完全访问（{{count}} 个会话）",
+      "permission_remembered-revoked": "撤销工具记忆：{{tool}}（{{workspace}}）",
+      "permission_remembered-revoked-all": "撤销全部工具记忆（{{count}} 条）"
     }
   },
   "invalidEntry": "请输入有效内容",
@@ -148,6 +153,48 @@
     },
     "builtinTag": "内置",
     "boundaryNote": "覆盖边界：主进程请求（模型调用/MCP/技能市场）、渲染层图片与链接、以及遵循代理环境变量的命令子进程；直连 socket 等深层绕过不在本层防护内。"
+  },
+  "systemGrant": {
+    "title": "系统授权",
+    "desc": "管理 AI 当前被授予的权限",
+    "fullTitle": "活跃完全访问",
+    "fullDesc": "以下会话已跳过文件写入与命令审批",
+    "fullBadge": "完全访问",
+    "revokeAllFull": "一键收回全部",
+    "revokeAllFullConfirm": "收回后这些会话回到逐次审批。继续？",
+    "rememberedTitle": "工作空间工具记忆",
+    "rememberedDesc": "「允许并记住」产生的免审记录，撤销后回到逐次审批",
+    "emptyFull": "当前没有完全访问会话",
+    "emptyRemembered": "暂无工具记忆",
+    "revoke": "撤销",
+    "revokeAll": "全部撤销",
+    "revokeAllConfirm": "将撤销全部工具记忆，继续？",
+    "revoked": "已撤销"
+  },
+  "runtimeDetail": {
+    "title": "运行时工具",
+    "note": "关闭的工具对本机所有 AI 会话与自动化隐藏，即刻生效",
+    "groupFile": "文件",
+    "groupCommand": "命令",
+    "groupSkill": "技能",
+    "groupPlan": "计划",
+    "kindRead": "读",
+    "kindWrite": "写",
+    "tools": {
+      "read_file": "读取工作区内文件",
+      "list_dir": "列出目录内容",
+      "search_files": "按关键词搜索文件",
+      "write_file": "写入或创建文件",
+      "delete_file": "删除文件或目录（受数据安全保护）",
+      "run_command": "执行 shell 命令",
+      "read_skill": "读取技能内容供对话引用",
+      "create_skill": "创建或更新技能",
+      "plan_create_item": "创建计划条目",
+      "plan_update_status": "更新计划条目状态",
+      "plan_append_summary": "为计划条目追加小结",
+      "plan_list_items": "列出计划条目",
+      "plan_get_item": "获取计划条目详情"
+    }
   },
   "error": {
     "saveFailed": "保存失败，请重试"

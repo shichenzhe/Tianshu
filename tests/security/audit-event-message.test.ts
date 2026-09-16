@@ -55,6 +55,9 @@ describe("eventMessageKey", () => {
       "config.commandRules.reset",
       "config.fileRules.reset",
       "audit.cleared",
+      "permission.full-revoked",
+      "permission.remembered-revoked",
+      "permission.remembered-revoked-all",
     ];
     for (const eventType of known) {
       expect(i18n.exists(eventMessageKey(eventType)), eventType).toBe(true);

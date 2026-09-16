@@ -10,7 +10,9 @@
     "command": "Command Security",
     "commandDesc": "Manage allow/ask/block lists for shell commands",
     "network": "Network Security",
-    "networkDesc": "Manage network requests and domain lists"
+    "networkDesc": "Manage network requests and domain lists",
+    "runtime": "Runtime tools",
+    "runtimeDesc": "Control built-in tools available to AI"
   },
   "dataSafety": {
     "title": "Data Safety",
@@ -71,7 +73,10 @@
       "data-safety_delete-failed": "Delete failed: {{path}} ({{error}})",
       "data-safety_bulk-delete-needs-approval": "Bulk delete needs approval: {{path}} (~{{estimated}} files)",
       "data-safety_bulk-delete-rejected": "Bulk delete rejected: {{path}} (~{{estimated}} files)",
-      "network_blocked": "Blocked network request: {{host}} (rule: {{rule}}, layer: {{source}})"
+      "network_blocked": "Blocked network request: {{host}} (rule: {{rule}}, layer: {{source}})",
+      "permission_full-revoked": "Revoked all full access ({{count}} sessions)",
+      "permission_remembered-revoked": "Revoked tool memory: {{tool}} ({{workspace}})",
+      "permission_remembered-revoked-all": "Revoked all tool memories ({{count}})"
     }
   },
   "invalidEntry": "Please enter a valid entry",
@@ -148,6 +153,48 @@
     },
     "builtinTag": "Built-in",
     "boundaryNote": "Coverage: main-process requests (model calls/MCP/skill market), renderer images and links, and command subprocesses honoring proxy env vars; deep bypasses such as raw sockets are out of scope."
+  },
+  "systemGrant": {
+    "title": "System grants",
+    "desc": "Manage permissions currently granted to AI",
+    "fullTitle": "Active full access",
+    "fullDesc": "The following sessions skip file-write and command approvals",
+    "fullBadge": "Full access",
+    "revokeAllFull": "Revoke all",
+    "revokeAllFullConfirm": "These sessions will return to per-action approval. Continue?",
+    "rememberedTitle": "Workspace tool memories",
+    "rememberedDesc": "Memory entries created by \"Allow and remember\"; revoking returns to per-action approval",
+    "emptyFull": "No full-access sessions",
+    "emptyRemembered": "No tool memories",
+    "revoke": "Revoke",
+    "revokeAll": "Revoke all",
+    "revokeAllConfirm": "This revokes all tool memories. Continue?",
+    "revoked": "Revoked"
+  },
+  "runtimeDetail": {
+    "title": "Runtime tools",
+    "note": "Closed tools are hidden from all AI sessions and automations on this machine, effective immediately",
+    "groupFile": "File",
+    "groupCommand": "Command",
+    "groupSkill": "Skill",
+    "groupPlan": "Plan",
+    "kindRead": "Read",
+    "kindWrite": "Write",
+    "tools": {
+      "read_file": "Read files in the workspace",
+      "list_dir": "List directory contents",
+      "search_files": "Search files by keyword",
+      "write_file": "Write or create files",
+      "delete_file": "Delete files or directories (protected by data safety)",
+      "run_command": "Execute shell commands",
+      "read_skill": "Read skill contents for reference in chat",
+      "create_skill": "Create or update skills",
+      "plan_create_item": "Create plan items",
+      "plan_update_status": "Update plan item status",
+      "plan_append_summary": "Append summaries to plan items",
+      "plan_list_items": "List plan items",
+      "plan_get_item": "Get plan item details"
+    }
   },
   "error": {
     "saveFailed": "Save failed, please retry"

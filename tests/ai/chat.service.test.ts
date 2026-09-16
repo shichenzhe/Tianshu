@@ -1119,7 +1119,7 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
   it("listFullGrants：只列 full 会话并 join 标题；查询失败行回落「会话 #id」不整表失败", async () => {
     const svc = makeGrantSvc(grantSessions({ 1: "任务A", 3: "任务C" }));
     svc.permissions.set(1, "full");
-    svc.permissions.set(2, "full"); // 标题查询失败 → 回落文案
+    svc.permissions.set(2, "full"); // 查无行（mock titles 无该键）→ 回落文案
     svc.permissions.set(3, "full");
     svc.permissions.set(4, "default"); // 非 full 不列出
     const list = (await handlerOf("permission:listFullGrants")()) as Array<{

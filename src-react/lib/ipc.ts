@@ -69,6 +69,12 @@ export type IPCChannel =
   | "permission:rememberTool"
   | "permission:listAllowedTools"
   | "permission:forgetTool"
+  // 系统授权卡（SP6 安全中心）
+  | "permission:listFullGrants"
+  | "permission:revokeAllFull"
+  | "permission:listRemembered"
+  | "permission:revokeRemembered"
+  | "permission:revokeAllRemembered"
   | "skill:openDir"
   | "skill:list"
   | "skill:setEnabled"

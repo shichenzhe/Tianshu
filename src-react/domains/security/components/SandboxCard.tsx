@@ -1,8 +1,14 @@
 /**
- * 沙箱安全卡片：总开关 + 三个二级入口（命令 SP2、文件 SP3、网络 SP5 均已启用可点）
+ * 沙箱安全卡片：总开关 + 四个二级入口（命令 SP2、文件 SP3、网络 SP5、运行时工具 SP6）
  */
 import { useTranslation } from "react-i18next";
-import { ChevronRight, FileLock, Globe, SquareTerminal } from "lucide-react";
+import {
+  ChevronRight,
+  FileLock,
+  Globe,
+  SquareTerminal,
+  Wrench,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { SecurityConfig, SecurityConfigKey } from "../model/types";
 import { Label } from "@/components/ui/label";
@@ -14,14 +20,15 @@ interface SandboxCardProps {
   onOpenCommand: () => void;
   onOpenFile: () => void;
   onOpenNetwork: () => void;
+  onOpenRuntime: () => void;
 }
 
 const ENTRIES: {
   icon: LucideIcon;
   labelKey: string;
   descKey: string;
-  /** 入口对应视图：三个二级入口（命令 SP2、文件 SP3、网络 SP5）均已启用 */
-  view: "command" | "file" | "network";
+  /** 入口对应视图：四个二级入口均已启用 */
+  view: "command" | "file" | "network" | "runtime";
 }[] = [
   {
     icon: FileLock,
@@ -41,6 +48,12 @@ const ENTRIES: {
     descKey: "security:sandbox.networkDesc",
     view: "network",
   },
+  {
+    icon: Wrench,
+    labelKey: "security:sandbox.runtime",
+    descKey: "security:sandbox.runtimeDesc",
+    view: "runtime",
+  },
 ];
 
 export default function SandboxCard({
@@ -49,12 +62,17 @@ export default function SandboxCard({
   onOpenCommand,
   onOpenFile,
   onOpenNetwork,
+  onOpenRuntime,
 }: SandboxCardProps) {
   const { t } = useTranslation(["security"]);
-  const openers: Record<"command" | "file" | "network", () => void> = {
+  const openers: Record<
+    "command" | "file" | "network" | "runtime",
+    () => void
+  > = {
     command: onOpenCommand,
     file: onOpenFile,
     network: onOpenNetwork,
+    runtime: onOpenRuntime,
   };
   return (
     <div className="space-y-5">

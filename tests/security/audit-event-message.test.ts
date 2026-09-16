@@ -41,8 +41,11 @@ describe("eventMessageKey", () => {
       "file-safety.approved",
       "file-safety.rejected",
       "file-safety.remembered",
+      "file-safety.needs-approval",
+      "file-safety.allow-listed",
       "config.sandboxEnabled.updated",
       "config.commandRules.reset",
+      "config.fileRules.reset",
       "audit.cleared",
     ];
     for (const eventType of known) {

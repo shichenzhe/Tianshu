@@ -67,6 +67,7 @@
       "config_fileRules_reset": "文件名单已重置为默认"
     }
   },
+  "invalidEntry": "请输入有效内容",
   "commandDetail": {
     "title": "命令安全",
     "priorityNote": "优先级：程序黑名单（绝对禁止，含子进程）＞ 询问名单 ＞ 放行名单 ＞ 默认审批",

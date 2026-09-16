@@ -40,6 +40,13 @@ describe("pathMatchesRule", () => {
     expect(pathMatchesRule("/a/b2/file", "/a/b")).toBe(false);
     expect(pathMatchesRule("/x", "")).toBe(false);
   });
+  it("不区分大小写文件系统（darwin/win32）上大小写变体命中", () => {
+    // darwin APFS / win32 NTFS 不区分大小写：~/.SSH/config 读同一文件须命中
+    // （linux 等区分大小写文件系统折叠关闭，恒 false）
+    expect(pathMatchesRule("/Users/x/.SSH/config", "/Users/x/.ssh")).toBe(
+      process.platform === "darwin" || process.platform === "win32",
+    );
+  });
 });
 
 describe("decideFileAccess 优先级矩阵", () => {

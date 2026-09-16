@@ -3,7 +3,8 @@
  * 优先级 内置清单（静态+运行时）> 用户白名单 > 用户黑名单 > default。
  * 匹配：条目归一化（~/ 展开/绝对原样/相对按 workspace/去尾分隔符与 *）后，
  * 精确文件与目录前缀双匹配（无尾分隔符条目同时保护同名目录——偏安全的
- * 两段式）。不做 glob（spec §1 已知边界）。
+ * 两段式）；不区分大小写文件系统（macOS/Windows）比较前折叠为小写。
+ * 不做 glob（spec §1 已知边界）。
  */
 import os from "node:os";
 import path from "node:path";
@@ -45,10 +46,20 @@ export function normalizeRulePath(
     : path.resolve(workspacePath, value);
 }
 
-/** 精确文件或目录前缀匹配（ruleAbs 为空恒 false） */
+/** 不区分大小写文件系统（darwin/win32 家族）上按小写比较 */
+const CASE_INSENSITIVE_FS =
+  process.platform === "darwin" || process.platform === "win32";
+
+function comparable(p: string): string {
+  return CASE_INSENSITIVE_FS ? p.toLowerCase() : p;
+}
+
+/** 精确文件或目录前缀匹配（ruleAbs 为空恒 false；比较经平台感知折叠） */
 export function pathMatchesRule(absPath: string, ruleAbs: string): boolean {
   if (ruleAbs === "") return false;
-  return absPath === ruleAbs || absPath.startsWith(ruleAbs + path.sep);
+  const folded = comparable(ruleAbs);
+  const target = comparable(absPath);
+  return target === folded || target.startsWith(folded + path.sep);
 }
 
 /** 名单命中：任一条目（归一化后）双匹配 */

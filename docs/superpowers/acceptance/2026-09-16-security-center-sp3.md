@@ -1,6 +1,6 @@
 # 安全中心（SP3）— 手动验收清单（Electron GUI 走查）
 
-> 适用分支：`worktree security-center-sp3`（d965346 设计 + 4da4f97 计划 + 功能 6 个 commit 与 1 个走查期 fix：c3daef0 → b9e7a65 + 本清单同批 fix + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1565 全绿（146 文件；安全域 tests/security 十四件 89 例，SP3 新增三件——file-policy / file-gate / file-gate-integration）
+> 适用分支：`worktree security-center-sp3`（d965346 设计 + 4da4f97 计划 + 功能 6 个 commit 与 1 个走查期 fix：c3daef0 → b9e7a65 + 本清单同批 fix + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1567 全绿（146 文件；安全域 tests/security 十四件 91 例，SP3 新增三件——file-policy / file-gate / file-gate-integration）
 > 对照文档：`docs/superpowers/specs/2026-09-16-security-center-sp3-design.md`（下称 spec）；实现计划 `docs/superpowers/plans/2026-09-16-security-center-sp3.md`（6 任务 TDD 拆解）
 > 前置：`npm run dev` 启动应用并登录；需一个绑定了工作目录的 AI 会话（第 4–7 项触发工具调用）与一个 automation 定时任务（第 8 项）；沙箱总开关默认开启；判定配置每次工具调用现读 SecurityService 内存缓存（写时失效）——名单变更即刻生效，无需重启；审计写入经 500ms 缓冲批量落库——刚触发的记录若未即时出现，点「刷新」或等 30s 轮询
 
@@ -19,7 +19,7 @@
 ### 2. 用户黑/白名单 CRUD 交互 + 空输入校验
 
 - **操作步骤**：① 点「用户黑名单」的「添加」，输入 `~/secrets` 后点对勾（或按回车）保存，再点「添加」输入任意内容后点叉号（或按 Esc）取消；② 点任一列表项的删除图标移除一条，再把某一名单的条目全部删空；③ 点「添加」后不输入直接点对勾。
-- **预期结果**（spec §5）：① 保存后新条目立即入列（等宽字体展示），取消则草稿清空且不落库、Esc 不冒泡误关设置框；② 删除后条目即时消失并持久化；名单删空后显示「暂无条目」空态提示（进入添加态时提示让位给输入框）；③ 空输入被拒并 toast「请输入有效命令」，不落库——文件名单仅做非空校验（无程序名格式限制，与命令黑名单不同）；重复条目（空白差异变体）静默去重不入列。
+- **预期结果**（spec §5）：① 保存后新条目立即入列（等宽字体展示），取消则草稿清空且不落库、Esc 不冒泡误关设置框；② 删除后条目即时消失并持久化；名单删空后显示「暂无条目」空态提示（进入添加态时提示让位给输入框）；③ 空输入被拒并 toast「请输入有效内容」（通用校验文案 security:invalidEntry，与命令名单的「请输入有效命令」区分），不落库——文件名单仅做非空校验（无程序名格式限制，与命令黑名单不同）；重复条目（空白差异变体）静默去重不入列。
 - **Commit 区域**：b9e7a65（RuleSection 自 CommandDetailView 提取共享 + 两名单接线）、6400c93（RuleSection 既有交互语义：Escape 阻止冒泡、取消清空草稿）。
 
 ### 3. 「重置为默认」恢复两名单 + 审计留痕
@@ -32,7 +32,7 @@
 
 ### 4. full 模式：读内置敏感路径仍弹审批，批准可读 / 拒绝回喂
 
-- **操作步骤**：把绑定目录会话切到完全访问（full）模式，让 AI 读 `~/.ssh/config`（或任一内置路径，如 `~/.netrc`）；弹审批后先点「允许」观察读取，再让 AI 读一次并点「拒绝」。
+- **操作步骤**：把绑定目录会话切到完全访问（full）模式，让 AI 读 `~/.ssh/config`（或任一内置路径，如 `~/.netrc`）；弹审批后先点「允许」观察读取，再让 AI 读一次并点「拒绝」。注意：工具层不展开 ~——实际操作时请让 AI 使用绝对路径（如 /Users/<you>/.ssh/config），`~` 字面形态会在工具层报"文件不存在"。
 - **预期结果**（spec §3/§4）：两次读取前均**弹审批弹层**——内置清单命中裁定 block，覆盖完全访问模式，且 read 类文件工具首次进入审批流（此前 read 一律免审）；批准后文件内容回喂模型、审计记「文件操作已获批准」；拒绝后文件不读取，模型收到「用户拒绝了此操作」回喂。每次弹审批前审计多一条「文件访问需审批: ~/.ssh/config」（file-safety.needs-approval，`{{path}}` 为模型请求的原始路径形态）。
 - **Commit 区域**：0e38800（runToolCall 文件门——block 无条件审批 + needs-approval 审计）、a713a96（file-gate 单例装配）、c3daef0（判定引擎）。
 
@@ -53,7 +53,7 @@
 ### 7. 三类新审计事件可见 + {{path}} 渲染 + en-US 文案跟随
 
 - **操作步骤**：完成第 3–6 项后打开审计中心（卡片态 + 「查看全部」全量视图），确认存在「文件访问需审批」「文件访问已放行」「文件名单已重置为默认」记录并核对 `{{path}}` 渲染内容；切语言到 en-US 重开审计中心与文件二级页，再切回 zh-CN。
-- **预期结果**（spec §6/§8）：文件事件带「文件安全」类别徽标（重置事件为「配置」）与时间戳；`{{path}}` 显示模型请求的原始相对路径（如 `~/.ssh/config`、`build/out2.js`），非解析后的绝对路径；en-US 下事件文案跟随（"File access requires approval: …"/"File access allow-listed: …"/"File lists reset to defaults"），二级页标题/优先级说明/三区块标题/按钮全部切换，无硬编码中文残留。
+- **预期结果**（spec §6/§8）：文件事件带「文件安全」类别徽标（重置事件为「配置」）与时间戳；`{{path}}` 显示模型请求的原始相对路径（如 `~/.ssh/config`、`build/out2.js`），非解析后的绝对路径；en-US 下事件文案跟随（"File access requires approval: …"/"File access allow-listed: …"/"File lists reset to defaults"），二级页标题/优先级说明/三区块标题/按钮全部切换，无硬编码中文残留。注意：工具层不展开 ~——实际操作时请让 AI 使用绝对路径（如 /Users/<you>/.ssh/config），`~` 字面形态会在工具层报"文件不存在"。
 - **Commit 区域**：4491087（3 个审计事件 key + fileDetail 双语词条）、0e38800（AuditCenter entryText 兜底变量加 path + 事件源写入）。
 
 ## 四、automation 无人值守

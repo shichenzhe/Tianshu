@@ -87,7 +87,7 @@ export default function FileDetailView({
         titleKey="security:fileDetail.blocklist.title"
         descKey="security:fileDetail.blocklist.desc"
         placeholderKey="security:fileDetail.blocklist.placeholder"
-        invalidKey="security:commandDetail.invalidCommand"
+        invalidKey="security:invalidEntry"
         items={config.fileBlocklist}
         validate={(raw) => (raw.trim() !== "" ? raw.trim() : null)}
         onSave={(items) => save("fileBlocklist", items)}
@@ -96,7 +96,7 @@ export default function FileDetailView({
         titleKey="security:fileDetail.allowlist.title"
         descKey="security:fileDetail.allowlist.desc"
         placeholderKey="security:fileDetail.allowlist.placeholder"
-        invalidKey="security:commandDetail.invalidCommand"
+        invalidKey="security:invalidEntry"
         items={config.fileAllowlist}
         validate={(raw) => (raw.trim() !== "" ? raw.trim() : null)}
         onSave={(items) => save("fileAllowlist", items)}

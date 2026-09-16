@@ -120,4 +120,13 @@ describe("runToolCall 文件判定门", () => {
     expect(agent.approvals).toHaveLength(0);
     expect(out).not.toContain("错误");
   });
+
+  it("search_files 不在文件门内（无判定不回归）", async () => {
+    const agent = makeAgent({ decideFileAccess: () => "block" });
+    await runToolCall(makeFileTool("search_files"), agent, "f7", {
+      pattern: "hello",
+    });
+    expect(agent.approvals).toHaveLength(0);
+    expect(agent.events).toHaveLength(0);
+  });
 });

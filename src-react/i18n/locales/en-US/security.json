@@ -67,6 +67,7 @@
       "config_fileRules_reset": "File lists reset to defaults"
     }
   },
+  "invalidEntry": "Please enter a valid entry",
   "commandDetail": {
     "title": "Command Security",
     "priorityNote": "Priority: program blocklist (absolute, incl. child processes) > ask list > allow list > default approval",

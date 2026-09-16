@@ -957,6 +957,20 @@ export async function runChatStream(
   return { blocks, errorCode, errorMessage };
 }
 
+/** SP6 系统授权卡：完全访问会话行（permission:listFullGrants 载荷，spec §4.1） */
+export interface FullSessionGrant {
+  sessionId: number;
+  title: string;
+}
+
+/** SP6 系统授权卡：工具记忆行（permission:listRemembered 载荷，spec §4.2） */
+export interface RememberedToolGrant {
+  id: number;
+  workspaceName: string;
+  toolName: string;
+  createdAt: string;
+}
+
 /** 流式工具态快照（chat:status 恢复渲染层 agent 态用，与 T6 store 同构） */
 export interface ToolSnapshotState {
   toolName: string;
@@ -1089,6 +1103,26 @@ export default class ChatService {
           where: { workspaceId, toolName },
         });
       },
+    );
+    // SP6 系统授权卡：full 会话总览与一键收回（spec §4.1）
+    ipcMain.handle(
+      "permission:listFullGrants",
+      (): Promise<FullSessionGrant[]> => this.listFullGrants(),
+    );
+    ipcMain.handle("permission:revokeAllFull", (): void =>
+      this.revokeAllFull(),
+    );
+    // SP6 工具记忆管理（spec §4.2）：撤销后该工具回到逐次审批流
+    ipcMain.handle(
+      "permission:listRemembered",
+      (): Promise<RememberedToolGrant[]> => this.listRemembered(),
+    );
+    ipcMain.handle(
+      "permission:revokeRemembered",
+      (_, id: number): Promise<void> => this.revokeRemembered(id),
+    );
+    ipcMain.handle("permission:revokeAllRemembered", (): Promise<void> =>
+      this.revokeAllRemembered(),
     );
     // P1 工作空间目录绑定：目录选择弹窗在主进程（dialog 属 GUI，repo 不引 electron）。
     // 用户取消返回 null，渲染层静默处理；存入前归一化（resolve + 去尾分隔符）
@@ -1236,6 +1270,99 @@ export default class ChatService {
         }
       },
     );
+  }
+
+  /** full 会话总览（SP6 spec §4.1）：标题查询失败行回落「会话 #id」不整表失败（spec §8） */
+  private async listFullGrants(): Promise<FullSessionGrant[]> {
+    return Promise.all(
+      this.permissions.listFull().map(async (sessionId) => ({
+        sessionId,
+        title: (await this.sessionTitleOf(sessionId)) ?? `会话 #${sessionId}`,
+      })),
+    );
+  }
+
+  /** 一键收回 full 会话（SP6 spec §4.1）：空集 no-op 不审计（spec §8） */
+  private revokeAllFull(): void {
+    const ids = this.permissions.listFull();
+    for (const id of ids) {
+      this.permissions.set(id, "default");
+    }
+    if (ids.length === 0) {
+      return;
+    }
+    this.auditSink?.({
+      eventType: "permission.full-revoked",
+      decision: "info",
+      detail: { count: ids.length },
+    });
+  }
+
+  /** 工具记忆列表（SP6 spec §4.2）：空间名 join 失败行回落 #workspaceId（spec §8） */
+  private async listRemembered(): Promise<RememberedToolGrant[]> {
+    const rows = await prisma.toolPermission.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    return Promise.all(
+      rows.map(async (row) => ({
+        id: row.id,
+        workspaceName:
+          (await this.workspaceNameOf(row.workspaceId)) ??
+          `#${row.workspaceId}`,
+        toolName: row.toolName,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    );
+  }
+
+  /** 撤销单条工具记忆（SP6 spec §4.2）：不存在 id 幂等 no-op 不审计（spec §8） */
+  private async revokeRemembered(id: number): Promise<void> {
+    const row = await prisma.toolPermission.findUnique({ where: { id } });
+    if (!row) {
+      return;
+    }
+    await prisma.toolPermission.delete({ where: { id } });
+    this.auditSink?.({
+      eventType: "permission.remembered-revoked",
+      decision: "info",
+      detail: {
+        tool: row.toolName,
+        workspace:
+          (await this.workspaceNameOf(row.workspaceId)) ??
+          `#${row.workspaceId}`,
+      },
+    });
+  }
+
+  /** 全部撤销工具记忆（SP6 spec §4.2）：空表 no-op 不审计（spec §8） */
+  private async revokeAllRemembered(): Promise<void> {
+    const { count } = await prisma.toolPermission.deleteMany({});
+    if (count === 0) {
+      return;
+    }
+    this.auditSink?.({
+      eventType: "permission.remembered-revoked-all",
+      decision: "info",
+      detail: { count },
+    });
+  }
+
+  /** 会话标题查询：失败/缺行返回 null（调用方走回落文案），不冒泡整表失败 */
+  private async sessionTitleOf(sessionId: number): Promise<string | null> {
+    try {
+      return (await this.sessions.getSession(sessionId))?.title ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 工作空间名查询：失败/缺行返回 null（调用方走 #id 回落文案） */
+  private async workspaceNameOf(workspaceId: number): Promise<string | null> {
+    try {
+      return (await this.sessions.getWorkspace(workspaceId))?.name ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private emit(

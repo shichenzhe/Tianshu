@@ -6,6 +6,7 @@ import {
   expect,
   it,
   vi,
+  type Mock,
 } from "vitest";
 
 vi.mock("electron", () => ({
@@ -35,6 +36,22 @@ const prismaStub = {
   messageDeleteMany: vi.fn<
     (_: MessageDeleteManyArgs) => Promise<{ count: number }>
   >(async () => ({ count: 0 })),
+  /** SP6 系统授权卡：toolPermission 表读写通道（listRemembered / revoke* 断言用） */
+  toolPermissions: [] as Array<{
+    id: number;
+    workspaceId: number;
+    toolName: string;
+    createdAt: Date;
+  }>,
+  toolPermissionFindMany: vi.fn(async () => prismaStub.toolPermissions),
+  toolPermissionFindUnique: vi.fn(
+    async ({ where: { id } }: { where: { id: number } }) =>
+      prismaStub.toolPermissions.find((row) => row.id === id) ?? null,
+  ),
+  toolPermissionDelete: vi.fn(async () => null),
+  toolPermissionDeleteMany: vi.fn(async () => ({
+    count: prismaStub.toolPermissions.length,
+  })),
 };
 
 // assembleContext 读通道（项目会话 base 注入测试按需覆写返回值）；
@@ -52,6 +69,14 @@ vi.mock("../../electron/commons/prisma-client", () => ({
       update: (args: MessageUpdateArgs) => prismaStub.messageUpdate(args),
       deleteMany: (args: MessageDeleteManyArgs) =>
         prismaStub.messageDeleteMany(args),
+    },
+    toolPermission: {
+      findMany: (args?: unknown) => prismaStub.toolPermissionFindMany(args),
+      findUnique: (args: { where: { id: number } }) =>
+        prismaStub.toolPermissionFindUnique(args),
+      delete: (args: { where: { id: number } }) =>
+        prismaStub.toolPermissionDelete(args),
+      deleteMany: (args?: unknown) => prismaStub.toolPermissionDeleteMany(args),
     },
     ...assembleReads,
   },
@@ -82,6 +107,9 @@ import {
   unregisterTools,
 } from "../../electron/domains/ai/agent/tool-registry";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
+import { ipcMain } from "electron";
+import { PermissionStore } from "../../electron/domains/ai/agent/permission-mode";
+import type { SecurityEvent } from "../../src-react/domains/security/model/types";
 
 const userHistory = [
   {
@@ -990,5 +1018,245 @@ describe("ChatService.assembleContext（项目会话工具硬隔离）", () => {
     expect(await toolNames(service)).toEqual([]);
     // ask 不做运行时交集（无实际工具集可对齐），声明沿用挂载集
     expect(ctx.systemWithSummary).toContain("技能：技能1");
+  });
+
+  it("SP6 运行时禁用钉住（Task 2 移交）：注入 runtimeFilter 后工具集不含禁用名，缺席不滤", async () => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: 1,
+        workspaceId: 1,
+        mode: null,
+        compactedUpToId: null,
+        summary: null,
+        projectId: null,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(1),
+      // 绑定目录：文件四件 + run_command 实际进入注入集（过滤断言才有意义）
+      getWorkspace: vi
+        .fn()
+        .mockResolvedValue({ id: 1, name: "空间", directoryPath: "/tmp/ws" }),
+    };
+    const mkSvc = (runtimeFilter?: () => string[]) =>
+      new ChatService(
+        sessions as unknown as SessionRepository,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        runtimeFilter,
+      );
+    expect(await toolNames(mkSvc(() => ["run_command"]))).not.toContain(
+      "run_command",
+    );
+    // 缺席（测试不注入）：不滤（回归锚点）
+    expect(await toolNames(mkSvc())).toContain("run_command");
+  });
+});
+
+/**
+ * SP6 系统授权 IPC（spec §4）：full 会话总览/一键收回 + 工具记忆查看/撤销。
+ * ipcMain.handle 为模块级 vi.fn：每次构造累积注册，取该通道最近一次注册的
+ * handler 直调（渲染层 invoke 的等价最小面）。
+ */
+describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
+  /** 该通道最近一次注册的 handler（对应本测试刚构造的 service） */
+  const handlerOf = (channel: string) => {
+    const calls = (ipcMain.handle as unknown as Mock).mock.calls.filter(
+      ([name]) => name === channel,
+    );
+    const latest = calls[calls.length - 1];
+    if (!latest) {
+      throw new Error(`IPC 未注册: ${channel}`);
+    }
+    return latest[1] as (...args: unknown[]) => unknown;
+  };
+
+  /** 标题/空间名查询 stub：值为 "fail" 时抛错（断言回落文案），缺省查无行 */
+  const grantSessions = (
+    titles: Record<number, string | "fail">,
+    workspaces: Record<number, string | "fail"> = {},
+  ) => ({
+    getSession: async (id: number) => {
+      const title = titles[id];
+      if (title === "fail") throw new Error("会话查询失败");
+      return title === undefined ? null : { title };
+    },
+    getWorkspace: async (id: number) => {
+      const name = workspaces[id];
+      if (name === "fail") throw new Error("工作空间查询失败");
+      return name === undefined ? null : { name };
+    },
+  });
+
+  /** 构造 service：auditSink 缺省捕获审计事件，permissions 私有 store 直达 */
+  const makeGrantSvc = (
+    sessions: ReturnType<typeof grantSessions>,
+    withAuditSink = true,
+  ) => {
+    const auditEvents: SecurityEvent[] = [];
+    const service = new ChatService(
+      sessions as unknown as SessionRepository,
+      undefined,
+      undefined,
+      withAuditSink ? (event) => auditEvents.push(event) : undefined,
+    );
+    return {
+      auditEvents,
+      permissions: (service as unknown as { permissions: PermissionStore })
+        .permissions,
+    };
+  };
+
+  beforeEach(() => {
+    prismaStub.toolPermissions = [];
+    prismaStub.toolPermissionFindMany.mockClear();
+    prismaStub.toolPermissionFindUnique.mockClear();
+    prismaStub.toolPermissionDelete.mockClear();
+    prismaStub.toolPermissionDeleteMany.mockClear();
+  });
+
+  it("listFullGrants：只列 full 会话并 join 标题；查询失败行回落「会话 #id」不整表失败", async () => {
+    const svc = makeGrantSvc(grantSessions({ 1: "任务A", 3: "任务C" }));
+    svc.permissions.set(1, "full");
+    svc.permissions.set(2, "full"); // 标题查询失败 → 回落文案
+    svc.permissions.set(3, "full");
+    svc.permissions.set(4, "default"); // 非 full 不列出
+    const list = (await handlerOf("permission:listFullGrants")()) as Array<{
+      sessionId: number;
+      title: string;
+    }>;
+    expect(list).toEqual([
+      { sessionId: 1, title: "任务A" },
+      { sessionId: 2, title: "会话 #2" },
+      { sessionId: 3, title: "任务C" },
+    ]);
+  });
+
+  it("revokeAllFull：全部 set 回 default 并审计 count；空集再调 no-op 不审计", async () => {
+    const svc = makeGrantSvc(grantSessions({}));
+    svc.permissions.set(1, "full");
+    svc.permissions.set(2, "full");
+    await handlerOf("permission:revokeAllFull")();
+    expect(svc.permissions.get(1)).toBe("default");
+    expect(svc.permissions.get(2)).toBe("default");
+    expect(svc.auditEvents).toEqual([
+      {
+        eventType: "permission.full-revoked",
+        decision: "info",
+        detail: { count: 2 },
+      },
+    ]);
+    // 再调（已空）：no-op 不再审计
+    await handlerOf("permission:revokeAllFull")();
+    expect(svc.auditEvents).toHaveLength(1);
+  });
+
+  it("revokeAllFull：auditSink 缺席（未接线）静默照常收回", async () => {
+    const svc = makeGrantSvc(grantSessions({}), false);
+    svc.permissions.set(1, "full");
+    await handlerOf("permission:revokeAllFull")();
+    expect(svc.permissions.get(1)).toBe("default");
+  });
+
+  it("listRemembered：按时间倒序并 join 工作空间名；join 失败行回落 #workspaceId", async () => {
+    prismaStub.toolPermissions = [
+      {
+        id: 7,
+        workspaceId: 5,
+        toolName: "run_command",
+        createdAt: new Date("2026-09-01T08:00:00Z"),
+      },
+      {
+        id: 8,
+        workspaceId: 6,
+        toolName: "write_file",
+        createdAt: new Date("2026-09-02T08:00:00Z"),
+      },
+    ];
+    makeGrantSvc(grantSessions({}, { 5: "我的空间", 6: "fail" }));
+    const list = (await handlerOf("permission:listRemembered")()) as Array<{
+      id: number;
+      workspaceName: string;
+      toolName: string;
+      createdAt: string;
+    }>;
+    expect(prismaStub.toolPermissionFindMany).toHaveBeenCalledWith({
+      orderBy: { createdAt: "desc" },
+    });
+    expect(list).toEqual([
+      {
+        id: 7,
+        workspaceName: "我的空间",
+        toolName: "run_command",
+        createdAt: "2026-09-01T08:00:00.000Z",
+      },
+      {
+        id: 8,
+        workspaceName: "#6",
+        toolName: "write_file",
+        createdAt: "2026-09-02T08:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("revokeRemembered：删单行并审计 tool/workspace；不存在 id 幂等 no-op 不审计", async () => {
+    prismaStub.toolPermissions = [
+      {
+        id: 7,
+        workspaceId: 5,
+        toolName: "run_command",
+        createdAt: new Date(),
+      },
+    ];
+    const svc = makeGrantSvc(grantSessions({}, { 5: "我的空间" }));
+    await handlerOf("permission:revokeRemembered")(null, 7);
+    expect(prismaStub.toolPermissionDelete).toHaveBeenCalledWith({
+      where: { id: 7 },
+    });
+    expect(svc.auditEvents).toEqual([
+      {
+        eventType: "permission.remembered-revoked",
+        decision: "info",
+        detail: { tool: "run_command", workspace: "我的空间" },
+      },
+    ]);
+    // 不存在 id：no-op 成功，不重复删也不审计
+    await expect(
+      handlerOf("permission:revokeRemembered")(null, 99),
+    ).resolves.toBeUndefined();
+    expect(prismaStub.toolPermissionDelete).toHaveBeenCalledTimes(1);
+    expect(svc.auditEvents).toHaveLength(1);
+  });
+
+  it("revokeAllRemembered：deleteMany 全表并审计 count；空表 no-op 不审计", async () => {
+    prismaStub.toolPermissions = [
+      {
+        id: 7,
+        workspaceId: 5,
+        toolName: "run_command",
+        createdAt: new Date(),
+      },
+      {
+        id: 8,
+        workspaceId: 6,
+        toolName: "write_file",
+        createdAt: new Date(),
+      },
+    ];
+    const svc = makeGrantSvc(grantSessions({}));
+    await handlerOf("permission:revokeAllRemembered")();
+    expect(prismaStub.toolPermissionDeleteMany).toHaveBeenCalledWith({});
+    expect(svc.auditEvents).toEqual([
+      {
+        eventType: "permission.remembered-revoked-all",
+        decision: "info",
+        detail: { count: 2 },
+      },
+    ]);
+    // 空表再调：no-op 不再审计
+    prismaStub.toolPermissions = [];
+    await handlerOf("permission:revokeAllRemembered")();
+    expect(svc.auditEvents).toHaveLength(1);
   });
 });

@@ -15,4 +15,11 @@ export class PermissionStore {
   set(sessionId: number, mode: AccessMode): void {
     this.modes.set(sessionId, mode);
   }
+
+  /** 当前 full 的会话 id 列表（SP6 系统授权卡；插入序） */
+  listFull(): number[] {
+    return [...this.modes.entries()]
+      .filter(([, mode]) => mode === "full")
+      .map(([sessionId]) => sessionId);
+  }
 }

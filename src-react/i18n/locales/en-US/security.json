@@ -61,7 +61,7 @@
       "command-safety_child-blocked": "Killed blacklisted child process: {{program}}",
       "command-safety_remembered": "Tool added to allowlist memory: {{tool}}",
       "file-safety_remembered": "Tool added to allowlist memory: {{tool}}",
-      "config_commandRules-reset": "Command lists reset to defaults"
+      "config_commandRules_reset": "Command lists reset to defaults"
     }
   },
   "commandDetail": {

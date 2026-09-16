@@ -61,7 +61,7 @@
       "command-safety_child-blocked": "已终止黑名单子进程: {{program}}",
       "command-safety_remembered": "工具已加入免审记忆: {{tool}}",
       "file-safety_remembered": "工具已加入免审记忆: {{tool}}",
-      "config_commandRules-reset": "命令名单已重置为默认"
+      "config_commandRules_reset": "命令名单已重置为默认"
     }
   },
   "commandDetail": {

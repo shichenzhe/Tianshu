@@ -105,7 +105,7 @@ export function pickDomainArray(raw: unknown): string[] {
   return [...seen];
 }
 
-/** 禁用工具清洗（SP6）：只收内置已知名，去重保注册表序；防配置漂移 */
+/** 禁用工具清洗（SP6）：只收内置已知名，去重保首次出现序；防配置漂移 */
 export function pickDisabledTools(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   const seen = new Set<string>();

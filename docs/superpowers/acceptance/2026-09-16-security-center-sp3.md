@@ -1,6 +1,6 @@
 # 安全中心（SP3）— 手动验收清单（Electron GUI 走查）
 
-> 适用分支：`worktree security-center-sp3`（d965346 设计 + 4da4f97 计划 + 功能 6 个 commit：c3daef0 → b9e7a65 + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1565 全绿（146 文件；安全域 tests/security 十四件 89 例，SP3 新增三件——file-policy / file-gate / file-gate-integration）
+> 适用分支：`worktree security-center-sp3`（d965346 设计 + 4da4f97 计划 + 功能 6 个 commit 与 1 个走查期 fix：c3daef0 → b9e7a65 + 本清单同批 fix + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1565 全绿（146 文件；安全域 tests/security 十四件 89 例，SP3 新增三件——file-policy / file-gate / file-gate-integration）
 > 对照文档：`docs/superpowers/specs/2026-09-16-security-center-sp3-design.md`（下称 spec）；实现计划 `docs/superpowers/plans/2026-09-16-security-center-sp3.md`（6 任务 TDD 拆解）
 > 前置：`npm run dev` 启动应用并登录；需一个绑定了工作目录的 AI 会话（第 4–7 项触发工具调用）与一个 automation 定时任务（第 8 项）；沙箱总开关默认开启；判定配置每次工具调用现读 SecurityService 内存缓存（写时失效）——名单变更即刻生效，无需重启；审计写入经 500ms 缓冲批量落库——刚触发的记录若未即时出现，点「刷新」或等 30s 轮询
 
@@ -61,8 +61,8 @@
 ### 8. full 模式定时任务读取黑名单路径被强拒
 
 - **操作步骤**：创建一个完全访问（full）模式的 automation 定时任务，指令让 AI 读取黑名单路径（如 `~/secrets/k.pem` 或 `~/.ssh/config`）；手动触发一轮运行后打开该任务的 run 记录详情。
-- **预期结果**（spec §2/§4）：任务虽为 full 模式，路径命中黑名单且无人值守（unattended）——**不挂起审批直接拒绝**，模型收到「错误: 无人值守任务不可访问黑名单路径，请调整名单或改为人工会话执行」；run 记录可见该拒绝反馈；审计记「文件操作被拒绝」（file-safety.rejected，detail.reason=unattended）。无人值守下白名单命中仍正常执行、其余审批分流行为不变。
-- **Commit 区域**：0e38800（unattended 强拒分支 + automation-runner 装配 decideFileAccess）。
+- **预期结果**（spec §2/§4）：任务虽为 full 模式，路径命中黑名单且无人值守（unattended）——**不挂起审批直接拒绝**，模型收到「错误: 无人值守任务不可访问黑名单路径，请调整名单或改为人工会话执行」；run 记录可见该拒绝反馈；审计行显示「文件操作被拒绝: <被拒路径>」（file-safety.rejected，detail.reason=unattended；词条插值 `{{summary}}` 经兜底链回退渲染 detail.path，如 `secret/k.pem`）。无人值守下白名单命中仍正常执行、其余审批分流行为不变。
+- **Commit 区域**：0e38800（unattended 强拒分支 + automation-runner 装配 decideFileAccess）、本清单同批 fix（AuditCenter entryText summary 兜底回退 path——无该回退时本事件 detail 仅 path/reason，`{{summary}}` 为空悬空冒号）。
 
 ---
 
@@ -71,6 +71,7 @@
 - 名单匹配**不做 glob**（spec §1 已知边界）：条目仅做「去尾 `*` 清洗」——`/dir/*` 归一化为 `/dir`（效果为整目录保护），不解析任何通配符语义；`*.pem` 这类通配符开头的条目清洗后为空串，恒不命中（等效无效条目）。归一化为循环剥离至稳定（c3daef0 初版单次剥离会留下 `/dir/*` 形态死规则，0cec111 修复）。
 - **search_files 不受名单约束**：文件门仅覆盖 read_file / write_file / list_dir 三件（FILE_GATE_TOOLS），search_files 不经门——黑名单路径内的文件名可能经搜索结果回喂模型（后续 SP 评估纳入）。
 - 审计 **detail.path 记录模型请求的原始相对路径**（截 200 字符），非 resolveSafePath 解析后的绝对路径——核对命中情况时需自行换算绝对形态。
+- unattended 文件拒绝审计行的词条插值 `{{summary}}` 在该事件下为空（detail 只有 path/reason）——AuditCenter entryText 的 summary 兜底链已回退 path 修复此悬空冒号（渲染为「文件操作被拒绝: <被拒路径>」），修复前形态为『文件操作被拒绝: 』冒号后为空。
 - 内置清单 macOS 17 条 / win32 16 条（剔除 `~/Library/Keychains/`）；「不可删」为三层防删——UI 只读区无删除钮、判定引擎静态内置优先、用户黑名单保存时自动剔除与内置清单相同的条目（stripBuiltinItems 双保险）。
 - needs-approval 事件 detail.source 统一为 `"blocklist"`（spec 勘误，计划期裁定）：判定引擎不返回命中来源，无法区分内置/用户黑名单。
 - `sandboxEnabled=false` 时文件判定门整体旁路（回到 SP2 前文件行为：常规审批链仍在）；fail-open 三层——getConfigValue 抛错、decider 抛错、gate 未安装均回落 `"default"`，不阻断文件操作。

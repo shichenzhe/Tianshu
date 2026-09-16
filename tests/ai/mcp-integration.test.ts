@@ -249,7 +249,7 @@ describe("ToolSet 组装（send 级集成）", () => {
     expect(names).not.toContain("search_files");
   });
 
-  it("绑定工作空间：文件四件 + read_skill + registry 注册的 mcp__ 全量", async () => {
+  it("绑定工作空间：文件五件 + read_skill + registry 注册的 mcp__ 全量", async () => {
     const { model, capturedToolNames } = scriptedModel([
       { steps: [{ kind: "text", delta: "好" }] },
     ]);
@@ -259,7 +259,7 @@ describe("ToolSet 组装（send 级集成）", () => {
     await service.send({ sessionId: 1, content: "hi" });
 
     const names = capturedToolNames[0] ?? [];
-    // registry 顺序：read_skill 在前，其后为文件四件（read/write/list/search）+
+    // registry 顺序：read_skill 在前，其后为文件五件（read/write/list/search/delete）+
     // run_command（P3 注册），mcp__ 注册序殿后
     expect(names.filter((name) => !name.startsWith("mcp__"))).toEqual([
       "read_skill",
@@ -267,6 +267,7 @@ describe("ToolSet 组装（send 级集成）", () => {
       "write_file",
       "list_dir",
       "search_files",
+      "delete_file",
       "run_command",
     ]);
     expect(names).toContain("mcp__srv__echo");

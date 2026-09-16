@@ -1,11 +1,14 @@
 /**
  * 内置文件工具（P1）：路径全部限定工作空间内，错误一律转字符串回喂
- * 纯 Node 实现（禁止 import electron），可被 vitest 直接测试
+ * 纯 Node 实现可被 vitest 直接测试；例外（SP4）：delete_file 的回收站
+ * 删除依赖 electron shell.trashItem，测试侧以 vi.mock("electron") 注入
  */
+import { shell } from "electron";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import type { BackupFileResult } from "../../security/file-history";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface ToolContext {
@@ -19,6 +22,13 @@ export interface ToolContext {
   onSecurityEvent?: SecurityEventSink;
   /** 子进程程序黑名单（SP2）：run_command 子进程监控消费；缺省不监控 */
   commandWatchBlacklist?: string[];
+  /** 删除保护（SP4）：true=trashItem 进系统回收站；装配注入，缺省 true 与默认配置一致 */
+  deleteProtection?: boolean;
+  /** 备份回调（SP4）：write_file 覆盖前 / delete_file 永久删除前调用；缺省不备份 */
+  onBackupFile?: (
+    absPath: string,
+    sessionId: number,
+  ) => Promise<BackupFileResult>;
 }
 
 export interface ToolDefinition<TArgs = unknown> {
@@ -57,6 +67,47 @@ function toToolResult(e: unknown): string {
     return fail(e.message);
   }
   return fail(String(e));
+}
+
+/** 数据安全审计事件（detail.path 截 200） */
+function emitDataEvent(
+  ctx: ToolContext,
+  eventType: string,
+  decision: "info" | "failed",
+  detail: Record<string, unknown>,
+): void {
+  if ("path" in detail && typeof detail.path === "string") {
+    detail.path = detail.path.slice(0, 200);
+  }
+  ctx.onSecurityEvent?.({
+    eventType,
+    decision,
+    detail,
+    sessionId: ctx.sessionId,
+  });
+}
+
+/** 备份并审计（SP4）：成功 backup-created；失败 backup-skipped（reason=disabled 静默）；返回是否成功 */
+async function backupAndAudit(
+  ctx: ToolContext,
+  absPath: string,
+): Promise<boolean> {
+  if (!ctx.onBackupFile) return false;
+  const r = await ctx.onBackupFile(absPath, ctx.sessionId);
+  if (r.ok) {
+    emitDataEvent(ctx, "data-safety.backup-created", "info", {
+      path: absPath,
+      size: r.size,
+    });
+    return true;
+  }
+  if (r.reason !== "disabled") {
+    emitDataEvent(ctx, "data-safety.backup-skipped", "info", {
+      path: absPath,
+      reason: r.reason.slice(0, 200),
+    });
+  }
+  return false;
 }
 
 /** 对可能不存在的路径取 realpath：沿祖先上溯到存在的一级，再拼回缺失段 */
@@ -157,6 +208,15 @@ const writeFileTool: ToolDefinition<z.infer<typeof writeFileSchema>> = {
         args.path,
         ctx.fullAccess,
       );
+      if (
+        (await fs.stat(target).then(
+          (s) => s.isFile(),
+          () => false,
+        )) &&
+        ctx.onBackupFile
+      ) {
+        await backupAndAudit(ctx, target); // fail-open：失败不中断写入
+      }
       await fs.mkdir(path.dirname(target), { recursive: true });
       await fs.writeFile(target, args.content, "utf8");
       return `已写入 ${args.path}（${byteLength} 字节）`;
@@ -308,16 +368,107 @@ const searchFilesTool: ToolDefinition<z.infer<typeof searchFilesSchema>> = {
   },
 };
 
+// ---------- delete_file ----------
+
+const deleteFileSchema = z.object({
+  path: z
+    .string()
+    .describe("要删除的文件或目录（工作空间内相对路径；目录递归删除）"),
+});
+
+/** 目录树收集全部文件绝对路径（预估走门层 countFilesForEstimate；此处供备份遍历） */
+async function listFilesUnder(root: string): Promise<string[]> {
+  const files: string[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const cur = stack.pop() as string;
+    const entries = await fs.readdir(cur, { withFileTypes: true });
+    for (const ent of entries) {
+      const full = path.join(cur, ent.name);
+      if (ent.isDirectory()) stack.push(full);
+      else if (ent.isFile()) files.push(full);
+    }
+  }
+  return files;
+}
+
+/** 回收站分支（deleteProtection 缺省/true）：trashItem 进系统回收站 + 审计 */
+async function trashDelete(
+  ctx: ToolContext,
+  target: string,
+  rel: string,
+): Promise<string> {
+  try {
+    await shell.trashItem(target);
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    emitDataEvent(ctx, "data-safety.delete-failed", "failed", {
+      path: rel,
+      error: error.slice(0, 200),
+    });
+    return fail(`移入回收站失败: ${error}（文件已保留）`);
+  }
+  emitDataEvent(ctx, "data-safety.delete-trashed", "info", { path: rel });
+  return `已将 ${rel} 移入回收站`;
+}
+
+/** 永久删除分支（deleteProtection=false）：先逐文件备份（fail-open）再递归删 + 审计 */
+async function permanentDelete(
+  ctx: ToolContext,
+  target: string,
+  rel: string,
+  isDir: boolean,
+): Promise<string> {
+  const files = isDir ? await listFilesUnder(target) : [target];
+  let backed = 0;
+  for (const f of files) {
+    if (await backupAndAudit(ctx, f)) backed += 1;
+  }
+  await fs.rm(target, { recursive: true, force: false });
+  emitDataEvent(ctx, "data-safety.delete-permanent", "info", {
+    path: rel,
+    files: files.length,
+  });
+  return `已永久删除 ${rel}（${files.length} 个文件，已备份 ${backed} 个）`;
+}
+
+const deleteFileTool: ToolDefinition<z.infer<typeof deleteFileSchema>> = {
+  name: "delete_file",
+  description:
+    "删除文件或目录（目录递归）。默认移入系统回收站（可在安全中心-数据安全调整）；大目录会请求确认。优先使用本工具而非 rm 命令。",
+  parameters: deleteFileSchema,
+  kind: "write",
+  execute: async (ctx, args) => {
+    try {
+      if (!args.path.trim()) return fail("路径不能为空");
+      const target = resolveSafePath(
+        ctx.workspacePath,
+        args.path,
+        ctx.fullAccess,
+      );
+      const stat = await fs.stat(target).catch(() => null);
+      if (!stat) return fail("文件不存在");
+      const rel = args.path;
+      if (ctx.deleteProtection !== false) return trashDelete(ctx, target, rel);
+      return permanentDelete(ctx, target, rel, stat.isDirectory());
+    } catch (e) {
+      return toToolResult(e);
+    }
+  },
+};
+
 export const FILE_TOOLS: ToolDefinition[] = [
   readFileTool,
   writeFileTool,
   listDirTool,
   searchFilesTool,
+  deleteFileTool,
 ];
 
 /** 按名取内置文件工具（SP3 集成测试直调单工具用） */
 export function makeFileTool(
-  name: "read_file" | "write_file" | "list_dir" | "search_files",
+  name:
+    "read_file" | "write_file" | "list_dir" | "search_files" | "delete_file",
 ): ToolDefinition<never> {
   const tool = FILE_TOOLS.find((t) => t.name === name);
   if (!tool) throw new Error(`未知文件工具: ${name}`);

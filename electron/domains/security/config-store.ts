@@ -108,8 +108,14 @@ const FIELD_PARSERS: {
   sandboxEnabled: (raw) => parseBoolOption(raw, true),
   fileAllowlist: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
   fileBlocklist: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
-  cmdAllow: (raw) => pickCommandRuleArray(parseJsonArray(raw ?? "[]")),
-  cmdAsk: (raw) => pickCommandRuleArray(parseJsonArray(raw ?? "[]")),
+  cmdAllow: (raw) =>
+    pickCommandRuleArray(
+      parseJsonArray(raw ?? JSON.stringify(SECURITY_DEFAULTS.cmdAllow)),
+    ),
+  cmdAsk: (raw) =>
+    pickCommandRuleArray(
+      parseJsonArray(raw ?? JSON.stringify(SECURITY_DEFAULTS.cmdAsk)),
+    ),
   programBlacklist: (raw) =>
     pickStringArray(
       parseJsonArray(raw ?? JSON.stringify(SECURITY_DEFAULTS.programBlacklist)),

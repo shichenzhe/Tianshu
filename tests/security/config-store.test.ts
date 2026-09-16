@@ -102,3 +102,16 @@ describe("defaults 平台差异与 upsert 兜底", () => {
     expect(calls).toEqual(["updateMany", "create:sandboxEnabled"]);
   });
 });
+
+describe("SP2 默认值演进", () => {
+  it("cmdAsk 默认 curl/wget，cmdAllow 默认 git push/npm install", () => {
+    expect(SECURITY_DEFAULTS.cmdAsk).toEqual([
+      { prefix: ["curl"] },
+      { prefix: ["wget"] },
+    ]);
+    expect(SECURITY_DEFAULTS.cmdAllow).toEqual([
+      { prefix: ["git", "push"] },
+      { prefix: ["npm", "install"] },
+    ]);
+  });
+});

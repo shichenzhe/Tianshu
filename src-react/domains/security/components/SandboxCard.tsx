@@ -1,6 +1,6 @@
 /**
- * 沙箱安全卡片：总开关 + 三个二级入口（SP1 占位禁用，SP2/SP3/SP5
- * 上线时逐个启用并接二级页视图）
+ * 沙箱安全卡片：总开关 + 三个二级入口（命令安全 SP2 已启用可点，
+ * 文件/网络安全 SP3/SP5 上线前维持禁用占位）
  */
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileLock, Globe, SquareTerminal } from "lucide-react";
@@ -12,9 +12,16 @@ import { Switch } from "@/components/ui/switch";
 interface SandboxCardProps {
   config: SecurityConfig;
   onToggle: (key: SecurityConfigKey, value: unknown) => void;
+  onOpenCommand: () => void;
 }
 
-const ENTRIES: { icon: LucideIcon; labelKey: string; descKey: string }[] = [
+const ENTRIES: {
+  icon: LucideIcon;
+  labelKey: string;
+  descKey: string;
+  /** 已启用入口对应的视图；缺省 = 仍为禁用占位 */
+  view?: "command";
+}[] = [
   {
     icon: FileLock,
     labelKey: "security:sandbox.file",
@@ -24,6 +31,7 @@ const ENTRIES: { icon: LucideIcon; labelKey: string; descKey: string }[] = [
     icon: SquareTerminal,
     labelKey: "security:sandbox.command",
     descKey: "security:sandbox.commandDesc",
+    view: "command",
   },
   {
     icon: Globe,
@@ -32,7 +40,11 @@ const ENTRIES: { icon: LucideIcon; labelKey: string; descKey: string }[] = [
   },
 ];
 
-export default function SandboxCard({ config, onToggle }: SandboxCardProps) {
+export default function SandboxCard({
+  config,
+  onToggle,
+  onOpenCommand,
+}: SandboxCardProps) {
   const { t } = useTranslation(["security"]);
   return (
     <div className="space-y-5">
@@ -52,25 +64,43 @@ export default function SandboxCard({ config, onToggle }: SandboxCardProps) {
         />
       </div>
       <div className="space-y-1">
-        {ENTRIES.map(({ icon: Icon, labelKey, descKey }) => (
-          <div
-            key={labelKey}
-            aria-disabled
-            className="flex items-center gap-3 rounded-md px-2 py-2 opacity-60"
-          >
-            <Icon size={16} className="shrink-0 text-muted-foreground" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm">{t(labelKey)}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {t(descKey)}
-              </p>
+        {ENTRIES.map(({ icon: Icon, labelKey, descKey, view }) =>
+          view === "command" ? (
+            <button
+              key={labelKey}
+              type="button"
+              onClick={onOpenCommand}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-primary-subtle hover:text-primary"
+            >
+              <Icon size={16} className="shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">{t(labelKey)}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {t(descKey)}
+                </p>
+              </div>
+              <ChevronRight size={14} className="text-muted-foreground" />
+            </button>
+          ) : (
+            <div
+              key={labelKey}
+              aria-disabled
+              className="flex items-center gap-3 rounded-md px-2 py-2 opacity-60"
+            >
+              <Icon size={16} className="shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">{t(labelKey)}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {t(descKey)}
+                </p>
+              </div>
+              <span className="rounded bg-primary-subtle px-1.5 py-0.5 text-xs text-primary">
+                {t("security:sandbox.comingSoon")}
+              </span>
+              <ChevronRight size={14} className="text-muted-foreground" />
             </div>
-            <span className="rounded bg-primary-subtle px-1.5 py-0.5 text-xs text-primary">
-              {t("security:sandbox.comingSoon")}
-            </span>
-            <ChevronRight size={14} className="text-muted-foreground" />
-          </div>
-        ))}
+          ),
+        )}
       </div>
     </div>
   );

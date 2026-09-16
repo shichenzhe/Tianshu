@@ -1,8 +1,8 @@
 /**
- * 安全中心首页（SP1 spec §9）：Dialog 内视图栈（首页 ↔ 审计全列表；
- * SP2-SP5 的三个二级页后续并入同一视图栈）。配置一次拉取、子卡片
- * 乐观保存（useSaveOrRevert 兜底回滚），照 app-settings 惯例。
- * 加载三态：null=拉取中（显示 loading）、loadFailed=失败、否则渲染。
+ * 安全中心首页（SP1 spec §9）：Dialog 内视图栈（首页 ↔ 审计全列表 ↔
+ * 命令安全二级页；SP3/SP5 的文件/网络二级页后续并入同一视图栈）。配置
+ * 一次拉取、子卡片乐观保存（useSaveOrRevert 兜底回滚），照 app-settings
+ * 惯例。加载三态：null=拉取中（显示 loading）、loadFailed=失败、否则渲染。
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,9 +12,10 @@ import { useSaveOrRevert } from "@/domains/app-settings/model/use-save-or-revert
 import SandboxCard from "./SandboxCard";
 import DataSafetyCard from "./DataSafetyCard";
 import AuditCenter from "./AuditCenter";
+import CommandDetailView from "./CommandDetailView";
 import SettingsGroup from "@/domains/app-settings/components/SettingsGroup";
 
-type SecurityView = "home" | "audit-all";
+type SecurityView = "home" | "audit-all" | "command";
 
 export default function SecurityCenter() {
   const { t } = useTranslation(["security"]);
@@ -65,10 +66,26 @@ export default function SecurityCenter() {
     );
   }
 
+  if (view === "command") {
+    return (
+      <div className="p-1">
+        <CommandDetailView
+          config={config}
+          onBack={() => setView("home")}
+          onRulesChange={setConfig}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <SettingsGroup title={t("security:sandbox.title")}>
-        <SandboxCard config={config} onToggle={updateConfig} />
+        <SandboxCard
+          config={config}
+          onToggle={updateConfig}
+          onOpenCommand={() => setView("command")}
+        />
       </SettingsGroup>
       <SettingsGroup title={t("security:dataSafety.title")}>
         <DataSafetyCard config={config} onUpdate={updateConfig} />

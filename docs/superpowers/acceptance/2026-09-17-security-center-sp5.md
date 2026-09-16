@@ -1,6 +1,6 @@
 # 安全中心（SP5）— 手动验收清单（Electron GUI 走查）
 
-> 适用分支：`worktree security-center-sp5`（dd3f104 设计 + dfcfd60 计划 + 功能 7 个 commit：a3ca57e → 15612ae + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1635 全绿（156 文件；安全域 tests/security 二十三件 157 例，SP5 新增五件——domain-policy / network-gate / local-proxy / mcp-url-gate / renderer-guard，合计 38 例，另 tests/ai/command-tool-proxy 新一件 2 例、既有 config-store / security-service 增补 5 例）
+> 适用分支：`worktree security-center-sp5`（dd3f104 设计 + dfcfd60 计划 + 功能 7 个 commit：a3ca57e → 15612ae + 本清单）；自动化验证：`npm run typecheck`/`lint` 零问题、`npm run test` 1635 全绿（156 文件；安全域 tests/security 二十三件 157 例，SP5 新增五件——domain-policy / network-gate / local-proxy / mcp-url-gate / renderer-guard，合计 38 例，另 tests/ai/command-tool-proxy 新一件 2 例、既有 config-store / security-service 增补 3 例（security-service +2、config-store +1）；再 +2 例来自 SP4 终审修复 09cad1c（晚于 SP4 清单 1590 快照——bulk-delete-gate / file-history 各 +1））
 > 对照文档：`docs/superpowers/specs/2026-09-17-security-center-sp5-design.md`（下称 spec）；实现计划 `docs/superpowers/plans/2026-09-17-security-center-sp5.md`（7 任务 TDD 拆解）
 > 前置：`npm run dev` 启动应用并登录；需一个绑定了工作目录的 AI 会话（第 4–8 项部分操作经会话触发，涉及 `run_command`）；至少一个已配置模型 provider（其 baseUrl 域自动进豁免面，第 4 项②依赖）；技能市场外网可达用于第 3/4 项对照；二级页入口 = 设置 → 安全中心 → 沙箱安全卡片「网络安全」；网络四配置判定层每次请求实时读配置——改动即刻生效，无需重启会话；审计写入经 500ms 缓冲批量落库——刚触发的记录若未即时出现，点「刷新」或等 30s 轮询
 
@@ -38,7 +38,7 @@
 ### 4. 开 blockAllNetwork → 技能市场挂 / 模型对话仍通（豁免）/ `run_command` curl 403（source=proxy，rule=offline）
 
 - **操作步骤**：二级页打开「断网模式」开关；①刷新技能市场；②同会话让 AI 正常对话一轮（如「介绍一下这个工作目录」）；③让 AI 用 run_command 执行 `curl -sI https://example.com`（default 模式 curl 在询问名单、先弹审批再放行）；④把 `example.com` 加入允许名单后再执行同条 curl 对照。走查完关闭「断网模式」。
-- **预期结果**（spec §2 裁定 1/2、§4/§5/§8、§3 判定序）：①技能市场挂（「市场加载失败」）+ 审计拦截记录规则为 offline（层 fetch；页面内 SkillHub 图片若触发则层 renderer）；②模型 API 走豁免面绝对优先（provider baseUrl 域 + loopback + 升级域）——对话与工具调用不中断，模型无感知断网；③curl 经子进程 env 注入的本地 CONNECT 代理（127.0.0.1 随机端口）CONNECT 被拒——工具回喂含 curl 报错（如 "Received HTTP code 403 from proxy after CONNECT"，退出码非 0，响应头 `X-Block-Reason: offline`）+ 审计「已拦截网络请求：example.com（规则：offline，层：proxy）」；④允许名单命中放行（allow 压过断网——用户显式 allow 是最强意图表达），curl 正常返回。注意：provider 豁免域为 30s TTL 缓存，新配 provider 后最长 30s 或任一安全配置保存后生效；loopback（localhost/127.0.0.1/::1）恒在 NO_PROXY 不受影响。关闭开关后全部恢复。
+- **预期结果**（spec §2 裁定 1/2、§4/§5/§8、§3 判定序）：①技能市场挂（「市场加载失败」）+ 审计拦截记录规则为 offline（层 fetch；页面内 SkillHub 图片若触发则层 renderer）；②模型 API 走豁免面绝对优先（provider baseUrl 域 + loopback + 升级域）——对话与工具调用不中断，模型无感知断网；③curl 经子进程 env 注入的本地 CONNECT 代理（127.0.0.1 随机端口）CONNECT 被拒——工具回喂含 curl 报错（如 "Received HTTP code 403 from proxy after CONNECT"，退出码非 0；`X-Block-Reason: offline` 响应头需 `curl -v` 才可见）+ 审计「已拦截网络请求：example.com（规则：offline，层：proxy）」；④允许名单命中放行（allow 压过断网——用户显式 allow 是最强意图表达），curl 正常返回。注意：provider 豁免域为 30s TTL 缓存，新配 provider 后最长 30s 或任一安全配置保存后生效；loopback（localhost/127.0.0.1/::1）恒在 NO_PROXY 不受影响。关闭开关后全部恢复。
 - **Commit 区域**：a3ca57e（判定序单源——allow 压断网）、cb504ff（策略层实时读配置）、5f555f0（本地代理 + run_command env 注入）。
 
 ## 五、恶意拦截
@@ -46,7 +46,7 @@
 ### 5. 内置清单命中（massgravel.dev）→ 拦截 + 审计 rule=malicious；关开关放行
 
 - **操作步骤**：保持「恶意网站拦截」开（默认开）；让 AI 用 run_command 执行 `curl -sI https://massgravel.dev`（内置清单条目）；核对审计中心；二级页点「展开 114 条」确认 massgravel.dev 在列且带「内置」徽标；关闭「恶意网站拦截」开关再执行同条 curl；重新打开开关再执行一次。
-- **预期结果**（spec §7/§8/裁定 7）：开关开启时 curl 返回 403（`X-Block-Reason: malicious`）+ 审计「已拦截网络请求：massgravel.dev（规则：malicious，层：proxy）」；内置清单只读区可见该条目且不可编辑删除（永不落盘，代码常量三层防删同 SP1 先例）；关闭开关后同一 curl **直连成功**（判定点受开关控制，清单仍在但不生效）；重新打开恢复拦截。渲染层同理：markdown 链接/图片指向清单域名时被拒（层 renderer，见第 7 项操作法）。
+- **预期结果**（spec §7/§8/裁定 7）：开关开启时 curl 返回 403（`X-Block-Reason: malicious` 头需 `curl -v` 可见）+ 审计「已拦截网络请求：massgravel.dev（规则：malicious，层：proxy）」；内置清单只读区可见该条目且不可编辑删除（永不落盘，代码常量三层防删同 SP1 先例）；关闭开关后同一 curl **直连成功**（判定点受开关控制，清单仍在但不生效）；重新打开恢复拦截。渲染层同理：markdown 链接/图片指向清单域名时被拒（层 renderer，见第 7 项操作法）。
 - **Commit 区域**：a3ca57e（BUILTIN_MALICIOUS_DOMAINS 114 条 + judgeDomain 恶意分支）、5204372（defaults 接线）、cb504ff / 5f555f0（fetch 层与代理层判定消费）。
 
 ## 六、MCP http 入口
@@ -71,7 +71,7 @@
 ### 8. SP2 命令门 / SP3 文件门 / SP4 批量门抽查 + sandboxEnabled=false 全门旁路回归
 
 - **操作步骤**：① 回归抽查（full 模式会话）：让 AI 读 `/Users/<you>/.ssh/config`；让 AI 执行 `rm -rf bulk`（SP4 清单第 6 项造的目录或任意目录）；让 AI 用 delete_file 删除一个 ≥ 阈值目录（照 SP4 清单第 6 项，阈值可临时调低）；② **旁路回归（强制走查项）**：设置 → 安全中心关闭「沙箱安全」总开关（sandboxEnabled=false），让 AI 用 run_command 依次执行 `curl -sI https://api.skillhub.cn`（拒绝名单仍含该域）与 `printenv HTTPS_PROXY`；刷新技能市场页；点击普通外链；核对审计中心无新增 network.blocked；③ 重新打开沙箱总开关，重复 ② 的 curl。
-- **预期结果**（SP2/SP3/SP4 spec + SP5 spec §2 裁定 3）：①三道门行为不变——内置敏感路径读弹审批（「文件访问需审批」，full 模式同样）、`rm` 命中程序黑名单弹「拦截危险命令」（绝对禁止含 full 模式）、大目录 delete_file 弹「批量删除需审批」；②旁路生效：deny 域 curl **直连成功**（判定跳过——policyProvider 返回 null 全门旁路）；`printenv HTTPS_PROXY` 输出为空（本地代理停止且子进程 env 不注入——childProxyEnv 对 null 门返回 undefined）；技能市场正常加载；审计**无**任何新增 network.blocked 记录；点击外链仍经系统浏览器打开（内开窗恒拒保留——应用卫生非沙箱策略，旁路时外开不做判定也不审计）；③重开总开关后同条 curl 立即恢复 403（判定实时读配置，无需重启会话，本地代理按需自动重启）。
+- **预期结果**（SP2/SP3/SP4 spec + SP5 spec §2 裁定 3）：①三道门行为不变——内置敏感路径读弹审批（「文件访问需审批」，full 模式同样）、`rm` 命中程序黑名单弹「拦截危险命令」（绝对禁止含 full 模式）、大目录 delete_file 弹「批量删除需审批」；②旁路生效：deny 域 curl **直连成功**（判定跳过——policyProvider 返回 null 全门旁路）；`printenv HTTPS_PROXY` 输出为空（本地代理停止且子进程 env 不注入——childProxyEnv 对 null 门返回 undefined）；技能市场正常加载；审计**无**任何新增 network.blocked 记录；点击外链仍经系统浏览器打开（内开窗恒拒保留——应用卫生非沙箱策略，旁路时外开不做判定也不审计）；③重开总开关后同条 curl 立即恢复 403（`curl -v` 可见 `X-Block-Reason`；判定实时读配置，无需重启会话，本地代理按需自动重启）。
 - **Commit 区域**：cb504ff（policyProvider null 旁路）、5f555f0（childProxyEnv undefined 零行为变化）、f8d3743（sandboxEnabled 旁路 + 内开窗恒拒保留）。
 
 ---

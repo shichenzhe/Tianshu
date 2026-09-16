@@ -71,7 +71,8 @@
       "data-safety_delete-permanent": "Permanently deleted: {{path}} ({{files}} files)",
       "data-safety_delete-failed": "Delete failed: {{path}} ({{error}})",
       "data-safety_bulk-delete-needs-approval": "Bulk delete needs approval: {{path}} (~{{estimated}} files)",
-      "data-safety_bulk-delete-rejected": "Bulk delete rejected: {{path}} (~{{estimated}} files)"
+      "data-safety_bulk-delete-rejected": "Bulk delete rejected: {{path}} (~{{estimated}} files)",
+      "network_blocked": "Blocked network request: {{host}} (rule: {{rule}}, layer: {{source}})"
     }
   },
   "invalidEntry": "Please enter a valid entry",
@@ -123,6 +124,31 @@
       "desc": "Writes to matched paths skip approval (takes precedence over blocklist, but cannot bypass builtin paths)",
       "placeholder": "e.g. ~/projects"
     }
+  },
+  "networkDetail": {
+    "title": "Network Safety",
+    "priorityNote": "Priority: built-in exemptions (model APIs/localhost) > denylist > allowlist > offline mode > malicious domains; patterns support *.example.com wildcards.",
+    "blockAllNetwork": "Offline mode",
+    "blockAllNetworkDesc": "All requests outside the allowlist and built-in exemptions will be denied",
+    "malicious": "Malicious site blocking",
+    "maliciousDesc": "Block access to domains in the built-in malicious list",
+    "denylist": {
+      "title": "Denylist",
+      "desc": "Match denies (takes precedence over allowlist)",
+      "placeholder": "e.g. evil.com or *.evil.com"
+    },
+    "allowlist": {
+      "title": "Allowlist",
+      "desc": "Match allows (still allowed in offline mode)",
+      "placeholder": "e.g. api.example.com or *.example.com"
+    },
+    "builtin": {
+      "title": "Built-in malicious domains",
+      "desc": "Code-built-in, updated with app versions, cannot be removed; not enforced when the switch above is off",
+      "expand": "Expand {{count}} entries"
+    },
+    "builtinTag": "Built-in",
+    "boundaryNote": "Coverage: main-process requests (model calls/MCP/skill market), renderer images and links, and command subprocesses honoring proxy env vars; deep bypasses such as raw sockets are out of scope."
   },
   "error": {
     "saveFailed": "Save failed, please retry"

@@ -71,7 +71,8 @@
       "data-safety_delete-permanent": "已永久删除: {{path}}（{{files}} 个文件）",
       "data-safety_delete-failed": "删除失败: {{path}}（{{error}}）",
       "data-safety_bulk-delete-needs-approval": "批量删除需审批: {{path}}（预估 {{estimated}} 个文件）",
-      "data-safety_bulk-delete-rejected": "批量删除已拒绝: {{path}}（预估 {{estimated}} 个文件）"
+      "data-safety_bulk-delete-rejected": "批量删除已拒绝: {{path}}（预估 {{estimated}} 个文件）",
+      "network_blocked": "已拦截网络请求：{{host}}（规则：{{rule}}，层：{{source}}）"
     }
   },
   "invalidEntry": "请输入有效内容",
@@ -123,6 +124,31 @@
       "desc": "命中路径的写操作免审批（优先于黑名单，但不能绕过内置清单）",
       "placeholder": "如 ~/projects"
     }
+  },
+  "networkDetail": {
+    "title": "网络安全",
+    "priorityNote": "判定优先级：内置豁免（模型服务/本机）> 拒绝名单 > 允许名单 > 断网模式 > 恶意域拦截；名单支持 *.example.com 子域通配。",
+    "blockAllNetwork": "断网模式",
+    "blockAllNetworkDesc": "允许名单与内置豁免之外的全部网络请求将被拒绝",
+    "malicious": "恶意网站拦截",
+    "maliciousDesc": "拦截访问内置恶意域名清单中的站点",
+    "denylist": {
+      "title": "拒绝名单",
+      "desc": "命中即拒（优先于允许名单）",
+      "placeholder": "如 evil.com 或 *.evil.com"
+    },
+    "allowlist": {
+      "title": "允许名单",
+      "desc": "命中即放行（断网模式下仍然放行）",
+      "placeholder": "如 api.example.com 或 *.example.com"
+    },
+    "builtin": {
+      "title": "内置恶意域清单",
+      "desc": "代码内置、随版本更新，不可删除；关闭上方开关后不再拦截",
+      "expand": "展开 {{count}} 条"
+    },
+    "builtinTag": "内置",
+    "boundaryNote": "覆盖边界：主进程请求（模型调用/MCP/技能市场）、渲染层图片与链接、以及遵循代理环境变量的命令子进程；直连 socket 等深层绕过不在本层防护内。"
   },
   "error": {
     "saveFailed": "保存失败，请重试"

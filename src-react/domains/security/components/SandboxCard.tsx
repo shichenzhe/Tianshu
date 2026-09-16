@@ -1,6 +1,5 @@
 /**
- * 沙箱安全卡片：总开关 + 三个二级入口（命令 SP2、文件 SP3 已启用可点，
- * 网络安全 SP5 上线前维持禁用占位）
+ * 沙箱安全卡片：总开关 + 三个二级入口（命令 SP2、文件 SP3、网络 SP5 均已启用可点）
  */
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileLock, Globe, SquareTerminal } from "lucide-react";
@@ -14,6 +13,7 @@ interface SandboxCardProps {
   onToggle: (key: SecurityConfigKey, value: unknown) => void;
   onOpenCommand: () => void;
   onOpenFile: () => void;
+  onOpenNetwork: () => void;
 }
 
 const ENTRIES: {
@@ -21,7 +21,7 @@ const ENTRIES: {
   labelKey: string;
   descKey: string;
   /** 已启用入口对应的视图；缺省 = 仍为禁用占位 */
-  view?: "command" | "file";
+  view?: "command" | "file" | "network";
 }[] = [
   {
     icon: FileLock,
@@ -39,6 +39,7 @@ const ENTRIES: {
     icon: Globe,
     labelKey: "security:sandbox.network",
     descKey: "security:sandbox.networkDesc",
+    view: "network",
   },
 ];
 
@@ -47,6 +48,7 @@ export default function SandboxCard({
   onToggle,
   onOpenCommand,
   onOpenFile,
+  onOpenNetwork,
 }: SandboxCardProps) {
   const { t } = useTranslation(["security"]);
   return (
@@ -73,7 +75,9 @@ export default function SandboxCard({
               ? onOpenCommand
               : view === "file"
                 ? onOpenFile
-                : null;
+                : view === "network"
+                  ? onOpenNetwork
+                  : null;
           return onOpen ? (
             <button
               key={labelKey}

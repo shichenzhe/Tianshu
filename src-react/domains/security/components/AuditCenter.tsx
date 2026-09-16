@@ -68,6 +68,9 @@ function entryText(t: TFunc, entry: AuditEntry): string {
     files: String(detail.files ?? ""),
     error: String(detail.error ?? ""),
     estimated: String(detail.estimated ?? ""),
+    host: String(detail.host ?? ""),
+    rule: String(detail.rule ?? ""),
+    source: String(detail.source ?? ""),
   };
   return t(key, vars);
 }

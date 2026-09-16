@@ -43,6 +43,7 @@ describe("eventMessageKey", () => {
       "file-safety.remembered",
       "file-safety.needs-approval",
       "file-safety.allow-listed",
+      "network.blocked",
       "data-safety.backup-created",
       "data-safety.backup-skipped",
       "data-safety.delete-trashed",

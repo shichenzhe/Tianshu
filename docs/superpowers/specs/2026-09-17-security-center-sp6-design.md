@@ -151,8 +151,8 @@ export function errorMessageWithCause(err: unknown): string;
 | `permission.remembered-revoked-all` | info | count | 全部撤销 |
 
 - category 走 `categoryOf` 缺省 → `config`（裁定 4，零 schema 变更）
-- i18n（security.json 双语同步）：`security:systemGrant.*`（卡片两区块、空态、按钮、确认弹窗）、`security:runtimeDetail.*`（页面、四组名、13 工具说明、kind badge）、`security:audit.events.permission_full_revoked` / `permission_remembered_revoked` / `permission_remembered_revoked_all`
-- eventType→messageKey 全点换下划线惯例（`permission.full-revoked` → `permission_full_revoked`）
+- i18n（security.json 双语同步）：`security:systemGrant.*`（卡片两区块、空态、按钮、确认弹窗）、`security:runtimeDetail.*`（页面、四组名、13 工具说明、kind badge）、`security:audit.events.permission_full-revoked` / `permission_remembered-revoked` / `permission_remembered-revoked-all`
+- eventType→messageKey 映射只把点替换为下划线、连字符保留（AuditCenter.tsx `replace(/\./g, "_")`；先例 `command-safety_cwd-fallback`），故 `permission.full-revoked` → `permission_full-revoked`
 - 守卫测试 known 列表 +3
 
 ## 8. 错误处理

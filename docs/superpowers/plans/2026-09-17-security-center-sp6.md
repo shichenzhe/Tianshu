@@ -15,7 +15,7 @@
 - **行为兼容硬约束**：`ChatService` 新参数与 `AutomationRunner` 注入新参全部可选、缺席时行为与现状逐字节一致；`disabledTools` 默认 `[]` 全启用；`permission:*` 既有 IPC（get/set/rememberTool）签名零改动
 - 生产代码零 `console`（winston `Log` 允许）；i18n zh-CN/en-US 同步逐 key；主题色只用 primary 变量族；JSX 零硬编码文案
 - Prettier v3（双引号、tabWidth 2、printWidth 80、尾逗号 all）；文件名 kebab-case；函数 ≤20 行软约束；重复 2 次以上抽函数
-- eventType→i18n key 全点换下划线（`permission.full-revoked`→`permission_full_revoked`）
+- eventType→i18n key 映射只把点替换为下划线、连字符保留（`permission.full-revoked`→`permission_full-revoked`）
 - 完成标准统一为三绿：`npm run test` 全过、`npm run typecheck` 零错误、`npm run lint` 零问题
 
 ---
@@ -452,7 +452,7 @@ i18n——`security.json` 双语同步追加（嵌套块，注意与既有顶层
 - `sandbox.runtime`：「运行时工具」/ "Runtime tools"；`sandbox.runtimeDesc`：「控制 AI 可用的内置工具」/ "Control built-in tools available to AI"
 - `runtimeDetail` 块：`title`（运行时工具/Runtime tools）、`note`（关闭的工具对本机所有 AI 会话与自动化隐藏，即刻生效/Closed tools are hidden from all AI sessions and automations on this machine, effective immediately）、`groupFile`（文件/File）、`groupCommand`（命令/Command）、`groupSkill`（技能/Skill）、`groupPlan`（计划/Plan）、`kindRead`（读/Read）、`kindWrite`（写/Write）、`tools.{read_file,list_dir,search_files,write_file,delete_file,run_command,read_skill,create_skill,plan_create_item,plan_update_status,plan_append_summary,plan_list_items,plan_get_item}` 13 条一句话说明（如 `read_file`：「读取工作区内文件」/ "Read files in the workspace"；`run_command`：「执行 shell 命令」/ "Execute shell commands"；`delete_file`：「删除文件或目录（受数据安全保护）」/ "Delete files or directories (protected by data safety)"——其余按工具语义逐条写全，双语成对）
 - `systemGrant` 块：`title`（系统授权/System grants）、`desc`（管理 AI 当前被授予的权限/Manage permissions currently granted to AI）、`fullTitle`（活跃完全访问/Active full access）、`fullDesc`（以下会话已跳过文件写入与命令审批/The following sessions skip file-write and command approvals）、`fullBadge`（完全访问/Full access）、`revokeAllFull`（一键收回全部/Revoke all）、`revokeAllFullConfirm`（收回后这些会话回到逐次审批。继续？/These sessions will return to per-action approval. Continue?）、`rememberedTitle`（工作空间工具记忆/Workspace tool memories）、`rememberedDesc`（「允许并记住」产生的免审记录，撤销后回到逐次审批/Memory entries created by "Allow and remember"; revoking returns to per-action approval）、`emptyFull`（当前没有完全访问会话/No full-access sessions）、`emptyRemembered`（暂无工具记忆/No tool memories）、`revoke`（撤销/Revoke）、`revokeAll`（全部撤销/Revoke all）、`revokeAllConfirm`（将撤销全部工具记忆，继续？/This revokes all tool memories. Continue?）、`revoked`（已撤销/Revoked）
-- `audit.events.permission_full_revoked`（「收回全部完全访问（{{count}} 个会话）」/ "Revoked all full access ({{count}} sessions)"）、`permission_remembered_revoked`（「撤销工具记忆：{{tool}}（{{workspace}}）」/ "Revoked tool memory: {{tool}} ({{workspace}})"）、`permission_remembered_revoked_all`（「撤销全部工具记忆（{{count}} 条）」/ "Revoked all tool memories ({{count}})"）
+- `audit.events.permission_full-revoked`（「收回全部完全访问（{{count}} 个会话）」/ "Revoked all full access ({{count}} sessions)"）、`permission_remembered-revoked`（「撤销工具记忆：{{tool}}（{{workspace}}）」/ "Revoked tool memory: {{tool}} ({{workspace}})"）、`permission_remembered-revoked-all`（「撤销全部工具记忆（{{count}} 条）」/ "Revoked all tool memories ({{count}})"）
 
 - [ ] **Step 4: 三绿 + 程序化 i18n 比对**（zh/en 键集一致、插值变量一致——照 SP5 Task 6 的比对手法自查一次）+ commit：`feat(安全中心): 系统授权卡片 + 运行时工具二级页——full 会话/工具记忆管理 UI 与双语词条`
 

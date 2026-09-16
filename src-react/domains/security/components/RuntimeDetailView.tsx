@@ -89,7 +89,7 @@ export default function RuntimeDetailView({
                   </p>
                 </div>
                 <Switch
-                  aria-label={t(`security:runtimeDetail.tools.${tool.name}`)}
+                  aria-label={tool.name}
                   checked={!config.disabledTools.includes(tool.name)}
                   onCheckedChange={(checked) => toggleTool(tool.name, checked)}
                 />

@@ -102,6 +102,25 @@ export default class SecurityService {
     return copySecurityConfig(this.config);
   }
 
+  /** 三名单恢复默认（spec §7）：逐 key 走 setConfig（各发 updated 审计）+ 一条 reset 事件 */
+  async resetCommandRules(): Promise<SecurityConfig> {
+    const keys: SecurityConfigKey[] = [
+      "programBlacklist",
+      "cmdAllow",
+      "cmdAsk",
+    ];
+    let config = this.getConfigValue();
+    for (const key of keys) {
+      config = await this.setConfig(key, SECURITY_DEFAULTS[key]);
+    }
+    this.opts.audit?.({
+      eventType: "config.commandRules.reset",
+      decision: "info",
+      detail: { keys },
+    });
+    return copySecurityConfig(config);
+  }
+
   private cleanValue(key: SecurityConfigKey, value: unknown): unknown {
     if (key === "fileBlocklist") {
       return stripBuiltinItems(value as string[], this.builtinBlocklist);
@@ -114,6 +133,10 @@ export default class SecurityService {
     ipcMain.handle(
       "security:setConfig",
       (_, key: SecurityConfigKey, value: unknown) => this.setConfig(key, value),
+    );
+    ipcMain.handle(
+      "security:resetCommandRules",
+      async (): Promise<SecurityConfig> => this.resetCommandRules(),
     );
     ipcMain.handle("security:openBackupDir", async (): Promise<void> => {
       const dir = path.join(app.getPath("userData"), "file-history");

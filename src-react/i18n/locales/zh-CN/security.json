@@ -55,8 +55,42 @@
       "file-safety_approved": "文件操作已获批准: {{summary}}",
       "file-safety_rejected": "文件操作被拒绝: {{summary}}",
       "config_updated": "安全配置已更新: {{key}}",
-      "audit_cleared": "审计记录已清空"
+      "audit_cleared": "审计记录已清空",
+      "command-safety_needs-approval": "命令需审批: {{command}}",
+      "command-safety_allow-listed": "命令已放行: {{command}}",
+      "command-safety_child-blocked": "已终止黑名单子进程: {{program}}",
+      "command-safety_remembered": "工具已加入免审记忆: {{tool}}",
+      "file-safety_remembered": "工具已加入免审记忆: {{tool}}",
+      "config_commandRules-reset": "命令名单已重置为默认"
     }
+  },
+  "commandDetail": {
+    "title": "命令安全",
+    "priorityNote": "优先级：程序黑名单（绝对禁止，含子进程）＞ 询问名单 ＞ 放行名单 ＞ 默认审批",
+    "reset": "重置为默认",
+    "resetDone": "已重置为默认名单",
+    "invalidCommand": "请输入有效命令",
+    "programBlacklist": {
+      "title": "程序黑名单",
+      "desc": "绝对禁止运行的程序（含子进程检测）；仅填程序名，不含路径或参数",
+      "placeholder": "如 mkfs",
+      "invalid": "仅接受程序名（不含 / \\ 或空白）"
+    },
+    "allow": {
+      "title": "放行名单",
+      "desc": "命中后跳过审批直接执行（视为可信命令；不匹配子进程）",
+      "placeholder": "如 git push"
+    },
+    "ask": {
+      "title": "询问名单",
+      "desc": "命中后先弹审批（完全访问模式下同样生效）；批准后继续执行",
+      "placeholder": "如 curl"
+    },
+    "add": "添加",
+    "confirm": "保存",
+    "cancel": "取消",
+    "remove": "删除",
+    "empty": "暂无条目"
   },
   "error": {
     "saveFailed": "保存失败，请重试"

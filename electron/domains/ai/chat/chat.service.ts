@@ -62,6 +62,8 @@ import {
 } from "../../security/command-gate";
 import { fileGate } from "../../security/file-gate";
 import type { FileAccessDecision } from "../../security/file-policy";
+import { countFilesForEstimate } from "../../security/file-history";
+import type { BackupFileResult } from "../../security/file-history";
 
 type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
@@ -156,8 +158,27 @@ export interface AgentStreamOptions {
     absPath: string,
     workspacePath: string,
   ) => FileAccessDecision;
+  /** 批量删除阈值（SP4 数据安全）：delete_file 目录预估 ≥ 阈值强制审批；缺省 50 */
+  bulkDeleteThreshold?: number;
+  /** 删除保护（SP4 数据安全）：透传 delete_file（true=回收站）；缺省 true */
+  deleteProtection?: boolean;
+  /** 备份回调（SP4 数据安全）：write_file 覆盖前 / delete_file 永久删除前；缺省不备份 */
+  onBackupFile?: (
+    absPath: string,
+    sessionId: number,
+  ) => Promise<BackupFileResult>;
   /** 无人值守流（automation，SP2）：ask 命中强制拒绝而非挂起审批 */
   unattended?: boolean;
+}
+
+/**
+ * 数据安全装配（SP4）：ChatService 构造注入，闭包实时读安全中心配置
+ * （运行中改配置即生效）；缺席（测试/未接线）时走缺省值
+ */
+export interface ChatDataSafety {
+  backupFile: (absPath: string, sessionId: number) => Promise<BackupFileResult>;
+  deleteProtection: () => boolean;
+  bulkDeleteThreshold: () => number;
 }
 
 export interface ChatStreamOptions {
@@ -350,6 +371,9 @@ async function executeToolSafe(
         onSecurityEvent: agent.onSecurityEvent,
         // SP2 子进程黑名单（会话与 automation 统一监控；win32 在 child-monitor 内 no-op）
         commandWatchBlacklist: commandWatchBlacklist(),
+        // SP4 数据安全：删除保护与备份回调（装配快照，每流一次）
+        deleteProtection: agent.deleteProtection,
+        onBackupFile: agent.onBackupFile,
       },
       input,
     );
@@ -421,7 +445,40 @@ function emitCommandEvent(
 
 const FILE_UNATTENDED_OUTPUT =
   "错误: 无人值守任务不可访问黑名单路径，请调整名单或改为人工会话执行";
-const FILE_GATE_TOOLS = new Set(["read_file", "write_file", "list_dir"]);
+const FILE_GATE_TOOLS = new Set([
+  "read_file",
+  "write_file",
+  "list_dir",
+  "delete_file",
+]);
+
+/** 批量删除 unattended 强拒文案（SP4） */
+const BULK_UNATTENDED_OUTPUT =
+  "错误: 无人值守任务不可执行批量删除，请调整安全中心阈值或改为人工会话执行";
+/** 批量删除阈值缺省（SP4）：与安全中心默认配置一致（bulkDeleteThreshold） */
+const BULK_DELETE_THRESHOLD_DEFAULT = 50;
+
+/** 批量删除预估（SP4）：delete_file 且目录预估 ≥ 阈值 → 估值；不涉及返回 null */
+async function resolveBulkDelete(
+  agent: AgentStreamOptions,
+  toolName: string,
+  input: unknown,
+): Promise<number | null> {
+  if (toolName !== "delete_file" || !agent.workspacePath) return null;
+  const rel = (input as { path?: unknown } | null)?.path;
+  if (typeof rel !== "string" || rel === "") return null;
+  try {
+    const abs = resolveSafePath(agent.workspacePath, rel, agent.fullAccess());
+    const stat = await fs.stat(abs).catch(() => null);
+    if (!stat?.isDirectory()) return null;
+    const threshold =
+      agent.bulkDeleteThreshold ?? BULK_DELETE_THRESHOLD_DEFAULT;
+    const count = await countFilesForEstimate(abs);
+    return count >= threshold ? count : null;
+  } catch {
+    return null;
+  }
+}
 
 /** 文件判定门：非文件工具/无 path/解析失败（越界等）返回 null */
 function resolveFileGate(
@@ -461,8 +518,10 @@ function emitFileEvent(
  * 工具调用全流程（包装注册表工具的 execute，供单测导出）：
  * 命令判定门（SP2）：run_command 先经 gate——block 拒 / ask 无条件审批
  * （unattended 强拒）/ allow 跳审批 / default 回落既有链路（行为不变）；
- * 文件判定门（SP3）：文件三件先经 gate——block 无条件审批（unattended 强拒）
- * / allow 跳审批 / default 回落既有链路（与命令门互斥，default 时链路不变）；
+ * 文件判定门（SP3，SP4 增 delete_file）：文件四件先经 gate——block 无条件审批
+ * （unattended 强拒）/ allow 跳审批 / default 回落既有链路（与命令门互斥，default 时链路不变）；
+ * 批量删除预估门（SP4）：delete_file 目录预估 ≥ 阈值 → 无条件强制审批
+ * （fullAccess 不豁免；unattended 强拒）；
  * write 审批判定（P4 反馈）——完全访问直执行（含 MCP）；
  * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行；
  * 默认态且未记忆 → 挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
@@ -540,7 +599,39 @@ export async function runToolCall(
   if (fileGateDecision === "allow") {
     emitFileEvent(agent, input, "file-safety.allow-listed", "allowed", {});
   }
+  const bulkEstimate = await resolveBulkDelete(agent, def.name, input);
+  if (bulkEstimate !== null && agent.unattended) {
+    finalStates?.set(toolCallId, "denied");
+    onChunk?.({
+      type: "tool-update",
+      toolCallId,
+      toolName: def.name,
+      state: "denied",
+      output: BULK_UNATTENDED_OUTPUT,
+    });
+    emitFileEvent(
+      agent,
+      input,
+      "data-safety.bulk-delete-rejected",
+      "rejected",
+      {
+        estimated: bulkEstimate,
+        reason: "unattended",
+      },
+    );
+    return BULK_UNATTENDED_OUTPUT;
+  }
+  if (bulkEstimate !== null) {
+    emitFileEvent(
+      agent,
+      input,
+      "data-safety.bulk-delete-needs-approval",
+      "info",
+      { estimated: bulkEstimate },
+    );
+  }
   const needsApproval =
+    bulkEstimate !== null ||
     gate === "ask" ||
     fileGateDecision === "block" ||
     (gate !== "allow" &&
@@ -904,6 +995,9 @@ export default class ChatService {
     // 审计事件出口（SP1）：Application 注入 auditLogService.append；
     // 缺席（测试/未接线）时全部回调静默空转，行为与接入前一致
     private auditSink?: SecurityEventSink,
+    // 数据安全装配（SP4）：Application 注入备份/删除保护/批量阈值闭包；
+    // 缺席（测试/未接线）时走缺省值，行为与接入前一致
+    private dataSafety?: ChatDataSafety,
   ) {
     this.registerHandlers();
   }
@@ -1396,6 +1490,13 @@ export default class ChatService {
       },
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
+      // SP4 数据安全：闭包实时读配置（运行中改配置即生效）
+      deleteProtection: this.dataSafety?.deleteProtection() ?? true,
+      bulkDeleteThreshold:
+        this.dataSafety?.bulkDeleteThreshold() ?? BULK_DELETE_THRESHOLD_DEFAULT,
+      onBackupFile: this.dataSafety
+        ? (absPath, sid) => this.dataSafety!.backupFile(absPath, sid)
+        : undefined,
       // SP2 命令判定门：与 automation 共享模块单例（会话流不设 unattended）
       decideCommand: commandGate,
       // SP3 文件判定门：同命令门共享模块单例

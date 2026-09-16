@@ -32,6 +32,7 @@ import {
   makeCommandDecider,
 } from "./domains/security/command-gate";
 import { installFileGate, makeFileDecider } from "./domains/security/file-gate";
+import { FileHistoryService } from "./domains/security/file-history";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -175,9 +176,30 @@ export default class Application {
         [app.getPath("userData")],
       ),
     );
-    // SP1 事件源接入：命令拦截/审批决议经 ChatService 第 4 参汇入审计链
-    new ChatService(sessionRepo, skillRepo, projectRepo, (event) =>
-      auditLogService.append(event),
+    // SP4 数据安全：备份服务 + ChatService 数据安全装配（闭包实时读配置）
+    const fileHistory = new FileHistoryService(
+      path.join(app.getPath("userData"), "file-history"),
+      () => securityService.getConfigValue().fileBackupMaxSizeMB * 1024 * 1024,
+    );
+    // SP1 事件源接入：命令拦截/审批决议经 ChatService 第 4 参汇入审计链；
+    // SP4 数据安全：第 5 参注入备份/删除保护/批量阈值（闭包实时读配置）
+    new ChatService(
+      sessionRepo,
+      skillRepo,
+      projectRepo,
+      (event) => auditLogService.append(event),
+      {
+        backupFile: (absPath, sessionId) => {
+          if (!securityService.getConfigValue().fileBackupEnabled) {
+            return Promise.resolve({ ok: false, reason: "disabled" });
+          }
+          return fileHistory.backupFile(absPath, sessionId);
+        },
+        deleteProtection: () =>
+          securityService.getConfigValue().deleteProtection,
+        bulkDeleteThreshold: () =>
+          securityService.getConfigValue().bulkDeleteThreshold,
+      },
     );
     // 内置技能自愈安装：缺失时从应用资源复制（幂等，已存在跳过）；
     // fire-and-forget，失败仅日志不阻塞启动（P-D §2）

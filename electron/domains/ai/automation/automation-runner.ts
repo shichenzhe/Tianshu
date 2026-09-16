@@ -9,7 +9,11 @@
 import { format } from "date-fns";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
-import { runChatStream, normalizeWorkspacePath } from "../chat/chat.service";
+import {
+  runChatStream,
+  normalizeWorkspacePath,
+  type ChatDataSafety,
+} from "../chat/chat.service";
 import { serializeBlocks, type MessageBlock } from "../chat/blocks";
 import { createLanguageModel } from "../provider/provider-factory";
 import { registry } from "../agent/tool-registry";
@@ -90,6 +94,10 @@ export interface ExecuteTaskOptions {
   triggerType: "schedule" | "catchUp" | "retry" | "manual";
   attempt: number;
   abort: AbortSignal;
+  /** 数据安全装配（SP4 裁定）：可选透传，缺省 undefined——automation 现无
+   * SecurityService/FileHistoryService 依赖，不注入即走缺省值
+   * （unattended 流对批量删除已有强拒兜底） */
+  dataSafety?: ChatDataSafety;
 }
 
 /**
@@ -271,6 +279,13 @@ async function streamAndRecord(
       decideCommand: commandGate,
       // 文件判定门(SP3):同命令门共享模块单例;无人值守 block 强拒不挂审批
       decideFileAccess: fileGate,
+      // SP4 数据安全:可选注入透传,缺省 undefined(automation 无备份与批量
+      // 门装配——unattended 流已有强拒兜底)
+      deleteProtection: opts.dataSafety?.deleteProtection(),
+      bulkDeleteThreshold: opts.dataSafety?.bulkDeleteThreshold(),
+      onBackupFile: opts.dataSafety
+        ? (absPath, sid) => opts.dataSafety!.backupFile(absPath, sid)
+        : undefined,
       unattended: true,
     },
   });

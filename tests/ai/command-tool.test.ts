@@ -1,10 +1,12 @@
-import { exec } from "node:child_process";
+import { exec, type ChildProcess } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("node:child_process", () => ({ exec: vi.fn() }));
+// execFile：command-tool 传递依赖 child-monitor 顶层 promisify 需要
+// （本文件不触子进程监控，watchCommandTree 不被调用）
+vi.mock("node:child_process", () => ({ exec: vi.fn(), execFile: vi.fn() }));
 
 import {
   isDangerousCommand,
@@ -22,7 +24,9 @@ type ExecOptionsShape = { cwd?: string; timeout?: number; maxBuffer?: number };
 
 const mockExec = vi.mocked(exec);
 
-/** 注入可控的 exec 假实现：同步回调吐出预设结果 */
+/** 注入可控的 exec 假实现：同步回调吐出预设结果
+ * （SP2 起真实契约须返回 ChildProcess——runExec 透出 child.pid 供监控挂载；
+ * 无黑名单时 startChildWatch 直接跳过，不触 watchCommandTree） */
 function fakeExec(result: {
   error?: Error & { code?: number | string | null; killed?: boolean };
   stdout?: string;
@@ -34,7 +38,7 @@ function fakeExec(result: {
     cb: ExecCallback,
   ) => {
     cb(result.error ?? null, result.stdout ?? "", result.stderr ?? "");
-    return undefined;
+    return { pid: 4321 } as ChildProcess;
   }) as unknown as typeof exec);
 }
 

@@ -55,6 +55,11 @@ import type {
 } from "../../../../src-react/domains/ai/api/chat.api";
 import type { WorkspaceRecord } from "../../../../src-react/domains/ai/api/workspace.api";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
+import {
+  commandGate,
+  commandWatchBlacklist,
+  type CommandDecision,
+} from "../../security/command-gate";
 
 type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
@@ -142,6 +147,10 @@ export interface AgentStreamOptions {
     decision: "approved" | "denied",
     argSummary: string,
   ) => void;
+  /** 命令安全判定门（SP2）：缺省走 commandGate 模块单例 */
+  decideCommand?: (command: string) => CommandDecision;
+  /** 无人值守流（automation，SP2）：ask 命中强制拒绝而非挂起审批 */
+  unattended?: boolean;
 }
 
 export interface ChatStreamOptions {
@@ -332,6 +341,8 @@ async function executeToolSafe(
         fullAccess: agent.fullAccess(),
         projectId: agent.projectId ?? null,
         onSecurityEvent: agent.onSecurityEvent,
+        // SP2 子进程黑名单（会话与 automation 统一监控；win32 在 child-monitor 内 no-op）
+        commandWatchBlacklist: commandWatchBlacklist(),
       },
       input,
     );
@@ -365,13 +376,51 @@ async function awaitApproval(
   );
 }
 
+const COMMAND_BLOCKED_OUTPUT = "错误: 该命令被命令安全策略禁止（程序黑名单）";
+const COMMAND_UNATTENDED_OUTPUT =
+  "错误: 无人值守任务不可执行询问名单命令，请从询问名单移除或改为人工会话执行";
+
+/** run_command 判定门：非 run_command 或无命令返回 null */
+function resolveCommandGate(
+  agent: AgentStreamOptions,
+  toolName: string,
+  input: unknown,
+): CommandDecision | null {
+  if (toolName !== "run_command") return null;
+  const command = (input as { command?: unknown } | null)?.command;
+  if (typeof command !== "string" || command === "") return null;
+  return (agent.decideCommand ?? commandGate)(command);
+}
+
+/** 命令判定门审计事件（detail 带 command 截断 + 附加字段） */
+function emitCommandEvent(
+  agent: AgentStreamOptions,
+  input: unknown,
+  eventType: string,
+  decision: "blocked" | "rejected" | "info" | "allowed",
+  extra: Record<string, unknown>,
+): void {
+  const command = String(
+    (input as { command?: unknown } | null)?.command ?? "",
+  );
+  agent.onSecurityEvent?.({
+    eventType,
+    decision,
+    detail: { command: command.slice(0, 200), ...extra },
+    commandPreview: command.slice(0, 100),
+    sessionId: agent.sessionId,
+  });
+}
+
 /**
- * 工具调用全流程（包装注册表工具的 execute）：
+ * 工具调用全流程（包装注册表工具的 execute，供单测导出）：
+ * 命令判定门（SP2）：run_command 先经 gate——block 拒 / ask 无条件审批
+ * （unattended 强拒）/ allow 跳审批 / default 回落既有链路（行为不变）；
  * write 审批判定（P4 反馈）——完全访问直执行（含 MCP）；
  * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行；
  * 默认态且未记忆 → 挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
  */
-async function runToolCall(
+export async function runToolCall(
   def: ToolDefinition,
   agent: AgentStreamOptions,
   toolCallId: string,
@@ -380,11 +429,54 @@ async function runToolCall(
   onChunk?: (chunk: ChatStreamChunk) => void,
   finalStates?: Map<string, ToolCallBlock["state"]>,
 ): Promise<string> {
-  if (
-    def.kind === "write" &&
-    !agent.fullAccess() &&
-    !(await agent.isToolAllowed(def.name))
-  ) {
+  const gate = resolveCommandGate(agent, def.name, input);
+  if (gate === "block") {
+    finalStates?.set(toolCallId, "denied");
+    onChunk?.({
+      type: "tool-update",
+      toolCallId,
+      toolName: def.name,
+      state: "denied",
+      output: COMMAND_BLOCKED_OUTPUT,
+    });
+    emitCommandEvent(agent, input, "command-safety.blocked", "blocked", {
+      source: "blacklist",
+    });
+    return COMMAND_BLOCKED_OUTPUT;
+  }
+  if (gate === "ask" && agent.unattended) {
+    finalStates?.set(toolCallId, "denied");
+    onChunk?.({
+      type: "tool-update",
+      toolCallId,
+      toolName: def.name,
+      state: "denied",
+      output: COMMAND_UNATTENDED_OUTPUT,
+    });
+    emitCommandEvent(agent, input, "command-safety.rejected", "rejected", {
+      reason: "unattended",
+    });
+    return COMMAND_UNATTENDED_OUTPUT;
+  }
+  if (gate === "ask") {
+    emitCommandEvent(agent, input, "command-safety.needs-approval", "info", {});
+  }
+  if (gate === "allow") {
+    emitCommandEvent(
+      agent,
+      input,
+      "command-safety.allow-listed",
+      "allowed",
+      {},
+    );
+  }
+  const needsApproval =
+    gate === "ask" ||
+    (gate !== "allow" &&
+      def.kind === "write" &&
+      !agent.fullAccess() &&
+      !(await agent.isToolAllowed(def.name)));
+  if (needsApproval) {
     const decision = await awaitApproval(
       def,
       toolCallId,
@@ -794,6 +886,14 @@ export default class ChatService {
           where: { workspaceId_toolName: { workspaceId, toolName } },
           update: {},
           create: { workspaceId, toolName },
+        });
+        // remembered 审计（SP1 终审归档补齐项，SP2 接入）
+        this.auditSink?.({
+          eventType: `${
+            toolName === "run_command" ? "command-safety" : "file-safety"
+          }.remembered`,
+          decision: "info",
+          detail: { tool: toolName, workspaceId },
         });
       },
     );
@@ -1224,6 +1324,8 @@ export default class ChatService {
       },
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(toolCallId, argSummary),
+      // SP2 命令判定门：与 automation 共享模块单例（会话流不设 unattended）
+      decideCommand: commandGate,
       onSecurityEvent: (event) => this.auditSink?.(event),
       onApprovalResolved: (toolName, decision, argSummary) => {
         // 决议词汇对齐审计侧：内部 denied 记 rejected（AuditDecision 与 UI i18n 词汇）

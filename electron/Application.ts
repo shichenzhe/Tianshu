@@ -26,6 +26,11 @@ import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
 import AuditLogService from "./domains/security/audit/audit-log.service";
 import SecurityService from "./domains/security/security.service";
+import {
+  installCommandGate,
+  installCommandWatchlist,
+  makeCommandDecider,
+} from "./domains/security/command-gate";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -153,6 +158,15 @@ export default class Application {
       audit: (event) => auditLogService.append(event),
     });
     await securityService.init().catch((e) => Log.error("安全配置加载失败", e));
+    // 命令安全判定门（SP2）：install 后 chat/automation 两处装配共享
+    installCommandGate(
+      makeCommandDecider(() => securityService.getConfigValue()),
+    );
+    installCommandWatchlist(() =>
+      securityService.getConfigValue().sandboxEnabled
+        ? securityService.getConfigValue().programBlacklist
+        : [],
+    );
     // SP1 事件源接入：命令拦截/审批决议经 ChatService 第 4 参汇入审计链
     new ChatService(sessionRepo, skillRepo, projectRepo, (event) =>
       auditLogService.append(event),

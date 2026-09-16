@@ -7,6 +7,8 @@
 import type { SecurityConfig } from "../../../src-react/domains/security/model/types";
 import { decideCommand, type CommandDecision } from "./command-policy";
 
+export type { CommandDecision };
+
 /** 由配置读函数构造判定器：总开关旁路 + 规则判定 + 异常 fail-open */
 export function makeCommandDecider(
   getConfigValue: () => SecurityConfig,
@@ -39,5 +41,21 @@ export function commandGate(command: string): CommandDecision {
     return installed?.(command) ?? "default";
   } catch {
     return "default";
+  }
+}
+
+/** 子进程程序黑名单单例（SP2 spec §5.1）：Application install 配置读函数，
+ * chat.service executeToolSafe 装配时消费；fail-open：未安装/异常返回 [] */
+let watchlistGetter: (() => string[]) | null = null;
+
+export function installCommandWatchlist(fn: () => string[]): void {
+  watchlistGetter = fn;
+}
+
+export function commandWatchBlacklist(): string[] {
+  try {
+    return watchlistGetter?.() ?? [];
+  } catch {
+    return [];
   }
 }

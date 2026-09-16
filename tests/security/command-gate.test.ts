@@ -40,4 +40,12 @@ describe("commandGate 模块单例", () => {
     installCommandGate(() => "default");
     expect(commandGate("rm -rf x")).toBe("default");
   });
+
+  it("gate 自身抛错 → fail-open default", () => {
+    installCommandGate(() => {
+      throw new Error("boom");
+    });
+    expect(commandGate("rm -rf x")).toBe("default");
+    installCommandGate(() => "default");
+  });
 });

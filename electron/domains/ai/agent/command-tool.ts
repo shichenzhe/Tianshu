@@ -4,11 +4,12 @@
  * - 默认态 cwd 限定工作空间内（越界回退工作空间根）；完全访问态不限定
  * 纯 Node 实现（node:child_process + node:path），可被 vitest 直接测试
  */
-import { exec } from "node:child_process";
+import { exec, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { z } from "zod";
 import type { ToolDefinition } from "./file-tools";
+import { watchCommandTree } from "../../security/child-monitor";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface CommandContext {
@@ -17,6 +18,8 @@ export interface CommandContext {
   fullAccess?: boolean;
   /** 安全事件上报（SP1 审计接入）：由 ChatService 装配注入，保持本模块纯函数可测 */
   onSecurityEvent?: SecurityEventSink;
+  /** 子进程程序黑名单（SP2）：非空时挂载子进程树监控；缺省不监控 */
+  commandWatchBlacklist?: string[];
 }
 
 const EXEC_TIMEOUT_MS = 60_000;
@@ -118,15 +121,17 @@ function resolveCwd(ctx: CommandContext, rel?: string): string | undefined {
 }
 
 /**
- * callback 风格 exec → Promise：输出溢出/超时/数值退出码归一为带标签结果
- * （溢出时回调仍带回已捕获的 stdout/stderr，不丢弃）；其余异常走启动失败
+ * callback 风格 exec → Promise（同时透出 child 供子进程监控挂载）：
+ * 输出溢出/超时/数值退出码归一为带标签结果（溢出时回调仍带回已捕获的
+ * stdout/stderr，不丢弃）；其余异常走启动失败
  */
 function runExec(
   command: string,
   cwd: string | undefined,
-): Promise<ExecOutcome> {
-  return new Promise((resolve, reject) => {
-    exec(
+): { promise: Promise<ExecOutcome>; child: ChildProcess } {
+  let child!: ChildProcess;
+  const promise = new Promise<ExecOutcome>((resolve, reject) => {
+    child = exec(
       command,
       { cwd, timeout: EXEC_TIMEOUT_MS, maxBuffer: EXEC_MAX_BUFFER },
       (error, stdout, stderr) => {
@@ -144,6 +149,38 @@ function runExec(
         }
       },
     );
+  });
+  return { promise, child };
+}
+
+/**
+ * 子进程黑名单监控挂载（SP2 spec §5.1）；无条件时不挂返回 undefined。
+ * 同一 pid 可能跨轮询重复命中（kill 未及生效），按 pid 去重只审计一次；
+ * 回调只入队审计事件、绝不抛（抛会计入 child-monitor 失败计数致误停）
+ */
+function startChildWatch(
+  ctx: CommandContext,
+  command: string,
+  pid: number | undefined,
+): (() => void) | undefined {
+  const blacklist = ctx.commandWatchBlacklist ?? [];
+  if (!pid || blacklist.length === 0 || process.platform === "win32") {
+    return undefined;
+  }
+  const seen = new Set<number>();
+  return watchCommandTree(pid, blacklist, (v) => {
+    if (seen.has(v.pid)) return;
+    seen.add(v.pid);
+    ctx.onSecurityEvent?.({
+      eventType: "command-safety.child-blocked",
+      decision: "blocked",
+      detail: {
+        program: v.program,
+        pid: v.pid,
+        rootCommand: command.slice(0, 200),
+      },
+      sessionId: ctx.sessionId,
+    });
   });
 }
 
@@ -166,7 +203,7 @@ const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
       ctx.onSecurityEvent?.({
         eventType: "command-safety.blocked",
         decision: "blocked",
-        detail: { command: args.command.slice(0, 200) },
+        detail: { command: args.command.slice(0, 200), source: "dangerous" },
         commandPreview: args.command.slice(0, 100),
         commandHash: commandSha256(args.command),
         sessionId: ctx.sessionId,
@@ -174,14 +211,20 @@ const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
       return "错误: 该命令被安全策略拦截（高风险破坏性操作）";
     }
     try {
-      const { code, label, stdout, stderr } = await runExec(
+      const { promise, child } = runExec(
         args.command,
         resolveCwd(ctx, args.cwd),
       );
-      const out = mergeOutput(stdout, stderr);
-      if (code === 0) return `退出码 0\n${out}`;
-      const suffix = label ? `/${label}` : "";
-      return `错误: 命令失败（退出码 ${code ?? "-"}${suffix}）\n${out}`;
+      const stopWatch = startChildWatch(ctx, args.command, child.pid);
+      try {
+        const { code, label, stdout, stderr } = await promise;
+        const out = mergeOutput(stdout, stderr);
+        if (code === 0) return `退出码 0\n${out}`;
+        const suffix = label ? `/${label}` : "";
+        return `错误: 命令失败（退出码 ${code ?? "-"}${suffix}）\n${out}`;
+      } finally {
+        stopWatch?.();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       return `错误: 命令启动失败（${msg}）`;

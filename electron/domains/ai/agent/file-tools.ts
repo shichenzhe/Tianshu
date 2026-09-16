@@ -17,6 +17,8 @@ export interface ToolContext {
   projectId?: number | null;
   /** 安全事件上报（SP1 审计）：ChatService 装配透传，工具按需消费（如 run_command） */
   onSecurityEvent?: SecurityEventSink;
+  /** 子进程程序黑名单（SP2）：run_command 子进程监控消费；缺省不监控 */
+  commandWatchBlacklist?: string[];
 }
 
 export interface ToolDefinition<TArgs = unknown> {

@@ -175,6 +175,9 @@ export default function CommandDetailView({
     items.map((line) => ({ prefix: line.trim().split(/\s+/) }));
   return (
     <div className="space-y-6">
+      <h3 className="text-sm font-medium">
+        {t("security:commandDetail.title")}
+      </h3>
       <div className="flex items-center justify-between gap-2">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft size={14} />

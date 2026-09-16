@@ -75,3 +75,4 @@
 - 询问名单绝对优先（裁定 A）：与放行名单同时命中时 ask 赢；覆盖 full 模式与免审记忆；automation 下 ask 命中一律视为拒绝。
 - `sandboxEnabled=false` 时命令判定门整体旁路（回到 SP1 前行为：常规审批链与危险命令正则仍在）；判定引擎异常时装配闭包 fail-open 返回 default，不阻断命令执行。
 - 审计事件经 500ms 缓冲批量落库（满 50 条立即 flush），高频操作下列表刷新有亚秒延迟属预期。
+- ask 名单可被 shell 包装绕过：tokenize 仅看首 token，`sh -c 'curl …'` 或管道形态不触发询问门（黑名单类有子进程监控兜底，ask 类无）；后续 SP 可对引号内 payload 再扫 ask 前缀。

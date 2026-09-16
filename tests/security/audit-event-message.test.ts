@@ -34,9 +34,15 @@ describe("eventMessageKey", () => {
       "command-safety.approved",
       "command-safety.rejected",
       "command-safety.cwd-fallback",
+      "command-safety.needs-approval",
+      "command-safety.allow-listed",
+      "command-safety.child-blocked",
+      "command-safety.remembered",
       "file-safety.approved",
       "file-safety.rejected",
+      "file-safety.remembered",
       "config.sandboxEnabled.updated",
+      "config.commandRules.reset",
       "audit.cleared",
     ];
     for (const eventType of known) {

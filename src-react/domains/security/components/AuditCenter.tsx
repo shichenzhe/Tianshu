@@ -58,7 +58,7 @@ function entryText(t: TFunc, entry: AuditEntry): string {
   }
   const vars = {
     ...detail,
-    summary: String(detail.summary ?? ""),
+    summary: String(detail.summary ?? detail.command ?? ""),
     command: String(detail.command ?? ""),
     key: String(detail.key ?? ""),
     requested: String(detail.requested ?? ""),

@@ -61,7 +61,10 @@
       "command-safety_child-blocked": "Killed blacklisted child process: {{program}}",
       "command-safety_remembered": "Tool added to allowlist memory: {{tool}}",
       "file-safety_remembered": "Tool added to allowlist memory: {{tool}}",
-      "config_commandRules_reset": "Command lists reset to defaults"
+      "config_commandRules_reset": "Command lists reset to defaults",
+      "file-safety_needs-approval": "File access requires approval: {{path}}",
+      "file-safety_allow-listed": "File access allow-listed: {{path}}",
+      "config_fileRules_reset": "File lists reset to defaults"
     }
   },
   "commandDetail": {
@@ -91,6 +94,27 @@
     "cancel": "Cancel",
     "remove": "Remove",
     "empty": "No entries"
+  },
+  "fileDetail": {
+    "title": "File Security",
+    "priorityNote": "Priority: builtin sensitive paths (immutable, incl. app data) > user allowlist > user blocklist; reads and writes to blocklisted paths require approval (even in full access mode)",
+    "reset": "Reset to defaults",
+    "resetDone": "Lists reset to defaults",
+    "builtin": {
+      "title": "Built-in sensitive paths",
+      "desc": "Preset sensitive config paths (SSH keys, cloud credentials, etc.); immutable — reads/writes require approval on hit"
+    },
+    "builtinTag": "Built-in",
+    "blocklist": {
+      "title": "User blocklist",
+      "desc": "Reads and writes to matched paths require approval; supports ~/-prefixed, absolute, or workspace-relative paths",
+      "placeholder": "e.g. ~/.config/myapp"
+    },
+    "allowlist": {
+      "title": "User allowlist",
+      "desc": "Writes to matched paths skip approval (takes precedence over blocklist, but cannot bypass builtin paths)",
+      "placeholder": "e.g. ~/projects"
+    }
   },
   "error": {
     "saveFailed": "Save failed, please retry"

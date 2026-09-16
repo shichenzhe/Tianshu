@@ -174,6 +174,7 @@ export type IPCChannel =
   | "security:auditClear"
   | "security:openBackupDir"
   | "security:resetCommandRules"
+  | "security:resetFileRules"
   // 更新日志
   | "update-log:getContent"
   | "update-log:getConfig";

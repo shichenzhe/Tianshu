@@ -61,7 +61,10 @@
       "command-safety_child-blocked": "已终止黑名单子进程: {{program}}",
       "command-safety_remembered": "工具已加入免审记忆: {{tool}}",
       "file-safety_remembered": "工具已加入免审记忆: {{tool}}",
-      "config_commandRules_reset": "命令名单已重置为默认"
+      "config_commandRules_reset": "命令名单已重置为默认",
+      "file-safety_needs-approval": "文件访问需审批: {{path}}",
+      "file-safety_allow-listed": "文件访问已放行: {{path}}",
+      "config_fileRules_reset": "文件名单已重置为默认"
     }
   },
   "commandDetail": {
@@ -91,6 +94,27 @@
     "cancel": "取消",
     "remove": "删除",
     "empty": "暂无条目"
+  },
+  "fileDetail": {
+    "title": "文件安全",
+    "priorityNote": "优先级：内置敏感路径（不可删，含应用数据目录）＞ 用户白名单 ＞ 用户黑名单；命中黑名单的读写均需审批（完全访问模式下同样生效）",
+    "reset": "重置为默认",
+    "resetDone": "已重置为默认名单",
+    "builtin": {
+      "title": "内置敏感路径",
+      "desc": "系统预置的敏感配置路径（SSH 密钥、云凭证等），不可删除或编辑；读写命中即弹审批"
+    },
+    "builtinTag": "内置",
+    "blocklist": {
+      "title": "用户黑名单",
+      "desc": "命中路径的读写均强制弹审批；支持 ~/ 开头、绝对或工作空间相对路径",
+      "placeholder": "如 ~/.config/myapp"
+    },
+    "allowlist": {
+      "title": "用户白名单",
+      "desc": "命中路径的写操作免审批（优先于黑名单，但不能绕过内置清单）",
+      "placeholder": "如 ~/projects"
+    }
   },
   "error": {
     "saveFailed": "保存失败，请重试"

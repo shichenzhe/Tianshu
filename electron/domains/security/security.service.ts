@@ -121,6 +121,21 @@ export default class SecurityService {
     return copySecurityConfig(config);
   }
 
+  /** 文件两名单恢复默认（spec §5）：用户部分重置，内置清单不受影响 */
+  async resetFileRules(): Promise<SecurityConfig> {
+    const keys: SecurityConfigKey[] = ["fileBlocklist", "fileAllowlist"];
+    let config = this.getConfigValue();
+    for (const key of keys) {
+      config = await this.setConfig(key, SECURITY_DEFAULTS[key]);
+    }
+    this.opts.audit?.({
+      eventType: "config.fileRules.reset",
+      decision: "info",
+      detail: { keys },
+    });
+    return copySecurityConfig(config);
+  }
+
   private cleanValue(key: SecurityConfigKey, value: unknown): unknown {
     if (key === "fileBlocklist") {
       return stripBuiltinItems(value as string[], this.builtinBlocklist);
@@ -137,6 +152,10 @@ export default class SecurityService {
     ipcMain.handle(
       "security:resetCommandRules",
       async (): Promise<SecurityConfig> => this.resetCommandRules(),
+    );
+    ipcMain.handle(
+      "security:resetFileRules",
+      async (): Promise<SecurityConfig> => this.resetFileRules(),
     );
     ipcMain.handle("security:openBackupDir", async (): Promise<void> => {
       const dir = path.join(app.getPath("userData"), "file-history");

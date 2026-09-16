@@ -26,6 +26,10 @@ export class SecurityApi {
     return invoke<SecurityConfig>("security:resetCommandRules");
   }
 
+  static resetFileRules(): Promise<SecurityConfig> {
+    return invoke<SecurityConfig>("security:resetFileRules");
+  }
+
   static auditList(params: AuditListParams): Promise<AuditListResult> {
     return invoke<AuditListResult>("security:auditList", params);
   }

@@ -1,6 +1,6 @@
 /**
- * 沙箱安全卡片：总开关 + 三个二级入口（命令安全 SP2 已启用可点，
- * 文件/网络安全 SP3/SP5 上线前维持禁用占位）
+ * 沙箱安全卡片：总开关 + 三个二级入口（命令 SP2、文件 SP3 已启用可点，
+ * 网络安全 SP5 上线前维持禁用占位）
  */
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileLock, Globe, SquareTerminal } from "lucide-react";
@@ -13,6 +13,7 @@ interface SandboxCardProps {
   config: SecurityConfig;
   onToggle: (key: SecurityConfigKey, value: unknown) => void;
   onOpenCommand: () => void;
+  onOpenFile: () => void;
 }
 
 const ENTRIES: {
@@ -20,12 +21,13 @@ const ENTRIES: {
   labelKey: string;
   descKey: string;
   /** 已启用入口对应的视图；缺省 = 仍为禁用占位 */
-  view?: "command";
+  view?: "command" | "file";
 }[] = [
   {
     icon: FileLock,
     labelKey: "security:sandbox.file",
     descKey: "security:sandbox.fileDesc",
+    view: "file",
   },
   {
     icon: SquareTerminal,
@@ -44,6 +46,7 @@ export default function SandboxCard({
   config,
   onToggle,
   onOpenCommand,
+  onOpenFile,
 }: SandboxCardProps) {
   const { t } = useTranslation(["security"]);
   return (
@@ -64,12 +67,18 @@ export default function SandboxCard({
         />
       </div>
       <div className="space-y-1">
-        {ENTRIES.map(({ icon: Icon, labelKey, descKey, view }) =>
-          view === "command" ? (
+        {ENTRIES.map(({ icon: Icon, labelKey, descKey, view }) => {
+          const onOpen =
+            view === "command"
+              ? onOpenCommand
+              : view === "file"
+                ? onOpenFile
+                : null;
+          return onOpen ? (
             <button
               key={labelKey}
               type="button"
-              onClick={onOpenCommand}
+              onClick={onOpen}
               className="flex w-full cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-primary-subtle hover:text-primary"
             >
               <Icon size={16} className="shrink-0 text-muted-foreground" />
@@ -99,8 +108,8 @@ export default function SandboxCard({
               </span>
               <ChevronRight size={14} className="text-muted-foreground" />
             </div>
-          ),
-        )}
+          );
+        })}
       </div>
     </div>
   );

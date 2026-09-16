@@ -17,6 +17,10 @@ export class LocalConnectProxy {
   /** 启动中/已启动的端口 Promise：并发 start（启动期 onConfigChange 与显式
    * 初对齐同时触发）复用同一 Promise，避免读到未就绪的端口值 */
   private starting?: Promise<number>;
+  /** CONNECT 隧道 socket 集：升级态连接脱离 server 连接追踪
+   * （closeAllConnections 不覆盖，Node 已知行为），stop 须显式终结，
+   * 否则 idle 隧道卡死 close 回调 */
+  private readonly tunnels = new Set<Duplex>();
 
   constructor(
     private readonly getGate: () =>
@@ -59,6 +63,12 @@ export class LocalConnectProxy {
     this.server = undefined;
     this.portValue = undefined;
     this.starting = undefined;
+    // 存量连接会卡死 close 回调——先全部终结：普通/在途连接由
+    // closeAllConnections 清（含 idle 隧道在内的升级态连接脱离 server
+    // 追踪，须由本类隧道集显式 destroy）
+    for (const socket of this.tunnels) socket.destroy();
+    this.tunnels.clear();
+    server.closeAllConnections();
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
@@ -81,6 +91,8 @@ export class LocalConnectProxy {
       return;
     }
     const port = Number(target.split(":")[1] ?? 443);
+    this.tunnels.add(clientSocket);
+    clientSocket.on("close", () => this.tunnels.delete(clientSocket));
     const upstream = net.connect(port, host, () => {
       clientSocket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
       upstream.write(head);
@@ -127,6 +139,8 @@ export class LocalConnectProxy {
       },
       (upRes) => {
         res.writeHead(upRes.statusCode ?? 502, upRes.headers);
+        // FIN 断流（对端平滑关闭）不触发 upstream error——主动终结客户端
+        upRes.on("aborted", () => res.destroy());
         upRes.pipe(res);
       },
     );

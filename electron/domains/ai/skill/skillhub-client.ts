@@ -6,6 +6,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 
 import { Constants } from "../../../Constants";
+import { errorMessageWithCause } from "../../../commons/error-message-with-cause";
 
 export interface SkillHubSkill {
   slug: string;
@@ -142,7 +143,10 @@ export class SkillHubClient {
         if (e instanceof SkillHubApiError) {
           throw e;
         }
-        lastError = e instanceof Error ? e : new Error(String(e));
+        lastError =
+          e instanceof Error
+            ? new Error(errorMessageWithCause(e))
+            : new Error(String(e));
         if (attempt >= MAX_ATTEMPTS) {
           throw lastError;
         }

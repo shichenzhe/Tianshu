@@ -269,8 +269,24 @@ describe("MCP 工具 execute", () => {
     await manager.connect(server);
 
     expect(await registry.find("mcp__srv__t")!.execute(ctx(), {})).toBe(
-      "错误: MCP 服务不可用（srv）",
+      "错误: MCP 服务不可用（srv）：connection closed",
     );
+  });
+
+  it("callTool 网络策略拒绝（fetch failed + cause）回喂解包后策略文案", async () => {
+    const { client } = fakeClient([{ name: "t" }]);
+    client.callTool = async () => {
+      // undici 拒绝形态：顶层 "fetch failed"，策略文案在 error.cause
+      throw new Error("fetch failed", {
+        cause: new Error("网络安全策略已拒绝 x（规则：deny）"),
+      });
+    };
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    const result = await registry.find("mcp__srv__t")!.execute(ctx(), {});
+    expect(result).toContain("MCP 服务不可用");
+    expect(result).toContain("网络安全策略已拒绝");
   });
 });
 

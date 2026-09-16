@@ -1,6 +1,8 @@
 /**
  * 本地 CONNECT 代理单测（SP5 Task 4）：CONNECT 放行/拒绝双路径与启停幂等；
  * 明文转发上游错误收口（终审 S1：响应头已发后断流销毁连接 / 未发回 502）。
+ * SP6 移交加固：stop 清 idle 隧道（closeAllConnections）与
+ * FIN 平滑关闭断流防护（aborted → 客户端终结，悬置路径带超时判负）。
  * 全部本地化——echo 目标监听 127.0.0.1（豁免面内），代理自身绑定 127.0.0.1；
  * 拒绝用例只发 CONNECT 头即收 403（判定先于 net.connect，不触真实外连）。
  * network-gate 传递依赖 Log（→ electron），经 vi.mock 替换（仓库既有模式）。
@@ -76,6 +78,43 @@ function responseSettled(res: http.IncomingMessage): Promise<void> {
     res.resume(); // 流动模式：暂停态下正常 end 的 close 可能不触发
     res.once("close", () => resolve());
     res.once("error", () => resolve());
+  });
+}
+
+/** 超时保护：悬置路径显式判负而非挂死用例（计时器 unref 不阻退出） */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(label)), ms);
+    timer.unref?.();
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      },
+    );
+  });
+}
+
+/** 手动 CONNECT 建隧道（裸 socket），resolve 于 200 连接建立响应 */
+function connectTunnel(
+  proxyPort: number,
+  targetPort: number,
+): Promise<net.Socket> {
+  return new Promise((resolve, reject) => {
+    const client = net.connect(proxyPort, "127.0.0.1");
+    client.on("connect", () => {
+      client.write(
+        `CONNECT 127.0.0.1:${targetPort} HTTP/1.1\r\nHost: 127.0.0.1:${targetPort}\r\n\r\n`,
+      );
+    });
+    client.on("data", (c) => {
+      if (c.toString().includes("200")) resolve(client);
+    });
+    client.on("error", reject);
   });
 }
 
@@ -232,5 +271,51 @@ describe("LocalConnectProxy", () => {
     expect(proxy.port).toBe(first);
     await proxy.stop();
     expect(proxy.port).toBeUndefined();
+  });
+
+  it("明文转发：上游 FIN 平滑关闭（非 RST）→ 客户端连接被终结不悬置", async () => {
+    // 目标回包（chunked 首块）后 socket.end() 平滑 FIN（不写终止 0 块）：
+    // 响应未完成且无 ECONNRESET——旧实现 upstream error 不触发、pipe 不
+    // end，客户端连接悬置；防护以 upRes aborted → 主动终结客户端
+    const target = net.createServer((socket) => {
+      socket.on("data", () => {
+        socket.write(
+          "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nping\r\n",
+        );
+        socket.end();
+      });
+    });
+    const targetPort: number = await new Promise((resolve) => {
+      target.listen(0, "127.0.0.1", () =>
+        resolve((target.address() as net.AddressInfo).port),
+      );
+    });
+    const proxy = new LocalConnectProxy(() => getNetworkGate());
+    const proxyPort = await proxy.start();
+    try {
+      const res = await plainRequest(proxyPort, targetPort);
+      expect(res.statusCode).toBe(200);
+      // 超时保护：旧实现 res 无任何终结事件，悬置至此被显式判负
+      await withTimeout(responseSettled(res), 3000, "客户端连接未终结（悬置）");
+      expect(res.destroyed).toBe(true); // 连接被终结（close/destroy 断言）
+      expect(res.complete).toBe(false); // 非响应完整结束（无终止 0 块）
+    } finally {
+      await proxy.stop();
+      await new Promise<void>((resolve) => target.close(() => resolve()));
+    }
+  });
+
+  it("stop 清 idle 隧道：closeAllConnections 生效，close 不被悬挂连接卡死", async () => {
+    const { server, port } = await echoServer();
+    const proxy = new LocalConnectProxy(() => getNetworkGate());
+    const proxyPort = await proxy.start();
+    const client = await connectTunnel(proxyPort, port); // 隧道保持 idle
+    try {
+      // 旧实现 server.close 等待存量连接结束 → 被 idle 隧道卡死直至超时
+      await withTimeout(proxy.stop(), 2000, "stop() 被 idle 隧道卡死");
+    } finally {
+      client.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

@@ -13,6 +13,7 @@ import { registerTools, unregisterTools } from "./tool-registry";
 import { getNetworkGate } from "../../security/network-gate";
 import type { NetworkVerdict } from "../../security/domain-policy";
 import Log from "../../../commons/Log";
+import { errorMessageWithCause } from "../../../commons/error-message-with-cause";
 
 export interface McpServerConfig {
   id: number;
@@ -349,8 +350,8 @@ export class McpManager {
         .filter((part) => part.type === "text" && typeof part.text === "string")
         .map((part) => part.text as string);
       return texts.length > 0 ? texts.join("\n") : "(无输出)";
-    } catch {
-      return `错误: MCP 服务不可用（${row.name}）`;
+    } catch (e) {
+      return `错误: MCP 服务不可用（${row.name}）：${errorMessageWithCause(e)}`;
     }
   }
 }

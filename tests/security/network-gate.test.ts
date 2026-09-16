@@ -14,6 +14,7 @@ vi.mock("../../electron/commons/Log", () => ({
 }));
 
 import Log from "../../electron/commons/Log";
+import { errorMessageWithCause } from "../../electron/commons/error-message-with-cause";
 import type { NetworkPolicyState } from "../../electron/domains/security/domain-policy";
 import {
   getNetworkGate,
@@ -203,5 +204,37 @@ describe("NetworkGate", () => {
     // 还原现场：卸策略槽并回直连，避免 wrap 泄漏到本文件其他用例
     setPolicyHook(null);
     applyProxyDispatcher({ mode: "direct" });
+  });
+
+  it("真实 fetch 拒绝：策略文案在 error.cause，解包后可见（SP5 移交 ①）", async () => {
+    const { setPolicyHook, applyProxyDispatcher } =
+      await import("../../electron/domains/app-settings/proxy-dispatcher");
+    const gate = installNetworkGate({
+      policyProvider: () => policy({ domainDeny: ["blocked-by-policy.test"] }),
+      audit: () => {},
+    });
+    setPolicyHook({
+      judgeHost: (host) => gate.judgeHost(host),
+      onBlocked: () => {},
+    });
+    applyProxyDispatcher({ mode: "direct" });
+    try {
+      // 拒绝在 dispatch 同步发生，不触真实外连；fetch 拒绝形态：
+      // 顶层 TypeError "fetch failed"，策略文案在 error.cause
+      const err: unknown = await fetch("https://blocked-by-policy.test/").then(
+        () => {
+          throw new Error("期待 fetch 被策略拒绝");
+        },
+        (e: unknown) => e,
+      );
+      const message = errorMessageWithCause(err);
+      expect(message).toContain("fetch failed");
+      expect(message).toContain("blocked-by-policy.test");
+      expect(message).toContain("deny");
+    } finally {
+      // 还原现场：卸策略槽并回直连，避免 wrap 泄漏到本文件其他用例
+      setPolicyHook(null);
+      applyProxyDispatcher({ mode: "direct" });
+    }
   });
 });

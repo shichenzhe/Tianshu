@@ -16,16 +16,24 @@ export interface FileAccessRules {
   fileAllowlist: string[];
 }
 
+/** 循环剥离尾分隔符与尾通配符至稳定（/dir/* → /dir、孤立 * → ""） */
+function stripTrailingSepAndGlob(value: string): string {
+  for (;;) {
+    const next = value
+      .replace(/[/\\]+$/, "")
+      .replace(/\*+$/, "")
+      .trim();
+    if (next === value) return value;
+    value = next;
+  }
+}
+
 /** 条目归一化：去首尾空白/尾分隔符/尾通配符，~/ 展开，相对按 workspace resolve */
 export function normalizeRulePath(
   entry: string,
   workspacePath: string,
 ): string {
-  let value = entry
-    .trim()
-    .replace(/[/\\]+$/, "")
-    .replace(/\*+$/, "")
-    .trim();
+  let value = stripTrailingSepAndGlob(entry.trim());
   if (value === "" || value === "~") {
     return value === "~" ? os.homedir() : "";
   }

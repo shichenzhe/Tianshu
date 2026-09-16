@@ -27,6 +27,10 @@ describe("normalizeRulePath", () => {
     expect(normalizeRulePath("/abs/dir", WS)).toBe(path.normalize("/abs/dir"));
     expect(normalizeRulePath("rel/dir", WS)).toBe(path.resolve(WS, "rel/dir"));
   });
+  it("/dir/* 形态循环剥离至稳定，孤立 * 归空", () => {
+    expect(normalizeRulePath("/secret/*", WS)).toBe("/secret");
+    expect(normalizeRulePath("*", WS)).toBe("");
+  });
 });
 
 describe("pathMatchesRule", () => {

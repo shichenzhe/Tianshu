@@ -64,7 +64,14 @@
       "config_commandRules_reset": "Command lists reset to defaults",
       "file-safety_needs-approval": "File access requires approval: {{path}}",
       "file-safety_allow-listed": "File access allow-listed: {{path}}",
-      "config_fileRules_reset": "File lists reset to defaults"
+      "config_fileRules_reset": "File lists reset to defaults",
+      "data-safety_backup-created": "File backed up: {{path}} ({{size}} bytes)",
+      "data-safety_backup-skipped": "File backup skipped: {{path}} ({{reason}})",
+      "data-safety_delete-trashed": "Moved to trash: {{path}}",
+      "data-safety_delete-permanent": "Permanently deleted: {{path}} ({{files}} files)",
+      "data-safety_delete-failed": "Delete failed: {{path}} ({{error}})",
+      "data-safety_bulk-delete-needs-approval": "Bulk delete needs approval: {{path}} (~{{estimated}} files)",
+      "data-safety_bulk-delete-rejected": "Bulk delete rejected: {{path}} (~{{estimated}} files)"
     }
   },
   "invalidEntry": "Please enter a valid entry",

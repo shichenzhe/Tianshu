@@ -64,7 +64,14 @@
       "config_commandRules_reset": "命令名单已重置为默认",
       "file-safety_needs-approval": "文件访问需审批: {{path}}",
       "file-safety_allow-listed": "文件访问已放行: {{path}}",
-      "config_fileRules_reset": "文件名单已重置为默认"
+      "config_fileRules_reset": "文件名单已重置为默认",
+      "data-safety_backup-created": "文件已备份: {{path}}（{{size}} 字节）",
+      "data-safety_backup-skipped": "文件备份跳过: {{path}}（{{reason}}）",
+      "data-safety_delete-trashed": "已移入回收站: {{path}}",
+      "data-safety_delete-permanent": "已永久删除: {{path}}（{{files}} 个文件）",
+      "data-safety_delete-failed": "删除失败: {{path}}（{{error}}）",
+      "data-safety_bulk-delete-needs-approval": "批量删除需审批: {{path}}（预估 {{estimated}} 个文件）",
+      "data-safety_bulk-delete-rejected": "批量删除已拒绝: {{path}}（预估 {{estimated}} 个文件）"
     }
   },
   "invalidEntry": "请输入有效内容",

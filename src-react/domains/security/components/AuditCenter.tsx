@@ -62,6 +62,7 @@ function entryText(t: TFunc, entry: AuditEntry): string {
     command: String(detail.command ?? ""),
     key: String(detail.key ?? ""),
     requested: String(detail.requested ?? ""),
+    path: String(detail.path ?? ""),
   };
   return t(key, vars);
 }

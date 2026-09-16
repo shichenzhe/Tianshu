@@ -31,6 +31,7 @@ import {
   installCommandWatchlist,
   makeCommandDecider,
 } from "./domains/security/command-gate";
+import { installFileGate, makeFileDecider } from "./domains/security/file-gate";
 import SqlFileExecutor from "./commons/sql-file-executor";
 import { fileURLToPath } from "node:url";
 import Log from "./commons/Log";
@@ -166,6 +167,13 @@ export default class Application {
       securityService.getConfigValue().sandboxEnabled
         ? securityService.getConfigValue().programBlacklist
         : [],
+    );
+    // 文件安全判定门（SP3）：extraBuiltin = userData 自我保护（spec §4.1）
+    installFileGate(
+      makeFileDecider(
+        () => securityService.getConfigValue(),
+        [app.getPath("userData")],
+      ),
     );
     // SP1 事件源接入：命令拦截/审批决议经 ChatService 第 4 参汇入审计链
     new ChatService(sessionRepo, skillRepo, projectRepo, (event) =>

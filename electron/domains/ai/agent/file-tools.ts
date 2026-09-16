@@ -314,3 +314,12 @@ export const FILE_TOOLS: ToolDefinition[] = [
   listDirTool,
   searchFilesTool,
 ];
+
+/** 按名取内置文件工具（SP3 集成测试直调单工具用） */
+export function makeFileTool(
+  name: "read_file" | "write_file" | "list_dir" | "search_files",
+): ToolDefinition<never> {
+  const tool = FILE_TOOLS.find((t) => t.name === name);
+  if (!tool) throw new Error(`未知文件工具: ${name}`);
+  return tool as ToolDefinition<never>;
+}

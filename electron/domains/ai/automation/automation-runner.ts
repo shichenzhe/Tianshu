@@ -18,6 +18,7 @@ import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { classifyError } from "../chat/error-classify";
 import { commandGate } from "../../security/command-gate";
+import { fileGate } from "../../security/file-gate";
 import { computeNextRun } from "./schedule";
 import { resolveAttachments } from "./resolve-attachments";
 import type { ScheduleConfig } from "../../../../src-react/domains/ai/automation/api/schedule.schema";
@@ -268,6 +269,8 @@ async function streamAndRecord(
       ),
       // 命令判定门(SP2):与 chat 共享模块单例;无人值守 ask 强拒不挂审批
       decideCommand: commandGate,
+      // 文件判定门(SP3):同命令门共享模块单例;无人值守 block 强拒不挂审批
+      decideFileAccess: fileGate,
       unattended: true,
     },
   });

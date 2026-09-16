@@ -60,6 +60,8 @@ import {
   commandWatchBlacklist,
   type CommandDecision,
 } from "../../security/command-gate";
+import { fileGate } from "../../security/file-gate";
+import type { FileAccessDecision } from "../../security/file-policy";
 
 type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
@@ -149,6 +151,11 @@ export interface AgentStreamOptions {
   ) => void;
   /** 命令安全判定门（SP2）：缺省走 commandGate 模块单例 */
   decideCommand?: (command: string) => CommandDecision;
+  /** 文件安全判定门（SP3）：缺省走 fileGate 模块单例 */
+  decideFileAccess?: (
+    absPath: string,
+    workspacePath: string,
+  ) => FileAccessDecision;
   /** 无人值守流（automation，SP2）：ask 命中强制拒绝而非挂起审批 */
   unattended?: boolean;
 }
@@ -412,10 +419,50 @@ function emitCommandEvent(
   });
 }
 
+const FILE_UNATTENDED_OUTPUT =
+  "错误: 无人值守任务不可访问黑名单路径，请调整名单或改为人工会话执行";
+const FILE_GATE_TOOLS = new Set(["read_file", "write_file", "list_dir"]);
+
+/** 文件判定门：非文件工具/无 path/解析失败（越界等）返回 null */
+function resolveFileGate(
+  agent: AgentStreamOptions,
+  toolName: string,
+  input: unknown,
+): FileAccessDecision | null {
+  if (!FILE_GATE_TOOLS.has(toolName) || !agent.workspacePath) return null;
+  const rel = (input as { path?: unknown } | null)?.path;
+  if (typeof rel !== "string" || rel === "") return null;
+  try {
+    const abs = resolveSafePath(agent.workspacePath, rel, agent.fullAccess());
+    return (agent.decideFileAccess ?? fileGate)(abs, agent.workspacePath);
+  } catch {
+    return null;
+  }
+}
+
+/** 文件门审计事件（detail.path 截 200 + 附加字段） */
+function emitFileEvent(
+  agent: AgentStreamOptions,
+  input: unknown,
+  eventType: string,
+  decision: "rejected" | "info" | "allowed",
+  extra: Record<string, unknown>,
+): void {
+  const p = String((input as { path?: unknown } | null)?.path ?? "");
+  agent.onSecurityEvent?.({
+    eventType,
+    decision,
+    detail: { path: p.slice(0, 200), ...extra },
+    sessionId: agent.sessionId,
+  });
+}
+
 /**
  * 工具调用全流程（包装注册表工具的 execute，供单测导出）：
  * 命令判定门（SP2）：run_command 先经 gate——block 拒 / ask 无条件审批
  * （unattended 强拒）/ allow 跳审批 / default 回落既有链路（行为不变）；
+ * 文件判定门（SP3）：文件三件先经 gate——block 无条件审批（unattended 强拒）
+ * / allow 跳审批 / default 回落既有链路（与命令门互斥，default 时链路不变）；
  * write 审批判定（P4 反馈）——完全访问直执行（含 MCP）；
  * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行；
  * 默认态且未记忆 → 挂起审批；拒绝以文案回喂（循环继续）；中止竞速防流悬挂
@@ -470,9 +517,34 @@ export async function runToolCall(
       {},
     );
   }
+  const fileGateDecision = resolveFileGate(agent, def.name, input);
+  if (fileGateDecision === "block" && agent.unattended) {
+    finalStates?.set(toolCallId, "denied");
+    onChunk?.({
+      type: "tool-update",
+      toolCallId,
+      toolName: def.name,
+      state: "denied",
+      output: FILE_UNATTENDED_OUTPUT,
+    });
+    emitFileEvent(agent, input, "file-safety.rejected", "rejected", {
+      reason: "unattended",
+    });
+    return FILE_UNATTENDED_OUTPUT;
+  }
+  if (fileGateDecision === "block") {
+    emitFileEvent(agent, input, "file-safety.needs-approval", "info", {
+      source: "blocklist",
+    });
+  }
+  if (fileGateDecision === "allow") {
+    emitFileEvent(agent, input, "file-safety.allow-listed", "allowed", {});
+  }
   const needsApproval =
     gate === "ask" ||
+    fileGateDecision === "block" ||
     (gate !== "allow" &&
+      fileGateDecision !== "allow" &&
       def.kind === "write" &&
       !agent.fullAccess() &&
       !(await agent.isToolAllowed(def.name)));
@@ -1326,6 +1398,8 @@ export default class ChatService {
         this.approvals.request(toolCallId, argSummary),
       // SP2 命令判定门：与 automation 共享模块单例（会话流不设 unattended）
       decideCommand: commandGate,
+      // SP3 文件判定门：同命令门共享模块单例
+      decideFileAccess: fileGate,
       onSecurityEvent: (event) => this.auditSink?.(event),
       onApprovalResolved: (toolName, decision, argSummary) => {
         // 决议词汇对齐审计侧：内部 denied 记 rejected（AuditDecision 与 UI i18n 词汇）

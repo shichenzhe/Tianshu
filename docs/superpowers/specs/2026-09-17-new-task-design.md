@@ -23,12 +23,12 @@
 | 2 | 场景完整联动三件套：`session.scenario` 落库 + 后端 system prompt 注入 + 技能按场景过滤进胶囊 | 用户选完整联动（选项③）；与现有 `SessionMode`（agent/ask/plan，执行语义）正交不冲突 |
 | 3 | 推荐胶囊 = 预设模板（i18n 常量，按场景分组）+ 该场景已打标已启用技能混排；技能点击插 `⚡技能` token | 模板填输入框（PRD 3.2 原文行为）；技能复用 PendingFile 机制 |
 | 4 | `skillRecord.scenarios`（JSON 数组字符串）+ 导入弹窗与技能管理列表手动勾选 | 不依赖技能市场数据改造；打标入口在用户侧 |
-| 5 | 附件 = 路径引用不拷贝；`PendingFile` 增 `localFile` kind；新 IPC `workspace:readExternalFile`；选择器/拖拽动作本身即授权 | WorkBuddy 同构（用户确认）；零新增存储、数据不出本地；现有 `workspace-files.ts` 以 workspacePath 为基，任意路径需新通道 |
-| 6 | 50MB 上限语义 = 单文件读取注入上限（超限报错不加 pill），非上传大小限制 | 文件不动，"上传限制"不成立；防超大文件全文入 prompt |
+| 5 | 附件 = 路径引用不拷贝；`PendingFile` 增 `localFile` kind；新 IPC `file:readExternalFile`；选择器/拖拽动作本身即授权 | WorkBuddy 同构（用户确认）；零新增存储、数据不出本地；现有 `workspace-files.ts` 以 workspacePath 为基，任意路径需新通道 |
+| 6 | 单文件读取注入上限复用现有 `READ_LIMIT = 512KB`（`workspace-files.ts:24`，与 `@文件` 同口径），超限报错不加 pill | 文件不动，"上传限制"不成立；50MB 文本远超模型上下文，512KB 才是"读内容注入 prompt"链路的真实约束，两处口径一致 |
 | 7 | 敏感词拦截 = 前端本地词表 + 发送前检查 + 命中置灰并提示原因 | 核实安全中心（SP1–SP6）为审批/审计/沙箱，无内容词表引擎可复用；此为最小落地方案 |
 | 8 | 魔法棒润色 = 新 IPC `chat:polish` 一次性非流式补全（默认 provider 默认模型，不落库不建 session）；三风格 professional / concise / translate-en | 润色是短文本变换，非对话；失败 toast 且原文不动 |
 | 9 | 模式徽标 / ModelPicker / 停止按钮不进落地页；session 以默认 mode(agent) 与全局默认模型创建 | 落地页是发起态；ChatView 内仍可调整 |
-| 10 | `ChatInput` 内联 token 解析 + 镜像层 + PendingFile 管理抽为共享模块，ChatView 与落地页共用 | `@文件`/`⚡技能` 引用两处同机制；DRY；ChatInput 行为不变 |
+| 10 | 落地页输入卡**独立精简实现**（textarea + 引用 pill + 简化 `@` 文件联想面板，PRD 3.3.2 的胶囊范式）；仅纯函数 `detectMention` 从 `ChatInput.tsx:126-149` 迁入 `inline-tokens.ts` 共用，ChatInput 其余零改动 | 联想面板/镜像层与 session 强耦合（PlusMenu/PermissionCapsule/ModelPicker 均需 sessionId），大抽取=ChatView 回归风险；PRD 引用范式本就是"胶囊标签展示"非行内 token |
 | 11 | 配置栏工作空间为任务级选择（决定 create 的 workspaceId），默认跟随全局当前空间，不改全局 | 语义是"本次任务运行范围"；全局切换仍由 WorkspaceMenu 负责 |
 | 12 | 权限高危档复用现有 `FullAccessModal` 二次确认；发送编排中先 `permission:set` 再 `send` | PRD"高危需二次确认"；permission 为进程内存态（chat.api.ts:127 注释） |
 
@@ -76,7 +76,7 @@ model skillRecord {
 
 | Channel | 入参 | 出参 | 说明 |
 |---|---|---|---|
-| `workspace:readExternalFile` | `absolutePath` | `{ content, size, binary }` | 读取用户主动添加的本地文件；>50MB 返回错误码；二进制返回标记按现有注入规则处理 |
+| `file:readExternalFile` | `absolutePath` | `{ content, size, binary }` | 读取用户主动添加的本地文件（`file:` 前缀与现有 `file:readWorkspaceFile` 同族，注册于 chat.service）；超 512KB 注入上限返回错误码；二进制返回标记按现有注入规则处理 |
 | `chat:polish` | `{ text, style }`，style = `professional \| concise \| translate-en` | `{ text }` | 一次性补全，默认 provider 默认模型，不落库不建 session |
 
 现有 `@文件`/`⚡技能`/`#待办` 引用机制、`readWorkspaceFile` 全部复用不动。
@@ -101,7 +101,7 @@ src-react/domains/ai/new-task/
 └── store/new-task-store.ts    # Zustand：文本/场景/空间/权限/pendingFiles；场景+权限+最近工作空间持久化 localStorage（下次进入恢复）
 ```
 
-共享抽取（裁定 10）：`ChatInput` 的内联 token 解析、镜像层同步、PendingFile 管理抽为 `chat/lib/` 共享模块，两处共用；具体抽取清单在实现计划逐文件定。
+共享（裁定 10 修订）：仅纯函数 `detectMention` 从 ChatInput 迁入 `chat/lib/inline-tokens.ts` 共用；落地页输入卡为独立精简实现（textarea 自适应 + 引用 pill 列表 + 简化 `@` 文件联想面板，选中转 pill），不搬 ChatInput 的镜像层与联想系统。
 
 ### 胶囊数据流
 
@@ -122,7 +122,7 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 | 场景 | 行为 |
 |---|---|
 | create/send 失败 | toast（复用现有错误文案体系），停留落地页，状态全保留 |
-| 文件 >50MB | toast"文件大小超出限制"，不加 pill |
+| 文件超 512KB 注入上限 | toast"文件大小超出限制"，不加 pill |
 | 敏感词命中 | 发送置灰 + 提示命中原因 |
 | 长文本 | 右下角 `n/2000` 计数 + 截断风险提示（仅提示） |
 | 无可用模型 | 发送置灰，复用 `chat:input.modelRequired` |

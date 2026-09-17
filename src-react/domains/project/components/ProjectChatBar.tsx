@@ -21,6 +21,7 @@ import AgentProgress from "@/domains/ai/chat/components/AgentProgress";
 import ApprovalBanner from "@/domains/ai/chat/components/ApprovalBanner";
 import type { AccessMode } from "@/domains/ai/chat/components/PermissionCapsule";
 import type { PendingFile } from "@/domains/ai/chat/lib/pending-file";
+import { buildInjectedContent } from "@/domains/ai/chat/lib/build-injected-content";
 import { useChatSend } from "@/domains/ai/chat/hooks/use-chat-send";
 import { useChatStore } from "@/domains/ai/chat/store/chat.store";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
@@ -108,18 +109,6 @@ interface ProjectChatBarProps {
     落为本地任务（projectId 置空，不进项目计划） */
 const LOCAL_TASK_DIRECTIVE =
   "\n\n[用户要求] 本次创建或更新的待办事项请存储为本地任务（projectId 置空，不出现在项目计划中）。";
-
-/** 引用注入前缀：技能/待办/文件各自专属前缀（待办为 T7 收尾——
-    与普通文件区分，便于模型分辨引用来源语义） */
-function referencePrefix(file: PendingFile): string {
-  if (file.kind === "skill") {
-    return `[引用技能 ${file.path}]`;
-  }
-  if (file.kind === "todo") {
-    return `[引用待办 ${file.path}]`;
-  }
-  return `[引用文件 ${file.path}]`;
-}
 
 export default function ProjectChatBar({
   detail,
@@ -232,12 +221,7 @@ export default function ProjectChatBar({
     files: PendingFile[],
     overrides?: ChatModelParams,
   ) => {
-    const injected =
-      files.length > 0
-        ? `${files
-            .map((file) => `${referencePrefix(file)}\n${file.content}`)
-            .join("\n\n")}\n\n${content}`
-        : content;
+    const injected = buildInjectedContent(content, files);
     const finalContent = localTask
       ? `${injected}${LOCAL_TASK_DIRECTIVE}`
       : injected;

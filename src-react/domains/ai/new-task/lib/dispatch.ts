@@ -1,0 +1,102 @@
+/**
+ * 新建任务发送编排（spec §3.2）：读 store 草稿 → 敏感词/工作空间前置校验 →
+ * 逐 pending 引用读内容（file 工作空间文件 / localFile 本地文件 / skill 技能，
+ * 注入格式与 ChatView 发送层同口径 buildInjectedContent）→ create(scenario)
+ * → [full: setPermission] → send → 清草稿跳会话。
+ * 任一步失败抛错（调用方 NewTaskView catch 后 toast），草稿与配置保留落地页
+ */
+import i18n from "@/i18n";
+
+import SessionApi from "../../api/session.api";
+import ChatApi from "../../api/chat.api";
+import SkillApi from "../../skills/api/skill.api";
+import { mapIpcError } from "../../chat/lib/error-message";
+import { buildInjectedContent } from "../../chat/lib/build-injected-content";
+import type { PendingFile } from "../../chat/lib/pending-file";
+import { invoke } from "@/lib/ipc";
+import { readExternalFile } from "./attach";
+import { checkSensitive } from "./sensitive-check";
+import type { PendingRef } from "../store/new-task-store";
+import { useNewTaskStore } from "../store/new-task-store";
+
+export interface DispatchParams {
+  navigate: (to: string, options?: { replace?: boolean }) => void;
+}
+
+/** 单条 pending 引用 → 注入块（读失败直接抛错中断本次发送——落地页逐引用可用才可发） */
+async function readPendingRef(
+  ref: PendingRef,
+  workspaceId: number,
+): Promise<PendingFile> {
+  if (ref.kind === "skill") {
+    const result = await SkillApi.readSkill(ref.ref);
+    return { path: ref.ref, content: result.content, kind: "skill" };
+  }
+  if (ref.kind === "localFile") {
+    const result = await readExternalFile(ref.ref);
+    return {
+      path: ref.ref,
+      // 图片不读进文本，注入占位标记（brief Step 3 口径）
+      content:
+        result.kind === "text" ? (result.content ?? "") : `[图片 ${ref.label}]`,
+      kind: "localFile",
+    };
+  }
+  const result = await invoke<{ content: string } | { error: string }>(
+    "file:readWorkspaceFile",
+    workspaceId,
+    ref.ref,
+  );
+  if ("error" in result) {
+    throw new Error(`read-failed:${ref.ref}`);
+  }
+  return { path: ref.ref, content: result.content, kind: "file" };
+}
+
+/** 读取 store 当前草稿并发起任务；任一步失败抛错（调用方 toast），输入保留 */
+export async function dispatchNewTask({
+  navigate,
+}: DispatchParams): Promise<void> {
+  const { content, scenario, workspaceId, accessMode, pending } =
+    useNewTaskStore.getState();
+  if (workspaceId === null) {
+    throw new Error("no-workspace");
+  }
+  const hit = checkSensitive(content);
+  if (hit) {
+    throw new Error(`sensitive:${hit}`);
+  }
+  const files = await Promise.all(
+    pending.map((ref) => readPendingRef(ref, workspaceId)),
+  );
+  const created = await SessionApi.create({ workspaceId, scenario });
+  if (accessMode === "full") {
+    await ChatApi.setPermission(created.id, "full");
+  }
+  await ChatApi.send({
+    sessionId: created.id,
+    content: buildInjectedContent(content, files),
+  });
+  useNewTaskStore.getState().resetDraft();
+  navigate(`/module/ai?session=${created.id}`, { replace: true });
+}
+
+/**
+ * dispatch 抛错 → toast 文案：无空间/敏感词/读失败映射 newTask 词条，
+ * 其余沿用 IPC 码表映射（chat:errors.*）/原样透传
+ */
+export function mapDispatchError(e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e);
+  if (message === "no-workspace") {
+    return i18n.t("newTask:context.noWorkspace");
+  }
+  if (message.startsWith("sensitive:")) {
+    return i18n.t("newTask:sensitiveHit", {
+      word: message.slice("sensitive:".length),
+    });
+  }
+  if (message.startsWith("read-failed:")) {
+    return i18n.t("newTask:attach.readFailed");
+  }
+  return mapIpcError(e);
+}

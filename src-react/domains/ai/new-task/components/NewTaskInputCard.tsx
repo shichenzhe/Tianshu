@@ -5,6 +5,8 @@
  * QuickMenu）；↑↓/Enter/Esc 键盘语义与 ChatInput:564-603 一致；选中转
  * pending 并从文本删除 @query 片段。拖拽本地文件经 getPathForFile 取绝对
  * 路径入 pending（readExternalFile 校验）。Enter→onSubmit（面板激活时除外）
+ * 发送矩阵（spec §6）：空文本/敏感词命中/未绑空间/无可用模型/发送中——
+ * 按钮置灰且 Enter 不触发；敏感词与无模型提示文案渲染于发送按钮旁
  */
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +14,7 @@ import { Send, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
+import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
 import { useNewTaskStore } from "../store/new-task-store";
@@ -20,11 +23,19 @@ import PolishMenu from "./PolishMenu";
 import QuickMenu from "./QuickMenu";
 
 interface NewTaskInputCardProps {
-  /** Enter/发送按钮触发（内部仅校验非空后回调；Task 14 接 dispatch） */
+  /** 矩阵放行后由 Enter/发送按钮触发（NewTaskView 绑 dispatch 编排） */
   onSubmit?: () => void;
+  /** 可用模型判定（ModelPicker 同口径，NewTaskView 双查询后传入）；缺省 true 保持独立渲染可用 */
+  hasUsableModel?: boolean;
+  /** 发送进行中（防重复提交）；缺省 false */
+  sending?: boolean;
 }
 
-export default function NewTaskInputCard({ onSubmit }: NewTaskInputCardProps) {
+export default function NewTaskInputCard({
+  onSubmit,
+  hasUsableModel = true,
+  sending = false,
+}: NewTaskInputCardProps) {
   const { t } = useTranslation(["newTask"]);
   const content = useNewTaskStore((s) => s.content);
   const setContent = useNewTaskStore((s) => s.setContent);
@@ -84,8 +95,17 @@ export default function NewTaskInputCard({ onSubmit }: NewTaskInputCardProps) {
     });
   };
 
+  // 发送矩阵（spec §6）：敏感词对草稿全文预检（与 dispatch 同词表）
+  const sensitiveHit = useMemo(() => checkSensitive(content), [content]);
+  const sendDisabled =
+    !content.trim() ||
+    sensitiveHit !== null ||
+    workspaceId === null ||
+    !hasUsableModel ||
+    sending;
+
   const submit = () => {
-    if (content.trim() === "") {
+    if (sendDisabled) {
       return;
     }
     onSubmit?.();
@@ -278,17 +298,26 @@ export default function NewTaskInputCard({ onSubmit }: NewTaskInputCardProps) {
           )}
         </div>
       )}
-      {/* 底部工具栏：左 ＋引用菜单；右 魔法棒/快速 + 发送（Task 14 前
-          校验只含空文本） */}
+      {/* 底部工具栏：左 ＋引用菜单；右 敏感词/模型提示 + 魔法棒/快速 + 发送 */}
       <div className="flex items-center pt-2">
         <AttachMenu />
         <div className="ml-auto flex items-center gap-2">
+          {sensitiveHit !== null && (
+            <span className="text-destructive text-xs">
+              {t("newTask:sensitiveHit", { word: sensitiveHit })}
+            </span>
+          )}
+          {!hasUsableModel && (
+            <span className="text-xs text-muted-foreground">
+              {t("newTask:modelRequired")}
+            </span>
+          )}
           <PolishMenu />
           <QuickMenu />
           <Button
             size="sm"
             onClick={submit}
-            disabled={content.trim() === ""}
+            disabled={sendDisabled}
             aria-label={t("newTask:send")}
             title={t("newTask:send")}
             className="h-8 w-8 shrink-0 rounded-full p-0"

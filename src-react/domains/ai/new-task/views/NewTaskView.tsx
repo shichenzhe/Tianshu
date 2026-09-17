@@ -1,11 +1,22 @@
 /**
  * 新建任务落地页（spec §3）：场景 Tab + 胶囊栏 + 输入卡 + 配置栏；
- * 发送时才创建 session（dispatch，Task 14 接入）
+ * 发送时才创建 session（dispatch 编排）；可用模型判定与 ChatView/ModelPicker
+ * 共享 ["models"]/["providers"] 查询缓存
  */
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 
+import { ModelApi } from "../../api/model.api";
+import { ProviderApi } from "../../api/provider.api";
+import { dispatchNewTask, mapDispatchError } from "../lib/dispatch";
 import { SCENARIO_KEYS } from "../lib/scenario";
-import { useNewTaskStore } from "../store/new-task-store";
+import {
+  hydratePersistedDraft,
+  useNewTaskStore,
+} from "../store/new-task-store";
 import ContextBar from "../components/ContextBar";
 import NewTaskInputCard from "../components/NewTaskInputCard";
 import PromptChips from "../components/PromptChips";
@@ -13,8 +24,46 @@ import { cn } from "@/lib/utils";
 
 export default function NewTaskView() {
   const { t } = useTranslation(["newTask", "common"]);
+  const navigate = useNavigate();
   const scenario = useNewTaskStore((s) => s.scenario);
   const setScenario = useNewTaskStore((s) => s.setScenario);
+  const [sending, setSending] = useState(false);
+
+  // 恢复持久化配置（store JSDoc「落地页挂载时调用一次」）：走 useState 惰性
+  // 初始化而非 effect——子组件（ContextBar）的首空间跟随 effect 先于父 effect
+  // 执行，effect 时机恢复会被 null 态先覆写持久化快照
+  useState(hydratePersistedDraft);
+
+  // 可用模型判定（ModelPicker 同口径同缓存键：启用模型挂在现存服务商下即可
+  // 用）；查询加载/失败期视为不可用（保守置灰，缓存命中即无感）
+  const modelsQuery = useQuery({
+    queryKey: ["models"],
+    queryFn: () => ModelApi.listAll(),
+  });
+  const providersQuery = useQuery({
+    queryKey: ["providers"],
+    queryFn: () => ProviderApi.list(),
+  });
+  const hasUsableModel = useMemo(() => {
+    const providerIds = new Set(
+      (providersQuery.data ?? []).map((provider) => provider.id),
+    );
+    return (modelsQuery.data ?? []).some(
+      (model) => model.enabled && providerIds.has(model.providerId),
+    );
+  }, [modelsQuery.data, providersQuery.data]);
+
+  // 发送编排（spec §3.2）：失败 toast 留在落地页（草稿与配置不动），成功清草稿跳会话
+  const handleSubmit = useCallback(async () => {
+    setSending(true);
+    try {
+      await dispatchNewTask({ navigate });
+    } catch (e) {
+      toast.error(mapDispatchError(e));
+    } finally {
+      setSending(false);
+    }
+  }, [navigate]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-center gap-4 px-6 py-10">
@@ -45,7 +94,11 @@ export default function NewTaskView() {
         ))}
       </div>
       <PromptChips />
-      <NewTaskInputCard />
+      <NewTaskInputCard
+        onSubmit={handleSubmit}
+        sending={sending}
+        hasUsableModel={hasUsableModel}
+      />
       {/* 配置栏（输入卡下方：任务级工作空间 + 权限档位） */}
       <ContextBar />
     </div>

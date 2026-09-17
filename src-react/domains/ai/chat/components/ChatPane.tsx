@@ -20,6 +20,7 @@ import ChatInput from "./ChatInput";
 import ChatMessages from "./ChatMessages";
 import { parseBlocks } from "../model/blocks";
 import type { PendingFile } from "../lib/pending-file";
+import { buildInjectedContent } from "../lib/build-injected-content";
 import type { AccessMode } from "./PermissionCapsule";
 import AgentProgress from "./AgentProgress";
 import { useChatSend } from "../hooks/use-chat-send";
@@ -137,22 +138,14 @@ export default function ChatPane({
     return tools.order.length + 1;
   });
 
-  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动 */
+  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动
+      （前缀拼装已抽共享纯函数 buildInjectedContent，与新建任务 dispatch 同口径） */
   const handleSend = async (
     content: string,
     files: PendingFile[],
     overrides?: ChatModelParams,
   ) => {
-    const injected =
-      files.length > 0
-        ? `${files
-            .map((file) =>
-              file.kind === "skill"
-                ? `[引用技能 ${file.path}]\n${file.content}`
-                : `[引用文件 ${file.path}]\n${file.content}`,
-            )
-            .join("\n\n")}\n\n${content}`
-        : content;
+    const injected = buildInjectedContent(content, files);
     try {
       await send(injected, undefined, overrides);
       // 防呆：成功发出新消息后退出编辑态，避免随后的编辑重发静默截断刚发的消息

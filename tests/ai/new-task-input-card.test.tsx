@@ -41,6 +41,13 @@ vi.hoisted(() => {
 import NewTaskInputCard from "@/domains/ai/new-task/components/NewTaskInputCard";
 import { useNewTaskStore } from "@/domains/ai/new-task/store/new-task-store";
 
+/** 发送按钮（aria-label = newTask:send）的 disabled 断言锚点 */
+function sendButton(): HTMLButtonElement {
+  return screen.getByRole("button", {
+    name: "newTask:send",
+  }) as HTMLButtonElement;
+}
+
 describe("NewTaskInputCard", () => {
   beforeEach(() => {
     invokeMock.mockReset();
@@ -77,5 +84,50 @@ describe("NewTaskInputCard", () => {
         .querySelector("svg:last-child")!,
     );
     expect(useNewTaskStore.getState().pending).toHaveLength(0);
+  });
+});
+
+describe("NewTaskInputCard 发送置灰矩阵（spec §6）", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    useNewTaskStore.getState().resetDraft();
+    useNewTaskStore.getState().setWorkspaceId(2);
+  });
+
+  // 内容经 textarea change 驱动（act 事件流，矩阵即时重算）
+  it("可用条件齐备启用；敏感词命中禁用并显示提示", () => {
+    const { container } = render(
+      <NewTaskInputCard onSubmit={vi.fn()} hasUsableModel />,
+    );
+    const textarea = container.querySelector("textarea")!;
+    fireEvent.change(textarea, { target: { value: "普通任务" } });
+    expect(sendButton().disabled).toBe(false);
+    // 敏感词命中：禁用 + 按钮旁提示（t mock 直返 key）
+    fireEvent.change(textarea, {
+      target: { value: "包含 示例违禁词A 的内容" },
+    });
+    expect(sendButton().disabled).toBe(true);
+    expect(screen.getByText("newTask:sensitiveHit")).toBeTruthy();
+  });
+
+  it("无可用模型/空文本禁用；矩阵禁用时 Enter 不触发 onSubmit", () => {
+    const onSubmit = vi.fn();
+    const { container, rerender } = render(
+      <NewTaskInputCard onSubmit={onSubmit} hasUsableModel={false} />,
+    );
+    const textarea = container.querySelector("textarea")!;
+    fireEvent.change(textarea, { target: { value: "普通任务" } });
+    expect(sendButton().disabled).toBe(true);
+    expect(screen.getByText("newTask:modelRequired")).toBeTruthy();
+    // 空文本禁用（模型可用时）
+    rerender(<NewTaskInputCard onSubmit={onSubmit} hasUsableModel />);
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(sendButton().disabled).toBe(true);
+    // 矩阵禁用（回填敏感词）时 Enter 不触发
+    fireEvent.change(textarea, {
+      target: { value: "包含 示例违禁词A 的内容" },
+    });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

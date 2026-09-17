@@ -92,6 +92,7 @@ export type IPCChannel =
   | "skillhub:categories"
   | "skillhub:install"
   | "file:pickAndRead"
+  | "file:pickLocalFiles"
   | "file:listWorkspaceFiles"
   | "file:readWorkspaceFile"
   | "file:readExternalFile"

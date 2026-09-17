@@ -22,6 +22,7 @@
     "workspaceFile": "Reference Workspace File",
     "historyChat": "Reference Chat History",
     "developing": "In Development",
+    "noFiles": "No matching files",
     "oversize": "File size exceeds the limit",
     "readFailed": "Failed to read file"
   },

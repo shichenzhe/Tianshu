@@ -1,0 +1,287 @@
+/**
+ * 新建任务输入卡（spec §4）：纯 textarea + 上方引用 pill 行 + 底部工具栏
+ * （无镜像层——引用以 pending pill 呈现，不留在输入流）。@ 触发文件联想
+ * 面板（工作空间文件 substring 匹配，技能不进 @ 面板——技能引用经胶囊/
+ * QuickMenu）；↑↓/Enter/Esc 键盘语义与 ChatInput:564-603 一致；选中转
+ * pending 并从文本删除 @query 片段。拖拽本地文件经 getPathForFile 取绝对
+ * 路径入 pending（readExternalFile 校验）。Enter→onSubmit（面板激活时除外）
+ */
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { Send, X, Zap } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
+import { useLocalFileAttach } from "../hooks/use-local-file-attach";
+import { useWorkspaceFiles } from "../hooks/use-workspace-files";
+import { useNewTaskStore } from "../store/new-task-store";
+import AttachMenu from "./AttachMenu";
+
+interface NewTaskInputCardProps {
+  /** Enter/发送按钮触发（内部仅校验非空后回调；Task 14 接 dispatch） */
+  onSubmit?: () => void;
+}
+
+export default function NewTaskInputCard({ onSubmit }: NewTaskInputCardProps) {
+  const { t } = useTranslation(["newTask"]);
+  const content = useNewTaskStore((s) => s.content);
+  const setContent = useNewTaskStore((s) => s.setContent);
+  const pending = useNewTaskStore((s) => s.pending);
+  const addPending = useNewTaskStore((s) => s.addPending);
+  const removePending = useNewTaskStore((s) => s.removePending);
+  const workspaceId = useNewTaskStore((s) => s.workspaceId);
+  const addLocalFile = useLocalFileAttach();
+  const [suggest, setSuggest] = useState<{
+    startIndex: number;
+    query: string;
+  } | null>(null);
+  const [highlightIndex, setHighlightIndex] = useState(0);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // @ 联想数据源：suggest 激活时拉取（按 workspaceId 缓存）；未绑定空间
+  // （null）不拉取——面板不可用，Enter 按普通输入提交
+  const workspaceFiles = useWorkspaceFiles(workspaceId, suggest !== null);
+
+  const suggestCandidates = useMemo(() => {
+    if (!suggest || !workspaceFiles) {
+      return [];
+    }
+    const query = suggest.query.toLowerCase();
+    return workspaceFiles
+      .filter((file) => file.toLowerCase().includes(query))
+      .slice(0, MENTION_LIMIT);
+  }, [suggest, workspaceFiles]);
+
+  const activeIndex = Math.min(
+    highlightIndex,
+    Math.max(suggestCandidates.length - 1, 0),
+  );
+
+  // 面板激活（键盘劫持判据）：@ 片段中且已绑工作空间；清单加载中/无匹配
+  // 面板给出无匹配提示（同 ChatInput 语义，Enter 不被劫持提交）
+  const panelActive = suggest !== null && workspaceId !== null;
+  const showSuggestList = panelActive;
+
+  /** 面板选中：文件转 pending pill，并从文本删除 @query 触发片段 */
+  const selectCandidate = (file: string) => {
+    const textarea = textareaRef.current;
+    const caret = textarea?.selectionStart ?? content.length;
+    const fragmentEnd = suggest
+      ? Math.min(caret, suggest.startIndex + 1 + suggest.query.length)
+      : caret;
+    const startIndex = suggest ? suggest.startIndex : caret;
+    setContent(
+      content.slice(0, startIndex) +
+        content.slice(Math.max(fragmentEnd, startIndex)),
+    );
+    setSuggest(null);
+    addPending({ label: file, ref: file, kind: "file" });
+    requestAnimationFrame(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(startIndex, startIndex);
+    });
+  };
+
+  const submit = () => {
+    if (content.trim() === "") {
+      return;
+    }
+    onSubmit?.();
+  };
+
+  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    setContent(value);
+    const mention = detectMention(value, event.target.selectionStart);
+    setSuggest(mention);
+    if (mention) {
+      setHighlightIndex(0);
+    }
+  };
+
+  // 光标移动（←→/Home/End/点击）不触发 onChange——在 select/keyup 上重算,
+  // 光标离开触发片段即关闭面板，避免 Enter 被残留面板劫持
+  const syncSuggestFromCaret = (target: HTMLTextAreaElement) => {
+    const mention = detectMention(target.value, target.selectionStart);
+    setSuggest(mention);
+  };
+
+  const handleSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    if (suggest !== null) {
+      syncSuggestFromCaret(event.currentTarget);
+    }
+  };
+
+  const handleKeyUp = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (
+      suggest !== null &&
+      ["Home", "End", "PageUp", "PageDown"].includes(event.key)
+    ) {
+      syncSuggestFromCaret(event.currentTarget);
+    }
+  };
+
+  const handleBlur = () => {
+    // 点击面板外失焦：关闭（点击候选项的 mousedown 已 preventDefault 不触发）
+    setSuggest(null);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // 面板激活时优先消费导航键
+    if (panelActive) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightIndex(
+          (activeIndex + 1) % Math.max(suggestCandidates.length, 1),
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightIndex(
+          (activeIndex - 1 + Math.max(suggestCandidates.length, 1)) %
+            Math.max(suggestCandidates.length, 1),
+        );
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        setSuggest(null);
+        return;
+      }
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !event.nativeEvent.isComposing
+      ) {
+        const candidate = suggestCandidates[activeIndex];
+        event.preventDefault();
+        // 无候选时 Enter 不提交，交由用户删掉触发符或继续输入
+        if (candidate) {
+          selectCandidate(candidate);
+        }
+        return;
+      }
+    }
+    // IME 组合中的 Enter 仅确认候选，不提交
+    if (event.nativeEvent.isComposing) {
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
+  };
+
+  /** 拖拽本地文件：getPathForFile 取绝对路径 → 校验入 pending（失败 toast） */
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    for (const file of Array.from(event.dataTransfer.files)) {
+      const absPath = window.filePath.getPathForFile(file);
+      void addLocalFile(absPath);
+    }
+  };
+
+  return (
+    <div
+      data-testid="new-task-input-card"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={handleDrop}
+      className="relative rounded-xl border border-border/50 bg-card px-3 py-2 shadow-sm focus-within:border-primary/40"
+    >
+      {/* 联想面板（向上弹出；清单加载完成前不显示，无匹配给出提示文案） */}
+      {showSuggestList && (
+        <div
+          data-testid="mention-panel"
+          className="absolute bottom-full left-3 z-10 mb-1 w-72 overflow-hidden rounded-lg border border-border/50 bg-card shadow-lg"
+        >
+          {suggestCandidates.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              {t("newTask:attach.noFiles")}
+            </p>
+          ) : (
+            <ul className="max-h-56 overflow-y-auto py-1">
+              {suggestCandidates.map((file, index) => (
+                <li key={file}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      // mousedown 先于 blur/提交键处理，阻止默认避免失焦
+                      event.preventDefault();
+                      selectCandidate(file);
+                    }}
+                    onMouseEnter={() => setHighlightIndex(index)}
+                    className={`flex w-full items-center gap-1.5 truncate px-2 py-1.5 text-left text-xs ${
+                      index === activeIndex
+                        ? "bg-primary-subtle text-primary"
+                        : "text-foreground"
+                    }`}
+                  >
+                    <span className="truncate">{file}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {/* 引用 pill 行 */}
+      {pending.length > 0 && (
+        <div className="flex flex-wrap gap-1 pb-1">
+          {pending.map((ref) => (
+            <span
+              key={ref.ref}
+              className="mb-1 inline-flex max-w-48 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary"
+            >
+              {ref.kind === "skill" && <Zap className="h-2.5 w-2.5" />}
+              <span className="truncate">{ref.label}</span>
+              <button
+                type="button"
+                aria-label={ref.label}
+                title={ref.label}
+                onClick={() => removePending(ref.ref)}
+                className="shrink-0"
+              >
+                <X className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <textarea
+        ref={textareaRef}
+        value={content}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        onSelect={handleSelect}
+        onBlur={handleBlur}
+        placeholder={t("newTask:inputPlaceholder")}
+        className="min-h-24 w-full resize-none border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-[50vh] outline-none placeholder:text-muted-foreground"
+      />
+      {/* 底部工具栏：左 ＋引用菜单 + 字数；右 魔法棒/快速（Task 12 挂
+          PolishMenu/QuickMenu）+ 发送（Task 14 前校验只含空文本） */}
+      <div className="flex items-center pt-2">
+        <div className="flex items-center gap-2">
+          <AttachMenu />
+          <span className="text-xs text-muted-foreground">
+            {t("newTask:charCount", { current: content.length })}
+          </span>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={submit}
+            disabled={content.trim() === ""}
+            aria-label={t("newTask:send")}
+            title={t("newTask:send")}
+            className="h-8 w-8 shrink-0 rounded-full p-0"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}

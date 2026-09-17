@@ -1293,6 +1293,21 @@ export default class ChatService {
     ipcMain.handle("file:readExternalFile", (_e, absPath: string) =>
       readWorkspaceFile(path.resolve(absPath)),
     );
+    // 新建任务落地页附件：本地文件选择器（多选）；仅取绝对路径——内容经
+    // file:readExternalFile 按需读取校验（区别于 pickAndRead 的选读一体），
+    // 取消/空选返回 null
+    ipcMain.handle(
+      "file:pickLocalFiles",
+      async (): Promise<string[] | null> => {
+        const result = await dialog.showOpenDialog({
+          properties: ["openFile", "multiSelections"],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+          return null;
+        }
+        return result.filePaths;
+      },
+    );
   }
 
   /** full 会话总览（SP6 spec §4.1）：标题查询失败行回落「会话 #id」不整表失败（spec §8） */

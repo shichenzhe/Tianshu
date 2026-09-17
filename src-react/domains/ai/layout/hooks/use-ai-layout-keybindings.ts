@@ -2,7 +2,8 @@
  * AI 布局级快捷键动作接线（17 条命令中的布局级 12 条 → 功能落点）：
  * - 设置面板/会话内搜索/侧栏/产物面板：各 Zustand store 的 getState 直调
  *   （分发层不订阅、不引起重渲染）
- * - 新建任务与上/下一任务：会话与空间数据从 React Query 缓存按需读取
+ * - 新建任务：导航 /module/ai/new 落地页（发送时才创建会话）；
+ *   上/下一任务：会话数据从 React Query 缓存按需读取
  *   （SessionTreePanel 挂载即预热），切换经 URL ?session= 导航
  * - 停止生成：URL 会话 + chat.store 流式态判定后调 ChatApi.stop
  * - 全屏：主进程 IPC 窗口翻转；字号三档递进/重置走 font-scale
@@ -21,12 +22,7 @@ import { useSettingsUiStore } from "@/domains/app-settings/store/settings-ui.sto
 import { invoke } from "@/lib/ipc";
 import ChatApi from "../../api/chat.api";
 import type { SessionRecord } from "../../api/session.api";
-import type { WorkspaceRecord } from "../../api/workspace.api";
-import {
-  createSessionAndSelect,
-  deriveCurrentWorkspaceId,
-  neighborSessionId,
-} from "../../chat/lib/session-actions";
+import { neighborSessionId } from "../../chat/lib/session-actions";
 import { useChatStore } from "../../chat/store/chat.store";
 import { useKeybindingDispatcher } from "./use-keybinding-dispatcher";
 import { useAiUiStore } from "../../store/ai-ui.store";
@@ -54,20 +50,8 @@ export function useAiLayoutKeybindings(): void {
     }
   };
 
-  /** 新建任务：目标空间与侧边栏「新建任务」同口径（选中任务所属 ∪ 第一个） */
-  const createConversation = () => {
-    const workspaces =
-      queryClient.getQueryData<WorkspaceRecord[]>(["workspaces"]) ?? [];
-    void createSessionAndSelect({
-      queryClient,
-      navigate,
-      workspaceId: deriveCurrentWorkspaceId(
-        cachedSessions(),
-        workspaces,
-        currentSessionId,
-      ),
-    });
-  };
+  /** 新建任务：导航 /module/ai/new 落地页（发送时才创建会话） */
+  const createConversation = () => navigate("/module/ai/new");
 
   /** 停止生成：仅当前会话有进行中流时调用（失败留渲染层日志：流收尾由主进程侧保障） */
   const stopGeneration = () => {

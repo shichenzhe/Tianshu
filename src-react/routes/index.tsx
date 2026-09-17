@@ -16,6 +16,10 @@ const ProviderSettingsView = lazy(
 );
 // AI 对话主界面
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
+// 新建任务落地页
+const NewTaskView = lazy(
+  () => import("@/domains/ai/new-task/views/NewTaskView"),
+);
 // AI 标准侧边栏布局
 const AiLayout = lazy(() => import("@/domains/ai/layout/views/AiLayout"));
 // 专家·技能·连接器统一管理
@@ -88,6 +92,14 @@ export const router = createHashRouter([
             element: (
               <LazyWrapper>
                 <ChatView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "new",
+            element: (
+              <LazyWrapper>
+                <NewTaskView />
               </LazyWrapper>
             ),
           },

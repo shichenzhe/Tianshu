@@ -6,8 +6,8 @@
  * 布局级快捷键分发（useAiLayoutKeybindings）在此挂载（原 AiLayout 职责迁入）。
  */
 import { useTranslation } from "react-i18next";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Bot,
   Clock,
@@ -20,14 +20,7 @@ import { cn } from "@/lib/utils";
 import AppLogo from "@/components/common/AppLogo";
 import SessionTreePanel from "@/domains/ai/layout/components/SessionTreePanel";
 import { useAiLayoutKeybindings } from "@/domains/ai/layout/hooks/use-ai-layout-keybindings";
-import type { SessionRecord } from "@/domains/ai/api/session.api";
-import WorkspaceApi, {
-  type WorkspaceRecord,
-} from "@/domains/ai/api/workspace.api";
-import {
-  createSessionAndSelect,
-  deriveCurrentWorkspaceId,
-} from "@/domains/ai/chat/lib/session-actions";
+import WorkspaceApi from "@/domains/ai/api/workspace.api";
 import { useAiUiStore } from "@/domains/ai/store/ai-ui.store";
 import ProjectSidebarList from "@/domains/project/components/ProjectSidebarList";
 
@@ -36,42 +29,21 @@ export default function GlobalSidebar() {
   const { t } = useTranslation(["chat", "common", "project"]);
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
   const collapsed = useAiUiStore((s) => s.sidebarCollapsed);
   const isMac = window.platform === "darwin";
 
-  const selectedSessionId = Number(searchParams.get("session")) || null;
   const isProjectRoute = location.pathname.startsWith("/module/project");
 
   /** 空间预热查询（key 与 SessionTreePanel 一致）：侧边栏为全局组件，
    *  项目模块等非 AI 路由下无组件观测 ["workspaces"]，挂载此查询兼任
    *  全局缓存预热，避免 gcTime 后缓存为空导致新建任务无目标空间 */
-  const { data: workspacesQueryData } = useQuery({
+  useQuery({
     queryKey: ["workspaces"],
     queryFn: () => WorkspaceApi.list(),
   });
 
-  /** 新建任务：目标空间与任务树/快捷键同口径（选中任务所属 ∪ 第一个），
-   *  空间优先取挂载查询的新鲜数据（冷缓存兜底读 React Query 缓存），
-   *  会话数据从缓存按需读取（SessionTreePanel 挂载即预热） */
-  const handleCreateSession = () => {
-    const workspaces =
-      workspacesQueryData ??
-      queryClient.getQueryData<WorkspaceRecord[]>(["workspaces"]) ??
-      [];
-    const sessions =
-      queryClient.getQueryData<SessionRecord[]>(["sessions", "all"]) ?? [];
-    void createSessionAndSelect({
-      queryClient,
-      navigate,
-      workspaceId: deriveCurrentWorkspaceId(
-        sessions,
-        workspaces,
-        selectedSessionId,
-      ),
-    });
-  };
+  /** 新建任务：进入 /module/ai/new 落地页（发送时才创建会话） */
+  const handleNewTask = () => navigate("/module/ai/new");
 
   const navEntries = [
     {
@@ -131,7 +103,7 @@ export default function GlobalSidebar() {
           <SidebarNavButton
             icon={<MessageSquare size={16} />}
             label={t("chat:sidebar.newTask")}
-            onClick={handleCreateSession}
+            onClick={handleNewTask}
           />
           {navEntries.map((entry) => (
             <SidebarNavButton

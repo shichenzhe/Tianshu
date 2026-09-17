@@ -189,6 +189,7 @@ export const SessionScalarFieldEnum = {
   currentModelId: 'currentModelId',
   title: 'title',
   mode: 'mode',
+  scenario: 'scenario',
   pinnedAt: 'pinnedAt',
   archivedAt: 'archivedAt',
   projectId: 'projectId',
@@ -253,6 +254,7 @@ export const SkillRecordScalarFieldEnum = {
   dir: 'dir',
   description: 'description',
   enabled: 'enabled',
+  scenarios: 'scenarios',
   installedAt: 'installedAt',
   updatedAt: 'updatedAt'
 } as const

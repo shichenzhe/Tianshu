@@ -43,6 +43,7 @@ export type SkillRecordMinAggregateOutputType = {
   dir: string | null
   description: string | null
   enabled: boolean | null
+  scenarios: string | null
   installedAt: Date | null
   updatedAt: Date | null
 }
@@ -56,6 +57,7 @@ export type SkillRecordMaxAggregateOutputType = {
   dir: string | null
   description: string | null
   enabled: boolean | null
+  scenarios: string | null
   installedAt: Date | null
   updatedAt: Date | null
 }
@@ -69,6 +71,7 @@ export type SkillRecordCountAggregateOutputType = {
   dir: number
   description: number
   enabled: number
+  scenarios: number
   installedAt: number
   updatedAt: number
   _all: number
@@ -92,6 +95,7 @@ export type SkillRecordMinAggregateInputType = {
   dir?: true
   description?: true
   enabled?: true
+  scenarios?: true
   installedAt?: true
   updatedAt?: true
 }
@@ -105,6 +109,7 @@ export type SkillRecordMaxAggregateInputType = {
   dir?: true
   description?: true
   enabled?: true
+  scenarios?: true
   installedAt?: true
   updatedAt?: true
 }
@@ -118,6 +123,7 @@ export type SkillRecordCountAggregateInputType = {
   dir?: true
   description?: true
   enabled?: true
+  scenarios?: true
   installedAt?: true
   updatedAt?: true
   _all?: true
@@ -218,6 +224,7 @@ export type SkillRecordGroupByOutputType = {
   dir: string
   description: string | null
   enabled: boolean
+  scenarios: string | null
   installedAt: Date
   updatedAt: Date
   _count: SkillRecordCountAggregateOutputType | null
@@ -254,6 +261,7 @@ export type skillRecordWhereInput = {
   dir?: Prisma.StringFilter<"skillRecord"> | string
   description?: Prisma.StringNullableFilter<"skillRecord"> | string | null
   enabled?: Prisma.BoolFilter<"skillRecord"> | boolean
+  scenarios?: Prisma.StringNullableFilter<"skillRecord"> | string | null
   installedAt?: Prisma.DateTimeFilter<"skillRecord"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"skillRecord"> | Date | string
 }
@@ -267,6 +275,7 @@ export type skillRecordOrderByWithRelationInput = {
   dir?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  scenarios?: Prisma.SortOrderInput | Prisma.SortOrder
   installedAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -283,6 +292,7 @@ export type skillRecordWhereUniqueInput = Prisma.AtLeast<{
   dir?: Prisma.StringFilter<"skillRecord"> | string
   description?: Prisma.StringNullableFilter<"skillRecord"> | string | null
   enabled?: Prisma.BoolFilter<"skillRecord"> | boolean
+  scenarios?: Prisma.StringNullableFilter<"skillRecord"> | string | null
   installedAt?: Prisma.DateTimeFilter<"skillRecord"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"skillRecord"> | Date | string
 }, "id" | "name">
@@ -296,6 +306,7 @@ export type skillRecordOrderByWithAggregationInput = {
   dir?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  scenarios?: Prisma.SortOrderInput | Prisma.SortOrder
   installedAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   _count?: Prisma.skillRecordCountOrderByAggregateInput
@@ -317,6 +328,7 @@ export type skillRecordScalarWhereWithAggregatesInput = {
   dir?: Prisma.StringWithAggregatesFilter<"skillRecord"> | string
   description?: Prisma.StringNullableWithAggregatesFilter<"skillRecord"> | string | null
   enabled?: Prisma.BoolWithAggregatesFilter<"skillRecord"> | boolean
+  scenarios?: Prisma.StringNullableWithAggregatesFilter<"skillRecord"> | string | null
   installedAt?: Prisma.DateTimeWithAggregatesFilter<"skillRecord"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"skillRecord"> | Date | string
 }
@@ -329,6 +341,7 @@ export type skillRecordCreateInput = {
   dir: string
   description?: string | null
   enabled?: boolean
+  scenarios?: string | null
   installedAt?: Date | string
   updatedAt?: Date | string
 }
@@ -342,6 +355,7 @@ export type skillRecordUncheckedCreateInput = {
   dir: string
   description?: string | null
   enabled?: boolean
+  scenarios?: string | null
   installedAt?: Date | string
   updatedAt?: Date | string
 }
@@ -354,6 +368,7 @@ export type skillRecordUpdateInput = {
   dir?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  scenarios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   installedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -367,6 +382,7 @@ export type skillRecordUncheckedUpdateInput = {
   dir?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  scenarios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   installedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -380,6 +396,7 @@ export type skillRecordCreateManyInput = {
   dir: string
   description?: string | null
   enabled?: boolean
+  scenarios?: string | null
   installedAt?: Date | string
   updatedAt?: Date | string
 }
@@ -392,6 +409,7 @@ export type skillRecordUpdateManyMutationInput = {
   dir?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  scenarios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   installedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -405,6 +423,7 @@ export type skillRecordUncheckedUpdateManyInput = {
   dir?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  scenarios?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   installedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -418,6 +437,7 @@ export type skillRecordCountOrderByAggregateInput = {
   dir?: Prisma.SortOrder
   description?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  scenarios?: Prisma.SortOrder
   installedAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -435,6 +455,7 @@ export type skillRecordMaxOrderByAggregateInput = {
   dir?: Prisma.SortOrder
   description?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  scenarios?: Prisma.SortOrder
   installedAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -448,6 +469,7 @@ export type skillRecordMinOrderByAggregateInput = {
   dir?: Prisma.SortOrder
   description?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  scenarios?: Prisma.SortOrder
   installedAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
 }
@@ -467,6 +489,7 @@ export type skillRecordSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   dir?: boolean
   description?: boolean
   enabled?: boolean
+  scenarios?: boolean
   installedAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["skillRecord"]>
@@ -480,6 +503,7 @@ export type skillRecordSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   dir?: boolean
   description?: boolean
   enabled?: boolean
+  scenarios?: boolean
   installedAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["skillRecord"]>
@@ -493,6 +517,7 @@ export type skillRecordSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   dir?: boolean
   description?: boolean
   enabled?: boolean
+  scenarios?: boolean
   installedAt?: boolean
   updatedAt?: boolean
 }, ExtArgs["result"]["skillRecord"]>
@@ -506,11 +531,12 @@ export type skillRecordSelectScalar = {
   dir?: boolean
   description?: boolean
   enabled?: boolean
+  scenarios?: boolean
   installedAt?: boolean
   updatedAt?: boolean
 }
 
-export type skillRecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "slug" | "version" | "source" | "dir" | "description" | "enabled" | "installedAt" | "updatedAt", ExtArgs["result"]["skillRecord"]>
+export type skillRecordOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "slug" | "version" | "source" | "dir" | "description" | "enabled" | "scenarios" | "installedAt" | "updatedAt", ExtArgs["result"]["skillRecord"]>
 
 export type $skillRecordPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "skillRecord"
@@ -524,6 +550,7 @@ export type $skillRecordPayload<ExtArgs extends runtime.Types.Extensions.Interna
     dir: string
     description: string | null
     enabled: boolean
+    scenarios: string | null
     installedAt: Date
     updatedAt: Date
   }, ExtArgs["result"]["skillRecord"]>
@@ -957,6 +984,7 @@ export interface skillRecordFieldRefs {
   readonly dir: Prisma.FieldRef<"skillRecord", 'String'>
   readonly description: Prisma.FieldRef<"skillRecord", 'String'>
   readonly enabled: Prisma.FieldRef<"skillRecord", 'Boolean'>
+  readonly scenarios: Prisma.FieldRef<"skillRecord", 'String'>
   readonly installedAt: Prisma.FieldRef<"skillRecord", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"skillRecord", 'DateTime'>
 }

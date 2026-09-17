@@ -51,6 +51,7 @@ export type SessionMinAggregateOutputType = {
   currentModelId: number | null
   title: string | null
   mode: string | null
+  scenario: string | null
   pinnedAt: Date | null
   archivedAt: Date | null
   projectId: number | null
@@ -68,6 +69,7 @@ export type SessionMaxAggregateOutputType = {
   currentModelId: number | null
   title: string | null
   mode: string | null
+  scenario: string | null
   pinnedAt: Date | null
   archivedAt: Date | null
   projectId: number | null
@@ -85,6 +87,7 @@ export type SessionCountAggregateOutputType = {
   currentModelId: number
   title: number
   mode: number
+  scenario: number
   pinnedAt: number
   archivedAt: number
   projectId: number
@@ -122,6 +125,7 @@ export type SessionMinAggregateInputType = {
   currentModelId?: true
   title?: true
   mode?: true
+  scenario?: true
   pinnedAt?: true
   archivedAt?: true
   projectId?: true
@@ -139,6 +143,7 @@ export type SessionMaxAggregateInputType = {
   currentModelId?: true
   title?: true
   mode?: true
+  scenario?: true
   pinnedAt?: true
   archivedAt?: true
   projectId?: true
@@ -156,6 +161,7 @@ export type SessionCountAggregateInputType = {
   currentModelId?: true
   title?: true
   mode?: true
+  scenario?: true
   pinnedAt?: true
   archivedAt?: true
   projectId?: true
@@ -260,6 +266,7 @@ export type SessionGroupByOutputType = {
   currentModelId: number | null
   title: string
   mode: string | null
+  scenario: string | null
   pinnedAt: Date | null
   archivedAt: Date | null
   projectId: number | null
@@ -300,6 +307,7 @@ export type sessionWhereInput = {
   currentModelId?: Prisma.IntNullableFilter<"session"> | number | null
   title?: Prisma.StringFilter<"session"> | string
   mode?: Prisma.StringNullableFilter<"session"> | string | null
+  scenario?: Prisma.StringNullableFilter<"session"> | string | null
   pinnedAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   archivedAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   projectId?: Prisma.IntNullableFilter<"session"> | number | null
@@ -317,6 +325,7 @@ export type sessionOrderByWithRelationInput = {
   currentModelId?: Prisma.SortOrderInput | Prisma.SortOrder
   title?: Prisma.SortOrder
   mode?: Prisma.SortOrderInput | Prisma.SortOrder
+  scenario?: Prisma.SortOrderInput | Prisma.SortOrder
   pinnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   archivedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -337,6 +346,7 @@ export type sessionWhereUniqueInput = Prisma.AtLeast<{
   currentModelId?: Prisma.IntNullableFilter<"session"> | number | null
   title?: Prisma.StringFilter<"session"> | string
   mode?: Prisma.StringNullableFilter<"session"> | string | null
+  scenario?: Prisma.StringNullableFilter<"session"> | string | null
   pinnedAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   archivedAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   projectId?: Prisma.IntNullableFilter<"session"> | number | null
@@ -354,6 +364,7 @@ export type sessionOrderByWithAggregationInput = {
   currentModelId?: Prisma.SortOrderInput | Prisma.SortOrder
   title?: Prisma.SortOrder
   mode?: Prisma.SortOrderInput | Prisma.SortOrder
+  scenario?: Prisma.SortOrderInput | Prisma.SortOrder
   pinnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   archivedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -379,6 +390,7 @@ export type sessionScalarWhereWithAggregatesInput = {
   currentModelId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
   title?: Prisma.StringWithAggregatesFilter<"session"> | string
   mode?: Prisma.StringNullableWithAggregatesFilter<"session"> | string | null
+  scenario?: Prisma.StringNullableWithAggregatesFilter<"session"> | string | null
   pinnedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"session"> | Date | string | null
   archivedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"session"> | Date | string | null
   projectId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
@@ -395,6 +407,7 @@ export type sessionCreateInput = {
   currentModelId?: number | null
   title?: string
   mode?: string | null
+  scenario?: string | null
   pinnedAt?: Date | string | null
   archivedAt?: Date | string | null
   projectId?: number | null
@@ -412,6 +425,7 @@ export type sessionUncheckedCreateInput = {
   currentModelId?: number | null
   title?: string
   mode?: string | null
+  scenario?: string | null
   pinnedAt?: Date | string | null
   archivedAt?: Date | string | null
   projectId?: number | null
@@ -428,6 +442,7 @@ export type sessionUpdateInput = {
   currentModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   title?: Prisma.StringFieldUpdateOperationsInput | string
   mode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  scenario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pinnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -445,6 +460,7 @@ export type sessionUncheckedUpdateInput = {
   currentModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   title?: Prisma.StringFieldUpdateOperationsInput | string
   mode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  scenario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pinnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -462,6 +478,7 @@ export type sessionCreateManyInput = {
   currentModelId?: number | null
   title?: string
   mode?: string | null
+  scenario?: string | null
   pinnedAt?: Date | string | null
   archivedAt?: Date | string | null
   projectId?: number | null
@@ -478,6 +495,7 @@ export type sessionUpdateManyMutationInput = {
   currentModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   title?: Prisma.StringFieldUpdateOperationsInput | string
   mode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  scenario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pinnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -495,6 +513,7 @@ export type sessionUncheckedUpdateManyInput = {
   currentModelId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   title?: Prisma.StringFieldUpdateOperationsInput | string
   mode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  scenario?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   pinnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -512,6 +531,7 @@ export type sessionCountOrderByAggregateInput = {
   currentModelId?: Prisma.SortOrder
   title?: Prisma.SortOrder
   mode?: Prisma.SortOrder
+  scenario?: Prisma.SortOrder
   pinnedAt?: Prisma.SortOrder
   archivedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -538,6 +558,7 @@ export type sessionMaxOrderByAggregateInput = {
   currentModelId?: Prisma.SortOrder
   title?: Prisma.SortOrder
   mode?: Prisma.SortOrder
+  scenario?: Prisma.SortOrder
   pinnedAt?: Prisma.SortOrder
   archivedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -555,6 +576,7 @@ export type sessionMinOrderByAggregateInput = {
   currentModelId?: Prisma.SortOrder
   title?: Prisma.SortOrder
   mode?: Prisma.SortOrder
+  scenario?: Prisma.SortOrder
   pinnedAt?: Prisma.SortOrder
   archivedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -583,6 +605,7 @@ export type sessionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   currentModelId?: boolean
   title?: boolean
   mode?: boolean
+  scenario?: boolean
   pinnedAt?: boolean
   archivedAt?: boolean
   projectId?: boolean
@@ -600,6 +623,7 @@ export type sessionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   currentModelId?: boolean
   title?: boolean
   mode?: boolean
+  scenario?: boolean
   pinnedAt?: boolean
   archivedAt?: boolean
   projectId?: boolean
@@ -617,6 +641,7 @@ export type sessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   currentModelId?: boolean
   title?: boolean
   mode?: boolean
+  scenario?: boolean
   pinnedAt?: boolean
   archivedAt?: boolean
   projectId?: boolean
@@ -634,6 +659,7 @@ export type sessionSelectScalar = {
   currentModelId?: boolean
   title?: boolean
   mode?: boolean
+  scenario?: boolean
   pinnedAt?: boolean
   archivedAt?: boolean
   projectId?: boolean
@@ -644,7 +670,7 @@ export type sessionSelectScalar = {
   lastMessageAt?: boolean
 }
 
-export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt", ExtArgs["result"]["session"]>
+export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "scenario" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt", ExtArgs["result"]["session"]>
 
 export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "session"
@@ -656,6 +682,7 @@ export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     currentModelId: number | null
     title: string
     mode: string | null
+    scenario: string | null
     pinnedAt: Date | null
     archivedAt: Date | null
     projectId: number | null
@@ -1093,6 +1120,7 @@ export interface sessionFieldRefs {
   readonly currentModelId: Prisma.FieldRef<"session", 'Int'>
   readonly title: Prisma.FieldRef<"session", 'String'>
   readonly mode: Prisma.FieldRef<"session", 'String'>
+  readonly scenario: Prisma.FieldRef<"session", 'String'>
   readonly pinnedAt: Prisma.FieldRef<"session", 'DateTime'>
   readonly archivedAt: Prisma.FieldRef<"session", 'DateTime'>
   readonly projectId: Prisma.FieldRef<"session", 'Int'>

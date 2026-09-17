@@ -94,6 +94,7 @@ model session {
   currentModelId Int?
   title          String    @default("新会话")
   mode           String?
+  scenario       String?
   pinnedAt       DateTime?
   archivedAt     DateTime?
   projectId      Int?
@@ -152,6 +153,7 @@ model skillRecord {
   dir         String
   description String?
   enabled     Boolean  @default(true)
+  scenarios   String?
   installedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

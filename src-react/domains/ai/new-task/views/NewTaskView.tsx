@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { SCENARIO_KEYS } from "../lib/scenario";
 import { useNewTaskStore } from "../store/new-task-store";
+import ContextBar from "../components/ContextBar";
 import NewTaskInputCard from "../components/NewTaskInputCard";
 import PromptChips from "../components/PromptChips";
 import { cn } from "@/lib/utils";
@@ -44,8 +45,9 @@ export default function NewTaskView() {
         ))}
       </div>
       <PromptChips />
-      {/* 输入卡（胶囊栏下方、配置栏占位上方——配置栏 Task 13 接入） */}
       <NewTaskInputCard />
+      {/* 配置栏（输入卡下方：任务级工作空间 + 权限档位） */}
+      <ContextBar />
     </div>
   );
 }

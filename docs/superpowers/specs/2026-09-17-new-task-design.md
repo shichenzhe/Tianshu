@@ -149,3 +149,4 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 4. **置灰矩阵补模型条件**：§6 本有"无可用模型→发送置灰"要求，计划 T14 的 disabled 矩阵遗漏该条件，执行中补上——判定复刻 ModelPicker 口径（共享 queryKey `["models"]`/`["providers"]`、存在启用 provider 的启用模型），加载窗口保守置灰，提示 `t("newTask:modelRequired")`。
 5. **持久化恢复接线**：store 的 `hydratePersistedDraft()` 落地后一度未接线，T14 接入 NewTaskView——采用 useState lazy initializer 而非 effect（子组件 ContextBar 的 null 兜底 effect 先于父 effect 执行，会覆盖持久化快照；lazy initializer 在首次渲染前恢复，时序正确）。
 6. **测试环境适配**（观察记录，非行为偏差）：FullAccessModal 确认按钮在 mock i18n 环境下渲染为 key 文本 `chat:permission.confirmFullAccess`，测试正则 `/确认|confirm/i` 经 "confirm" 子串命中；真实中文文案为"允许完全访问"。测试已注释说明。
+7. **技能安装/更新接口不透传 scenarios**（执行裁定）：spec §4.1 的'技能安装/更新接口透传 scenarios'未实现——场景打标仅有技能管理列表勾选入口（skill:setScenarios）。数据安全已验证：安装器 upsert 只写 slug/version/source/dir/description，list() 对账只写 dir/description，用户打标在重装/扫描下不丢失。导入弹窗打标列为后续演进。

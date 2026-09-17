@@ -22,11 +22,15 @@ export interface SessionRecord {
   /** /compact 摘要(v8):存在即压缩态;compactedUpToId 为压缩覆盖点消息 id */
   summary?: string | null;
   compactedUpToId?: number | null;
+  /** 发起场景 daily|coding|design；缺省落 null */
+  scenario?: string | null;
 }
 
 export interface SessionCreateParams {
   workspaceId: number;
   assistantId?: number;
+  /** 发起场景 daily|coding|design；缺省不落库 */
+  scenario?: string;
 }
 
 export interface MessageRecord {

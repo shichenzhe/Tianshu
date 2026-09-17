@@ -251,6 +251,7 @@ export class SessionRepository {
       data: {
         workspaceId: p.workspaceId,
         assistantId: p.assistantId,
+        scenario: p.scenario ?? null,
         currentModelId: latest?.currentModelId ?? undefined,
         title: "新会话",
       },

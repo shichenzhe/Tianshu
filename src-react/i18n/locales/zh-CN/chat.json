@@ -455,6 +455,12 @@
       "market": "市场",
       "local": "本地"
     },
+    "scenario": {
+      "daily": "日常",
+      "coding": "编程",
+      "design": "设计",
+      "edit": "场景"
+    },
     "createSkillPrompt": "请帮我创建一个技能:"
   },
   "usage": {

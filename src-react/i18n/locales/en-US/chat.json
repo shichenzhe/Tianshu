@@ -455,6 +455,12 @@
       "market": "Market",
       "local": "Local"
     },
+    "scenario": {
+      "daily": "Daily",
+      "coding": "Coding",
+      "design": "Design",
+      "edit": "Scenarios"
+    },
     "createSkillPrompt": "Please help me create a skill: "
   },
   "usage": {

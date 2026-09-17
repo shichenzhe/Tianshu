@@ -78,6 +78,7 @@ export type IPCChannel =
   | "skill:openDir"
   | "skill:list"
   | "skill:setEnabled"
+  | "skill:setScenarios"
   | "skill:batchSetEnabled"
   | "skill:uninstall"
   | "skill:batchUninstall"

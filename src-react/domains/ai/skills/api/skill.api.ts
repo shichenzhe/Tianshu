@@ -14,6 +14,8 @@ export interface SkillRecord {
   description: string | null;
   enabled: boolean;
   installedAt: string;
+  /** 场景打标(JSON 反序列化产物;null=未打标),Task 10 胶囊混排消费 */
+  scenarios: string[] | null;
 }
 
 export interface BatchUninstallResult {
@@ -44,10 +46,12 @@ export interface SkillStatsResult {
   items: SkillStatItem[];
 }
 
-const SkillApi = {
+export const SkillApi = {
   list: () => invoke<SkillRecord[]>("skill:list"),
   setEnabled: (name: string, enabled: boolean) =>
     invoke<null>("skill:setEnabled", { name, enabled }),
+  setScenarios: (name: string, scenarios: string[]) =>
+    invoke<null>("skill:setScenarios", { name, scenarios }),
   batchSetEnabled: (names: string[], enabled: boolean) =>
     invoke<null>("skill:batchSetEnabled", { names, enabled }),
   uninstall: (name: string) => invoke<null>("skill:uninstall", { name }),

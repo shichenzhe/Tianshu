@@ -80,6 +80,11 @@ export class SkillRepository {
         this.setEnabled(p.name, p.enabled),
     );
     ipcMain.handle(
+      "skill:setScenarios",
+      (_e, p: { name: string; scenarios: string[] }): Promise<null> =>
+        this.setScenarios(p.name, p.scenarios),
+    );
+    ipcMain.handle(
       "skill:batchSetEnabled",
       (_e, p: { names: string[]; enabled: boolean }) =>
         this.batchSetEnabled(p.names, p.enabled),
@@ -166,6 +171,7 @@ export class SkillRepository {
     return fresh.map((row) => ({
       ...row,
       installedAt: row.installedAt.toISOString(),
+      scenarios: row.scenarios ? (JSON.parse(row.scenarios) as string[]) : null,
     }));
   }
 
@@ -180,6 +186,17 @@ export class SkillRepository {
       name,
       enabled ? "enable" : "disable",
     );
+    return null;
+  }
+
+  /** 场景打标:JSON 序列化落库;scenario 值不在白名单时过滤防脏数据 */
+  private async setScenarios(name: string, scenarios: string[]): Promise<null> {
+    const valid = ["daily", "coding", "design"];
+    const filtered = [...new Set(scenarios.filter((s) => valid.includes(s)))];
+    await this.prismaClient.skillRecord.update({
+      where: { name },
+      data: { scenarios: JSON.stringify(filtered) },
+    });
     return null;
   }
 

@@ -84,7 +84,8 @@ export default function NewTaskView() {
   }, [navigate]);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-3xl flex-col justify-center gap-4 px-6 py-10">
+    <div className="flex h-full w-full flex-col justify-center gap-4 p-4">
+      {/* 全宽 + p-4：与 ChatView/ChatPane 内容区同宽同边距（无 max-w 约束） */}
       <h1 className="text-center text-2xl font-semibold text-foreground">
         {t("newTask:heroTitle", { app: t("common:appName") })}
       </h1>

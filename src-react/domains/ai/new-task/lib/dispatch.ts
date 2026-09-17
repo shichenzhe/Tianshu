@@ -2,10 +2,12 @@
  * 新建任务发送编排（spec §3.2）：读 store 草稿 → 敏感词/工作空间前置校验 →
  * 逐 pending 引用读内容（file 工作空间文件 / localFile 本地文件 / skill 技能，
  * 注入格式与 ChatView 发送层同口径 buildInjectedContent）→ create(scenario)
- * → [full: setPermission] → send → 清草稿跳会话。
- * 任一步失败抛错（调用方 NewTaskView catch 后 toast），草稿与配置保留落地页
+ * → [full: setPermission] → send（发起即继续不等流结束）→ 清草稿跳会话。
+ * create/读引用失败抛错（调用方 NewTaskView catch 后 toast）草稿保留落地页；
+ * send 例外——session 已建立仅早期失败 toast，仍导航
  */
 import i18n from "@/i18n";
+import { toast } from "sonner";
 
 import SessionApi from "../../api/session.api";
 import ChatApi from "../../api/chat.api";
@@ -73,9 +75,15 @@ export async function dispatchNewTask({
   if (accessMode === "full") {
     await ChatApi.setPermission(created.id, "full");
   }
-  await ChatApi.send({
+  // chat:send 的 IPC 契约是"整个流式生成完成才 resolve"（后端 send 内部
+  // await streamAndPersist）——落地页发起即继续、不等流：ChatView 挂载后经
+  // chat:status/流事件恢复进度；早期失败（无模型等，发生在流开始前）在此
+  // toast，流内错误由 ChatView 错误块展示（与 ChatInput 发送同口径）
+  ChatApi.send({
     sessionId: created.id,
     content: buildInjectedContent(content, files),
+  }).catch((e) => {
+    toast.error(mapDispatchError(e));
   });
   useNewTaskStore.getState().resetDraft();
   navigate(`/module/ai?session=${created.id}`, { replace: true });

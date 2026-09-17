@@ -1,7 +1,9 @@
 /**
  * 新建任务 dispatch 发送编排单测（spec §3.2）：create(scenario) →
- * [full: setPermission] → send（引用前缀块注入，ChatView 同口径）→
- * navigate；任一步失败抛错且草稿保留在落地页。IPC 全量走 invoke 级 mock
+ * [full: setPermission] → send（引用前缀块注入，ChatView 同口径；发起即
+ * 继续不等流结束——chat:send IPC 到流完成才 resolve，早期失败 toast）→
+ * navigate；create/读引用失败抛错且草稿保留，send 例外（session 已建立，
+ * 失败仅 toast 仍导航）。IPC 全量走 invoke 级 mock
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,8 +30,12 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => `mapped:${key}` },
 }));
 
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, toastMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  toastMock: { error: vi.fn() },
+}));
 vi.mock("@/lib/ipc", () => ({ invoke: invokeMock }));
+vi.mock("sonner", () => ({ toast: toastMock }));
 
 import {
   dispatchNewTask,
@@ -93,16 +99,40 @@ describe("dispatchNewTask", () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, "permission:set", 9, "full");
   });
 
-  it("send 失败：抛错且不清草稿（留在落地页）", async () => {
+  it("send 早期失败：不阻塞导航，toast 提示（session 已建立、用户消息已落库）", async () => {
     invokeMock.mockImplementation((channel: string) => {
       if (channel === "session:create") {
         return Promise.resolve(SESSION);
       }
-      return Promise.reject(new Error("network"));
+      if (channel === "chat:send") {
+        return Promise.reject(new Error("network"));
+      }
+      return Promise.resolve(null);
     });
-    await expect(dispatchNewTask({ navigate })).rejects.toThrow("network");
-    expect(navigate).not.toHaveBeenCalled();
-    expect(useNewTaskStore.getState().content).toBe("帮我写周报");
+    await dispatchNewTask({ navigate });
+    expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
+      replace: true,
+    });
+    await vi.waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+  });
+
+  it("chat:send 挂起（流式生成中）不阻塞导航——跳转不等流结束", async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === "session:create") {
+        return Promise.resolve(SESSION);
+      }
+      if (channel === "chat:send") {
+        // chat:send IPC 契约：整个流式生成完成才 resolve——用永不 resolve
+        // 的 promise 模拟流进行中，dispatch 不得被它挡住
+        return new Promise(() => {});
+      }
+      return Promise.resolve(null);
+    });
+    await dispatchNewTask({ navigate });
+    expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
+      replace: true,
+    });
+    expect(useNewTaskStore.getState().content).toBe("");
   });
 
   it("pending 引用读内容注入：file 走 readWorkspaceFile，localFile 走 readExternalFile，skill 走 readSkill", async () => {

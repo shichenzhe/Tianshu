@@ -46,12 +46,15 @@ NewTaskView 发送
   1. 前置检查（敏感词 → 无可用模型 → 无工作空间）
   2. SessionApi.create({ workspaceId, scenario })
   3. 若权限=高危：ChatApi.setPermission(sessionId, "full")
-  4. ChatApi.send({ sessionId, content })  ← 不传 modelId，后端回退会话/全局默认模型（与现有 ChatView 新会话一致）
+  4. ChatApi.send({ sessionId, content })  ← 发起即继续、不 await——chat:send
+     IPC 契约是整个流式生成完成才 resolve（后端 send 内部 await streamAndPersist），
+     等它会把跳转阻塞整个生成期；早期失败（无模型等）catch 后 toast，
+     流内错误由 ChatView 错误块展示。不传 modelId，后端回退会话/全局默认模型
   5. navigate(`/module/ai?session=${id}`)
   6. ChatView 现有 chat:status 恢复机制自动接上流式输出
 ```
 
-任一步失败：toast 错误、停留落地页、文本与配置全保留（PRD 4.1）。
+create/读引用失败：toast 错误、停留落地页、文本与配置全保留（PRD 4.1）；send 例外——session 已建立、用户消息已落库，早期失败仅 toast 仍导航。
 
 ## 4. 数据模型与后端变更
 

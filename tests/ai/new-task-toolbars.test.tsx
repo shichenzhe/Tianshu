@@ -176,11 +176,11 @@ describe("AttachMenu（PlusMenu 对齐）", () => {
     useNewTaskStore.getState().setWorkspaceId(2);
   });
 
-  it("菜单八项齐备：文件三件套 + 模式/专家/技能 + 连接器", async () => {
+  it("菜单六项齐备：文件两项 + 模式/专家/技能 + 连接器（无历史对话项）", async () => {
     render(<AttachMenu />);
     await openMenu("newTask:attach.title", "chat:plus.addFile");
     expect(screen.getByText("newTask:attach.workspaceFile")).toBeTruthy();
-    expect(screen.getByText("newTask:attach.historyChat")).toBeTruthy();
+    expect(screen.queryByText("newTask:attach.historyChat")).toBeNull();
     expect(screen.getByText("chat:plus.mode")).toBeTruthy();
     expect(screen.getByText("chat:plus.expert")).toBeTruthy();
     expect(screen.getByText("chat:plus.skill")).toBeTruthy();

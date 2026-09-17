@@ -1,9 +1,9 @@
 /**
  * 新建任务输入卡 ＋号菜单（PlusMenu 对齐）：与会话 ChatInput 的
- * PlusMenu 六项内容一致 + 落地页文件三件套——
+ * PlusMenu 菜单项一致——
  * 文件组：添加文件（file:pickLocalFiles 取路径 → readExternalFile 校验入
  *   pending，机制按落地页 pill 范式不搬 @token）、引用工作空间文件（二级
- *   子面板 useWorkspaceFiles）、引用历史对话（占位 toast）；
+ *   子面板 useWorkspaceFiles）；
  * 草稿组：模式（PlusMenu 导出 MODES 复用，✓ 草稿态写 store，dispatch 时
  *   setMode 落库）、专家（ExpertSubMenu onPick 草稿分支，同 dispatch 落库）、
  *   技能（SkillSubMenu 直接复用——全局启停/本地导入/管理入口无 session 依赖）；
@@ -14,7 +14,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, FilePlus, History, Plug, Plus, Sparkles } from "lucide-react";
+import { Check, FilePlus, Plug, Plus, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -127,12 +127,6 @@ export default function AttachMenu() {
               )}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <DropdownMenuItem
-            onClick={() => toast.info(t("newTask:attach.developing"))}
-          >
-            <History />
-            {t("newTask:attach.historyChat")}
-          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>

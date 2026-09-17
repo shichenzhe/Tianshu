@@ -94,7 +94,7 @@ src-react/domains/ai/new-task/
 │   ├── PromptChips.tsx        # 横向滚动胶囊栏；模板胶囊 + 技能胶囊混排
 │   ├── NewTaskInputCard.tsx   # textarea(自适应, max-h 50vh) + 附件 pill 列表 + 工具栏
 │   ├── AttachMenu.tsx         # + 菜单（PlusMenu 对齐）：添加文件/工作空间文件 + 模式/专家/技能 + 连接器
-│   ├── PolishMenu.tsx         # 更专业 / 更简洁 / 翻译成英文
+│   ├── polish-button.tsx      # AI 润色：单按钮通用润色（professional），转圈禁点
 │   ├── QuickMenu.tsx          # ⚡快速：预设快捷指令 + 已启用技能
 │   └── ContextBar.tsx         # 工作空间选择器 + 权限选择器
 ├── lib/
@@ -154,3 +154,4 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 6. **测试环境适配**（观察记录，非行为偏差）：FullAccessModal 确认按钮在 mock i18n 环境下渲染为 key 文本 `chat:permission.confirmFullAccess`，测试正则 `/确认|confirm/i` 经 "confirm" 子串命中；真实中文文案为"允许完全访问"。测试已注释说明。
 7. **技能安装/更新接口不透传 scenarios**（执行裁定）：spec §4.1 的'技能安装/更新接口透传 scenarios'未实现——场景打标仅有技能管理列表勾选入口（skill:setScenarios）。数据安全已验证：安装器 upsert 只写 slug/version/source/dir/description，list() 对账只写 dir/description，用户打标在重装/扫描下不丢失。导入弹窗打标列为后续演进。
 8. **+ 菜单完整对齐 PlusMenu**（用户裁定，修订裁定 9 的模式部分）：落地页 AttachMenu 由文件三项扩为与会话 PlusMenu 六项对齐——文件两项（添加文件/工作空间文件）+ 模式/专家/技能 + 连接器（PRD 的"引用历史对话"占位项经用户后续裁定移除，连带删除 newTask:attach.historyChat/developing 词条）。模式/专家在无 session 语境下改为"草稿态"：store 增 mode（默认 agent）/assistantId（默认 null）两任务级草稿字段（不持久化、resetDraft 清），dispatch 在 create 后按需 setAssistant/setMode 落库（默认值跳过省 IPC，时序 create→setAssistant→setMode→setPermission→send）；选中反馈在输入卡工具栏以徽章呈现（专家名可 X 清除、非 agent 模式标签，ChatInput 底行同形态）。实现依赖：PlusMenu 导出 MODES 供复用；ExpertSubMenu 增可选 onPick 草稿分支（sessionId 改可选，ChatInput 调用零改动）；SkillSubMenu 无 session 依赖原样复用；文案复用 chat:plus.* 词条。裁定 9"模式不进落地页"就此废止（模式可在发起前选定）；ModelPicker/停止按钮仍不进落地页。
+9. **润色交互简化为通用单按钮**（用户裁定，修订裁定 8 的三风格部分）：弃下拉三风格，PolishButton 点击即对全文润色，style 固定 `professional`（通用档），润色中触发钮 Loader2 转圈且禁点（不锁 textarea），完成/失败恢复。后端 `chat:polish` 契约不变（仍收三风格 style，前端固定传 professional，三 prompt 模板保留向后兼容）；失败 toast 原文不动、空文本静默、未绑空间 toast 等行为与原 PolishMenu 一致。连带删除 newTask:polish.professional/concise/translate-en 三词条（无引用）。

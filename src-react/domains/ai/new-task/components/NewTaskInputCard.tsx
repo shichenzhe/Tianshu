@@ -22,7 +22,7 @@ import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
 import { useNewTaskStore } from "../store/new-task-store";
 import AttachMenu from "./AttachMenu";
-import PolishMenu from "./PolishMenu";
+import PolishButton from "./polish-button";
 import QuickMenu from "./QuickMenu";
 
 interface NewTaskInputCardProps {
@@ -362,7 +362,7 @@ export default function NewTaskInputCard({
               {t("newTask:modelRequired")}
             </span>
           )}
-          <PolishMenu />
+          <PolishButton />
           <QuickMenu />
           <Button
             size="sm"

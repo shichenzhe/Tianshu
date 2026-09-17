@@ -26,9 +26,6 @@
   },
   "polish": {
     "title": "AI 润色",
-    "professional": "更专业",
-    "concise": "更简洁",
-    "translate-en": "翻译成英文",
     "failed": "润色失败，请稍后重试"
   },
   "quick": {

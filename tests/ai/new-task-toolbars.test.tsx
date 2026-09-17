@@ -1,11 +1,11 @@
 // tests/ai/new-task-toolbars.test.tsx
 // @vitest-environment jsdom
 /**
- * 新建任务输入卡工具栏三件套（Task 12）：PolishMenu（润色）、QuickMenu
- * （快捷指令 + 已启用技能）、工具栏挂载与字数阈值（1800 显示 / 2000 截断
- * 提示）。i18n t mock 直返 key（quick.*.label 渲染 / quick.*.prompt 填入
- * 文本，词条为 {label,prompt} 对象结构）；Radix DropdownMenu 经
- * pointerDown+click 开菜单（同 tests/ai/plus-menu.test.tsx:64）。
+ * 新建任务输入卡工具栏测试：PolishButton（通用润色单按钮）、QuickMenu
+ * （快捷指令 + 已启用技能）、AttachMenu（PlusMenu 对齐菜单）与字数阈值
+ * （1800 显示 / 2000 截断提示）。i18n t mock 直返 key（quick.*.label 渲染 /
+ * quick.*.prompt 填入文本，词条为 {label,prompt} 对象结构）；Radix
+ * DropdownMenu 经 pointerDown+click 开菜单（同 tests/ai/plus-menu.test.tsx:64）。
  */
 import {
   render,
@@ -62,7 +62,7 @@ vi.hoisted(() => {
 });
 
 import { toast } from "sonner";
-import PolishMenu from "@/domains/ai/new-task/components/PolishMenu";
+import PolishButton from "@/domains/ai/new-task/components/polish-button";
 import QuickMenu from "@/domains/ai/new-task/components/QuickMenu";
 import AttachMenu from "@/domains/ai/new-task/components/AttachMenu";
 import NewTaskInputCard from "@/domains/ai/new-task/components/NewTaskInputCard";
@@ -81,7 +81,14 @@ async function openMenu(
   });
 }
 
-describe("PolishMenu", () => {
+describe("PolishButton", () => {
+  /** 润色触发钮（aria-label = newTask:polish.title） */
+  function polishButton(): HTMLButtonElement {
+    return screen.getByRole("button", {
+      name: "newTask:polish.title",
+    }) as HTMLButtonElement;
+  }
+
   beforeEach(() => {
     invokeMock.mockReset();
     vi.mocked(toast.error).mockClear();
@@ -89,52 +96,66 @@ describe("PolishMenu", () => {
     useNewTaskStore.getState().setWorkspaceId(2);
   });
 
-  it("选风格调 polish 并替换文本", async () => {
+  it("点击即以通用风格润色并替换文本（无下拉）", async () => {
     useNewTaskStore.getState().setContent("draft");
     invokeMock.mockResolvedValue({ text: "better" });
-    render(<PolishMenu />);
-    await openMenu("newTask:polish.title", "newTask:polish.professional");
-    fireEvent.click(screen.getByText("newTask:polish.concise"));
+    render(<PolishButton />);
+    fireEvent.click(polishButton());
     await waitFor(() =>
       expect(useNewTaskStore.getState().content).toBe("better"),
     );
     expect(invokeMock).toHaveBeenCalledExactlyOnceWith("chat:polish", {
       workspaceId: 2,
       text: "draft",
-      style: "concise",
+      style: "professional",
     });
   });
 
-  it("空文本点击风格项不发请求", async () => {
-    invokeMock.mockResolvedValue({ text: "better" });
-    render(<PolishMenu />);
-    await openMenu("newTask:polish.title", "newTask:polish.professional");
-    fireEvent.click(screen.getByText("newTask:polish.concise"));
-    await waitFor(() =>
-      expect(screen.queryByText("newTask:polish.professional")).toBeNull(),
+  it("润色中按钮转圈禁点，完成后恢复可点", async () => {
+    useNewTaskStore.getState().setContent("draft");
+    let resolve!: (v: { text: string }) => void;
+    invokeMock.mockImplementation(
+      () =>
+        new Promise<{ text: string }>((r) => {
+          resolve = r;
+        }),
     );
+    render(<PolishButton />);
+    const button = polishButton();
+    fireEvent.click(button);
+    expect(button.disabled).toBe(true);
+    resolve({ text: "better" });
+    await waitFor(() =>
+      expect(useNewTaskStore.getState().content).toBe("better"),
+    );
+    expect(polishButton().disabled).toBe(false);
+  });
+
+  it("空文本点击不发请求", async () => {
+    invokeMock.mockResolvedValue({ text: "better" });
+    render(<PolishButton />);
+    fireEvent.click(polishButton());
+    await waitFor(() => expect(useNewTaskStore.getState().content).toBe(""));
     expect(invokeMock).not.toHaveBeenCalled();
-    expect(useNewTaskStore.getState().content).toBe("");
   });
 
   it("润色失败 toast 且原文不动", async () => {
     useNewTaskStore.getState().setContent("draft");
     invokeMock.mockRejectedValue(new Error("boom"));
-    render(<PolishMenu />);
-    await openMenu("newTask:polish.title", "newTask:polish.professional");
-    fireEvent.click(screen.getByText("newTask:polish.concise"));
+    render(<PolishButton />);
+    fireEvent.click(polishButton());
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("newTask:polish.failed"),
     );
     expect(useNewTaskStore.getState().content).toBe("draft");
+    expect(polishButton().disabled).toBe(false);
   });
 
   it("未绑工作空间不发请求，toast 提示", async () => {
     useNewTaskStore.getState().setWorkspaceId(null);
     useNewTaskStore.getState().setContent("draft");
-    render(<PolishMenu />);
-    await openMenu("newTask:polish.title", "newTask:polish.professional");
-    fireEvent.click(screen.getByText("newTask:polish.concise"));
+    render(<PolishButton />);
+    fireEvent.click(polishButton());
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith("newTask:context.noWorkspace"),
     );

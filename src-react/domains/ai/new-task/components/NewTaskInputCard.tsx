@@ -16,6 +16,8 @@ import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
 import { useNewTaskStore } from "../store/new-task-store";
 import AttachMenu from "./AttachMenu";
+import PolishMenu from "./PolishMenu";
+import QuickMenu from "./QuickMenu";
 
 interface NewTaskInputCardProps {
   /** Enter/发送按钮触发（内部仅校验非空后回调；Task 14 接 dispatch） */
@@ -260,16 +262,29 @@ export default function NewTaskInputCard({ onSubmit }: NewTaskInputCardProps) {
         placeholder={t("newTask:inputPlaceholder")}
         className="min-h-24 w-full resize-none border-0 bg-transparent p-0 text-sm leading-relaxed field-sizing-content max-h-[50vh] outline-none placeholder:text-muted-foreground"
       />
-      {/* 底部工具栏：左 ＋引用菜单 + 字数；右 魔法棒/快速（Task 12 挂
-          PolishMenu/QuickMenu）+ 发送（Task 14 前校验只含空文本） */}
-      <div className="flex items-center pt-2">
-        <div className="flex items-center gap-2">
-          <AttachMenu />
-          <span className="text-xs text-muted-foreground">
-            {t("newTask:charCount", { current: content.length })}
+      {/* 字数（textarea 下右对齐）：>1800 才显示（Math.min 封顶 2000）；
+          ≥2000 追加红字截断提示 */}
+      {content.length > 1800 && (
+        <div className="flex items-center justify-end gap-1.5 pt-0.5 text-xs text-muted-foreground">
+          <span>
+            {t("newTask:charCount", {
+              current: String(Math.min(content.length, 2000)),
+            })}
           </span>
+          {content.length >= 2000 && (
+            <span className="text-destructive">
+              {t("newTask:truncateHint")}
+            </span>
+          )}
         </div>
+      )}
+      {/* 底部工具栏：左 ＋引用菜单；右 魔法棒/快速 + 发送（Task 14 前
+          校验只含空文本） */}
+      <div className="flex items-center pt-2">
+        <AttachMenu />
         <div className="ml-auto flex items-center gap-2">
+          <PolishMenu />
+          <QuickMenu />
           <Button
             size="sm"
             onClick={submit}

@@ -35,10 +35,10 @@
   },
   "quick": {
     "title": "快速",
-    "summarize": "总结全文",
-    "translateSel": "翻译成英文",
-    "expand": "扩写细节",
-    "listify": "列表化改写",
+    "summarize": { "label": "总结全文", "prompt": "请总结以下内容的要点：\n[粘贴内容]" },
+    "translateSel": { "label": "翻译成英文", "prompt": "请将以下内容翻译成英文：\n[粘贴内容]" },
+    "expand": { "label": "扩写细节", "prompt": "请对以下内容扩写补充细节：\n[粘贴内容]" },
+    "listify": { "label": "列表化改写", "prompt": "请将以下内容改写为要点列表：\n[粘贴内容]" },
     "skillsGroup": "已启用技能"
   },
   "context": {

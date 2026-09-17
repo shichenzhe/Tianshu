@@ -35,10 +35,10 @@
   },
   "quick": {
     "title": "Quick",
-    "summarize": "Summarize",
-    "translateSel": "Translate to English",
-    "expand": "Expand Details",
-    "listify": "Convert to List",
+    "summarize": { "label": "Summarize", "prompt": "Summarize the key points of the following content:\n[Paste content]" },
+    "translateSel": { "label": "Translate to English", "prompt": "Translate the following content into English:\n[Paste content]" },
+    "expand": { "label": "Expand Details", "prompt": "Expand the following content with more details:\n[Paste content]" },
+    "listify": { "label": "Convert to List", "prompt": "Rewrite the following content as a bullet list:\n[Paste content]" },
     "skillsGroup": "Enabled Skills"
   },
   "context": {

@@ -32,6 +32,7 @@ import {
   type ContextUsageBreakdown,
 } from "./context-usage";
 import { classifyError } from "./error-classify";
+import { readWorkspaceFile } from "./workspace-files";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
 import {
@@ -1270,6 +1271,12 @@ export default class ChatService {
           return { error: "读取失败" };
         }
       },
+    );
+    // @ 新建任务落地页附件：读取用户经选择器/拖拽显式给出的本地文件绝对
+    // 路径（路径引用不拷贝），复用 readWorkspaceFile 的 512KB 注入上限与
+    // 图片 dataUrl 逻辑
+    ipcMain.handle("file:readExternalFile", (_e, absPath: string) =>
+      readWorkspaceFile(path.resolve(absPath)),
     );
   }
 

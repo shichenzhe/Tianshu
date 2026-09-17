@@ -93,6 +93,7 @@ export type IPCChannel =
   | "file:pickAndRead"
   | "file:listWorkspaceFiles"
   | "file:readWorkspaceFile"
+  | "file:readExternalFile"
   | "mcpServer:list"
   | "mcpServer:create"
   | "mcpServer:update"

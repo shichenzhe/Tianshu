@@ -5,7 +5,8 @@
  * - /命令:内置命令词表(当前 compact)
  * - #待办:项目计划事项引用(#<数字 id>,标题/状态由消费方按 todoItems 解析)
  * 发送时解析 → 文件/技能/待办读内容前置注入(消息文本保留 token 原样),
- * 命令移出文本执行;镜像层用 renderTokenSegments 渲染 pill 高亮
+ * 命令移出文本执行;镜像层用 renderTokenSegments 渲染 pill 高亮;
+ * detectMention(@ 触发检测)自 ChatInput 迁入共享(新建任务落地页复用)
  */
 export interface TokenSegments {
   /** 移除全部 token 后的纯文本(首尾重整) */
@@ -114,4 +115,35 @@ export function detectSlash(
     return null;
   }
   return { startIndex: slash, query: token };
+}
+
+/** @token 允许字符（@ 后连续输入的部分） */
+export const MENTION_TOKEN_RE = /[\w\-./]/;
+
+/** 联想面板候选上限（@ 文件、/ 技能与 # 待办面板共用） */
+export const MENTION_LIMIT = 8;
+
+/** 光标前最近的 @token：返回 @ 起始下标与 token 文本；无有效 token 返回 null */
+export function detectMention(
+  value: string,
+  caret: number,
+): { startIndex: number; query: string } | null {
+  const upto = value.slice(0, caret);
+  const at = upto.lastIndexOf("@");
+  if (at === -1) {
+    return null;
+  }
+  const token = upto.slice(at + 1);
+  if (
+    token.length > 0 &&
+    ![...token].every((ch) => MENTION_TOKEN_RE.test(ch))
+  ) {
+    return null;
+  }
+  // @ 前必须是行首或空白（避免邮箱等误触）
+  const prev = at > 0 ? upto[at - 1] : "";
+  if (prev && !/\s/.test(prev)) {
+    return null;
+  }
+  return { startIndex: at, query: token };
 }

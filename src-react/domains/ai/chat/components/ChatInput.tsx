@@ -50,7 +50,9 @@ import {
 import type { ChatModelParams } from "../../api/chat.api";
 import type { SessionMode } from "../../api/session.api";
 import {
+  MENTION_LIMIT,
   SLASH_COMMANDS,
+  detectMention,
   detectSlash,
   parseInlineTokens,
   renderTokenSegments,
@@ -61,10 +63,6 @@ import ModelPicker from "./ModelPicker";
 import ContextUsageButton from "./context-usage-button";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
 import PlusMenu, { type LocalTaskToggle } from "./PlusMenu";
-
-/** @token 允许字符（@ 后连续输入的部分） */
-const MENTION_TOKEN_RE = /[\w\-./]/;
-const MENTION_LIMIT = 8;
 
 /** 联想候选:命令 / 技能 / 文件 / 待办 */
 type SuggestCandidate =
@@ -121,31 +119,6 @@ interface ChatInputProps {
   onStop: () => void;
   /** 自定义占位文案（项目底栏传项目文案）；缺省沿用 chat 默认（AI 模块不变） */
   placeholder?: string;
-}
-
-/** 光标前最近的 @token：返回 @ 起始下标与 token 文本；无有效 token 返回 null */
-function detectMention(
-  value: string,
-  caret: number,
-): { startIndex: number; query: string } | null {
-  const upto = value.slice(0, caret);
-  const at = upto.lastIndexOf("@");
-  if (at === -1) {
-    return null;
-  }
-  const token = upto.slice(at + 1);
-  if (
-    token.length > 0 &&
-    ![...token].every((ch) => MENTION_TOKEN_RE.test(ch))
-  ) {
-    return null;
-  }
-  // @ 前必须是行首或空白（避免邮箱等误触）
-  const prev = at > 0 ? upto[at - 1] : "";
-  if (prev && !/\s/.test(prev)) {
-    return null;
-  }
-  return { startIndex: at, query: token };
 }
 
 /**

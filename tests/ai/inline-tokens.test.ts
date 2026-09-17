@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SLASH_COMMANDS,
+  detectMention,
   detectSlash,
   parseInlineTokens,
   renderTokenSegments,
@@ -135,5 +136,29 @@ describe("todo token（#<id>）", () => {
       { text: " ", isToken: false },
       { text: "⚡s", isToken: true },
     ]);
+  });
+});
+
+describe("detectMention @ 触发检测", () => {
+  it("detectMention @ 前须空白", () => {
+    expect(detectMention("a@doc", 5)).toBeNull();
+    expect(detectMention("看 @doc", 6)).toEqual({
+      startIndex: 2,
+      query: "doc",
+    });
+  });
+
+  it("行首触发且空 query 触发；邮箱不误触", () => {
+    expect(detectMention("@doc", 4)).toEqual({ startIndex: 0, query: "doc" });
+    expect(detectMention("@", 1)).toEqual({ startIndex: 0, query: "" });
+    expect(detectMention("user@host.com", 13)).toBeNull();
+  });
+
+  it("token 内非法字符中断", () => {
+    expect(detectMention("@a!b", 4)).toBeNull();
+  });
+
+  it("光标前的最后 @ 生效", () => {
+    expect(detectMention("@a @b", 5)).toEqual({ startIndex: 3, query: "b" });
   });
 });

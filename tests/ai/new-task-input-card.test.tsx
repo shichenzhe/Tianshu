@@ -16,7 +16,20 @@ vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
 vi.mock("@/lib/ipc", () => ({ invoke: invokeMock }));
-vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: [] }) }));
+// AttachMenu 连接器项用 useNavigate（PlusMenu 对齐），mock 掉 Router 依赖；
+// SkillImportDialog 拖入较重依赖（useQueryClient 等），mock 为空组件
+// （同 tests/ai/new-task-toolbars.test.tsx）
+vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
+vi.mock("@/domains/ai/skills/components/SkillImportDialog", () => ({
+  default: () => null,
+}));
+// useQuery 按 queryKey 分流：assistants 供专家名徽章，其余（workspace 等）空
+vi.mock("@tanstack/react-query", () => ({
+  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) =>
+    queryKey[0] === "assistants"
+      ? { data: [{ id: 7, name: "Al", icon: null }] }
+      : { data: [] },
+}));
 vi.stubGlobal("filePath", {
   getPathForFile: (f: File) => (f as { path?: string }).path ?? f.name,
 });
@@ -84,6 +97,31 @@ describe("NewTaskInputCard", () => {
         .querySelector("svg:last-child")!,
     );
     expect(useNewTaskStore.getState().pending).toHaveLength(0);
+  });
+
+  it("选中态徽章：专家名可清除；非 agent 模式显示模式徽章", () => {
+    // + 菜单草稿的选中反馈（ChatInput 底行 assistantName/ASK|PLAN 徽章同形态）
+    useNewTaskStore.getState().setAssistantId(7);
+    useNewTaskStore.getState().setMode("plan");
+    render(<NewTaskInputCard onSubmit={vi.fn()} />);
+    expect(screen.getByText("Al")).toBeTruthy();
+    expect(screen.getByText("chat:plus.modePlan")).toBeTruthy();
+    // 清除专家：X 点击回 null，徽章消失
+    fireEvent.click(
+      screen.getByRole("button", { name: "newTask:attach.clearExpert" }),
+    );
+    expect(useNewTaskStore.getState().assistantId).toBeNull();
+    expect(screen.queryByText("Al")).toBeNull();
+    // 模式徽章不随专家清除变化（plan 仍在）
+    expect(screen.getByText("chat:plus.modePlan")).toBeTruthy();
+  });
+
+  it("默认草稿（agent/无专家）不渲染徽章", () => {
+    render(<NewTaskInputCard onSubmit={vi.fn()} />);
+    expect(
+      screen.queryByRole("button", { name: "newTask:attach.clearExpert" }),
+    ).toBeNull();
+    expect(screen.queryByText("chat:plus.modeAgent")).toBeNull();
   });
 });
 

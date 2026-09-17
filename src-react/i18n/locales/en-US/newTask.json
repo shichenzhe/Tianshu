@@ -18,13 +18,13 @@
   },
   "attach": {
     "title": "Add Reference",
-    "localFile": "Add Local File",
     "workspaceFile": "Reference Workspace File",
     "historyChat": "Reference Chat History",
     "developing": "In Development",
     "noFiles": "No matching files",
     "oversize": "File size exceeds the limit",
-    "readFailed": "Failed to read file"
+    "readFailed": "Failed to read file",
+    "clearExpert": "Remove expert"
   },
   "polish": {
     "title": "AI Polish",

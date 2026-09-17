@@ -7,6 +7,7 @@
  */
 import { create } from "zustand";
 
+import type { SessionMode } from "../../api/session.api";
 import { isScenarioKey, type ScenarioKey } from "../lib/scenario";
 
 const NEW_TASK_STORAGE_KEY = "tianshu-new-task";
@@ -26,10 +27,16 @@ interface NewTaskState {
   workspaceId: number | null;
   accessMode: "default" | "full";
   pending: PendingRef[];
+  /** + 菜单模式项草稿（PlusMenu 对齐）：dispatch create 后 setMode 落库 */
+  mode: SessionMode;
+  /** + 菜单专家项草稿（PlusMenu 对齐）：dispatch create 后 setAssistant 落库 */
+  assistantId: number | null;
   setContent(s: string): void;
   setScenario(k: ScenarioKey): void;
   setWorkspaceId(id: number | null): void;
   setAccessMode(m: "default" | "full"): void;
+  setMode(m: SessionMode): void;
+  setAssistantId(id: number | null): void;
   /** label+kind 去重后追加（同展示名同来源视为同一引用） */
   addPending(ref: PendingRef): void;
   /** 按 ref 移除 */
@@ -44,7 +51,12 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
   workspaceId: null,
   accessMode: "default",
   pending: [],
+  mode: "agent",
+  assistantId: null,
   setContent: (s) => set({ content: s }),
+  // mode/assistantId 为任务级草稿（与三配置区分）：不持久化、resetDraft 清
+  setMode: (m) => set({ mode: m }),
+  setAssistantId: (id) => set({ assistantId: id }),
   // 三配置 setter 内部写回持久化快照；content/pending 为草稿不持久化
   setScenario: (k) => {
     set({ scenario: k });
@@ -69,7 +81,8 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
     set((state) => ({
       pending: state.pending.filter((p) => p.ref !== ref),
     })),
-  resetDraft: () => set({ content: "", pending: [] }),
+  resetDraft: () =>
+    set({ content: "", pending: [], mode: "agent", assistantId: null }),
 }));
 
 /**

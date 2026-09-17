@@ -10,10 +10,13 @@
  */
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, X, Zap } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Bot, Send, X, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
+import AssistantApi from "../../api/assistant.api";
+import { MODES } from "../../chat/components/PlusMenu";
 import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
@@ -39,14 +42,29 @@ export default function NewTaskInputCard({
   sending = false,
   inputRef,
 }: NewTaskInputCardProps) {
-  const { t } = useTranslation(["newTask"]);
+  const { t } = useTranslation(["newTask", "chat"]);
   const content = useNewTaskStore((s) => s.content);
   const setContent = useNewTaskStore((s) => s.setContent);
   const pending = useNewTaskStore((s) => s.pending);
   const addPending = useNewTaskStore((s) => s.addPending);
   const removePending = useNewTaskStore((s) => s.removePending);
   const workspaceId = useNewTaskStore((s) => s.workspaceId);
+  const mode = useNewTaskStore((s) => s.mode);
+  const assistantId = useNewTaskStore((s) => s.assistantId);
+  const setAssistantId = useNewTaskStore((s) => s.setAssistantId);
   const addLocalFile = useLocalFileAttach();
+
+  // 专家名徽章：+ 菜单草稿选中态的可见反馈（ExpertSubMenu 同缓存键
+  // ["assistants"]，与专家子菜单共享查询缓存）
+  const assistantsQuery = useQuery({
+    queryKey: ["assistants"],
+    queryFn: () => AssistantApi.list(),
+  });
+  const assistantName = useMemo(
+    () => (assistantsQuery.data ?? []).find((a) => a.id === assistantId)?.name,
+    [assistantsQuery.data, assistantId],
+  );
+  const modeLabelKey = MODES.find((m) => m.value === mode)?.labelKey;
   const [suggest, setSuggest] = useState<{
     startIndex: number;
     query: string;
@@ -308,9 +326,31 @@ export default function NewTaskInputCard({
           )}
         </div>
       )}
-      {/* 底部工具栏：左 ＋引用菜单；右 敏感词/模型提示 + 魔法棒/快速 + 发送 */}
+      {/* 底部工具栏：左 ＋引用菜单 + 草稿选中态徽章（专家名可清除、
+          非 agent 模式——ChatInput 底行 assistantName/ASK|PLAN 同形态）；
+          右 敏感词/模型提示 + 魔法棒/快速 + 发送 */}
       <div className="flex items-center pt-2">
         <AttachMenu />
+        {assistantName && (
+          <span className="ml-1 inline-flex max-w-40 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary">
+            <Bot className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{assistantName}</span>
+            <button
+              type="button"
+              aria-label={t("newTask:attach.clearExpert")}
+              title={t("newTask:attach.clearExpert")}
+              onClick={() => setAssistantId(null)}
+              className="shrink-0"
+            >
+              <X className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />
+            </button>
+          </span>
+        )}
+        {mode !== "agent" && modeLabelKey && (
+          <span className="ml-1 rounded-full border border-primary/30 bg-primary-subtle px-2 py-0.5 text-[10px] font-medium text-primary">
+            {t(modeLabelKey)}
+          </span>
+        )}
         <div className="ml-auto flex items-center gap-2">
           {sensitiveHit !== null && (
             <span className="text-destructive text-xs">

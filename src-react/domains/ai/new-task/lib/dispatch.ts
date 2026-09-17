@@ -2,7 +2,8 @@
  * 新建任务发送编排（spec §3.2）：读 store 草稿 → 敏感词/工作空间前置校验 →
  * 逐 pending 引用读内容（file 工作空间文件 / localFile 本地文件 / skill 技能，
  * 注入格式与 ChatView 发送层同口径 buildInjectedContent）→ create(scenario)
- * → [full: setPermission] → send（发起即继续不等流结束）→ 清草稿跳会话。
+ * → [专家/模式草稿落库（PlusMenu 对齐）：setAssistant / setMode] →
+ * [full: setPermission] → send（发起即继续不等流结束）→ 清草稿跳会话。
  * create/读引用失败抛错（调用方 NewTaskView catch 后 toast）草稿保留落地页；
  * send 例外——session 已建立仅早期失败 toast，仍导航
  */
@@ -59,8 +60,15 @@ async function readPendingRef(
 export async function dispatchNewTask({
   navigate,
 }: DispatchParams): Promise<void> {
-  const { content, scenario, workspaceId, accessMode, pending } =
-    useNewTaskStore.getState();
+  const {
+    content,
+    scenario,
+    workspaceId,
+    accessMode,
+    pending,
+    mode,
+    assistantId,
+  } = useNewTaskStore.getState();
   if (workspaceId === null) {
     throw new Error("no-workspace");
   }
@@ -72,6 +80,14 @@ export async function dispatchNewTask({
     pending.map((ref) => readPendingRef(ref, workspaceId)),
   );
   const created = await SessionApi.create({ workspaceId, scenario });
+  // + 菜单草稿落库（PlusMenu 对齐）：专家/模式选中态写到新建 session；
+  // 默认值（无专家/agent）跳过——create 默认即该值，省两次 IPC
+  if (assistantId !== null) {
+    await SessionApi.setAssistant(created.id, assistantId);
+  }
+  if (mode !== "agent") {
+    await SessionApi.setMode(created.id, mode);
+  }
   if (accessMode === "full") {
     await ChatApi.setPermission(created.id, "full");
   }

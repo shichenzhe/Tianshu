@@ -18,13 +18,13 @@
   },
   "attach": {
     "title": "添加引用",
-    "localFile": "添加本地文件",
     "workspaceFile": "引用工作空间文件",
     "historyChat": "引用历史对话",
     "developing": "开发中",
     "noFiles": "无匹配文件",
     "oversize": "文件大小超出限制",
-    "readFailed": "文件读取失败"
+    "readFailed": "文件读取失败",
+    "clearExpert": "移除专家"
   },
   "polish": {
     "title": "AI 润色",

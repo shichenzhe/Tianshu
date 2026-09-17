@@ -44,6 +44,20 @@ describe("new-task store", () => {
     expect(s.content).toBe("");
     expect(s.scenario).toBe("coding");
   });
+  it("mode/assistantId 为任务级草稿：setter 可写，resetDraft 回默认", () => {
+    // + 菜单对齐 PlusMenu（完整对齐裁定）：模式/专家选中暂存草稿，
+    // 发送时经 dispatch 落库到新建 session；每次新任务回默认
+    // （agent/无专家，与会话默认一致），不随三配置持久化
+    expect(useNewTaskStore.getState().mode).toBe("agent");
+    expect(useNewTaskStore.getState().assistantId).toBeNull();
+    useNewTaskStore.getState().setMode("plan");
+    useNewTaskStore.getState().setAssistantId(5);
+    expect(useNewTaskStore.getState().mode).toBe("plan");
+    expect(useNewTaskStore.getState().assistantId).toBe(5);
+    useNewTaskStore.getState().resetDraft();
+    expect(useNewTaskStore.getState().mode).toBe("agent");
+    expect(useNewTaskStore.getState().assistantId).toBeNull();
+  });
 });
 
 describe("new-task store 持久化", () => {
@@ -65,6 +79,8 @@ describe("new-task store 持久化", () => {
     useNewTaskStore.getState().setWorkspaceId(3);
     useNewTaskStore.getState().setAccessMode("full");
     useNewTaskStore.getState().setContent("草稿");
+    useNewTaskStore.getState().setMode("ask");
+    useNewTaskStore.getState().setAssistantId(9);
     expect(localStorage.getItem(STORAGE_KEY)).toBe(
       JSON.stringify({
         scenario: "coding",

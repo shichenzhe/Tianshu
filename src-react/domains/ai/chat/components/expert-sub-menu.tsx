@@ -27,16 +27,21 @@ const SESSIONS_KEY = ["sessions"] as const;
 const EXPERTS_ROUTE = "/module/ai/experts?tab=assistants";
 
 interface ExpertSubMenuProps {
-  sessionId: number;
+  /** 会话模式必传（写会话）；草稿模式（onPick）下忽略 */
+  sessionId?: number;
   currentAssistantId?: number;
   /** 已挂载专家白名单（项目动态流）；未传不过滤（AI 模块行为不变） */
   allowedIds?: number[];
+  /** 草稿模式回调（新建任务落地页 PlusMenu 对齐）：传入时选中纯前端
+      暂存不写会话（session 创建后由 dispatch 落库），null = 默认助手 */
+  onPick?: (assistantId: number | null) => void;
 }
 
 export default function ExpertSubMenu({
   sessionId,
   currentAssistantId,
   allowedIds,
+  onPick,
 }: ExpertSubMenuProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
@@ -68,13 +73,18 @@ export default function ExpertSubMenu({
     [mounted, keyword],
   );
 
-  /** 单选：写会话后失效 sessions，选中态与徽章随缓存刷新 */
+  /** 单选：草稿模式纯回调暂存；会话模式写会话后失效 sessions，
+      选中态与徽章随缓存刷新 */
   const handleSelect = async (assistantId: number | null) => {
+    if (onPick) {
+      onPick(assistantId);
+      return;
+    }
     if ((assistantId ?? undefined) === currentAssistantId) {
       return;
     }
     try {
-      await SessionApi.setAssistant(sessionId, assistantId);
+      await SessionApi.setAssistant(sessionId!, assistantId);
       await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
     } catch (e) {
       toast.error(mapIpcError(e));

@@ -69,8 +69,9 @@ interface PlusMenuProps {
   onOpenMcp: () => void;
 }
 
-/** 模式三态（spec R5）：agent 为默认（DB 落 null） */
-const MODES: Array<{ value: SessionMode; labelKey: string }> = [
+/** 模式三态（spec R5）：agent 为默认（DB 落 null）；导出供新建任务
+    落地页 AttachMenu 复用（+ 菜单对齐，避免双份漂移） */
+export const MODES: Array<{ value: SessionMode; labelKey: string }> = [
   { value: "agent", labelKey: "chat:plus.modeAgent" },
   { value: "ask", labelKey: "chat:plus.modeAsk" },
   { value: "plan", labelKey: "chat:plus.modePlan" },

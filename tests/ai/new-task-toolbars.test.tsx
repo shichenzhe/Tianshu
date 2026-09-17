@@ -26,10 +26,24 @@ vi.mock("react-i18next", () => ({
 // cn 依赖 @/i18n 实例（DropdownMenu→cn），最小桩避免拉起完整 i18n 栈
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
 vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn() } }));
-const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+const { invokeMock, navigateMock } = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  navigateMock: vi.fn(),
+}));
 vi.mock("@/lib/ipc", () => ({ invoke: invokeMock }));
+vi.mock("react-router-dom", () => ({ useNavigate: () => navigateMock }));
+// SkillImportDialog 拖入较重依赖，mock 为空组件（同 plus-menu.test.tsx）
+vi.mock("@/domains/ai/skills/components/SkillImportDialog", () => ({
+  default: () => null,
+}));
+// useQuery 按 queryKey 分流：QuickMenu/SkillSubMenu 走 skillRecords，
+// AttachMenu→ExpertSubMenu 走 assistants；QueryClient 仅失效缓存 mock 空操作
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [{ name: "s1", enabled: true, scenarios: null }] }),
+  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) =>
+    queryKey[0] === "assistants"
+      ? { data: [{ id: 7, name: "Al", icon: null }] }
+      : { data: [{ name: "s1", enabled: true, scenarios: null }] },
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 // localStorage stub:store 配置 setter 手写持久化,测试环境无原生 localStorage
 vi.hoisted(() => {
@@ -50,6 +64,7 @@ vi.hoisted(() => {
 import { toast } from "sonner";
 import PolishMenu from "@/domains/ai/new-task/components/PolishMenu";
 import QuickMenu from "@/domains/ai/new-task/components/QuickMenu";
+import AttachMenu from "@/domains/ai/new-task/components/AttachMenu";
 import NewTaskInputCard from "@/domains/ai/new-task/components/NewTaskInputCard";
 import { useNewTaskStore } from "@/domains/ai/new-task/store/new-task-store";
 
@@ -150,6 +165,67 @@ describe("QuickMenu", () => {
       ref: "s1",
       kind: "skill",
     });
+  });
+});
+
+describe("AttachMenu（PlusMenu 对齐）", () => {
+  beforeEach(() => {
+    invokeMock.mockReset();
+    navigateMock.mockReset();
+    useNewTaskStore.getState().resetDraft();
+    useNewTaskStore.getState().setWorkspaceId(2);
+  });
+
+  it("菜单八项齐备：文件三件套 + 模式/专家/技能 + 连接器", async () => {
+    render(<AttachMenu />);
+    await openMenu("newTask:attach.title", "chat:plus.addFile");
+    expect(screen.getByText("newTask:attach.workspaceFile")).toBeTruthy();
+    expect(screen.getByText("newTask:attach.historyChat")).toBeTruthy();
+    expect(screen.getByText("chat:plus.mode")).toBeTruthy();
+    expect(screen.getByText("chat:plus.expert")).toBeTruthy();
+    expect(screen.getByText("chat:plus.skill")).toBeTruthy();
+    expect(screen.getByText("chat:plus.connector")).toBeTruthy();
+  });
+
+  it("模式子菜单：选中写草稿 store（不碰 IPC）", async () => {
+    render(<AttachMenu />);
+    await openMenu("newTask:attach.title", "chat:plus.addFile");
+    fireEvent.pointerMove(screen.getByText("chat:plus.mode"), {
+      pointerType: "mouse",
+    });
+    await waitFor(() =>
+      expect(screen.getByText("chat:plus.modePlan")).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByText("chat:plus.modePlan"));
+    expect(useNewTaskStore.getState().mode).toBe("plan");
+    expect(
+      invokeMock.mock.calls.filter((c) => c[0].startsWith("session:")),
+    ).toHaveLength(0);
+  });
+
+  it("专家面板：选中写草稿 store（onPick 模式不写会话）", async () => {
+    render(<AttachMenu />);
+    await openMenu("newTask:attach.title", "chat:plus.addFile");
+    fireEvent.pointerMove(screen.getByText("chat:plus.expert"), {
+      pointerType: "mouse",
+    });
+    await waitFor(() => expect(screen.getByText("Al")).toBeTruthy());
+    fireEvent.click(screen.getByText("Al"));
+    expect(useNewTaskStore.getState().assistantId).toBe(7);
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "session:setAssistant",
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it("连接器项：导航专家页 connectors Tab", async () => {
+    render(<AttachMenu />);
+    await openMenu("newTask:attach.title", "chat:plus.addFile");
+    fireEvent.click(screen.getByText("chat:plus.connector"));
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/module/ai/experts?tab=connectors",
+    );
   });
 });
 

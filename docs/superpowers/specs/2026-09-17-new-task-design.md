@@ -93,7 +93,7 @@ src-react/domains/ai/new-task/
 │   ├── ScenarioTabs.tsx       # 日常办公(默认) / 代码开发 / 设计创意
 │   ├── PromptChips.tsx        # 横向滚动胶囊栏；模板胶囊 + 技能胶囊混排
 │   ├── NewTaskInputCard.tsx   # textarea(自适应, max-h 50vh) + 附件 pill 列表 + 工具栏
-│   ├── AttachMenu.tsx         # + 菜单：添加本地文件 / 引用工作空间文件 / 引用历史对话(占位)
+│   ├── AttachMenu.tsx         # + 菜单（PlusMenu 对齐）：添加文件/工作空间文件/历史对话(占位) + 模式/专家/技能 + 连接器
 │   ├── PolishMenu.tsx         # 更专业 / 更简洁 / 翻译成英文
 │   ├── QuickMenu.tsx          # ⚡快速：预设快捷指令 + 已启用技能
 │   └── ContextBar.tsx         # 工作空间选择器 + 权限选择器
@@ -153,3 +153,4 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 5. **持久化恢复接线**：store 的 `hydratePersistedDraft()` 落地后一度未接线，T14 接入 NewTaskView——采用 useState lazy initializer 而非 effect（子组件 ContextBar 的 null 兜底 effect 先于父 effect 执行，会覆盖持久化快照；lazy initializer 在首次渲染前恢复，时序正确）。
 6. **测试环境适配**（观察记录，非行为偏差）：FullAccessModal 确认按钮在 mock i18n 环境下渲染为 key 文本 `chat:permission.confirmFullAccess`，测试正则 `/确认|confirm/i` 经 "confirm" 子串命中；真实中文文案为"允许完全访问"。测试已注释说明。
 7. **技能安装/更新接口不透传 scenarios**（执行裁定）：spec §4.1 的'技能安装/更新接口透传 scenarios'未实现——场景打标仅有技能管理列表勾选入口（skill:setScenarios）。数据安全已验证：安装器 upsert 只写 slug/version/source/dir/description，list() 对账只写 dir/description，用户打标在重装/扫描下不丢失。导入弹窗打标列为后续演进。
+8. **+ 菜单完整对齐 PlusMenu**（用户裁定，修订裁定 9 的模式部分）：落地页 AttachMenu 由文件三项扩为与会话 PlusMenu 六项对齐——文件三件套（添加文件/工作空间文件/历史对话占位）+ 模式/专家/技能 + 连接器。模式/专家在无 session 语境下改为"草稿态"：store 增 mode（默认 agent）/assistantId（默认 null）两任务级草稿字段（不持久化、resetDraft 清），dispatch 在 create 后按需 setAssistant/setMode 落库（默认值跳过省 IPC，时序 create→setAssistant→setMode→setPermission→send）；选中反馈在输入卡工具栏以徽章呈现（专家名可 X 清除、非 agent 模式标签，ChatInput 底行同形态）。实现依赖：PlusMenu 导出 MODES 供复用；ExpertSubMenu 增可选 onPick 草稿分支（sessionId 改可选，ChatInput 调用零改动）；SkillSubMenu 无 session 依赖原样复用；文案复用 chat:plus.* 词条。裁定 9"模式不进落地页"就此废止（模式可在发起前选定）；ModelPicker/停止按钮仍不进落地页。

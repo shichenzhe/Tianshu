@@ -99,6 +99,37 @@ describe("dispatchNewTask", () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, "permission:set", 9, "full");
   });
 
+  it("草稿选了专家与非默认模式：create 后 setAssistant→setMode 落库再 send", async () => {
+    useNewTaskStore.getState().setAssistantId(5);
+    useNewTaskStore.getState().setMode("plan");
+    mockInvokeDefault();
+    await dispatchNewTask({ navigate });
+    const channels = invokeMock.mock.calls.map((c) => c[0]);
+    expect(channels).toEqual([
+      "session:create",
+      "session:setAssistant",
+      "session:setMode",
+      "chat:send",
+    ]);
+    expect(invokeMock).toHaveBeenCalledWith("session:setAssistant", 9, 5);
+    expect(invokeMock).toHaveBeenCalledWith("session:setMode", 9, "plan");
+  });
+
+  it("高危+专家+plan 全量：create→setAssistant→setMode→setPermission→send 顺序落库", async () => {
+    useNewTaskStore.getState().setAssistantId(5);
+    useNewTaskStore.getState().setMode("plan");
+    useNewTaskStore.getState().setAccessMode("full");
+    mockInvokeDefault();
+    await dispatchNewTask({ navigate });
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
+      "session:create",
+      "session:setAssistant",
+      "session:setMode",
+      "permission:set",
+      "chat:send",
+    ]);
+  });
+
   it("send 早期失败：不阻塞导航，toast 提示（session 已建立、用户消息已落库）", async () => {
     invokeMock.mockImplementation((channel: string) => {
       if (channel === "session:create") {

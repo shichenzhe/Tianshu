@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 
 import { SCENARIO_KEYS } from "../lib/scenario";
 import { useNewTaskStore } from "../store/new-task-store";
+import PromptChips from "../components/PromptChips";
 import { cn } from "@/lib/utils";
 
 export default function NewTaskView() {
@@ -41,6 +42,7 @@ export default function NewTaskView() {
           </button>
         ))}
       </div>
+      <PromptChips />
     </div>
   );
 }

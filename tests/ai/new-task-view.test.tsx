@@ -2,6 +2,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -17,9 +18,14 @@ import NewTaskView from "@/domains/ai/new-task/views/NewTaskView";
 describe("NewTaskView 骨架", () => {
   it("渲染标题与场景 Tab", () => {
     render(
-      <MemoryRouter>
-        <NewTaskView />
-      </MemoryRouter>,
+      // Task 10 起挂载 PromptChips（useQuery），需 QueryClientProvider；
+      // skill:list 查询在 jsdom 无 IPC 桥时 reject，由 React Query 吞掉，
+      // 胶囊数据空渲染不影响本用例断言
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <NewTaskView />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
     // 注：仓库未装 @testing-library/jest-dom（全仓 0 处 toBeInTheDocument），
     // 沿用既有断言口径 toBeTruthy（同 tests/ai/chat-input-todo.test.tsx）

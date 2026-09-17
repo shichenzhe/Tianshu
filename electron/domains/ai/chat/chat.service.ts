@@ -25,6 +25,7 @@ import {
   type ToolCallBlock,
 } from "./blocks";
 import { mergeParams, type ChatModelParams } from "./param-merge";
+import { buildScenarioSystem } from "./scenario-prompt";
 import { estimateReserveTokens, truncateHistory } from "./history-truncate";
 import {
   computeUsageBreakdown,
@@ -1903,9 +1904,14 @@ export default class ChatService {
       ? (buildProjectSystemBase(baseProjectCtx) ?? assistantRow?.systemPrompt)
       : assistantRow?.systemPrompt;
     const personalization = await loadPersonalization();
-    const baseSystem = buildPersonalizedSystem(
-      personalization,
-      buildModeSystem(mode, base, sessionSkills),
+    // 场景提示段注入（新建任务 spec §4.2）：session.scenario 非空且已知时
+    // 追加到 system 末尾；未知值/null 原样返回 base
+    const baseSystem = buildScenarioSystem(
+      session.scenario as string | null | undefined,
+      buildPersonalizedSystem(
+        personalization,
+        buildModeSystem(mode, base, sessionSkills),
+      ),
     );
     const systemWithSummary =
       compacted && session.summary

@@ -61,6 +61,8 @@ export interface ChatStatusResult {
   };
 }
 
+export type PolishStyle = "professional" | "concise" | "translate-en";
+
 export default class ChatApi {
   /**
    * 查询会话流状态（切回会话恢复 UI，spec §4）
@@ -151,6 +153,15 @@ export default class ChatApi {
     toolName: string,
   ): Promise<void> {
     return invoke<void>("permission:forgetTool", workspaceId, toolName);
+  }
+
+  /** 新建任务落地页润色（一次性补全，不落库不建 session） */
+  static async polish(params: {
+    workspaceId: number;
+    text: string;
+    style: PolishStyle;
+  }): Promise<{ text: string }> {
+    return invoke<{ text: string }>("chat:polish", params);
   }
 }
 

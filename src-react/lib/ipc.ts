@@ -63,6 +63,7 @@ export type IPCChannel =
   | "chat:stop"
   | "chat:compact"
   | "chat:usage"
+  | "chat:polish"
   | "agent:approve"
   | "permission:get"
   | "permission:set"

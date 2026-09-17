@@ -58,6 +58,7 @@ import type {
   ChatSendParams,
   ChatStatusResult,
   ChatStreamChunk,
+  PolishStyle,
 } from "../../../../src-react/domains/ai/api/chat.api";
 import type { WorkspaceRecord } from "../../../../src-react/domains/ai/api/workspace.api";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
@@ -88,6 +89,14 @@ registerTools(makePlanTools({ prisma }));
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 const COMPACT_DIRECTIVE =
   "请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。";
+
+/** 落地页润色补全指令（新建任务 spec §4.3）：给模型看，不进 i18n */
+const STYLE_PROMPTS: Record<string, string> = {
+  professional:
+    "请将以下文本改写得更专业、正式，保留原意与结构，直接输出改写结果：",
+  concise: "请将以下文本精简压缩，保留关键信息，直接输出精简结果：",
+  "translate-en": "请将以下中文文本翻译成英文，直接输出译文：",
+};
 
 /** assistant blocks JSON → 纯文本(text 块拼接;解析失败返回空串) */
 function extractAssistantText(blocksJson: string): string {
@@ -1051,6 +1060,12 @@ export default class ChatService {
     // 上下文用量拆解（输入框环形指示器数据源）
     ipcMain.handle("chat:usage", (_, sessionId: number) =>
       this.getUsageBreakdown(sessionId),
+    );
+    // 落地页润色（新建任务 spec §4.3）：一次性非流式补全，不落库不建 session
+    ipcMain.handle(
+      "chat:polish",
+      (_, p: { workspaceId: number; text: string; style: PolishStyle }) =>
+        this.polishText(p),
     );
     // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具
     ipcMain.handle(
@@ -2105,6 +2120,61 @@ export default class ChatService {
       // 标题失败静默降级（对用户无感知）：仅记录日志保留可观测性
       Log.warn("AI 标题生成失败", e instanceof Error ? e.message : e);
     }
+  }
+
+  /**
+   * 落地页润色：一次性非流式补全，不落库不建 session（新建任务 spec §4.3）。
+   * 模型解析与 assembleContext 同口径：workspace.defaultModelId 优先，
+   * 回退任意启用 provider 首个启用模型（model 与 provider 无 Prisma
+   * relation，启用集需先取 provider id 再筛模型）
+   */
+  private async polishText(p: {
+    workspaceId: number;
+    text: string;
+    style: PolishStyle;
+  }): Promise<{ text: string }> {
+    const workspace = await this.sessions.getWorkspace(p.workspaceId);
+    const enabledProviderIds = (
+      await prisma.provider.findMany({
+        where: { enabled: true },
+        select: { id: true },
+      })
+    ).map((row) => row.id);
+    const modelRow = workspace?.defaultModelId
+      ? await prisma.model.findUnique({
+          where: { id: workspace.defaultModelId },
+        })
+      : await prisma.model.findFirst({
+          where: {
+            enabled: true,
+            providerId: { in: enabledProviderIds },
+          },
+          orderBy: { id: "asc" },
+        });
+    const providerRow = modelRow
+      ? await prisma.provider.findUnique({
+          where: { id: modelRow.providerId },
+        })
+      : null;
+    if (!modelRow || !providerRow) {
+      throw new Error("未配置可用模型，请先在服务商设置中配置");
+    }
+    // 一次性补全（titleModelText 同款 generateText 先例，system 承载
+    // 改写指令、prompt 为原文；无 30 token 标题上限约束）
+    const result = await generateText({
+      model: createLanguageModel(
+        {
+          type: providerRow.type,
+          baseUrl: providerRow.baseUrl,
+          apiKey: providerRow.apiKey ?? undefined,
+          extraHeaders: providerRow.extraHeaders,
+        },
+        modelRow.modelId,
+      ),
+      system: STYLE_PROMPTS[p.style] ?? STYLE_PROMPTS.professional,
+      prompt: p.text,
+    });
+    return { text: result.text };
   }
 
   stop(sessionId: number): void {

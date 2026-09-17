@@ -138,3 +138,14 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 - **Vitest 单测**：`scenario.ts`（场景→胶囊映射、技能过滤）、`sensitive-check.ts`、`dispatch.ts`（mock IPC：编排顺序、各步失败、高危分支）、字数计数
 - **组件测试**：Tab 切换联动胶囊、点击胶囊填模板、发送置灰条件矩阵（空文本/敏感词/无模型/无空间）
 - **手工验收清单**：`docs/superpowers/acceptance/2026-09-17-new-task.md`，沿用 sp 系列模式
+
+## 9. Deviations（执行记录）
+
+实现与 spec 的偏差补记（来源：SDD ledger 各任务执行记录；行为均以 spec 目标为准，以下为达成路径的偏差）：
+
+1. **润色模型选择（chat:polish）**：计划参考实现拟复用 `titleModelText` / `getFirstUsableModel`，代码事实为前者硬编码标题 system prompt + `maxOutputTokens:30`（直接复用会截断润色输出）、后者不存在。实际实现为 `generateText` + `createLanguageModel` 模式复刻，配 prisma 两步查询回退（provider→model）。行为与 §4.3 一致（默认 provider 默认模型）。
+2. **文件选择通道补建**：计划遗漏系统文件选择器通道，执行中补建 `file:pickLocalFiles`（IPCChannel 联合类型登记，与既有通道同模式）。另：计划中测试 mock 与实现要求自相矛盾（整模块 mock `@tanstack/react-query` vs 实现走 useQuery），实际以自建 `hooks/use-workspace-files.ts` 直连 invoke 解决（调用形态对齐 ChatInput，带取消标志无竞态）。
+3. **i18n 结构演进**：`newTask:quick.*` 词条从标量扩为 `{label, prompt}` 对象结构（Controller Ruling 4；zh/en 双语同步；测试断言 key 以组件实际渲染为准）。
+4. **置灰矩阵补模型条件**：§6 本有"无可用模型→发送置灰"要求，计划 T14 的 disabled 矩阵遗漏该条件，执行中补上——判定复刻 ModelPicker 口径（共享 queryKey `["models"]`/`["providers"]`、存在启用 provider 的启用模型），加载窗口保守置灰，提示 `t("newTask:modelRequired")`。
+5. **持久化恢复接线**：store 的 `hydratePersistedDraft()` 落地后一度未接线，T14 接入 NewTaskView——采用 useState lazy initializer 而非 effect（子组件 ContextBar 的 null 兜底 effect 先于父 effect 执行，会覆盖持久化快照；lazy initializer 在首次渲染前恢复，时序正确）。
+6. **测试环境适配**（观察记录，非行为偏差）：FullAccessModal 确认按钮在 mock i18n 环境下渲染为 key 文本 `chat:permission.confirmFullAccess`，测试正则 `/确认|confirm/i` 经 "confirm" 子串命中；真实中文文案为"允许完全访问"。测试已注释说明。

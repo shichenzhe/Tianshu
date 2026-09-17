@@ -16,6 +16,7 @@ import zhChat from "./locales/zh-CN/chat.json";
 import zhSettings from "./locales/zh-CN/settings.json";
 import zhProject from "./locales/zh-CN/project.json";
 import zhSecurity from "./locales/zh-CN/security.json";
+import zhNewTask from "./locales/zh-CN/newTask.json";
 
 // en-US
 import enCommon from "./locales/en-US/common.json";
@@ -26,6 +27,7 @@ import enChat from "./locales/en-US/chat.json";
 import enSettings from "./locales/en-US/settings.json";
 import enProject from "./locales/en-US/project.json";
 import enSecurity from "./locales/en-US/security.json";
+import enNewTask from "./locales/en-US/newTask.json";
 
 const resources = {
   "zh-CN": {
@@ -37,6 +39,7 @@ const resources = {
     settings: zhSettings,
     project: zhProject,
     security: zhSecurity,
+    newTask: zhNewTask,
   },
   "en-US": {
     common: enCommon,
@@ -47,6 +50,7 @@ const resources = {
     settings: enSettings,
     project: enProject,
     security: enSecurity,
+    newTask: enNewTask,
   },
 };
 
@@ -66,6 +70,7 @@ i18n
       "settings",
       "project",
       "security",
+      "newTask",
     ],
     interpolation: {
       escapeValue: false,

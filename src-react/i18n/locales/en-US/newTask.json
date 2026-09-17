@@ -1,0 +1,57 @@
+{
+  "heroTitle": "{{app}}, how can I help",
+  "inputPlaceholder": "Describe your task, type @ to reference files or skills…",
+  "scenario": { "daily": "Daily Work", "coding": "Coding", "design": "Design" },
+  "chips": {
+    "docProcess": { "label": "Document Processing", "prompt": "Help me organize the following content into a well-structured document:\n[Paste content]" },
+    "slides": { "label": "Slides", "prompt": "Help me generate a PPT outline about [topic], including key arguments and page suggestions" },
+    "weeklyReport": { "label": "Weekly Report", "prompt": "Based on the following work log, help me write this week's report:\n[Work log]" },
+    "emailReply": { "label": "Email Reply", "prompt": "Help me draft a reply email with the following context:\n[Context]" },
+    "pythonScript": { "label": "Python Script", "prompt": "Help me write a Python script to: [description]" },
+    "reactComponent": { "label": "Frontend Component", "prompt": "Help me write a [component description] component with React + Tailwind" },
+    "sqlWriter": { "label": "SQL Writing", "prompt": "Write SQL based on the following table schema:\n[Table schema and query requirements]" },
+    "debugHelper": { "label": "Debug", "prompt": "Help me debug the following code:\n[Paste code and error]" },
+    "copywriting": { "label": "Copywriting", "prompt": "Write promotional copy for [product/campaign], targeting [audience]" },
+    "posterPrompt": { "label": "Poster Prompt", "prompt": "Help me write an AI image prompt for a poster on the theme: [topic]" },
+    "brainstorm": { "label": "Brainstorm", "prompt": "Brainstorm 10 creative ideas around [topic]" },
+    "skillChip": { "label": "Skills" }
+  },
+  "attach": {
+    "title": "Add Reference",
+    "localFile": "Add Local File",
+    "workspaceFile": "Reference Workspace File",
+    "historyChat": "Reference Chat History",
+    "developing": "In Development",
+    "oversize": "File size exceeds the limit",
+    "readFailed": "Failed to read file"
+  },
+  "polish": {
+    "title": "AI Polish",
+    "professional": "More Professional",
+    "concise": "More Concise",
+    "translate-en": "Translate to English",
+    "failed": "Polish failed, please try again later"
+  },
+  "quick": {
+    "title": "Quick",
+    "summarize": "Summarize",
+    "translateSel": "Translate to English",
+    "expand": "Expand Details",
+    "listify": "Convert to List",
+    "skillsGroup": "Enabled Skills"
+  },
+  "context": {
+    "workspace": "Select Workspace",
+    "permission": "Default Permission",
+    "standard": "Standard Mode",
+    "full": "High-Risk Mode",
+    "fullDesc": "Allows write operations and command execution, at your own risk",
+    "noWorkspace": "Please create a workspace first"
+  },
+  "send": "Send Task",
+  "sensitiveHit": "Content contains restricted words: {{word}}",
+  "charCount": "{{current}}/2000",
+  "truncateHint": "Limit reached, overly long content may be truncated",
+  "modelRequired": "Please configure an available model first",
+  "dispatchFailed": "Failed to dispatch task, please retry"
+}

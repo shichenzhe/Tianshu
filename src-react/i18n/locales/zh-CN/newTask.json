@@ -1,0 +1,57 @@
+{
+  "heroTitle": "{{app}}，我帮你",
+  "inputPlaceholder": "描述你的任务，输入 @ 引用文件或技能……",
+  "scenario": { "daily": "日常办公", "coding": "代码开发", "design": "设计创意" },
+  "chips": {
+    "docProcess": { "label": "文档处理", "prompt": "帮我把以下内容整理成一份结构清晰的文档：\n[粘贴内容]" },
+    "slides": { "label": "幻灯片", "prompt": "帮我生成一份关于 [主题] 的 PPT 大纲，包含核心论点与分页建议" },
+    "weeklyReport": { "label": "周报生成", "prompt": "根据以下工作记录，帮我生成一份本周周报：\n[工作记录]" },
+    "emailReply": { "label": "邮件回复", "prompt": "帮我起草一封回复邮件，背景如下：\n[背景说明]" },
+    "pythonScript": { "label": "Python 脚本", "prompt": "帮我写一个 Python 脚本实现：[功能描述]" },
+    "reactComponent": { "label": "前端组件", "prompt": "帮我用 React + Tailwind 写一个 [组件描述] 组件" },
+    "sqlWriter": { "label": "SQL 编写", "prompt": "根据以下表结构写 SQL：\n[表结构与查询需求]" },
+    "debugHelper": { "label": "Debug 排查", "prompt": "帮我排查以下代码的 bug：\n[粘贴代码与报错]" },
+    "copywriting": { "label": "文案策划", "prompt": "为 [产品/活动] 策划一段推广文案，目标人群是 [人群]" },
+    "posterPrompt": { "label": "海报 Prompt", "prompt": "帮我写一段生成海报的 AI 绘图提示词，主题：[主题]" },
+    "brainstorm": { "label": "头脑风暴", "prompt": "围绕 [主题] 头脑风暴 10 个创意点子" },
+    "skillChip": { "label": "技能" }
+  },
+  "attach": {
+    "title": "添加引用",
+    "localFile": "添加本地文件",
+    "workspaceFile": "引用工作空间文件",
+    "historyChat": "引用历史对话",
+    "developing": "开发中",
+    "oversize": "文件大小超出限制",
+    "readFailed": "文件读取失败"
+  },
+  "polish": {
+    "title": "AI 润色",
+    "professional": "更专业",
+    "concise": "更简洁",
+    "translate-en": "翻译成英文",
+    "failed": "润色失败，请稍后重试"
+  },
+  "quick": {
+    "title": "快速",
+    "summarize": "总结全文",
+    "translateSel": "翻译成英文",
+    "expand": "扩写细节",
+    "listify": "列表化改写",
+    "skillsGroup": "已启用技能"
+  },
+  "context": {
+    "workspace": "选择工作空间",
+    "permission": "默认权限",
+    "standard": "标准模式",
+    "full": "高危模式",
+    "fullDesc": "允许写操作与命令执行，风险自担",
+    "noWorkspace": "请先创建工作空间"
+  },
+  "send": "发送任务",
+  "sensitiveHit": "内容包含受限词：{{word}}",
+  "charCount": "{{current}}/2000",
+  "truncateHint": "已达上限，超长内容可能被截断",
+  "modelRequired": "请先配置可用模型",
+  "dispatchFailed": "任务发起失败，请重试"
+}

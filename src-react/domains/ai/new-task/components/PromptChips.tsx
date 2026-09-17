@@ -10,11 +10,29 @@ import SkillApi from "../../skills/api/skill.api";
 import { SCENARIO_CHIPS, filterScenarioSkills } from "../lib/scenario";
 import { useNewTaskStore } from "../store/new-task-store";
 
-export default function PromptChips() {
+interface PromptChipsProps {
+  /**
+   * 模板胶囊点击回调（filled = 已插值的模板文案）：由 NewTaskView 填 store
+   * 并聚焦置光标（spec §5 光标落 [主题] 占位处）；缺省直接填 store（独立
+   * 渲染兼容，同原行为）
+   */
+  onTemplateClick?: (filled: string) => void;
+}
+
+export default function PromptChips({ onTemplateClick }: PromptChipsProps) {
   const { t } = useTranslation(["newTask"]);
   const scenario = useNewTaskStore((s) => s.scenario);
   const setContent = useNewTaskStore((s) => s.setContent);
   const addPending = useNewTaskStore((s) => s.addPending);
+
+  const applyTemplate = (chipKey: string) => {
+    const filled = t(`newTask:chips.${chipKey}.prompt`);
+    if (onTemplateClick) {
+      onTemplateClick(filled);
+    } else {
+      setContent(filled);
+    }
+  };
 
   const skillsQuery = useQuery({
     queryKey: ["skillRecords"],
@@ -32,7 +50,7 @@ export default function PromptChips() {
         <button
           key={chipKey}
           type="button"
-          onClick={() => setContent(t(`newTask:chips.${chipKey}.prompt`))}
+          onClick={() => applyTemplate(chipKey)}
           className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-border/50 px-3 text-xs text-foreground hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
         >
           <Sparkles className="h-3 w-3 shrink-0 text-primary" />

@@ -3,7 +3,7 @@
  * 发送时才创建 session（dispatch 编排）；可用模型判定与 ChatView/ModelPicker
  * 共享 ["models"]/["providers"] 查询缓存
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -27,7 +27,25 @@ export default function NewTaskView() {
   const navigate = useNavigate();
   const scenario = useNewTaskStore((s) => s.scenario);
   const setScenario = useNewTaskStore((s) => s.setScenario);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [sending, setSending] = useState(false);
+
+  // 模板胶囊填充（spec §5）：填入后聚焦输入框并把光标落首个 [ 占位处
+  // （无占位则落文末）；queueMicrotask 等受控 value 提交后再置选区，
+  // 否则 React 写 value 会重置刚设的光标
+  const handleTemplateClick = useCallback((filled: string) => {
+    useNewTaskStore.getState().setContent(filled);
+    queueMicrotask(() => {
+      const textarea = inputRef.current;
+      if (!textarea) {
+        return;
+      }
+      const caret = filled.indexOf("[");
+      const index = caret >= 0 ? caret : filled.length;
+      textarea.focus();
+      textarea.setSelectionRange(index, index);
+    });
+  }, []);
 
   // 恢复持久化配置（store JSDoc「落地页挂载时调用一次」）：走 useState 惰性
   // 初始化而非 effect——子组件（ContextBar）的首空间跟随 effect 先于父 effect
@@ -93,11 +111,12 @@ export default function NewTaskView() {
           </button>
         ))}
       </div>
-      <PromptChips />
+      <PromptChips onTemplateClick={handleTemplateClick} />
       <NewTaskInputCard
         onSubmit={handleSubmit}
         sending={sending}
         hasUsableModel={hasUsableModel}
+        inputRef={inputRef}
       />
       {/* 配置栏（输入卡下方：任务级工作空间 + 权限档位） */}
       <ContextBar />

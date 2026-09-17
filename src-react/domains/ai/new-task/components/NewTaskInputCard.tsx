@@ -29,12 +29,15 @@ interface NewTaskInputCardProps {
   hasUsableModel?: boolean;
   /** 发送进行中（防重复提交）；缺省 false */
   sending?: boolean;
+  /** 外部光标控制锚点（NewTaskView 模板胶囊填充后聚焦置选区）；缺省不外接 */
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
 }
 
 export default function NewTaskInputCard({
   onSubmit,
   hasUsableModel = true,
   sending = false,
+  inputRef,
 }: NewTaskInputCardProps) {
   const { t } = useTranslation(["newTask"]);
   const content = useNewTaskStore((s) => s.content);
@@ -272,7 +275,14 @@ export default function NewTaskInputCard({
         </div>
       )}
       <textarea
-        ref={textareaRef}
+        // 内部 textareaRef（联想面板选区回写）与外部 inputRef（NewTaskView
+        // 模板胶囊光标控制）合并挂载
+        ref={(node) => {
+          textareaRef.current = node;
+          if (inputRef) {
+            inputRef.current = node;
+          }
+        }}
         value={content}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

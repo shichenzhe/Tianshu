@@ -1,11 +1,20 @@
 // @vitest-environment jsdom
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// t 走可覆写的 vi.fn（默认直返 key 同原桩）；模板胶囊光标用例需对
+// chips.*.prompt 回带 [ 占位的真实文案（key 本身无 "["，断言不了占位索引）
+const { tMock } = vi.hoisted(() => ({ tMock: vi.fn((k: string) => k) }));
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (k: string) => k }),
+  useTranslation: () => ({ t: tMock }),
 }));
 
 // cn 依赖 @/i18n 实例，最小桩避免拉起完整 i18n 栈（dispatch → mapIpcError
@@ -42,6 +51,8 @@ describe("NewTaskView 骨架", () => {
   // 持久化 key 与 store 三配置跨用例复位（防 hydrate 把上一用例残留回灌）
   beforeEach(() => {
     localStorage.removeItem(STORAGE_KEY);
+    tMock.mockReset();
+    tMock.mockImplementation((k: string) => k);
     useNewTaskStore.setState({
       content: "",
       scenario: "daily",
@@ -105,5 +116,33 @@ describe("NewTaskView 骨架", () => {
     // 空文本矩阵不放行：不触达 session:create（IPC 桥在 jsdom 不可用，
     // 未被 dispatch 调用即不会抛错——此处以 store 草稿仍空佐证未发送）
     expect(useNewTaskStore.getState().content).toBe("");
+  });
+
+  it("模板胶囊填充后聚焦输入框，光标落首个 [ 占位处（spec §5）", async () => {
+    // t mock 默认直返 key（无 [ 占位），本用例对 slides.prompt 覆写为带
+    // [主题] 占位的模板文案（截取自 zh-CN 真实词条），才能断言光标索引
+    const filled = "帮我生成关于 [主题] 的 PPT 大纲";
+    tMock.mockImplementation((k: string) =>
+      k === "newTask:chips.slides.prompt" ? filled : k,
+    );
+    const { container } = render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <NewTaskView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(screen.getByText("newTask:chips.slides.label"));
+    // 填充回调经 queueMicrotask 置选区（等受控 value 提交后再置），flush
+    // 微任务队列后断言
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const textarea = container.querySelector("textarea")!;
+    expect(useNewTaskStore.getState().content).toBe(filled);
+    expect(document.activeElement).toBe(textarea);
+    const caret = filled.indexOf("[");
+    expect(textarea.selectionStart).toBe(caret);
+    expect(textarea.selectionEnd).toBe(caret);
   });
 });

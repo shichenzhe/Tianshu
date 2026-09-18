@@ -57,7 +57,7 @@ export default function LibraryItemDialogs({
           aria-label={t("chat:library.nameLabel")}
           autoFocus
           onKeyDown={(e) => {
-            if (e.key === "Enter" && name.trim()) {
+            if (e.key === "Enter" && name.trim() && !submitting) {
               onSubmit(name.trim());
             }
           }}

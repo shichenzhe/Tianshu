@@ -44,7 +44,10 @@ import { Constants } from "./Constants";
 import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
 import { buildExemptDomains } from "./domains/security/domain-policy";
 import { installNetworkGate } from "./domains/security/network-gate";
-import { installSessionGuard } from "./domains/security/renderer-guard";
+import {
+  installSessionGuard,
+  installLibraryPreviewSessionGuard,
+} from "./domains/security/renderer-guard";
 import { LocalConnectProxy } from "./domains/security/local-proxy";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -257,6 +260,9 @@ export default class Application {
       onBlocked: (host, rule) => networkGate.blockedAudit(host, rule, "fetch"),
     });
     installSessionGuard(); // SP5：渲染层 webRequest 判定
+    // 资料库预览 webview 为独立 partition，webRequest 门不随 defaultSession
+    // 生效——对 library-preview session 单独注册 http(s) 全拒
+    installLibraryPreviewSessionGuard();
     // TTL 异步刷新（首启动即拉一次）+ 代理生命周期初对齐（配置变更时经
     // onConfigChange 重触发）；退出时停本地代理释放端口
     void readProviderDomains();

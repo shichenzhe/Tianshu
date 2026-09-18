@@ -51,3 +51,15 @@ export function installSessionGuard(): void {
     },
   );
 }
+
+/** 资料库预览 webview 独立 partition（library-preview）的网络门：本地
+ *  file:// 预览对 http(s) 子资源/外链直接全拒（spec「外链直接拒」语义，
+ *  不走白名单门）；fromPartition 立即创建 session，放启动装配一次即可 */
+export function installLibraryPreviewSessionGuard(): void {
+  session
+    .fromPartition("library-preview")
+    .webRequest.onBeforeRequest(
+      { urls: ["http://*/*", "https://*/*"] },
+      (_details, callback) => callback({ cancel: true }),
+    );
+}

@@ -128,7 +128,9 @@ export default function NewTaskInputCard({
   const panelActive = suggest !== null && workspaceId !== null;
   const showSuggestList = panelActive;
 
-  /** 面板选中：候选转 pending pill（file=工作空间相对路径，localFile=库内绝对路径），并从文本删除 @query 触发片段 */
+  /** 面板选中：候选转 pending pill（file=工作空间相对路径），并从文本删除
+   *  @query 触发片段；资料库候选（localFile）走 addLocalFile——512KB/二进制
+   *  预检 + 失败 toast + pill label 同「＋引用」入口同源（统一口径） */
   const selectCandidate = (candidate: MentionCandidate) => {
     const textarea = textareaRef.current;
     const caret = textarea?.selectionStart ?? content.length;
@@ -141,11 +143,15 @@ export default function NewTaskInputCard({
         content.slice(Math.max(fragmentEnd, startIndex)),
     );
     setSuggest(null);
-    addPending({
-      label: candidate.label,
-      ref: candidate.ref,
-      kind: candidate.kind,
-    });
+    if (candidate.kind === "localFile") {
+      void addLocalFile(candidate.ref);
+    } else {
+      addPending({
+        label: candidate.label,
+        ref: candidate.ref,
+        kind: candidate.kind,
+      });
+    }
     requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(startIndex, startIndex);

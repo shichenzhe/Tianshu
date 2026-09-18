@@ -2,14 +2,15 @@
  * 资料库仓储（spec §3/§4）：DB 为真相源 + ID 寻址存储
  * {userData}/library/{itemId}/{原文件名}。元数据六通道（list 含面包屑 /
  * search 跨层 / createFolder / rename / move 循环防护 / delete 级联删
- * 记录后清盘）；移动与重命名只改 DB 不动磁盘。文件三通道（addFiles
- * 拷贝入库 + revealItem 定位）见 Task 4。
+ * 记录后清盘）；rename/move 的 file 分支均磁盘双写（storagePath 派生自
+ * name，纯 DB 改名会使路径断裂）；folder 无磁盘实体，仍纯 DB。
  */
 import { ipcMain, app, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import prisma from "../../../commons/prisma-client";
+import Log from "../../../commons/Log";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import type {
   LibraryItem,
@@ -234,7 +235,6 @@ export default class LibraryRepository {
    * rename 升级（Task 3 review 裁决）：file 的重命名先同步磁盘文件名再
    * update DB（storagePath 派生自当前 name，纯 DB rename 会使其断裂）；
    * 磁盘失败抛错、DB 不动。folder 无磁盘实体，仍走纯 DB。
-   * 以本方法整体替换 Task 3 的 rename 实现。
    */
   async rename(id: number, name: string): Promise<LibraryItem> {
     const row = await this.mustGet(id);
@@ -255,7 +255,8 @@ export default class LibraryRepository {
     return toClientItem(updated, this.libraryRoot);
   }
 
-  /** 移动：目标须为文件夹且不在被移项自身子树内（循环防护）；纯 DB */
+  /** 移动：目标须为文件夹且不在被移项自身子树内（循环防护）；file 撞名
+   *  改序号时磁盘双写（同 rename 模式——磁盘成功才动 DB），其余纯 DB */
   async move(ids: number[], targetParentId: number | null): Promise<null> {
     const all = await this.prismaClient.libraryItem.findMany();
     const rows: ItemRow[] = all.map((row) => ({
@@ -293,6 +294,15 @@ export default class LibraryRepository {
       }
       const finalName = uniqueDbName(existingNames, current.name);
       existingNames.add(finalName);
+      // 撞名（finalName !== current.name）时 file 须先同步磁盘文件名再动
+      // DB——storagePath 派生自 name，纯 DB 改名会使路径指向不存在文件且
+      // rename() 后续按错名 fs.rename ENOENT 无法自愈；folder 纯 DB
+      if (current.kind === "file" && finalName !== current.name) {
+        await fs.rename(
+          path.join(this.libraryRoot, String(id), current.name),
+          path.join(this.libraryRoot, String(id), finalName),
+        );
+      }
       await this.prismaClient.libraryItem.update({
         where: { id },
         data: { parentId: targetParentId, name: finalName },
@@ -350,7 +360,7 @@ export default class LibraryRepository {
           force: true,
         });
       } catch (error) {
-        console.warn(`资料库磁盘清理失败（id=${id}）`, error);
+        Log.warn(`资料库磁盘清理失败（id=${id}）`, error);
       }
     }
   }

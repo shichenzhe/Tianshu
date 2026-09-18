@@ -7,6 +7,11 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }));
 
+// library.repo 引入 Log（→ winston + electron，asset-repo.test 先例直接 mock）
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
 // 内存表：findMany(where.parentId === null 不匹配的用 null 语义对齐
 const table: Array<Record<string, unknown> & { id: number }> = [];
 let nextId = 1;
@@ -145,5 +150,24 @@ describe("LibraryRepository 文件通道", () => {
     expect(fs.existsSync(renamed.storagePath)).toBe(true);
     expect(fs.readFileSync(renamed.storagePath as string, "utf8")).toBe("data");
     expect(fs.existsSync(added[0].storagePath as string)).toBe(false);
+  });
+
+  it("move 撞名文件磁盘双写：同名移入目标层自动序号且 storagePath 落盘", async () => {
+    const srcDir = fs.mkdtempSync(path.join(os.tmpdir(), "lib-src5-"));
+    const src = path.join(srcDir, "同.txt");
+    fs.writeFileSync(src, "m");
+    const repo = new LibraryRepository();
+    const folder = await repo.createFolder("目标", null);
+    const { added } = await repo.addFiles([src], null); // 根层
+    await repo.addFiles([src], folder.id); // 目标层同名（序号占位）
+    const oldPath = added[0].storagePath as string;
+    // 根层同名文件移入目标层 → DB 名「同 (2).txt」且磁盘同步改名
+    await repo.move([added[0].id], folder.id);
+    const { items } = await repo.list(folder.id);
+    const moved = items.find((item) => item.id === added[0].id);
+    expect(moved?.name).toBe("同 (2).txt");
+    expect(fs.existsSync(moved?.storagePath as string)).toBe(true);
+    expect(fs.readFileSync(moved?.storagePath as string, "utf8")).toBe("m");
+    expect(fs.existsSync(oldPath)).toBe(false);
   });
 });

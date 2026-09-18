@@ -43,7 +43,7 @@ export default function LibraryPickerDialog({
     new Map(),
   );
   const searching = keyword.trim().length > 0;
-  const { data } = useQuery({
+  const { data, isPending } = useQuery({
     queryKey: searching
       ? ["librarySearch", keyword.trim()]
       : ["libraryItems", folderId],
@@ -118,9 +118,10 @@ export default function LibraryPickerDialog({
           </nav>
         )}
         <div className="flex-1 overflow-y-auto">
-          {items.length === 0 && (
+          {/* 查询进行中不渲染空态文案（首次/切层闪「无资料」误导） */}
+          {items.length === 0 && !isPending && (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              {t("chat:library.empty")}
+              {t("chat:library.pickEmpty")}
             </p>
           )}
           {items.map((item) =>

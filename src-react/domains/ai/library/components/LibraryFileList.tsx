@@ -104,10 +104,13 @@ export default function LibraryFileList({
             )}
           </button>
           <span className="truncate text-muted-foreground">
-            {t(
-              TYPE_LABEL_KEY[item.fileType ?? "other"] ??
-                "chat:library.typeOther",
-            )}
+            {/* folder 行类型列渲染「—」（fileType 为 null，不落「其他」） */}
+            {item.kind === "folder"
+              ? "—"
+              : t(
+                  TYPE_LABEL_KEY[item.fileType ?? "other"] ??
+                    "chat:library.typeOther",
+                )}
           </span>
           <span className="text-muted-foreground">{formatSize(item.size)}</span>
           <span className="truncate text-muted-foreground">

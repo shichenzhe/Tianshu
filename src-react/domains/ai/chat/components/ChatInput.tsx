@@ -40,6 +40,7 @@ import { usePlanAdvanceStore } from "../../../project/store/plan-advance.store";
 import SkillApi from "../../skills/api/skill.api";
 import AssistantApi from "../../api/assistant.api";
 import LibraryApi from "../../library/api/library.api";
+import { isOversizeError } from "../../new-task/lib/attach";
 import { mapIpcError } from "../lib/error-message";
 
 import { Button } from "@/components/ui/button";
@@ -440,7 +441,10 @@ export default function ChatInput({
         }
       }
       // 资料库 pill：读内容组注入块（与 dispatch.readPendingRef 同口径——
-      // 文本注入、图片占位标记；读失败 toast 计入 failures）
+      // 文本注入、图片占位标记）；读取失败与 @token 失败分离——libFailures
+      // 非空即恢复输入与 pill 不发送（资料库引用不在文本中，静默丢失会使
+      // 「已按原样保留」谎报），专用 toast 告知
+      const libFailures: string[] = [];
       for (const libFile of libraryFiles) {
         try {
           const result = await invoke<{
@@ -456,8 +460,16 @@ export default function ChatInput({
             kind: "localFile",
           });
         } catch {
-          failures.push(libFile.name);
+          libFailures.push(libFile.name);
         }
+      }
+      if (libFailures.length > 0) {
+        toast.warning(
+          t("chat:library.sendReadFailed", { names: libFailures.join(", ") }),
+        );
+        setContent(raw);
+        setLibraryFiles(libraryFiles);
+        return;
       }
       if (failures.length > 0) {
         toast.warning(
@@ -489,6 +501,33 @@ export default function ChatInput({
     t,
   ]);
 
+  /** 资料库 pill 挂载（@ 联想与＋菜单选择器两入口共用）：挂 pill 前经
+   *  readExternalFile 预检（512KB 上限/二进制/权限），失败按超限/读取失败
+   *  区分 toast 且不挂 pill（同 new-task addLocalFile 口径）；通过后按
+   *  storagePath 去重合并 */
+  const attachLibraryFile = useCallback(
+    async (name: string, storagePath: string) => {
+      try {
+        await invoke("file:readExternalFile", storagePath);
+      } catch (e) {
+        toast.error(
+          t(
+            isOversizeError(e)
+              ? "chat:library.oversize"
+              : "chat:library.readFailed",
+          ),
+        );
+        return;
+      }
+      setLibraryFiles((prev) =>
+        prev.some((f) => f.storagePath === storagePath)
+          ? prev
+          : [...prev, { name, storagePath }],
+      );
+    },
+    [t],
+  );
+
   /** 面板选中:按候选类型拼 token 插入光标处 */
   const selectCandidate = useCallback(
     (candidate: SuggestCandidate) => {
@@ -505,14 +544,8 @@ export default function ChatInput({
           content.slice(end);
         setContent(next);
         setSuggest(null);
-        setLibraryFiles((prev) =>
-          prev.some((f) => f.storagePath === candidate.storagePath)
-            ? prev
-            : [
-                ...prev,
-                { name: candidate.name, storagePath: candidate.storagePath },
-              ],
-        );
+        // 挂 pill 前预检：读取失败（超限/二进制/权限）toast 且不挂 pill
+        void attachLibraryFile(candidate.name, candidate.storagePath);
         requestAnimationFrame(() => {
           const pos = suggest ? suggest.startIndex : caret;
           textarea?.focus();
@@ -540,7 +573,7 @@ export default function ChatInput({
         textarea?.setSelectionRange(pos, pos);
       });
     },
-    [content, suggest],
+    [content, suggest, attachLibraryFile],
   );
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -904,16 +937,13 @@ export default function ChatInput({
                 insertAtCaret(`@${filePath} `);
               }
             }}
-            onPickLibraryFiles={(files) =>
-              setLibraryFiles((prev) => {
-                // storagePath 去重合并（@ 联想挂过的不再重复）
-                const seen = new Set(prev.map((f) => f.storagePath));
-                return [
-                  ...prev,
-                  ...files.filter((f) => !seen.has(f.storagePath)),
-                ];
-              })
-            }
+            onPickLibraryFiles={(files) => {
+              // 挂 pill 前逐文件预检（attachLibraryFile 内 storagePath 去重
+              // 合并 + 失败 toast 不挂）
+              for (const file of files) {
+                void attachLibraryFile(file.name, file.storagePath);
+              }
+            }}
             onOpenMcp={onOpenMcp}
           />
           <PermissionCapsule

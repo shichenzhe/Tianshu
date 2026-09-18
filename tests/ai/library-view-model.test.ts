@@ -88,6 +88,14 @@ describe("fileUrlOf / formatSize", () => {
   it("file:// 逐段编码空格", () => {
     expect(fileUrlOf("/a b/c#d.txt")).toBe("file:///a%20b/c%23d.txt");
   });
+  it("win32 反斜杠归一为 / 且盘符段原样保留（不编码成 C%3A）", () => {
+    expect(fileUrlOf("C:\\Users\\a b\\img 1.png")).toBe(
+      "file://C:/Users/a%20b/img%201.png",
+    );
+    expect(fileUrlOf("D:\\Reports\\汇总#1.md")).toBe(
+      "file://D:/Reports/%E6%B1%87%E6%80%BB%231.md",
+    );
+  });
   it("容量格式化与 null 占位", () => {
     expect(formatSize(null)).toBe("—");
     expect(formatSize(1024)).toBe("1.0 KB");

@@ -42,13 +42,18 @@ export default function LibraryMoveDialog({
   });
   const folders = (data?.items ?? []).filter((item) => item.kind === "folder");
 
+  /** 关闭统一重置浏览层（取消/遮罩关闭/移入成功后均回根层，避免下次开窗残留） */
+  const handleClose = () => {
+    onClose();
+    setFolderId(null);
+  };
+
   const handleMove = async () => {
     setSubmitting(true);
     try {
       await LibraryApi.move(itemIds, folderId ?? undefined);
       onMoved();
-      onClose();
-      setFolderId(null);
+      handleClose();
     } catch (e) {
       toast.error(mapIpcError(e));
     } finally {
@@ -57,7 +62,7 @@ export default function LibraryMoveDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
       <DialogContent className="border border-border/50 rounded-lg shadow-lg sm:max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -66,7 +71,8 @@ export default function LibraryMoveDialog({
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
-                aria-label="back"
+                aria-label={t("common:back")}
+                title={t("common:back")}
                 onClick={() => setFolderId(null)}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -96,7 +102,7 @@ export default function LibraryMoveDialog({
           ))}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose}>
             {t("common:cancel")}
           </Button>
           <Button disabled={submitting} onClick={() => void handleMove()}>

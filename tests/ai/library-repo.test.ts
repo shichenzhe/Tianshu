@@ -7,6 +7,11 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }));
 
+// library.repo 引入 Log（→ winston + electron，asset-repo.test 先例直接 mock）
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+
 // 内存表：findMany(where.parentId === null 不匹配的用 null 语义对齐
 const table: Array<Record<string, unknown> & { id: number }> = [];
 let nextId = 1;

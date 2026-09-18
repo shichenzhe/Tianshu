@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const openExternal = vi.hoisted(() => vi.fn(async (url: string) => void url));
 vi.mock("electron", () => ({
   shell: { openExternal },
-  session: { defaultSession: { webRequest: { onBeforeRequest: vi.fn() } } },
+  session: {
+    defaultSession: { webRequest: { onBeforeRequest: vi.fn() } },
+    fromPartition: vi.fn(() => ({ webRequest: { onBeforeRequest: vi.fn() } })),
+  },
 }));
 // network-gate 传递依赖 Log（→ electron，终审 S2）；本文件 electron mock 无
 // app.getPath，故直接 mock Log（照 settings.service.test 先例）
@@ -25,9 +28,12 @@ vi.mock(
   },
 );
 
+import { session } from "electron";
+import type { Session } from "electron";
 import { getNetworkGate } from "../../electron/domains/security/network-gate";
 import {
   handleWindowOpen,
+  installLibraryPreviewSessionGuard,
   shouldAllowNavigation,
 } from "../../electron/domains/security/renderer-guard";
 import type { NetworkGate } from "../../electron/domains/security/network-gate";
@@ -123,5 +129,28 @@ describe("shouldAllowNavigation", () => {
       false,
     );
     expect(shouldAllowNavigation("", "http://localhost:5173")).toBe(false);
+  });
+});
+
+describe("installLibraryPreviewSessionGuard（资料库预览 partition 网络门）", () => {
+  it("对 library-preview session 的 http(s) 请求直接 cancel（本地预览外链全拒）", () => {
+    const onBeforeRequest = vi.fn();
+    vi.mocked(session.fromPartition).mockReturnValue({
+      webRequest: { onBeforeRequest },
+    } as unknown as Session);
+    installLibraryPreviewSessionGuard();
+    expect(session.fromPartition).toHaveBeenCalledWith("library-preview");
+    expect(onBeforeRequest).toHaveBeenCalledTimes(1);
+    const [filter, handler] = onBeforeRequest.mock.calls[0] as [
+      { urls: string[] },
+      (
+        details: { url: string },
+        callback: (response: { cancel?: boolean }) => void,
+      ) => void,
+    ];
+    expect(filter).toEqual({ urls: ["http://*/*", "https://*/*"] });
+    const cancel = vi.fn();
+    handler({ url: "https://evil.com/x.js" }, cancel);
+    expect(cancel).toHaveBeenCalledWith({ cancel: true });
   });
 });

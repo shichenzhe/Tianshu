@@ -105,10 +105,13 @@ export default function LibraryView() {
     try {
       const result = await LibraryApi.addFiles(paths, folderId ?? undefined);
       if (result.added.length > 0 || result.failed.length > 0) {
-        // 重名自动编号告知（spec 裁定 7）：入库后名与源文件名不同的条目计数
-        const renamedCount = result.added.filter(
-          (item, index) => item.name !== paths[index]?.split(/[\\/]/).pop(),
-        ).length;
+        // 重名自动编号告知（spec 裁定 7）：按 added 条目自身口径比对——
+        // 入库后名与源文件名（originalPath 尾段）不同的条目计数；不按
+        // paths 索引配对（混合成功/失败批次会错位）
+        const renamedCount = result.added.filter((item) => {
+          const origin = item.originalPath?.split(/[\\/]/).pop();
+          return origin !== undefined && item.name !== origin;
+        }).length;
         toast.success(
           t("chat:library.uploadToast", {
             success: result.added.length,
@@ -286,7 +289,11 @@ export default function LibraryView() {
           onPreview={(item) => setPreviewItem(item)}
           onRename={(item) => setDialog({ mode: "rename", item })}
           onMove={(item) => setMoveIds([item.id])}
-          onReveal={(item) => void LibraryApi.revealItem(item.id)}
+          onReveal={(item) =>
+            void LibraryApi.revealItem(item.id).catch((e) =>
+              toast.error(mapIpcError(e)),
+            )
+          }
           onDelete={(item) => setDeleteItem(item)}
         />
       )}

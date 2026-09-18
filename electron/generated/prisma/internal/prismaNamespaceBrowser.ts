@@ -73,7 +73,8 @@ export const ModelName = {
   planItem: 'planItem',
   planView: 'planView',
   planItemAttachment: 'planItemAttachment',
-  securityAuditLog: 'securityAuditLog'
+  securityAuditLog: 'securityAuditLog',
+  libraryItem: 'libraryItem'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -428,6 +429,22 @@ export const SecurityAuditLogScalarFieldEnum = {
 } as const
 
 export type SecurityAuditLogScalarFieldEnum = (typeof SecurityAuditLogScalarFieldEnum)[keyof typeof SecurityAuditLogScalarFieldEnum]
+
+
+export const LibraryItemScalarFieldEnum = {
+  id: 'id',
+  parentId: 'parentId',
+  name: 'name',
+  kind: 'kind',
+  fileType: 'fileType',
+  mimeType: 'mimeType',
+  size: 'size',
+  originalPath: 'originalPath',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type LibraryItemScalarFieldEnum = (typeof LibraryItemScalarFieldEnum)[keyof typeof LibraryItemScalarFieldEnum]
 
 
 export const SortOrder = {

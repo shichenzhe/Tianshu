@@ -316,3 +316,18 @@ model securityAuditLog {
   @@index([createdAt], map: "idx_audit_createdAt")
   @@index([category], map: "idx_audit_category")
 }
+
+model libraryItem {
+  id           Int      @id @default(autoincrement())
+  parentId     Int?
+  name         String
+  kind         String // "folder" | "file"
+  fileType     String?
+  mimeType     String?
+  size         Int?
+  originalPath String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([parentId])
+}

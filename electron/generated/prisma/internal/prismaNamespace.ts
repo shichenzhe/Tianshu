@@ -419,7 +419,8 @@ export const ModelName = {
   planItem: 'planItem',
   planView: 'planView',
   planItemAttachment: 'planItemAttachment',
-  securityAuditLog: 'securityAuditLog'
+  securityAuditLog: 'securityAuditLog',
+  libraryItem: 'libraryItem'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -435,7 +436,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2141,6 +2142,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    libraryItem: {
+      payload: Prisma.$libraryItemPayload<ExtArgs>
+      fields: Prisma.libraryItemFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.libraryItemFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.libraryItemFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        findFirst: {
+          args: Prisma.libraryItemFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.libraryItemFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        findMany: {
+          args: Prisma.libraryItemFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>[]
+        }
+        create: {
+          args: Prisma.libraryItemCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        createMany: {
+          args: Prisma.libraryItemCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.libraryItemCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>[]
+        }
+        delete: {
+          args: Prisma.libraryItemDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        update: {
+          args: Prisma.libraryItemUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        deleteMany: {
+          args: Prisma.libraryItemDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.libraryItemUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.libraryItemUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>[]
+        }
+        upsert: {
+          args: Prisma.libraryItemUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$libraryItemPayload>
+        }
+        aggregate: {
+          args: Prisma.LibraryItemAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateLibraryItem>
+        }
+        groupBy: {
+          args: Prisma.libraryItemGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LibraryItemGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.libraryItemCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.LibraryItemCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2518,6 +2593,22 @@ export const SecurityAuditLogScalarFieldEnum = {
 export type SecurityAuditLogScalarFieldEnum = (typeof SecurityAuditLogScalarFieldEnum)[keyof typeof SecurityAuditLogScalarFieldEnum]
 
 
+export const LibraryItemScalarFieldEnum = {
+  id: 'id',
+  parentId: 'parentId',
+  name: 'name',
+  kind: 'kind',
+  fileType: 'fileType',
+  mimeType: 'mimeType',
+  size: 'size',
+  originalPath: 'originalPath',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type LibraryItemScalarFieldEnum = (typeof LibraryItemScalarFieldEnum)[keyof typeof LibraryItemScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -2748,6 +2839,7 @@ export type GlobalOmitConfig = {
   planView?: Prisma.planViewOmit
   planItemAttachment?: Prisma.planItemAttachmentOmit
   securityAuditLog?: Prisma.securityAuditLogOmit
+  libraryItem?: Prisma.libraryItemOmit
 }
 
 /* Types for Logging */

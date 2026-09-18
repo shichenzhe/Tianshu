@@ -132,3 +132,8 @@ export type planItemAttachment = Prisma.planItemAttachmentModel
  * 
  */
 export type securityAuditLog = Prisma.securityAuditLogModel
+/**
+ * Model libraryItem
+ * 
+ */
+export type libraryItem = Prisma.libraryItemModel

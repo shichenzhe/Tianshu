@@ -39,9 +39,14 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
   };
 });
 
-// 二级浮层与导入弹窗拖入较重依赖，mock 为空组件，本测试只关心菜单开合
+// 二级浮层与导入/资料库选择弹窗拖入较重依赖，mock 为空组件，
+// 本测试只关心菜单开合
 vi.mock(
   "../../src-react/domains/ai/skills/components/SkillImportDialog",
+  () => ({ default: () => null }),
+);
+vi.mock(
+  "../../src-react/domains/ai/library/components/LibraryPickerDialog",
   () => ({ default: () => null }),
 );
 vi.mock("../../src-react/domains/ai/chat/components/expert-sub-menu", () => ({
@@ -57,6 +62,7 @@ const BASE_PROPS = {
   sessionId: 1,
   currentMode: "agent" as const,
   onPickPaths: () => undefined,
+  onPickLibraryFiles: () => undefined,
   onOpenMcp: () => undefined,
 };
 
@@ -84,6 +90,10 @@ describe("PlusMenu", () => {
   it("点击 ＋ 按钮应打开扩展菜单", async () => {
     render(<PlusMenu {...BASE_PROPS} />);
     await openPlusMenu();
+    // 资料库项（Task 9）：位于添加文件之后
+    expect(
+      screen.getByRole("menuitem", { name: "chat:plus.library" }),
+    ).toBeTruthy();
     expect(screen.getByText("chat:plus.connector")).toBeTruthy();
   });
 

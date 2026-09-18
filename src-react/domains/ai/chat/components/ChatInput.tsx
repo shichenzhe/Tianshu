@@ -25,6 +25,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Library,
   ListTodo,
   Send,
   Sparkles,
@@ -38,6 +39,7 @@ import { useCreateSkillPromptStore } from "../../skills/store/create-skill.store
 import { usePlanAdvanceStore } from "../../../project/store/plan-advance.store";
 import SkillApi from "../../skills/api/skill.api";
 import AssistantApi from "../../api/assistant.api";
+import LibraryApi from "../../library/api/library.api";
 import { mapIpcError } from "../lib/error-message";
 
 import { Button } from "@/components/ui/button";
@@ -63,12 +65,14 @@ import ModelPicker from "./ModelPicker";
 import ContextUsageButton from "./context-usage-button";
 import PermissionCapsule, { type AccessMode } from "./PermissionCapsule";
 import PlusMenu, { type LocalTaskToggle } from "./PlusMenu";
+import type { PickedLibraryFile } from "../../library/components/LibraryPickerDialog";
 
-/** 联想候选:命令 / 技能 / 文件 / 待办 */
+/** 联想候选:命令 / 技能 / 文件 / 资料库 / 待办 */
 type SuggestCandidate =
   | { kind: "command"; name: string }
   | { kind: "skill"; name: string }
   | { kind: "file"; path: string }
+  | { kind: "library"; name: string; storagePath: string }
   | { kind: "todo"; id: number; title: string };
 
 /** 项目待办引用数据源(计划事项记录;ProjectChatBar 注入,AI 模块不传) */
@@ -174,6 +178,9 @@ export default function ChatInput({
     query: string;
   } | null>(null);
   const [highlightIndex, setHighlightIndex] = useState(0);
+  // 资料库引用 pill（@ 联想与＋菜单共同数据源；storagePath 含空格，
+  // 不走 @token——spec §6「选中挂 pill」）
+  const [libraryFiles, setLibraryFiles] = useState<PickedLibraryFile[]>([]);
   const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLDivElement>(null);
@@ -213,6 +220,15 @@ export default function ChatInput({
       invoke<string[] | null>("file:listWorkspaceFiles", workspaceId),
     enabled: workspaceId !== null && suggest !== null,
     staleTime: 300_000,
+  });
+
+  // @ 联想资料库候选（跨层文件名搜索；与选择器共享 librarySearch 缓存；
+  // 空 query 不拉——避免 bare @ 每击键全量搜索）
+  const suggestQuery = suggest?.type === "at" ? suggest.query : "";
+  const librarySearchQuery = useQuery({
+    queryKey: ["librarySearch", suggestQuery],
+    queryFn: () => LibraryApi.search(suggestQuery),
+    enabled: suggestQuery.length > 0,
   });
 
   // 已安装技能（/ 面板候选 + 输入框启用标签行；与＋菜单技能浮层共享缓存）
@@ -266,14 +282,31 @@ export default function ChatInput({
     if (!files) {
       return [];
     }
-    return (
-      query
+    // 资料库组：候选按 librarySearch 结果追加（空 query 恒空——不与工作
+    // 空间文件组混排，选中挂 pill 而非 @token）
+    const library: SuggestCandidate[] = query
+      ? (librarySearchQuery.data ?? []).slice(0, MENTION_LIMIT).map((item) => ({
+          kind: "library" as const,
+          name: item.name,
+          storagePath: item.storagePath ?? "",
+        }))
+      : [];
+    return [
+      ...(query
         ? files.filter((file) => file.toLowerCase().includes(query))
         : [...files].sort((a, b) => a.length - b.length)
-    )
-      .slice(0, MENTION_LIMIT)
-      .map((file) => ({ kind: "file" as const, path: file }));
-  }, [suggest, skillsQuery.data, workspaceFilesQuery.data, todoItems]);
+      )
+        .slice(0, MENTION_LIMIT)
+        .map((file) => ({ kind: "file" as const, path: file })),
+      ...library,
+    ];
+  }, [
+    suggest,
+    skillsQuery.data,
+    workspaceFilesQuery.data,
+    librarySearchQuery.data,
+    todoItems,
+  ]);
 
   // 待办标题映射:#<id> → 待办标题(已引用 chips 行数据源)
   const todoTitleById = useMemo(() => {
@@ -355,6 +388,7 @@ export default function ChatInput({
     const messageText = stripCommandTokens(raw);
     setContent("");
     setSuggest(null);
+    setLibraryFiles([]);
     for (const command of commands) {
       onRunCommand(command);
     }
@@ -405,6 +439,26 @@ export default function ChatInput({
           });
         }
       }
+      // 资料库 pill：读内容组注入块（与 dispatch.readPendingRef 同口径——
+      // 文本注入、图片占位标记；读失败 toast 计入 failures）
+      for (const libFile of libraryFiles) {
+        try {
+          const result = await invoke<{
+            kind: "text" | "image";
+            content?: string;
+          }>("file:readExternalFile", libFile.storagePath);
+          files.push({
+            path: libFile.name,
+            content:
+              result.kind === "text"
+                ? (result.content ?? "")
+                : `[图片 ${libFile.name}]`,
+            kind: "localFile",
+          });
+        } catch {
+          failures.push(libFile.name);
+        }
+      }
       if (failures.length > 0) {
         toast.warning(
           t("chat:mention.tokenReadFailed", { names: failures.join(", ") }),
@@ -413,7 +467,9 @@ export default function ChatInput({
       if (messageText.trim() === "" && files.length === 0) {
         if (commands.length === 0 || failures.length > 0) {
           // 既无正文也无可用注入(且非纯命令成功):恢复输入避免吞掉
+          // (资料库 pill 不在文本中,须随输入一并恢复)
           setContent(raw);
+          setLibraryFiles(libraryFiles);
         }
         return;
       }
@@ -427,6 +483,7 @@ export default function ChatInput({
     sending,
     workspaceId,
     todoItems,
+    libraryFiles,
     onRunCommand,
     onSend,
     t,
@@ -440,6 +497,29 @@ export default function ChatInput({
       const end = suggest
         ? Math.min(caret, suggest.startIndex + 1 + suggest.query.length)
         : caret;
+      // 资料库候选不插 @token（storagePath 含空格,TOKEN_RE 不匹配会截断
+      // 成碎 token）:删除 @ 触发片段（同 NewTaskInputCard 语义）后挂 pill
+      if (candidate.kind === "library") {
+        const next =
+          content.slice(0, suggest ? suggest.startIndex : caret) +
+          content.slice(end);
+        setContent(next);
+        setSuggest(null);
+        setLibraryFiles((prev) =>
+          prev.some((f) => f.storagePath === candidate.storagePath)
+            ? prev
+            : [
+                ...prev,
+                { name: candidate.name, storagePath: candidate.storagePath },
+              ],
+        );
+        requestAnimationFrame(() => {
+          const pos = suggest ? suggest.startIndex : caret;
+          textarea?.focus();
+          textarea?.setSelectionRange(pos, pos);
+        });
+        return;
+      }
       const token =
         candidate.kind === "file"
           ? `@${candidate.path} `
@@ -651,9 +731,11 @@ export default function ChatInput({
                   key={`${candidate.kind}:${
                     candidate.kind === "file"
                       ? candidate.path
-                      : candidate.kind === "todo"
-                        ? candidate.id
-                        : candidate.name
+                      : candidate.kind === "library"
+                        ? candidate.storagePath
+                        : candidate.kind === "todo"
+                          ? candidate.id
+                          : candidate.name
                   }`}
                 >
                   <button
@@ -690,6 +772,14 @@ export default function ChatInput({
                         <span className="ml-auto shrink-0 text-muted-foreground">
                           #{candidate.id}
                         </span>
+                      </>
+                    ) : candidate.kind === "library" ? (
+                      /* 分组小标签区分工作空间文件组（同 NewTaskInputCard） */
+                      <>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {t("chat:library.groupLibrary")}
+                        </span>
+                        <span className="truncate">{candidate.name}</span>
                       </>
                     ) : (
                       <span className="truncate">{candidate.path}</span>
@@ -777,6 +867,28 @@ export default function ChatInput({
           ))}
         </div>
       )}
+      {/* 资料库引用 pill 行：@ 联想与＋菜单共同数据源（不在输入流中），
+          点击移除 */}
+      {libraryFiles.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1 px-1 pb-1 pt-1">
+          {libraryFiles.map((file) => (
+            <button
+              key={file.storagePath}
+              type="button"
+              title={file.name}
+              onClick={() =>
+                setLibraryFiles((prev) =>
+                  prev.filter((f) => f.storagePath !== file.storagePath),
+                )
+              }
+              className="inline-flex max-w-48 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary hover:border-primary/30"
+            >
+              <Library className="h-2.5 w-2.5 shrink-0" />
+              <span className="truncate">{file.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {/* 下行：左 ＋菜单 + 权限胶囊 + 模式徽标，右 模型 + 发送/停止 */}
       <div className="flex items-center pt-2">
         <div className="flex items-center gap-2">
@@ -792,6 +904,16 @@ export default function ChatInput({
                 insertAtCaret(`@${filePath} `);
               }
             }}
+            onPickLibraryFiles={(files) =>
+              setLibraryFiles((prev) => {
+                // storagePath 去重合并（@ 联想挂过的不再重复）
+                const seen = new Set(prev.map((f) => f.storagePath));
+                return [
+                  ...prev,
+                  ...files.filter((f) => !seen.has(f.storagePath)),
+                ];
+              })
+            }
             onOpenMcp={onOpenMcp}
           />
           <PermissionCapsule

@@ -10,7 +10,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, FilePlus, Plug, Plus, Sparkles } from "lucide-react";
+import { Check, FilePlus, Library, Plug, Plus, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/tooltip";
 import { invoke } from "@/lib/ipc";
 import SessionApi, { type SessionMode } from "../../api/session.api";
+import LibraryPickerDialog, {
+  type PickedLibraryFile,
+} from "../../library/components/LibraryPickerDialog";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
 import { mapIpcError } from "../lib/error-message";
 import ExpertSubMenu from "./expert-sub-menu";
@@ -66,6 +69,9 @@ interface PlusMenuProps {
   localTask?: LocalTaskToggle;
   /** 选中的文件路径回传 ChatInput 以内联 @token 插入(内容发送时再读) */
   onPickPaths: (paths: string[]) => void;
+  /** 资料库选中文件回传 ChatInput 挂引用 pill（storagePath 含空格不入
+      @token 流；内容发送时再读） */
+  onPickLibraryFiles: (files: PickedLibraryFile[]) => void;
   onOpenMcp: () => void;
 }
 
@@ -85,11 +91,13 @@ export default function PlusMenu({
   boundSkillNames,
   localTask,
   onPickPaths,
+  onPickLibraryFiles,
   onOpenMcp,
 }: PlusMenuProps) {
   const { t } = useTranslation(["chat"]);
   const queryClient = useQueryClient();
   const [importOpen, setImportOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   /** 写会话后失效 sessions，徽标与选中态随缓存刷新 */
   const invalidateSessions = async () => {
@@ -173,6 +181,10 @@ export default function PlusMenu({
             <FilePlus />
             {t("chat:plus.addFile")}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
+            <Library />
+            {t("chat:plus.library")}
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
@@ -222,6 +234,11 @@ export default function PlusMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <SkillImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <LibraryPickerDialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onPick={onPickLibraryFiles}
+      />
     </>
   );
 }

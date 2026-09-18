@@ -173,4 +173,9 @@ chat namespace `library` 段重写扩充（zh-CN / en-US 同步）：
 
 ## Deviations（执行记录）
 
-（执行中如有偏离，逐条记录于此）
+1. **renderer-guard 内联同语义**：`renderer-guard.ts` 的 `shouldAllowNavigation` 依赖 electron 模块不能进渲染层，预览 webview 导航拦截采用同语义内联实现（`will-navigate` preventDefault 全拦外跳，仅初始 `file://` 加载放行）。
+2. **重名序号从 ` (2)` 起**：§2 裁定 7 字面为 ` (1)`，实现对齐 `asset.repo`/Finder 惯例从 ` (2)` 起且序号插在扩展名前（`笔记 (2).md`）；重名 toast 告知经 `uploadRenamed` 插值实现。
+3. **文本预览沿用 512KB**：md/text/code 预览的文本读取沿用 `file:readExternalFile`（512KB 上限随之沿用，超限降级 Finder 按钮）。
+4. **file rename 磁盘双写**：§2 裁定 3「移动/重命名纯 DB」对 file 的 rename 不成立——storagePath 派生自当前 name，file 重命名须先 `fs.rename` 磁盘文件再 update DB（磁盘失败抛错不动 DB）；folder rename、全部 move 仍纯 DB（移动只改 parentId）。
+5. **allowpopups 存在性陷阱**：§4 字面写 `allowpopups=false`，Electron 实以 `hasAttribute` 判定——属性存在即放行弹窗（无论值）。实现为**不写该属性**（默认拒绝），达成 spec 意图。
+6. **i18n 插值双花括号**：spec 阶段文案以单花括号示意，实现统一 i18next `{{var}}` 约定。

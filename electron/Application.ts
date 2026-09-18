@@ -15,6 +15,7 @@ import {
 } from "./domains/ai/agent/mcp-manager";
 import { McpRepository } from "./domains/ai/mcp/mcp.repo";
 import { SkillRepository } from "./domains/ai/skill/skill.repo";
+import LibraryRepository from "./domains/ai/library/library.repo";
 import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
 import ProjectRepository from "./domains/project/project.repo";
@@ -147,6 +148,8 @@ export default class Application {
     // 技能管理：list 自愈对账（扫描→对账→落库）+启停/批量/卸载 IPC；
     // 禁用名单供 chat 组装过滤（P-A §4.2），须先于 ChatService 实例化传入
     const skillRepo = new SkillRepository(prisma);
+    // 资料库（DB v11）：拷贝入库 + ID 寻址存储
+    new LibraryRepository(prisma);
     // 项目模块：repo 供 chat 组装项目会话上下文（项目指令+挂载专家），
     // 须先于 ChatService 实例化传入（单实例，避免 IPC 重复注册）
     const projectRepo = new ProjectRepository();

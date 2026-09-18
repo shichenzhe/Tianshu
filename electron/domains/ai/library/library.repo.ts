@@ -5,11 +5,16 @@
  * 记录后清盘）；移动与重命名只改 DB 不动磁盘。文件三通道（addFiles
  * 拷贝入库 + revealItem 定位）见 Task 4。
  */
-import { ipcMain, app } from "electron";
+import { ipcMain, app, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs/promises";
+import { existsSync } from "node:fs";
 import prisma from "../../../commons/prisma-client";
 import type { PrismaClient } from "../../../generated/prisma/client";
-import type { LibraryItem } from "../../../../src-react/domains/ai/library/api/library.api";
+import type {
+  LibraryItem,
+  AddFilesResult,
+} from "../../../../src-react/domains/ai/library/api/library.api";
 import {
   buildBreadcrumbChain,
   collectSubtreeIds,
@@ -17,6 +22,9 @@ import {
   sanitizeLibraryName,
   uniqueDbName,
   compareLibraryItems,
+  classifyFileType,
+  mimeOf,
+  storageDirOf,
   type ItemRow,
 } from "./library.utils";
 
@@ -89,6 +97,14 @@ export default class LibraryRepository {
         this.move(ids, targetParentId),
     );
     ipcMain.handle("library:delete", (_e, ids: number[]) => this.delete(ids));
+    ipcMain.handle(
+      "library:addFiles",
+      (_e, paths: string[], folderId: number | null) =>
+        this.addFiles(paths, folderId),
+    );
+    ipcMain.handle("library:revealItem", (_e, id: number) =>
+      this.revealItem(id),
+    );
   }
 
   /** 单层列表（folder 置前基准序）+ 祖先链面包屑一次返回 */
@@ -141,13 +157,97 @@ export default class LibraryRepository {
     return toClientItem(row, this.libraryRoot);
   }
 
-  /** 重命名：清洗 + 同层（排除自身）重名序号；纯 DB 不动磁盘 */
+  /**
+   * 批量拷贝入库：逐文件 校验源存在 → 同层重名序号 → INSERT 得 id →
+   * mkdir {libraryRoot}/{id} → copyFile → 回填 size。任一步失败回滚该条
+   * （删记录 + 清目录）记入 failed，不阻断批次（spec §4）。
+   */
+  async addFiles(
+    paths: string[],
+    folderId: number | null,
+  ): Promise<AddFilesResult> {
+    const result: AddFilesResult = { added: [], failed: [] };
+    const siblingNames = await this.siblingNames(folderId);
+    for (const absPath of paths) {
+      const baseName = path.basename(absPath);
+      try {
+        if (!existsSync(absPath)) {
+          throw new Error("源文件不存在");
+        }
+        const name = uniqueDbName(siblingNames, sanitizeLibraryName(baseName));
+        const row = await this.prismaClient.libraryItem.create({
+          data: {
+            parentId: folderId,
+            name,
+            kind: "file",
+            fileType: classifyFileType(name),
+            mimeType: mimeOf(name),
+            originalPath: absPath,
+          },
+        });
+        const dir = storageDirOf(this.libraryRoot, row.id);
+        try {
+          await fs.mkdir(dir, { recursive: true });
+          await fs.copyFile(absPath, path.join(dir, name));
+          const stat = await fs.stat(path.join(dir, name));
+          await this.prismaClient.libraryItem.update({
+            where: { id: row.id },
+            data: { size: stat.size },
+          });
+        } catch (error) {
+          // 入库中途失败：回滚记录与目录（吞错——清理失败仅日志）
+          await this.prismaClient.libraryItem
+            .deleteMany({ where: { id: { in: [row.id] } } })
+            .catch(() => {});
+          await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+          throw error;
+        }
+        siblingNames.add(name);
+        result.added.push(
+          toClientItem(
+            { ...row, size: (await this.mustGet(row.id)).size ?? null },
+            this.libraryRoot,
+          ),
+        );
+      } catch (error) {
+        result.failed.push({
+          path: baseName,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return result;
+  }
+
+  /** Finder/资源管理器定位（file 定位文件本体、folder 定位其目录） */
+  async revealItem(id: number): Promise<null> {
+    const row = await this.mustGet(id);
+    shell.showItemInFolder(
+      row.kind === "file"
+        ? path.join(this.libraryRoot, String(row.id), row.name)
+        : storageDirOf(this.libraryRoot, id),
+    );
+    return null;
+  }
+
+  /**
+   * rename 升级（Task 3 review 裁决）：file 的重命名先同步磁盘文件名再
+   * update DB（storagePath 派生自当前 name，纯 DB rename 会使其断裂）；
+   * 磁盘失败抛错、DB 不动。folder 无磁盘实体，仍走纯 DB。
+   * 以本方法整体替换 Task 3 的 rename 实现。
+   */
   async rename(id: number, name: string): Promise<LibraryItem> {
     const row = await this.mustGet(id);
     const finalName = uniqueDbName(
       await this.siblingNames(row.parentId ?? null, id),
       sanitizeLibraryName(name),
     );
+    if (row.kind === "file" && finalName !== row.name) {
+      await fs.rename(
+        path.join(this.libraryRoot, String(id), row.name),
+        path.join(this.libraryRoot, String(id), finalName),
+      );
+    }
     const updated = await this.prismaClient.libraryItem.update({
       where: { id },
       data: { name: finalName },
@@ -241,8 +341,17 @@ export default class LibraryRepository {
     return row;
   }
 
-  /** Task 4 实现：逐项清理 {libraryRoot}/{id} 目录（失败仅日志，孤儿目录无害） */
-  private async cleanupDisk(_ids: number[]): Promise<void> {
-    void _ids; // 占位参数，Task 4 消费
+  /** 删除后清盘：先删记录后删盘（中断仅剩孤儿目录，无害——spec 裁定 8）；失败记日志放行 */
+  private async cleanupDisk(ids: number[]): Promise<void> {
+    for (const id of ids) {
+      try {
+        await fs.rm(storageDirOf(this.libraryRoot, id), {
+          recursive: true,
+          force: true,
+        });
+      } catch (error) {
+        console.warn(`资料库磁盘清理失败（id=${id}）`, error);
+      }
+    }
   }
 }

@@ -81,6 +81,8 @@ function createWindow() {
       : undefined,
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
+      // 资料库预览 <webview>（html/pdf/音视频走内置 Chromium 渲染，spec 裁定 6）
+      webviewTag: true,
     },
     // macOS 用 hidden（红绿灯浮层），布局上单独留一行给红绿灯；
     // Windows 生产用 hidden + overlay（自绘窗口按钮），开发用 default。

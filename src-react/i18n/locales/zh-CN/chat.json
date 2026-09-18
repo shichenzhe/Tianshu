@@ -221,7 +221,10 @@
     "loadFailed": "加载资料失败",
     "noSearchResult": "没有匹配的资料",
     "searchBack": "返回全部",
-    "recent": "最近添加"
+    "recent": "最近添加",
+    "previewFailed": "预览加载失败",
+    "openInFinder": "在 Finder 中打开",
+    "previewUnsupported": "此格式暂不支持预览，可在 Finder 中打开"
   },
   "automation": {
     "title": "自动化",

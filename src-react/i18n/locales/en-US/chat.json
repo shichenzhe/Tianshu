@@ -221,7 +221,10 @@
     "loadFailed": "Failed to load",
     "noSearchResult": "No matching files",
     "searchBack": "Back to all",
-    "recent": "Recently added"
+    "recent": "Recently added",
+    "previewFailed": "Preview failed to load",
+    "openInFinder": "Open in Finder",
+    "previewUnsupported": "Preview not supported for this format; open it in Finder"
   },
   "automation": {
     "title": "Automation",

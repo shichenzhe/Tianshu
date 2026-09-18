@@ -2,7 +2,8 @@
  * 资料库「我的资料」（spec §5）：工具栏（面包屑/搜索/类型筛选/新建
  * 文件夹/上传）+ 列表。搜索跨层走 library:search；排序与类型筛选前端
  * 本地（单层数据量小，skill 页先例）；拖拽入库（拖到页面任意处）。
- * 预览在 Task 7 接入（本版行内点击暂不预览）。
+ * 文件点击/菜单预览走 LibraryPreviewDialog（md/文本/图片内联，
+ * html/pdf/音视频 webview）。
  */
 import { useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -39,6 +40,7 @@ import {
 import LibraryFileList, { TYPE_LABEL_KEY } from "../components/LibraryFileList";
 import LibraryItemDialogs from "../components/LibraryItemDialogs";
 import LibraryMoveDialog from "../components/LibraryMoveDialog";
+import LibraryPreviewDialog from "../components/LibraryPreviewDialog";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { invoke } from "@/lib/ipc";
 
@@ -57,6 +59,7 @@ export default function LibraryView() {
   } | null>(null);
   const [moveIds, setMoveIds] = useState<number[] | null>(null);
   const [deleteItem, setDeleteItem] = useState<LibraryItem | null>(null);
+  const [previewItem, setPreviewItem] = useState<LibraryItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const searching = keyword.trim().length > 0;
@@ -280,9 +283,7 @@ export default function LibraryView() {
           items={items}
           loading={searching ? searchQuery.isLoading : listQuery.isLoading}
           onOpen={(item) => setFolderId(item.id)}
-          onPreview={() => {
-            /* Task 7 接预览 */
-          }}
+          onPreview={(item) => setPreviewItem(item)}
           onRename={(item) => setDialog({ mode: "rename", item })}
           onMove={(item) => setMoveIds([item.id])}
           onReveal={(item) => void LibraryApi.revealItem(item.id)}
@@ -333,6 +334,10 @@ export default function LibraryView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <LibraryPreviewDialog
+        item={previewItem}
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

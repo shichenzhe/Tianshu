@@ -3,7 +3,8 @@
  * PlusMenu 菜单项一致——
  * 文件组：添加文件（file:pickLocalFiles 取路径 → readExternalFile 校验入
  *   pending，机制按落地页 pill 范式不搬 @token）、引用工作空间文件（二级
- *   子面板 useWorkspaceFiles）；
+ *   子面板 useWorkspaceFiles）、资料库（LibraryPickerDialog 浏览/搜索多选，
+ *   选中 storagePath 逐个走 addLocalFile 入 pending）；
  * 草稿组：模式（PlusMenu 导出 MODES 复用，✓ 草稿态写 store，dispatch 时
  *   setMode 落库）、专家（ExpertSubMenu onPick 草稿分支，同 dispatch 落库）、
  *   技能（SkillSubMenu 直接复用——全局启停/本地导入/管理入口无 session 依赖）；
@@ -14,7 +15,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, FilePlus, Plug, Plus, Sparkles } from "lucide-react";
+import { Check, FilePlus, Library, Plug, Plus, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ import {
 import { invoke } from "@/lib/ipc";
 import type { SessionMode } from "../../api/session.api";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
+import LibraryPickerDialog from "../../library/components/LibraryPickerDialog";
 import { MODES } from "../../chat/components/PlusMenu";
 import ExpertSubMenu from "../../chat/components/expert-sub-menu";
 import SkillSubMenu from "../../chat/components/skill-sub-menu";
@@ -50,6 +52,7 @@ export default function AttachMenu() {
   const setAssistantId = useNewTaskStore((s) => s.setAssistantId);
   const addLocalFile = useLocalFileAttach();
   const [importOpen, setImportOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   // 子面板打开时才拉清单（关闭后缓存复用，空间切换重拉）
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const workspaceFiles = useWorkspaceFiles(workspaceId, workspaceOpen);
@@ -97,6 +100,10 @@ export default function AttachMenu() {
           <DropdownMenuItem onClick={() => void handlePickLocalFiles()}>
             <FilePlus />
             {t("chat:plus.addFile")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setLibraryOpen(true)}>
+            <Library />
+            {t("chat:plus.library")}
           </DropdownMenuItem>
           <DropdownMenuSub onOpenChange={setWorkspaceOpen}>
             <DropdownMenuSubTrigger>
@@ -160,6 +167,15 @@ export default function AttachMenu() {
         </DropdownMenuContent>
       </DropdownMenu>
       <SkillImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <LibraryPickerDialog
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        onPick={(files) => {
+          for (const file of files) {
+            void addLocalFile(file.storagePath);
+          }
+        }}
+      />
     </>
   );
 }

@@ -84,6 +84,7 @@
   "plus": {
     "title": "扩展菜单",
     "addFile": "添加文件",
+    "library": "资料库",
     "mode": "模式",
     "modeAgent": "默认",
     "modeAsk": "仅问答",
@@ -181,6 +182,10 @@
   "library": {
     "title": "资料库",
     "searchPlaceholder": "搜索资料",
+    "pickTitle": "引用资料库",
+    "pickConfirm": "引用",
+    "groupWorkspace": "工作空间文件",
+    "groupLibrary": "资料库",
     "mine": "我的资料",
     "empty": "还没有资料，点击「上传」或拖入文件开始",
     "upload": "上传",

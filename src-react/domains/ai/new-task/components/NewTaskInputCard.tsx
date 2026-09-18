@@ -1,12 +1,13 @@
 /**
  * 新建任务输入卡（spec §4）：纯 textarea + 上方引用 pill 行 + 底部工具栏
  * （无镜像层——引用以 pending pill 呈现，不留在输入流）。@ 触发文件联想
- * 面板（工作空间文件 substring 匹配，技能不进 @ 面板——技能引用经胶囊/
- * QuickMenu）；↑↓/Enter/Esc 键盘语义与 ChatInput:564-603 一致；选中转
- * pending 并从文本删除 @query 片段。拖拽本地文件经 getPathForFile 取绝对
- * 路径入 pending（readExternalFile 校验）。Enter→onSubmit（面板激活时除外）
- * 发送矩阵（spec §6）：空文本/敏感词命中/未绑空间/无可用模型/发送中——
- * 按钮置灰且 Enter 不触发；敏感词与无模型提示文案渲染于发送按钮旁
+ * 面板（工作空间文件 substring 匹配 + 资料库跨层搜索两组候选，技能不进
+ * @ 面板——技能引用经胶囊/QuickMenu）；↑↓/Enter/Esc 键盘语义与
+ * ChatInput:564-603 一致；选中转 pending 并从文本删除 @query 片段。拖拽
+ * 本地文件经 getPathForFile 取绝对路径入 pending（readExternalFile 校验）。
+ * Enter→onSubmit（面板激活时除外）发送矩阵（spec §6）：空文本/敏感词命中/
+ * 未绑空间/无可用模型/发送中——按矩阵置灰且 Enter 不触发；敏感词与无模型
+ * 提示文案渲染于发送按钮旁
  */
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +17,7 @@ import { Bot, Send, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
 import AssistantApi from "../../api/assistant.api";
+import LibraryApi from "../../library/api/library.api";
 import { MODES } from "../../chat/components/PlusMenu";
 import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
@@ -24,6 +26,14 @@ import { useNewTaskStore } from "../store/new-task-store";
 import AttachMenu from "./AttachMenu";
 import PolishButton from "./polish-button";
 import QuickMenu from "./QuickMenu";
+
+/** @ 联想候选：工作空间文件 + 资料库文件（分组渲染，选中转 pending） */
+interface MentionCandidate {
+  label: string;
+  ref: string;
+  kind: "file" | "localFile";
+  group: "workspace" | "library";
+}
 
 interface NewTaskInputCardProps {
   /** 矩阵放行后由 Enter/发送按钮触发（NewTaskView 绑 dispatch 编排） */
@@ -76,15 +86,37 @@ export default function NewTaskInputCard({
   // （null）不拉取——面板不可用，Enter 按普通输入提交
   const workspaceFiles = useWorkspaceFiles(workspaceId, suggest !== null);
 
-  const suggestCandidates = useMemo(() => {
+  // 资料库候选：suggest 激活时按 query 跨层搜索（空 query 后端返 []，
+  // bare @ 不出资料库组）
+  const libraryQuery = useQuery({
+    queryKey: ["librarySearch", suggest?.query ?? ""],
+    queryFn: () => LibraryApi.search(suggest?.query ?? ""),
+    enabled: suggest !== null,
+  });
+  const suggestCandidates = useMemo<MentionCandidate[]>(() => {
     if (!suggest || !workspaceFiles) {
       return [];
     }
     const query = suggest.query.toLowerCase();
-    return workspaceFiles
+    const workspace: MentionCandidate[] = workspaceFiles
       .filter((file) => file.toLowerCase().includes(query))
-      .slice(0, MENTION_LIMIT);
-  }, [suggest, workspaceFiles]);
+      .slice(0, MENTION_LIMIT)
+      .map((file) => ({
+        label: file,
+        ref: file,
+        kind: "file",
+        group: "workspace",
+      }));
+    const library: MentionCandidate[] = (libraryQuery.data ?? [])
+      .slice(0, MENTION_LIMIT)
+      .map((item) => ({
+        label: item.name,
+        ref: item.storagePath ?? "",
+        kind: "localFile",
+        group: "library",
+      }));
+    return [...workspace, ...library];
+  }, [suggest, workspaceFiles, libraryQuery.data]);
 
   const activeIndex = Math.min(
     highlightIndex,
@@ -96,8 +128,8 @@ export default function NewTaskInputCard({
   const panelActive = suggest !== null && workspaceId !== null;
   const showSuggestList = panelActive;
 
-  /** 面板选中：文件转 pending pill，并从文本删除 @query 触发片段 */
-  const selectCandidate = (file: string) => {
+  /** 面板选中：候选转 pending pill（file=工作空间相对路径，localFile=库内绝对路径），并从文本删除 @query 触发片段 */
+  const selectCandidate = (candidate: MentionCandidate) => {
     const textarea = textareaRef.current;
     const caret = textarea?.selectionStart ?? content.length;
     const fragmentEnd = suggest
@@ -109,7 +141,11 @@ export default function NewTaskInputCard({
         content.slice(Math.max(fragmentEnd, startIndex)),
     );
     setSuggest(null);
-    addPending({ label: file, ref: file, kind: "file" });
+    addPending({
+      label: candidate.label,
+      ref: candidate.ref,
+      kind: candidate.kind,
+    });
     requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(startIndex, startIndex);
@@ -245,14 +281,14 @@ export default function NewTaskInputCard({
             </p>
           ) : (
             <ul className="max-h-56 overflow-y-auto py-1">
-              {suggestCandidates.map((file, index) => (
-                <li key={file}>
+              {suggestCandidates.map((candidate, index) => (
+                <li key={candidate.ref}>
                   <button
                     type="button"
                     onMouseDown={(event) => {
                       // mousedown 先于 blur/提交键处理，阻止默认避免失焦
                       event.preventDefault();
-                      selectCandidate(file);
+                      selectCandidate(candidate);
                     }}
                     onMouseEnter={() => setHighlightIndex(index)}
                     className={`flex w-full items-center gap-1.5 truncate px-2 py-1.5 text-left text-xs ${
@@ -261,7 +297,13 @@ export default function NewTaskInputCard({
                         : "text-foreground"
                     }`}
                   >
-                    <span className="truncate">{file}</span>
+                    {/* 分组小标签：工作空间文件 / 资料库 */}
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {candidate.group === "library"
+                        ? t("chat:library.groupLibrary")
+                        : t("chat:library.groupWorkspace")}
+                    </span>
+                    <span className="truncate">{candidate.label}</span>
                   </button>
                 </li>
               ))}

@@ -34,9 +34,9 @@ describe("uniqueDbName", () => {
   });
   it("占用时追加序号并保留扩展名", () => {
     expect(uniqueDbName(new Set(["a.txt"]), "a.txt")).toBe("a (2).txt");
-    expect(
-      uniqueDbName(new Set(["a.txt", "a (2).txt"]), "a.txt"),
-    ).toBe("a (3).txt");
+    expect(uniqueDbName(new Set(["a.txt", "a (2).txt"]), "a.txt")).toBe(
+      "a (3).txt",
+    );
   });
 });
 

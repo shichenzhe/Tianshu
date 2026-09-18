@@ -30,8 +30,7 @@ const LibraryApi = {
       "library:list",
       parentId ?? null,
     ),
-  search: (keyword: string) =>
-    invoke<LibraryItem[]>("library:search", keyword),
+  search: (keyword: string) => invoke<LibraryItem[]>("library:search", keyword),
   addFiles: (paths: string[], folderId?: number) =>
     invoke<AddFilesResult>("library:addFiles", paths, folderId ?? null),
   createFolder: (name: string, parentId?: number) =>

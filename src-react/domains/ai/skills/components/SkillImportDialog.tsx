@@ -1,7 +1,9 @@
 /**
  * 导入技能弹窗:点击选择/拖拽 zip 或目录 → dryRun 预检
  * (异常红字 reason / 冲突覆盖确认 / 摘要展示)→
- * 「非高风险自动安装」勾上即装,或点「安装」;成功 toast + 关闭 + invalidate
+ * 「非高风险自动安装」勾上即装,或点「安装」;成功 toast + 关闭 + invalidate。
+ * 摘要态可当场打场景标(三场景复选,勾选随安装 scenarios 透传落库,
+ * 重选文件复位——spec Deviation 7 收口,免装后二次跳管理列表)
  */
 import { useRef, useState } from "react";
 import type { DragEvent } from "react";
@@ -33,6 +35,7 @@ import {
 } from "@/components/ui/dialog";
 import { mapIpcError } from "../../chat/lib/error-message";
 import SkillApi from "../api/skill.api";
+import { SCENARIO_KEYS } from "./SkillCard";
 
 /** 选中包展示名(路径末段:zip 文件名或目录名) */
 const baseName = (path: string) =>
@@ -68,6 +71,9 @@ export default function SkillImportDialog({
   const [conflictName, setConflictName] = useState<string | null>(null);
   const [autoInstall, setAutoInstall] = useState(false);
   const [installing, setInstalling] = useState(false);
+  // 当场打场景标（spec Deviation 7 收口）：勾选随本次安装透传落库，
+  // 重选文件复位（新包不继承上一包勾选）
+  const [scenarios, setScenarios] = useState<string[]>([]);
 
   const busy = checking || installing;
 
@@ -81,6 +87,14 @@ export default function SkillImportDialog({
     setConflictName(null);
     setAutoInstall(false);
     setInstalling(false);
+    setScenarios([]);
+  };
+
+  /** 场景复选切换（多选，同 SkillCard 打标语义） */
+  const handleScenarioToggle = (key: string, checked: boolean) => {
+    setScenarios((prev) =>
+      checked ? [...prev, key] : prev.filter((s) => s !== key),
+    );
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -113,6 +127,7 @@ export default function SkillImportDialog({
     setSummary(null);
     setConflictName(null);
     setAutoInstall(false);
+    setScenarios([]);
     void inspect(path);
   };
 
@@ -135,12 +150,17 @@ export default function SkillImportDialog({
     if (file) selectPath(dropFilePath(file));
   };
 
-  /** 真装:成功 toast + 关闭 + invalidate;conflict(并发边缘)→ 覆盖弹窗;异常红字 */
+  /** 真装:成功 toast + 关闭 + invalidate;conflict(并发边缘)→ 覆盖弹窗;异常红字。
+   *  scenarios 随装透传落库(空数组=显式不打标) */
   const install = async (path: string, overwrite = false) => {
     setInstalling(true);
     setError(null);
     try {
-      const result = await SkillApi.importSkill({ path, overwrite });
+      const result = await SkillApi.importSkill({
+        path,
+        overwrite,
+        scenarios,
+      });
       if (result.status === "conflict") {
         setConflictName(result.name);
         return;
@@ -234,24 +254,49 @@ export default function SkillImportDialog({
           </div>
         )}
 
-        {/* 摘要态:非高风险自动安装开关 */}
+        {/* 摘要态:非高风险自动安装开关 + 当场打场景标(勾选随安装落库) */}
         {summary && (
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="skill-auto-install"
-              checked={autoInstall}
-              disabled={installing}
-              onCheckedChange={(checked) =>
-                handleAutoInstallChange(checked === true)
-              }
-            />
-            <Label
-              htmlFor="skill-auto-install"
-              className="cursor-pointer text-sm text-muted-foreground"
-            >
-              {t("chat:skills.autoInstall")}
-            </Label>
-          </div>
+          <>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="skill-auto-install"
+                checked={autoInstall}
+                disabled={installing}
+                onCheckedChange={(checked) =>
+                  handleAutoInstallChange(checked === true)
+                }
+              />
+              <Label
+                htmlFor="skill-auto-install"
+                className="cursor-pointer text-sm text-muted-foreground"
+              >
+                {t("chat:skills.autoInstall")}
+              </Label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-muted-foreground">
+                {t("chat:skills.scenario.edit")}
+              </span>
+              {SCENARIO_KEYS.map((key) => (
+                <div key={key} className="flex items-center gap-1.5">
+                  <Checkbox
+                    id={`skill-scenario-${key}`}
+                    checked={scenarios.includes(key)}
+                    disabled={installing}
+                    onCheckedChange={(checked) =>
+                      handleScenarioToggle(key, checked === true)
+                    }
+                  />
+                  <Label
+                    htmlFor={`skill-scenario-${key}`}
+                    className="cursor-pointer text-xs font-normal text-muted-foreground"
+                  >
+                    {t(`chat:skills.scenario.${key}`)}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         <DialogFooter>

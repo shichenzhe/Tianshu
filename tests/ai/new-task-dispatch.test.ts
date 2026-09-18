@@ -239,7 +239,7 @@ describe("mapDispatchError", () => {
     expect(mapDispatchError(new Error("no-workspace"))).toBe(
       "mapped:newTask:context.noWorkspace",
     );
-    expect(mapDispatchError(new Error("sensitive:示例违禁词A"))).toBe(
+    expect(mapDispatchError(new Error("sensitive:赌球"))).toBe(
       "mapped:newTask:sensitiveHit",
     );
     expect(mapDispatchError(new Error("read-failed:docs/a.md"))).toBe(

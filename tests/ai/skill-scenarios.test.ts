@@ -17,3 +17,28 @@ describe("SkillApi.setScenarios", () => {
     });
   });
 });
+
+describe("SkillApi.importSkill 场景打标透传（导入弹窗当场打标）", () => {
+  beforeEach(() => invokeMock.mockReset());
+
+  it("真装透传 scenarios（含空数组=显式不打标）；未传不带该键", async () => {
+    invokeMock.mockResolvedValue({ status: "installed", record: {} });
+    await SkillApi.importSkill({
+      path: "/tmp/s.zip",
+      scenarios: ["daily"],
+    });
+    expect(invokeMock).toHaveBeenCalledWith("skill:import", {
+      path: "/tmp/s.zip",
+      scenarios: ["daily"],
+    });
+    await SkillApi.importSkill({ path: "/tmp/s.zip", scenarios: [] });
+    expect(invokeMock).toHaveBeenLastCalledWith("skill:import", {
+      path: "/tmp/s.zip",
+      scenarios: [],
+    });
+    await SkillApi.importSkill({ path: "/tmp/s.zip" });
+    expect(invokeMock).toHaveBeenLastCalledWith("skill:import", {
+      path: "/tmp/s.zip",
+    });
+  });
+});

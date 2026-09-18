@@ -97,13 +97,29 @@ export class SkillRepository {
     );
     ipcMain.handle(
       "skill:import",
-      (
+      async (
         _e,
-        p: { path: string; overwrite?: boolean; dryRun?: boolean },
-      ): Promise<InstallResult | InspectResult> =>
-        p.dryRun
-          ? this.installer.inspectFromPath(p.path)
-          : this.installer.importFromPath(p.path, p.overwrite ?? false),
+        p: {
+          path: string;
+          overwrite?: boolean;
+          dryRun?: boolean;
+          scenarios?: string[];
+        },
+      ): Promise<InstallResult | InspectResult> => {
+        if (p.dryRun) {
+          return this.installer.inspectFromPath(p.path);
+        }
+        const result = await this.installer.importFromPath(
+          p.path,
+          p.overwrite ?? false,
+        );
+        // 导入弹窗当场打标透传：仅显式传参时落库（空数组=清标），
+        // 未传不动——保护重装/旧调用方下已有用户打标（spec Deviation 7）
+        if (result.status === "installed" && p.scenarios !== undefined) {
+          await this.setScenarios(result.record.name, p.scenarios);
+        }
+        return result;
+      },
     );
     ipcMain.handle("skill:pickImport", () => this.pickImport());
     ipcMain.handle("skill:stats", () => this.stats());

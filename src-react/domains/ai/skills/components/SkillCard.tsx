@@ -26,7 +26,7 @@ import type { SkillRecord } from "../api/skill.api";
 import { mapIpcError } from "../../chat/lib/error-message";
 
 /** 场景白名单（与 skill.repo.ts setScenarios 的 valid 列表保持同步） */
-const SCENARIO_KEYS = ["daily", "coding", "design"] as const;
+export const SCENARIO_KEYS = ["daily", "coding", "design"] as const;
 
 interface SkillCardProps {
   record: SkillRecord;

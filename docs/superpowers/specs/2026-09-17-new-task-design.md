@@ -11,6 +11,7 @@
 - 语音输入（🎤）——直接移除，不做占位
 - 数据埋点（PRD 第 5 节）——直接移除，不留事件常量
 - `@联系人` / `@历史对话`——`@` 引用仅保留现有文件/技能/待办
+- 引用历史对话功能——用户裁定不需要（2026-09-18）：进入历史会话即可，+ 菜单占位项一并移除
 - 权限"只读档"——现有体系仅 `default | full` 两档（`permission:set` 主进程内存态），只读档需工具过滤体系支撑，列为后续演进；落地页为标准/高危两档
 - 上传拷贝存储——采用路径引用模型（WorkBuddy 同构）：不复制文件，引用原路径按需读取
 - 场景影响技能市场数据建模——技能场景标签仅用户手动打标（导入弹窗 + 技能管理列表勾选），不做关键词自动推断
@@ -152,6 +153,7 @@ ScenarioTabs(当前场景) ─┬─> scenario.ts 预设模板胶囊（i18n 文�
 4. **置灰矩阵补模型条件**：§6 本有"无可用模型→发送置灰"要求，计划 T14 的 disabled 矩阵遗漏该条件，执行中补上——判定复刻 ModelPicker 口径（共享 queryKey `["models"]`/`["providers"]`、存在启用 provider 的启用模型），加载窗口保守置灰，提示 `t("newTask:modelRequired")`。
 5. **持久化恢复接线**：store 的 `hydratePersistedDraft()` 落地后一度未接线，T14 接入 NewTaskView——采用 useState lazy initializer 而非 effect（子组件 ContextBar 的 null 兜底 effect 先于父 effect 执行，会覆盖持久化快照；lazy initializer 在首次渲染前恢复，时序正确）。
 6. **测试环境适配**（观察记录，非行为偏差）：FullAccessModal 确认按钮在 mock i18n 环境下渲染为 key 文本 `chat:permission.confirmFullAccess`，测试正则 `/确认|confirm/i` 经 "confirm" 子串命中；真实中文文案为"允许完全访问"。测试已注释说明。
-7. **技能安装/更新接口不透传 scenarios**（执行裁定）：spec §4.1 的'技能安装/更新接口透传 scenarios'未实现——场景打标仅有技能管理列表勾选入口（skill:setScenarios）。数据安全已验证：安装器 upsert 只写 slug/version/source/dir/description，list() 对账只写 dir/description，用户打标在重装/扫描下不丢失。导入弹窗打标列为后续演进。
+7. **技能安装/更新接口不透传 scenarios**（后续迭代收口）：执行期曾仅有技能管理列表勾选入口；后续迭代补齐导入弹窗当场打标——SkillImportDialog 摘要态三场景复选，勾选随安装经 `skill:import` 的 `scenarios` 参数透传，后端安装成功且显式传参（含空数组=显式清标）时 `setScenarios` 落库，未传不动（保护重装/旧调用方下已有用户打标）。市场安装（`skillhub:install`）仍不打标，装后经管理列表勾选。数据安全不变：安装器 upsert 只写 slug/version/source/dir/description。
 8. **+ 菜单完整对齐 PlusMenu**（用户裁定，修订裁定 9 的模式部分）：落地页 AttachMenu 由文件三项扩为与会话 PlusMenu 六项对齐——文件两项（添加文件/工作空间文件）+ 模式/专家/技能 + 连接器（PRD 的"引用历史对话"占位项经用户后续裁定移除，连带删除 newTask:attach.historyChat/developing 词条）。模式/专家在无 session 语境下改为"草稿态"：store 增 mode（默认 agent）/assistantId（默认 null）两任务级草稿字段（不持久化、resetDraft 清），dispatch 在 create 后按需 setAssistant/setMode 落库（默认值跳过省 IPC，时序 create→setAssistant→setMode→setPermission→send）；选中反馈在输入卡工具栏以徽章呈现（专家名可 X 清除、非 agent 模式标签，ChatInput 底行同形态）。实现依赖：PlusMenu 导出 MODES 供复用；ExpertSubMenu 增可选 onPick 草稿分支（sessionId 改可选，ChatInput 调用零改动）；SkillSubMenu 无 session 依赖原样复用；文案复用 chat:plus.* 词条。裁定 9"模式不进落地页"就此废止（模式可在发起前选定）；ModelPicker/停止按钮仍不进落地页。
 9. **润色交互简化为通用单按钮**（用户裁定，修订裁定 8 的三风格部分）：弃下拉三风格，PolishButton 点击即对全文润色，style 固定 `professional`（通用档），润色中触发钮 Loader2 转圈且禁点（不锁 textarea），完成/失败恢复。后端 `chat:polish` 契约不变（仍收三风格 style，前端固定传 professional，三 prompt 模板保留向后兼容）；失败 toast 原文不动、空文本静默、未绑空间 toast 等行为与原 PolishMenu 一致。连带删除 newTask:polish.professional/concise/translate-en 三词条（无引用）。
+10. **敏感词表内置基础通用档**（后续迭代收口）：占位词（示例违禁词A/B）替换为内置基础词表——五类高置信违法黑话/短语（暴力恐怖/毒品/赌博/诈骗洗钱/色情，约 18 词，按类别分组注释维护），选词倾向组合短语降低子串匹配对正常讨论的误伤（如"赌球""洗钱渠道"，单词"赌博"不收——"戒赌/防诈骗宣传"类正当文本不拦）；运营可按需增删，机制与置灰/提示行为不变。

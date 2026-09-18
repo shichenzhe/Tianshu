@@ -57,11 +57,13 @@ export const SkillApi = {
   uninstall: (name: string) => invoke<null>("skill:uninstall", { name }),
   batchUninstall: (names: string[]) =>
     invoke<BatchUninstallResult>("skill:batchUninstall", { names }),
-  /** 本地导入(zip 文件或技能目录);dryRun 只做校验/冲突预检,不落盘不写库 */
+  /** 本地导入(zip 文件或技能目录);dryRun 只做校验/冲突预检,不落盘不写库;
+   *  scenarios=导入弹窗当场打标(空数组=显式不打标,未传=保持已有标不覆盖) */
   importSkill: (params: {
     path: string;
     overwrite?: boolean;
     dryRun?: boolean;
+    scenarios?: string[];
   }) => invoke<InstallResult | InspectResult>("skill:import", params),
   /** 拉起系统文件选择器选 zip 文件或目录 */
   pickImport: () => invoke<PickImportResult>("skill:pickImport"),

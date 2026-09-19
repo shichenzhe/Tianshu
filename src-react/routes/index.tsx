@@ -65,7 +65,9 @@ function LazyWrapper({ children }: { children: React.ReactNode }) {
 export const router = createHashRouter([
   {
     path: "/",
-    element: <Navigate to="/module/ai" replace />,
+    // 应用默认落地新建任务页（用户裁定；/module/ai index 仍是对话视图，
+    // 供侧边栏「对话」入口与 ?session= 会话直达）
+    element: <Navigate to="/module/ai/new" replace />,
   },
   {
     path: "/login",
@@ -77,7 +79,7 @@ export const router = createHashRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/module/ai" replace />,
+        element: <Navigate to="/module/ai/new" replace />,
       },
       {
         path: "ai",

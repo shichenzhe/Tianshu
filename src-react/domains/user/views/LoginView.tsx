@@ -83,7 +83,8 @@ export default function LoginView() {
   // 初始化：检查是否已登录
   useEffect(() => {
     if (isLoginValid()) {
-      navigate("/module/ai", { replace: true });
+      // 已登录直达：默认落地新建任务页（与应用入口一致）
+      navigate("/module/ai/new", { replace: true });
       return;
     }
 
@@ -178,7 +179,8 @@ export default function LoginView() {
       }
 
       toast.success(t("user:login.loginSuccess"));
-      navigate("/module/ai");
+      // 登录成功默认落地新建任务页（与应用入口一致）
+      navigate("/module/ai/new");
     } catch (error) {
       console.error("登录失败:", error);
       toast.error(t("user:login.loginFailed"));

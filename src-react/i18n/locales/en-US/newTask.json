@@ -22,6 +22,7 @@
     "noFiles": "No matching files",
     "oversize": "File size exceeds the limit",
     "readFailed": "Failed to read file",
+    "selectWorkspaceFirst": "Select a workspace first",
     "clearExpert": "Remove expert"
   },
   "polish": {
@@ -38,16 +39,15 @@
   },
   "context": {
     "workspace": "Select Workspace",
-    "permission": "Default Permission",
-    "standard": "Standard Mode",
-    "full": "High-Risk Mode",
-    "fullDesc": "Allows write operations and command execution, at your own risk",
-    "noWorkspace": "Please create a workspace first"
+    "noWorkspace": "Please create a workspace first",
+    "searchWorkspace": "Search workspaces",
+    "noMatch": "No matching workspaces"
   },
   "send": "Send Task",
   "sensitiveHit": "Content contains restricted words: {{word}}",
   "charCount": "{{current}}/2000",
   "truncateHint": "Limit reached, overly long content may be truncated",
   "modelRequired": "Please configure an available model first",
+  "workspaceRequired": "Select a workspace first",
   "dispatchFailed": "Failed to dispatch task, please retry"
 }

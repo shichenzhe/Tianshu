@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, FilePlus, Library, Plug, Plus, Sparkles } from "lucide-react";
 
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { invoke } from "@/lib/ipc";
 import type { SessionMode } from "../../api/session.api";
+import WorkspaceApi from "../../api/workspace.api";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
 import LibraryPickerDialog from "../../library/components/LibraryPickerDialog";
 import { MODES } from "../../chat/components/PlusMenu";
@@ -56,6 +58,12 @@ export default function AttachMenu() {
   // 子面板打开时才拉清单（关闭后缓存复用，空间切换重拉）
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const workspaceFiles = useWorkspaceFiles(workspaceId, workspaceOpen);
+  // 空态文案三分支依据（共享缓存）：有空间未选 vs 无空间可建
+  const workspacesQuery = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => WorkspaceApi.list(),
+  });
+  const hasWorkspaces = (workspacesQuery.data ?? []).length > 0;
 
   /** 选择器本地文件：仅取路径，内容校验（512KB/权限）在 addLocalFile 内 */
   const handlePickLocalFiles = async () => {
@@ -127,7 +135,9 @@ export default function AttachMenu() {
                 <p className="px-2 py-1.5 text-xs text-muted-foreground">
                   {t(
                     workspaceId === null
-                      ? "newTask:context.noWorkspace"
+                      ? hasWorkspaces
+                        ? "newTask:attach.selectWorkspaceFirst"
+                        : "newTask:context.noWorkspace"
                       : "newTask:attach.noFiles",
                   )}
                 </p>

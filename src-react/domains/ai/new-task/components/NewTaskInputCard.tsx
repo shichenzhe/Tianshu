@@ -1,5 +1,7 @@
 /**
  * 新建任务输入卡（spec §4）：纯 textarea + 上方引用 pill 行 + 底部工具栏
+ * （模块配置与 ChatInput 底行对齐：＋菜单/权限胶囊/专家与模式徽章 +
+ * 模型选择/魔法棒/快速/发送；权限与模型为草稿态，dispatch 时落库）。
  * （无镜像层——引用以 pending pill 呈现，不留在输入流）。@ 触发文件联想
  * 面板（工作空间文件 substring 匹配 + 资料库跨层搜索两组候选，技能不进
  * @ 面板——技能引用经胶囊/QuickMenu）；↑↓/Enter/Esc 键盘语义与
@@ -19,6 +21,8 @@ import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
 import AssistantApi from "../../api/assistant.api";
 import LibraryApi from "../../library/api/library.api";
 import { MODES } from "../../chat/components/PlusMenu";
+import ModelPicker from "../../chat/components/ModelPicker";
+import PermissionCapsule from "../../chat/components/PermissionCapsule";
 import { useDebouncedValue } from "../../chat/hooks/use-debounced-value";
 import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
@@ -63,6 +67,10 @@ export default function NewTaskInputCard({
   const mode = useNewTaskStore((s) => s.mode);
   const assistantId = useNewTaskStore((s) => s.assistantId);
   const setAssistantId = useNewTaskStore((s) => s.setAssistantId);
+  const accessMode = useNewTaskStore((s) => s.accessMode);
+  const setAccessMode = useNewTaskStore((s) => s.setAccessMode);
+  const modelId = useNewTaskStore((s) => s.modelId);
+  const setModelId = useNewTaskStore((s) => s.setModelId);
   const addLocalFile = useLocalFileAttach();
 
   // 专家名徽章：+ 菜单草稿选中态的可见反馈（ExpertSubMenu 同缓存键
@@ -376,11 +384,14 @@ export default function NewTaskInputCard({
           )}
         </div>
       )}
-      {/* 底部工具栏：左 ＋引用菜单 + 草稿选中态徽章（专家名可清除、
-          非 agent 模式——ChatInput 底行 assistantName/ASK|PLAN 同形态）；
-          右 敏感词/模型提示 + 魔法棒/快速 + 发送 */}
+      {/* 底部工具栏（ChatInput 底行对齐）：左 ＋引用菜单 + 权限胶囊 +
+          草稿选中态徽章（专家名可清除、非 agent 模式）；右 敏感词/模型/
+          工作空间提示 + 模型选择 + 魔法棒/快速 + 发送 */}
       <div className="flex items-center pt-2">
         <AttachMenu />
+        <div className="ml-1">
+          <PermissionCapsule accessMode={accessMode} onChange={setAccessMode} />
+        </div>
         {assistantName && (
           <span className="ml-1 inline-flex max-w-40 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary">
             <Bot className="h-2.5 w-2.5 shrink-0" />
@@ -412,6 +423,15 @@ export default function NewTaskInputCard({
               {t("newTask:modelRequired")}
             </span>
           )}
+          {workspaceId === null && (
+            <span className="text-xs text-muted-foreground">
+              {t("newTask:workspaceRequired")}
+            </span>
+          )}
+          <ModelPicker
+            currentModelId={modelId ?? undefined}
+            onPickModel={setModelId}
+          />
           <PolishButton />
           <QuickMenu />
           <Button

@@ -31,12 +31,15 @@ interface NewTaskState {
   mode: SessionMode;
   /** + 菜单专家项草稿（PlusMenu 对齐）：dispatch create 后 setAssistant 落库 */
   assistantId: number | null;
+  /** 模型选择草稿（ModelPicker 对齐）：dispatch create 后在 send 前 setModel 落库 */
+  modelId: number | null;
   setContent(s: string): void;
   setScenario(k: ScenarioKey): void;
   setWorkspaceId(id: number | null): void;
   setAccessMode(m: "default" | "full"): void;
   setMode(m: SessionMode): void;
   setAssistantId(id: number | null): void;
+  setModelId(id: number | null): void;
   /** label+kind 去重后追加（同展示名同来源视为同一引用） */
   addPending(ref: PendingRef): void;
   /** 按 ref 移除 */
@@ -53,10 +56,12 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
   pending: [],
   mode: "agent",
   assistantId: null,
+  modelId: null,
   setContent: (s) => set({ content: s }),
-  // mode/assistantId 为任务级草稿（与三配置区分）：不持久化、resetDraft 清
+  // mode/assistantId/modelId 为任务级草稿（与三配置区分）：不持久化、resetDraft 清
   setMode: (m) => set({ mode: m }),
   setAssistantId: (id) => set({ assistantId: id }),
+  setModelId: (id) => set({ modelId: id }),
   // 三配置 setter 内部写回持久化快照；content/pending 为草稿不持久化
   setScenario: (k) => {
     set({ scenario: k });
@@ -82,7 +87,13 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
       pending: state.pending.filter((p) => p.ref !== ref),
     })),
   resetDraft: () =>
-    set({ content: "", pending: [], mode: "agent", assistantId: null }),
+    set({
+      content: "",
+      pending: [],
+      mode: "agent",
+      assistantId: null,
+      modelId: null,
+    }),
 }));
 
 /**

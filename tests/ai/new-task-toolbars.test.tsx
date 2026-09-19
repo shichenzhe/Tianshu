@@ -37,12 +37,25 @@ vi.mock("@/domains/ai/skills/components/SkillImportDialog", () => ({
   default: () => null,
 }));
 // useQuery 按 queryKey 分流：QuickMenu/SkillSubMenu 走 skillRecords，
-// AttachMenu→ExpertSubMenu 走 assistants；QueryClient 仅失效缓存 mock 空操作
+// AttachMenu→ExpertSubMenu 走 assistants，ModelPicker 走 providers/models
+// （草稿分支选中不落库）；QueryClient 仅失效缓存 mock 空操作
 vi.mock("@tanstack/react-query", () => ({
-  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) =>
-    queryKey[0] === "assistants"
-      ? { data: [{ id: 7, name: "Al", icon: null }] }
-      : { data: [{ name: "s1", enabled: true, scenarios: null }] },
+  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+    if (queryKey[0] === "assistants") {
+      return { data: [{ id: 7, name: "Al", icon: null }] };
+    }
+    if (queryKey[0] === "providers") {
+      return { data: [{ id: 1, name: "P1" }] };
+    }
+    if (queryKey[0] === "models") {
+      return {
+        data: [
+          { id: 11, name: "M1", modelId: "m-1", providerId: 1, enabled: true },
+        ],
+      };
+    }
+    return { data: [{ name: "s1", enabled: true, scenarios: null }] };
+  },
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 // localStorage stub:store 配置 setter 手写持久化,测试环境无原生 localStorage
@@ -257,10 +270,18 @@ describe("NewTaskInputCard 工具栏与字数", () => {
     useNewTaskStore.getState().setWorkspaceId(2);
   });
 
-  it("底行挂载 AttachMenu/PolishMenu/QuickMenu/发送", () => {
+  it("底行挂载 AttachMenu/权限胶囊/模型选择/PolishMenu/QuickMenu/发送（ChatInput 对齐）", () => {
     render(<NewTaskInputCard />);
     expect(
       screen.getByRole("button", { name: "newTask:attach.title" }),
+    ).toBeTruthy();
+    // 权限胶囊（ChatInput 同款 PermissionCapsule）
+    expect(
+      screen.getByRole("button", { name: "chat:permission.allowFullAccess" }),
+    ).toBeTruthy();
+    // 模型选择（ModelPicker 草稿分支，未选显示引导文案）
+    expect(
+      screen.getByRole("button", { name: "chat:input.selectModel" }),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "newTask:polish.title" }),
@@ -269,6 +290,48 @@ describe("NewTaskInputCard 工具栏与字数", () => {
       screen.getByRole("button", { name: "newTask:quick.title" }),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: "newTask:send" })).toBeTruthy();
+  });
+
+  it("权限胶囊：开 full 经 FullAccessModal 免责确认写草稿 store；关回落 default", async () => {
+    render(<NewTaskInputCard />);
+    // 上弹面板（Popover）打开后拨开关 → FullAccessModal 强制确认
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:permission.allowFullAccess" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("chat:permission.panelDefaultDesc")).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("switch"));
+    await waitFor(() =>
+      expect(screen.getByText("chat:permission.modalRisk")).toBeTruthy(),
+    );
+    // 免责勾选后确认钮才可用（确认钮文案为 chat:permission.confirmFullAccess）
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:permission.confirmFullAccess" }),
+    );
+    expect(useNewTaskStore.getState().accessMode).toBe("full");
+    // 再开面板关开关：直落 default（无确认，同 ChatPane 口径）
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:permission.allowFullAccess" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("chat:permission.panelFullDesc")).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole("switch"));
+    expect(useNewTaskStore.getState().accessMode).toBe("default");
+  });
+
+  it("模型选择：选中写草稿 store，不碰 IPC（session 创建后才落库）", async () => {
+    render(<NewTaskInputCard />);
+    await openMenu("chat:input.selectModel", "M1");
+    fireEvent.click(screen.getByText("M1"));
+    expect(useNewTaskStore.getState().modelId).toBe(11);
+    expect(invokeMock).not.toHaveBeenCalledWith(
+      "session:setModel",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it("字数 ≤1800 不显示；>1800 显示；≥2000 附截断提示", () => {

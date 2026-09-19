@@ -19,8 +19,8 @@ import FullAccessModal from "./FullAccessModal";
 export type AccessMode = "default" | "full";
 
 interface PermissionCapsuleProps {
-  /** 仅用于生成无障碍 id；权限读写均在 ChatPane */
-  sessionId: number;
+  /** 仅用于生成无障碍 id；权限读写均在调用方（新建任务页草稿态不传） */
+  sessionId?: number;
   accessMode: AccessMode;
   onChange: (mode: AccessMode) => void;
 }
@@ -33,7 +33,7 @@ export default function PermissionCapsule({
   const { t } = useTranslation(["chat"]);
   const [modalOpen, setModalOpen] = useState(false);
   const isFull = accessMode === "full";
-  const switchId = `permission-full-${sessionId}`;
+  const switchId = `permission-full-${sessionId ?? "draft"}`;
 
   const handleSwitchChange = (checked: boolean) => {
     if (checked) {

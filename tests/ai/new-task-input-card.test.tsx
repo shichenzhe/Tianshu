@@ -23,12 +23,15 @@ vi.mock("react-router-dom", () => ({ useNavigate: () => vi.fn() }));
 vi.mock("@/domains/ai/skills/components/SkillImportDialog", () => ({
   default: () => null,
 }));
-// useQuery 按 queryKey 分流：assistants 供专家名徽章，其余（workspace 等）空
+// useQuery 按 queryKey 分流：assistants 供专家名徽章，其余（workspace/
+// providers/models 等）空；ModelPicker 需 useQueryClient（草稿分支不触
+// 达，空操作桩）
 vi.mock("@tanstack/react-query", () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) =>
     queryKey[0] === "assistants"
       ? { data: [{ id: 7, name: "Al", icon: null }] }
       : { data: [] },
+  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 vi.stubGlobal("filePath", {
   getPathForFile: (f: File) => (f as { path?: string }).path ?? f.name,

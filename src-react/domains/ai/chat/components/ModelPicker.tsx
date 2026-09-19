@@ -29,13 +29,17 @@ const SESSIONS_KEY = ["sessions"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
 
 interface ModelPickerProps {
-  sessionId: number;
+  /** 会话模型直写分支；新建任务页草稿态不传（经 onPickModel 回调） */
+  sessionId?: number;
   currentModelId?: number;
+  /** 草稿分支（无 session 语境）：选中回调调用方，不落库不失效缓存 */
+  onPickModel?: (modelId: number) => void;
 }
 
 export default function ModelPicker({
   sessionId,
   currentModelId,
+  onPickModel,
 }: ModelPickerProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
@@ -69,6 +73,14 @@ export default function ModelPicker({
     : t("chat:input.selectModel");
 
   const handleSelect = async (modelId: number) => {
+    // 草稿分支在前：无 session 语境（新建任务页）仅回调，不落库不失效缓存
+    if (onPickModel) {
+      onPickModel(modelId);
+      return;
+    }
+    if (sessionId === undefined) {
+      return;
+    }
     try {
       await SessionApi.setModel(sessionId, modelId);
       await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });

@@ -44,19 +44,23 @@ describe("new-task store", () => {
     expect(s.content).toBe("");
     expect(s.scenario).toBe("coding");
   });
-  it("mode/assistantId 为任务级草稿：setter 可写，resetDraft 回默认", () => {
-    // + 菜单对齐 PlusMenu（完整对齐裁定）：模式/专家选中暂存草稿，
-    // 发送时经 dispatch 落库到新建 session；每次新任务回默认
-    // （agent/无专家，与会话默认一致），不随三配置持久化
+  it("mode/assistantId/modelId 为任务级草稿：setter 可写，resetDraft 回默认", () => {
+    // + 菜单/工具栏对齐 ChatInput（完整对齐裁定）：模式/专家/模型选中暂存
+    // 草稿，发送时经 dispatch 落库到新建 session；每次新任务回默认
+    // （agent/无专家/模型未选走后端默认），不随三配置持久化
     expect(useNewTaskStore.getState().mode).toBe("agent");
     expect(useNewTaskStore.getState().assistantId).toBeNull();
+    expect(useNewTaskStore.getState().modelId).toBeNull();
     useNewTaskStore.getState().setMode("plan");
     useNewTaskStore.getState().setAssistantId(5);
+    useNewTaskStore.getState().setModelId(11);
     expect(useNewTaskStore.getState().mode).toBe("plan");
     expect(useNewTaskStore.getState().assistantId).toBe(5);
+    expect(useNewTaskStore.getState().modelId).toBe(11);
     useNewTaskStore.getState().resetDraft();
     expect(useNewTaskStore.getState().mode).toBe("agent");
     expect(useNewTaskStore.getState().assistantId).toBeNull();
+    expect(useNewTaskStore.getState().modelId).toBeNull();
   });
 });
 

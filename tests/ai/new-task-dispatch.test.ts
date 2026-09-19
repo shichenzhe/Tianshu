@@ -1,9 +1,10 @@
 /**
  * 新建任务 dispatch 发送编排单测（spec §3.2）：create(scenario) →
- * [full: setPermission] → send（引用前缀块注入，ChatView 同口径；发起即
- * 继续不等流结束——chat:send IPC 到流完成才 resolve，早期失败 toast）→
- * navigate；create/读引用失败抛错且草稿保留，send 例外（session 已建立，
- * 失败仅 toast 仍导航）。IPC 全量走 invoke 级 mock
+ * [专家/模式/模型草稿落库] → [full: setPermission] → send（引用前缀块注入，
+ * ChatView 同口径；发起即继续不等流结束——chat:send IPC 到流完成才
+ * resolve，早期失败 toast）→ navigate；create/读引用失败抛错且草稿保留，
+ * send 例外（session 已建立，失败仅 toast 仍导航；setModel 失败同理降级
+ * 继续，避免孤儿会话）。IPC 全量走 invoke 级 mock
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -128,6 +129,38 @@ describe("dispatchNewTask", () => {
       "permission:set",
       "chat:send",
     ]);
+  });
+
+  it("草稿选了模型：create 后 setModel 落库（必须先于 send）再 send", async () => {
+    useNewTaskStore.getState().setModelId(11);
+    mockInvokeDefault();
+    await dispatchNewTask({ navigate });
+    expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
+      "session:create",
+      "session:setModel",
+      "chat:send",
+    ]);
+    expect(invokeMock).toHaveBeenCalledWith("session:setModel", 9, 11);
+  });
+
+  it("setModel 失败降级：toast 提示但仍 send 并导航（session 已建立不中断）", async () => {
+    useNewTaskStore.getState().setModelId(11);
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === "session:create") {
+        return Promise.resolve(SESSION);
+      }
+      if (channel === "session:setModel") {
+        return Promise.reject(new Error("model-gone"));
+      }
+      return Promise.resolve(null);
+    });
+    await dispatchNewTask({ navigate });
+    expect(invokeMock).toHaveBeenCalledWith("session:setModel", 9, 11);
+    expect(invokeMock).toHaveBeenCalledWith("chat:send", expect.anything());
+    expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
+      replace: true,
+    });
+    await vi.waitFor(() => expect(toastMock.error).toHaveBeenCalled());
   });
 
   it("send 早期失败：不阻塞导航，toast 提示（session 已建立、用户消息已落库）", async () => {

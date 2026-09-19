@@ -2,7 +2,8 @@
  * 新建任务发送编排（spec §3.2）：读 store 草稿 → 敏感词/工作空间前置校验 →
  * 逐 pending 引用读内容（file 工作空间文件 / localFile 本地文件 / skill 技能，
  * 注入格式与 ChatView 发送层同口径 buildInjectedContent）→ create(scenario)
- * → [专家/模式草稿落库（PlusMenu 对齐）：setAssistant / setMode] →
+ * → [专家/模式/模型草稿落库（PlusMenu 对齐）：setAssistant / setMode /
+ * setModel（send 前完成，失败降级继续）] →
  * [full: setPermission] → send（发起即继续不等流结束）→ 清草稿跳会话。
  * create/读引用失败抛错（调用方 NewTaskView catch 后 toast）草稿保留落地页；
  * send 例外——session 已建立仅早期失败 toast，仍导航
@@ -68,6 +69,7 @@ export async function dispatchNewTask({
     pending,
     mode,
     assistantId,
+    modelId,
   } = useNewTaskStore.getState();
   if (workspaceId === null) {
     throw new Error("no-workspace");
@@ -87,6 +89,16 @@ export async function dispatchNewTask({
   }
   if (mode !== "agent") {
     await SessionApi.setMode(created.id, mode);
+  }
+  // 模型草稿落库必须在 send 之前：chat:send 为 fire-and-forget，起流时
+  // 读 session 模型；失败降级继续（session 已建，中断会产生孤儿会话，
+  // 改用后端默认模型发送并 toast）
+  if (modelId !== null) {
+    try {
+      await SessionApi.setModel(created.id, modelId);
+    } catch (e) {
+      toast.error(mapDispatchError(e));
+    }
   }
   if (accessMode === "full") {
     await ChatApi.setPermission(created.id, "full");

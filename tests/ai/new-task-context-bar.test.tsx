@@ -1,11 +1,13 @@
 // tests/ai/new-task-context-bar.test.tsx
 // @vitest-environment jsdom
 /**
- * 新建任务配置栏（Task 13）：工作空间下拉（默认跟随列表第一个 + 切换写
- * store）与权限下拉两档（standard 直写 default；full 开 FullAccessModal，
- * 勾选免责后确认才写 full）。i18n t mock 直返 key；Radix DropdownMenu 经
- * pointerDown+click 开菜单（同 tests/ai/new-task-toolbars.test.tsx:57）；
- * FullAccessModal 确认钮 disabled={!acknowledged}，需先勾选免责再确认。
+ * 新建任务配置栏（修订 spec 裁定 11：工作空间显式选择）：未选空间不再
+ * 自动跟随列表第一个——保持 null 引导态；持久化脏 id（空间已删/换库）
+ * 归零回引导态；合法 id 保留并显示空间名；空列表灰字 noWorkspace 不写
+ * store；点击胶囊弹 WorkspacePickerDialog（弹框交互见
+ * workspace-picker-dialog.test.tsx）。权限胶囊已随工具栏对齐迁入
+ * NewTaskInputCard（用例见 new-task-toolbars.test.tsx）。i18n t mock 直返
+ * key；useQuery mock 仅 data（ContextBar 只消费 data）。
  */
 import {
   render,
@@ -23,9 +25,10 @@ afterEach(cleanup);
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
-// cn 依赖 @/i18n 实例（DropdownMenu/AlertDialog→cn），最小桩避免拉起完整 i18n 栈
+// cn 依赖 @/i18n 实例（WorkspacePickerDialog→Dialog→cn），最小桩避免拉起
+// 完整 i18n 栈
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
-// 用例可覆写的查询返回（仅 data——ContextBar 只消费 data）
+// 用例可覆写的查询返回（仅 data——ContextBar/弹框只消费 data）
 const { queryData } = vi.hoisted(() => ({
   queryData: {
     data: [
@@ -61,43 +64,35 @@ const DEFAULT_WORKSPACES = [
   { id: 2, name: "项目组A" },
 ];
 
-/** Radix DropdownMenuTrigger 经 pointerDown(主键)+click 打开后等首项出现 */
-async function openMenu(
-  triggerLabel: string,
-  firstItemText: string,
-): Promise<void> {
-  const trigger = screen.getByRole("button", { name: triggerLabel });
-  fireEvent.pointerDown(trigger, { button: 0 });
-  fireEvent.click(trigger);
-  await waitFor(() => {
-    expect(screen.getByText(firstItemText)).toBeTruthy();
-  });
-}
-
-describe("ContextBar", () => {
+describe("ContextBar（工作空间显式选择）", () => {
   beforeEach(() => {
     queryData.data = DEFAULT_WORKSPACES;
-    // resetDraft 不清三配置；显式回首次进入态（workspaceId=null 触发默认兜底）
+    // resetDraft 不清三配置；显式回未选态（引导态）
     useNewTaskStore.getState().resetDraft();
     useNewTaskStore.getState().setWorkspaceId(null);
   });
 
-  it("默认选第一个工作空间；切换写 store", async () => {
+  it("未选空间不自动跟随第一个：保持 null，胶囊显示引导态", () => {
     render(<ContextBar />);
-    await waitFor(() => expect(useNewTaskStore.getState().workspaceId).toBe(1));
-    await openMenu("个人空间", "项目组A");
-    fireEvent.click(screen.getByText("项目组A"));
-    expect(useNewTaskStore.getState().workspaceId).toBe(2);
+    expect(useNewTaskStore.getState().workspaceId).toBeNull();
+    // 引导态文案 = context.workspace（"选择工作空间"）
+    expect(screen.getByText("newTask:context.workspace")).toBeTruthy();
   });
 
-  it("选高危弹 FullAccessModal，确认后写 full", async () => {
+  it("持久化脏 id（列表已无此空间）归零回引导态", async () => {
+    useNewTaskStore.getState().setWorkspaceId(99);
     render(<ContextBar />);
-    await openMenu("newTask:context.standard", "newTask:context.full");
-    fireEvent.click(screen.getByText("newTask:context.full"));
-    // 免责勾选后确认钮才可用（确认钮文案为 chat:permission.confirmFullAccess）
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: /确认|confirm/i }));
-    expect(useNewTaskStore.getState().accessMode).toBe("full");
+    await waitFor(() =>
+      expect(useNewTaskStore.getState().workspaceId).toBeNull(),
+    );
+    expect(screen.getByText("newTask:context.workspace")).toBeTruthy();
+  });
+
+  it("合法持久化 id 保留：胶囊显示空间名", () => {
+    useNewTaskStore.getState().setWorkspaceId(2);
+    render(<ContextBar />);
+    expect(useNewTaskStore.getState().workspaceId).toBe(2);
+    expect(screen.getByText("项目组A")).toBeTruthy();
   });
 
   it("空列表显示无工作空间灰字且不写 store", () => {
@@ -105,5 +100,14 @@ describe("ContextBar", () => {
     render(<ContextBar />);
     expect(screen.getByText("newTask:context.noWorkspace")).toBeTruthy();
     expect(useNewTaskStore.getState().workspaceId).toBeNull();
+  });
+
+  it("点击胶囊打开工作空间选择弹框", async () => {
+    render(<ContextBar />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "newTask:context.workspace" }),
+    );
+    // Radix Dialog 打开（content role=dialog）
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
   });
 });

@@ -22,6 +22,7 @@
     "noFiles": "无匹配文件",
     "oversize": "文件大小超出限制",
     "readFailed": "文件读取失败",
+    "selectWorkspaceFirst": "请先选择工作空间",
     "clearExpert": "移除专家"
   },
   "polish": {
@@ -38,16 +39,15 @@
   },
   "context": {
     "workspace": "选择工作空间",
-    "permission": "默认权限",
-    "standard": "标准模式",
-    "full": "高危模式",
-    "fullDesc": "允许写操作与命令执行，风险自担",
-    "noWorkspace": "请先创建工作空间"
+    "noWorkspace": "请先创建工作空间",
+    "searchWorkspace": "搜索工作空间",
+    "noMatch": "无匹配工作空间"
   },
   "send": "发送任务",
   "sensitiveHit": "内容包含受限词：{{word}}",
   "charCount": "{{current}}/2000",
   "truncateHint": "已达上限，超长内容可能被截断",
   "modelRequired": "请先配置可用模型",
+  "workspaceRequired": "请先选择工作空间",
   "dispatchFailed": "任务发起失败，请重试"
 }

@@ -182,6 +182,10 @@
   "library": {
     "title": "资料库",
     "searchPlaceholder": "搜索资料",
+    "searchLabel": "搜索资料",
+    "backToList": "返回文件列表",
+    "collapseSidebar": "收起侧边栏",
+    "expandSidebar": "展开侧边栏",
     "pickTitle": "引用资料库",
     "pickConfirm": "引用",
     "groupWorkspace": "工作空间文件",
@@ -194,6 +198,7 @@
     "colType": "类型",
     "colSize": "大小",
     "colAddedAt": "添加时间",
+    "originalPath": "原路径",
     "typeAll": "全部类型",
     "typeDocument": "文档",
     "typeHtml": "网页",
@@ -227,7 +232,6 @@
     "pickAttachFailed": "以下资料无法引用：{{names}}",
     "retry": "重试",
     "noSearchResult": "没有匹配的资料",
-    "searchBack": "返回全部",
     "recent": "最近添加",
     "previewFailed": "预览加载失败",
     "openInFinder": "在 Finder 中打开",
@@ -240,7 +244,10 @@
   "automation": {
     "title": "自动化",
     "toggleEnabled": "启用或停用任务",
-    "tabs": { "tasks": "定时任务", "runs": "运行记录" },
+    "tabs": {
+      "tasks": "定时任务",
+      "runs": "运行记录"
+    },
     "toolbar": {
       "searchPlaceholder": "搜索任务名称",
       "refresh": "刷新",

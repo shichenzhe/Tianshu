@@ -182,6 +182,10 @@
   "library": {
     "title": "Library",
     "searchPlaceholder": "Search files",
+    "searchLabel": "Search library",
+    "backToList": "Back to file list",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
     "pickTitle": "Pick from library",
     "pickConfirm": "Reference",
     "groupWorkspace": "Workspace files",
@@ -194,6 +198,7 @@
     "colType": "Type",
     "colSize": "Size",
     "colAddedAt": "Added",
+    "originalPath": "Original path",
     "typeAll": "All types",
     "typeDocument": "Document",
     "typeHtml": "Web page",
@@ -227,7 +232,6 @@
     "pickAttachFailed": "Unable to reference: {{names}}",
     "retry": "Retry",
     "noSearchResult": "No matching files",
-    "searchBack": "Back to all",
     "recent": "Recently added",
     "previewFailed": "Preview failed to load",
     "openInFinder": "Open in Finder",
@@ -240,7 +244,10 @@
   "automation": {
     "title": "Automation",
     "toggleEnabled": "Toggle task enabled",
-    "tabs": { "tasks": "Scheduled Tasks", "runs": "Run History" },
+    "tabs": {
+      "tasks": "Scheduled Tasks",
+      "runs": "Run History"
+    },
     "toolbar": {
       "searchPlaceholder": "Search task names",
       "refresh": "Refresh",

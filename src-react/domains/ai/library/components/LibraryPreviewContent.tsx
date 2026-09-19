@@ -1,6 +1,6 @@
 /**
- * 资料库预览（spec 裁定 6 + §5）：md 复用会话 MarkdownView（text prop，
- * artifacts/FilePreview.tsx:104 同款先例）/ text-code <pre> / image <img> /
+ * 资料库预览内容体（从 LibraryPreviewDialog 拆壳内嵌化——详情面板载体）：
+ * md 复用会话 MarkdownView（text prop）/ text-code <pre> / image <img> /
  * html-pdf-audio-video <webview file://>（独立 partition、禁弹窗、ref+
  * addEventListener 拦 will-navigate 外跳——renderer-guard 依赖 electron
  * 进不了渲染层，此为同语义内联实现）/ 其余或读失败降级 Finder。文本读取
@@ -15,12 +15,6 @@ import { toast } from "sonner";
 import { FolderSearch } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import MarkdownView from "@/domains/ai/chat/components/MarkdownView";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { invoke } from "@/lib/ipc";
@@ -28,15 +22,13 @@ import type { LibraryItem } from "../api/library.api";
 import { fileUrlOf, previewModeOf } from "../lib/library-view-model";
 import LibraryApi from "../api/library.api";
 
-interface LibraryPreviewDialogProps {
-  item: LibraryItem | null;
-  onClose: () => void;
+interface LibraryPreviewContentProps {
+  item: LibraryItem;
 }
 
-export default function LibraryPreviewDialog({
+export default function LibraryPreviewContent({
   item,
-  onClose,
-}: LibraryPreviewDialogProps) {
+}: LibraryPreviewContentProps) {
   const { t } = useTranslation(["chat"]);
   const [text, setText] = useState<string | null>(null);
   // dev 图片预览 dataUrl（生产恒 null——<img> 直链 file://）
@@ -51,7 +43,7 @@ export default function LibraryPreviewDialog({
     setText(null);
     setDataUrl(null);
     setLoadFailed(false);
-    if (!item || item.kind !== "file") {
+    if (item.kind !== "file") {
       return;
     }
     let stale = false;
@@ -123,9 +115,6 @@ export default function LibraryPreviewDialog({
     };
   }, [item?.id]);
 
-  if (!item) {
-    return null;
-  }
   const mode = previewModeOf(item);
   const url = item.storagePath ? fileUrlOf(item.storagePath) : "";
   const textLoading =
@@ -133,65 +122,60 @@ export default function LibraryPreviewDialog({
     text === null &&
     !loadFailed;
   return (
-    <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="flex h-[80vh] max-w-3xl flex-col border border-border/50 rounded-lg shadow-lg">
-        <DialogHeader>
-          <DialogTitle className="truncate pr-6">{item.name}</DialogTitle>
-        </DialogHeader>
-        {mode === "finder" || loadFailed ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
-            <p>
-              {loadFailed
-                ? t("chat:library.previewFailed")
-                : t("chat:library.previewUnsupported")}
-            </p>
-            <Button
-              variant="outline"
-              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-              onClick={() =>
-                void LibraryApi.revealItem(item.id).catch((e) =>
-                  toast.error(mapIpcError(e)),
-                )
-              }
-            >
-              <FolderSearch className="mr-1 h-4 w-4" />
-              {t("chat:library.openInFinder")}
-            </Button>
-          </div>
-        ) : mode === "inline-md" ? (
-          <div className="flex-1 overflow-y-auto rounded-md border border-border/50 p-4 text-sm">
-            {textLoading ? "…" : <MarkdownView text={text ?? ""} />}
-          </div>
-        ) : mode === "inline-text" ? (
-          <pre className="flex-1 overflow-auto rounded-md border border-border/50 p-4 text-xs leading-relaxed">
-            {textLoading ? "…" : text}
-          </pre>
-        ) : mode === "inline-image" ? (
-          <div className="flex flex-1 items-center justify-center overflow-auto">
-            {/* dev：dataUrl 读取中显示占位（此时直链 file:// 会因跨源被拒，
-                不能提前挂 src 触发 onError 误降级）；生产直链 file:// */}
-            {import.meta.env.DEV && dataUrl === null ? (
-              "…"
-            ) : (
-              <img
-                src={import.meta.env.DEV ? (dataUrl ?? "") : url}
-                alt={item.name}
-                onError={() => setLoadFailed(true)}
-                className="max-h-full max-w-full object-contain"
-              />
-            )}
-          </div>
-        ) : (
-          // allowpopups 刻意不写：Electron 按 DOM 属性「存在性」取值
-          // （hasAttribute），写 "false" 反而会放行弹窗；不写即默认拒绝
-          <webview
-            ref={webviewRef}
-            src={url}
-            partition="library-preview"
-            className="flex-1 rounded-md border border-border/50"
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    <div className="flex h-full min-h-0 flex-col">
+      {mode === "finder" || loadFailed ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
+          <p>
+            {loadFailed
+              ? t("chat:library.previewFailed")
+              : t("chat:library.previewUnsupported")}
+          </p>
+          <Button
+            variant="outline"
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            onClick={() =>
+              void LibraryApi.revealItem(item.id).catch((e) =>
+                toast.error(mapIpcError(e)),
+              )
+            }
+          >
+            <FolderSearch className="mr-1 h-4 w-4" />
+            {t("chat:library.openInFinder")}
+          </Button>
+        </div>
+      ) : mode === "inline-md" ? (
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-border/50 p-4 text-sm">
+          {textLoading ? "…" : <MarkdownView text={text ?? ""} />}
+        </div>
+      ) : mode === "inline-text" ? (
+        <pre className="min-h-0 flex-1 overflow-auto rounded-md border border-border/50 p-4 text-xs leading-relaxed">
+          {textLoading ? "…" : text}
+        </pre>
+      ) : mode === "inline-image" ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
+          {/* dev：dataUrl 读取中显示占位（此时直链 file:// 会因跨源被拒，
+              不能提前挂 src 触发 onError 误降级）；生产直链 file:// */}
+          {import.meta.env.DEV && dataUrl === null ? (
+            "…"
+          ) : (
+            <img
+              src={import.meta.env.DEV ? (dataUrl ?? "") : url}
+              alt={item.name}
+              onError={() => setLoadFailed(true)}
+              className="max-h-full max-w-full object-contain"
+            />
+          )}
+        </div>
+      ) : (
+        // allowpopups 刻意不写：Electron 按 DOM 属性「存在性」取值
+        // （hasAttribute），写 "false" 反而会放行弹窗；不写即默认拒绝
+        <webview
+          ref={webviewRef}
+          src={url}
+          partition="library-preview"
+          className="min-h-0 flex-1 rounded-md border border-border/50"
+        />
+      )}
+    </div>
   );
 }

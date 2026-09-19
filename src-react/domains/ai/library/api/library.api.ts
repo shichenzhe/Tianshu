@@ -24,6 +24,13 @@ export interface AddFilesResult {
   failed: Array<{ path: string; reason: string }>;
 }
 
+/** 树形栏节点（folder 平铺行；前端 buildFolderTree 组嵌套树） */
+export interface LibraryFolderNode {
+  id: number;
+  parentId: number | null;
+  name: string;
+}
+
 const LibraryApi = {
   list: (parentId?: number) =>
     invoke<{ items: LibraryItem[]; breadcrumbs: LibraryItem[] }>(
@@ -42,6 +49,7 @@ const LibraryApi = {
   delete: (ids: number[]) => invoke<null>("library:delete", ids),
   revealItem: (id: number) => invoke<null>("library:revealItem", id),
   subtreeCount: (id: number) => invoke<number>("library:subtreeCount", id),
+  tree: () => invoke<LibraryFolderNode[]>("library:tree"),
 };
 
 export default LibraryApi;

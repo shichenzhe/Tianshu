@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFolderTree,
   fileUrlOf,
   filterByType,
   formatSize,
@@ -101,5 +102,41 @@ describe("fileUrlOf / formatSize", () => {
     expect(formatSize(1024)).toBe("1.0 KB");
     expect(formatSize(1536)).toBe("1.5 KB");
     expect(formatSize(5 * 1024 * 1024)).toBe("5.0 MB");
+  });
+});
+
+describe("buildFolderTree 组树", () => {
+  it("平铺 → 嵌套；层内按名称排序（ASCII 断言——不依赖环境 collation）", () => {
+    const tree = buildFolderTree([
+      { id: 1, parentId: null, name: "docs" },
+      { id: 2, parentId: null, name: "assets" },
+      { id: 3, parentId: 1, name: "img" },
+      { id: 4, parentId: 1, name: "doc" },
+    ]);
+    expect(tree.map((n) => n.name)).toEqual(["assets", "docs"]);
+    expect(tree[1].children.map((c) => c.name)).toEqual(["doc", "img"]);
+  });
+
+  it("中文层内排序稳定且层级正确", () => {
+    const tree = buildFolderTree([
+      { id: 1, parentId: null, name: "资料" },
+      { id: 2, parentId: 1, name: "图片" },
+      { id: 3, parentId: 1, name: "文档" },
+    ]);
+    expect(tree).toHaveLength(1);
+    const names = tree[0].children.map((c) => c.name);
+    expect([...names].sort((a, b) => a.localeCompare(b))).toEqual(names);
+  });
+
+  it("孤儿（parent 不在集合）挂根；自环防御性落根", () => {
+    const tree = buildFolderTree([
+      { id: 1, parentId: 99, name: "孤儿" },
+      { id: 2, parentId: 2, name: "自环" },
+    ]);
+    expect(tree.map((n) => n.id).sort()).toEqual([1, 2]);
+  });
+
+  it("空输入返回空数组", () => {
+    expect(buildFolderTree([])).toEqual([]);
   });
 });

@@ -152,4 +152,20 @@ describe("LibraryRepository 元数据通道", () => {
     expect(await repo.subtreeCount(f4.id)).toBe(0);
     await expect(repo.subtreeCount(999)).rejects.toThrow("条目不存在");
   });
+
+  it("tree 返回全量 folder 平铺（含层级 id，不含 file）", async () => {
+    const repo = new LibraryRepository();
+    const f1 = await repo.createFolder("A", null);
+    await repo.createFolder("B", f1.id);
+    const file = await repo.createFolder("伪文件", f1.id);
+    Object.assign(
+      table.find((r) => r.id === file.id)!,
+      { kind: "file" },
+    );
+    const tree = await repo.tree();
+    expect(tree).toHaveLength(2);
+    expect(tree.find((n) => n.id === f1.id)?.parentId).toBeNull();
+    expect(tree.find((n) => n.name === "B")?.parentId).toBe(f1.id);
+    expect(tree.some((n) => n.id === file.id)).toBe(false);
+  });
 });

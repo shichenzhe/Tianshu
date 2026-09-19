@@ -92,3 +92,42 @@ export function formatSize(bytes: number | null): string {
   } while (value >= 1024 && unitIndex < units.length - 1);
   return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
 }
+
+/** 树形栏嵌套节点（folder 平铺 → buildFolderTree 组装） */
+export interface FolderTreeNode {
+  id: number;
+  name: string;
+  children: FolderTreeNode[];
+}
+
+/** 平铺文件夹行 → 嵌套树（层内 name localeCompare 排序；parent 不在
+ *  集合的孤儿挂根兜底——move 防环已保证数据无环，自环防御性跳过） */
+export function buildFolderTree(
+  rows: Array<{ id: number; parentId: number | null; name: string }>,
+): FolderTreeNode[] {
+  const byId = new Map<number, FolderTreeNode>();
+  for (const row of rows) {
+    byId.set(row.id, { id: row.id, name: row.name, children: [] });
+  }
+  const roots: FolderTreeNode[] = [];
+  for (const row of rows) {
+    const node = byId.get(row.id)!;
+    const parent =
+      row.parentId !== null && row.parentId !== row.id
+        ? byId.get(row.parentId)
+        : undefined;
+    if (parent) {
+      parent.children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+  const sortTree = (nodes: FolderTreeNode[]): void => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    for (const node of nodes) {
+      sortTree(node.children);
+    }
+  };
+  sortTree(roots);
+  return roots;
+}

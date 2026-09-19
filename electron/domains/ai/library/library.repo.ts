@@ -15,6 +15,7 @@ import type { PrismaClient } from "../../../generated/prisma/client";
 import type {
   LibraryItem,
   AddFilesResult,
+  LibraryFolderNode,
 } from "../../../../src-react/domains/ai/library/api/library.api";
 import {
   buildBreadcrumbChain,
@@ -109,6 +110,7 @@ export default class LibraryRepository {
     ipcMain.handle("library:subtreeCount", (_e, id: number) =>
       this.subtreeCount(id),
     );
+    ipcMain.handle("library:tree", () => this.tree());
   }
 
   /** 单层列表（folder 置前基准序）+ 祖先链面包屑一次返回 */
@@ -144,6 +146,20 @@ export default class LibraryRepository {
       where: { kind: "file", name: { contains: keyword.trim() } },
     });
     return rows.map((row) => toClientItem(row, this.libraryRoot));
+  }
+
+  /** 全量文件夹平铺（树形栏数据源；个人库量级小一次拉全，元数据
+   *  变更后由前端 invalidate 重拉） */
+  async tree(): Promise<LibraryFolderNode[]> {
+    const rows = await this.prismaClient.libraryItem.findMany({
+      where: { kind: "folder" },
+      select: { id: true, parentId: true, name: true },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      parentId: row.parentId ?? null,
+      name: row.name,
+    }));
   }
 
   /** 新建文件夹：清洗 + 同层重名序号 */

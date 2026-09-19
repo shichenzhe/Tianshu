@@ -106,6 +106,7 @@ export type IPCChannel =
   | "library:delete"
   | "library:revealItem"
   | "library:subtreeCount"
+  | "library:tree"
   | "mcpServer:list"
   | "mcpServer:create"
   | "mcpServer:update"

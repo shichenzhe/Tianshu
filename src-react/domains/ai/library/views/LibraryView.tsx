@@ -1,19 +1,19 @@
 /**
- * 资料库「我的资料」（spec §5）：工具栏（面包屑/搜索/类型筛选/新建
- * 文件夹/上传）+ 列表。搜索跨层走 library:search；排序与类型筛选前端
- * 本地（单层数据量小，skill 页先例）；拖拽入库（拖到页面任意处）。
- * 文件点击/菜单预览走 LibraryPreviewDialog（md/文本/图片内联，
- * html/pdf/音视频 webview）。
+ * 资料库「我的资料」（spec §5 + 树改迭代）：左树形栏（文件夹导航 +
+ * 搜索/列表按钮行，可收起成窄条）+ 主区三态互斥——列表态（当前层文件
+ * + 工具栏：类型筛选/排序/上传/新建文件夹）/ 搜索态（树栏搜索输入驱动
+ * 的跨层结果）/ 详情态（选中文件预览 + 元信息 + 行操作，
+ * LibraryDetailPanel）。排序与类型筛选前端本地（单层数据量小，
+ * skill 页先例）；拖拽入库（拖到页面任意处）。
  */
 import { useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ChevronRight, FolderPlus, Search, Upload } from "lucide-react";
+import { FolderPlus, Upload } from "lucide-react";
 
 import PageTitle from "@/components/layout/PageTitle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -40,7 +40,8 @@ import {
 import LibraryFileList, { TYPE_LABEL_KEY } from "../components/LibraryFileList";
 import LibraryItemDialogs from "../components/LibraryItemDialogs";
 import LibraryMoveDialog from "../components/LibraryMoveDialog";
-import LibraryPreviewDialog from "../components/LibraryPreviewDialog";
+import LibrarySidebarTree from "../components/LibrarySidebarTree";
+import LibraryDetailPanel from "../components/LibraryDetailPanel";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { invoke } from "@/lib/ipc";
 
@@ -60,8 +61,10 @@ export default function LibraryView() {
   const [moveIds, setMoveIds] = useState<number[] | null>(null);
   const [deleteItem, setDeleteItem] = useState<LibraryItem | null>(null);
   const [deleteCount, setDeleteCount] = useState<number | null>(null);
-  const [previewItem, setPreviewItem] = useState<LibraryItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 树改迭代：左栏收起态 + 主区详情态选中文件
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
+  const [detailItem, setDetailItem] = useState<LibraryItem | null>(null);
 
   const searching = keyword.trim().length > 0;
   const listQuery = useQuery({
@@ -82,9 +85,13 @@ export default function LibraryView() {
     [rawItems, typeFilter, sortField],
   );
 
+  // 主区三态互斥：详情态优先（搜索结果点文件进入），次搜索态，默认列表态
+  const viewMode = detailItem ? "detail" : searching ? "search" : "list";
+
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["libraryItems"] });
     await queryClient.invalidateQueries({ queryKey: ["librarySearch"] });
+    await queryClient.invalidateQueries({ queryKey: ["libraryTree"] });
   };
 
   /** 上传：系统选择器多选 → addFiles 到当前层 */
@@ -157,6 +164,8 @@ export default function LibraryView() {
         await LibraryApi.rename(dialog.item.id, name);
       }
       setDialog(null);
+      // 重命名后详情态的本地对象已过期——回列表态（数据经 invalidate 重拉）
+      setDetailItem(null);
       await invalidate();
     } catch (e) {
       toast.error(mapIpcError(e));
@@ -185,6 +194,9 @@ export default function LibraryView() {
     try {
       await LibraryApi.delete([deleteItem.id]);
       setDeleteItem(null);
+      setDeleteCount(null);
+      // 删除的就是详情本体——回列表态
+      setDetailItem(null);
       await invalidate();
     } catch (e) {
       toast.error(mapIpcError(e));
@@ -193,137 +205,143 @@ export default function LibraryView() {
     }
   };
 
-  const breadcrumbs = listQuery.data?.breadcrumbs ?? [];
-
   return (
     <div
-      className="flex h-full flex-col overflow-y-auto p-4"
+      className="flex h-full"
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => void handleDrop(e)}
     >
-      <PageTitle title={t("chat:library.title")} />
-      <div className="flex flex-wrap items-center gap-2 py-3">
-        {!searching && (
-          <nav className="flex items-center gap-1 text-sm">
-            <button
-              type="button"
-              className="rounded-md px-1.5 py-1 hover:bg-primary-subtle hover:text-primary"
-              onClick={() => setFolderId(null)}
-            >
-              {t("chat:library.mine")}
-            </button>
-            {breadcrumbs.map((crumb) => (
-              <span key={crumb.id} className="flex items-center gap-1">
-                <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                <button
-                  type="button"
-                  className="rounded-md px-1.5 py-1 hover:bg-primary-subtle hover:text-primary"
-                  onClick={() => setFolderId(crumb.id)}
+      <LibrarySidebarTree
+        collapsed={treeCollapsed}
+        onToggleCollapse={() => setTreeCollapsed((v) => !v)}
+        folderId={folderId}
+        onSelectFolder={(id) => {
+          // 选中文件夹即主区导航（回列表态，清搜索与详情）
+          setFolderId(id);
+          setKeyword("");
+          setDetailItem(null);
+        }}
+        keyword={keyword}
+        onKeywordChange={setKeyword}
+        onBackToList={() => {
+          setKeyword("");
+          setDetailItem(null);
+        }}
+        backEnabled={viewMode !== "list"}
+      />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
+        <PageTitle title={t("chat:library.title")} />
+        {viewMode === "detail" && detailItem ? (
+          <div className="min-h-0 flex-1">
+            <LibraryDetailPanel
+              item={detailItem}
+              onBack={() => setDetailItem(null)}
+              onRename={(item) => setDialog({ mode: "rename", item })}
+              onMove={(item) => setMoveIds([item.id])}
+              onReveal={(item) =>
+                void LibraryApi.revealItem(item.id).catch((e) =>
+                  toast.error(mapIpcError(e)),
+                )
+              }
+              onDelete={openDelete}
+            />
+          </div>
+        ) : (
+          <>
+            {/* 工具栏（列表/搜索态共用）：类型筛选 / 排序切换 / 新建
+                文件夹 / 上传；搜索入口与导航在左树栏 */}
+            <div className="flex flex-wrap items-center gap-2 py-3">
+              <div className="ml-auto flex items-center gap-2">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger
+                    className="w-32"
+                    aria-label={t("chat:library.colType")}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="border border-border/50 rounded-lg shadow-lg">
+                    {TYPE_FILTERS.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {t(
+                          type === "all"
+                            ? "chat:library.typeAll"
+                            : (TYPE_LABEL_KEY[type] ??
+                                "chat:library.typeOther"),
+                        )}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                  onClick={() =>
+                    setSortField(
+                      sortField === "updatedAt" ? "name" : "updatedAt",
+                    )
+                  }
                 >
-                  {crumb.name}
-                </button>
-              </span>
-            ))}
-          </nav>
+                  {sortField === "updatedAt"
+                    ? t("chat:library.recent")
+                    : t("chat:library.colName")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                  onClick={() => setDialog({ mode: "createFolder" })}
+                >
+                  <FolderPlus className="mr-1 h-4 w-4" />
+                  {t("chat:library.newFolder")}
+                </Button>
+                <Button size="sm" onClick={() => void handleUpload()}>
+                  <Upload className="mr-1 h-4 w-4" />
+                  {t("chat:library.upload")}
+                </Button>
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {searching && searchQuery.data?.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  {t("chat:library.noSearchResult")}
+                </p>
+              ) : !searching && listQuery.isError ? (
+                <div className="py-10 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    {t("chat:library.loadFailed")}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                    onClick={() => void listQuery.refetch()}
+                  >
+                    {t("chat:library.retry")}
+                  </Button>
+                </div>
+              ) : (
+                <LibraryFileList
+                  items={items}
+                  loading={
+                    searching ? searchQuery.isLoading : listQuery.isLoading
+                  }
+                  onOpen={(item) => setFolderId(item.id)}
+                  onPreview={(item) => setDetailItem(item)}
+                  onRename={(item) => setDialog({ mode: "rename", item })}
+                  onMove={(item) => setMoveIds([item.id])}
+                  onReveal={(item) =>
+                    void LibraryApi.revealItem(item.id).catch((e) =>
+                      toast.error(mapIpcError(e)),
+                    )
+                  }
+                  onDelete={openDelete}
+                />
+              )}
+            </div>
+          </>
         )}
-        {searching && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            onClick={() => setKeyword("")}
-          >
-            {t("chat:library.searchBack")}
-          </Button>
-        )}
-        <div className="relative ml-auto">
-          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            placeholder={t("chat:library.searchPlaceholder")}
-            className="w-56 pl-8"
-          />
-        </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger
-            className="w-32"
-            aria-label={t("chat:library.colType")}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="border border-border/50 rounded-lg shadow-lg">
-            {TYPE_FILTERS.map((type) => (
-              <SelectItem key={type} value={type}>
-                {t(
-                  type === "all"
-                    ? "chat:library.typeAll"
-                    : (TYPE_LABEL_KEY[type] ?? "chat:library.typeOther"),
-                )}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          variant="outline"
-          size="sm"
-          className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-          onClick={() => setDialog({ mode: "createFolder" })}
-        >
-          <FolderPlus className="mr-1 h-4 w-4" />
-          {t("chat:library.newFolder")}
-        </Button>
-        <Button size="sm" onClick={() => void handleUpload()}>
-          <Upload className="mr-1 h-4 w-4" />
-          {t("chat:library.upload")}
-        </Button>
       </div>
-      <div
-        className="flex items-center gap-3 pb-2 text-xs text-muted-foreground"
-        onClick={() =>
-          setSortField(sortField === "updatedAt" ? "name" : "updatedAt")
-        }
-      >
-        <button type="button" className="hover:text-primary">
-          {sortField === "updatedAt"
-            ? t("chat:library.recent")
-            : t("chat:library.colName")}
-        </button>
-      </div>
-      {searching && searchQuery.data?.length === 0 ? (
-        <p className="py-10 text-center text-sm text-muted-foreground">
-          {t("chat:library.noSearchResult")}
-        </p>
-      ) : !searching && listQuery.isError ? (
-        <div className="py-10 text-center">
-          <p className="text-sm text-muted-foreground">
-            {t("chat:library.loadFailed")}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-2 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            onClick={() => void listQuery.refetch()}
-          >
-            {t("chat:library.retry")}
-          </Button>
-        </div>
-      ) : (
-        <LibraryFileList
-          items={items}
-          loading={searching ? searchQuery.isLoading : listQuery.isLoading}
-          onOpen={(item) => setFolderId(item.id)}
-          onPreview={(item) => setPreviewItem(item)}
-          onRename={(item) => setDialog({ mode: "rename", item })}
-          onMove={(item) => setMoveIds([item.id])}
-          onReveal={(item) =>
-            void LibraryApi.revealItem(item.id).catch((e) =>
-              toast.error(mapIpcError(e)),
-            )
-          }
-          onDelete={openDelete}
-        />
-      )}
 
       <LibraryItemDialogs
         open={dialog !== null}
@@ -337,7 +355,11 @@ export default function LibraryView() {
         open={moveIds !== null}
         itemIds={moveIds ?? []}
         onClose={() => setMoveIds(null)}
-        onMoved={() => void invalidate()}
+        onMoved={() => {
+          // 移动后详情态的本地对象层级已过期——回列表态
+          setDetailItem(null);
+          void invalidate();
+        }}
       />
       <AlertDialog
         open={deleteItem !== null}
@@ -378,10 +400,6 @@ export default function LibraryView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <LibraryPreviewDialog
-        item={previewItem}
-        onClose={() => setPreviewItem(null)}
-      />
     </div>
   );
 }

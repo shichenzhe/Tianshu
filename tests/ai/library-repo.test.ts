@@ -126,4 +126,30 @@ describe("LibraryRepository 元数据通道", () => {
     await repo.delete([f1.id]);
     expect(table).toHaveLength(0);
   });
+
+  it("createFolder 校验上级存在且为文件夹", async () => {
+    const repo = new LibraryRepository();
+    const f1 = await repo.createFolder("A", null);
+    const file = await repo.createFolder("伪文件", f1.id);
+    Object.assign(
+      table.find((r) => r.id === file.id)!,
+      { kind: "file" },
+    );
+    await expect(repo.createFolder("B", 999)).rejects.toThrow("条目不存在");
+    await expect(repo.createFolder("B", file.id)).rejects.toThrow(
+      "上级必须是文件夹",
+    );
+  });
+
+  it("subtreeCount 统计全部后代（不含自身）；无子为 0", async () => {
+    const repo = new LibraryRepository();
+    const f1 = await repo.createFolder("A", null);
+    const f2 = await repo.createFolder("B", f1.id);
+    await repo.createFolder("C", f2.id);
+    const f4 = await repo.createFolder("E", null);
+    expect(await repo.subtreeCount(f1.id)).toBe(2);
+    expect(await repo.subtreeCount(f2.id)).toBe(1);
+    expect(await repo.subtreeCount(f4.id)).toBe(0);
+    await expect(repo.subtreeCount(999)).rejects.toThrow("条目不存在");
+  });
 });

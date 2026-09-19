@@ -179,5 +179,5 @@ chat namespace `library` 段重写扩充（zh-CN / en-US 同步）：
 4. **file rename/move 撞名磁盘双写**：§2 裁定 3「移动/重命名纯 DB」对 file 不成立——storagePath 派生自当前 name，file 重命名须先 `fs.rename` 磁盘文件再 update DB（磁盘失败抛错不动 DB）；move 的 file 撞名（自动序号改名）分支同样双写（终审修复补齐），只改 parentId 不改名的 move 与 folder 操作仍纯 DB。
 5. **allowpopups 存在性陷阱**：§4 字面写 `allowpopups=false`，Electron 实以 `hasAttribute` 判定——属性存在即放行弹窗（无论值）。实现为**不写该属性**（默认拒绝），达成 spec 意图。
 6. **i18n 插值双花括号**：spec 阶段文案以单花括号示意，实现统一 i18next `{{var}}` 约定。
-7. **删除确认 AlertDialog 未含子项内容数**：§5 弹窗字面「文件夹提示含内容数」需子树计数查询，首版用通用文件夹提示文案（`deleteFolderHint`「将删除文件夹及其全部内容」）；后续迭代可补精确计数。
-8. **会话侧 @ 联想的资料库组沿用「工作空间已绑定」门控**：未绑空间的 @ 面板整体为 needBind 提示，资料库组不可达（资料库本不依赖工作空间，此为面板门控的连带）；＋菜单「资料库」入口不受限，随时可用。
+7. **删除确认含内容数（打磨迭代补齐）**：首版用通用文件夹提示文案；后续迭代经 `library:subtreeCount` 通道实现精确计数（folder 删除确认按 `{{name}}`/`{{count}}` 插值提示，拉取失败退回通用文案）。
+8. **会话侧 @ 联想的资料库组曾沿用「工作空间已绑定」门控（打磨迭代放开）**：首版未绑空间时 @ 面板整体为 needBind 提示、资料库组不可达；后续迭代放开——资料库组不再依赖工作空间绑定（资料库为全局），未绑空间 bare @ 仍给 needBind 引导，已输入 query 时资料库照常联想。

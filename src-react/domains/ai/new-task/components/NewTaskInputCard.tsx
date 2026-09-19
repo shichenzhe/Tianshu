@@ -19,6 +19,7 @@ import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
 import AssistantApi from "../../api/assistant.api";
 import LibraryApi from "../../library/api/library.api";
 import { MODES } from "../../chat/components/PlusMenu";
+import { useDebouncedValue } from "../../chat/hooks/use-debounced-value";
 import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
@@ -87,10 +88,11 @@ export default function NewTaskInputCard({
   const workspaceFiles = useWorkspaceFiles(workspaceId, suggest !== null);
 
   // 资料库候选：suggest 激活时按 query 跨层搜索（空 query 后端返 []，
-  // bare @ 不出资料库组）
+  // bare @ 不出资料库组）；300ms 防抖——避免每击键一发 IPC
+  const debouncedQuery = useDebouncedValue(suggest?.query ?? "", 300);
   const libraryQuery = useQuery({
-    queryKey: ["librarySearch", suggest?.query ?? ""],
-    queryFn: () => LibraryApi.search(suggest?.query ?? ""),
+    queryKey: ["librarySearch", debouncedQuery],
+    queryFn: () => LibraryApi.search(debouncedQuery),
     enabled: suggest !== null,
   });
   const suggestCandidates = useMemo<MentionCandidate[]>(() => {

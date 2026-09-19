@@ -41,6 +41,7 @@ const LibraryApi = {
     invoke<null>("library:move", ids, targetParentId ?? null),
   delete: (ids: number[]) => invoke<null>("library:delete", ids),
   revealItem: (id: number) => invoke<null>("library:revealItem", id),
+  subtreeCount: (id: number) => invoke<number>("library:subtreeCount", id),
 };
 
 export default LibraryApi;

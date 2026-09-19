@@ -59,6 +59,7 @@ export default function LibraryView() {
   } | null>(null);
   const [moveIds, setMoveIds] = useState<number[] | null>(null);
   const [deleteItem, setDeleteItem] = useState<LibraryItem | null>(null);
+  const [deleteCount, setDeleteCount] = useState<number | null>(null);
   const [previewItem, setPreviewItem] = useState<LibraryItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -92,7 +93,7 @@ export default function LibraryView() {
     try {
       paths = await invoke<string[] | null>("file:pickLocalFiles");
     } catch {
-      toast.error(t("chat:library.loadFailed"));
+      toast.error(t("chat:library.pickFailed"));
       return;
     }
     if (!paths) {
@@ -161,6 +162,18 @@ export default function LibraryView() {
       toast.error(mapIpcError(e));
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  /** 打开删除确认：folder 顺带拉子树内容数（spec §5 删除提示含内容数）；
+   *  拉取失败退回通用文案，不阻断确认 */
+  const openDelete = (item: LibraryItem) => {
+    setDeleteItem(item);
+    setDeleteCount(null);
+    if (item.kind === "folder") {
+      LibraryApi.subtreeCount(item.id)
+        .then(setDeleteCount)
+        .catch(() => setDeleteCount(null));
     }
   };
 
@@ -281,6 +294,20 @@ export default function LibraryView() {
         <p className="py-10 text-center text-sm text-muted-foreground">
           {t("chat:library.noSearchResult")}
         </p>
+      ) : !searching && listQuery.isError ? (
+        <div className="py-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            {t("chat:library.loadFailed")}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            onClick={() => void listQuery.refetch()}
+          >
+            {t("chat:library.retry")}
+          </Button>
+        </div>
       ) : (
         <LibraryFileList
           items={items}
@@ -294,7 +321,7 @@ export default function LibraryView() {
               toast.error(mapIpcError(e)),
             )
           }
-          onDelete={(item) => setDeleteItem(item)}
+          onDelete={openDelete}
         />
       )}
 
@@ -314,7 +341,12 @@ export default function LibraryView() {
       />
       <AlertDialog
         open={deleteItem !== null}
-        onOpenChange={(next) => !next && setDeleteItem(null)}
+        onOpenChange={(next) => {
+          if (!next) {
+            setDeleteItem(null);
+            setDeleteCount(null);
+          }
+        }}
       >
         <AlertDialogContent className="border border-border/50 rounded-lg shadow-lg">
           <AlertDialogHeader>
@@ -323,7 +355,12 @@ export default function LibraryView() {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deleteItem?.kind === "folder"
-                ? t("chat:library.deleteFolderHint")
+                ? deleteCount
+                  ? t("chat:library.deleteFolderCountHint", {
+                      name: deleteItem.name,
+                      count: deleteCount,
+                    })
+                  : t("chat:library.deleteFolderHint")
                 : t("chat:library.deleteFileHint")}
             </AlertDialogDescription>
           </AlertDialogHeader>

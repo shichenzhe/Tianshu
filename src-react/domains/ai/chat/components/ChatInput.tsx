@@ -40,6 +40,7 @@ import { usePlanAdvanceStore } from "../../../project/store/plan-advance.store";
 import SkillApi from "../../skills/api/skill.api";
 import AssistantApi from "../../api/assistant.api";
 import LibraryApi from "../../library/api/library.api";
+import { useDebouncedValue } from "../hooks/use-debounced-value";
 import { isOversizeError } from "../../new-task/lib/attach";
 import { mapIpcError } from "../lib/error-message";
 
@@ -226,10 +227,12 @@ export default function ChatInput({
   // @ 联想资料库候选（跨层文件名搜索；与选择器共享 librarySearch 缓存；
   // 空 query 不拉——避免 bare @ 每击键全量搜索）
   const suggestQuery = suggest?.type === "at" ? suggest.query : "";
+  // 300ms 防抖——避免每击键一发 library:search IPC
+  const debouncedQuery = useDebouncedValue(suggestQuery, 300);
   const librarySearchQuery = useQuery({
-    queryKey: ["librarySearch", suggestQuery],
-    queryFn: () => LibraryApi.search(suggestQuery),
-    enabled: suggestQuery.length > 0,
+    queryKey: ["librarySearch", debouncedQuery],
+    queryFn: () => LibraryApi.search(debouncedQuery),
+    enabled: debouncedQuery.length > 0,
   });
 
   // 已安装技能（/ 面板候选 + 输入框启用标签行；与＋菜单技能浮层共享缓存）
@@ -279,12 +282,9 @@ export default function ChatInput({
           title: item.title,
         }));
     }
-    const files = workspaceFilesQuery.data;
-    if (!files) {
-      return [];
-    }
     // 资料库组：候选按 librarySearch 结果追加（空 query 恒空——不与工作
-    // 空间文件组混排，选中挂 pill 而非 @token）
+    // 空间文件组混排，选中挂 pill 而非 @token）；不依赖工作空间绑定
+    // （资料库为全局），未绑/清单未就绪时仍可 @ 到资料库
     const library: SuggestCandidate[] = query
       ? (librarySearchQuery.data ?? []).slice(0, MENTION_LIMIT).map((item) => ({
           kind: "library" as const,
@@ -292,6 +292,10 @@ export default function ChatInput({
           storagePath: item.storagePath ?? "",
         }))
       : [];
+    const files = workspaceFilesQuery.data;
+    if (!files) {
+      return library;
+    }
     return [
       ...(query
         ? files.filter((file) => file.toLowerCase().includes(query))
@@ -504,26 +508,29 @@ export default function ChatInput({
   /** 资料库 pill 挂载（@ 联想与＋菜单选择器两入口共用）：挂 pill 前经
    *  readExternalFile 预检（512KB 上限/二进制/权限），失败按超限/读取失败
    *  区分 toast 且不挂 pill（同 new-task addLocalFile 口径）；通过后按
-   *  storagePath 去重合并 */
+   *  storagePath 去重合并。silent 批量场景不逐条 toast（调用方合并提示） */
   const attachLibraryFile = useCallback(
-    async (name: string, storagePath: string) => {
+    async (name: string, storagePath: string, silent = false) => {
       try {
         await invoke("file:readExternalFile", storagePath);
       } catch (e) {
-        toast.error(
-          t(
-            isOversizeError(e)
-              ? "chat:library.oversize"
-              : "chat:library.readFailed",
-          ),
-        );
-        return;
+        if (!silent) {
+          toast.error(
+            t(
+              isOversizeError(e)
+                ? "chat:library.oversize"
+                : "chat:library.readFailed",
+            ),
+          );
+        }
+        return false;
       }
       setLibraryFiles((prev) =>
         prev.some((f) => f.storagePath === storagePath)
           ? prev
           : [...prev, { name, storagePath }],
       );
+      return true;
     },
     [t],
   );
@@ -710,7 +717,10 @@ export default function ChatInput({
     }
   };
 
-  const slashNoFiles = suggest?.type === "at" && workspaceId === null;
+  // 未绑空间的 bare @（资料库组空 query 恒空）→ needBind 引导；已输入
+  // query 时资料库仍可达，走通用无匹配文案而非误导性的绑定提示
+  const slashNoFiles =
+    suggest?.type === "at" && workspaceId === null && !suggest.query;
   const noCandidates = suggest !== null && suggestCandidates.length === 0;
 
   // 镜像层分段:token 渲染 pill(主题色),普通文本与 textarea 同度量
@@ -938,11 +948,28 @@ export default function ChatInput({
               }
             }}
             onPickLibraryFiles={(files) => {
-              // 挂 pill 前逐文件预检（attachLibraryFile 内 storagePath 去重
-              // 合并 + 失败 toast 不挂）
-              for (const file of files) {
-                void attachLibraryFile(file.name, file.storagePath);
-              }
+              // 批量预检：失败项静默收集后合并单条 toast（避免逐文件多条
+              // 打扰），成功项去重挂 pill
+              void (async () => {
+                const failed: string[] = [];
+                for (const file of files) {
+                  const ok = await attachLibraryFile(
+                    file.name,
+                    file.storagePath,
+                    true,
+                  );
+                  if (!ok) {
+                    failed.push(file.name);
+                  }
+                }
+                if (failed.length > 0) {
+                  toast.error(
+                    t("chat:library.pickAttachFailed", {
+                      names: failed.join("、"),
+                    }),
+                  );
+                }
+              })();
             }}
             onOpenMcp={onOpenMcp}
           />

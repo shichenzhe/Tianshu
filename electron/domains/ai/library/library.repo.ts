@@ -106,6 +106,9 @@ export default class LibraryRepository {
     ipcMain.handle("library:revealItem", (_e, id: number) =>
       this.revealItem(id),
     );
+    ipcMain.handle("library:subtreeCount", (_e, id: number) =>
+      this.subtreeCount(id),
+    );
   }
 
   /** 单层列表（folder 置前基准序）+ 祖先链面包屑一次返回 */
@@ -148,6 +151,12 @@ export default class LibraryRepository {
     name: string,
     parentId: number | null,
   ): Promise<LibraryItem> {
+    if (parentId !== null) {
+      const parent = await this.mustGet(parentId);
+      if (parent.kind !== "folder") {
+        throw new Error("上级必须是文件夹");
+      }
+    }
     const finalName = uniqueDbName(
       await this.siblingNames(parentId),
       sanitizeLibraryName(name),
@@ -243,10 +252,7 @@ export default class LibraryRepository {
       sanitizeLibraryName(name),
     );
     if (row.kind === "file" && finalName !== row.name) {
-      await fs.rename(
-        path.join(this.libraryRoot, String(id), row.name),
-        path.join(this.libraryRoot, String(id), finalName),
-      );
+      await this.renameDiskFile(id, row.name, finalName);
     }
     const updated = await this.prismaClient.libraryItem.update({
       where: { id },
@@ -258,13 +264,7 @@ export default class LibraryRepository {
   /** 移动：目标须为文件夹且不在被移项自身子树内（循环防护）；file 撞名
    *  改序号时磁盘双写（同 rename 模式——磁盘成功才动 DB），其余纯 DB */
   async move(ids: number[], targetParentId: number | null): Promise<null> {
-    const all = await this.prismaClient.libraryItem.findMany();
-    const rows: ItemRow[] = all.map((row) => ({
-      id: row.id,
-      parentId: row.parentId ?? null,
-      name: row.name,
-      kind: row.kind as "folder" | "file",
-    }));
+    const rows = await this.allItemRows();
     if (targetParentId !== null) {
       const target = rows.find((row) => row.id === targetParentId);
       if (!target || target.kind !== "folder") {
@@ -298,10 +298,7 @@ export default class LibraryRepository {
       // DB——storagePath 派生自 name，纯 DB 改名会使路径指向不存在文件且
       // rename() 后续按错名 fs.rename ENOENT 无法自愈；folder 纯 DB
       if (current.kind === "file" && finalName !== current.name) {
-        await fs.rename(
-          path.join(this.libraryRoot, String(id), current.name),
-          path.join(this.libraryRoot, String(id), finalName),
-        );
+        await this.renameDiskFile(id, current.name, finalName);
       }
       await this.prismaClient.libraryItem.update({
         where: { id },
@@ -313,19 +310,50 @@ export default class LibraryRepository {
 
   /** 级联删除子树记录（磁盘清理见 Task 4 cleanupDisk） */
   async delete(ids: number[]): Promise<null> {
-    const all = await this.prismaClient.libraryItem.findMany();
-    const rows: ItemRow[] = all.map((row) => ({
-      id: row.id,
-      parentId: row.parentId ?? null,
-      name: row.name,
-      kind: row.kind as "folder" | "file",
-    }));
+    const rows = await this.allItemRows();
     const subtreeIds = collectSubtreeIds(rows, ids);
     await this.prismaClient.libraryItem.deleteMany({
       where: { id: { in: subtreeIds } },
     });
     await this.cleanupDisk(subtreeIds);
     return null;
+  }
+
+  /** 子树内容数（删除确认提示用；含全部后代，不含自身） */
+  async subtreeCount(id: number): Promise<number> {
+    await this.mustGet(id);
+    const rows = await this.allItemRows();
+    return collectSubtreeIds(rows, [id]).length - 1;
+  }
+
+  /** 全表行投影（move/delete/subtreeCount 共用的循环防护数据源） */
+  private async allItemRows(): Promise<ItemRow[]> {
+    const rows = await this.prismaClient.libraryItem.findMany();
+    return rows.map((row) => ({
+      id: row.id,
+      parentId: row.parentId ?? null,
+      name: row.name,
+      kind: row.kind as "folder" | "file",
+    }));
+  }
+
+  /** 磁盘文件改名（rename/move 撞名共用）；失败抛中文错误带原因，DB 不动 */
+  private async renameDiskFile(
+    id: number,
+    oldName: string,
+    newName: string,
+  ): Promise<void> {
+    try {
+      await fs.rename(
+        path.join(this.libraryRoot, String(id), oldName),
+        path.join(this.libraryRoot, String(id), newName),
+      );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new Error(`磁盘文件同步失败（${oldName}）: ${reason}`, {
+        cause: error,
+      });
+    }
   }
 
   /** 同层名集合（rename 时排除自身） */

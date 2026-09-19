@@ -83,7 +83,18 @@ export default function LibraryPickerDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          // 关闭即重置——重开从根层干净开始，不残留上次搜索/层级/勾选
+          setKeyword("");
+          setFolderId(null);
+          setSelected(new Map());
+          onClose();
+        }
+      }}
+    >
       <DialogContent className="flex max-h-[70vh] flex-col border border-border/50 rounded-lg shadow-lg sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t("chat:library.pickTitle")}</DialogTitle>

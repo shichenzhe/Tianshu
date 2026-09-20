@@ -10,10 +10,13 @@
 import { useTranslation } from "react-i18next";
 
 import type { SkinDef } from "@/domains/app-settings/model/skins";
+import type { ThemeType } from "@/stores/skin.store";
 import { getSkinName } from "./skin-name";
 
 interface ThemePreviewCardProps {
   skin: SkinDef;
+  /** 实际生效色相（store hue）：微调后异于皮肤默认时预览如实反映 */
+  hue: ThemeType;
 }
 
 /** 左侧窄条（宽 1/5）：主题相近背景色（inline style 消费装饰变量，无壁纸时回落 bg-muted） */
@@ -80,7 +83,7 @@ function TypePill({ type }: { type: SkinDef["type"] }) {
   );
 }
 
-export default function ThemePreviewCard({ skin }: ThemePreviewCardProps) {
+export default function ThemePreviewCard({ skin, hue }: ThemePreviewCardProps) {
   const { t, i18n } = useTranslation(["settings"]);
 
   return (
@@ -88,7 +91,7 @@ export default function ThemePreviewCard({ skin }: ThemePreviewCardProps) {
       role="img"
       aria-label={`${t("settings:appearance.preview")} ${getSkinName(skin, i18n.language)}`}
       data-mode={skin.mode}
-      data-theme={skin.hue}
+      data-theme={hue}
       data-wallpaper={skin.wallpaper ?? undefined}
       className="relative flex h-64 overflow-hidden rounded-lg border border-border/50 bg-background shadow-sm"
     >

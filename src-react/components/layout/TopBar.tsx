@@ -1,12 +1,11 @@
 /**
  * 顶部全局操作栏
- * 包含 Logo、应用名、主题切换、用户菜单
+ * 包含 Logo、应用名、语言切换、用户菜单
  * 背景三段与下方栏位对齐（顶栏背景跟随主题）：左段=侧栏色（sidebar
  * 主题渐变，宽随折叠）、中段=主面板同款底色（panelClass 由 MainLayout
  * 传入，融为一体）、右段=产物面板色（宽度由面板挂载上报 store）
  */
 
-import ThemeSelector from "@/components/common/ThemeSelector";
 import LanguageSelector from "@/components/common/LanguageSelector";
 import AppLogo from "@/components/common/AppLogo";
 import UserMenu from "./UserMenu";
@@ -97,7 +96,6 @@ export default function TopBar({
         <div className="flex items-center h-full" style={noDragStyle}>
           <div className="flex items-center gap-1 mr-2">
             {rightLeadingSlot}
-            <ThemeSelector size="sm" />
             <LanguageSelector size="sm" />
             <UserMenu />
             {/* Windows 窗口控制区分隔线（macOS 无） */}

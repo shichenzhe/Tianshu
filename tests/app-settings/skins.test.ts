@@ -49,7 +49,7 @@ const SPEC_TRIPLETS: ReadonlyArray<
   ["light", "light", "green", null],
   ["dark", "dark", "blue", null],
   ["dawn-mist", "light", "blue", "dawn-mist"],
-  ["ripple", "light", "blue", "ripple"],
+  ["ripple", "light", "orange", "ripple"],
   ["field", "light", "green", "field"],
   ["pine", "light", "green", "pine"],
   ["ocean-sky", "light", "blue", "ocean-sky"],
@@ -153,9 +153,9 @@ describe("SKINS 与 skin.store 解析一致性", () => {
       useSkinStore.getState().setSkin(skin.id);
       expect(useSkinStore.getState().skin).toBe(skin.id);
     }
-    // 不在 SKINS 中的 id 回落 light
+    // 不在 SKINS 中的 id 回落默认 field
     useSkinStore.getState().setSkin("not-a-skin");
-    expect(useSkinStore.getState().skin).toBe("light");
+    expect(useSkinStore.getState().skin).toBe("field");
   });
 
   it("抽 3 款断言 store 侧 DOM 三元组与 SkinDef 一致", () => {
@@ -174,6 +174,7 @@ describe("settings.json appearance 界面文案双语齐备", () => {
   const EXPECTED_KEYS = [
     "allSkins",
     "basicType",
+    "colorTheme",
     "premiumType",
     "preview",
     "selected",

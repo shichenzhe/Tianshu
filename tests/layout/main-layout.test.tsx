@@ -6,7 +6,7 @@
  *   判断被限制在 /module/ai 导致项目页三按钮消失）
  * - 会话内搜索（SessionSearchBox）仍为 AI 会话专属
  * mock 骨架同 tests/ai/chat-input-todo.test.tsx：i18n 直返 key、
- * GlobalSidebar/UserMenu/ThemeSelector/LanguageSelector/AppLogo 重依赖
+ * GlobalSidebar/UserMenu/LanguageSelector/AppLogo 重依赖
  * stub、user.store 固定有效登录态（verifyToken resolve）
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -78,9 +78,6 @@ vi.mock("../../src-react/components/layout/GlobalSidebar", () => ({
   default: () => null,
 }));
 vi.mock("../../src-react/components/layout/UserMenu", () => ({
-  default: () => null,
-}));
-vi.mock("@/components/common/ThemeSelector", () => ({
   default: () => null,
 }));
 vi.mock("@/components/common/LanguageSelector", () => ({

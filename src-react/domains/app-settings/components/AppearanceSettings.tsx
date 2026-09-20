@@ -14,7 +14,9 @@ import SkinCard from "./SkinCard";
 
 export default function AppearanceSettings() {
   const { t } = useTranslation(["settings"]);
-  const { skin, setSkin } = useSkinStore();
+  // hue/setHue 接线色相微调：选中卡色点行 + 预览卡如实反映（顶栏
+  // ThemeSelector 移除后，色相微调能力迁至皮肤卡）
+  const { skin, setSkin, hue, setHue } = useSkinStore();
   // store.skin 经 sanitizePersisted 归一恒为合法 id，?? SKINS[0] 仅类型收敛兜底
   const currentSkin = getSkin(skin) ?? SKINS[0];
 
@@ -23,7 +25,7 @@ export default function AppearanceSettings() {
       <h2 className="text-base font-semibold text-foreground">
         {t("settings:appearance.title")}
       </h2>
-      <ThemePreviewCard skin={currentSkin} />
+      <ThemePreviewCard skin={currentSkin} hue={hue} />
       <section className="space-y-3">
         <h3 className="text-sm font-medium text-muted-foreground">
           {t("settings:appearance.allSkins")}
@@ -35,6 +37,8 @@ export default function AppearanceSettings() {
               skin={item}
               selected={item.id === skin}
               onSelect={setSkin}
+              activeHue={hue}
+              onHueChange={setHue}
             />
           ))}
         </div>

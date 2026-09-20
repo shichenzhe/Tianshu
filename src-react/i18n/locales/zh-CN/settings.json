@@ -29,7 +29,8 @@
     "allSkins": "全部皮肤",
     "basicType": "基础主题",
     "premiumType": "精选皮肤",
-    "selected": "当前主题"
+    "selected": "当前主题",
+    "colorTheme": "颜色主题"
   },
   "permission": {
     "keepAwake": "锁屏运行",

@@ -59,7 +59,7 @@ describe("ThemePreviewCard 局部换肤绑定", () => {
   ])(
     "$id：根元素三元组属性与皮肤一致（wallpaper=null 时属性省略）",
     ({ id, mode, hue, wallpaper }) => {
-      render(<ThemePreviewCard skin={skinOf(id)} />);
+      render(<ThemePreviewCard skin={skinOf(id)} hue={hue} />);
       const root = screen.getByRole("img");
       expect(root.getAttribute("data-mode")).toBe(mode);
       expect(root.getAttribute("data-theme")).toBe(hue);
@@ -68,34 +68,34 @@ describe("ThemePreviewCard 局部换肤绑定", () => {
   );
 
   it("基础皮肤省略 data-wallpaper 属性（无空串残留）", () => {
-    render(<ThemePreviewCard skin={skinOf("light")} />);
+    render(<ThemePreviewCard skin={skinOf("light")} hue="green" />);
     expect(screen.getByRole("img").hasAttribute("data-wallpaper")).toBe(false);
   });
 
   it("aria-label 为预览文案 + 皮肤名（名称随 locale 分流）", () => {
-    render(<ThemePreviewCard skin={skinOf("ink")} />);
+    render(<ThemePreviewCard skin={skinOf("ink")} hue="blue" />);
     expect(
       screen.getByRole("img", { name: "settings:appearance.preview 墨韵" }),
     ).toBeTruthy();
     cleanup();
     mockLanguage = "en-US";
-    render(<ThemePreviewCard skin={skinOf("ink")} />);
+    render(<ThemePreviewCard skin={skinOf("ink")} hue="blue" />);
     expect(
       screen.getByRole("img", { name: "settings:appearance.preview Ink" }),
     ).toBeTruthy();
   });
 
   it("类型胶囊：basic → basicType，premium → premiumType", () => {
-    render(<ThemePreviewCard skin={skinOf("light")} />);
+    render(<ThemePreviewCard skin={skinOf("light")} hue="green" />);
     expect(screen.getByText("settings:appearance.basicType")).toBeTruthy();
     expect(screen.queryByText("settings:appearance.premiumType")).toBeNull();
     cleanup();
-    render(<ThemePreviewCard skin={skinOf("dusk")} />);
+    render(<ThemePreviewCard skin={skinOf("dusk")} hue="orange" />);
     expect(screen.getByText("settings:appearance.premiumType")).toBeTruthy();
   });
 
   it("主界面模拟元素齐备：侧栏条（主题色）/主区壁纸叠层/双气泡/输入条", () => {
-    render(<ThemePreviewCard skin={skinOf("ripple")} />);
+    render(<ThemePreviewCard skin={skinOf("ripple")} hue="orange" />);
     // 侧栏条 inline style 消费 --skin-sidebar-bg（主题相近背景色，不显示壁纸）
     const sidebar = screen.getByTestId("preview-sidebar");
     expect(sidebar.style.backgroundImage).toContain("--skin-sidebar-bg");
@@ -191,6 +191,41 @@ describe("SkinCard", () => {
         .querySelector("[data-mode]")
         ?.hasAttribute("data-wallpaper"),
     ).toBe(false);
+  });
+
+  it("选中卡色相微调：缩略块随 activeHue 覆盖默认 + 四色点回调不冒泡", () => {
+    const onHueChange = vi.fn();
+    const { container } = render(
+      <SkinCard
+        skin={skinOf("ripple")}
+        selected
+        onSelect={onSelect}
+        activeHue="red"
+        onHueChange={onHueChange}
+      />,
+    );
+    // 选中卡缩略块显示实际生效色相（red 覆盖 ripple 默认 orange）
+    expect(
+      container.querySelector("[data-mode]")?.getAttribute("data-theme"),
+    ).toBe("red");
+    // 四色点（blue/red/green/orange 序）：仅当前色相 aria-checked
+    const radios = screen.getAllByRole("radio");
+    expect(radios).toHaveLength(4);
+    expect(radios.map((radio) => radio.getAttribute("aria-checked"))).toEqual([
+      "false",
+      "true",
+      "false",
+      "false",
+    ]);
+    // 点击色点回调色相，且不冒泡成整卡 onSelect（stopPropagation）
+    fireEvent.click(radios[0]);
+    expect(onHueChange).toHaveBeenCalledWith("blue");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it("未传 onHueChange：选中卡也不渲染色点行", () => {
+    render(<SkinCard skin={skinOf("light")} selected onSelect={onSelect} />);
+    expect(screen.queryAllByRole("radio")).toHaveLength(0);
   });
 });
 

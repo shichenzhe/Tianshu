@@ -19,7 +19,7 @@ import { getSkin, type SkinDef } from "@/domains/app-settings/model/skins";
 export type ThemeType = "blue" | "red" | "green" | "orange";
 export type SkinMode = "light" | "dark";
 
-const DEFAULT_SKIN = "light";
+const DEFAULT_SKIN = "field"; // 默认皮肤：原野（light + green + field 壁纸）
 const DEFAULT_HUE: ThemeType = "green"; // 默认绿色主题
 const STORAGE_KEY = "tianshu-theme";
 const HUES: readonly ThemeType[] = ["blue", "red", "green", "orange"];

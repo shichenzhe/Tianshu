@@ -16,6 +16,7 @@ import {
   RefreshCw,
   FileText,
   ChevronDown,
+  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -212,6 +213,14 @@ export default function UserMenu() {
           >
             <Lightbulb size={14} className="mr-2" />
             {t("layout:userMenu.memoryEvolution")}
+          </DropdownMenuItem>
+          {/* 外观：直达设置面板外观页（顶栏调色盘按钮移除后的快捷入口） */}
+          <DropdownMenuItem
+            onClick={() => openSettings("appearance")}
+            className="cursor-pointer"
+          >
+            <Palette size={14} className="mr-2" />
+            {t("layout:userMenu.appearance")}
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-pointer">

@@ -29,7 +29,8 @@
     "allSkins": "All Themes",
     "basicType": "Basic",
     "premiumType": "Featured",
-    "selected": "Current"
+    "selected": "Current",
+    "colorTheme": "Color Theme"
   },
   "permission": {
     "keepAwake": "Run When Locked",

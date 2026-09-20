@@ -59,7 +59,7 @@ export const SKINS: SkinDef[] = [
   {
     id: "ripple",
     mode: "light",
-    hue: "blue",
+    hue: "orange",
     wallpaper: "ripple",
     type: "premium",
     name: "涟漪",

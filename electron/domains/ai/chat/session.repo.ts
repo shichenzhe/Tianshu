@@ -186,7 +186,13 @@ export class SessionRepository {
 
   async createWorkspace(p: WorkspaceCreateParams): Promise<WorkspaceRecord> {
     const row = await prisma.workspace.create({
-      data: { name: p.name, icon: p.icon, defaultModelId: p.defaultModelId },
+      data: {
+        name: p.name,
+        icon: p.icon,
+        defaultModelId: p.defaultModelId,
+        // 「打开本地空间」一步建绑（其余入口不传 = 不设置）
+        directoryPath: p.directoryPath,
+      },
     });
     return this.toWorkspace(row);
   }

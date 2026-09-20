@@ -35,6 +35,7 @@ export type IPCChannel =
   | "workspace:delete"
   | "workspace:bindDirectory"
   | "workspace:unbindDirectory"
+  | "workspace:openLocal"
   | "workspace:openDirectory"
   | "workspace:readFile"
   | "workspace:revealFile"

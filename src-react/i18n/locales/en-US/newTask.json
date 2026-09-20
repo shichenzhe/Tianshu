@@ -41,7 +41,9 @@
     "workspace": "Select Workspace",
     "noWorkspace": "Please create a workspace first",
     "searchWorkspace": "Search workspaces",
-    "noMatch": "No matching workspaces"
+    "noMatch": "No matching workspaces",
+    "newWorkspace": "New workspace",
+    "openLocal": "Open local folder"
   },
   "send": "Send Task",
   "sensitiveHit": "Content contains restricted words: {{word}}",

@@ -41,7 +41,9 @@
     "workspace": "选择工作空间",
     "noWorkspace": "请先创建工作空间",
     "searchWorkspace": "搜索工作空间",
-    "noMatch": "无匹配工作空间"
+    "noMatch": "无匹配工作空间",
+    "newWorkspace": "新建空间",
+    "openLocal": "打开本地空间"
   },
   "send": "发送任务",
   "sensitiveHit": "内容包含受限词：{{word}}",

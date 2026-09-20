@@ -4,10 +4,10 @@
  * 新建任务配置栏（修订 spec 裁定 11：工作空间显式选择）：未选空间不再
  * 自动跟随列表第一个——保持 null 引导态；持久化脏 id（空间已删/换库）
  * 归零回引导态；合法 id 保留并显示空间名；空列表灰字 noWorkspace 不写
- * store；点击胶囊弹 WorkspacePickerDialog（弹框交互见
- * workspace-picker-dialog.test.tsx）。权限胶囊已随工具栏对齐迁入
+ * store；点击胶囊打开 WorkspacePickerMenu 下拉（下拉交互见
+ * workspace-picker-menu.test.tsx）。权限胶囊已随工具栏对齐迁入
  * NewTaskInputCard（用例见 new-task-toolbars.test.tsx）。i18n t mock 直返
- * key；useQuery mock 仅 data（ContextBar 只消费 data）。
+ * key；useQuery mock 仅 data（ContextBar/下拉只消费 data）。
  */
 import {
   render,
@@ -25,20 +25,23 @@ afterEach(cleanup);
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
-// cn 依赖 @/i18n 实例（WorkspacePickerDialog→Dialog→cn），最小桩避免拉起
+// cn 依赖 @/i18n 实例（WorkspacePickerMenu→Popover→cn），最小桩避免拉起
 // 完整 i18n 栈
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
-// 用例可覆写的查询返回（仅 data——ContextBar/弹框只消费 data）
-const { queryData } = vi.hoisted(() => ({
+// 用例可覆写的查询返回（仅 data——ContextBar/下拉只消费 data）；
+// WorkspacePickerMenu 还用 useQueryClient（invalidateQueries）
+const { queryData, invalidateMock } = vi.hoisted(() => ({
   queryData: {
     data: [
       { id: 1, name: "个人空间" },
       { id: 2, name: "项目组A" },
     ],
   },
+  invalidateMock: vi.fn(),
 }));
 vi.mock("@tanstack/react-query", () => ({
   useQuery: () => queryData,
+  useQueryClient: () => ({ invalidateQueries: invalidateMock }),
 }));
 // localStorage stub:store 配置 setter 手写持久化,测试环境无原生 localStorage
 vi.hoisted(() => {
@@ -102,12 +105,26 @@ describe("ContextBar（工作空间显式选择）", () => {
     expect(useNewTaskStore.getState().workspaceId).toBeNull();
   });
 
-  it("点击胶囊打开工作空间选择弹框", async () => {
+  it("点击胶囊打开工作空间选择下拉（搜索框出现）", async () => {
     render(<ContextBar />);
     fireEvent.click(
       screen.getByRole("button", { name: "newTask:context.workspace" }),
     );
-    // Radix Dialog 打开（content role=dialog）
-    await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
+    // Radix Popover 打开（面板内搜索框 aria-label 判据）
+    await waitFor(() =>
+      expect(
+        screen.getByRole("textbox", {
+          name: "newTask:context.searchWorkspace",
+        }),
+      ).toBeTruthy(),
+    );
+    // 列表项与新建/打开本地入口同时渲染
+    expect(screen.getByText("项目组A")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "newTask:context.newWorkspace" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "newTask:context.openLocal" }),
+    ).toBeTruthy();
   });
 });

@@ -19,6 +19,8 @@ export interface WorkspaceCreateParams {
   name: string;
   icon?: string;
   defaultModelId?: number;
+  /** 「打开本地空间」一步建绑用；普通新建不传 */
+  directoryPath?: string;
 }
 
 export interface WorkspaceUpdateParams {
@@ -53,6 +55,11 @@ export class WorkspaceApi {
   /** P1：解绑工作空间目录（历史消息保留，仅收回 AI 的文件访问入口） */
   static async unbindDirectory(id: number): Promise<WorkspaceRecord | null> {
     return invoke<WorkspaceRecord | null>("workspace:unbindDirectory", id);
+  }
+
+  /** 新建任务页「打开本地空间」：目录选择 + 以目录名建空间并绑定；取消返回 null */
+  static async openLocal(): Promise<WorkspaceRecord | null> {
+    return invoke<WorkspaceRecord | null>("workspace:openLocal");
   }
 
   /** 打开空间绑定目录（任务上下文菜单「打开文件夹」） */

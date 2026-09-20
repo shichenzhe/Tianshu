@@ -1164,6 +1164,24 @@ export default class ChatService {
       async (_, workspaceId: number): Promise<WorkspaceRecord | null> =>
         this.sessions.updateWorkspaceBoundDirectory(workspaceId, null),
     );
+    // 新建任务页「打开本地空间」：一次调用 = 目录选择 + 以目录名建空间并
+    // 绑定（用户取消返回 null，渲染层静默处理）；归一化同 bindDirectory
+    ipcMain.handle(
+      "workspace:openLocal",
+      async (): Promise<WorkspaceRecord | null> => {
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+        });
+        if (result.canceled || !result.filePaths[0]) {
+          return null;
+        }
+        const directoryPath = normalizeWorkspacePath(result.filePaths[0]);
+        return this.sessions.createWorkspace({
+          name: path.basename(directoryPath),
+          directoryPath,
+        });
+      },
+    );
     // 技能目录一键打开（P2 skill 无管理界面，文件系统即配置——保证发现性）
     ipcMain.handle("skill:openDir", async (): Promise<string> => {
       const skillsDir = path.join(app.getPath("userData"), "skills");

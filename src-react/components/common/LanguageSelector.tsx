@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useClearWallpaper } from "@/lib/hooks";
 
 const languages = [
   { code: "zh-CN", key: "zhCN" },
@@ -26,6 +27,8 @@ export default function LanguageSelector({
   size = "md",
 }: LanguageSelectorProps) {
   const { t, i18n } = useTranslation(["layout"]);
+  // 清晰壁纸路由（新建任务详情页）触发按钮切实底，与主题色区分
+  const solid = useClearWallpaper();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,7 +51,11 @@ export default function LanguageSelector({
     >
       <DropdownMenuTrigger asChild>
         <div
-          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer hover:bg-muted text-muted-foreground transition-all duration-200`}
+          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer ${
+            solid
+              ? "bg-card border border-border/50 text-foreground hover:bg-muted hover:border-border"
+              : "hover:bg-muted text-muted-foreground"
+          } transition-all duration-200`}
           onMouseEnter={() => {
             if (menuTimer.current) clearTimeout(menuTimer.current);
             setMenuOpen(true);

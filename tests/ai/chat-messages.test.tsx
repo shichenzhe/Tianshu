@@ -5,11 +5,11 @@
  *   发送状态与输入留在组合壳 ChatPane（组合壳行为回归由
  *   chat-view-edit-optimistic.test.tsx 全栈用例保障）
  * - props 透传：session/workspace/editing 与编辑回调原样下发 MessageList
- * - DOM 结构与拆分前一致：外壳/内列类名、artifacts 旁挂同级、children
- *   插槽紧随消息列表（组合壳注入 AgentProgress + ChatInput 的位置）
- * - artifacts 旁挂门控：artifactsOpen && workspace 双真才渲染面板
- * MessageList/ArtifactsPanel 以捕获 props 的 stub 替代（避免挂全量
- * markdown/react-query 渲染管道，骨架参照 chat-view-edit-optimistic.test.tsx）
+ * - DOM 结构与拆分前一致：外壳/内列类名、children 插槽紧随消息列表
+ *   （组合壳注入 AgentProgress + ChatInput 的位置；产物面板已上移至
+ *   ChatView/ActivityPane 调用方层旁挂，不在本组件）
+ * MessageList 以捕获 props 的 stub 替代（避免挂全量 markdown/react-query
+ * 渲染管道，骨架参照 chat-view-edit-optimistic.test.tsx）
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -40,17 +40,6 @@ vi.mock("../../src-react/domains/ai/chat/components/MessageList", async () => {
   };
 });
 
-// ArtifactsPanel stub：占位可定位节点（是否渲染由 ChatMessages 门控）
-vi.mock(
-  "../../src-react/domains/ai/chat/components/artifacts/ArtifactsPanel",
-  async () => {
-    const { createElement } = await import("react");
-    return {
-      default: () => createElement("div", { "data-testid": "artifacts-panel" }),
-    };
-  },
-);
-
 import ChatMessages from "../../src-react/domains/ai/chat/components/ChatMessages";
 
 const SESSION: SessionRecord = {
@@ -69,7 +58,6 @@ const noop = () => {};
 function baseProps(
   overrides: {
     workspace?: { id: number } | null;
-    artifactsOpen?: boolean;
     editing?: { messageId: number; text: string } | null;
   } = {},
 ) {
@@ -77,7 +65,6 @@ function baseProps(
     session: SESSION,
     workspace:
       overrides.workspace === undefined ? { id: 10 } : overrides.workspace,
-    artifactsOpen: overrides.artifactsOpen ?? false,
     editing: overrides.editing ?? null,
     onRegenerate: noop,
     onEdit: noop,
@@ -96,7 +83,6 @@ describe("ChatMessages 消息区组件", () => {
   it("渲染消息区（MessageList 出现）且无输入区（无 textarea/发送按钮）", () => {
     render(<ChatMessages {...baseProps()} />);
     expect(screen.getByTestId("message-list")).toBeTruthy();
-    expect(screen.queryByTestId("artifacts-panel")).toBeNull();
     expect(document.querySelector("textarea")).toBeNull();
     expect(screen.queryByRole("button")).toBeNull();
   });
@@ -133,9 +119,9 @@ describe("ChatMessages 消息区组件", () => {
     expect(listProps.current?.workspaceId).toBeNull();
   });
 
-  it("DOM 结构与拆分前一致：外壳/内列类名、插槽紧随消息列表、artifacts 旁挂同级", () => {
+  it("DOM 结构与拆分前一致：外壳/内列类名、插槽紧随消息列表", () => {
     const { container } = render(
-      <ChatMessages {...baseProps({ artifactsOpen: true })}>
+      <ChatMessages {...baseProps()}>
         <div data-testid="bottom-slot" />
       </ChatMessages>,
     );
@@ -147,23 +133,5 @@ describe("ChatMessages 消息区组件", () => {
     expect(list.parentElement).toBe(column);
     // children 插槽紧随消息列表（组合壳注入 AgentProgress + ChatInput 的位置）
     expect(list.nextElementSibling).toBe(screen.getByTestId("bottom-slot"));
-    // artifacts 面板与消息列同为外壳子节点（旁挂不进列）
-    expect(screen.getByTestId("artifacts-panel").parentElement).toBe(outer);
-  });
-
-  it("artifactsOpen 与 workspace 双真才渲染产物面板", () => {
-    let view = render(<ChatMessages {...baseProps({ artifactsOpen: true })} />);
-    expect(screen.getByTestId("artifacts-panel")).toBeTruthy();
-    view.unmount();
-
-    view = render(<ChatMessages {...baseProps({ artifactsOpen: false })} />);
-    expect(screen.queryByTestId("artifacts-panel")).toBeNull();
-    view.unmount();
-
-    view = render(
-      <ChatMessages {...baseProps({ artifactsOpen: true, workspace: null })} />,
-    );
-    expect(screen.queryByTestId("artifacts-panel")).toBeNull();
-    view.unmount();
   });
 });

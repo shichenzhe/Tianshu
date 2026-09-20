@@ -20,7 +20,7 @@ export type ThemeType = "blue" | "red" | "green" | "orange";
 export type SkinMode = "light" | "dark";
 
 const DEFAULT_SKIN = "light";
-const DEFAULT_HUE: ThemeType = "orange"; // 沿用现状默认橙色
+const DEFAULT_HUE: ThemeType = "green"; // 默认绿色主题
 const STORAGE_KEY = "tianshu-theme";
 const HUES: readonly ThemeType[] = ["blue", "red", "green", "orange"];
 
@@ -64,7 +64,7 @@ function sanitizePersisted(persisted: unknown): {
 
 export interface SkinState {
   skin: string; // 皮肤 id，缺省 "light"
-  hue: ThemeType; // "blue"|"red"|"green"|"orange"，缺省 "orange"
+  hue: ThemeType; // "blue"|"red"|"green"|"orange"，缺省 "green"
   setSkin: (skinId: string) => void; // 皮肤完整预设：写 skin + 其自带 hue
   setHue: (hue: ThemeType) => void; // 正交：保 mode/wallpaper 只换 data-theme
 }

@@ -83,7 +83,7 @@ describe("持久化迁移", () => {
     await useSkinStore.persist.rehydrate();
     const { skin, hue } = useSkinStore.getState();
     expect(skin).toBe("light");
-    expect(hue).toBe("orange");
+    expect(hue).toBe("green");
   });
 
   it("setSkin 持久化 partialize 后的 {skin,hue}（version 1）", () => {
@@ -177,22 +177,24 @@ describe("initSkin 启动初始化", () => {
       JSON.stringify({ state: { skin: "pine", hue: "red" }, version: 1 }),
     );
     initSkin();
-    expect(root().dataset.mode).toBe("dark");
+    expect(root().dataset.mode).toBe("light");
     expect(root().dataset.theme).toBe("red");
     expect(root().dataset.wallpaper).toBe("pine");
   });
 
-  it("无存储回落默认（light + orange）", () => {
+  it("无存储回落默认（light + green）", () => {
+    // beforeEach 的 setState 经 persist 写回 storage，再清一次才是真"无存储"
+    localStorage.clear();
     initSkin();
     expect(root().dataset.mode).toBe("light");
-    expect(root().dataset.theme).toBe("orange");
+    expect(root().dataset.theme).toBe("green");
   });
 
-  it("localStorage 为畸形 JSON 时不抛错，回落默认（light + orange）", () => {
+  it("localStorage 为畸形 JSON 时不抛错，回落默认（light + green）", () => {
     localStorage.setItem("tianshu-theme", "{invalid json");
     expect(() => initSkin()).not.toThrow();
     expect(root().dataset.mode).toBe("light");
-    expect(root().dataset.theme).toBe("orange");
+    expect(root().dataset.theme).toBe("green");
   });
 });
 

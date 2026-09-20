@@ -7,6 +7,7 @@ import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Palette } from "lucide-react";
 import { useThemeStore, type ThemeType } from "@/stores/theme.store";
+import { useClearWallpaper } from "@/lib/hooks";
 
 import {
   DropdownMenu,
@@ -29,6 +30,8 @@ interface ThemeSelectorProps {
 export default function ThemeSelector({ size = "md" }: ThemeSelectorProps) {
   const { t } = useTranslation(["layout"]);
   const { theme, setTheme } = useThemeStore();
+  // 清晰壁纸路由（新建任务详情页）触发按钮切实底，与主题色区分
+  const solid = useClearWallpaper();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -49,7 +52,11 @@ export default function ThemeSelector({ size = "md" }: ThemeSelectorProps) {
     >
       <DropdownMenuTrigger asChild>
         <div
-          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer hover:bg-muted text-muted-foreground transition-all duration-200`}
+          className={`${buttonSize} flex items-center justify-center rounded-md cursor-pointer ${
+            solid
+              ? "bg-card border border-border/50 text-foreground hover:bg-muted hover:border-border"
+              : "hover:bg-muted text-muted-foreground"
+          } transition-all duration-200`}
           onMouseEnter={() => {
             if (menuTimer.current) clearTimeout(menuTimer.current);
             setMenuOpen(true);

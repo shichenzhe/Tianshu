@@ -5,9 +5,8 @@
  * 1. [data-mode="dark"] 深色模式语义变量集——逐项覆盖 globals.css @theme 亮色值；
  *    primary 系保持 data-theme 的 hue 驱动，暗色下整体提亮（hover/active 方向反转：
  *    悬停更亮而非更深）
- * 2. [data-wallpaper="<id>"] 8 款壁纸装饰变量：--skin-bg-gradient（body 叠加渐变）
- *    与 --skin-sidebar-image（侧栏 SVG 图案 / 渐变）；每款皮肤 mode 固定（spec §3.1），
- *    light 系为低透明度柔和叠加、dark 系为深色渐变，选择器独立无交叉
+ * 2. [data-wallpaper="<id>"] 8 款壁纸装饰变量：--skin-bg-image、
+ *    --skin-body-overlay、--skin-sidebar-bg（变量语义详见壁纸分区注释）
  * 3. 消费点：body（背景色 + 壁纸渐变）与全局侧边栏壳 [data-sidebar-shell]
  *
  * 属性由 skin.store.applySkin 写入 documentElement（data-mode / data-theme /
@@ -96,145 +95,193 @@
 }
 
 /* =====================================================
-   壁纸装饰层（8 款，mode 固定——light 系低透明度叠加 / dark 系深色渐变）
-   每组仅定义 --skin-bg-gradient 与 --skin-sidebar-image 两个变量
-   ===================================================== */
-
-/* =====================================================
-   壁纸装饰层（8 款，真实摄影图 Unsplash License 免费商用无需署名，
+   壁纸装饰层（8 款，吉卜力工作室官方剧照，来源 ghibli.jp 画廊——
+   工作室声明"画像はご自由にお使いください"（图像可自由使用），
    图片本地打包于 ../assets/skins/，运行时零网络依赖）
    每组三个变量：
-   - --skin-bg-image        背景大图（body 与侧栏共用，cover 铺满）
-   - --skin-body-overlay    body 可读性叠加层（半透明底色，保证界面文字对比）
-   - --skin-sidebar-overlay 侧栏叠加层（更透明，壁纸更显眼）
+   - --skin-bg-image        背景大图（仅 body 主面板，cover 铺满）
+   - --skin-body-overlay    body 轻纱叠加层（低不透明度，柔化壁纸；文字对比
+                            主要由主面板底色保障）
+   - --skin-body-overlay-clear 新建任务详情页专用极淡纱（html data-clear-
+                            wallpaper 时 body 切换消费，壁纸近乎全清晰）
+   - --skin-sidebar-bg      侧栏背景（与壁纸主色调相近的实色渐变，
+                            侧栏不显示壁纸——壁纸集中在中间主面板）
    浅色系叠白、深色系叠黑；图片缺失时 overlay 仍提供完整底色。
    ===================================================== */
 
-/* 晨雾（light / 淡紫）— 晨雾远山与柔光天空 */
+/* 晨雾（light / 青灰）— 《辉夜姬物语》水彩乡村农舍晨雾（kaguyahime006） */
 [data-wallpaper="dawn-mist"] {
   --skin-bg-image: url("../assets/skins/dawn-mist.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(260 30% 98% / 0.88) 0%,
-    hsl(255 25% 98% / 0.8) 55%,
-    hsl(250 20% 97% / 0.85) 100%
+    hsl(110 12% 98% / 0.5) 0%,
+    hsl(100 10% 98% / 0.42) 55%,
+    hsl(95 8% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(260 35% 96% / 0.55) 0%,
-    hsl(255 30% 96% / 0.35) 100%
+    hsl(110 12% 98% / 0.12) 0%,
+    hsl(100 10% 98% / 0.1) 55%,
+    hsl(95 8% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(105 12% 96%) 0%,
+    hsl(100 10% 94%) 100%
   );
 }
 
-/* 涟漪（light / 清蓝）— 柔光下的蓝色水纹 */
+/* 涟漪（light / 青绿）— 《悬崖上的金鱼姬》碧波轻舟与涟光（ponyo044） */
 [data-wallpaper="ripple"] {
   --skin-bg-image: url("../assets/skins/ripple.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(195 30% 98% / 0.88) 0%,
-    hsl(195 25% 98% / 0.82) 50%,
-    hsl(200 25% 97% / 0.86) 100%
+    hsl(180 26% 98% / 0.5) 0%,
+    hsl(178 22% 98% / 0.44) 50%,
+    hsl(175 18% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(195 35% 96% / 0.5) 0%,
-    hsl(195 30% 96% / 0.3) 100%
+    hsl(180 26% 98% / 0.12) 0%,
+    hsl(178 22% 98% / 0.1) 50%,
+    hsl(175 18% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(180 28% 96%) 0%,
+    hsl(176 24% 94%) 100%
   );
 }
 
-/* 原野（light / 草绿）— 草地树林与远山 */
+/* 原野（light / 草绿）— 《起风了》林间草地与写生画架（kazetachinu050） */
 [data-wallpaper="field"] {
   --skin-bg-image: url("../assets/skins/field.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(100 25% 98% / 0.88) 0%,
-    hsl(110 20% 98% / 0.8) 55%,
-    hsl(120 20% 97% / 0.85) 100%
+    hsl(100 25% 98% / 0.5) 0%,
+    hsl(105 20% 98% / 0.42) 55%,
+    hsl(110 18% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(110 30% 96% / 0.5) 0%,
-    hsl(120 28% 96% / 0.32) 100%
+    hsl(100 25% 98% / 0.12) 0%,
+    hsl(105 20% 98% / 0.1) 55%,
+    hsl(110 18% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(105 28% 96%) 0%,
+    hsl(110 22% 94%) 100%
   );
 }
 
-/* 海空（light / 湛蓝）— 平静海面与天际线 */
+/* 海空（light / 湛蓝）— 《悬崖上的金鱼姬》碧海蓝天与绿屿（ponyo005） */
 [data-wallpaper="ocean-sky"] {
   --skin-bg-image: url("../assets/skins/ocean-sky.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(205 40% 98% / 0.85) 0%,
-    hsl(203 32% 98% / 0.78) 50%,
-    hsl(199 38% 97% / 0.85) 100%
+    hsl(205 40% 98% / 0.48) 0%,
+    hsl(203 32% 98% / 0.42) 50%,
+    hsl(199 38% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(205 45% 96% / 0.45) 0%,
-    hsl(200 38% 96% / 0.28) 100%
+    hsl(205 40% 98% / 0.12) 0%,
+    hsl(203 32% 98% / 0.1) 50%,
+    hsl(199 38% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(205 42% 96%) 0%,
+    hsl(200 36% 94%) 100%
   );
 }
 
-/* 暖沙（light / 暖橙）— 金色阳光下的沙丘 */
+/* 暖沙（light / 暖橙）— 《风之谷》金色沙丘与滑翔翼（nausicaa007） */
 [data-wallpaper="warm-sand"] {
   --skin-bg-image: url("../assets/skins/warm-sand.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(38 45% 98% / 0.88) 0%,
-    hsl(36 38% 98% / 0.8) 55%,
-    hsl(33 40% 97% / 0.85) 100%
+    hsl(38 45% 98% / 0.5) 0%,
+    hsl(36 38% 98% / 0.42) 55%,
+    hsl(33 40% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(38 50% 96% / 0.5) 0%,
-    hsl(35 45% 96% / 0.32) 100%
+    hsl(38 45% 98% / 0.12) 0%,
+    hsl(36 38% 98% / 0.1) 55%,
+    hsl(33 40% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(38 46% 96%) 0%,
+    hsl(35 40% 94%) 100%
   );
 }
 
-/* 暮色（dark / 暖橙夜）— 群山剪影与橙色落日 */
+/* 暮色（dark / 暖橙夜）— 《哈尔的移动城堡》紫橙晚霞荒野（howl010） */
 [data-wallpaper="dusk"] {
   --skin-bg-image: url("../assets/skins/dusk.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(222 14% 7% / 0.82) 0%,
-    hsl(222 14% 7% / 0.9) 45%,
-    hsl(230 16% 8% / 0.95) 100%
+    hsl(265 14% 7% / 0.55) 0%,
+    hsl(265 14% 7% / 0.62) 45%,
+    hsl(270 15% 8% / 0.7) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(222 14% 7% / 0.45) 0%,
-    hsl(222 14% 7% / 0.7) 100%
+    hsl(265 14% 7% / 0.14) 0%,
+    hsl(265 14% 7% / 0.16) 45%,
+    hsl(270 15% 8% / 0.18) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(265 14% 9%) 0%,
+    hsl(270 14% 7%) 100%
   );
 }
 
-/* 松林（dark / 墨绿）— 雾中深绿松林 */
+/* 松林（light / 松绿）— 《借物少女艾莉埃蒂》阳光林间花园小径（karigurashi001） */
 [data-wallpaper="pine"] {
   --skin-bg-image: url("../assets/skins/pine.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(160 18% 7% / 0.85) 0%,
-    hsl(155 16% 7% / 0.9) 50%,
-    hsl(150 18% 6% / 0.95) 100%
+    hsl(140 22% 98% / 0.5) 0%,
+    hsl(135 18% 98% / 0.42) 55%,
+    hsl(130 15% 97% / 0.48) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(155 18% 7% / 0.45) 0%,
-    hsl(150 18% 6% / 0.68) 100%
+    hsl(140 22% 98% / 0.12) 0%,
+    hsl(135 18% 98% / 0.1) 55%,
+    hsl(130 15% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(135 24% 96%) 0%,
+    hsl(130 20% 94%) 100%
   );
 }
 
-/* 墨韵（dark / 深蓝）— 暗底蓝色墨旋 */
+/* 墨韵（dark / 深蓝）— 《悬崖上的金鱼姬》深蓝夜空满月倒影（ponyo038） */
 [data-wallpaper="ink"] {
   --skin-bg-image: url("../assets/skins/ink.jpg");
   --skin-body-overlay: linear-gradient(
     180deg,
-    hsl(225 20% 8% / 0.8) 0%,
-    hsl(222 16% 7% / 0.88) 50%,
-    hsl(228 18% 9% / 0.94) 100%
+    hsl(225 20% 8% / 0.55) 0%,
+    hsl(222 16% 7% / 0.6) 50%,
+    hsl(228 18% 9% / 0.68) 100%
   );
-  --skin-sidebar-overlay: linear-gradient(
+  --skin-body-overlay-clear: linear-gradient(
     180deg,
-    hsl(225 22% 8% / 0.42) 0%,
-    hsl(222 18% 7% / 0.65) 100%
+    hsl(225 20% 8% / 0.14) 0%,
+    hsl(222 16% 7% / 0.15) 50%,
+    hsl(228 18% 9% / 0.17) 100%
+  );
+  --skin-sidebar-bg: linear-gradient(
+    180deg,
+    hsl(225 20% 9%) 0%,
+    hsl(222 16% 8%) 100%
   );
 }
 
@@ -256,6 +303,15 @@ body {
   color: var(--color-foreground);
 }
 
+/* 新建任务详情页壁纸清晰模式（html data-clear-wallpaper 由 MainLayout 按路由
+   维护）：body 换极淡纱；主面板不再叠底色（MainLayout panelClass 空串），
+   壁纸近乎全清晰；无壁纸皮肤两变量皆回落 none，body 纯色不受影响 */
+[data-clear-wallpaper] body {
+  background-image:
+    var(--skin-body-overlay-clear, none),
+    var(--skin-bg-image, none);
+}
+
 /* shiki 代码块深色高亮切换：shiki 双主题输出 --shiki-dark CSS 变量，
    此前无消费规则——深色下代码块仍亮色高亮（外观模块验收 A3 跟进票） */
 [data-mode="dark"] .shiki span {
@@ -263,11 +319,8 @@ body {
 }
 
 /* 全局侧边栏壳（GlobalSidebar 内层 div，data-sidebar-shell 标记）：
-   叠加壁纸侧栏图案，未设置时回落 none */
+   主题相近背景色（不显示壁纸，壁纸集中在中间主面板），
+   未设置时回落 none（露出 aside 的 bg-muted/40 底） */
 [data-sidebar-shell] {
-  background-image:
-    var(--skin-sidebar-overlay, none),
-    var(--skin-bg-image, none);
-  background-size: cover;
-  background-position: center;
+  background: var(--skin-sidebar-bg, none);
 }

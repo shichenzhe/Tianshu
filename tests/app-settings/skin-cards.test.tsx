@@ -94,12 +94,15 @@ describe("ThemePreviewCard 局部换肤绑定", () => {
     expect(screen.getByText("settings:appearance.premiumType")).toBeTruthy();
   });
 
-  it("主界面模拟元素齐备：侧栏条/壁纸图案（skin 变量）/双气泡/输入条", () => {
+  it("主界面模拟元素齐备：侧栏条（主题色）/主区壁纸叠层/双气泡/输入条", () => {
     render(<ThemePreviewCard skin={skinOf("ripple")} />);
-    expect(screen.getByTestId("preview-sidebar")).toBeTruthy();
-    // 壁纸图案区 inline style 消费 skins.css 的 --skin-sidebar-image 装饰变量
-    const wallpaper = screen.getByTestId("preview-sidebar-wallpaper");
-    expect(wallpaper.style.backgroundImage).toContain("--skin-sidebar-image");
+    // 侧栏条 inline style 消费 --skin-sidebar-bg（主题相近背景色，不显示壁纸）
+    const sidebar = screen.getByTestId("preview-sidebar");
+    expect(sidebar.style.backgroundImage).toContain("--skin-sidebar-bg");
+    // 主区 inline style 消费 body 同款壁纸叠层（overlay + image 两层）
+    const conversation = screen.getByTestId("preview-conversation");
+    expect(conversation.style.backgroundImage).toContain("--skin-body-overlay");
+    expect(conversation.style.backgroundImage).toContain("--skin-bg-image");
     expect(screen.getByTestId("preview-bubble-user")).toBeTruthy();
     expect(screen.getByTestId("preview-bubble-assistant")).toBeTruthy();
     expect(screen.getByTestId("preview-input-bar")).toBeTruthy();
@@ -176,7 +179,7 @@ describe("SkinCard", () => {
       <SkinCard skin={skinOf("pine")} selected={false} onSelect={onSelect} />,
     );
     const thumbnail = container.querySelector("[data-mode]");
-    expect(thumbnail?.getAttribute("data-mode")).toBe("dark");
+    expect(thumbnail?.getAttribute("data-mode")).toBe("light");
     expect(thumbnail?.getAttribute("data-theme")).toBe("green");
     expect(thumbnail?.getAttribute("data-wallpaper")).toBe("pine");
     cleanup();

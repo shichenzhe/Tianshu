@@ -46,9 +46,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useClearWallpaper } from "@/lib/hooks";
 
 export default function UserMenu() {
   const { t } = useTranslation(["layout", "common"]);
+  // 清晰壁纸路由（新建任务详情页）触发按钮切实底，与主题色区分
+  const solid = useClearWallpaper();
   const navigate = useNavigate();
   const { user, reset } = useUserStore();
 
@@ -148,7 +151,11 @@ export default function UserMenu() {
       >
         <DropdownMenuTrigger asChild>
           <div
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer hover:bg-accent text-foreground transition-all duration-200"
+            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer ${
+              solid
+                ? "bg-card border border-border/50 hover:bg-muted"
+                : "hover:bg-accent"
+            } text-foreground transition-all duration-200`}
             onMouseEnter={() => {
               if (menuTimer.current) clearTimeout(menuTimer.current);
               setMenuOpen(true);

@@ -3,6 +3,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 
 /**
  * 防抖 Hook
@@ -21,6 +22,16 @@ export function useDebounce<T>(value: T, delay: number): T {
   }, [value, delay]);
 
   return debouncedValue;
+}
+
+/**
+ * 壁纸清晰模式路由判断（新建任务详情页 /module/ai/new）
+ * MainLayout 据此在 html 打 data-clear-wallpaper（skins.css 切换极淡纱）；
+ * 顶栏右侧按钮（外观/语言/用户）据此切实底样式——清晰壁纸上需与主题色
+ * 区分，其余路由保持原透明 hover 底
+ */
+export function useClearWallpaper(): boolean {
+  return useLocation().pathname.startsWith("/module/ai/new");
 }
 
 /**

@@ -1,8 +1,9 @@
 /**
  * 主题预览大卡：按皮肤三元组局部作用域换肤——data-mode/data-theme/data-wallpaper
  * 写在卡片根元素，skins.css 属性选择器作用于卡片子树（CSS 变量继承），卡内模拟
- * 主界面构成：左窄侧栏条（含壁纸图案）+ 右侧对话区（顶行小色条 / user 右气泡 /
- * assistant 左气泡 / 底部输入条），全部消费主题语义变量，不硬编码颜色；
+ * 主界面构成：左窄侧栏条（主题相近背景色，不显示壁纸）+ 右侧对话区（壁纸集中
+ * 在主面板，顶行小色条 / user 右气泡 / assistant 左气泡 / 底部输入条），全部
+ * 消费主题语义变量，不硬编码颜色；
  * 右上角类型胶囊区分基础主题 / 精选皮肤
  */
 
@@ -15,27 +16,31 @@ interface ThemePreviewCardProps {
   skin: SkinDef;
 }
 
-/** 左侧窄条（宽 1/5）：侧栏色 + 底部壁纸图案区（inline style 消费装饰变量） */
+/** 左侧窄条（宽 1/5）：主题相近背景色（inline style 消费装饰变量，无壁纸时回落 bg-muted） */
 function PreviewSidebar() {
   return (
     <div
       data-testid="preview-sidebar"
-      className="flex w-1/5 shrink-0 flex-col border-r border-border/50 bg-muted"
-    >
-      <div className="flex-1" />
-      <div
-        data-testid="preview-sidebar-wallpaper"
-        className="h-1/3 w-full"
-        style={{ backgroundImage: "var(--skin-sidebar-image, none)" }}
-      />
-    </div>
+      className="w-1/5 shrink-0 border-r border-border/50 bg-muted"
+      style={{ backgroundImage: "var(--skin-sidebar-bg, none)" }}
+    />
   );
 }
 
-/** 右侧对话区：顶行小色条 + user/assistant 气泡 + 底部输入条 */
+/** 右侧对话区（中间主面板）：顶行小色条 + user/assistant 气泡 + 底部输入条；
+    壁纸叠层与 body 同款（overlay + image 两层），无壁纸时透出卡片根底色 */
 function PreviewConversation() {
   return (
-    <div className="flex flex-1 flex-col gap-2 bg-background p-3">
+    <div
+      data-testid="preview-conversation"
+      className="flex flex-1 flex-col gap-2 p-3"
+      style={{
+        backgroundImage:
+          "var(--skin-body-overlay, none), var(--skin-bg-image, none)",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
       <div className="h-2 w-8 rounded bg-primary" />
       <div className="flex justify-end">
         <div

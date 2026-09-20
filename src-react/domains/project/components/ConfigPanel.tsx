@@ -9,7 +9,7 @@
  *   + 前往自动化入口 + 空态文案
  * - 成员：头像占位（昵称首字符）+ 昵称 + owner 徽标 + me 标记（单成员）
  */
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,6 +34,7 @@ import {
 } from "@/domains/ai/automation/api/automation.api";
 import { CreateTaskDialog } from "@/domains/ai/automation/components/CreateTaskDialog";
 import { useUserStore } from "@/domains/user/store/user.store";
+import { useAiUiStore } from "@/domains/ai/store/ai-ui.store";
 import ProjectApi from "../api/project.api";
 import CapabilityRow from "./CapabilityRow";
 import InstructionEditDialog from "./InstructionEditDialog";
@@ -63,6 +64,13 @@ interface ConfigPanelProps {
 
 export default function ConfigPanel({ detail }: ConfigPanelProps) {
   const { t } = useTranslation(["project", "chat"]);
+  // 顶部工具栏右段宽度注册（store 注册表求和，可与动态流产物面板并存）：
+  // 320 与右列宽 w-80 同步维护（挂载即展开、卸载即收起）
+  const panelId = useId();
+  useEffect(() => {
+    useAiUiStore.getState().registerTopbarRightWidth(panelId, 320);
+    return () => useAiUiStore.getState().unregisterTopbarRightWidth(panelId);
+  }, [panelId]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);

@@ -3,7 +3,7 @@
  * 唯一实例在此，输入框与消息列表共享 sending 状态；key 取会话 id，
  * 切换会话时重建（流监听与节流缓冲随之隔离）。
  * 项目模块复用时可通过可选过滤集限定＋菜单可选能力（未传不过滤）
- * 拆分说明：消息区子树（MessageList + artifacts 旁挂）已拆至 ChatMessages，
+ * 拆分说明：消息区子树（MessageList）已拆至 ChatMessages，
  * 本组件为组合壳——发送/编辑/权限等状态与回调原位持有，经 props 透传，
  * 底部插槽注入 AgentProgress + ChatInput；props 签名与导出名不变
  * （AI 模块 ChatView 等消费方零改动），行为与拆分前一致
@@ -25,7 +25,6 @@ import type { AccessMode } from "./PermissionCapsule";
 import AgentProgress from "./AgentProgress";
 import { useChatSend } from "../hooks/use-chat-send";
 import { useChatStore } from "../store/chat.store";
-import { useAiUiStore } from "../../store/ai-ui.store";
 import { mapIpcError } from "../lib/error-message";
 import { truncateMessagesForEdit } from "../lib/truncate-messages-for-edit";
 
@@ -69,7 +68,6 @@ export default function ChatPane({
     messageId: number;
     text: string;
   } | null>(null);
-  const artifactsOpen = useAiUiStore((s) => s.artifactsOpen);
 
   // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
   // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底
@@ -229,7 +227,6 @@ export default function ChatPane({
     <ChatMessages
       session={session}
       workspace={workspace}
-      artifactsOpen={artifactsOpen}
       editing={editing}
       onRegenerate={handleRegenerate}
       onEdit={handleEdit}

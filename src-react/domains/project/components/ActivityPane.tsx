@@ -29,6 +29,7 @@ import { ModelApi } from "@/domains/ai/api/model.api";
 import ChatApi from "@/domains/ai/api/chat.api";
 import type { MessageRecord } from "@/domains/ai/api/session.api";
 import ChatMessages from "@/domains/ai/chat/components/ChatMessages";
+import ArtifactsPanel from "@/domains/ai/chat/components/artifacts/ArtifactsPanel";
 import { parseBlocks } from "@/domains/ai/chat/model/blocks";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { truncateMessagesForEdit } from "@/domains/ai/chat/lib/truncate-messages-for-edit";
@@ -79,6 +80,11 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
     text: string;
   } | null>(null);
   const artifactsOpen = useAiUiStore((s) => s.artifactsOpen);
+  // 产物面板开关为全局内存态（与 ChatView 共用旁挂）：进入本面板时重置收起，
+  // 防止会话页的展开态残留到项目详情（面板不跨视图保留）
+  useEffect(() => {
+    useAiUiStore.getState().setArtifactsOpen(false);
+  }, []);
   // 流式标记（startStream/finishStream 引用稳定）：发送链在 ProjectChatBar，
   // 此处仅为重发/重新生成标记 sending 态与失败收尾，不订阅流事件
   const startStream = useChatStore((s) => s.startStream);
@@ -174,19 +180,25 @@ export default function ActivityPane({ detail }: ActivityPaneProps) {
   const handleEditCancel = () => setEditing(null);
 
   return (
-    // 内容列全宽（与普通聊天面板同口径——验收反馈：两聊天面板宽度一致）
-    <div className="flex min-h-0 w-full flex-1">
+    // 内容列全宽（与普通聊天面板同口径——验收反馈：两聊天面板宽度一致）；
+    // relative 为产物全屏预览锚点，产物面板全高旁挂（同 ChatView 右列）
+    <div className="relative flex min-h-0 w-full flex-1">
       <ChatMessages
         key={session.id}
         session={session}
         workspace={workspace}
-        artifactsOpen={artifactsOpen}
         editing={editing}
         onRegenerate={handleRegenerate}
         onEdit={handleEdit}
         onEditSubmit={handleEditSubmit}
         onEditCancel={handleEditCancel}
       />
+      {artifactsOpen && (
+        <ArtifactsPanel
+          sessionId={session.id}
+          workspaceId={detail.assetWorkspaceId}
+        />
+      )}
     </div>
   );
 }

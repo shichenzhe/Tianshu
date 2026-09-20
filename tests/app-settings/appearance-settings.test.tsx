@@ -134,7 +134,7 @@ describe("AppearanceSettings 即点即切（真实 store）", () => {
     render(<AppearanceSettings />);
     act(() => useSkinStore.getState().setSkin("pine"));
     const preview = screen.getByRole("img");
-    expect(preview.getAttribute("data-mode")).toBe("dark");
+    expect(preview.getAttribute("data-mode")).toBe("light");
     expect(preview.getAttribute("data-theme")).toBe("green");
     expect(preview.getAttribute("data-wallpaper")).toBe("pine");
     // 选中样式同步转移到 pine 卡（选中态读 store.skin 单一数据源）

@@ -51,7 +51,7 @@ export default function PromptChips({ onTemplateClick }: PromptChipsProps) {
           key={chipKey}
           type="button"
           onClick={() => applyTemplate(chipKey)}
-          className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-border/50 px-3 text-xs text-foreground hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
+          className="flex h-8 shrink-0 items-center gap-1 rounded-full border border-border/50 bg-card px-3 text-xs text-foreground hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
         >
           <Sparkles className="h-3 w-3 shrink-0 text-primary" />
           {t(`newTask:chips.${chipKey}.label`)}

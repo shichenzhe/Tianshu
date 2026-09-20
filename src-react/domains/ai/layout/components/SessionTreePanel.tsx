@@ -79,12 +79,7 @@ type WorkspaceDialogState =
   | { mode: "create"; name: string }
   | { mode: "rename"; name: string; workspaceId: number };
 
-interface SessionTreePanelProps {
-  /** 侧边栏折叠态（收缩时整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */
-  collapsed: boolean;
-}
-
-export default function SessionTreePanel({ collapsed }: SessionTreePanelProps) {
+export default function SessionTreePanel() {
   const { t } = useTranslation(["chat", "common"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -380,76 +375,68 @@ export default function SessionTreePanel({ collapsed }: SessionTreePanelProps) {
 
   return (
     <>
-      {/* 空间分组任务树（收缩态整体隐藏：折叠/展开入口在顶栏 AiTopbarActions） */}
-      {!collapsed && (
-        <div className="fade-in p-2 border-t border-border/50">
-          <button
-            type="button"
-            className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
-            onClick={() => setSpacesOpen((open) => !open)}
-          >
-            {spacesOpen ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )}
-            {t("chat:sidebar.spaces")} ({workspaces.length})
-          </button>
-          {spacesOpen &&
-            workspaces.map((workspace) => (
-              <WorkspaceGroup
-                key={workspace.id}
-                workspace={workspace}
-                collapsed={collapsed}
-                collapsedGroup={collapsedSpaces[workspace.id] ?? false}
-                sessions={sessions.filter(
-                  (s) => s.workspaceId === workspace.id,
-                )}
-                selectedSessionId={selectedSessionId}
-                batchMode={batchMode}
-                batchSelectedIds={selectedIds}
-                isStreaming={isStreaming}
-                onBatchToggleIds={toggleBatchIds}
-                onBatchEnter={() => setBatchMode(true)}
-                onToggleGroup={() =>
-                  setCollapsedSpaces((prev) => ({
-                    ...prev,
-                    [workspace.id]: !(prev[workspace.id] ?? false),
-                  }))
-                }
-                onSelect={selectSession}
-                onCreateTask={() => handleCreateSession(workspace.id)}
-                onCreateWorkspace={() =>
-                  setWorkspaceDialog({
-                    mode: "create",
-                    name: t("chat:defaultWorkspaceName"),
-                  })
-                }
-                onManageRename={() =>
-                  setWorkspaceDialog({
-                    mode: "rename",
-                    name: workspace.name,
-                    workspaceId: workspace.id,
-                  })
-                }
-                onManageDelete={() => setDeletingWorkspace(workspace)}
-                onManageBind={() => handleBindDirectory(workspace.id)}
-                onManageUnbind={() => setUnbindingWorkspace(workspace)}
-                onSessionRename={(session) => {
-                  setSessionTitle(session.title);
-                  setRenamingSession(session);
-                }}
-                onSessionDelete={(session) => setDeletingSession(session)}
-                onSessionPin={(s) => void handlePin(s)}
-                onSessionArchive={(s) => void handleArchive(s)}
-                onOpenFolder={() => void handleOpenFolder(workspace.id)}
-              />
-            ))}
-        </div>
-      )}
+      {/* 空间分组任务树（收起时由 GlobalSidebar aside 宽度裁切整体隐藏，
+          内容常驻不随折叠切换——避免收展动画期间列表闪动） */}
+      <div className="p-2 border-t border-border/50">
+        <button
+          type="button"
+          className="flex w-full items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          onClick={() => setSpacesOpen((open) => !open)}
+        >
+          {spacesOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {t("chat:sidebar.spaces")} ({workspaces.length})
+        </button>
+        {spacesOpen &&
+          workspaces.map((workspace) => (
+            <WorkspaceGroup
+              key={workspace.id}
+              workspace={workspace}
+              collapsedGroup={collapsedSpaces[workspace.id] ?? false}
+              sessions={sessions.filter((s) => s.workspaceId === workspace.id)}
+              selectedSessionId={selectedSessionId}
+              batchMode={batchMode}
+              batchSelectedIds={selectedIds}
+              isStreaming={isStreaming}
+              onBatchToggleIds={toggleBatchIds}
+              onBatchEnter={() => setBatchMode(true)}
+              onToggleGroup={() =>
+                setCollapsedSpaces((prev) => ({
+                  ...prev,
+                  [workspace.id]: !(prev[workspace.id] ?? false),
+                }))
+              }
+              onSelect={selectSession}
+              onCreateTask={() => handleCreateSession(workspace.id)}
+              onCreateWorkspace={() =>
+                setWorkspaceDialog({
+                  mode: "create",
+                  name: t("chat:defaultWorkspaceName"),
+                })
+              }
+              onManageRename={() =>
+                setWorkspaceDialog({
+                  mode: "rename",
+                  name: workspace.name,
+                  workspaceId: workspace.id,
+                })
+              }
+              onManageDelete={() => setDeletingWorkspace(workspace)}
+              onManageBind={() => handleBindDirectory(workspace.id)}
+              onManageUnbind={() => setUnbindingWorkspace(workspace)}
+              onSessionRename={(session) => {
+                setSessionTitle(session.title);
+                setRenamingSession(session);
+              }}
+              onSessionDelete={(session) => setDeletingSession(session)}
+              onSessionPin={(s) => void handlePin(s)}
+              onSessionArchive={(s) => void handleArchive(s)}
+              onOpenFolder={() => void handleOpenFolder(workspace.id)}
+            />
+          ))}
+      </div>
 
       {/* 批量管理底部操作栏（批量模式固定悬浮于侧边栏底部） */}
-      {batchMode && !collapsed && (
+      {batchMode && (
         <BatchActionBar
           selectedCount={selectedIds.size}
           allChecked={allChecked}
@@ -637,7 +624,6 @@ export default function SessionTreePanel({ collapsed }: SessionTreePanelProps) {
 
 interface WorkspaceGroupProps {
   workspace: WorkspaceRecord;
-  collapsed: boolean;
   collapsedGroup: boolean;
   sessions: SessionRecord[];
   selectedSessionId: number | null;
@@ -668,7 +654,6 @@ interface WorkspaceGroupProps {
 /** 单空间分组：标题行（折叠钮 + 空间名 + 悬停 +/...）+ 任务列表 */
 function WorkspaceGroup({
   workspace,
-  collapsed,
   collapsedGroup,
   sessions,
   selectedSessionId,
@@ -708,7 +693,8 @@ function WorkspaceGroup({
         : false;
 
   return (
-    <div className="group/workspace mt-1">
+    // pl-3 缩进：与顶层「空间」标题拉开层级（任务行在其内再缩 ml-2）
+    <div className="group/workspace mt-1 pl-3">
       <div className="relative flex items-center">
         {batchMode && (
           <Checkbox
@@ -726,10 +712,7 @@ function WorkspaceGroup({
         )}
         <button
           type="button"
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pl-1 text-left text-sm text-foreground/90 hover:bg-primary-subtle/60",
-            collapsed && "justify-center",
-          )}
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pl-1 text-left text-sm text-foreground/90 hover:bg-primary-subtle/60"
           onClick={onToggleGroup}
           title={workspace.name}
           aria-expanded={!collapsedGroup}
@@ -743,32 +726,30 @@ function WorkspaceGroup({
           ) : (
             <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
           )}
-          {!collapsed && <span className="truncate">{workspace.name}</span>}
+          <span className="truncate">{workspace.name}</span>
         </button>
-        {!collapsed && (
-          <div className="absolute right-0 flex items-center opacity-0 transition-opacity group-hover/workspace:opacity-100">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
-              onClick={onCreateTask}
-              aria-label={t("chat:sidebar.newTaskInWorkspace")}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-            <WorkspaceMenu
-              disabled={false}
-              workspace={workspace}
-              onCreateWorkspace={onCreateWorkspace}
-              onRename={onManageRename}
-              onDelete={onManageDelete}
-              onBindDirectory={onManageBind}
-              onUnbindDirectory={onManageUnbind}
-            />
-          </div>
-        )}
+        <div className="absolute right-0 flex items-center opacity-0 transition-opacity group-hover/workspace:opacity-100">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-muted-foreground hover:text-primary"
+            onClick={onCreateTask}
+            aria-label={t("chat:sidebar.newTaskInWorkspace")}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </Button>
+          <WorkspaceMenu
+            disabled={false}
+            workspace={workspace}
+            onCreateWorkspace={onCreateWorkspace}
+            onRename={onManageRename}
+            onDelete={onManageDelete}
+            onBindDirectory={onManageBind}
+            onUnbindDirectory={onManageUnbind}
+          />
+        </div>
       </div>
-      {!collapsedGroup && !collapsed && (
+      {!collapsedGroup && (
         <div id={`workspace-group-${workspace.id}`} className="ml-2">
           {sessions.length === 0 ? (
             <p className="px-2 py-1 text-xs text-muted-foreground">

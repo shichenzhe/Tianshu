@@ -4,23 +4,23 @@
  * 流式 tools 派生（deriveSessionFiles），selector 只订 tools 避免 text
  * delta 重渲染。preview 返回后回到前一列表视图（不落入 artifactsView）
  */
-import { useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Check, ChevronDown, PanelRight } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  PanelRightClose,
+  PanelRightOpen,
+} from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import SessionApi from "../../../api/session.api";
 import { useAiUiStore, type AiArtifactsView } from "../../../store/ai-ui.store";
 import { useChatStore } from "../../store/chat.store";
@@ -48,6 +48,13 @@ export default function ArtifactsPanel({
   const setView = useAiUiStore((s) => s.setArtifactsView);
   const [previewFile, setPreviewFile] = useState<SessionFile | null>(null);
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  // 顶部工具栏右段宽度注册（store 注册表求和，可与项目配置栏并存）：
+  // 340 与本面板列宽 w-[340px] 同步维护
+  const panelId = useId();
+  useEffect(() => {
+    useAiUiStore.getState().registerTopbarRightWidth(panelId, 340);
+    return () => useAiUiStore.getState().unregisterTopbarRightWidth(panelId);
+  }, [panelId]);
 
   // 与 MessageList 共享 ["messages", sessionId] 缓存；流结束既有 invalidate 链路刷新
   const messagesQuery = useQuery({
@@ -78,8 +85,8 @@ export default function ArtifactsPanel({
 
   return (
     <>
-      {/* 悬浮面板：absolute 相对行容器，覆盖聊天区右缘不挤压内容 */}
-      <div className="absolute inset-y-0 right-0 z-30 flex w-[340px] flex-col border-l border-border/50 bg-background shadow-lg">
+      {/* 挤压式右列（与项目详情右栏同构）：shrink-0 占位，收起时由外层整体移除 */}
+      <div className="flex w-[340px] shrink-0 flex-col border-l border-border/50 bg-background">
         <div className="flex items-center border-b border-border/50 px-2 py-1.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -157,7 +164,7 @@ export default function ArtifactsPanel({
           )}
         </div>
       </div>
-      {/* 全屏预览渲染在行容器层（absolute inset-0 相对行容器而非悬浮面板） */}
+      {/* 全屏预览渲染在行容器层（absolute inset-0 相对行容器而非产物面板） */}
       {previewFile && previewFullscreen && (
         <FilePreview
           file={previewFile}
@@ -171,27 +178,27 @@ export default function ArtifactsPanel({
   );
 }
 
-/** 顶栏开关按钮（ChatView 顶行右侧）：展开态提示「收起右栏」，收起态提示「产物面板」 */
+/** 顶栏开关按钮（ChatView 顶行右侧，与项目详情右栏开关同构）：
+ *  图标随状态切换（展开=收起图标/收起=展开图标），ghost 无 Tooltip */
 export function ArtifactsPanelToggle() {
   const { t } = useTranslation(["chat"]);
   const open = useAiUiStore((s) => s.artifactsOpen);
   const toggle = useAiUiStore((s) => s.toggleArtifacts);
   const label = open ? t("chat:artifacts.close") : t("chat:artifacts.open");
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label={label}
-            onClick={toggle}
-            className="rounded p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-          >
-            <PanelRight className="h-4 w-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label={label}
+      aria-pressed={open}
+      onClick={toggle}
+      className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+    >
+      {open ? (
+        <PanelRightClose className="h-4 w-4" />
+      ) : (
+        <PanelRightOpen className="h-4 w-4" />
+      )}
+    </Button>
   );
 }

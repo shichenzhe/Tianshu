@@ -15,12 +15,17 @@ import AiTopbarActions from "@/domains/ai/layout/components/AiTopbarActions";
 import SessionSearchBox from "@/domains/ai/layout/components/SessionSearchBox";
 import GlobalSidebar from "./GlobalSidebar";
 import TopBar from "./TopBar";
+import { useSkinStore } from "@/stores/skin.store";
+import { useClearWallpaper } from "@/lib/hooks";
+import { cn } from "@/lib/utils";
 
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation(["layout"]);
   const { user, isLoginValid, reset } = useUserStore();
+  // 皮肤 id：主面板底色依据——只有浅色基础款纯白，其余随主题色（见 main className）
+  const skin = useSkinStore((s) => s.skin);
 
   // 判断是否显示导航布局
   const shouldShowNav =
@@ -58,12 +63,32 @@ export default function MainLayout() {
     checkAuth();
   }, [location.pathname, t]);
 
+  // 主面板底色（TopBar 中段同款复用——顶部工具栏与面板融为一体）：
+  // 仅浅色基础款纯白（与侧栏形成层次）；新建任务详情页（/module/ai/new）
+  // 不叠底色（壁纸清晰模式，body 换极淡纱）；其余页面浓遮——body 壁纸
+  // 轻纱层 + muted/80 合计保证文字/表格边框对比
+  const isNewTaskRoute = useClearWallpaper();
+  const panelClass =
+    skin === "light" ? "bg-background" : isNewTaskRoute ? "" : "bg-muted/80";
+
+  // 壁纸清晰模式标记：新建任务详情页在 html 打 data-clear-wallpaper，
+  // skins.css 据此把 body 轻纱换成极淡版（离开该路由即摘除）
+  useEffect(() => {
+    document.documentElement.toggleAttribute(
+      "data-clear-wallpaper",
+      isNewTaskRoute,
+    );
+    return () =>
+      document.documentElement.removeAttribute("data-clear-wallpaper");
+  }, [isNewTaskRoute]);
+
   return (
     <div className="app-container">
       {shouldShowNav && (
         <TopBar
           leftSlot={<AiTopbarActions />}
           rightLeadingSlot={isAiRoute ? <SessionSearchBox /> : undefined}
+          panelClass={panelClass}
         />
       )}
 
@@ -75,7 +100,8 @@ export default function MainLayout() {
         }}
       >
         {shouldShowNav && <GlobalSidebar />}
-        <main className="min-w-0 flex-1 overflow-y-auto bg-muted/40">
+        {/* 主面板：panelClass 与 TopBar 中段同源（见上方注释） */}
+        <main className={cn("min-w-0 flex-1 overflow-y-auto", panelClass)}>
           <Outlet />
         </main>
       </div>

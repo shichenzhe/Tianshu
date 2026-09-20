@@ -46,15 +46,15 @@ type Hue = SkinDef["hue"];
 const SPEC_TRIPLETS: ReadonlyArray<
   readonly [string, Mode, Hue, string | null]
 > = [
-  ["light", "light", "blue", null],
+  ["light", "light", "green", null],
   ["dark", "dark", "blue", null],
   ["dawn-mist", "light", "blue", "dawn-mist"],
   ["ripple", "light", "blue", "ripple"],
   ["field", "light", "green", "field"],
+  ["pine", "light", "green", "pine"],
   ["ocean-sky", "light", "blue", "ocean-sky"],
   ["warm-sand", "light", "orange", "warm-sand"],
   ["dusk", "dark", "orange", "dusk"],
-  ["pine", "dark", "green", "pine"],
   ["ink", "dark", "blue", "ink"],
 ];
 
@@ -65,10 +65,10 @@ const WALLPAPER_IDS = [
   "dawn-mist",
   "ripple",
   "field",
+  "pine",
   "ocean-sky",
   "warm-sand",
   "dusk",
-  "pine",
   "ink",
 ];
 
@@ -109,14 +109,14 @@ describe("SKINS 十款元数据", () => {
     }
   });
 
-  it("wallpaper 与 mode 对应：基础两款 null，light 系五款 + dark 系三款", () => {
+  it("wallpaper 与 mode 对应：基础两款 null，light 系六款 + dark 系两款", () => {
     expect(getSkin("light")?.wallpaper).toBeNull();
     expect(getSkin("dark")?.wallpaper).toBeNull();
     const wallpaperSkins = SKINS.filter((s) => s.wallpaper !== null);
     expect(wallpaperSkins.map((s) => s.wallpaper)).toEqual(WALLPAPER_IDS);
-    // light 系五款 + dark 系三款，且 wallpaper 值与 id 一致（skins.css 选择器同名）
-    expect(wallpaperSkins.filter((s) => s.mode === "light")).toHaveLength(5);
-    expect(wallpaperSkins.filter((s) => s.mode === "dark")).toHaveLength(3);
+    // light 系六款 + dark 系两款，且 wallpaper 值与 id 一致（skins.css 选择器同名）
+    expect(wallpaperSkins.filter((s) => s.mode === "light")).toHaveLength(6);
+    expect(wallpaperSkins.filter((s) => s.mode === "dark")).toHaveLength(2);
     for (const skin of wallpaperSkins) {
       expect(skin.wallpaper).toBe(skin.id);
     }

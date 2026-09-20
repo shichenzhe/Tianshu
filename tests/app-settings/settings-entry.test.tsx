@@ -29,10 +29,15 @@ vi.mock("react-i18next", () => ({
 }));
 
 // UserMenu 专属桩：路由导航 / 用户态 / 与入口直达无关的三个子对话框
+// （useLocation 桩供 UserMenu 内 useClearWallpaper 路由判断，无需 Router 上下文）
 const navigateMock = vi.hoisted(() => vi.fn());
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
-  return { ...actual, useNavigate: () => navigateMock };
+  return {
+    ...actual,
+    useNavigate: () => navigateMock,
+    useLocation: () => ({ pathname: "/" }),
+  };
 });
 vi.mock("@/domains/user/store/user.store", () => ({
   useUserStore: () => ({ user: { username: "测试用户" }, reset: vi.fn() }),

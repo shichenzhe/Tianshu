@@ -105,7 +105,7 @@ export default function NewTaskView() {
               "rounded-full border border-border/50 px-4 py-1.5 text-sm transition-colors",
               scenario === key
                 ? "bg-primary-subtle text-primary hover:border-primary/30"
-                : "text-muted-foreground hover:bg-primary-subtle hover:text-primary",
+                : "bg-card text-muted-foreground hover:bg-primary-subtle hover:text-primary",
             )}
           >
             {t(`newTask:scenario.${key}`)}

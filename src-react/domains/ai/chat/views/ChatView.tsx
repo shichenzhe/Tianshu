@@ -3,7 +3,10 @@
  * 当前空间由选中任务派生（侧边栏分组树已展示全部空间），会话数据经共享
  * React Query 缓存派生，setModel/setAssistant/setMode 失效后即为最新值
  * 单会话面板拆至 components/ChatPane（跨模块复用），本视图只做选态派生
+ * 布局与项目详情右栏同构：左列（顶栏 + ChatPane）+ 右列产物面板全高
+ * 挤压式旁挂（收起时整体移除，开关在顶栏右侧）
  */
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -24,7 +27,10 @@ import { WorkspaceApi } from "../../api/workspace.api";
 import MessageList from "../components/MessageList";
 import ChatPane from "../components/ChatPane";
 import WorkspacePathChip from "../components/WorkspacePathChip";
-import { ArtifactsPanelToggle } from "../components/artifacts/ArtifactsPanel";
+import ArtifactsPanel, {
+  ArtifactsPanelToggle,
+} from "../components/artifacts/ArtifactsPanel";
+import { useAiUiStore } from "../../store/ai-ui.store";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 const PROVIDERS_KEY = ["providers"] as const;
@@ -38,6 +44,12 @@ export default function ChatView() {
   const [searchParams] = useSearchParams();
   // 选中任务进 URL（?session=）：刷新可恢复、全局搜索有跳转落点
   const selectedSessionId = Number(searchParams.get("session")) || null;
+  const artifactsOpen = useAiUiStore((s) => s.artifactsOpen);
+  // 产物面板开关为全局内存态（ChatView 与项目详情 ActivityPane 共用旁挂）：
+  // 进入视图时重置收起，防止上一处（如项目详情动态流）的展开态残留
+  useEffect(() => {
+    useAiUiStore.getState().setArtifactsOpen(false);
+  }, []);
 
   const providersQuery = useQuery({
     queryKey: PROVIDERS_KEY,
@@ -79,40 +91,52 @@ export default function ChatView() {
     null;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* 顶栏：有会话时渲染；左路径 chip（绑定时）+ 右产物面板开关 */}
-      {selectedSession && (
-        <div className="flex items-center justify-between px-4 pt-2">
-          {activeWorkspace?.directoryPath ? (
-            <WorkspacePathChip workspace={activeWorkspace} />
-          ) : (
-            <span />
-          )}
-          <ArtifactsPanelToggle />
-        </div>
-      )}
-      {needsSetup ? (
-        <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
-      ) : selectedSession ? (
-        <ChatPane
-          key={selectedSession.id}
-          session={selectedSession}
-          workspace={activeWorkspace}
-          hasModel={Boolean(
-            selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
-          )}
-          onOpenSettings={(target) =>
-            navigate(
-              target === "providers"
-                ? PROVIDERS_ROUTE
-                : target === "assistants"
-                  ? ASSISTANTS_ROUTE
-                  : MCP_ROUTE,
-            )
-          }
+    // relative 为产物全屏预览锚点（absolute inset-0 覆盖整个会话视图）
+    <div className="relative flex h-full">
+      {/* 左列：顶栏 + 消息/输入（或引导态/无会话兜底） */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* 顶栏（样式与项目详情 header 同构）：左路径 chip（绑定时）+ 右产物面板开关 */}
+        {selectedSession && (
+          <header className="flex items-center justify-between border-b border-border/50 px-4 py-1.5">
+            {activeWorkspace?.directoryPath ? (
+              <WorkspacePathChip workspace={activeWorkspace} />
+            ) : (
+              <span />
+            )}
+            <ArtifactsPanelToggle />
+          </header>
+        )}
+        {needsSetup ? (
+          <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
+        ) : selectedSession ? (
+          <ChatPane
+            key={selectedSession.id}
+            session={selectedSession}
+            workspace={activeWorkspace}
+            hasModel={Boolean(
+              selectedSession.currentModelId ?? activeWorkspace?.defaultModelId,
+            )}
+            onOpenSettings={(target) =>
+              navigate(
+                target === "providers"
+                  ? PROVIDERS_ROUTE
+                  : target === "assistants"
+                    ? ASSISTANTS_ROUTE
+                    : MCP_ROUTE,
+              )
+            }
+          />
+        ) : (
+          <MessageList sessionId={null} />
+        )}
+      </div>
+
+      {/* 右列产物面板（与项目详情右栏同构）：全高挤压式，收起时整体移除 */}
+      {selectedSession && artifactsOpen && activeWorkspace && (
+        <ArtifactsPanel
+          sessionId={selectedSession.id}
+          workspaceId={activeWorkspace.id}
         />
-      ) : (
-        <MessageList sessionId={null} />
       )}
     </div>
   );

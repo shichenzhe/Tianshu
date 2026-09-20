@@ -21,12 +21,12 @@ export interface SkinDef {
   descEn: string;
 }
 
-/** 十款皮肤（顺序即 spec §3.1 表顺序：基础两款 + light 系五款 + dark 系三款） */
+/** 十款皮肤（顺序即 spec §3.1 表顺序：基础两款 + light 系六款 + dark 系两款） */
 export const SKINS: SkinDef[] = [
   {
     id: "light",
     mode: "light",
-    hue: "blue",
+    hue: "green",
     wallpaper: null,
     type: "basic",
     name: "浅色",
@@ -53,8 +53,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "晨雾",
     nameEn: "Dawn Mist",
-    desc: "淡紫云纹氛围",
-    descEn: "Lavender mist ambience",
+    desc: "水彩农舍晨雾",
+    descEn: "Watercolor farmstead in morning mist",
   },
   {
     id: "ripple",
@@ -64,8 +64,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "涟漪",
     nameEn: "Ripple",
-    desc: "水纹涟漪清新",
-    descEn: "Fresh rippling water",
+    desc: "碧波轻舟涟光",
+    descEn: "Ripples of a boat on clear water",
   },
   {
     id: "field",
@@ -75,8 +75,19 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "原野",
     nameEn: "Field",
-    desc: "草地绿意自然",
-    descEn: "Natural grassland greenery",
+    desc: "林间草地野花",
+    descEn: "Woodland meadow in bloom",
+  },
+  {
+    id: "pine",
+    mode: "light",
+    hue: "green",
+    wallpaper: "pine",
+    type: "premium",
+    name: "松林",
+    nameEn: "Pine",
+    desc: "阳光林间花园",
+    descEn: "Sunlit woodland garden",
   },
   {
     id: "ocean-sky",
@@ -86,8 +97,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "海空",
     nameEn: "Ocean Sky",
-    desc: "天海一色湛蓝",
-    descEn: "Azure sea meeting sky",
+    desc: "碧海蓝天绿屿",
+    descEn: "Azure sea, isle and sky",
   },
   {
     id: "warm-sand",
@@ -97,8 +108,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "暖沙",
     nameEn: "Warm Sand",
-    desc: "沙丘暖阳",
-    descEn: "Sun-warmed dunes",
+    desc: "金色沙丘暖阳",
+    descEn: "Sunlit golden dunes",
   },
   {
     id: "dusk",
@@ -108,19 +119,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "暮色",
     nameEn: "Dusk",
-    desc: "暖橙暮光夜景",
-    descEn: "Warm amber twilight",
-  },
-  {
-    id: "pine",
-    mode: "dark",
-    hue: "green",
-    wallpaper: "pine",
-    type: "premium",
-    name: "松林",
-    nameEn: "Pine",
-    desc: "墨绿松林层叠",
-    descEn: "Layered dark-green pines",
+    desc: "紫橙晚霞暮色",
+    descEn: "Violet-amber twilight",
   },
   {
     id: "ink",
@@ -130,8 +130,8 @@ export const SKINS: SkinDef[] = [
     type: "premium",
     name: "墨韵",
     nameEn: "Ink",
-    desc: "深蓝漩涡墨色",
-    descEn: "Deep-blue ink swirls",
+    desc: "深蓝夜空明月",
+    descEn: "Deep-blue night with a full moon",
   },
 ];
 

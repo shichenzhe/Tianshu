@@ -34,7 +34,13 @@ interface AiUiState {
   setSearchOpen: (open: boolean) => void;
   artifactsOpen: boolean;
   artifactsView: AiArtifactsView;
+  /** 顶部工具栏右段宽度注册表（右列面板挂载注册/卸载注销，TopBar 取总和
+      ——产物面板与项目配置栏可并存，单值会被后写覆盖/卸载误清零） */
+  topbarRightWidths: Record<string, number>;
   toggleArtifacts: () => void;
+  setArtifactsOpen: (open: boolean) => void;
+  registerTopbarRightWidth: (id: string, width: number) => void;
+  unregisterTopbarRightWidth: (id: string) => void;
   setArtifactsView: (view: AiArtifactsView) => void;
 }
 
@@ -44,6 +50,7 @@ export const useAiUiStore = create<AiUiState>((set) => ({
   searchOpen: false,
   artifactsOpen: false,
   artifactsView: "overview",
+  topbarRightWidths: {},
   toggleSidebar: () =>
     set((state) => {
       const next = !state.sidebarCollapsed;
@@ -62,5 +69,16 @@ export const useAiUiStore = create<AiUiState>((set) => ({
   setSearchOpen: (open) => set({ searchOpen: open }),
   toggleArtifacts: () =>
     set((state) => ({ artifactsOpen: !state.artifactsOpen })),
+  setArtifactsOpen: (open) => set({ artifactsOpen: open }),
+  registerTopbarRightWidth: (id, width) =>
+    set((state) => ({
+      topbarRightWidths: { ...state.topbarRightWidths, [id]: width },
+    })),
+  unregisterTopbarRightWidth: (id) =>
+    set((state) => {
+      const next = { ...state.topbarRightWidths };
+      delete next[id];
+      return { topbarRightWidths: next };
+    }),
   setArtifactsView: (view) => set({ artifactsView: view }),
 }));

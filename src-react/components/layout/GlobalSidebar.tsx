@@ -80,7 +80,7 @@ export default function GlobalSidebar() {
       )}
     >
       {/* 内容层固定宽度 + 自带右边框（收起时随宽度动画一并裁掉，不留残线）；
-          data-sidebar-shell 供 skins.css 叠加壁纸侧栏图案 */}
+          data-sidebar-shell 供 skins.css 叠加主题相近侧栏背景色（不显示壁纸） */}
       <div
         data-sidebar-shell=""
         className="flex h-full w-64 shrink-0 flex-col border-r border-border/50"
@@ -116,10 +116,14 @@ export default function GlobalSidebar() {
           ))}
         </div>
 
-        {/* 主体区：我的项目 + AI 空间分组任务树上下共存（统一滚动容器） */}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ProjectSidebarList collapsed={collapsed} />
-          <SessionTreePanel collapsed={collapsed} />
+        {/* 主体区分区滚动：我的项目（限高自滚，不挤压空间区）+ 空间分组
+            任务树（占剩余高度独立滚动）——任一列表再长另一区始终可见 */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* 收展仅由外层 aside 宽度裁切完成（组件内容常驻，避免动画闪动） */}
+          <ProjectSidebarList />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <SessionTreePanel />
+          </div>
         </div>
       </div>
     </aside>

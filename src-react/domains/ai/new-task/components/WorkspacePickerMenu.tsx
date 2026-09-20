@@ -43,7 +43,8 @@ import { useNewTaskStore } from "../store/new-task-store";
 /** 胶囊触发钮样式（与 chat PermissionCapsule.tsx:52 一致） */
 const CAPSULE_CLASS =
   "flex h-8 shrink-0 items-center gap-1.5 rounded-full border " +
-  "border-border/50 px-2.5 text-xs hover:border-primary/30 hover:bg-primary-subtle";
+  "border-border/50 bg-card px-2.5 text-xs text-foreground " +
+  "hover:border-primary/30 hover:bg-primary-subtle";
 
 /** 菜单项（分割线下两个入口）统一样式 */
 const ACTION_ITEM_CLASS =

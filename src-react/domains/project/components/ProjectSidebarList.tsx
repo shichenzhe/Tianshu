@@ -3,27 +3,24 @@
  * 「我的项目」标题 + 项目行（模版图标 + 名称，点击进入 /module/project/:id，
  * 当前项目行高亮）；复用 hub 的 ["projects", ownerId] 查询缓存。
  */
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/domains/user/store/user.store";
 import ProjectApi from "../api/project.api";
 import { getTemplate, getTemplateIcon } from "../model/project-templates";
 
-interface ProjectSidebarListProps {
-  /** 侧边栏折叠态（收缩时整体隐藏，与 AI 任务树口径一致） */
-  collapsed: boolean;
-}
-
-export default function ProjectSidebarList({
-  collapsed,
-}: ProjectSidebarListProps) {
+export default function ProjectSidebarList() {
   const { t } = useTranslation(["project", "common"]);
   const navigate = useNavigate();
   const location = useLocation();
   const user = useUserStore((state) => state.user);
+  // 区块折叠（与「空间」标题同构，内存态刷新重置）
+  const [projectsOpen, setProjectsOpen] = useState(true);
 
   // 与 hub 共用查询缓存（同一 ["projects", ownerId] key）
   const { data: projects = [] } = useQuery({
@@ -36,12 +33,20 @@ export default function ProjectSidebarList({
     Number(location.pathname.match(/^\/module\/project\/(\d+)/)?.[1]) || null;
 
   return (
-    <>
-      {!collapsed && (
-        <div className="fade-in p-2">
-          <p className="flex items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground">
-            {t("project:sidebar.myProjects")} ({projects.length})
-          </p>
+    // 限高自滚：条目多时最多占主体区一半、列表内部滚动，
+    // 不挤压下方空间区（百分比相对主体区，其为 flex-1 定高容器）
+    <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col p-2">
+      <button
+        type="button"
+        className="flex w-full shrink-0 items-center gap-1 rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        onClick={() => setProjectsOpen((open) => !open)}
+        aria-expanded={projectsOpen}
+      >
+        {projectsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {t("project:sidebar.myProjects")} ({projects.length})
+      </button>
+      {projectsOpen && (
+        <div className="min-h-0 overflow-y-auto">
           {projects.map((project) => {
             const Icon = getTemplateIcon(
               getTemplate(project.templateKey ?? "")?.icon,
@@ -71,6 +76,6 @@ export default function ProjectSidebarList({
           )}
         </div>
       )}
-    </>
+    </div>
   );
 }

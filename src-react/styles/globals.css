@@ -8,7 +8,7 @@
 
 @theme {
   /* 主题色变量 - 通过 --theme-hue 控制主题 */
-  --theme-hue: 18deg; /* 默认橙色，蓝色: 215deg, 红色: 350deg, 绿色: 150deg */
+  --theme-hue: 150deg; /* 默认绿色，蓝色: 220deg, 红色: 355deg, 橙色: 18deg */
 
   /* 主色系统 */
   --color-primary: hsl(var(--theme-hue) 65% 60%);

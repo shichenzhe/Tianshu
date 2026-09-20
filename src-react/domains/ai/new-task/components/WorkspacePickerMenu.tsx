@@ -7,7 +7,7 @@
  * 以当前 workspaceId 标记 Check；数据走 ["workspaces"] 共享缓存
  * （GlobalSidebar 已预热，通常零额外 IPC）。
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -61,6 +61,7 @@ export default function WorkspacePickerMenu() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const { data } = useQuery({
     queryKey: ["workspaces"],
@@ -246,7 +247,14 @@ export default function WorkspacePickerMenu() {
           }
         }}
       >
-        <DialogContent className="rounded-lg border-border/50 shadow-lg sm:max-w-sm">
+        <DialogContent
+          className="rounded-lg border-border/50 shadow-lg sm:max-w-sm"
+          onOpenAutoFocus={(e) => {
+            // 打开即聚焦名称输入框（Radix 接管焦点后 React autoFocus 失效）
+            e.preventDefault();
+            nameInputRef.current?.focus();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>{t("chat:newWorkspace")}</DialogTitle>
           </DialogHeader>
@@ -256,6 +264,7 @@ export default function WorkspacePickerMenu() {
             </Label>
             <Input
               id="workspace-picker-name"
+              ref={nameInputRef}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => {
@@ -263,7 +272,6 @@ export default function WorkspacePickerMenu() {
                   void handleCreateSubmit();
                 }
               }}
-              autoFocus
             />
           </div>
           <DialogFooter>

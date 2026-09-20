@@ -128,9 +128,12 @@ describe("WorkspacePickerMenu", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "newTask:context.newWorkspace" }),
     );
-    // 菜单关闭、名称对话框打开
+    // 菜单关闭、名称对话框打开且焦点默认落在输入框
     await waitFor(() => expect(screen.getByRole("dialog")).toBeTruthy());
     expect(searchBox()).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByLabelText("ai:provider.name"),
+    );
     fireEvent.change(screen.getByLabelText("ai:provider.name"), {
       target: { value: "新空间" },
     });

@@ -80,6 +80,13 @@ export default function LoginView() {
   const usernameInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
+  // 裸壁纸模式：body 不叠遮罩纱，壁纸 100% 可见（页面内容仅一卡片）
+  useEffect(() => {
+    document.documentElement.setAttribute("data-bare-wallpaper", "");
+    return () =>
+      document.documentElement.removeAttribute("data-bare-wallpaper");
+  }, []);
+
   // 初始化：检查是否已登录
   useEffect(() => {
     if (isLoginValid()) {
@@ -244,7 +251,8 @@ export default function LoginView() {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen bg-gradient-to-br from-primary-subtle via-background to-primary-subtle relative">
+    // 纯透明容器：壁纸 100% 透出（基础皮肤无壁纸时为 body 纯色底）
+    <div className="flex justify-center items-center h-screen relative">
       {/* Logo 区域 */}
       <div className="absolute top-6 left-6 flex items-center gap-3">
         <AppLogo className="w-8 h-8" />

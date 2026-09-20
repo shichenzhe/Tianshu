@@ -312,6 +312,12 @@ body {
     var(--skin-bg-image, none);
 }
 
+/* 登录页裸壁纸模式（html data-bare-wallpaper 由 LoginView 挂载维护）：
+   不叠任何遮罩纱，壁纸 100% 可见（页面内容仅一卡片，无需减淡保可读） */
+[data-bare-wallpaper] body {
+  background-image: var(--skin-bg-image, none);
+}
+
 /* shiki 代码块深色高亮切换：shiki 双主题输出 --shiki-dark CSS 变量，
    此前无消费规则——深色下代码块仍亮色高亮（外观模块验收 A3 跟进票） */
 [data-mode="dark"] .shiki span {

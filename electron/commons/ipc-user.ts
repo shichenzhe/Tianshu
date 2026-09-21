@@ -4,9 +4,9 @@
  */
 import { ipcMain, IpcMainInvokeEvent } from "electron";
 import * as jwt from "jsonwebtoken";
+import { getJwtSecret } from "./jwt-secret";
 
-/** JWT 密钥（登录签发与此处校验共用；建议使用环境变量存储） */
-export const JWT_SECRET = "3k4jl234jl2kj23423j";
+export { getJwtSecret };
 
 /** JWT payload 契约（generateUserToken 签发） */
 interface UserTokenPayload extends jwt.JwtPayload {
@@ -23,7 +23,7 @@ export function generateUserToken(user: {
 }): string {
   return jwt.sign(
     { id: user.id, username: user.username, nickname: user.nickname },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: "30d" },
   );
 }
@@ -39,7 +39,7 @@ export function verifyUserId(token: unknown): number {
   }
   let payload: UserTokenPayload;
   try {
-    payload = jwt.verify(token, JWT_SECRET) as UserTokenPayload;
+    payload = jwt.verify(token, getJwtSecret()) as UserTokenPayload;
   } catch (error) {
     console.error("Token验证失败:", error);
     throw new Error("登录态已失效，请重新登录", { cause: error });

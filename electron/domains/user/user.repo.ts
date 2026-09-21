@@ -4,8 +4,9 @@
  */
 import { ipcMain } from "electron";
 import * as jwt from "jsonwebtoken";
-import { generateUserToken, JWT_SECRET } from "../../commons/ipc-user";
+import { generateUserToken, getJwtSecret } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
+import { hashPassword, isHashedPassword, verifyPassword } from "./password";
 import {
   UserInfo,
   UserCreateParams,
@@ -69,7 +70,6 @@ export default class UserRepository {
         email: true,
       },
     });
-    console.info("user", result);
     return this.toUserInfo(result!);
   }
 
@@ -134,12 +134,12 @@ export default class UserRepository {
       data: {
         username: params.username,
         nickname: params.nickname,
-        password: params.password,
+        password: hashPassword(params.password),
         email: params.email,
       },
     });
 
-    console.info("用户创建成功：", newUser);
+    console.info("用户创建成功：", newUser.username);
 
     return 1;
   }
@@ -153,12 +153,11 @@ export default class UserRepository {
       params.username,
       params.email || "",
     );
-    console.info("modifyUsser:" + params.id, existId);
     if (existId !== null && existId != params.id) {
       return -1;
     }
 
-    const updateUser = await prisma.user.update({
+    await prisma.user.update({
       where: {
         id: params.id,
       },
@@ -168,7 +167,6 @@ export default class UserRepository {
         email: params.email,
       },
     });
-    console.info("modify", updateUser);
     return 1;
   }
 
@@ -181,24 +179,31 @@ export default class UserRepository {
     const user = await prisma.user.findFirst({
       where: {
         username: params.username,
-        password: params.password,
       },
       select: {
         id: true,
         username: true,
         nickname: true,
         email: true,
+        password: true,
       },
     });
 
-    if (!user) {
+    if (!user || !verifyPassword(params.password, user.password)) {
       throw new Error("用户名或密码错误");
     }
-    const userInfo = this.toUserInfo(user);
-    // 生成JWT token
-    const token = this.generateToken(userInfo);
-    console.info("login sucess:", token);
-    return { ...userInfo, token };
+    // 存量明文密码平滑迁移：校验通过后原地升级为 scrypt 哈希
+    // （迁移失败不阻断登录，下次登录再试）
+    if (!isHashedPassword(user.password)) {
+      await prisma.user
+        .update({
+          where: { id: user.id },
+          data: { password: hashPassword(params.password) },
+        })
+        .catch((e) => console.error("密码哈希迁移失败:", e));
+    }
+    const userInfo = this.toUserInfo(user); // 多余的 password 列由结构类型自然丢弃
+    return { ...userInfo, token: this.generateToken(userInfo) };
   }
 
   /**
@@ -237,7 +242,7 @@ export default class UserRepository {
    */
   async verifyToken(token: string): Promise<unknown> {
     try {
-      return jwt.verify(token, JWT_SECRET);
+      return jwt.verify(token, getJwtSecret());
     } catch (error) {
       console.error("Token验证失败:", error);
       return null;
@@ -253,10 +258,13 @@ export default class UserRepository {
     const user = await prisma.user.findFirst({
       where: {
         username: params.username,
-        password: params.oldPassword,
+      },
+      select: {
+        id: true,
+        password: true,
       },
     });
-    if (!user) {
+    if (!user || !verifyPassword(params.oldPassword, user.password)) {
       return false;
     }
 
@@ -265,7 +273,7 @@ export default class UserRepository {
         id: user.id, // 使用唯一主键更新更安全
       },
       data: {
-        password: params.newPassword,
+        password: hashPassword(params.newPassword),
       },
     });
     return true;

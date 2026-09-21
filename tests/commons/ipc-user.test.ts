@@ -1,11 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 
-// ipc-user 依赖 ipcMain（handleUser 注册用）；纯函数测试仅需空实现
-vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
+// ipc-user 依赖 ipcMain（handleUser 注册用）；jwt-secret 依赖 app.getPath：
+// 随机目录避免与其他测试文件并行共享密钥文件
+vi.mock("electron", () => {
+  const dir = `/tmp/tianshu-jwt-secret-test-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+  return {
+    ipcMain: { handle: vi.fn() },
+    app: { getPath: () => dir },
+  };
+});
 
 import * as jwt from "jsonwebtoken";
 import {
-  JWT_SECRET,
+  getJwtSecret,
   generateUserToken,
   verifyUserId,
 } from "../../electron/commons/ipc-user";
@@ -28,7 +37,7 @@ describe("ipc-user", () => {
   });
 
   it("未签 id 的旧版 token（v12 前签发）拒绝，提示重新登录", () => {
-    const legacy = jwt.sign({ username: "a" }, JWT_SECRET, {
+    const legacy = jwt.sign({ username: "a" }, getJwtSecret(), {
       expiresIn: "1h",
     });
     expect(() => verifyUserId(legacy)).toThrow("登录态版本过旧");

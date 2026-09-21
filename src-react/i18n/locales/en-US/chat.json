@@ -195,6 +195,7 @@
     "tabAll": "All",
     "tabFavorites": "Favorites",
     "recentEmpty": "No files viewed yet — open a file to see it here",
+    "favoritesEmpty": "No favorites yet — tap the hollow heart beside a file name to favorite it",
     "commandPlaceholder": "Search library",
     "commandRecent": "Recently viewed",
     "commandNoResult": "No results found",

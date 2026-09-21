@@ -6,12 +6,15 @@
 interface PageTitleProps {
   title: string;
   gradient?: boolean;
+  /** 标题左侧内容（如标题行左侧的操作按钮）；可选，不影响既有用法 */
+  leading?: React.ReactNode;
   children?: React.ReactNode;
 }
 
 export default function PageTitle({
   title,
   gradient = true,
+  leading,
   children,
 }: PageTitleProps) {
   return (
@@ -23,7 +26,10 @@ export default function PageTitle({
             : "bg-primary"
         }`}
       >
-        <h2 className="text-base font-medium">{title}</h2>
+        <div className="flex items-center gap-2">
+          {leading}
+          <h2 className="text-base font-medium">{title}</h2>
+        </div>
         {children}
       </div>
     </div>

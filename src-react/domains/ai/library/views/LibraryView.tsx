@@ -1,6 +1,6 @@
 /**
  * 资料库「我的资料」（spec §5）：左树形栏（搜索入口/「最近」+「我的
- * 资料」快捷项/文件夹树，可收起成窄条，收起按钮在主区标题行）+ 主区
+ * 资料」快捷项/文件夹树，可收起成窄条，收起按钮在主区标题行左侧）+ 主区
  * 两态——列表态（全部|收藏 Tab + 类型筛选 + 上传；排序在列头，新建
  * 文件夹在树栏「+」）/ 详情态（文件预览 + 元信息 + 行操作）。搜索态
  * 已收敛为命令面板（⌘K 或树栏搜索入口唤起，空输入最近浏览/输入实时
@@ -74,7 +74,7 @@ export default function LibraryView() {
   const [deleteItem, setDeleteItem] = useState<LibraryItem | null>(null);
   const [deleteCount, setDeleteCount] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // 树改迭代：左栏收起态 + 主区详情态选中文件
+  // 左栏收起态 + 主区详情态选中文件
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [detailItem, setDetailItem] = useState<LibraryItem | null>(null);
 
@@ -323,9 +323,10 @@ export default function LibraryView() {
         onCreateFolder={() => setDialog({ mode: "createFolder" })}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
-        <PageTitle title={pageTitle}>
-          {/* 收起按钮（Task 5 移入主区标题行；展开态树栏顶部行不再有） */}
-          <div className="flex items-center gap-1">
+        {/* 收起按钮在标题行左侧（spec §3）；展开按钮在收起态树栏窄条顶部 */}
+        <PageTitle
+          title={pageTitle}
+          leading={
             <button
               type="button"
               title={t("chat:library.collapseSidebar")}
@@ -335,8 +336,8 @@ export default function LibraryView() {
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
-          </div>
-        </PageTitle>
+          }
+        />
         {viewMode === "detail" && detailItem ? (
           <div className="min-h-0 flex-1">
             <LibraryDetailPanel
@@ -424,9 +425,11 @@ export default function LibraryView() {
                   items={items}
                   loading={listQuery.isLoading}
                   emptyText={
-                    view.type === "recent" && tab === "all"
-                      ? t("chat:library.recentEmpty")
-                      : undefined
+                    tab === "favorites"
+                      ? t("chat:library.favoritesEmpty")
+                      : view.type === "recent"
+                        ? t("chat:library.recentEmpty")
+                        : undefined
                   }
                   sortField={sortField}
                   sortAsc={sortAsc}

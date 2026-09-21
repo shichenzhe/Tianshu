@@ -195,6 +195,7 @@
     "tabAll": "全部",
     "tabFavorites": "收藏",
     "recentEmpty": "还没有访问过的文件，先打开一个文件试试",
+    "favoritesEmpty": "还没有收藏的文件，点击文件名前的空心 ♥ 收藏",
     "commandPlaceholder": "搜索资料",
     "commandRecent": "最近浏览",
     "commandNoResult": "未找到相关内容",

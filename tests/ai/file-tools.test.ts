@@ -166,6 +166,39 @@ describe("search_files", () => {
     });
     expect(out).toMatch(/^错误: /);
   });
+  it("嵌套量词（(a+)* 形态）拒绝", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "(a+)*b",
+      output_mode: "files_with_matches",
+    });
+    expect(out).toContain("灾难性回溯");
+  });
+  it("有界量词组不受误伤（(\\w{2})+、(\\d+)、(a|b)*）放行", async () => {
+    writeFileSync(path.join(ws, "quant.txt"), "ab\n");
+    for (const pattern of ["(\\w{2})+", "(\\d+)", "(a|b)*"]) {
+      const out = await tool("search_files").execute(ctx(), {
+        pattern,
+        output_mode: "content",
+      });
+      expect(out).not.toMatch(/^错误: /);
+    }
+  });
+  it("超长正则拒绝（>200 字符）", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "a".repeat(201),
+      output_mode: "files_with_matches",
+    });
+    expect(out).toContain("正则过长");
+  });
+  it("超长行截断后仍可匹配前缀", async () => {
+    writeFileSync(path.join(ws, "long.txt"), "x".repeat(3000) + "target");
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "^x+$",
+      output_mode: "content",
+    });
+    // 目标行超 2000 字符被截断，截断后行尾非 x → 不应崩溃且不产出错误
+    expect(out).toMatch(/未找到匹配内容|long\.txt/);
+  });
 });
 
 describe("fullAccess 完全访问边界", () => {

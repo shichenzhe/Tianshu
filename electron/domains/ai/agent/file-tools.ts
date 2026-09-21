@@ -311,8 +311,37 @@ async function collectFiles(dir: string, acc: string[]): Promise<void> {
   }
 }
 
-/** 编译用户提供的正则，非法时抛可读错误（由外层转字符串） */
+/** 正则防护上限：pattern 长度与逐行测试截断（模型生成物非用户手输，从严） */
+const PATTERN_MAX_LENGTH = 200;
+const LINE_TEST_SLICE = 2000;
+
+/** 无界量词源：+、*、{n,}（有界 {n}/{n,m} 上限明确，非灾难回溯源） */
+const UNBOUNDED_QUANT_SRC = "\\+|\\*|\\{\\d+,\\d*\\}";
+
+/**
+ * 嵌套量词形态（如 (a+)+、(\w{2,})*）：分组内带无界量词且分组自身再带
+ * 无界量词——灾难性回溯（ReDoS）的典型源。启发式不跨内层括号，
+ * 深层嵌套（((a)*)+）不覆盖，剩余风险由行截断收敛
+ */
+const NESTED_UNBOUNDED_QUANT = new RegExp(
+  `\\((?:\\\\.|[^()\\\\])*(?:${UNBOUNDED_QUANT_SRC})(?:\\\\.|[^()\\\\])*\\)(?:${UNBOUNDED_QUANT_SRC})`,
+);
+
+/**
+ * 编译用户（模型）提供的正则，含 ReDoS 三重防护：
+ * 长度上限、嵌套量词形态拒绝、行截断（调用方）；非法时抛可读错误（由外层转字符串）
+ */
 function compileRegex(pattern: string): RegExp {
+  if (pattern.length > PATTERN_MAX_LENGTH) {
+    throw new Error(
+      `正则过长（超 ${PATTERN_MAX_LENGTH} 字符）: ${pattern.slice(0, 50)}…`,
+    );
+  }
+  if (NESTED_UNBOUNDED_QUANT.test(pattern)) {
+    throw new Error(
+      "正则含嵌套量词（如 (a+)* 形态），存在灾难性回溯风险，请改写为更简单的模式",
+    );
+  }
   try {
     return new RegExp(pattern);
   } catch {
@@ -350,9 +379,11 @@ const searchFilesTool: ToolDefinition<z.infer<typeof searchFilesSchema>> = {
           .join("/");
         const lines = buf.toString("utf8").split("\n");
         for (let i = 0; i < lines.length; i++) {
-          if (regex.test(lines[i])) {
+          // 行截断防超长行与正则灾难回溯的组合放大
+          const line = lines[i].slice(0, LINE_TEST_SLICE);
+          if (regex.test(line)) {
             matchedFiles.add(rel);
-            if (!filesMode) contentLines.push(`${rel}:${i + 1}: ${lines[i]}`);
+            if (!filesMode) contentLines.push(`${rel}:${i + 1}: ${line}`);
           }
         }
       }

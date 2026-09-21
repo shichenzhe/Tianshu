@@ -248,8 +248,6 @@
     "pickFailed": "Failed to open the file picker",
     "pickAttachFailed": "Unable to reference: {{names}}",
     "retry": "Retry",
-    "noSearchResult": "No matching files",
-    "recent": "Recently added",
     "previewFailed": "Preview failed to load",
     "openInFinder": "Open in Finder",
     "previewUnsupported": "Preview not supported for this format; open it in Finder",

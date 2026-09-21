@@ -248,8 +248,6 @@
     "pickFailed": "打开文件选择器失败",
     "pickAttachFailed": "以下资料无法引用：{{names}}",
     "retry": "重试",
-    "noSearchResult": "没有匹配的资料",
-    "recent": "最近添加",
     "previewFailed": "预览加载失败",
     "openInFinder": "在 Finder 中打开",
     "previewUnsupported": "此格式暂不支持预览，可在 Finder 中打开",

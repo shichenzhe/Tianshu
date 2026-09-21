@@ -36,6 +36,7 @@ import {
   type MessageBlock,
 } from "../../electron/domains/ai/chat/blocks";
 import { ApprovalCoordinator } from "../../electron/domains/ai/agent/approval";
+import { generateUserToken } from "../../electron/commons/ipc-user";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
 import type { ChatStreamChunk } from "../../src-react/domains/ai/api/chat.api";
 import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
@@ -537,12 +538,16 @@ describe("agent:approve 审批接线", () => {
       event: unknown,
       toolCallId: string,
       approved: boolean,
-    ) => boolean;
+      token: string,
+    ) => Promise<boolean>;
     expect(approveHandler).toBeTypeOf("function");
 
+    // handleUser 形态：末参 token（无效 token 整体拒绝）
+    const token = generateUserToken({ id: 1, username: "t" });
     const pending = approvals.request("t9", "write_file → a.txt");
-    expect(approveHandler({}, "t9", true)).toBe(true);
+    expect(await approveHandler({}, "t9", true, token)).toBe(true);
     await expect(pending).resolves.toBe(true);
-    expect(approveHandler({}, "ghost", true)).toBe(false);
+    expect(await approveHandler({}, "ghost", true, token)).toBe(false);
+    await expect(approveHandler({}, "t9", true, "not-a-token")).rejects.toThrow();
   });
 });

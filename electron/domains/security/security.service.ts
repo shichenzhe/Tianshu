@@ -3,7 +3,8 @@
  * 读走缓存零 DB 开销（SP2-SP6 执行层消费）；写 = normalize → 剔内置 →
  * upsert option → 更新缓存 → 审计 config.<key>.updated。
  */
-import { app, ipcMain, shell } from "electron";
+import { app, shell } from "electron";
+import { handleUser } from "../../commons/ipc-user";
 import fs from "node:fs/promises";
 import path from "node:path";
 import prisma from "../../commons/prisma-client";
@@ -160,20 +161,21 @@ export default class SecurityService {
   }
 
   private registerHandlers(): void {
-    ipcMain.handle("security:getConfig", () => this.getConfig());
-    ipcMain.handle(
+    // handleUser：安全中心为登录用户能力（token 解 userId；配置为应用级共享，不按用户过滤）
+    handleUser("security:getConfig", () => this.getConfig());
+    handleUser(
       "security:setConfig",
-      (_, key: SecurityConfigKey, value: unknown) => this.setConfig(key, value),
+      (_, _userId, key: SecurityConfigKey, value: unknown) =>
+        this.setConfig(key, value),
     );
-    ipcMain.handle(
+    handleUser(
       "security:resetCommandRules",
       async (): Promise<SecurityConfig> => this.resetCommandRules(),
     );
-    ipcMain.handle(
-      "security:resetFileRules",
-      async (): Promise<SecurityConfig> => this.resetFileRules(),
+    handleUser("security:resetFileRules", async (): Promise<SecurityConfig> =>
+      this.resetFileRules(),
     );
-    ipcMain.handle("security:openBackupDir", async (): Promise<void> => {
+    handleUser("security:openBackupDir", async (): Promise<void> => {
       const dir = path.join(app.getPath("userData"), "file-history");
       await fs.mkdir(dir, { recursive: true });
       const openError = await shell.openPath(dir);

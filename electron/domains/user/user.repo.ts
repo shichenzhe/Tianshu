@@ -4,7 +4,11 @@
  */
 import { ipcMain } from "electron";
 import * as jwt from "jsonwebtoken";
-import { generateUserToken, getJwtSecret } from "../../commons/ipc-user";
+import {
+  generateUserToken,
+  getJwtSecret,
+  handleUser,
+} from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
 import { hashPassword, isHashedPassword, verifyPassword } from "./password";
 import {
@@ -25,11 +29,12 @@ export default class UserRepository {
    * 注册IPC处理程序
    */
   private registerHandlers() {
-    ipcMain.handle("user:getByUsername", async (_, username: string) => {
+    // handleUser：资料类操作需登录（login/create/verifyToken 保留匿名——登录前无 token）
+    handleUser("user:getByUsername", (_, _userId, username: string) => {
       return this.getByUsername(username);
     });
 
-    ipcMain.handle("user:modify", async (_, params: UserUpdateParams) => {
+    handleUser("user:modify", (_, _userId, params: UserUpdateParams) => {
       return this.modify(params);
     });
 
@@ -45,9 +50,9 @@ export default class UserRepository {
       return this.verifyToken(token);
     });
 
-    ipcMain.handle(
+    handleUser(
       "user:modifyPassword",
-      async (_, params: PasswordUpdateParams) => {
+      (_, _userId, params: PasswordUpdateParams) => {
         return this.modifyPassword(params);
       },
     );

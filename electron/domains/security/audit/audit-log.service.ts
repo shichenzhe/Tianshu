@@ -5,7 +5,8 @@
  * （sequence 全程单调，仅链首 prevHash 归零）。
  * 查询倒序分页 + keyword（截 200 字符）。
  */
-import { app, dialog, ipcMain, shell } from "electron";
+import { app, dialog, shell } from "electron";
+import { handleUser } from "../../../commons/ipc-user";
 import Log from "../../../commons/Log";
 import prisma from "../../../commons/prisma-client";
 import type {
@@ -91,11 +92,12 @@ export default class AuditLogService {
         .catch(() => {})
         .finally(() => app.quit());
     });
-    ipcMain.handle("security:auditList", (_, params: AuditListParams) =>
+    // handleUser：审计查询/导出/清空为登录用户能力（审计链为应用级全局数据）
+    handleUser("security:auditList", (_, _userId, params: AuditListParams) =>
       this.list(params),
     );
-    ipcMain.handle("security:auditClear", () => this.clear());
-    ipcMain.handle("security:auditExport", (_, format: "json" | "csv") =>
+    handleUser("security:auditClear", () => this.clear());
+    handleUser("security:auditExport", (_, _userId, format: "json" | "csv") =>
       this.exportToFile(format),
     );
   }

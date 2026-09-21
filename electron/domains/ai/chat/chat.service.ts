@@ -1084,10 +1084,11 @@ export default class ChatService {
       ) => this.polishText(p, userId),
     );
     // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具。
-    // 审批卡产生于已校验归属的会话流内（toolCallId 一次性），运行态不落库，保持原通道
-    ipcMain.handle(
+    // 审批卡产生于已校验归属的会话流内（toolCallId 一次性），运行态不落库；
+    // handleUser 鉴权后 userId 亦不参与（工具执行时按会话归属校验）
+    handleUser(
       "agent:approve",
-      (_, toolCallId: string, approved: boolean) =>
+      (_, _userId, toolCallId: string, approved: boolean) =>
         this.approvals.respond(toolCallId, approved),
     );
     // P3 会话工具权限：default 询问 / full 放行（spec §8：无会话校验静默收）

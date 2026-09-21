@@ -64,9 +64,18 @@ contextBridge.exposeInMainWorld("ipcRenderer", {
 contextBridge.exposeInMainWorld("platform", process.platform);
 
 // 拖拽文件取本地绝对路径：File.path 属性已在 Electron 32 移除，
-// webUtils.getPathForFile 是官方替代且仅能在 preload 调用（见 SkillImportDialog）
+// webUtils.getPathForFile 是官方替代且仅能在 preload 调用（见 SkillImportDialog）。
+// 解出非空路径时同步登记外部读授权（file:readExternalFile 授权门）：
+// 经原生 ipcRenderer.send 直发主进程，刻意不进通道白名单——渲染层只能
+// 通过真实拖拽（File 对象无法伪造，合成 File 解出空串）产生授权
 contextBridge.exposeInMainWorld("filePath", {
-  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  getPathForFile: (file: File) => {
+    const resolved = webUtils.getPathForFile(file);
+    if (resolved !== "") {
+      ipcRenderer.send("file:grant-external-path", resolved);
+    }
+    return resolved;
+  },
 });
 
 // const api = {};

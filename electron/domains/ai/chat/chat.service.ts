@@ -34,6 +34,10 @@ import {
 } from "./context-usage";
 import { classifyError } from "./error-classify";
 import { readWorkspaceFile } from "./workspace-files";
+import {
+  grantExternalPaths,
+  isExternalReadAllowed,
+} from "./external-file-gate";
 import { createLanguageModel } from "../provider/provider-factory";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
 import {
@@ -1358,27 +1362,39 @@ export default class ChatService {
         }
       },
     );
-    // @ 新建任务落地页附件：读取用户经选择器/拖拽显式给出的本地文件绝对
-    // 路径（路径引用不拷贝），复用 readWorkspaceFile 的 512KB 注入上限与
-    // 图片 dataUrl 逻辑
-    ipcMain.handle("file:readExternalFile", (_e, absPath: string) =>
-      readWorkspaceFile(path.resolve(absPath)),
-    );
+    // @ 新建任务落地页/资料库引用：读取用户显式给出（资料库/选择器/拖拽）
+    // 的本地文件绝对路径（路径引用不拷贝），复用 readWorkspaceFile 的
+    // 512KB 注入上限与图片 dataUrl 逻辑。external-file-gate 授权门：
+    // 未授权路径直接拒绝——防渲染层 XSS 任意读本地文件
+    handleUser("file:readExternalFile", (_, _userId, absPath: string) => {
+      if (!isExternalReadAllowed(absPath)) {
+        throw new Error(
+          "未授权的文件路径（仅限资料库或经选择器/拖拽给出的文件）",
+        );
+      }
+      return readWorkspaceFile(path.resolve(absPath));
+    });
+    // 拖拽路径授权登记：preload 的 getPathForFile 解出真实拖拽路径后经
+    // 原生 send 直达本通道。刻意不进 preload 白名单——渲染层无法伪造
+    // 授权（XSS 合成的 File 经 webUtils 解出空串）
+    ipcMain.on("file:grant-external-path", (_e, absPath: unknown) => {
+      if (typeof absPath === "string") {
+        grantExternalPaths([absPath]);
+      }
+    });
     // 新建任务落地页附件：本地文件选择器（多选）；仅取绝对路径——内容经
     // file:readExternalFile 按需读取校验（区别于 pickAndRead 的选读一体），
-    // 取消/空选返回 null
-    ipcMain.handle(
-      "file:pickLocalFiles",
-      async (): Promise<string[] | null> => {
-        const result = await dialog.showOpenDialog({
-          properties: ["openFile", "multiSelections"],
-        });
-        if (result.canceled || result.filePaths.length === 0) {
-          return null;
-        }
-        return result.filePaths;
-      },
-    );
+    // 取消/空选返回 null；返回即登记读授权（选择器 = 用户显式给出）
+    handleUser("file:pickLocalFiles", async (): Promise<string[] | null> => {
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile", "multiSelections"],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+      grantExternalPaths(result.filePaths);
+      return result.filePaths;
+    });
   }
 
   /** full 会话总览（SP6 spec §4.1）：标题查询失败行回落「会话 #id」不整表失败（spec §8） */

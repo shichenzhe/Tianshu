@@ -10,7 +10,7 @@ import {
 } from "vitest";
 
 vi.mock("electron", () => ({
-  ipcMain: { handle: vi.fn() },
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
   // Log 模块顶层读取 app.getPath("userData") 计算日志目录
   app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
 }));

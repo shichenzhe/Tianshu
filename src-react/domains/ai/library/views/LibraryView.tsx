@@ -7,7 +7,7 @@
  * folder），Tab 优先于视图（收藏=全局收藏）；排序与类型筛选前端本地
  * （单层数据量小，skill 页先例）；拖拽入库（拖到页面任意处）。
  */
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -76,6 +76,19 @@ export default function LibraryView() {
   // 树改迭代：左栏收起态 + 主区详情态选中文件
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [detailItem, setDetailItem] = useState<LibraryItem | null>(null);
+
+  // ⌘K/Ctrl+K 唤起搜索命令面板：组件挂载即注册（资料库路由独占，
+  // 卸载自动移除，不与全局冲突）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // Tab 优先于视图：收藏为全局收藏，其余按视图路由取数
   // （返回形态联合，显式泛型避免 useQuery 推断失败）

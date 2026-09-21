@@ -1,5 +1,5 @@
 import { autoUpdater } from "electron-updater";
-import { ipcMain, BrowserWindow } from "electron";
+import { ipcMain, BrowserWindow, app } from "electron";
 import Log from "./commons/Log";
 import { Constants } from "./Constants";
 
@@ -46,8 +46,11 @@ export const initUpdater = (win: BrowserWindow) => {
 
   autoUpdater.autoDownload = true;
 
-  // 开启本地dev调试
-  autoUpdater.forceDevUpdateConfig = true;
+  // 仅开发环境开启本地 dev 更新调试；生产包强制读取打包元数据，
+  // 避免加载应用目录旁的 dev-app-update.yml（可被篡改指向任意更新源）
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+  }
 
   checkForUpdates();
 

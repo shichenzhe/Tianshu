@@ -164,12 +164,13 @@ export default function LibrarySidebarTree({
           }`}
         >
           {/* 收/展单按钮（用户裁定）：与窄条顶部展开按钮同源，均走
-              onToggleCollapse 切向另一态 */}
+              onToggleCollapse 切向另一态；常显 muted 灰不依赖行色，
+              避免过淡看不见（窄条按钮同风格） */}
           <button
             type="button"
             title={t("chat:library.collapseSidebar")}
             aria-label={t("chat:library.collapseSidebar")}
-            className="ml-0.5 shrink-0 rounded p-1 hover:text-primary"
+            className="ml-0.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
             onClick={onToggleCollapse}
           >
             <PanelLeftClose className="h-4 w-4" />

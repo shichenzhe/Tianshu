@@ -129,9 +129,9 @@ export interface ProjectDetail {
  */
 export interface ProjectCreateParams {
   /**
-   * 创建人用户 id
+   * 创建人用户 id（v12 起主进程以 token 解出的用户为准，可缺省）
    */
-  ownerId: number;
+  ownerId?: number;
 
   /**
    * 项目名

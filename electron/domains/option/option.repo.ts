@@ -2,8 +2,9 @@
  * 选项数据库服务
  * 处理选项相关的数据库操作
  */
-import { ipcMain } from "electron";
+import { handleUser } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
+import { APP_OPTION_TYPE } from "../app-settings/option-store";
 import {
   OptionItem,
   OptionCreateParams,
@@ -17,38 +18,50 @@ export default class OptionRepository {
   }
 
   /**
-   * 注册IPC处理程序
+   * 注册IPC处理程序（userId 由 token 解出，见 commons/ipc-user）
    */
   private registerHandlers() {
-    ipcMain.handle("option:listByType", async (_, type: string) => {
-      return this.listByType(type);
+    handleUser("option:listByType", (_, userId, type: string) => {
+      return this.listByType(type, userId);
     });
 
     // 注册新增选项的处理程序
-    ipcMain.handle("option:create", async (_, params: OptionCreateParams) => {
-      return this.create(params);
+    handleUser("option:create", (_, userId, params: OptionCreateParams) => {
+      return this.create(params, userId);
     });
 
     // 注册删除选项的处理程序
-    ipcMain.handle("option:delete", async (_, params: OptionDeleteParams) => {
-      return this.delete(params);
+    handleUser("option:delete", (_, userId, params: OptionDeleteParams) => {
+      return this.delete(params, userId);
     });
 
     // 注册更新选项的处理程序
-    ipcMain.handle("option:update", async (_, params: OptionUpdateParams) => {
-      return this.update(params);
+    handleUser("option:update", (_, userId, params: OptionUpdateParams) => {
+      return this.update(params, userId);
     });
+  }
+
+  /**
+   * 选项归属列取值：应用级 type（如 proxy/keepAwake）恒 NULL = 全局共享，
+   * 其余类型归当前用户
+   * @param type 选项类型
+   * @param userId 当前用户 id
+   */
+  private ownerOf(type: string, userId: number): number | null {
+    return type === APP_OPTION_TYPE ? null : userId;
   }
 
   /**
    * 根据类型查询选项数据
    * @param type 选项类型
+   * @param userId 当前用户 id
    * @returns 选项数据数组
    */
-  async listByType(type: string): Promise<OptionItem[]> {
+  async listByType(type: string, userId: number): Promise<OptionItem[]> {
     const options = await prisma.option.findMany({
       where: {
         type: type,
+        userId: this.ownerOf(type, userId),
       },
       select: {
         value: true,
@@ -70,12 +83,13 @@ export default class OptionRepository {
   /**
    * 新增选项
    * @param params 创建参数
+   * @param userId 当前用户 id
    * @returns 新增的选项ID
    */
-  async create(params: OptionCreateParams): Promise<number> {
+  async create(params: OptionCreateParams, userId: number): Promise<number> {
     try {
       const result = await prisma.option.create({
-        data: params,
+        data: { ...params, userId: this.ownerOf(params.type, userId) },
       });
 
       return result.id;
@@ -88,14 +102,16 @@ export default class OptionRepository {
   /**
    * 更新选项
    * @param params 更新参数
+   * @param userId 当前用户 id
    * @returns 是否更新成功
    */
-  async update(params: OptionUpdateParams): Promise<boolean> {
+  async update(params: OptionUpdateParams, userId: number): Promise<boolean> {
     try {
       const result = await prisma.option.updateMany({
         where: {
           type: params.type,
           name: params.name,
+          userId: this.ownerOf(params.type, userId),
         },
         data: {
           value: params.value,
@@ -113,14 +129,16 @@ export default class OptionRepository {
   /**
    * 删除选项
    * @param params 删除参数
+   * @param userId 当前用户 id
    * @returns 是否删除成功
    */
-  async delete(params: OptionDeleteParams): Promise<boolean> {
+  async delete(params: OptionDeleteParams, userId: number): Promise<boolean> {
     try {
       const result = await prisma.option.deleteMany({
         where: {
           type: params.type,
           name: params.name,
+          userId: this.ownerOf(params.type, userId),
         },
       });
 

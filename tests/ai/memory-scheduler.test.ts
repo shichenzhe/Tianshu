@@ -225,7 +225,7 @@ describe("catchUp 消费语义（M4，spec §5.2 修订）", () => {
             modelId: "m1",
             enabled: true,
           }),
-          listAll: async () => [
+          listAllEnabledAnyUser: async () => [
             { id: 1, providerId: 1, modelId: "m1", enabled: true },
           ],
         },
@@ -285,7 +285,7 @@ function mkScheduler(
         modelId: "m1",
         enabled: true,
       }),
-      listAll: listModels,
+      listAllEnabledAnyUser: listModels,
     },
   });
 }

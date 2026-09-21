@@ -27,10 +27,10 @@ describe("PlanItemApi", () => {
     expect(invokeMock).toHaveBeenCalledExactlyOnceWith("planItem:list", 7);
   });
 
-  it("listMine 走 planItem:listMine 并透传用户 id", async () => {
+  it("listMine 走 planItem:listMine（userId 由 IPC 层 token 注入，不透传）", async () => {
     invokeMock.mockResolvedValue([]);
-    await PlanItemApi.listMine(3);
-    expect(invokeMock).toHaveBeenCalledExactlyOnceWith("planItem:listMine", 3);
+    await PlanItemApi.listMine();
+    expect(invokeMock).toHaveBeenCalledExactlyOnceWith("planItem:listMine");
   });
 
   it("create 走 planItem:create 并透传创建参数", async () => {

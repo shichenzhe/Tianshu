@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
 import type {
   AssistantCreateParams,
@@ -33,7 +33,6 @@ const BUILTIN_ASSISTANTS: AssistantCreateParams[] = [
 export class AssistantRepository {
   constructor() {
     this.registerIpcHandlers();
-    void this.seedIfEmpty();
   }
 
   private toRecord(row: AssistantRow): AssistantRecord {
@@ -49,28 +48,48 @@ export class AssistantRepository {
   }
 
   private registerIpcHandlers() {
-    ipcMain.handle("assistant:list", () => this.list());
-    ipcMain.handle("assistant:create", (_, p: AssistantCreateParams) =>
-      this.create(p),
+    handleUser("assistant:list", (_, userId) => this.list(userId));
+    handleUser("assistant:create", (_, userId, p: AssistantCreateParams) =>
+      this.create(p, userId),
     );
-    ipcMain.handle("assistant:update", (_, p: AssistantUpdateParams) =>
-      this.update(p),
+    handleUser("assistant:update", (_, userId, p: AssistantUpdateParams) =>
+      this.update(p, userId),
     );
-    ipcMain.handle("assistant:delete", (_, id: number) => this.delete(id));
+    handleUser("assistant:delete", (_, userId, id: number) =>
+      this.delete(id, userId),
+    );
   }
 
-  async seedIfEmpty(): Promise<void> {
-    const count = await prisma.assistant.count();
+  /**
+   * 播种内置助手（每用户一份；原启动期 seedIfEmpty 因多用户隔离改为
+   * 首次 list 时按用户补种）
+   */
+  private async seedIfEmptyFor(userId: number): Promise<void> {
+    const count = await prisma.assistant.count({ where: { userId } });
     if (count === 0) {
       await prisma.assistant.createMany({
-        data: BUILTIN_ASSISTANTS.map((a) => ({ ...a, builtin: true })),
+        data: BUILTIN_ASSISTANTS.map((a) => ({
+          ...a,
+          builtin: true,
+          userId,
+        })),
       });
     }
   }
 
-  async list(): Promise<AssistantRecord[]> {
+  /** 校验助手归当前用户（不存在与他人所有同报错，不泄露存在性） */
+  private async assertOwned(id: number, userId: number): Promise<void> {
+    const row = await prisma.assistant.findFirst({ where: { id, userId } });
+    if (!row) {
+      throw new Error("ASSISTANT_NOT_FOUND");
+    }
+  }
+
+  async list(userId: number): Promise<AssistantRecord[]> {
+    await this.seedIfEmptyFor(userId);
     return (
       await prisma.assistant.findMany({
+        where: { userId },
         orderBy: [{ builtin: "desc" }, { createdAt: "asc" }],
       })
     ).map((row) => this.toRecord(row));
@@ -81,7 +100,10 @@ export class AssistantRepository {
     return row ? this.toRecord(row) : null;
   }
 
-  async create(p: AssistantCreateParams): Promise<AssistantRecord> {
+  async create(
+    p: AssistantCreateParams,
+    userId: number,
+  ): Promise<AssistantRecord> {
     const row = await prisma.assistant.create({
       data: {
         name: p.name,
@@ -90,12 +112,17 @@ export class AssistantRepository {
         temperature: p.temperature,
         topP: p.topP,
         maxTokens: p.maxTokens,
+        userId,
       },
     });
     return this.toRecord(row);
   }
 
-  async update(p: AssistantUpdateParams): Promise<AssistantRecord> {
+  async update(
+    p: AssistantUpdateParams,
+    userId: number,
+  ): Promise<AssistantRecord> {
+    await this.assertOwned(p.id, userId);
     const row = await prisma.assistant.update({
       where: { id: p.id },
       data: {
@@ -110,9 +137,12 @@ export class AssistantRepository {
     return this.toRecord(row);
   }
 
-  async delete(id: number): Promise<void> {
-    const row = await prisma.assistant.findUnique({ where: { id } });
-    if (row?.builtin) {
+  async delete(id: number, userId: number): Promise<void> {
+    const row = await prisma.assistant.findFirst({ where: { id, userId } });
+    if (!row) {
+      throw new Error("ASSISTANT_NOT_FOUND");
+    }
+    if (row.builtin) {
       // 错误码由渲染端 mapIpcError 映射 i18n 文案
       throw new Error("ASSISTANT_BUILTIN");
     }

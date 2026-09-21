@@ -6,6 +6,7 @@
 import { BrowserWindow, ipcMain } from "electron";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
+import { handleUser } from "../../../commons/ipc-user";
 import {
   scheduleSchema,
   type ScheduleConfig,
@@ -140,25 +141,39 @@ export default class AutomationRepository {
   }
 
   private registerHandlers(): void {
-    ipcMain.handle("automation:list", () => this.listTasks());
-    ipcMain.handle("automation:create", (_, p: TaskCreateParams) =>
-      this.createTask(p),
+    handleUser("automation:list", (_, userId) => this.listTasks(userId));
+    handleUser("automation:create", (_, userId, p: TaskCreateParams) =>
+      this.createTask(p, userId),
     );
-    ipcMain.handle("automation:update", (_, id: number, p: TaskCreateParams) =>
-      this.updateTask(id, p),
+    handleUser(
+      "automation:update",
+      (_, userId, id: number, p: TaskCreateParams) =>
+        this.updateTask(id, p, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "automation:delete",
-      async (_, ids: number[]): Promise<void> => {
+      async (_, userId, ids: number[]): Promise<void> => {
+        // 仅删本人任务（他人 id 混入被过滤），run 随任务级联
+        const owned = await prisma.automationTask.findMany({
+          where: { id: { in: ids }, userId },
+          select: { id: true },
+        });
+        const ownedIds = owned.map((row) => row.id);
+        if (ownedIds.length === 0) {
+          return;
+        }
         await prisma.$transaction([
-          prisma.automationRun.deleteMany({ where: { taskId: { in: ids } } }),
-          prisma.automationTask.deleteMany({ where: { id: { in: ids } } }),
+          prisma.automationRun.deleteMany({
+            where: { taskId: { in: ownedIds } },
+          }),
+          prisma.automationTask.deleteMany({ where: { id: { in: ownedIds } } }),
         ]);
       },
     );
-    ipcMain.handle(
+    handleUser(
       "automation:toggle",
-      async (_, id: number, enabled: boolean): Promise<TaskRecord> => {
+      async (_, userId, id: number, enabled: boolean): Promise<TaskRecord> => {
+        await this.assertTaskOwned(id, userId);
         // 重新启用 = 给异常任务恢复路径:清 statusNote,status 回 active
         const row = await prisma.automationTask.update({
           where: { id },
@@ -170,10 +185,12 @@ export default class AutomationRepository {
         return this.hydrate(row);
       },
     );
-    ipcMain.handle(
+    handleUser(
       "automation:runNow",
-      async (_, id: number): Promise<void> => {
-        const task = await prisma.automationTask.findUnique({ where: { id } });
+      async (_, userId, id: number): Promise<void> => {
+        const task = await prisma.automationTask.findFirst({
+          where: { id, userId },
+        });
         if (!task) {
           throw new Error(`automation task ${id} not found`);
         }
@@ -200,13 +217,20 @@ export default class AutomationRepository {
           });
       },
     );
+    // templates 为静态模板、stat 为匿名埋点：不涉用户数据，保留匿名通道
+    // （渲染端统一追加的 token 会被忽略）
     ipcMain.handle("automation:templates", (): TemplateRecord[] =>
       listAutomationTemplates().map(toTemplateRecord),
     );
-    ipcMain.handle(
+    handleUser(
       "automation:runs:page",
-      (_, page: number, taskId?: number, status?: RunRecord["status"]) =>
-        this.listRuns(page, taskId, status),
+      (
+        _,
+        userId,
+        page: number,
+        taskId?: number,
+        status?: RunRecord["status"],
+      ) => this.listRuns(page, taskId, status, userId),
     );
     ipcMain.handle("automation:stat", (_, detail: CreateStatDetail) => {
       void recordAutomationEvent(prisma, "create", detail);
@@ -222,19 +246,59 @@ export default class AutomationRepository {
     return toTaskRecord(row, workspace);
   }
 
-  async listTasks(): Promise<TaskRecord[]> {
+  /** 校验任务归当前用户（不存在与他人所有同报错，不泄露存在性） */
+  private async assertTaskOwned(id: number, userId: number): Promise<void> {
+    const row = await prisma.automationTask.findFirst({
+      where: { id, userId },
+    });
+    if (!row) {
+      throw new Error(`automation task ${id} not found`);
+    }
+  }
+
+  /** 校验任务引用的工作空间与模型归当前用户（model 经 provider 链路） */
+  private async assertTaskRefsOwned(
+    workspaceId: number,
+    modelId: number,
+    userId: number,
+  ): Promise<void> {
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: workspaceId, userId },
+    });
+    if (!workspace) {
+      throw new Error("WORKSPACE_NOT_FOUND");
+    }
+    const model = await prisma.model.findUnique({ where: { id: modelId } });
+    if (!model) {
+      throw new Error("MODEL_MISSING");
+    }
+    const provider = await prisma.provider.findFirst({
+      where: { id: model.providerId, userId },
+    });
+    if (!provider) {
+      throw new Error("PROVIDER_NOT_FOUND");
+    }
+  }
+
+  async listTasks(userId: number): Promise<TaskRecord[]> {
     const rows = await prisma.automationTask.findMany({
+      where: { userId },
       orderBy: { createdAt: "desc" },
     });
     return Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
-  private async createTask(p: TaskCreateParams): Promise<TaskRecord> {
+  private async createTask(
+    p: TaskCreateParams,
+    userId: number,
+  ): Promise<TaskRecord> {
+    await this.assertTaskRefsOwned(p.workspaceId, p.modelId, userId);
     const row = await prisma.automationTask.create({
       data: {
         ...buildTaskData(p, new Date()),
         enabled: true,
         status: "active",
+        userId,
       },
     });
     return this.hydrate(row);
@@ -243,7 +307,10 @@ export default class AutomationRepository {
   private async updateTask(
     id: number,
     p: TaskCreateParams,
+    userId: number,
   ): Promise<TaskRecord> {
+    await this.assertTaskOwned(id, userId);
+    await this.assertTaskRefsOwned(p.workspaceId, p.modelId, userId);
     const row = await prisma.automationTask.findUnique({ where: { id } });
     const updated = await prisma.automationTask.update({
       where: { id },
@@ -260,11 +327,24 @@ export default class AutomationRepository {
 
   async listRuns(
     page: number,
-    taskId?: number,
-    status?: RunRecord["status"],
+    taskId: number | undefined,
+    status: RunRecord["status"] | undefined,
+    userId: number,
   ): Promise<RunPage> {
+    // 运行记录经任务归属限定当前用户；指定 taskId 时先校验归属
+    let taskFilter: number | { in: number[] };
+    if (taskId !== undefined) {
+      await this.assertTaskOwned(taskId, userId);
+      taskFilter = taskId;
+    } else {
+      const ownedTasks = await prisma.automationTask.findMany({
+        where: { userId },
+        select: { id: true },
+      });
+      taskFilter = { in: ownedTasks.map((row) => row.id) };
+    }
     const where = {
-      ...(taskId ? { taskId } : {}),
+      taskId: taskFilter,
       ...(status ? { status } : {}),
     };
     const PAGE_SIZE = 20;

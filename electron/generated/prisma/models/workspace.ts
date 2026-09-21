@@ -30,12 +30,14 @@ export type WorkspaceAvgAggregateOutputType = {
   id: number | null
   defaultModelId: number | null
   projectId: number | null
+  userId: number | null
 }
 
 export type WorkspaceSumAggregateOutputType = {
   id: number | null
   defaultModelId: number | null
   projectId: number | null
+  userId: number | null
 }
 
 export type WorkspaceMinAggregateOutputType = {
@@ -48,6 +50,7 @@ export type WorkspaceMinAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   projectId: number | null
+  userId: number | null
 }
 
 export type WorkspaceMaxAggregateOutputType = {
@@ -60,6 +63,7 @@ export type WorkspaceMaxAggregateOutputType = {
   createdAt: Date | null
   updatedAt: Date | null
   projectId: number | null
+  userId: number | null
 }
 
 export type WorkspaceCountAggregateOutputType = {
@@ -72,6 +76,7 @@ export type WorkspaceCountAggregateOutputType = {
   createdAt: number
   updatedAt: number
   projectId: number
+  userId: number
   _all: number
 }
 
@@ -80,12 +85,14 @@ export type WorkspaceAvgAggregateInputType = {
   id?: true
   defaultModelId?: true
   projectId?: true
+  userId?: true
 }
 
 export type WorkspaceSumAggregateInputType = {
   id?: true
   defaultModelId?: true
   projectId?: true
+  userId?: true
 }
 
 export type WorkspaceMinAggregateInputType = {
@@ -98,6 +105,7 @@ export type WorkspaceMinAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   projectId?: true
+  userId?: true
 }
 
 export type WorkspaceMaxAggregateInputType = {
@@ -110,6 +118,7 @@ export type WorkspaceMaxAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   projectId?: true
+  userId?: true
 }
 
 export type WorkspaceCountAggregateInputType = {
@@ -122,6 +131,7 @@ export type WorkspaceCountAggregateInputType = {
   createdAt?: true
   updatedAt?: true
   projectId?: true
+  userId?: true
   _all?: true
 }
 
@@ -221,6 +231,7 @@ export type WorkspaceGroupByOutputType = {
   createdAt: Date
   updatedAt: Date
   projectId: number | null
+  userId: number | null
   _count: WorkspaceCountAggregateOutputType | null
   _avg: WorkspaceAvgAggregateOutputType | null
   _sum: WorkspaceSumAggregateOutputType | null
@@ -256,6 +267,7 @@ export type workspaceWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   projectId?: Prisma.IntNullableFilter<"workspace"> | number | null
+  userId?: Prisma.IntNullableFilter<"workspace"> | number | null
 }
 
 export type workspaceOrderByWithRelationInput = {
@@ -268,6 +280,7 @@ export type workspaceOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type workspaceWhereUniqueInput = Prisma.AtLeast<{
@@ -283,6 +296,7 @@ export type workspaceWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"workspace"> | Date | string
   projectId?: Prisma.IntNullableFilter<"workspace"> | number | null
+  userId?: Prisma.IntNullableFilter<"workspace"> | number | null
 }, "id">
 
 export type workspaceOrderByWithAggregationInput = {
@@ -295,6 +309,7 @@ export type workspaceOrderByWithAggregationInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.workspaceCountOrderByAggregateInput
   _avg?: Prisma.workspaceAvgOrderByAggregateInput
   _max?: Prisma.workspaceMaxOrderByAggregateInput
@@ -315,6 +330,7 @@ export type workspaceScalarWhereWithAggregatesInput = {
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"workspace"> | Date | string
   projectId?: Prisma.IntNullableWithAggregatesFilter<"workspace"> | number | null
+  userId?: Prisma.IntNullableWithAggregatesFilter<"workspace"> | number | null
 }
 
 export type workspaceCreateInput = {
@@ -326,6 +342,7 @@ export type workspaceCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   projectId?: number | null
+  userId?: number | null
 }
 
 export type workspaceUncheckedCreateInput = {
@@ -338,6 +355,7 @@ export type workspaceUncheckedCreateInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   projectId?: number | null
+  userId?: number | null
 }
 
 export type workspaceUpdateInput = {
@@ -349,6 +367,7 @@ export type workspaceUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceUncheckedUpdateInput = {
@@ -361,6 +380,7 @@ export type workspaceUncheckedUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceCreateManyInput = {
@@ -373,6 +393,7 @@ export type workspaceCreateManyInput = {
   createdAt?: Date | string
   updatedAt?: Date | string
   projectId?: number | null
+  userId?: number | null
 }
 
 export type workspaceUpdateManyMutationInput = {
@@ -384,6 +405,7 @@ export type workspaceUpdateManyMutationInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceUncheckedUpdateManyInput = {
@@ -396,6 +418,7 @@ export type workspaceUncheckedUpdateManyInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type workspaceCountOrderByAggregateInput = {
@@ -408,12 +431,14 @@ export type workspaceCountOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type workspaceAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type workspaceMaxOrderByAggregateInput = {
@@ -426,6 +451,7 @@ export type workspaceMaxOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type workspaceMinOrderByAggregateInput = {
@@ -438,12 +464,14 @@ export type workspaceMinOrderByAggregateInput = {
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type workspaceSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   defaultModelId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type NullableDateTimeFieldUpdateOperationsInput = {
@@ -462,6 +490,7 @@ export type workspaceSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   createdAt?: boolean
   updatedAt?: boolean
   projectId?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -474,6 +503,7 @@ export type workspaceSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   createdAt?: boolean
   updatedAt?: boolean
   projectId?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -486,6 +516,7 @@ export type workspaceSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   createdAt?: boolean
   updatedAt?: boolean
   projectId?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["workspace"]>
 
 export type workspaceSelectScalar = {
@@ -498,9 +529,10 @@ export type workspaceSelectScalar = {
   createdAt?: boolean
   updatedAt?: boolean
   projectId?: boolean
+  userId?: boolean
 }
 
-export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "writeApprovedAt" | "createdAt" | "updatedAt" | "projectId", ExtArgs["result"]["workspace"]>
+export type workspaceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "directoryPath" | "defaultModelId" | "writeApprovedAt" | "createdAt" | "updatedAt" | "projectId" | "userId", ExtArgs["result"]["workspace"]>
 
 export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "workspace"
@@ -515,6 +547,7 @@ export type $workspacePayload<ExtArgs extends runtime.Types.Extensions.InternalA
     createdAt: Date
     updatedAt: Date
     projectId: number | null
+    userId: number | null
   }, ExtArgs["result"]["workspace"]>
   composites: {}
 }
@@ -947,6 +980,7 @@ export interface workspaceFieldRefs {
   readonly createdAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"workspace", 'DateTime'>
   readonly projectId: Prisma.FieldRef<"workspace", 'Int'>
+  readonly userId: Prisma.FieldRef<"workspace", 'Int'>
 }
     
 

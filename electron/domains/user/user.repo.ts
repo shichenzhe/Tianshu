@@ -4,6 +4,7 @@
  */
 import { ipcMain } from "electron";
 import * as jwt from "jsonwebtoken";
+import { generateUserToken, JWT_SECRET } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
 import {
   UserInfo,
@@ -15,8 +16,6 @@ import {
 } from "./user.entity";
 
 export default class UserRepository {
-  private JWT_SECRET = "3k4jl234jl2kj23423j"; // 建议使用环境变量存储
-
   constructor() {
     this.registerHandlers();
   }
@@ -227,14 +226,8 @@ export default class UserRepository {
    * @returns JWT token
    */
   private generateToken(user: UserInfo): string {
-    const options: jwt.SignOptions = {
-      expiresIn: "30d",
-    };
-    return jwt.sign(
-      { username: user.username, nickname: user.nickname },
-      this.JWT_SECRET,
-      options,
-    );
+    // v12 多用户隔离：payload 补签 id，业务 IPC 由 commons/ipc-user 解出 userId
+    return generateUserToken(user);
   }
 
   /**
@@ -244,7 +237,7 @@ export default class UserRepository {
    */
   async verifyToken(token: string): Promise<unknown> {
     try {
-      return jwt.verify(token, this.JWT_SECRET);
+      return jwt.verify(token, JWT_SECRET);
     } catch (error) {
       console.error("Token验证失败:", error);
       return null;

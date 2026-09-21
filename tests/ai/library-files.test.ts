@@ -39,6 +39,14 @@ vi.mock("../../electron/commons/prisma-client", () => ({
             }),
           ),
       ),
+      findFirst: vi.fn(
+        async ({ where }: { where?: Record<string, unknown> } = {}) =>
+          table.find((row) =>
+            Object.entries(where ?? {}).every(
+              ([key, value]) => row[key] === value,
+            ),
+          ) ?? null,
+      ),
       findUnique: vi.fn(
         async ({ where }: { where: { id: number } }) =>
           table.find((row) => row.id === where.id) ?? null,
@@ -90,6 +98,9 @@ import os from "node:os";
 import path from "node:path";
 import LibraryRepository from "../../electron/domains/ai/library/library.repo";
 
+/** 测试用户 id（v12 起资料库按用户隔离，repo 方法末位参数） */
+const UID = 1;
+
 beforeEach(() => {
   table.length = 0;
   nextId = 1;
@@ -104,7 +115,7 @@ describe("LibraryRepository 文件通道", () => {
     fs.writeFileSync(src2, "png");
 
     const repo = new LibraryRepository();
-    const result = await repo.addFiles([src1, src2], null);
+    const result = await repo.addFiles([src1, src2], null, UID);
     expect(result.added).toHaveLength(2);
     expect(result.failed).toHaveLength(0);
     // 原名落盘在 {userData}/library/{id}/ 下（userData 被 mock 为
@@ -114,7 +125,7 @@ describe("LibraryRepository 文件通道", () => {
     }
     // 再次入库同名 → 序号（uniqueDbName 为 Task 2 已定契约：序号插在
     // 扩展名前，"笔记.md" → "笔记 (2).md"——brief 期望串笔误已修正）
-    const again = await repo.addFiles([src1], null);
+    const again = await repo.addFiles([src1], null, UID);
     expect(again.added[0].name).toBe("笔记 (2).md");
   });
 
@@ -123,7 +134,7 @@ describe("LibraryRepository 文件通道", () => {
     const ok = path.join(srcDir, "ok.txt");
     fs.writeFileSync(ok, "x");
     const repo = new LibraryRepository();
-    const result = await repo.addFiles([ok, "/nonexistent/a.txt"], null);
+    const result = await repo.addFiles([ok, "/nonexistent/a.txt"], null, UID);
     expect(result.added).toHaveLength(1);
     expect(result.failed).toHaveLength(1);
   });
@@ -133,9 +144,9 @@ describe("LibraryRepository 文件通道", () => {
     const src = path.join(srcDir, "d.txt");
     fs.writeFileSync(src, "x");
     const repo = new LibraryRepository();
-    const { added } = await repo.addFiles([src], null);
+    const { added } = await repo.addFiles([src], null, UID);
     const dir = path.dirname(added[0].storagePath as string);
-    await repo.delete([added[0].id]);
+    await repo.delete([added[0].id], UID);
     expect(fs.existsSync(dir)).toBe(false);
   });
 
@@ -144,8 +155,8 @@ describe("LibraryRepository 文件通道", () => {
     const src = path.join(srcDir, "r.txt");
     fs.writeFileSync(src, "data");
     const repo = new LibraryRepository();
-    const { added } = await repo.addFiles([src], null);
-    const renamed = await repo.rename(added[0].id, "改名后.txt");
+    const { added } = await repo.addFiles([src], null, UID);
+    const renamed = await repo.rename(added[0].id, "改名后.txt", UID);
     // 磁盘文件名随 DB name 变化，storagePath 始终指向真实文件
     expect(fs.existsSync(renamed.storagePath)).toBe(true);
     expect(fs.readFileSync(renamed.storagePath as string, "utf8")).toBe("data");
@@ -157,13 +168,13 @@ describe("LibraryRepository 文件通道", () => {
     const src = path.join(srcDir, "同.txt");
     fs.writeFileSync(src, "m");
     const repo = new LibraryRepository();
-    const folder = await repo.createFolder("目标", null);
-    const { added } = await repo.addFiles([src], null); // 根层
-    await repo.addFiles([src], folder.id); // 目标层同名（序号占位）
+    const folder = await repo.createFolder("目标", null, UID);
+    const { added } = await repo.addFiles([src], null, UID); // 根层
+    await repo.addFiles([src], folder.id, UID); // 目标层同名（序号占位）
     const oldPath = added[0].storagePath as string;
     // 根层同名文件移入目标层 → DB 名「同 (2).txt」且磁盘同步改名
-    await repo.move([added[0].id], folder.id);
-    const { items } = await repo.list(folder.id);
+    await repo.move([added[0].id], folder.id, UID);
+    const { items } = await repo.list(folder.id, UID);
     const moved = items.find((item) => item.id === added[0].id);
     expect(moved?.name).toBe("同 (2).txt");
     expect(fs.existsSync(moved?.storagePath as string)).toBe(true);

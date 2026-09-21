@@ -28,10 +28,12 @@ export type AggregateOption = {
 
 export type OptionAvgAggregateOutputType = {
   id: number | null
+  userId: number | null
 }
 
 export type OptionSumAggregateOutputType = {
   id: number | null
+  userId: number | null
 }
 
 export type OptionMinAggregateOutputType = {
@@ -40,6 +42,7 @@ export type OptionMinAggregateOutputType = {
   name: string | null
   value: string | null
   note: string | null
+  userId: number | null
 }
 
 export type OptionMaxAggregateOutputType = {
@@ -48,6 +51,7 @@ export type OptionMaxAggregateOutputType = {
   name: string | null
   value: string | null
   note: string | null
+  userId: number | null
 }
 
 export type OptionCountAggregateOutputType = {
@@ -56,16 +60,19 @@ export type OptionCountAggregateOutputType = {
   name: number
   value: number
   note: number
+  userId: number
   _all: number
 }
 
 
 export type OptionAvgAggregateInputType = {
   id?: true
+  userId?: true
 }
 
 export type OptionSumAggregateInputType = {
   id?: true
+  userId?: true
 }
 
 export type OptionMinAggregateInputType = {
@@ -74,6 +81,7 @@ export type OptionMinAggregateInputType = {
   name?: true
   value?: true
   note?: true
+  userId?: true
 }
 
 export type OptionMaxAggregateInputType = {
@@ -82,6 +90,7 @@ export type OptionMaxAggregateInputType = {
   name?: true
   value?: true
   note?: true
+  userId?: true
 }
 
 export type OptionCountAggregateInputType = {
@@ -90,6 +99,7 @@ export type OptionCountAggregateInputType = {
   name?: true
   value?: true
   note?: true
+  userId?: true
   _all?: true
 }
 
@@ -185,6 +195,7 @@ export type OptionGroupByOutputType = {
   name: string
   value: string
   note: string | null
+  userId: number | null
   _count: OptionCountAggregateOutputType | null
   _avg: OptionAvgAggregateOutputType | null
   _sum: OptionSumAggregateOutputType | null
@@ -216,6 +227,7 @@ export type optionWhereInput = {
   name?: Prisma.StringFilter<"option"> | string
   value?: Prisma.StringFilter<"option"> | string
   note?: Prisma.StringNullableFilter<"option"> | string | null
+  userId?: Prisma.IntNullableFilter<"option"> | number | null
 }
 
 export type optionOrderByWithRelationInput = {
@@ -224,11 +236,12 @@ export type optionOrderByWithRelationInput = {
   name?: Prisma.SortOrder
   value?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type optionWhereUniqueInput = Prisma.AtLeast<{
   id?: number
-  type_name?: Prisma.optionTypeNameCompoundUniqueInput
+  type_name_userId?: Prisma.optionTypeNameUserIdCompoundUniqueInput
   AND?: Prisma.optionWhereInput | Prisma.optionWhereInput[]
   OR?: Prisma.optionWhereInput[]
   NOT?: Prisma.optionWhereInput | Prisma.optionWhereInput[]
@@ -236,7 +249,8 @@ export type optionWhereUniqueInput = Prisma.AtLeast<{
   name?: Prisma.StringFilter<"option"> | string
   value?: Prisma.StringFilter<"option"> | string
   note?: Prisma.StringNullableFilter<"option"> | string | null
-}, "id" | "type_name">
+  userId?: Prisma.IntNullableFilter<"option"> | number | null
+}, "id" | "type_name_userId">
 
 export type optionOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -244,6 +258,7 @@ export type optionOrderByWithAggregationInput = {
   name?: Prisma.SortOrder
   value?: Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.optionCountOrderByAggregateInput
   _avg?: Prisma.optionAvgOrderByAggregateInput
   _max?: Prisma.optionMaxOrderByAggregateInput
@@ -260,6 +275,7 @@ export type optionScalarWhereWithAggregatesInput = {
   name?: Prisma.StringWithAggregatesFilter<"option"> | string
   value?: Prisma.StringWithAggregatesFilter<"option"> | string
   note?: Prisma.StringNullableWithAggregatesFilter<"option"> | string | null
+  userId?: Prisma.IntNullableWithAggregatesFilter<"option"> | number | null
 }
 
 export type optionCreateInput = {
@@ -267,6 +283,7 @@ export type optionCreateInput = {
   name: string
   value: string
   note?: string | null
+  userId?: number | null
 }
 
 export type optionUncheckedCreateInput = {
@@ -275,6 +292,7 @@ export type optionUncheckedCreateInput = {
   name: string
   value: string
   note?: string | null
+  userId?: number | null
 }
 
 export type optionUpdateInput = {
@@ -282,6 +300,7 @@ export type optionUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   value?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type optionUncheckedUpdateInput = {
@@ -290,6 +309,7 @@ export type optionUncheckedUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   value?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type optionCreateManyInput = {
@@ -298,6 +318,7 @@ export type optionCreateManyInput = {
   name: string
   value: string
   note?: string | null
+  userId?: number | null
 }
 
 export type optionUpdateManyMutationInput = {
@@ -305,6 +326,7 @@ export type optionUpdateManyMutationInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   value?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type optionUncheckedUpdateManyInput = {
@@ -313,11 +335,13 @@ export type optionUncheckedUpdateManyInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   value?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
-export type optionTypeNameCompoundUniqueInput = {
+export type optionTypeNameUserIdCompoundUniqueInput = {
   type: string
   name: string
+  userId: number
 }
 
 export type optionCountOrderByAggregateInput = {
@@ -326,10 +350,12 @@ export type optionCountOrderByAggregateInput = {
   name?: Prisma.SortOrder
   value?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type optionAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type optionMaxOrderByAggregateInput = {
@@ -338,6 +364,7 @@ export type optionMaxOrderByAggregateInput = {
   name?: Prisma.SortOrder
   value?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type optionMinOrderByAggregateInput = {
@@ -346,10 +373,20 @@ export type optionMinOrderByAggregateInput = {
   name?: Prisma.SortOrder
   value?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type optionSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
+}
+
+export type NullableIntFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
 
@@ -360,6 +397,7 @@ export type optionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   name?: boolean
   value?: boolean
   note?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["option"]>
 
 export type optionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -368,6 +406,7 @@ export type optionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   value?: boolean
   note?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["option"]>
 
 export type optionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -376,6 +415,7 @@ export type optionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extens
   name?: boolean
   value?: boolean
   note?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["option"]>
 
 export type optionSelectScalar = {
@@ -384,9 +424,10 @@ export type optionSelectScalar = {
   name?: boolean
   value?: boolean
   note?: boolean
+  userId?: boolean
 }
 
-export type optionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "type" | "name" | "value" | "note", ExtArgs["result"]["option"]>
+export type optionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "type" | "name" | "value" | "note" | "userId", ExtArgs["result"]["option"]>
 
 export type $optionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "option"
@@ -397,6 +438,7 @@ export type $optionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
     name: string
     value: string
     note: string | null
+    userId: number | null
   }, ExtArgs["result"]["option"]>
   composites: {}
 }
@@ -825,6 +867,7 @@ export interface optionFieldRefs {
   readonly name: Prisma.FieldRef<"option", 'String'>
   readonly value: Prisma.FieldRef<"option", 'String'>
   readonly note: Prisma.FieldRef<"option", 'String'>
+  readonly userId: Prisma.FieldRef<"option", 'Int'>
 }
     
 

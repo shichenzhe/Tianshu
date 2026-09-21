@@ -48,7 +48,8 @@ export interface MemorySchedulerDeps {
   providerRepo: ProviderRuntimeSource;
   modelRepo: {
     getById(id: number): Promise<MemoryModelRow | null>;
-    listAll(): Promise<MemoryModelRow[]>;
+    /** v12 隔离：个性化记忆为本机全局，兜底模型从全体用户启用池解析 */
+    listAllEnabledAnyUser(): Promise<MemoryModelRow[]>;
   };
   tickMs?: number;
 }
@@ -206,7 +207,7 @@ export default class MemoryScheduler {
 
   private resolveModel(): Promise<MemoryModelContext | null> {
     return resolveMemoryModel(this.deps.providerRepo, this.deps.modelRepo, () =>
-      this.deps.modelRepo.listAll(),
+      this.deps.modelRepo.listAllEnabledAnyUser(),
     );
   }
 

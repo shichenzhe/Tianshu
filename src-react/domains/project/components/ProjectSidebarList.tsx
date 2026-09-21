@@ -25,7 +25,7 @@ export default function ProjectSidebarList() {
   // 与 hub 共用查询缓存（同一 ["projects", ownerId] key）
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", user.id],
-    queryFn: () => ProjectApi.list(user.id),
+    queryFn: () => ProjectApi.list(),
   });
 
   // 当前项目行高亮：/module/project/:id

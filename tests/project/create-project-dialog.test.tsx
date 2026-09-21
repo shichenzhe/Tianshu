@@ -325,7 +325,7 @@ describe("提交链路", () => {
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
     expect(vi.mocked(ProjectApi.create)).toHaveBeenCalledWith({
-      ownerId: 1,
+      // ownerId 不再由前端传（v12 token 注入主进程解 userId）
       name: "alpha",
       systemPrompt: PRD.prompt,
       templateKey: "prd-workflow",

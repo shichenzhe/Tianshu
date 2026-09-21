@@ -297,7 +297,6 @@ export default function PlanPane({
   const handleQuickCreateIn = async (status: PlanStatus, title: string) => {
     try {
       await PlanItemApi.create({
-        createdById: user.id,
         assigneeId: user.id,
         projectId,
         title,

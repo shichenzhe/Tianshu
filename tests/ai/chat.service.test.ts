@@ -43,15 +43,34 @@ const prismaStub = {
     toolName: string;
     createdAt: Date;
   }>,
+  /** 本人工作空间 id 集（v12 listRemembered/revoke* 先经 ownedWorkspaceIds 收敛） */
+  ownedWorkspaceIds: [5, 6],
   toolPermissionFindMany: vi.fn(async () => prismaStub.toolPermissions),
   toolPermissionFindUnique: vi.fn(
     async ({ where: { id } }: { where: { id: number } }) =>
       prismaStub.toolPermissions.find((row) => row.id === id) ?? null,
   ),
+  /** v12 revokeRemembered 走 findFirst（含 workspaceId in 本人空间过滤） */
+  toolPermissionFindFirst: vi.fn(
+    async ({
+      where,
+    }: {
+      where: { id: number; workspaceId?: { in: number[] } };
+    }) =>
+      prismaStub.toolPermissions.find(
+        (row) =>
+          row.id === where.id &&
+          (!where.workspaceId ||
+            where.workspaceId.in.includes(row.workspaceId)),
+      ) ?? null,
+  ),
   toolPermissionDelete: vi.fn(async () => null),
   toolPermissionDeleteMany: vi.fn(async () => ({
     count: prismaStub.toolPermissions.length,
   })),
+  workspaceFindMany: vi.fn(async () =>
+    prismaStub.ownedWorkspaceIds.map((id) => ({ id })),
+  ),
 };
 
 // assembleContext 读通道（项目会话 base 注入测试按需覆写返回值）；
@@ -74,9 +93,13 @@ vi.mock("../../electron/commons/prisma-client", () => ({
       findMany: (args?: unknown) => prismaStub.toolPermissionFindMany(args),
       findUnique: (args: { where: { id: number } }) =>
         prismaStub.toolPermissionFindUnique(args),
+      findFirst: (args?: unknown) => prismaStub.toolPermissionFindFirst(args),
       delete: (args: { where: { id: number } }) =>
         prismaStub.toolPermissionDelete(args),
       deleteMany: (args?: unknown) => prismaStub.toolPermissionDeleteMany(args),
+    },
+    workspace: {
+      findMany: (args?: unknown) => prismaStub.workspaceFindMany(args),
     },
     ...assembleReads,
   },
@@ -108,8 +131,12 @@ import {
 } from "../../electron/domains/ai/agent/tool-registry";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
 import { ipcMain } from "electron";
+import { generateUserToken } from "../../electron/commons/ipc-user";
 import { PermissionStore } from "../../electron/domains/ai/agent/permission-mode";
 import type { SecurityEvent } from "../../src-react/domains/security/model/types";
+
+/** handleUser 通道直调用 token（v12 起工具记忆 IPC 按用户过滤，userId=1） */
+const TOKEN = generateUserToken({ id: 1, username: "tester" });
 
 const userHistory = [
   {
@@ -308,7 +335,9 @@ describe("runChatStream", () => {
 describe("ChatService 并发防护", () => {
   it("并发 send 在首个 await 前注册：第二次调用立即拒绝，用户消息不重复且失败后无泄漏", async () => {
     const sessions = {
-      getSession: vi.fn().mockResolvedValue({ id: 1, assistantId: null }),
+      getSession: vi
+        .fn()
+        .mockResolvedValue({ id: 1, assistantId: null, userId: 1 }),
       setSessionModel: vi.fn().mockResolvedValue(undefined),
       appendMessage: vi.fn().mockResolvedValue({}),
       autotitleIfDefault: vi.fn().mockResolvedValue(undefined),
@@ -318,10 +347,10 @@ describe("ChatService 并发防护", () => {
     const service = new ChatService(sessions as unknown as SessionRepository);
 
     // 未 await：首个请求同步完成注册后才轮到第二次调用
-    const first = service.send({ sessionId: 1, content: "hi" });
-    await expect(service.send({ sessionId: 1, content: "hi" })).rejects.toThrow(
-      "CONCURRENT_REQUEST",
-    );
+    const first = service.send({ sessionId: 1, content: "hi" }, 1);
+    await expect(
+      service.send({ sessionId: 1, content: "hi" }, 1),
+    ).rejects.toThrow("CONCURRENT_REQUEST");
 
     // 首个请求完整走完只落库一条用户消息，被拒的并发请求未重复落库
     await expect(first).rejects.toThrow("NO_MODEL");
@@ -329,7 +358,7 @@ describe("ChatService 并发防护", () => {
 
     // 早期失败已清理注册：后续请求不再报并发错误
     await expect(
-      service.send({ sessionId: 1, content: "again" }),
+      service.send({ sessionId: 1, content: "again" }, 1),
     ).rejects.toThrow("NO_MODEL");
   });
 });
@@ -547,6 +576,8 @@ const makeService = (sessionOverrides: Record<string, unknown> = {}) => {
       id: 1,
       assistantId: null,
       compactedUpToId: null,
+      // v12 隔离：getSession 返回行携带 userId（send/editAndResend 归属比对）
+      userId: 1,
       ...sessionOverrides,
     }),
     getEffectiveModelId: vi.fn().mockResolvedValue(null),
@@ -567,7 +598,7 @@ describe("ChatService.editAndResend（编辑重发）", () => {
   it("改写目标 user 消息内容并删除其后尾部，失败后清理并发注册", async () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
-    await expect(service.editAndResend(1, 3, "改后的内容")).rejects.toThrow(
+    await expect(service.editAndResend(1, 1, 3, "改后的内容")).rejects.toThrow(
       "NO_MODEL",
     );
     // 仅改写 blocks：断言完整入参即证明 createdAt 等其余字段未被触碰
@@ -586,7 +617,7 @@ describe("ChatService.editAndResend（编辑重发）", () => {
   it("目标是 assistant（非 user）→ MESSAGE_NOT_FOUND，不触写通道", async () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
-    await expect(service.editAndResend(1, 2, "改")).rejects.toThrow(
+    await expect(service.editAndResend(1, 1, 2, "改")).rejects.toThrow(
       "MESSAGE_NOT_FOUND",
     );
     expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
@@ -597,7 +628,7 @@ describe("ChatService.editAndResend（编辑重发）", () => {
   it("消息不存在 → MESSAGE_NOT_FOUND，不触写通道", async () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
-    await expect(service.editAndResend(1, 99, "改")).rejects.toThrow(
+    await expect(service.editAndResend(1, 1, 99, "改")).rejects.toThrow(
       "MESSAGE_NOT_FOUND",
     );
     expect(prismaStub.messageUpdate).not.toHaveBeenCalled();
@@ -610,7 +641,7 @@ describe("ChatService.editAndResend（编辑重发）", () => {
     const { service } = makeService();
     const existing = new AbortController();
     abortsOf(service).set(1, existing);
-    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow(
+    await expect(service.editAndResend(1, 1, 3, "改")).rejects.toThrow(
       "CONCURRENT_REQUEST",
     );
     expect(abortsOf(service).get(1)).toBe(existing);
@@ -621,14 +652,18 @@ describe("ChatService.editAndResend（编辑重发）", () => {
   it("压缩点在被删尾部 → 摘要失效清空", async () => {
     prismaStub.messages = fourChatRows();
     const { sessions, service } = makeService({ compactedUpToId: 4 });
-    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow("NO_MODEL");
+    await expect(service.editAndResend(1, 1, 3, "改")).rejects.toThrow(
+      "NO_MODEL",
+    );
     expect(sessions.updateSummary).toHaveBeenCalledWith(1, null, null);
   });
 
   it("压缩点在保留区 → 摘要保留", async () => {
     prismaStub.messages = fourChatRows();
     const { sessions, service } = makeService({ compactedUpToId: 2 });
-    await expect(service.editAndResend(1, 3, "改")).rejects.toThrow("NO_MODEL");
+    await expect(service.editAndResend(1, 1, 3, "改")).rejects.toThrow(
+      "NO_MODEL",
+    );
     expect(sessions.updateSummary).not.toHaveBeenCalled();
   });
 });
@@ -640,7 +675,7 @@ describe("ChatService.regenerate（截断抽取后行为不变）", () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
     // 目标 id=2（assistant），其前最后一条 user 为 id=1 → 删 [2,3,4]
-    await expect(service.regenerate(1, 2)).rejects.toThrow("NO_MODEL");
+    await expect(service.regenerate(1, 1, 2)).rejects.toThrow("NO_MODEL");
     expect(prismaStub.messageDeleteMany).toHaveBeenCalledWith({
       where: { id: { in: [2, 3, 4] } },
     });
@@ -650,11 +685,13 @@ describe("ChatService.regenerate（截断抽取后行为不变）", () => {
   it("目标消息不存在或非 assistant → MESSAGE_NOT_FOUND", async () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
-    await expect(service.regenerate(1, 99)).rejects.toThrow(
+    await expect(service.regenerate(1, 1, 99)).rejects.toThrow(
       "MESSAGE_NOT_FOUND",
     );
     // id=3 是 user 而非 assistant，同样拒绝
-    await expect(service.regenerate(1, 3)).rejects.toThrow("MESSAGE_NOT_FOUND");
+    await expect(service.regenerate(1, 1, 3)).rejects.toThrow(
+      "MESSAGE_NOT_FOUND",
+    );
     expect(prismaStub.messageDeleteMany).not.toHaveBeenCalled();
   });
 });
@@ -1112,8 +1149,10 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
     prismaStub.toolPermissions = [];
     prismaStub.toolPermissionFindMany.mockClear();
     prismaStub.toolPermissionFindUnique.mockClear();
+    prismaStub.toolPermissionFindFirst.mockClear();
     prismaStub.toolPermissionDelete.mockClear();
     prismaStub.toolPermissionDeleteMany.mockClear();
+    prismaStub.workspaceFindMany.mockClear();
   });
 
   it("listFullGrants：只列 full 会话并 join 标题；查询失败行回落「会话 #id」不整表失败", async () => {
@@ -1175,13 +1214,22 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       },
     ];
     makeGrantSvc(grantSessions({}, { 5: "我的空间", 6: "fail" }));
-    const list = (await handlerOf("permission:listRemembered")()) as Array<{
+    const list = (await handlerOf("permission:listRemembered")(
+      null,
+      TOKEN,
+    )) as Array<{
       id: number;
       workspaceName: string;
       toolName: string;
       createdAt: string;
     }>;
+    // v12：先收敛本人空间 id，再限定 toolPermission 范围
+    expect(prismaStub.workspaceFindMany).toHaveBeenCalledWith({
+      where: { userId: 1 },
+      select: { id: true },
+    });
     expect(prismaStub.toolPermissionFindMany).toHaveBeenCalledWith({
+      where: { workspaceId: { in: [5, 6] } },
       orderBy: { createdAt: "desc" },
     });
     expect(list).toEqual([
@@ -1210,7 +1258,11 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       },
     ];
     const svc = makeGrantSvc(grantSessions({}, { 5: "我的空间" }));
-    await handlerOf("permission:revokeRemembered")(null, 7);
+    await handlerOf("permission:revokeRemembered")(null, 7, TOKEN);
+    // v12：findFirst 限定本人空间（非本人空间的记忆行不可撤销）
+    expect(prismaStub.toolPermissionFindFirst).toHaveBeenCalledWith({
+      where: { id: 7, workspaceId: { in: [5, 6] } },
+    });
     expect(prismaStub.toolPermissionDelete).toHaveBeenCalledWith({
       where: { id: 7 },
     });
@@ -1223,7 +1275,7 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
     ]);
     // 不存在 id：no-op 成功，不重复删也不审计
     await expect(
-      handlerOf("permission:revokeRemembered")(null, 99),
+      handlerOf("permission:revokeRemembered")(null, 99, TOKEN),
     ).resolves.toBeUndefined();
     expect(prismaStub.toolPermissionDelete).toHaveBeenCalledTimes(1);
     expect(svc.auditEvents).toHaveLength(1);
@@ -1245,8 +1297,11 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       },
     ];
     const svc = makeGrantSvc(grantSessions({}));
-    await handlerOf("permission:revokeAllRemembered")();
-    expect(prismaStub.toolPermissionDeleteMany).toHaveBeenCalledWith({});
+    await handlerOf("permission:revokeAllRemembered")(null, TOKEN);
+    // v12：deleteMany 限定本人空间（不再是全表裸删）
+    expect(prismaStub.toolPermissionDeleteMany).toHaveBeenCalledWith({
+      where: { workspaceId: { in: [5, 6] } },
+    });
     expect(svc.auditEvents).toEqual([
       {
         eventType: "permission.remembered-revoked-all",
@@ -1256,7 +1311,7 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
     ]);
     // 空表再调：no-op 不再审计
     prismaStub.toolPermissions = [];
-    await handlerOf("permission:revokeAllRemembered")();
+    await handlerOf("permission:revokeAllRemembered")(null, TOKEN);
     expect(svc.auditEvents).toHaveLength(1);
   });
 });

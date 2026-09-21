@@ -35,7 +35,7 @@ export default function ProjectHubView() {
 
   const { data: projects = [] } = useQuery({
     queryKey: ["projects", user.id],
-    queryFn: () => ProjectApi.list(user.id),
+    queryFn: () => ProjectApi.list(),
   });
 
   // 客户端过滤：name 包含关键词即命中（大小写不敏感）

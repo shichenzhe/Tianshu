@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import { McpManager, parseMcpRow } from "../agent/mcp-manager";
@@ -44,32 +44,50 @@ export class McpRepository {
   }
 
   private registerIpcHandlers() {
-    ipcMain.handle("mcpServer:list", () => this.list());
-    ipcMain.handle("mcpServer:create", (_, p: McpServerCreateParams) =>
-      this.create(p),
+    handleUser("mcpServer:list", (_, userId) => this.list(userId));
+    handleUser("mcpServer:create", (_, userId, p: McpServerCreateParams) =>
+      this.create(p, userId),
     );
-    ipcMain.handle("mcpServer:update", (_, p: McpServerUpdateParams) =>
-      this.update(p),
+    handleUser("mcpServer:update", (_, userId, p: McpServerUpdateParams) =>
+      this.update(p, userId),
     );
-    ipcMain.handle("mcpServer:delete", (_, id: number) => this.delete(id));
-    ipcMain.handle("mcpServer:reconnect", (_, id: number) =>
-      this.reconnect(id),
+    handleUser("mcpServer:delete", (_, userId, id: number) =>
+      this.delete(id, userId),
     );
-    ipcMain.handle("mcpServer:setEnabled", (_, id: number, enabled: boolean) =>
-      this.setEnabled(id, enabled),
+    handleUser("mcpServer:reconnect", (_, userId, id: number) =>
+      this.reconnect(id, userId),
     );
-    ipcMain.handle("mcpServer:statuses", () => this.statuses());
+    handleUser(
+      "mcpServer:setEnabled",
+      (_, userId, id: number, enabled: boolean) =>
+        this.setEnabled(id, enabled, userId),
+    );
+    handleUser("mcpServer:statuses", (_, userId) => this.statuses(userId));
   }
 
-  async list(): Promise<McpServerRecord[]> {
+  /** 校验服务器记录归当前用户（不存在与他人所有同报错） */
+  private async assertOwned(id: number, userId: number): Promise<void> {
+    const row = await this.prismaClient.mcpServer.findFirst({
+      where: { id, userId },
+    });
+    if (!row) {
+      throw new Error("MCP_SERVER_MISSING");
+    }
+  }
+
+  async list(userId: number): Promise<McpServerRecord[]> {
     return (
       await this.prismaClient.mcpServer.findMany({
+        where: { userId },
         orderBy: { createdAt: "asc" },
       })
     ).map((row) => this.toRecord(row));
   }
 
-  async create(p: McpServerCreateParams): Promise<McpServerRecord> {
+  async create(
+    p: McpServerCreateParams,
+    userId: number,
+  ): Promise<McpServerRecord> {
     const row = await this.prismaClient.mcpServer.create({
       data: {
         name: p.name,
@@ -80,6 +98,7 @@ export class McpRepository {
         url: p.url,
         headers: p.headers,
         enabled: p.enabled,
+        userId,
       },
     });
     // 新建即启用：立即连接并注册工具（连接失败由 manager 记 error 状态，不阻塞创建）；
@@ -90,7 +109,11 @@ export class McpRepository {
     return this.toRecord(row);
   }
 
-  async update(p: McpServerUpdateParams): Promise<McpServerRecord> {
+  async update(
+    p: McpServerUpdateParams,
+    userId: number,
+  ): Promise<McpServerRecord> {
+    await this.assertOwned(p.id, userId);
     const before = await this.prismaClient.mcpServer.findUnique({
       where: { id: p.id },
     });
@@ -118,7 +141,8 @@ export class McpRepository {
     return this.toRecord(row);
   }
 
-  async delete(id: number): Promise<void> {
+  async delete(id: number, userId: number): Promise<void> {
+    await this.assertOwned(id, userId);
     const row = await this.prismaClient.mcpServer.delete({ where: { id } });
     // 行已删，停用只为注销工具并断开（unregister + close），防残留子进程
     if (this.manager) {
@@ -126,7 +150,12 @@ export class McpRepository {
     }
   }
 
-  async setEnabled(id: number, enabled: boolean): Promise<void> {
+  async setEnabled(
+    id: number,
+    enabled: boolean,
+    userId: number,
+  ): Promise<void> {
+    await this.assertOwned(id, userId);
     const before = await this.prismaClient.mcpServer.findUnique({
       where: { id },
     });
@@ -141,7 +170,8 @@ export class McpRepository {
   }
 
   /** 查行重连（连接参数修改后的手动刷新入口） */
-  async reconnect(id: number): Promise<void> {
+  async reconnect(id: number, userId: number): Promise<void> {
+    await this.assertOwned(id, userId);
     const row = await this.prismaClient.mcpServer.findUnique({
       where: { id },
     });
@@ -153,7 +183,16 @@ export class McpRepository {
     }
   }
 
-  statuses(): McpServerStatus[] {
-    return this.manager ? this.manager.getStatuses() : [];
+  /** 连接进程为主进程级共享池，状态按用户可见的服务器集过滤 */
+  async statuses(userId: number): Promise<McpServerStatus[]> {
+    if (!this.manager) {
+      return [];
+    }
+    const rows = await this.prismaClient.mcpServer.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    const owned = new Set(rows.map((row) => row.id));
+    return this.manager.getStatuses().filter((status) => owned.has(status.id));
   }
 }

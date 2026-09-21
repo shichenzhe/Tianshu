@@ -14,9 +14,9 @@ import type {
 } from "../../../../electron/domains/project/project.entity";
 
 export default abstract class ProjectApi {
-  /** 当前用户的项目列表 */
-  static async list(ownerId: number): Promise<ProjectRecord[]> {
-    return invoke<ProjectRecord[]>("project:list", ownerId);
+  /** 当前用户的项目列表（ownerId 由主进程从 token 解出） */
+  static async list(): Promise<ProjectRecord[]> {
+    return invoke<ProjectRecord[]>("project:list");
   }
 
   /** 项目详情：项目记录 + 能力挂载 + 动态流会话 */

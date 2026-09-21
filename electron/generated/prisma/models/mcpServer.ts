@@ -28,10 +28,12 @@ export type AggregateMcpServer = {
 
 export type McpServerAvgAggregateOutputType = {
   id: number | null
+  userId: number | null
 }
 
 export type McpServerSumAggregateOutputType = {
   id: number | null
+  userId: number | null
 }
 
 export type McpServerMinAggregateOutputType = {
@@ -46,6 +48,7 @@ export type McpServerMinAggregateOutputType = {
   enabled: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  userId: number | null
 }
 
 export type McpServerMaxAggregateOutputType = {
@@ -60,6 +63,7 @@ export type McpServerMaxAggregateOutputType = {
   enabled: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  userId: number | null
 }
 
 export type McpServerCountAggregateOutputType = {
@@ -74,16 +78,19 @@ export type McpServerCountAggregateOutputType = {
   enabled: number
   createdAt: number
   updatedAt: number
+  userId: number
   _all: number
 }
 
 
 export type McpServerAvgAggregateInputType = {
   id?: true
+  userId?: true
 }
 
 export type McpServerSumAggregateInputType = {
   id?: true
+  userId?: true
 }
 
 export type McpServerMinAggregateInputType = {
@@ -98,6 +105,7 @@ export type McpServerMinAggregateInputType = {
   enabled?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
 }
 
 export type McpServerMaxAggregateInputType = {
@@ -112,6 +120,7 @@ export type McpServerMaxAggregateInputType = {
   enabled?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
 }
 
 export type McpServerCountAggregateInputType = {
@@ -126,6 +135,7 @@ export type McpServerCountAggregateInputType = {
   enabled?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
   _all?: true
 }
 
@@ -227,6 +237,7 @@ export type McpServerGroupByOutputType = {
   enabled: boolean
   createdAt: Date
   updatedAt: Date
+  userId: number | null
   _count: McpServerCountAggregateOutputType | null
   _avg: McpServerAvgAggregateOutputType | null
   _sum: McpServerSumAggregateOutputType | null
@@ -264,6 +275,7 @@ export type mcpServerWhereInput = {
   enabled?: Prisma.BoolFilter<"mcpServer"> | boolean
   createdAt?: Prisma.DateTimeFilter<"mcpServer"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"mcpServer"> | Date | string
+  userId?: Prisma.IntNullableFilter<"mcpServer"> | number | null
 }
 
 export type mcpServerOrderByWithRelationInput = {
@@ -278,6 +290,7 @@ export type mcpServerOrderByWithRelationInput = {
   enabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type mcpServerWhereUniqueInput = Prisma.AtLeast<{
@@ -295,6 +308,7 @@ export type mcpServerWhereUniqueInput = Prisma.AtLeast<{
   enabled?: Prisma.BoolFilter<"mcpServer"> | boolean
   createdAt?: Prisma.DateTimeFilter<"mcpServer"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"mcpServer"> | Date | string
+  userId?: Prisma.IntNullableFilter<"mcpServer"> | number | null
 }, "id">
 
 export type mcpServerOrderByWithAggregationInput = {
@@ -309,6 +323,7 @@ export type mcpServerOrderByWithAggregationInput = {
   enabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.mcpServerCountOrderByAggregateInput
   _avg?: Prisma.mcpServerAvgOrderByAggregateInput
   _max?: Prisma.mcpServerMaxOrderByAggregateInput
@@ -331,6 +346,7 @@ export type mcpServerScalarWhereWithAggregatesInput = {
   enabled?: Prisma.BoolWithAggregatesFilter<"mcpServer"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"mcpServer"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"mcpServer"> | Date | string
+  userId?: Prisma.IntNullableWithAggregatesFilter<"mcpServer"> | number | null
 }
 
 export type mcpServerCreateInput = {
@@ -344,6 +360,7 @@ export type mcpServerCreateInput = {
   enabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type mcpServerUncheckedCreateInput = {
@@ -358,6 +375,7 @@ export type mcpServerUncheckedCreateInput = {
   enabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type mcpServerUpdateInput = {
@@ -371,6 +389,7 @@ export type mcpServerUpdateInput = {
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type mcpServerUncheckedUpdateInput = {
@@ -385,6 +404,7 @@ export type mcpServerUncheckedUpdateInput = {
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type mcpServerCreateManyInput = {
@@ -399,6 +419,7 @@ export type mcpServerCreateManyInput = {
   enabled?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type mcpServerUpdateManyMutationInput = {
@@ -412,6 +433,7 @@ export type mcpServerUpdateManyMutationInput = {
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type mcpServerUncheckedUpdateManyInput = {
@@ -426,6 +448,7 @@ export type mcpServerUncheckedUpdateManyInput = {
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type mcpServerCountOrderByAggregateInput = {
@@ -440,10 +463,12 @@ export type mcpServerCountOrderByAggregateInput = {
   enabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type mcpServerAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type mcpServerMaxOrderByAggregateInput = {
@@ -458,6 +483,7 @@ export type mcpServerMaxOrderByAggregateInput = {
   enabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type mcpServerMinOrderByAggregateInput = {
@@ -472,10 +498,12 @@ export type mcpServerMinOrderByAggregateInput = {
   enabled?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type mcpServerSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 
@@ -492,6 +520,7 @@ export type mcpServerSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   enabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["mcpServer"]>
 
 export type mcpServerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -506,6 +535,7 @@ export type mcpServerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   enabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["mcpServer"]>
 
 export type mcpServerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -520,6 +550,7 @@ export type mcpServerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   enabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["mcpServer"]>
 
 export type mcpServerSelectScalar = {
@@ -534,9 +565,10 @@ export type mcpServerSelectScalar = {
   enabled?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }
 
-export type mcpServerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "transport" | "command" | "args" | "env" | "url" | "headers" | "enabled" | "createdAt" | "updatedAt", ExtArgs["result"]["mcpServer"]>
+export type mcpServerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "transport" | "command" | "args" | "env" | "url" | "headers" | "enabled" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["mcpServer"]>
 
 export type $mcpServerPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "mcpServer"
@@ -553,6 +585,7 @@ export type $mcpServerPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     enabled: boolean
     createdAt: Date
     updatedAt: Date
+    userId: number | null
   }, ExtArgs["result"]["mcpServer"]>
   composites: {}
 }
@@ -987,6 +1020,7 @@ export interface mcpServerFieldRefs {
   readonly enabled: Prisma.FieldRef<"mcpServer", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"mcpServer", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"mcpServer", 'DateTime'>
+  readonly userId: Prisma.FieldRef<"mcpServer", 'Int'>
 }
     
 

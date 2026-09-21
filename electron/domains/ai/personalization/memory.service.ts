@@ -172,7 +172,7 @@ export default class MemoryService {
       fetchMaterial: () => fetchRecentConversation(prisma),
       resolveModel: () =>
         resolveMemoryModel(this.deps.providerRepo, this.deps.modelRepo, () =>
-          this.deps.modelRepo.listAll(),
+          this.deps.modelRepo.listAllEnabledAnyUser(),
         ),
       compile: (currentMemory, material, instructionMode, model, signal) =>
         compileMemory({

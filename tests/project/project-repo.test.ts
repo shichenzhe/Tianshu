@@ -30,14 +30,20 @@ vi.mock("node:fs/promises", () => ({ default: fsStub, ...fsStub }));
 // prisma stub：各测试按需覆写实现（vi.hoisted 使其在 vi.mock 工厂执行前初始化）
 const prismaStub = vi.hoisted(() => ({
   project: {
+    // 默认返回 ownerId=UID 行（v12 归属校验数据源；clearAllMocks 不清实现）
+    findUnique: vi.fn().mockResolvedValue({ id: 11, ownerId: 1 }),
     findFirst: vi.fn(),
     findMany: vi.fn(),
-    findUnique: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
-  projectMember: { create: vi.fn(), deleteMany: vi.fn(), findMany: vi.fn() },
+  projectMember: {
+    create: vi.fn(),
+    deleteMany: vi.fn(),
+    findMany: vi.fn(),
+    findFirst: vi.fn(),
+  },
   projectBinding: {
     createMany: vi.fn(),
     deleteMany: vi.fn(),
@@ -78,6 +84,9 @@ import {
 
 const repo = new ProjectRepository();
 
+/** 测试用户 id（v12 起 userId 由 token 解出，repo 方法末位参数） */
+const UID = 1;
+
 /** 期望中的资产目录/项目根目录（与实现 path.join 口径一致） */
 const assetsDir = (projectId: number) =>
   path.join(USER_DATA, "projects", String(projectId), "assets");
@@ -89,24 +98,24 @@ describe("ProjectRepository.create", () => {
 
   it("同名项目 → 抛 PROJECT_NAME_EXISTS", async () => {
     prismaStub.project.findFirst.mockResolvedValue({ id: 1 });
-    await expect(repo.create({ ownerId: 1, name: "test" })).rejects.toThrow(
-      PROJECT_NAME_EXISTS,
-    );
+    await expect(
+      repo.create({ ownerId: 1, name: "test" }, UID),
+    ).rejects.toThrow(PROJECT_NAME_EXISTS);
     expect(prismaStub.project.create).not.toHaveBeenCalled();
   });
 
-  it("全局最近选过模型 → 项目 session 继承该模型（继承查询不限空间）", async () => {
+  it("同用户最近选过模型 → 项目 session 继承该模型（v12 继承限本人会话）", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
     prismaStub.project.create.mockResolvedValue({ id: 11, name: "t2" });
     prismaStub.workspace.create.mockResolvedValue({ id: 30 });
     prismaStub.session.findFirst.mockResolvedValueOnce({ currentModelId: 42 });
     prismaStub.session.create.mockResolvedValue({ id: 22, projectId: 11 });
 
-    await repo.create({ ownerId: 1, name: "t2" });
+    await repo.create({ ownerId: 1, name: "t2" }, UID);
 
     expect(prismaStub.session.findFirst).toHaveBeenCalledTimes(1);
     expect(prismaStub.session.findFirst).toHaveBeenCalledWith({
-      where: { currentModelId: { not: null } },
+      where: { currentModelId: { not: null }, userId: UID },
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
       select: { currentModelId: true },
     });
@@ -117,6 +126,7 @@ describe("ProjectRepository.create", () => {
           workspaceId: 30,
           title: "t2",
           currentModelId: 42,
+          userId: UID,
         },
       }),
     );
@@ -129,27 +139,34 @@ describe("ProjectRepository.create", () => {
     prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 23, projectId: 12 });
 
-    await repo.create({ ownerId: 1, name: "t3" });
+    await repo.create({ ownerId: 1, name: "t3" }, UID);
 
     expect(prismaStub.session.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: { projectId: 12, workspaceId: 31, title: "t3" },
+        data: { projectId: 12, workspaceId: 31, title: "t3", userId: UID },
       }),
     );
   });
 
   it("正常创建 → 建 project + 资产目录 + 资产空间 + owner member + 项目 session + 欢迎消息", async () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
-    prismaStub.project.create.mockResolvedValue({ id: 11, name: "test" });
+    prismaStub.project.create.mockResolvedValue({
+      id: 11,
+      name: "test",
+      ownerId: UID,
+    });
     prismaStub.workspace.create.mockResolvedValue({ id: 30 });
     prismaStub.session.findFirst.mockResolvedValueOnce({ currentModelId: 42 });
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
 
-    const result = await repo.create({
-      ownerId: 1,
-      name: "test",
-      welcomeMessage: "欢迎",
-    });
+    const result = await repo.create(
+      {
+        ownerId: 1,
+        name: "test",
+        welcomeMessage: "欢迎",
+      },
+      UID,
+    );
 
     expect(fsStub.mkdir).toHaveBeenCalledWith(assetsDir(11), {
       recursive: true,
@@ -159,6 +176,7 @@ describe("ProjectRepository.create", () => {
         name: "资产 · test",
         directoryPath: assetsDir(11),
         projectId: 11,
+        userId: UID,
       },
     });
     expect(prismaStub.projectMember.create).toHaveBeenCalledWith(
@@ -166,10 +184,10 @@ describe("ProjectRepository.create", () => {
         data: { projectId: 11, userId: 1, role: "owner" },
       }),
     );
-    // 项目 session 挂资产空间（workspaceId=30），模型走全局继承（无 workspaceId 条件）
+    // 项目 session 挂资产空间（workspaceId=30），模型走本人最近会话继承
     expect(prismaStub.session.findFirst).toHaveBeenCalledTimes(1);
     expect(prismaStub.session.findFirst).toHaveBeenCalledWith({
-      where: { currentModelId: { not: null } },
+      where: { currentModelId: { not: null }, userId: UID },
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
       select: { currentModelId: true },
     });
@@ -180,6 +198,7 @@ describe("ProjectRepository.create", () => {
           workspaceId: 30,
           title: "test",
           currentModelId: 42,
+          userId: UID,
         },
       }),
     );
@@ -197,7 +216,7 @@ describe("ProjectRepository.create", () => {
     prismaStub.workspace.create.mockResolvedValue({ id: 31 });
     prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 22, projectId: 12 });
-    await repo.create({ ownerId: 1, name: "t2" });
+    await repo.create({ ownerId: 1, name: "t2" }, UID);
     expect(prismaStub.message.create).not.toHaveBeenCalled();
   });
 
@@ -207,11 +226,14 @@ describe("ProjectRepository.create", () => {
     prismaStub.workspace.create.mockResolvedValue({ id: 30 });
     prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
-    await repo.create({
-      ownerId: 1,
-      name: "b",
-      bindings: [{ itemType: "assistant", itemId: 3 }],
-    });
+    await repo.create(
+      {
+        ownerId: 1,
+        name: "b",
+        bindings: [{ itemType: "assistant", itemId: 3 }],
+      },
+      UID,
+    );
     expect(prismaStub.projectBinding.createMany).toHaveBeenCalledWith({
       data: [{ projectId: 11, itemType: "assistant", itemId: 3 }],
     });
@@ -223,7 +245,7 @@ describe("ProjectRepository.create", () => {
     prismaStub.workspace.create.mockResolvedValue({ id: 30 });
     prismaStub.session.findFirst.mockResolvedValueOnce(null);
     prismaStub.session.create.mockResolvedValue({ id: 21, projectId: 11 });
-    await repo.create({ ownerId: 1, name: "b" });
+    await repo.create({ ownerId: 1, name: "b" }, UID);
     expect(prismaStub.projectBinding.createMany).not.toHaveBeenCalled();
   });
 
@@ -231,7 +253,7 @@ describe("ProjectRepository.create", () => {
     prismaStub.project.findFirst.mockResolvedValue(null);
     prismaStub.project.create.mockResolvedValue({ id: 11, name: "t" });
     fsStub.mkdir.mockRejectedValueOnce(new Error("EACCES: permission denied"));
-    await expect(repo.create({ ownerId: 1, name: "t" })).rejects.toThrow(
+    await expect(repo.create({ ownerId: 1, name: "t" }, UID)).rejects.toThrow(
       /资产目录创建失败/,
     );
     expect(prismaStub.workspace.create).not.toHaveBeenCalled();
@@ -246,7 +268,7 @@ describe("ProjectRepository.remove", () => {
     prismaStub.workspace.findFirst.mockResolvedValue(null);
     prismaStub.planItem.findMany.mockResolvedValue([{ id: 101 }, { id: 102 }]);
     prismaStub.session.findMany.mockResolvedValue([{ id: 21 }, { id: 22 }]);
-    await repo.remove(11);
+    await repo.remove(11, UID);
     expect(fsStub.rm).not.toHaveBeenCalled();
     expect(prismaStub.workspace.delete).not.toHaveBeenCalled();
     // 三期级联：项目计划事项随项目删除（本地任务 projectId null 不受影响）
@@ -295,7 +317,7 @@ describe("ProjectRepository.remove", () => {
     });
     prismaStub.planItem.findMany.mockResolvedValue([]);
     prismaStub.session.findMany.mockResolvedValue([{ id: 21 }]);
-    await repo.remove(11);
+    await repo.remove(11, UID);
     expect(fsStub.rm).toHaveBeenCalledWith(projectRootDir(11), {
       recursive: true,
       force: true,
@@ -320,7 +342,7 @@ describe("ProjectRepository.remove", () => {
     fsStub.rm.mockRejectedValueOnce(new Error("EACCES: permission denied"));
     prismaStub.planItem.findMany.mockResolvedValue([]);
     prismaStub.session.findMany.mockResolvedValue([]);
-    await expect(repo.remove(11)).resolves.toBeUndefined();
+    await expect(repo.remove(11, UID)).resolves.toBeUndefined();
     expect(prismaStub.workspace.delete).toHaveBeenCalledWith({
       where: { id: 30 },
     });
@@ -369,7 +391,7 @@ describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
     });
     prismaStub.projectBinding.findMany.mockResolvedValue([]);
 
-    const detail = await repo.getDetail(11);
+    const detail = await repo.getDetail(11, UID);
 
     expect(fsStub.mkdir).toHaveBeenCalledWith(assetsDir(11), {
       recursive: true,
@@ -379,6 +401,7 @@ describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
         name: "资产 · 旧项目",
         directoryPath: assetsDir(11),
         projectId: 11,
+        userId: UID,
       },
     });
     expect(prismaStub.session.updateMany).toHaveBeenCalledWith({
@@ -401,7 +424,7 @@ describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
     });
     prismaStub.projectBinding.findMany.mockResolvedValue([]);
 
-    const detail = await repo.getDetail(11);
+    const detail = await repo.getDetail(11, UID);
 
     expect(fsStub.mkdir).not.toHaveBeenCalled();
     expect(prismaStub.workspace.create).not.toHaveBeenCalled();
@@ -412,7 +435,7 @@ describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
   it("项目或会话不存在 → 抛 PROJECT_NOT_FOUND", async () => {
     prismaStub.project.findUnique.mockResolvedValue(null);
     prismaStub.session.findFirst.mockResolvedValue(null);
-    await expect(repo.getDetail(99)).rejects.toThrow(PROJECT_NOT_FOUND);
+    await expect(repo.getDetail(99, UID)).rejects.toThrow(PROJECT_NOT_FOUND);
     expect(prismaStub.workspace.create).not.toHaveBeenCalled();
   });
 });
@@ -425,14 +448,14 @@ describe("ProjectRepository.update", () => {
       name: "a",
     });
     prismaStub.project.findFirst.mockResolvedValue({ id: 2 });
-    await expect(repo.update({ id: 1, name: "b" })).rejects.toThrow(
+    await expect(repo.update({ id: 1, name: "b" }, UID)).rejects.toThrow(
       PROJECT_NAME_EXISTS,
     );
   });
 
   it("项目不存在 → 抛 PROJECT_NOT_FOUND", async () => {
     prismaStub.project.findUnique.mockResolvedValue(null);
-    await expect(repo.update({ id: 99, name: "x" })).rejects.toThrow(
+    await expect(repo.update({ id: 99, name: "x" }, UID)).rejects.toThrow(
       PROJECT_NOT_FOUND,
     );
   });
@@ -440,10 +463,16 @@ describe("ProjectRepository.update", () => {
 
 describe("ProjectRepository.setBindings", () => {
   it("全量替换：先清空再批量写入", async () => {
-    await repo.setBindings(11, [
-      { itemType: "assistant", itemId: 3 },
-      { itemType: "skill", itemId: 4 },
-    ]);
+    // 归属校验数据源（上一 describe 曾把 findUnique 覆写为 null，需复位）
+    prismaStub.project.findUnique.mockResolvedValue({ id: 11, ownerId: UID });
+    await repo.setBindings(
+      11,
+      [
+        { itemType: "assistant", itemId: 3 },
+        { itemType: "skill", itemId: 4 },
+      ],
+      UID,
+    );
     expect(prismaStub.projectBinding.deleteMany).toHaveBeenCalledWith({
       where: { projectId: 11 },
     });
@@ -554,6 +583,8 @@ describe("ProjectRepository.listMembers", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("返回成员列表（joinedAt 序）并 join user 取昵称（缺昵称回退用户名）", async () => {
+    // 归属校验数据源（防前序用例覆写污染）
+    prismaStub.project.findUnique.mockResolvedValue({ id: 11, ownerId: UID });
     const now = new Date("2026-09-01T00:00:00Z");
     prismaStub.projectMember.findMany.mockResolvedValue([
       { projectId: 11, userId: 2, role: "member", joinedAt: now },
@@ -563,7 +594,7 @@ describe("ProjectRepository.listMembers", () => {
       { id: 1, nickname: "黄", username: "hjx" },
       { id: 2, nickname: "", username: "ai_bot" },
     ]);
-    const members = await repo.listMembers(11);
+    const members = await repo.listMembers(11, UID);
     expect(members).toEqual([
       { userId: 2, nickname: "ai_bot", username: "ai_bot", role: "member" },
       { userId: 1, nickname: "黄", username: "hjx", role: "owner" },

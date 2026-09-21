@@ -4,6 +4,7 @@
  * 搜索——AI 侧会话查询全部隐含 projectId: null，前端行为不变。
  * 二期（spec §3.2）：项目资产空间（workspace.projectId 非空）同样
  * 不进 AI 侧边栏空间分组树（listWorkspaces 过滤 projectId: null）。
+ * v12 多用户隔离：全部查询携带 userId（token 解出，不信任前端）。
  * 依赖经 vi.mock 替换（electron ipcMain / Log / prisma client），
  * 沿用 session-repo.test.ts 的 mock 模式。
  */
@@ -15,6 +16,9 @@ vi.mock("../../electron/commons/Log", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+/** 测试用户 id（v12 起所有查询/归属校验维度） */
+const UID = 3;
+
 const { prismaStub, sessionFindMany, messageFindMany, workspaceFindMany } =
   vi.hoisted(() => {
     const sessionFindMany = vi.fn().mockResolvedValue([]);
@@ -23,13 +27,14 @@ const { prismaStub, sessionFindMany, messageFindMany, workspaceFindMany } =
     const prismaStub = {
       session: {
         findMany: sessionFindMany,
-        findFirst: vi.fn().mockResolvedValue(null),
+        findFirst: vi.fn().mockResolvedValue({ id: 1, userId: 3 }),
       },
       message: { findMany: messageFindMany },
-      // 构造函数 ensureDefaultWorkspace 走 workspace.count（返回非 0 跳过建默认空间）
+      // listWorkspaces 空 count 时补建默认空间（返回非 0 跳过）
       workspace: {
         count: vi.fn().mockResolvedValue(1),
         findMany: workspaceFindMany,
+        findFirst: vi.fn().mockResolvedValue({ id: 1, userId: 3 }),
       },
     };
     return { prismaStub, sessionFindMany, messageFindMany, workspaceFindMany };
@@ -45,7 +50,7 @@ const repo = new SessionRepository();
 
 describe("会话隔离（项目会话不进 AI 任务树/搜索）", () => {
   it("listAllSessions 查询含 projectId: null", async () => {
-    await repo.listAllSessions();
+    await repo.listAllSessions(UID);
     expect(sessionFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ projectId: null }),
@@ -54,7 +59,7 @@ describe("会话隔离（项目会话不进 AI 任务树/搜索）", () => {
   });
 
   it("listSessions 查询含 projectId: null", async () => {
-    await repo.listSessions(1);
+    await repo.listSessions(1, UID);
     expect(sessionFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ projectId: null }),
@@ -63,7 +68,7 @@ describe("会话隔离（项目会话不进 AI 任务树/搜索）", () => {
   });
 
   it("searchSessionsByTitle 查询含 projectId: null", async () => {
-    await repo.searchSessionsByTitle("kw");
+    await repo.searchSessionsByTitle("kw", UID);
     expect(sessionFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ projectId: null }),
@@ -73,9 +78,9 @@ describe("会话隔离（项目会话不进 AI 任务树/搜索）", () => {
 
   it("searchMessages 先查非项目会话 id 集再限定消息范围", async () => {
     sessionFindMany.mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
-    await repo.searchMessages("kw");
+    await repo.searchMessages("kw", UID);
     expect(sessionFindMany).toHaveBeenCalledWith({
-      where: { projectId: null },
+      where: { projectId: null, userId: UID },
       select: { id: true },
     });
     expect(messageFindMany).toHaveBeenCalledWith(
@@ -86,9 +91,9 @@ describe("会话隔离（项目会话不进 AI 任务树/搜索）", () => {
   });
 
   it("listWorkspaces 查询含 projectId: null（资产空间不进侧边栏分组树）", async () => {
-    await repo.listWorkspaces();
+    await repo.listWorkspaces(UID);
     expect(workspaceFindMany).toHaveBeenCalledWith({
-      where: { projectId: null },
+      where: { projectId: null, userId: UID },
       orderBy: { createdAt: "asc" },
     });
   });

@@ -8,8 +8,8 @@
  * - 表格渲染全列（标题/状态/处理人/优先级/标签 + 动态自定义字段列与缺值 --）
  * - 行内状态 Select 切换走 move 通道（id + 目标状态 + sortOrder=目标列 max+1，
  *   不调 update）；优先级切换走 update({ id, priority })（不调 move）
- * - 快速新增回车 → create（createdById/assigneeId/projectId/title 缺省态）+ 双 key 失效；
- *   空标题回车忽略
+ * - 快速新增回车 → create（assigneeId/projectId/title 缺省态，createdById
+ *   由 token 注入不透传）+ 双 key 失效；空标题回车忽略
  * - 筛选组合：经组合筛选面板（PlanFilterPopover）施加标签(contains 输入)/
  *   状态(多选)/优先级(多选)条件，跨维度 AND 过滤（draft.conditions 经引擎
  *   filterItems 生效）；搜索标题包含过滤
@@ -514,8 +514,8 @@ describe("PlanPane 快速新增", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() =>
+      // v12：createdById 不再由前端传（token 注入 userId）
       expect(PlanItemApi.create).toHaveBeenCalledWith({
-        createdById: 1,
         assigneeId: 1,
         projectId: 1,
         title: "快速新增事项",

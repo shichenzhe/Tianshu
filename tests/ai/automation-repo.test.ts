@@ -16,7 +16,7 @@ vi.mock("../../electron/commons/prisma-client", () => ({
   // listRuns where 组合用例需要 automationRun/automationTask 查询桩
   default: {
     automationRun: { count: vi.fn(), findMany: vi.fn() },
-    automationTask: { findMany: vi.fn() },
+    automationTask: { findMany: vi.fn(), findFirst: vi.fn() },
   },
 }));
 
@@ -25,6 +25,9 @@ import AutomationRepository, {
   buildTaskData,
 } from "../../electron/domains/ai/automation/automation.repo";
 import prisma from "../../electron/commons/prisma-client";
+
+/** 测试用户 id（v12 起任务/运行记录按用户隔离，repo 方法末位参数） */
+const UID = 1;
 
 const row = {
   id: 1,
@@ -180,9 +183,16 @@ describe("listRuns where 组合", () => {
   it("taskId/status 只传有值者;分页 skip/take 随页码", async () => {
     vi.mocked(prisma.automationRun.count).mockResolvedValue(0);
     vi.mocked(prisma.automationRun.findMany).mockResolvedValue([]);
+    // v12：指定 taskId 先经归属校验；不指定时收敛本人任务 id 集
+    vi.mocked(prisma.automationTask.findFirst).mockResolvedValue({
+      id: 7,
+    } as never);
     vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
     const repo = new AutomationRepository();
-    await repo.listRuns(1, 7, "failed");
+    await repo.listRuns(1, 7, "failed", UID);
+    expect(prisma.automationTask.findFirst).toHaveBeenCalledWith({
+      where: { id: 7, userId: UID },
+    });
     expect(prisma.automationRun.count).toHaveBeenCalledWith({
       where: { taskId: 7, status: "failed" },
     });
@@ -193,12 +203,25 @@ describe("listRuns where 组合", () => {
         take: 20,
       }),
     );
-    await repo.listRuns(3);
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([
+      { id: 1 },
+      { id: 2 },
+    ] as never);
+    await repo.listRuns(3, undefined, undefined, UID);
+    // 本轮第 2 次调用为 owned 收敛（第 3 次是 names 反查，rows 空集）
+    expect(prisma.automationTask.findMany).toHaveBeenNthCalledWith(2, {
+      where: { userId: UID },
+      select: { id: true },
+    });
     expect(prisma.automationRun.count).toHaveBeenLastCalledWith({
-      where: {},
+      where: { taskId: { in: [1, 2] } },
     });
     expect(prisma.automationRun.findMany).toHaveBeenLastCalledWith(
-      expect.objectContaining({ where: {}, skip: 40, take: 20 }),
+      expect.objectContaining({
+        where: { taskId: { in: [1, 2] } },
+        skip: 40,
+        take: 20,
+      }),
     );
   });
 });

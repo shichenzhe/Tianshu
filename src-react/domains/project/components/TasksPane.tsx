@@ -115,12 +115,12 @@ export default function TasksPane() {
 
   const itemsQuery = useQuery({
     queryKey: PLAN_ITEMS_MINE_KEY(user.id),
-    queryFn: () => PlanItemApi.listMine(user.id),
+    queryFn: () => PlanItemApi.listMine(),
   });
   // 项目名解析：复用 hub 的 ["projects", userId] 缓存（前缀一致可共享）
   const projectsQuery = useQuery({
     queryKey: ["projects", user.id],
-    queryFn: () => ProjectApi.list(user.id),
+    queryFn: () => ProjectApi.list(),
   });
 
   const items = useMemo(() => itemsQuery.data ?? [], [itemsQuery.data]);

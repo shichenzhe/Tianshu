@@ -2,6 +2,7 @@
  * IPC 通信封装
  * 提供类型安全的 IPC 调用方法
  */
+import { useUserStore } from "@/domains/user/store/user.store";
 
 export type IPCChannel =
   // user 域
@@ -202,6 +203,14 @@ export type IPCChannel =
   | "update-log:getConfig";
 
 /**
+ * 业务 IPC 末尾统一追加的登录 token（主进程 electron/commons/ipc-user.ts
+ * 解出 userId；用户域等白名单通道由 handler 忽略该参数）
+ */
+function authToken(): string {
+  return useUserStore.getState().user.token;
+}
+
+/**
  * 调用主进程方法
  */
 export async function invoke<T = unknown>(
@@ -211,7 +220,8 @@ export async function invoke<T = unknown>(
   if (!window.ipcRenderer) {
     throw new Error("IPC Renderer not available");
   }
-  return window.ipcRenderer.invoke(channel, ...args) as Promise<T>;
+  // 末尾统一追加登录 token：业务通道解出 userId，白名单通道忽略
+  return window.ipcRenderer.invoke(channel, ...args, authToken()) as Promise<T>;
 }
 
 /**
@@ -221,7 +231,7 @@ export function send(channel: string, ...args: unknown[]): void {
   if (!window.ipcRenderer) {
     throw new Error("IPC Renderer not available");
   }
-  window.ipcRenderer.send(channel, ...args);
+  window.ipcRenderer.send(channel, ...args, authToken());
 }
 
 /**

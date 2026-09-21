@@ -27,8 +27,9 @@ model option {
   name  String
   value String
   note  String?
+  userId Int? // v12 多用户隔离；type="app" 恒 NULL = 应用级共享
 
-  @@unique([type, name], map: "idx_option_type_name")
+  @@unique([type, name, userId], map: "idx_option_type_name_user")
   @@index([type], map: "option_type_index")
 }
 
@@ -42,6 +43,9 @@ model provider {
   enabled      Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  userId       Int? // v12 多用户隔离
+
+  @@index([userId], map: "provider_userId_index")
 }
 
 model model {
@@ -71,6 +75,9 @@ model assistant {
   builtin      Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  userId       Int? // v12 多用户隔离
+
+  @@index([userId], map: "assistant_userId_index")
 }
 
 model workspace {
@@ -83,8 +90,10 @@ model workspace {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   projectId       Int?
+  userId          Int? // v12 多用户隔离
 
   @@index([projectId], map: "workspace_projectId_index")
+  @@index([userId], map: "workspace_userId_index")
 }
 
 model session {
@@ -103,8 +112,10 @@ model session {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   lastMessageAt  DateTime?
+  userId         Int? // v12 多用户隔离（冗余列，创建时随工作空间写入）
 
   @@index([projectId], map: "session_projectId_index")
+  @@index([userId], map: "session_userId_index")
 }
 
 model message {
@@ -133,6 +144,9 @@ model mcpServer {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  userId    Int? // v12 多用户隔离
+
+  @@index([userId], map: "mcpServer_userId_index")
 }
 
 model toolPermission {
@@ -185,11 +199,13 @@ model automationTask {
   nextRunAt    DateTime?
   templateSlug String?
   projectId    Int?      // NULL = 全局任务（子系统 E）
+  userId       Int?      // v12 多用户隔离
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
   @@index([enabled])
   @@index([projectId], map: "automation_task_projectId_index")
+  @@index([userId], map: "automation_task_userId_index")
 }
 
 model automationRun {
@@ -326,8 +342,10 @@ model libraryItem {
   mimeType     String?
   size         Int?
   originalPath String?
+  userId       Int? // v12 多用户隔离（新建时随根继承）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([parentId])
+  @@index([userId], map: "libraryItem_userId_index")
 }

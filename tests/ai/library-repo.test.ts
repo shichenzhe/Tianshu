@@ -39,6 +39,14 @@ vi.mock("../../electron/commons/prisma-client", () => ({
             }),
           ),
       ),
+      findFirst: vi.fn(
+        async ({ where }: { where?: Record<string, unknown> } = {}) =>
+          table.find((row) =>
+            Object.entries(where ?? {}).every(
+              ([key, value]) => row[key] === value,
+            ),
+          ) ?? null,
+      ),
       findUnique: vi.fn(
         async ({ where }: { where: { id: number } }) =>
           table.find((row) => row.id === where.id) ?? null,
@@ -86,6 +94,9 @@ vi.mock("../../electron/commons/prisma-client", () => ({
 
 import LibraryRepository from "../../electron/domains/ai/library/library.repo";
 
+/** 测试用户 id（v12 起资料库按用户隔离，repo 方法末位参数） */
+const UID = 1;
+
 beforeEach(() => {
   table.length = 0;
   nextId = 1;
@@ -94,10 +105,10 @@ beforeEach(() => {
 describe("LibraryRepository 元数据通道", () => {
   it("createFolder 重名自动序号；list 返回面包屑与 folder 置前", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("工作", null);
-    const f2 = await repo.createFolder("工作", null);
+    const f1 = await repo.createFolder("工作", null, UID);
+    const f2 = await repo.createFolder("工作", null, UID);
     expect(f2.name).toBe("工作 (2)");
-    const file = await repo.createFolder("a.md", f1.id);
+    const file = await repo.createFolder("a.md", f1.id, UID);
     Object.assign(
       table.find((r) => r.id === file.id)!,
       {
@@ -105,64 +116,66 @@ describe("LibraryRepository 元数据通道", () => {
         fileType: "text",
       },
     );
-    const { items, breadcrumbs } = await repo.list(f1.id);
+    const { items, breadcrumbs } = await repo.list(f1.id, UID);
     expect(items.map((i: { name: string }) => i.name)).toEqual(["a.md"]);
     expect(breadcrumbs.map((b: { id: number }) => b.id)).toEqual([f1.id]);
-    const root = await repo.list(null);
+    const root = await repo.list(null, UID);
     expect(root.items[0].kind).toBe("folder");
   });
 
   it("move 移入自身子树被拒", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("A", null);
-    const f2 = await repo.createFolder("B", f1.id);
-    await expect(repo.move([f1.id], f2.id)).rejects.toThrow();
+    const f1 = await repo.createFolder("A", null, UID);
+    const f2 = await repo.createFolder("B", f1.id, UID);
+    await expect(repo.move([f1.id], f2.id, UID)).rejects.toThrow();
   });
 
   it("delete 级联删除子树记录", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("A", null);
-    await repo.createFolder("B", f1.id);
-    await repo.delete([f1.id]);
+    const f1 = await repo.createFolder("A", null, UID);
+    await repo.createFolder("B", f1.id, UID);
+    await repo.delete([f1.id], UID);
     expect(table).toHaveLength(0);
   });
 
   it("createFolder 校验上级存在且为文件夹", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("A", null);
-    const file = await repo.createFolder("伪文件", f1.id);
+    const f1 = await repo.createFolder("A", null, UID);
+    const file = await repo.createFolder("伪文件", f1.id, UID);
     Object.assign(
       table.find((r) => r.id === file.id)!,
       { kind: "file" },
     );
-    await expect(repo.createFolder("B", 999)).rejects.toThrow("条目不存在");
-    await expect(repo.createFolder("B", file.id)).rejects.toThrow(
+    await expect(repo.createFolder("B", 999, UID)).rejects.toThrow(
+      "条目不存在",
+    );
+    await expect(repo.createFolder("B", file.id, UID)).rejects.toThrow(
       "上级必须是文件夹",
     );
   });
 
   it("subtreeCount 统计全部后代（不含自身）；无子为 0", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("A", null);
-    const f2 = await repo.createFolder("B", f1.id);
-    await repo.createFolder("C", f2.id);
-    const f4 = await repo.createFolder("E", null);
-    expect(await repo.subtreeCount(f1.id)).toBe(2);
-    expect(await repo.subtreeCount(f2.id)).toBe(1);
-    expect(await repo.subtreeCount(f4.id)).toBe(0);
-    await expect(repo.subtreeCount(999)).rejects.toThrow("条目不存在");
+    const f1 = await repo.createFolder("A", null, UID);
+    const f2 = await repo.createFolder("B", f1.id, UID);
+    await repo.createFolder("C", f2.id, UID);
+    const f4 = await repo.createFolder("E", null, UID);
+    expect(await repo.subtreeCount(f1.id, UID)).toBe(2);
+    expect(await repo.subtreeCount(f2.id, UID)).toBe(1);
+    expect(await repo.subtreeCount(f4.id, UID)).toBe(0);
+    await expect(repo.subtreeCount(999, UID)).rejects.toThrow("条目不存在");
   });
 
   it("tree 返回全量 folder 平铺（含层级 id，不含 file）", async () => {
     const repo = new LibraryRepository();
-    const f1 = await repo.createFolder("A", null);
-    await repo.createFolder("B", f1.id);
-    const file = await repo.createFolder("伪文件", f1.id);
+    const f1 = await repo.createFolder("A", null, UID);
+    await repo.createFolder("B", f1.id, UID);
+    const file = await repo.createFolder("伪文件", f1.id, UID);
     Object.assign(
       table.find((r) => r.id === file.id)!,
       { kind: "file" },
     );
-    const tree = await repo.tree();
+    const tree = await repo.tree(UID);
     expect(tree).toHaveLength(2);
     expect(tree.find((n) => n.id === f1.id)?.parentId).toBeNull();
     expect(tree.find((n) => n.name === "B")?.parentId).toBe(f1.id);

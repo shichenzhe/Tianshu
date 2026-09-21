@@ -2276,7 +2276,8 @@ export const OptionScalarFieldEnum = {
   type: 'type',
   name: 'name',
   value: 'value',
-  note: 'note'
+  note: 'note',
+  userId: 'userId'
 } as const
 
 export type OptionScalarFieldEnum = (typeof OptionScalarFieldEnum)[keyof typeof OptionScalarFieldEnum]
@@ -2291,7 +2292,8 @@ export const ProviderScalarFieldEnum = {
   extraHeaders: 'extraHeaders',
   enabled: 'enabled',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  userId: 'userId'
 } as const
 
 export type ProviderScalarFieldEnum = (typeof ProviderScalarFieldEnum)[keyof typeof ProviderScalarFieldEnum]
@@ -2324,7 +2326,8 @@ export const AssistantScalarFieldEnum = {
   maxTokens: 'maxTokens',
   builtin: 'builtin',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  userId: 'userId'
 } as const
 
 export type AssistantScalarFieldEnum = (typeof AssistantScalarFieldEnum)[keyof typeof AssistantScalarFieldEnum]
@@ -2339,7 +2342,8 @@ export const WorkspaceScalarFieldEnum = {
   writeApprovedAt: 'writeApprovedAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  projectId: 'projectId'
+  projectId: 'projectId',
+  userId: 'userId'
 } as const
 
 export type WorkspaceScalarFieldEnum = (typeof WorkspaceScalarFieldEnum)[keyof typeof WorkspaceScalarFieldEnum]
@@ -2360,7 +2364,8 @@ export const SessionScalarFieldEnum = {
   compactedUpToId: 'compactedUpToId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
-  lastMessageAt: 'lastMessageAt'
+  lastMessageAt: 'lastMessageAt',
+  userId: 'userId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -2392,7 +2397,8 @@ export const McpServerScalarFieldEnum = {
   headers: 'headers',
   enabled: 'enabled',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  updatedAt: 'updatedAt',
+  userId: 'userId'
 } as const
 
 export type McpServerScalarFieldEnum = (typeof McpServerScalarFieldEnum)[keyof typeof McpServerScalarFieldEnum]
@@ -2455,6 +2461,7 @@ export const AutomationTaskScalarFieldEnum = {
   nextRunAt: 'nextRunAt',
   templateSlug: 'templateSlug',
   projectId: 'projectId',
+  userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
@@ -2602,6 +2609,7 @@ export const LibraryItemScalarFieldEnum = {
   mimeType: 'mimeType',
   size: 'size',
   originalPath: 'originalPath',
+  userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

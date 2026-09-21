@@ -201,6 +201,7 @@ const sessionsStub = (
       title: "新会话",
       mode,
       projectId,
+      userId: 1,
     })),
     getEffectiveModelId: vi.fn(async () => 11),
     appendMessage: vi.fn(
@@ -338,6 +339,7 @@ describe("两级审批判定（send 级集成）", () => {
     try {
       await service.send(
         { sessionId: 1, content: "hi" },
+        1,
         captureSender(chunks),
       );
       expect(hasApprovalChunk(chunks)).toBe(false);
@@ -375,6 +377,7 @@ describe("两级审批判定（send 级集成）", () => {
     const chunks: ChatStreamChunk[] = [];
     const pending = service.send(
       { sessionId: 1, content: "hi" },
+      1,
       captureSender(chunks),
     );
 
@@ -425,7 +428,11 @@ describe("两级审批判定（send 级集成）", () => {
     const service = new ChatService(sessionsStub(null));
     internals(service).permissions.set(1, "full");
     const chunks: ChatStreamChunk[] = [];
-    await service.send({ sessionId: 1, content: "hi" }, captureSender(chunks));
+    await service.send(
+      { sessionId: 1, content: "hi" },
+      1,
+      captureSender(chunks),
+    );
 
     expect(hasApprovalChunk(chunks)).toBe(false);
     expect(mcpExecuted).toEqual(["hi"]);
@@ -454,6 +461,7 @@ describe("两级审批判定（send 级集成）", () => {
     try {
       await service.send(
         { sessionId: 1, content: "hi" },
+        1,
         captureSender(chunks),
       );
 
@@ -490,6 +498,7 @@ describe("两级审批判定（send 级集成）", () => {
     const chunks: ChatStreamChunk[] = [];
     const pending = service.send(
       { sessionId: 1, content: "hi" },
+      1,
       captureSender(chunks),
     );
 
@@ -515,7 +524,7 @@ describe("模式组装（send 级）", () => {
     mockFactory.current = () => model;
     const service = new ChatService(sessionsStub("/tmp/ws", "ask"));
 
-    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+    await service.send({ sessionId: 1, content: "hi" }, 1, captureSender([]));
 
     expect(calls[0]?.toolNames).toEqual([]);
     expect(calls[0]?.system).toBe("你是问答助手");
@@ -529,7 +538,7 @@ describe("模式组装（send 级）", () => {
     mockFactory.current = () => model;
     const service = new ChatService(sessionsStub("/tmp/ws", "plan"));
 
-    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+    await service.send({ sessionId: 1, content: "hi" }, 1, captureSender([]));
 
     const system = calls[0]?.system ?? "";
     expect(system.startsWith("你是计划助手")).toBe(true);
@@ -580,7 +589,7 @@ describe("plan 工具组暴露门槛（项目会话专属，子系统 F）", () 
       projectRepoStub as never,
     );
 
-    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+    await service.send({ sessionId: 1, content: "hi" }, 1, captureSender([]));
 
     expect(calls[0]?.toolNames).toContain("plan_create_item");
     expect(calls[0]?.toolNames).toContain("plan_update_status");
@@ -594,7 +603,7 @@ describe("plan 工具组暴露门槛（项目会话专属，子系统 F）", () 
     mockFactory.current = () => model;
     const service = new ChatService(sessionsStub("/tmp/ws"));
 
-    await service.send({ sessionId: 1, content: "hi" }, captureSender([]));
+    await service.send({ sessionId: 1, content: "hi" }, 1, captureSender([]));
 
     expect(
       (calls[0]?.toolNames ?? []).some((name) => name.startsWith("plan_")),

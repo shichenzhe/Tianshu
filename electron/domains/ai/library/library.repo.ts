@@ -5,12 +5,13 @@
  * 记录后清盘）；rename/move 的 file 分支均磁盘双写（storagePath 派生自
  * name，纯 DB 改名会使路径断裂）；folder 无磁盘实体，仍纯 DB。
  */
-import { ipcMain, app, shell } from "electron";
+import { app, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
+import { handleUser } from "../../../commons/ipc-user";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import type {
   LibraryItem,
@@ -79,54 +80,61 @@ export default class LibraryRepository {
   }
 
   private registerHandlers(): void {
-    ipcMain.handle("library:list", (_e, parentId: number | null) =>
-      this.list(parentId),
+    handleUser("library:list", (_, userId, parentId: number | null) =>
+      this.list(parentId, userId),
     );
-    ipcMain.handle("library:search", (_e, keyword: string) =>
-      this.search(keyword),
+    handleUser("library:search", (_, userId, keyword: string) =>
+      this.search(keyword, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "library:createFolder",
-      (_e, name: string, parentId: number | null) =>
-        this.createFolder(name, parentId),
+      (_, userId, name: string, parentId: number | null) =>
+        this.createFolder(name, parentId, userId),
     );
-    ipcMain.handle("library:rename", (_e, id: number, name: string) =>
-      this.rename(id, name),
+    handleUser("library:rename", (_, userId, id: number, name: string) =>
+      this.rename(id, name, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "library:move",
-      (_e, ids: number[], targetParentId: number | null) =>
-        this.move(ids, targetParentId),
+      (_, userId, ids: number[], targetParentId: number | null) =>
+        this.move(ids, targetParentId, userId),
     );
-    ipcMain.handle("library:delete", (_e, ids: number[]) => this.delete(ids));
-    ipcMain.handle(
+    handleUser("library:delete", (_, userId, ids: number[]) =>
+      this.delete(ids, userId),
+    );
+    handleUser(
       "library:addFiles",
-      (_e, paths: string[], folderId: number | null) =>
-        this.addFiles(paths, folderId),
+      (_, userId, paths: string[], folderId: number | null) =>
+        this.addFiles(paths, folderId, userId),
     );
-    ipcMain.handle("library:revealItem", (_e, id: number) =>
-      this.revealItem(id),
+    handleUser("library:revealItem", (_, userId, id: number) =>
+      this.revealItem(id, userId),
     );
-    ipcMain.handle("library:subtreeCount", (_e, id: number) =>
-      this.subtreeCount(id),
+    handleUser("library:subtreeCount", (_, userId, id: number) =>
+      this.subtreeCount(id, userId),
     );
-    ipcMain.handle("library:tree", () => this.tree());
+    handleUser("library:tree", (_, userId) => this.tree(userId));
   }
 
   /** 单层列表（folder 置前基准序）+ 祖先链面包屑一次返回 */
-  async list(parentId: number | null): Promise<{
+  async list(
+    parentId: number | null,
+    userId: number,
+  ): Promise<{
     items: LibraryItem[];
     breadcrumbs: LibraryItem[];
   }> {
     const rows = await this.prismaClient.libraryItem.findMany({
-      where: { parentId },
+      where: { parentId, userId },
     });
     const items = rows
       .map((row) => toClientItem(row, this.libraryRoot))
       .sort(compareLibraryItems);
     let breadcrumbs: LibraryItem[] = [];
     if (parentId !== null) {
-      const all = await this.prismaClient.libraryItem.findMany();
+      const all = await this.prismaClient.libraryItem.findMany({
+        where: { userId },
+      });
       // 透传完整行（仅收紧 kind 类型）：链上对象原样流回 toClientItem，
       // 缺 createdAt 等字段会在 ISO 转换处崩
       breadcrumbs = buildBreadcrumbChain(
@@ -138,21 +146,25 @@ export default class LibraryRepository {
   }
 
   /** 跨层文件名搜索（仅 file；contains = SQLite LIKE，ASCII 大小写不敏感） */
-  async search(keyword: string): Promise<LibraryItem[]> {
+  async search(keyword: string, userId: number): Promise<LibraryItem[]> {
     if (!keyword.trim()) {
       return [];
     }
     const rows = await this.prismaClient.libraryItem.findMany({
-      where: { kind: "file", name: { contains: keyword.trim() } },
+      where: {
+        kind: "file",
+        name: { contains: keyword.trim() },
+        userId,
+      },
     });
     return rows.map((row) => toClientItem(row, this.libraryRoot));
   }
 
   /** 全量文件夹平铺（树形栏数据源；个人库量级小一次拉全，元数据
    *  变更后由前端 invalidate 重拉） */
-  async tree(): Promise<LibraryFolderNode[]> {
+  async tree(userId: number): Promise<LibraryFolderNode[]> {
     const rows = await this.prismaClient.libraryItem.findMany({
-      where: { kind: "folder" },
+      where: { kind: "folder", userId },
       select: { id: true, parentId: true, name: true },
     });
     return rows.map((row) => ({
@@ -166,19 +178,20 @@ export default class LibraryRepository {
   async createFolder(
     name: string,
     parentId: number | null,
+    userId: number,
   ): Promise<LibraryItem> {
     if (parentId !== null) {
-      const parent = await this.mustGet(parentId);
+      const parent = await this.mustGet(parentId, userId);
       if (parent.kind !== "folder") {
         throw new Error("上级必须是文件夹");
       }
     }
     const finalName = uniqueDbName(
-      await this.siblingNames(parentId),
+      await this.siblingNames(parentId, userId),
       sanitizeLibraryName(name),
     );
     const row = await this.prismaClient.libraryItem.create({
-      data: { parentId, name: finalName, kind: "folder" },
+      data: { parentId, name: finalName, kind: "folder", userId },
     });
     return toClientItem(row, this.libraryRoot);
   }
@@ -191,9 +204,14 @@ export default class LibraryRepository {
   async addFiles(
     paths: string[],
     folderId: number | null,
+    userId: number,
   ): Promise<AddFilesResult> {
     const result: AddFilesResult = { added: [], failed: [] };
-    const siblingNames = await this.siblingNames(folderId);
+    // 目标层归属校验（根层免校验，下方写入均带 userId）
+    if (folderId !== null) {
+      await this.mustGet(folderId, userId);
+    }
+    const siblingNames = await this.siblingNames(folderId, userId);
     for (const absPath of paths) {
       const baseName = path.basename(absPath);
       try {
@@ -209,6 +227,7 @@ export default class LibraryRepository {
             fileType: classifyFileType(name),
             mimeType: mimeOf(name),
             originalPath: absPath,
+            userId,
           },
         });
         const dir = storageDirOf(this.libraryRoot, row.id);
@@ -231,7 +250,7 @@ export default class LibraryRepository {
         siblingNames.add(name);
         result.added.push(
           toClientItem(
-            { ...row, size: (await this.mustGet(row.id)).size ?? null },
+            { ...row, size: (await this.mustGet(row.id, userId)).size ?? null },
             this.libraryRoot,
           ),
         );
@@ -246,8 +265,8 @@ export default class LibraryRepository {
   }
 
   /** Finder/资源管理器定位（file 定位文件本体、folder 定位其目录） */
-  async revealItem(id: number): Promise<null> {
-    const row = await this.mustGet(id);
+  async revealItem(id: number, userId: number): Promise<null> {
+    const row = await this.mustGet(id, userId);
     shell.showItemInFolder(
       row.kind === "file"
         ? path.join(this.libraryRoot, String(row.id), row.name)
@@ -261,10 +280,10 @@ export default class LibraryRepository {
    * update DB（storagePath 派生自当前 name，纯 DB rename 会使其断裂）；
    * 磁盘失败抛错、DB 不动。folder 无磁盘实体，仍走纯 DB。
    */
-  async rename(id: number, name: string): Promise<LibraryItem> {
-    const row = await this.mustGet(id);
+  async rename(id: number, name: string, userId: number): Promise<LibraryItem> {
+    const row = await this.mustGet(id, userId);
     const finalName = uniqueDbName(
-      await this.siblingNames(row.parentId ?? null, id),
+      await this.siblingNames(row.parentId ?? null, userId, id),
       sanitizeLibraryName(name),
     );
     if (row.kind === "file" && finalName !== row.name) {
@@ -279,8 +298,12 @@ export default class LibraryRepository {
 
   /** 移动：目标须为文件夹且不在被移项自身子树内（循环防护）；file 撞名
    *  改序号时磁盘双写（同 rename 模式——磁盘成功才动 DB），其余纯 DB */
-  async move(ids: number[], targetParentId: number | null): Promise<null> {
-    const rows = await this.allItemRows();
+  async move(
+    ids: number[],
+    targetParentId: number | null,
+    userId: number,
+  ): Promise<null> {
+    const rows = await this.allItemRows(userId);
     if (targetParentId !== null) {
       const target = rows.find((row) => row.id === targetParentId);
       if (!target || target.kind !== "folder") {
@@ -324,9 +347,10 @@ export default class LibraryRepository {
     return null;
   }
 
-  /** 级联删除子树记录（磁盘清理见 Task 4 cleanupDisk） */
-  async delete(ids: number[]): Promise<null> {
-    const rows = await this.allItemRows();
+  /** 级联删除子树记录（磁盘清理见 Task 4 cleanupDisk）；数据源按用户
+   *  过滤，他人条目不在子树集合内即不可删 */
+  async delete(ids: number[], userId: number): Promise<null> {
+    const rows = await this.allItemRows(userId);
     const subtreeIds = collectSubtreeIds(rows, ids);
     await this.prismaClient.libraryItem.deleteMany({
       where: { id: { in: subtreeIds } },
@@ -336,15 +360,17 @@ export default class LibraryRepository {
   }
 
   /** 子树内容数（删除确认提示用；含全部后代，不含自身） */
-  async subtreeCount(id: number): Promise<number> {
-    await this.mustGet(id);
-    const rows = await this.allItemRows();
+  async subtreeCount(id: number, userId: number): Promise<number> {
+    await this.mustGet(id, userId);
+    const rows = await this.allItemRows(userId);
     return collectSubtreeIds(rows, [id]).length - 1;
   }
 
-  /** 全表行投影（move/delete/subtreeCount 共用的循环防护数据源） */
-  private async allItemRows(): Promise<ItemRow[]> {
-    const rows = await this.prismaClient.libraryItem.findMany();
+  /** 用户全量行投影（move/delete/subtreeCount 共用的循环防护数据源） */
+  private async allItemRows(userId: number): Promise<ItemRow[]> {
+    const rows = await this.prismaClient.libraryItem.findMany({
+      where: { userId },
+    });
     return rows.map((row) => ({
       id: row.id,
       parentId: row.parentId ?? null,
@@ -372,22 +398,24 @@ export default class LibraryRepository {
     }
   }
 
-  /** 同层名集合（rename 时排除自身） */
+  /** 同层名集合（rename 时排除自身；同层同用户，根层跨用户需带 userId） */
   private async siblingNames(
     parentId: number | null,
+    userId: number,
     excludeId?: number,
   ): Promise<Set<string>> {
     const rows = await this.prismaClient.libraryItem.findMany({
-      where: { parentId },
+      where: { parentId, userId },
     });
     return new Set(
       rows.filter((row) => row.id !== excludeId).map((row) => row.name),
     );
   }
 
-  private async mustGet(id: number) {
-    const row = await this.prismaClient.libraryItem.findUnique({
-      where: { id },
+  /** 取行并校验归属当前用户（不存在与他人所有同报错，不泄露存在性） */
+  private async mustGet(id: number, userId: number) {
+    const row = await this.prismaClient.libraryItem.findFirst({
+      where: { id, userId },
     });
     if (!row) {
       throw new Error("条目不存在");

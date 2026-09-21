@@ -3,15 +3,19 @@
  * searchByTitle 的 LIKE/排序/take 语义、toSession 的新字段序列化。
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用
  * permissions-integration.test.ts 的 mock 模式。
- * 项目模块一期（Task 3）起，AI 侧查询均隐含 projectId: null（会话隔离）。
+ * 项目模块一期（Task 3）起，AI 侧查询均隐含 projectId: null（会话隔离）；
+ * v12 多用户隔离起，查询/校验均携带 userId（token 解出，不信任前端）。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const prismaStub = vi.hoisted(() => ({
-  workspace: { count: vi.fn(async () => 1) },
+  workspace: {
+    count: vi.fn(async () => 1),
+    findFirst: vi.fn(async () => ({})),
+  },
   session: {
     findMany: vi.fn(),
-    findFirst: vi.fn(),
+    findFirst: vi.fn(async () => ({})),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -40,6 +44,9 @@ vi.mock("../../electron/commons/prisma-client", () => ({
 import { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
 import type { SessionRow } from "../../electron/domains/ai/chat/session.repo";
 
+/** 测试用户 id（v12 起所有查询/归属校验维度） */
+const UID = 3;
+
 function makeRow(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
     id: 1,
@@ -63,6 +70,8 @@ describe("SessionRepository v5 扩展", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaStub.workspace.count.mockResolvedValue(1);
+    prismaStub.workspace.findFirst.mockResolvedValue({ id: 2, userId: UID });
+    prismaStub.session.findFirst.mockResolvedValue({ id: 1, userId: UID });
     repo = new SessionRepository();
   });
 
@@ -70,9 +79,9 @@ describe("SessionRepository v5 扩展", () => {
     prismaStub.session.findMany.mockResolvedValue([
       makeRow({ pinnedAt: new Date("2026-09-03T00:00:00Z") }),
     ]);
-    const rows = await repo.listAllSessions();
+    const rows = await repo.listAllSessions(UID);
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { archivedAt: null, projectId: null },
+      where: { archivedAt: null, projectId: null, userId: UID },
       orderBy: { lastMessageAt: "desc" },
     });
     expect(rows[0].pinnedAt).toBe("2026-09-03T00:00:00.000Z");
@@ -80,21 +89,21 @@ describe("SessionRepository v5 扩展", () => {
   });
 
   it("pinSession(true) 写当前时间、pinSession(false) 写 null", async () => {
-    await repo.pinSession(1, true);
+    await repo.pinSession(1, true, UID);
     const data = prismaStub.session.update.mock.calls[0][0].data;
     expect(data.pinnedAt).toBeInstanceOf(Date);
-    await repo.pinSession(1, false);
+    await repo.pinSession(1, false, UID);
     expect(prismaStub.session.update.mock.calls[1][0].data).toEqual({
       pinnedAt: null,
     });
   });
 
   it("archiveSession 同理切换 archivedAt", async () => {
-    await repo.archiveSession(1, true);
+    await repo.archiveSession(1, true, UID);
     expect(
       prismaStub.session.update.mock.calls[0][0].data.archivedAt,
     ).toBeInstanceOf(Date);
-    await repo.archiveSession(1, false);
+    await repo.archiveSession(1, false, UID);
     expect(prismaStub.session.update.mock.calls[1][0].data).toEqual({
       archivedAt: null,
     });
@@ -102,9 +111,14 @@ describe("SessionRepository v5 扩展", () => {
 
   it("searchSessionsByTitle 关键词模式：LIKE + 未归档 + 倒序 + take 20", async () => {
     prismaStub.session.findMany.mockResolvedValue([]);
-    await repo.searchSessionsByTitle("金价");
+    await repo.searchSessionsByTitle("金价", UID);
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { title: { contains: "金价" }, archivedAt: null, projectId: null },
+      where: {
+        title: { contains: "金价" },
+        archivedAt: null,
+        projectId: null,
+        userId: UID,
+      },
       orderBy: { updatedAt: "desc" },
       take: 20,
     });
@@ -112,9 +126,9 @@ describe("SessionRepository v5 扩展", () => {
 
   it("searchSessionsByTitle 空关键词：最近任务模式", async () => {
     prismaStub.session.findMany.mockResolvedValue([]);
-    await repo.searchSessionsByTitle("");
+    await repo.searchSessionsByTitle("", UID);
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
-      where: { archivedAt: null, projectId: null },
+      where: { archivedAt: null, projectId: null, userId: UID },
       orderBy: { updatedAt: "desc" },
       take: 20,
     });
@@ -122,7 +136,7 @@ describe("SessionRepository v5 扩展", () => {
 
   it("listSessions 补过滤 archivedAt: null", async () => {
     prismaStub.session.findMany.mockResolvedValue([]);
-    await repo.listSessions(2);
+    await repo.listSessions(2, UID);
     expect(prismaStub.session.findMany).toHaveBeenCalledWith({
       where: { workspaceId: 2, archivedAt: null, projectId: null },
       orderBy: { lastMessageAt: "desc" },
@@ -130,7 +144,7 @@ describe("SessionRepository v5 扩展", () => {
   });
 
   it("deleteSession 事务内先置空 automationRun.sessionId 再删消息与会话（孤儿 run 不残留死链）", async () => {
-    await repo.deleteSession(7);
+    await repo.deleteSession(7, UID);
     // 三操作经同一事务数组提交（先 run 置空、再消息、后会话）
     expect(prismaStub.$transaction).toHaveBeenCalledTimes(1);
     expect(prismaStub.automationRun.updateMany).toHaveBeenCalledWith({

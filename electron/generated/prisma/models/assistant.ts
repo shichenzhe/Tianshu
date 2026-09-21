@@ -31,6 +31,7 @@ export type AssistantAvgAggregateOutputType = {
   temperature: number | null
   topP: number | null
   maxTokens: number | null
+  userId: number | null
 }
 
 export type AssistantSumAggregateOutputType = {
@@ -38,6 +39,7 @@ export type AssistantSumAggregateOutputType = {
   temperature: number | null
   topP: number | null
   maxTokens: number | null
+  userId: number | null
 }
 
 export type AssistantMinAggregateOutputType = {
@@ -51,6 +53,7 @@ export type AssistantMinAggregateOutputType = {
   builtin: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  userId: number | null
 }
 
 export type AssistantMaxAggregateOutputType = {
@@ -64,6 +67,7 @@ export type AssistantMaxAggregateOutputType = {
   builtin: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
+  userId: number | null
 }
 
 export type AssistantCountAggregateOutputType = {
@@ -77,6 +81,7 @@ export type AssistantCountAggregateOutputType = {
   builtin: number
   createdAt: number
   updatedAt: number
+  userId: number
   _all: number
 }
 
@@ -86,6 +91,7 @@ export type AssistantAvgAggregateInputType = {
   temperature?: true
   topP?: true
   maxTokens?: true
+  userId?: true
 }
 
 export type AssistantSumAggregateInputType = {
@@ -93,6 +99,7 @@ export type AssistantSumAggregateInputType = {
   temperature?: true
   topP?: true
   maxTokens?: true
+  userId?: true
 }
 
 export type AssistantMinAggregateInputType = {
@@ -106,6 +113,7 @@ export type AssistantMinAggregateInputType = {
   builtin?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
 }
 
 export type AssistantMaxAggregateInputType = {
@@ -119,6 +127,7 @@ export type AssistantMaxAggregateInputType = {
   builtin?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
 }
 
 export type AssistantCountAggregateInputType = {
@@ -132,6 +141,7 @@ export type AssistantCountAggregateInputType = {
   builtin?: true
   createdAt?: true
   updatedAt?: true
+  userId?: true
   _all?: true
 }
 
@@ -232,6 +242,7 @@ export type AssistantGroupByOutputType = {
   builtin: boolean
   createdAt: Date
   updatedAt: Date
+  userId: number | null
   _count: AssistantCountAggregateOutputType | null
   _avg: AssistantAvgAggregateOutputType | null
   _sum: AssistantSumAggregateOutputType | null
@@ -268,6 +279,7 @@ export type assistantWhereInput = {
   builtin?: Prisma.BoolFilter<"assistant"> | boolean
   createdAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
+  userId?: Prisma.IntNullableFilter<"assistant"> | number | null
 }
 
 export type assistantOrderByWithRelationInput = {
@@ -281,6 +293,7 @@ export type assistantOrderByWithRelationInput = {
   builtin?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type assistantWhereUniqueInput = Prisma.AtLeast<{
@@ -297,6 +310,7 @@ export type assistantWhereUniqueInput = Prisma.AtLeast<{
   builtin?: Prisma.BoolFilter<"assistant"> | boolean
   createdAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
+  userId?: Prisma.IntNullableFilter<"assistant"> | number | null
 }, "id">
 
 export type assistantOrderByWithAggregationInput = {
@@ -310,6 +324,7 @@ export type assistantOrderByWithAggregationInput = {
   builtin?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.assistantCountOrderByAggregateInput
   _avg?: Prisma.assistantAvgOrderByAggregateInput
   _max?: Prisma.assistantMaxOrderByAggregateInput
@@ -331,6 +346,7 @@ export type assistantScalarWhereWithAggregatesInput = {
   builtin?: Prisma.BoolWithAggregatesFilter<"assistant"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"assistant"> | Date | string
+  userId?: Prisma.IntNullableWithAggregatesFilter<"assistant"> | number | null
 }
 
 export type assistantCreateInput = {
@@ -343,6 +359,7 @@ export type assistantCreateInput = {
   builtin?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type assistantUncheckedCreateInput = {
@@ -356,6 +373,7 @@ export type assistantUncheckedCreateInput = {
   builtin?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type assistantUpdateInput = {
@@ -368,6 +386,7 @@ export type assistantUpdateInput = {
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type assistantUncheckedUpdateInput = {
@@ -381,6 +400,7 @@ export type assistantUncheckedUpdateInput = {
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type assistantCreateManyInput = {
@@ -394,6 +414,7 @@ export type assistantCreateManyInput = {
   builtin?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
+  userId?: number | null
 }
 
 export type assistantUpdateManyMutationInput = {
@@ -406,6 +427,7 @@ export type assistantUpdateManyMutationInput = {
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type assistantUncheckedUpdateManyInput = {
@@ -419,6 +441,7 @@ export type assistantUncheckedUpdateManyInput = {
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type assistantCountOrderByAggregateInput = {
@@ -432,6 +455,7 @@ export type assistantCountOrderByAggregateInput = {
   builtin?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type assistantAvgOrderByAggregateInput = {
@@ -439,6 +463,7 @@ export type assistantAvgOrderByAggregateInput = {
   temperature?: Prisma.SortOrder
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type assistantMaxOrderByAggregateInput = {
@@ -452,6 +477,7 @@ export type assistantMaxOrderByAggregateInput = {
   builtin?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type assistantMinOrderByAggregateInput = {
@@ -465,6 +491,7 @@ export type assistantMinOrderByAggregateInput = {
   builtin?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 export type assistantSumOrderByAggregateInput = {
@@ -472,6 +499,7 @@ export type assistantSumOrderByAggregateInput = {
   temperature?: Prisma.SortOrder
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
+  userId?: Prisma.SortOrder
 }
 
 
@@ -487,6 +515,7 @@ export type assistantSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   builtin?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["assistant"]>
 
 export type assistantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -500,6 +529,7 @@ export type assistantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   builtin?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["assistant"]>
 
 export type assistantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -513,6 +543,7 @@ export type assistantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   builtin?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }, ExtArgs["result"]["assistant"]>
 
 export type assistantSelectScalar = {
@@ -526,9 +557,10 @@ export type assistantSelectScalar = {
   builtin?: boolean
   createdAt?: boolean
   updatedAt?: boolean
+  userId?: boolean
 }
 
-export type assistantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "systemPrompt" | "temperature" | "topP" | "maxTokens" | "builtin" | "createdAt" | "updatedAt", ExtArgs["result"]["assistant"]>
+export type assistantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "systemPrompt" | "temperature" | "topP" | "maxTokens" | "builtin" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["assistant"]>
 
 export type $assistantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "assistant"
@@ -544,6 +576,7 @@ export type $assistantPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     builtin: boolean
     createdAt: Date
     updatedAt: Date
+    userId: number | null
   }, ExtArgs["result"]["assistant"]>
   composites: {}
 }
@@ -977,6 +1010,7 @@ export interface assistantFieldRefs {
   readonly builtin: Prisma.FieldRef<"assistant", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"assistant", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"assistant", 'DateTime'>
+  readonly userId: Prisma.FieldRef<"assistant", 'Int'>
 }
     
 

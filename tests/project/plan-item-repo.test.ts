@@ -24,7 +24,12 @@ vi.mock("electron", () => ({
 }));
 
 // prisma stub：各测试按需覆写实现（vi.hoisted 使其在 vi.mock 工厂执行前初始化）
+// project.findUnique 默认返回 ownerId=UID 的项目行（v12 assertProjectVisible 数据源；
+// vi.clearAllMocks 只清调用记录不清实现，默认值跨用例存活）
 const prismaStub = vi.hoisted(() => ({
+  project: {
+    findUnique: vi.fn().mockResolvedValue({ id: 11, ownerId: 1 }),
+  },
   planItem: {
     findFirst: vi.fn(),
     findMany: vi.fn(),
@@ -41,6 +46,7 @@ const prismaStub = vi.hoisted(() => ({
   },
   planItemAttachment: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
     create: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
@@ -59,6 +65,9 @@ import { PLAN_ITEM_NOT_FOUND } from "../../electron/domains/project/plan-item.en
 import { ipcMain } from "electron";
 
 const repo = new PlanItemRepository();
+
+/** 测试用户 id（v12 起 userId 由 token 解出，repo 方法第二参数） */
+const UID = 1;
 
 const now = new Date("2026-09-13T00:00:00Z");
 const projectRow = {
@@ -84,25 +93,28 @@ describe("PlanItemRepository.create", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("title 空串或纯空白 → 抛「标题不能为空」，不落库", async () => {
-    await expect(repo.create({ createdById: 1, title: "" })).rejects.toThrow(
-      "标题不能为空",
-    );
-    await expect(repo.create({ createdById: 1, title: "   " })).rejects.toThrow(
-      "标题不能为空",
-    );
+    await expect(
+      repo.create({ createdById: 1, title: "" }, UID),
+    ).rejects.toThrow("标题不能为空");
+    await expect(
+      repo.create({ createdById: 1, title: "   " }, UID),
+    ).rejects.toThrow("标题不能为空");
     expect(prismaStub.planItem.create).not.toHaveBeenCalled();
   });
 
   it("非法 status → 抛「无效的状态」，不落库", async () => {
     await expect(
-      repo.create({ createdById: 1, title: "t", status: "doing" as never }),
+      repo.create(
+        { createdById: 1, title: "t", status: "doing" as never },
+        UID,
+      ),
     ).rejects.toThrow("无效的状态");
     expect(prismaStub.planItem.create).not.toHaveBeenCalled();
   });
 
   it("非法 priority → 抛「无效的优先级」，不落库", async () => {
     await expect(
-      repo.create({ createdById: 1, title: "t", priority: "P9" as never }),
+      repo.create({ createdById: 1, title: "t", priority: "P9" as never }, UID),
     ).rejects.toThrow("无效的优先级");
     expect(prismaStub.planItem.create).not.toHaveBeenCalled();
   });
@@ -112,16 +124,19 @@ describe("PlanItemRepository.create", () => {
     prismaStub.planItem.create.mockResolvedValue(projectRow);
     prismaStub.projectMember.findFirst.mockResolvedValue({ id: 1 });
 
-    await repo.create({
-      createdById: 1,
-      title: "  事项A  ",
-      projectId: 11,
-      status: "in_progress",
-      priority: "P0",
-      assigneeId: 1,
-      tags: ["前端", "联调"],
-      customFields: { 工作量: 3 },
-    });
+    await repo.create(
+      {
+        createdById: 1,
+        title: "  事项A  ",
+        projectId: 11,
+        status: "in_progress",
+        priority: "P0",
+        assigneeId: 1,
+        tags: ["前端", "联调"],
+        customFields: { 工作量: 3 },
+      },
+      UID,
+    );
 
     expect(prismaStub.projectMember.findFirst).toHaveBeenCalledWith({
       where: { projectId: 11, userId: 1 },
@@ -158,7 +173,10 @@ describe("PlanItemRepository.create", () => {
       sortOrder: 1,
     });
 
-    const record = await repo.create({ createdById: 1, title: "本地任务" });
+    const record = await repo.create(
+      { createdById: 1, title: "本地任务" },
+      UID,
+    );
 
     expect(prismaStub.planItem.findFirst).toHaveBeenCalledWith({
       where: { projectId: null, status: "not_started" },
@@ -192,7 +210,7 @@ describe("PlanItemRepository.list", () => {
   it("按项目过滤，sortOrder asc + updatedAt desc，行转记录（JSON 解析 + DateTime→ISO）", async () => {
     prismaStub.planItem.findMany.mockResolvedValue([projectRow]);
 
-    const records = await repo.list(11);
+    const records = await repo.list(11, UID);
 
     expect(prismaStub.planItem.findMany).toHaveBeenCalledWith({
       where: { projectId: 11 },
@@ -243,7 +261,7 @@ describe("PlanItemRepository.update", () => {
   it("局部更新 → data 只含传入键（未传字段不覆盖）", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
 
-    await repo.update({ id: 1, title: "新标题", priority: "P2" });
+    await repo.update({ id: 1, title: "新标题", priority: "P2" }, UID);
 
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -254,12 +272,15 @@ describe("PlanItemRepository.update", () => {
   it("assigneeId null → 显式清空处理人；tags/customFields 序列化落库", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
 
-    await repo.update({
-      id: 1,
-      assigneeId: null,
-      tags: ["新标签"],
-      customFields: { 工作量: 5 },
-    });
+    await repo.update(
+      {
+        id: 1,
+        assigneeId: null,
+        tags: ["新标签"],
+        customFields: { 工作量: 5 },
+      },
+      UID,
+    );
 
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -275,7 +296,7 @@ describe("PlanItemRepository.update", () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     prismaStub.planItem.findFirst.mockResolvedValue({ sortOrder: 7 });
 
-    await repo.update({ id: 1, status: "done" });
+    await repo.update({ id: 1, status: "done" }, UID);
 
     expect(prismaStub.planItem.findFirst).toHaveBeenCalledWith({
       where: { projectId: 11, status: "done" },
@@ -291,7 +312,7 @@ describe("PlanItemRepository.update", () => {
   it("status 传值但未变 → 不重算 sortOrder（data 无该键、不查列尾）", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
 
-    await repo.update({ id: 1, status: "in_progress" });
+    await repo.update({ id: 1, status: "in_progress" }, UID);
 
     expect(prismaStub.planItem.findFirst).not.toHaveBeenCalled();
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
@@ -306,7 +327,7 @@ describe("PlanItemRepository.update", () => {
   it("未传 status → 不重算 sortOrder（data 无该键）", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
 
-    await repo.update({ id: 1, title: "只改标题" });
+    await repo.update({ id: 1, title: "只改标题" }, UID);
 
     expect(prismaStub.planItem.findFirst).not.toHaveBeenCalled();
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
@@ -320,7 +341,7 @@ describe("PlanItemRepository.update", () => {
 
   it("title trim 后为空 → 抛「标题不能为空」", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
-    await expect(repo.update({ id: 1, title: "  " })).rejects.toThrow(
+    await expect(repo.update({ id: 1, title: "  " }, UID)).rejects.toThrow(
       "标题不能为空",
     );
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
@@ -329,17 +350,17 @@ describe("PlanItemRepository.update", () => {
   it("非法枚举 → 抛中文错误，不落库", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     await expect(
-      repo.update({ id: 1, status: "cancelled" as never }),
+      repo.update({ id: 1, status: "cancelled" as never }, UID),
     ).rejects.toThrow("无效的状态");
     await expect(
-      repo.update({ id: 1, priority: "P9" as never }),
+      repo.update({ id: 1, priority: "P9" as never }, UID),
     ).rejects.toThrow("无效的优先级");
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
 
   it("id 不存在 → 抛 PLAN_ITEM_NOT_FOUND", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(null);
-    await expect(repo.update({ id: 99, title: "x" })).rejects.toThrow(
+    await expect(repo.update({ id: 99, title: "x" }, UID)).rejects.toThrow(
       PLAN_ITEM_NOT_FOUND,
     );
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
@@ -352,7 +373,7 @@ describe("PlanItemRepository.move", () => {
   it("拖拽落点 → 更新 status + 列内新序 sortOrder", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
 
-    await repo.move({ id: 1, status: "done", sortOrder: 3 });
+    await repo.move({ id: 1, status: "done", sortOrder: 3 }, UID);
 
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -363,7 +384,7 @@ describe("PlanItemRepository.move", () => {
   it("非法 status → 抛「无效的状态」", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     await expect(
-      repo.move({ id: 1, status: "archived" as never, sortOrder: 1 }),
+      repo.move({ id: 1, status: "archived" as never, sortOrder: 1 }, UID),
     ).rejects.toThrow("无效的状态");
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
@@ -371,15 +392,19 @@ describe("PlanItemRepository.move", () => {
   it("id 不存在 → 抛 PLAN_ITEM_NOT_FOUND", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(null);
     await expect(
-      repo.move({ id: 99, status: "done", sortOrder: 1 }),
+      repo.move({ id: 99, status: "done", sortOrder: 1 }, UID),
     ).rejects.toThrow(PLAN_ITEM_NOT_FOUND);
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
 });
 
 describe("PlanItemRepository.remove", () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it("按 id 删除", async () => {
-    await repo.remove(9);
+    // v12：删前先查行做归属校验（assertItemOperable → 项目可见）
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    await repo.remove(9, UID);
     expect(prismaStub.planItem.delete).toHaveBeenCalledWith({
       where: { id: 9 },
     });
@@ -400,7 +425,7 @@ describe("PlanItemRepository.toRecord（JSON 列容错）", () => {
       { ...projectRow, tags: null, customFields: null },
     ]);
 
-    const records = await repo.list(11);
+    const records = await repo.list(11, UID);
 
     expect(records.map((r) => r.tags)).toEqual([[], [], []]);
     expect(records.map((r) => r.customFields)).toEqual([{}, {}, {}]);
@@ -416,10 +441,10 @@ describe("PlanItemRepository.listFields", () => {
       { value: "工作量", note: "number" },
     ]);
 
-    const defs = await repo.listFields(11);
+    const defs = await repo.listFields(11, UID);
 
     expect(prismaStub.option.findMany).toHaveBeenCalledWith({
-      where: { type: "planFields:11" },
+      where: { type: "planFields:11", userId: UID },
       orderBy: { value: "asc" },
     });
     expect(defs).toEqual([
@@ -435,7 +460,7 @@ describe("PlanItemRepository.listFields", () => {
       { value: "备注", note: "text" },
     ]);
 
-    const defs = await repo.listFields(11);
+    const defs = await repo.listFields(11, UID);
 
     expect(defs).toEqual([{ name: "备注", type: "text" }]);
   });
@@ -446,16 +471,20 @@ describe("PlanItemRepository.saveFields", () => {
 
   it("空名/非法类型/重名 → 抛中文错误，不触达 option 写与行清理", async () => {
     await expect(
-      repo.saveFields(11, [{ name: "   ", type: "text" }]),
+      repo.saveFields(11, [{ name: "   ", type: "text" }], UID),
     ).rejects.toThrow("字段名不能为空");
     await expect(
-      repo.saveFields(11, [{ name: "工作量", type: "percent" as never }]),
+      repo.saveFields(11, [{ name: "工作量", type: "percent" as never }], UID),
     ).rejects.toThrow("无效的字段类型");
     await expect(
-      repo.saveFields(11, [
-        { name: "工作量", type: "number" },
-        { name: " 工作量 ", type: "text" },
-      ]),
+      repo.saveFields(
+        11,
+        [
+          { name: "工作量", type: "number" },
+          { name: " 工作量 ", type: "text" },
+        ],
+        UID,
+      ),
     ).rejects.toThrow("字段名重复");
     expect(prismaStub.option.deleteMany).not.toHaveBeenCalled();
     expect(prismaStub.option.createMany).not.toHaveBeenCalled();
@@ -468,17 +497,21 @@ describe("PlanItemRepository.saveFields", () => {
       { value: "工作量" },
     ]);
 
-    await repo.saveFields(11, [
-      { name: " 交付日 ", type: "date" },
-      { name: "工作量", type: "text" },
-    ]);
+    await repo.saveFields(
+      11,
+      [
+        { name: " 交付日 ", type: "date" },
+        { name: "工作量", type: "text" },
+      ],
+      UID,
+    );
 
     expect(prismaStub.option.findMany).toHaveBeenCalledWith({
-      where: { type: "planFields:11" },
+      where: { type: "planFields:11", userId: UID },
       select: { value: true },
     });
     expect(prismaStub.option.deleteMany).toHaveBeenCalledWith({
-      where: { type: "planFields:11" },
+      where: { type: "planFields:11", userId: UID },
     });
     expect(prismaStub.option.createMany).toHaveBeenCalledWith({
       data: [
@@ -487,12 +520,14 @@ describe("PlanItemRepository.saveFields", () => {
           name: "交付日",
           value: "交付日",
           note: "date",
+          userId: UID,
         },
         {
           type: "planFields:11",
           name: "工作量",
           value: "工作量",
           note: "text",
+          userId: UID,
         },
       ],
     });
@@ -504,7 +539,7 @@ describe("PlanItemRepository.saveFields", () => {
     prismaStub.option.findMany.mockResolvedValue([{ value: "工作量" }]);
     prismaStub.planItem.findMany.mockResolvedValue([]);
 
-    await repo.saveFields(11, []);
+    await repo.saveFields(11, [], UID);
 
     expect(prismaStub.option.deleteMany).toHaveBeenCalledTimes(1);
     expect(prismaStub.option.createMany).not.toHaveBeenCalled();
@@ -527,7 +562,7 @@ describe("PlanItemRepository.saveFields", () => {
       { id: 5, customFields: "{oops" },
     ]);
 
-    await repo.saveFields(11, [{ name: "交付日", type: "date" }]);
+    await repo.saveFields(11, [{ name: "交付日", type: "date" }], UID);
 
     expect(prismaStub.planItem.update).toHaveBeenCalledTimes(2);
     expect(prismaStub.planItem.update).toHaveBeenNthCalledWith(1, {
@@ -556,7 +591,7 @@ describe("PlanItemRepository.saveFields", () => {
       },
     );
 
-    await expect(repo.saveFields(11, [])).rejects.toThrow(
+    await expect(repo.saveFields(11, [], UID)).rejects.toThrow(
       "清理字段值失败 2 条",
     );
     expect(prismaStub.planItem.update).toHaveBeenCalledTimes(3);
@@ -594,13 +629,16 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
 
   it("create 透传 source/startDate/dueDate：ISO 字符串转 Date，缺省 source=manual", async () => {
     prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
-    await repo.create({
-      createdById: 1,
-      projectId: 11,
-      title: "t",
-      startDate: "2026-09-14T00:00:00.000Z",
-      dueDate: "2026-09-20T00:00:00.000Z",
-    });
+    await repo.create(
+      {
+        createdById: 1,
+        projectId: 11,
+        title: "t",
+        startDate: "2026-09-14T00:00:00.000Z",
+        dueDate: "2026-09-20T00:00:00.000Z",
+      },
+      UID,
+    );
     expect(prismaStub.planItem.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         source: "manual",
@@ -612,18 +650,21 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
 
   it("create 非法 source → 抛「无效的来源」", async () => {
     await expect(
-      repo.create({
-        createdById: 1,
-        title: "t",
-        source: "magic" as never,
-      }),
+      repo.create(
+        {
+          createdById: 1,
+          title: "t",
+          source: "magic" as never,
+        },
+        UID,
+      ),
     ).rejects.toThrow("无效的来源");
   });
 
   it("update 传 null 清空 startDate；合法 assigneeId（项目成员）通过", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     prismaStub.projectMember.findFirst.mockResolvedValue({ id: 1 });
-    await repo.update({ id: 1, startDate: null, assigneeId: 7 });
+    await repo.update({ id: 1, startDate: null, assigneeId: 7 }, UID);
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
       data: { startDate: null, assigneeId: 7 },
@@ -633,7 +674,7 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
   it("update 指派非项目成员 → 抛「处理人必须是项目成员」不落库", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     prismaStub.projectMember.findFirst.mockResolvedValue(null);
-    await expect(repo.update({ id: 1, assigneeId: 99 })).rejects.toThrow(
+    await expect(repo.update({ id: 1, assigneeId: 99 }, UID)).rejects.toThrow(
       "处理人必须是项目成员",
     );
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
@@ -641,7 +682,7 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
 
   it("update 传空串 startDate → 归一为 null 清空（弹窗回填空串 = 无日期）", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
-    await repo.update({ id: 1, startDate: "" });
+    await repo.update({ id: 1, startDate: "" }, UID);
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
       data: { startDate: null },
@@ -650,9 +691,9 @@ describe("PlanItemRepository.字段扩展（子系统 A）", () => {
 
   it("update 非法日期串 → 抛「无效的日期格式」不落库", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
-    await expect(repo.update({ id: 1, startDate: "garbage" })).rejects.toThrow(
-      "无效的日期格式",
-    );
+    await expect(
+      repo.update({ id: 1, startDate: "garbage" }, UID),
+    ).rejects.toThrow("无效的日期格式");
     expect(prismaStub.planItem.update).not.toHaveBeenCalled();
   });
 });
@@ -662,12 +703,15 @@ describe("PlanItemRepository.description 透传", () => {
 
   it("create 透传 description；缺省空串语义经 DB null 由 toRecord 归一", async () => {
     prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
-    await repo.create({
-      createdById: 1,
-      projectId: 11,
-      title: "t",
-      description: "# 计划",
-    });
+    await repo.create(
+      {
+        createdById: 1,
+        projectId: 11,
+        title: "t",
+        description: "# 计划",
+      },
+      UID,
+    );
     expect(prismaStub.planItem.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ description: "# 计划" }),
     });
@@ -677,13 +721,13 @@ describe("PlanItemRepository.description 透传", () => {
     prismaStub.planItem.findMany.mockResolvedValue([
       { ...projectRow, description: null },
     ]);
-    const rows = await repo.list(11);
+    const rows = await repo.list(11, UID);
     expect(rows[0].description).toBe("");
   });
 
   it("update description null = 清空", async () => {
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
-    await repo.update({ id: 1, description: null });
+    await repo.update({ id: 1, description: null }, UID);
     expect(prismaStub.planItem.update).toHaveBeenCalledWith({
       where: { id: 1 },
       data: { description: null },
@@ -704,7 +748,7 @@ describe("PlanItemRepository.attachments 三通道", () => {
 
   it("list 按 planItemId 查询并转 ISO", async () => {
     prismaStub.planItemAttachment.findMany.mockResolvedValue([attRow]);
-    const rows = await repo.listAttachments(1);
+    const rows = await repo.listAttachments(1, UID);
     expect(prismaStub.planItemAttachment.findMany).toHaveBeenCalledWith({
       where: { planItemId: 1 },
       orderBy: { id: "asc" },
@@ -714,10 +758,14 @@ describe("PlanItemRepository.attachments 三通道", () => {
 
   it("create 建关联；delete 按 id 删", async () => {
     prismaStub.planItemAttachment.create.mockResolvedValue(attRow);
-    const created = await repo.createAttachment(1, {
-      fileName: "a.pdf",
-      assetPath: "attachments/a.pdf",
-    });
+    const created = await repo.createAttachment(
+      1,
+      {
+        fileName: "a.pdf",
+        assetPath: "attachments/a.pdf",
+      },
+      UID,
+    );
     expect(prismaStub.planItemAttachment.create).toHaveBeenCalledWith({
       data: {
         planItemId: 1,
@@ -726,14 +774,14 @@ describe("PlanItemRepository.attachments 三通道", () => {
       },
     });
     expect(created.id).toBe(5);
-    await repo.removeAttachment(5);
+    await repo.removeAttachment(5, UID);
     expect(prismaStub.planItemAttachment.delete).toHaveBeenCalledWith({
       where: { id: 5 },
     });
   });
 
   it("remove 事项级联删附件关联（保留文件）", async () => {
-    await repo.remove(1);
+    await repo.remove(1, UID);
     expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
       where: { planItemId: 1 },
     });
@@ -750,20 +798,23 @@ describe("PlanItemRepository.aiSummary（v8，子系统 F）", () => {
     prismaStub.planItem.findMany.mockResolvedValue([
       { ...projectRow, aiSummary: "[2026-09-15] 完成" },
     ]);
-    expect((await repo.list(11))[0].aiSummary).toBe("[2026-09-15] 完成");
+    expect((await repo.list(11, UID))[0].aiSummary).toBe("[2026-09-15] 完成");
     prismaStub.planItem.findMany.mockResolvedValue([
       { ...projectRow, aiSummary: null },
     ]);
-    expect((await repo.list(11))[0].aiSummary).toBe("");
+    expect((await repo.list(11, UID))[0].aiSummary).toBe("");
   });
 
   it("人路径负向：buildUpdateData/create 输出永不含 aiSummary 键", async () => {
     prismaStub.planItem.create.mockResolvedValue({ ...projectRow, id: 9 });
-    await repo.create({ createdById: 1, projectId: 11, title: "t" } as never);
+    await repo.create(
+      { createdById: 1, projectId: 11, title: "t" } as never,
+      UID,
+    );
     const data = prismaStub.planItem.create.mock.calls[0][0].data;
     expect("aiSummary" in data).toBe(false);
     prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
-    await repo.update({ id: 1, title: "x", aiSummary: "hack" } as never);
+    await repo.update({ id: 1, title: "x", aiSummary: "hack" } as never, UID);
     expect(
       "aiSummary" in prismaStub.planItem.update.mock.calls[0][0].data,
     ).toBe(false);

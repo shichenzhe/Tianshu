@@ -69,7 +69,7 @@ npm run typecheck
 - Prisma ORM + SQLite
 - Schema 定义：`prisma/schema.prisma`
 - Prisma Client 输出：`electron/generated/prisma`
-- 当前数据库版本：8（`electron/Constants.ts`；v1 为发布前合并 v2–v10 的全量建表脚本，后续 schema 变更再逐版新增 `script/vN`）
+- 当前数据库版本：12（`electron/Constants.ts`；v1 为发布前合并 v2–v10 的全量建表脚本，后续 schema 变更再逐版新增 `script/vN`；v12 起业务表带 userId 隔离，IPC 层经 token 解出 userId，前端不传用户 id）
 
 主要数据表：`user`、`option`、`modelConfig`、`db_version`、`skillRecord`、`skillStat`
 

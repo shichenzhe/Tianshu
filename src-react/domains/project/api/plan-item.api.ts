@@ -37,9 +37,9 @@ export default abstract class PlanItemApi {
     return invoke<PlanItemRecord[]>("planItem:list", projectId);
   }
 
-  /** 个人聚合（任务 Tab 数据源）：指派给我 OR 我创建 */
-  static async listMine(userId: number): Promise<PlanItemRecord[]> {
-    return invoke<PlanItemRecord[]>("planItem:listMine", userId);
+  /** 个人聚合（任务 Tab 数据源）：指派给我 OR 我创建（userId 由主进程从 token 解出） */
+  static async listMine(): Promise<PlanItemRecord[]> {
+    return invoke<PlanItemRecord[]>("planItem:listMine");
   }
 
   /** 创建事项（title trim 与枚举校验在后端） */

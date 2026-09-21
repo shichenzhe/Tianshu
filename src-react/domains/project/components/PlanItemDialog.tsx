@@ -340,7 +340,6 @@ export default function PlanItemDialog({
         });
       } else {
         const created = await PlanItemApi.create({
-          createdById: user.id,
           // 处理人：打开时缺省指派自己（任务 Tab「指派给我的」依赖），
           // 胶囊可改派；显式选「未指派」传 null 原样透传
           assigneeId,

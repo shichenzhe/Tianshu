@@ -13,6 +13,7 @@ import {
 } from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
+import { handleUser } from "../../../commons/ipc-user";
 import { buildPersonalizedSystem } from "../personalization/personalization.prompt";
 import { loadPersonalization } from "../personalization/personalization.repo";
 import {
@@ -1036,57 +1037,76 @@ export default class ChatService {
   }
 
   private registerHandlers() {
-    ipcMain.handle("chat:send", (event, params: ChatSendParams) =>
-      this.send(params, event.sender),
+    // v12 多用户隔离：用户数据通道统一 handleUser（token → userId），
+    // 归属校验在会话/空间维度（不存在与他人所有同报错）
+    handleUser("chat:send", (event, userId, params: ChatSendParams) =>
+      this.send(params, userId, event.sender),
     );
-    ipcMain.handle("chat:compact", (event, sessionId: number) =>
-      this.compact(sessionId, event.sender),
+    handleUser("chat:compact", (event, userId, sessionId: number) =>
+      this.compact(sessionId, userId, event.sender),
     );
-    ipcMain.handle(
+    handleUser(
       "chat:regenerate",
-      (event, sessionId: number, messageId?: number) =>
-        this.regenerate(sessionId, messageId, event.sender),
+      (event, userId, sessionId: number, messageId?: number) =>
+        this.regenerate(sessionId, userId, messageId, event.sender),
     );
     // 编辑重发：改写目标 user 消息并删除其后全部，重跑流
-    ipcMain.handle(
+    handleUser(
       "chat:editAndResend",
-      (event, sessionId: number, messageId: number, content: string) =>
-        this.editAndResend(sessionId, messageId, content, event.sender),
+      (event, userId, sessionId: number, messageId: number, content: string) =>
+        this.editAndResend(sessionId, userId, messageId, content, event.sender),
     );
-    ipcMain.handle("chat:stop", (_, sessionId: number) => this.stop(sessionId));
-    ipcMain.handle("chat:status", (_, sessionId: number) =>
-      this.status(sessionId),
-    );
+    handleUser("chat:stop", async (_, userId, sessionId: number) => {
+      await this.sessions.assertSessionOwned(sessionId, userId);
+      this.stop(sessionId);
+    });
+    handleUser("chat:status", async (_, userId, sessionId: number) => {
+      await this.sessions.assertSessionOwned(sessionId, userId);
+      return this.status(sessionId);
+    });
     // 上下文用量拆解（输入框环形指示器数据源）
-    ipcMain.handle("chat:usage", (_, sessionId: number) =>
-      this.getUsageBreakdown(sessionId),
+    handleUser("chat:usage", (_, userId, sessionId: number) =>
+      this.getUsageBreakdown(sessionId, userId),
     );
     // 落地页润色（新建任务 spec §4.3）：一次性非流式补全，不落库不建 session
-    ipcMain.handle(
+    handleUser(
       "chat:polish",
-      (_, p: { workspaceId: number; text: string; style: PolishStyle }) =>
-        this.polishText(p),
+      (
+        _,
+        userId,
+        p: { workspaceId: number; text: string; style: PolishStyle },
+      ) => this.polishText(p, userId),
     );
-    // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具
+    // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具。
+    // 审批卡产生于已校验归属的会话流内（toolCallId 一次性），运行态不落库，保持原通道
     ipcMain.handle(
       "agent:approve",
       (_, toolCallId: string, approved: boolean) =>
         this.approvals.respond(toolCallId, approved),
     );
     // P3 会话工具权限：default 询问 / full 放行（spec §8：无会话校验静默收）
-    ipcMain.handle("permission:get", (_, sessionId: number) =>
-      this.permissions.get(sessionId),
-    );
-    ipcMain.handle(
+    handleUser("permission:get", async (_, userId, sessionId: number) => {
+      await this.sessions.assertSessionOwned(sessionId, userId);
+      return this.permissions.get(sessionId);
+    });
+    handleUser(
       "permission:set",
-      (_, sessionId: number, mode: "default" | "full") =>
-        this.permissions.set(sessionId, mode),
+      async (_, userId, sessionId: number, mode: "default" | "full") => {
+        await this.sessions.assertSessionOwned(sessionId, userId);
+        return this.permissions.set(sessionId, mode);
+      },
     );
     // P4 工作空间级工具记忆（参照 Claude Code allowed-tools）：
     // 「允许并记住」写表 → 该工具在本工作空间后续免审
-    ipcMain.handle(
+    handleUser(
       "permission:rememberTool",
-      async (_, workspaceId: number, toolName: string): Promise<void> => {
+      async (
+        _,
+        userId,
+        workspaceId: number,
+        toolName: string,
+      ): Promise<void> => {
+        await this.sessions.assertWorkspaceOwned(workspaceId, userId);
         await prisma.toolPermission.upsert({
           where: { workspaceId_toolName: { workspaceId, toolName } },
           update: {},
@@ -1102,26 +1122,35 @@ export default class ChatService {
         });
       },
     );
-    ipcMain.handle(
+    handleUser(
       "permission:listAllowedTools",
-      (_, workspaceId: number): Promise<string[]> =>
-        prisma.toolPermission
+      async (_, userId, workspaceId: number): Promise<string[]> => {
+        await this.sessions.assertWorkspaceOwned(workspaceId, userId);
+        return prisma.toolPermission
           .findMany({
             where: { workspaceId },
             orderBy: { createdAt: "desc" },
             select: { toolName: true },
           })
-          .then((rows) => rows.map((row) => row.toolName)),
+          .then((rows) => rows.map((row) => row.toolName));
+      },
     );
-    ipcMain.handle(
+    handleUser(
       "permission:forgetTool",
-      async (_, workspaceId: number, toolName: string): Promise<void> => {
+      async (
+        _,
+        userId,
+        workspaceId: number,
+        toolName: string,
+      ): Promise<void> => {
+        await this.sessions.assertWorkspaceOwned(workspaceId, userId);
         await prisma.toolPermission.deleteMany({
           where: { workspaceId, toolName },
         });
       },
     );
-    // SP6 系统授权卡：full 会话总览与一键收回（spec §4.1）
+    // SP6 系统授权卡：full 会话总览与一键收回（spec §4.1）。
+    // 运行态内存表（主进程单实例），收回属收紧权限无泄露面，维持全局通道
     ipcMain.handle(
       "permission:listFullGrants",
       (): Promise<FullSessionGrant[]> => this.listFullGrants(),
@@ -1130,22 +1159,28 @@ export default class ChatService {
       this.revokeAllFull(),
     );
     // SP6 工具记忆管理（spec §4.2）：撤销后该工具回到逐次审批流
-    ipcMain.handle(
+    handleUser(
       "permission:listRemembered",
-      (): Promise<RememberedToolGrant[]> => this.listRemembered(),
+      (_, userId): Promise<RememberedToolGrant[]> =>
+        this.listRemembered(userId),
     );
-    ipcMain.handle(
+    handleUser(
       "permission:revokeRemembered",
-      (_, id: number): Promise<void> => this.revokeRemembered(id),
+      (_, userId, id: number): Promise<void> =>
+        this.revokeRemembered(id, userId),
     );
-    ipcMain.handle("permission:revokeAllRemembered", (): Promise<void> =>
-      this.revokeAllRemembered(),
+    handleUser("permission:revokeAllRemembered", (_, userId): Promise<void> =>
+      this.revokeAllRemembered(userId),
     );
     // P1 工作空间目录绑定：目录选择弹窗在主进程（dialog 属 GUI，repo 不引 electron）。
     // 用户取消返回 null，渲染层静默处理；存入前归一化（resolve + 去尾分隔符）
-    ipcMain.handle(
+    handleUser(
       "workspace:bindDirectory",
-      async (_, workspaceId: number): Promise<WorkspaceRecord | null> => {
+      async (
+        _,
+        userId,
+        workspaceId: number,
+      ): Promise<WorkspaceRecord | null> => {
         const result = await dialog.showOpenDialog({
           properties: ["openDirectory"],
         });
@@ -1155,20 +1190,21 @@ export default class ChatService {
         return this.sessions.updateWorkspaceBoundDirectory(
           workspaceId,
           normalizeWorkspacePath(result.filePaths[0]),
+          userId,
         );
       },
     );
     // 解绑走同一写通道（null = 解绑），独立于 workspace:update 参数类型
-    ipcMain.handle(
+    handleUser(
       "workspace:unbindDirectory",
-      async (_, workspaceId: number): Promise<WorkspaceRecord | null> =>
-        this.sessions.updateWorkspaceBoundDirectory(workspaceId, null),
+      async (_, userId, workspaceId: number): Promise<WorkspaceRecord | null> =>
+        this.sessions.updateWorkspaceBoundDirectory(workspaceId, null, userId),
     );
     // 新建任务页「打开本地空间」：一次调用 = 目录选择 + 以目录名建空间并
     // 绑定（用户取消返回 null，渲染层静默处理）；归一化同 bindDirectory
-    ipcMain.handle(
+    handleUser(
       "workspace:openLocal",
-      async (): Promise<WorkspaceRecord | null> => {
+      async (_, userId): Promise<WorkspaceRecord | null> => {
         const result = await dialog.showOpenDialog({
           properties: ["openDirectory"],
         });
@@ -1176,10 +1212,13 @@ export default class ChatService {
           return null;
         }
         const directoryPath = normalizeWorkspacePath(result.filePaths[0]);
-        return this.sessions.createWorkspace({
-          name: path.basename(directoryPath),
-          directoryPath,
-        });
+        return this.sessions.createWorkspace(
+          {
+            name: path.basename(directoryPath),
+            directoryPath,
+          },
+          userId,
+        );
       },
     );
     // 技能目录一键打开（P2 skill 无管理界面，文件系统即配置——保证发现性）
@@ -1229,11 +1268,14 @@ export default class ChatService {
     );
     // @ 联想数据源：工作空间内文件清单（相对路径，posix 分隔符）；
     // 排除 node_modules/.git/dist 与隐藏项，上限 2000；未绑定目录返回 null
-    ipcMain.handle(
+    handleUser(
       "file:listWorkspaceFiles",
-      async (_, workspaceId: number): Promise<string[] | null> => {
+      async (_, userId, workspaceId: number): Promise<string[] | null> => {
         const workspace = await this.sessions.getWorkspace(workspaceId);
-        const root = workspace?.directoryPath?.trim();
+        if (!workspace || workspace.userId !== userId) {
+          return null;
+        }
+        const root = workspace.directoryPath?.trim();
         if (!root) {
           return null;
         }
@@ -1272,15 +1314,19 @@ export default class ChatService {
     );
     // @ 选中后读取工作空间内单个文件；resolveSafePath 校验 + 同 pickAndRead 的
     // 大小/二进制规则
-    ipcMain.handle(
+    handleUser(
       "file:readWorkspaceFile",
       async (
         _,
+        userId,
         workspaceId: number,
         relPath: string,
       ): Promise<{ content: string } | { error: string }> => {
         const workspace = await this.sessions.getWorkspace(workspaceId);
-        const root = workspace?.directoryPath?.trim();
+        if (!workspace || workspace.userId !== userId) {
+          return { error: "未绑定工作空间目录" };
+        }
+        const root = workspace.directoryPath?.trim();
         if (!root) {
           return { error: "未绑定工作空间目录" };
         }
@@ -1354,9 +1400,11 @@ export default class ChatService {
     });
   }
 
-  /** 工具记忆列表（SP6 spec §4.2）：空间名 join 失败行回落 #workspaceId（spec §8） */
-  private async listRemembered(): Promise<RememberedToolGrant[]> {
+  /** 工具记忆列表（SP6 spec §4.2）：空间名 join 失败行回落 #workspaceId（spec §8）；v12 限定本人空间 */
+  private async listRemembered(userId: number): Promise<RememberedToolGrant[]> {
+    const ownedWorkspaceIds = await this.ownedWorkspaceIds(userId);
     const rows = await prisma.toolPermission.findMany({
+      where: { workspaceId: { in: ownedWorkspaceIds } },
       orderBy: { createdAt: "desc" },
     });
     return Promise.all(
@@ -1371,9 +1419,12 @@ export default class ChatService {
     );
   }
 
-  /** 撤销单条工具记忆（SP6 spec §4.2）：不存在 id 幂等 no-op 不审计（spec §8） */
-  private async revokeRemembered(id: number): Promise<void> {
-    const row = await prisma.toolPermission.findUnique({ where: { id } });
+  /** 撤销单条工具记忆（SP6 spec §4.2）：不存在/非本人空间幂等 no-op 不审计（spec §8） */
+  private async revokeRemembered(id: number, userId: number): Promise<void> {
+    const ownedWorkspaceIds = await this.ownedWorkspaceIds(userId);
+    const row = await prisma.toolPermission.findFirst({
+      where: { id, workspaceId: { in: ownedWorkspaceIds } },
+    });
     if (!row) {
       return;
     }
@@ -1390,9 +1441,12 @@ export default class ChatService {
     });
   }
 
-  /** 全部撤销工具记忆（SP6 spec §4.2）：空表 no-op 不审计（spec §8） */
-  private async revokeAllRemembered(): Promise<void> {
-    const { count } = await prisma.toolPermission.deleteMany({});
+  /** 全部撤销工具记忆（SP6 spec §4.2）：空集 no-op 不审计（spec §8）；v12 限定本人空间 */
+  private async revokeAllRemembered(userId: number): Promise<void> {
+    const ownedWorkspaceIds = await this.ownedWorkspaceIds(userId);
+    const { count } = await prisma.toolPermission.deleteMany({
+      where: { workspaceId: { in: ownedWorkspaceIds } },
+    });
     if (count === 0) {
       return;
     }
@@ -1410,6 +1464,16 @@ export default class ChatService {
     } catch {
       return null;
     }
+  }
+
+  /** 本人全部工作空间 id（工具记忆按空间过滤数据源；toolPermission 为裸列无 relation） */
+  private async ownedWorkspaceIds(userId: number): Promise<number[]> {
+    return (
+      await prisma.workspace.findMany({
+        where: { userId },
+        select: { id: true },
+      })
+    ).map((row) => row.id);
   }
 
   /** 工作空间名查询：失败/缺行返回 null（调用方走 #id 回落文案） */
@@ -1438,13 +1502,17 @@ export default class ChatService {
    * 历史)→ 摘要指令走一次普通 send(流式可见)→ 取最后一条 assistant 文本
    * 落 session.summary/compactedUpToId;后续 send 上下文 = 摘要 + 压缩点后消息
    */
-  async compact(sessionId: number, sender?: WebContents): Promise<void> {
+  async compact(
+    sessionId: number,
+    userId: number,
+    sender?: WebContents,
+  ): Promise<void> {
     const session = await this.sessions.getSession(sessionId);
-    if (!session) {
+    if (!session || session.userId !== userId) {
       throw new Error("SESSION_NOT_FOUND");
     }
     await this.sessions.updateSummary(sessionId, null, null);
-    await this.send({ sessionId, content: COMPACT_DIRECTIVE }, sender);
+    await this.send({ sessionId, content: COMPACT_DIRECTIVE }, userId, sender);
     const rows = await prisma.message.findMany({
       where: { sessionId, role: "assistant" },
       orderBy: { createdAt: "desc" },
@@ -1461,7 +1529,11 @@ export default class ChatService {
     await this.sessions.updateSummary(sessionId, summaryText, last.id);
   }
 
-  async send(params: ChatSendParams, sender?: WebContents): Promise<void> {
+  async send(
+    params: ChatSendParams,
+    userId: number,
+    sender?: WebContents,
+  ): Promise<void> {
     // 并发检查必须是首条语句；AbortController 在首个 await 前注册，消除 TOCTOU 窗口
     // 业务错误 message 只传错误码（Electron invoke 拒绝时仅保留 message），渲染端映射 i18n
     if (this.aborts.has(params.sessionId)) {
@@ -1471,13 +1543,17 @@ export default class ChatService {
     this.aborts.set(params.sessionId, abort);
     try {
       const session = await this.sessions.getSession(params.sessionId);
-      if (!session) {
+      if (!session || session.userId !== userId) {
         throw new Error("SESSION_NOT_FOUND");
       }
 
       // 请求级模型选择写入会话当前值（会话记住上次选择，spec §4.2）
       if (params.modelId) {
-        await this.sessions.setSessionModel(params.sessionId, params.modelId);
+        await this.sessions.setSessionModel(
+          params.sessionId,
+          params.modelId,
+          userId,
+        );
       }
 
       // 用户消息立即落库 + 首条消息自动起标题
@@ -1487,10 +1563,15 @@ export default class ChatService {
         blocks: serializeBlocks([{ type: "text", text: params.content }]),
         assistantId: session.assistantId ?? undefined,
       } satisfies AppendMessageParams);
-      await this.sessions.autotitleIfDefault(params.sessionId, params.content);
+      await this.sessions.autotitleIfDefault(
+        params.sessionId,
+        params.content,
+        userId,
+      );
 
       await this.streamAndPersist(
         params.sessionId,
+        userId,
         abort,
         sender,
         params.overrides,
@@ -1509,6 +1590,7 @@ export default class ChatService {
    */
   async regenerate(
     sessionId: number,
+    userId: number,
     messageId?: number,
     sender?: WebContents,
   ): Promise<void> {
@@ -1519,7 +1601,7 @@ export default class ChatService {
     this.aborts.set(sessionId, abort);
     try {
       const session = await this.sessions.getSession(sessionId);
-      if (!session) {
+      if (!session || session.userId !== userId) {
         throw new Error("SESSION_NOT_FOUND");
       }
       const rows = await prisma.message.findMany({
@@ -1557,6 +1639,7 @@ export default class ChatService {
       }
       await this.truncateAfterAndStream(
         sessionId,
+        userId,
         rows,
         lastUserIdx,
         session.compactedUpToId,
@@ -1575,6 +1658,7 @@ export default class ChatService {
    */
   async editAndResend(
     sessionId: number,
+    userId: number,
     messageId: number,
     content: string,
     sender?: WebContents,
@@ -1587,7 +1671,7 @@ export default class ChatService {
     this.aborts.set(sessionId, abort);
     try {
       const session = await this.sessions.getSession(sessionId);
-      if (!session) {
+      if (!session || session.userId !== userId) {
         throw new Error("SESSION_NOT_FOUND");
       }
       const rows = await prisma.message.findMany({
@@ -1606,6 +1690,7 @@ export default class ChatService {
       });
       await this.truncateAfterAndStream(
         sessionId,
+        userId,
         rows,
         targetIdx,
         session.compactedUpToId,
@@ -1627,6 +1712,7 @@ export default class ChatService {
    */
   private async truncateAfterAndStream(
     sessionId: number,
+    userId: number,
     rows: ChatMessageRow[],
     keepUpToIndex: number,
     compactedUpToId: number | null,
@@ -1642,7 +1728,7 @@ export default class ChatService {
     if (compactedUpToId != null && tailIds.includes(compactedUpToId)) {
       await this.sessions.updateSummary(sessionId, null, null);
     }
-    await this.streamAndPersist(sessionId, abort, sender);
+    await this.streamAndPersist(sessionId, userId, abort, sender);
   }
 
   /**
@@ -1782,13 +1868,14 @@ export default class ChatService {
    */
   private async streamAndPersist(
     sessionId: number,
+    userId: number,
     abort: AbortController,
     sender?: WebContents,
     overrides?: ChatModelParams,
     maxSteps: number = DEFAULT_MAX_STEPS,
   ): Promise<void> {
     const startedAt = Date.now();
-    const ctx = await this.assembleContext(sessionId, overrides);
+    const ctx = await this.assembleContext(sessionId, userId, overrides);
     try {
       const result = await runChatStream({
         model: createLanguageModel(
@@ -1846,7 +1933,7 @@ export default class ChatService {
       } else {
         this.emit(sender, sessionId, { type: "finish" });
         // 首轮问答完成 → AI 起标题（不阻塞、失败静默，spec §6）
-        void this.generateTitleIfFirstExchange(sessionId, sender, {
+        void this.generateTitleIfFirstExchange(sessionId, userId, sender, {
           type: ctx.providerRow.type,
           baseUrl: ctx.providerRow.baseUrl,
           apiKey: ctx.providerRow.apiKey ?? undefined,
@@ -1868,10 +1955,11 @@ export default class ChatService {
    */
   private async assembleContext(
     sessionId: number,
+    userId: number,
     overrides?: ChatModelParams,
   ) {
     const session = await this.sessions.getSession(sessionId);
-    if (!session) {
+    if (!session || session.userId !== userId) {
       throw new Error("SESSION_NOT_FOUND");
     }
     const modelId = await this.sessions.getEffectiveModelId(sessionId);
@@ -1996,9 +2084,10 @@ export default class ChatService {
    */
   async getUsageBreakdown(
     sessionId: number,
+    userId: number,
   ): Promise<ContextUsageBreakdown | null> {
     try {
-      const ctx = await this.assembleContext(sessionId);
+      const ctx = await this.assembleContext(sessionId, userId);
       const toolDefinitions =
         ctx.mode === "ask"
           ? []
@@ -2100,6 +2189,7 @@ export default class ChatService {
    */
   private async generateTitleIfFirstExchange(
     sessionId: number,
+    userId: number,
     sender: WebContents | undefined,
     ctx: {
       type: string;
@@ -2119,7 +2209,7 @@ export default class ChatService {
         return;
       }
       const session = await this.sessions.getSession(sessionId);
-      if (!session) {
+      if (!session || session.userId !== userId) {
         return;
       }
       const truncate = (blocksJson: string) => {
@@ -2147,7 +2237,7 @@ export default class ChatService {
       if (!title) {
         return;
       }
-      await this.sessions.renameSession(sessionId, title);
+      await this.sessions.renameSession(sessionId, title, userId);
       this.emit(sender, sessionId, { type: "title-updated", title });
     } catch (e) {
       // 标题失败静默降级（对用户无感知）：仅记录日志保留可观测性
@@ -2161,15 +2251,21 @@ export default class ChatService {
    * 回退任意启用 provider 首个启用模型（model 与 provider 无 Prisma
    * relation，启用集需先取 provider id 再筛模型）
    */
-  private async polishText(p: {
-    workspaceId: number;
-    text: string;
-    style: PolishStyle;
-  }): Promise<{ text: string }> {
+  private async polishText(
+    p: {
+      workspaceId: number;
+      text: string;
+      style: PolishStyle;
+    },
+    userId: number,
+  ): Promise<{ text: string }> {
     const workspace = await this.sessions.getWorkspace(p.workspaceId);
+    if (!workspace || workspace.userId !== userId) {
+      throw new Error("WORKSPACE_NOT_FOUND");
+    }
     const enabledProviderIds = (
       await prisma.provider.findMany({
-        where: { enabled: true },
+        where: { enabled: true, userId },
         select: { id: true },
       })
     ).map((row) => row.id);

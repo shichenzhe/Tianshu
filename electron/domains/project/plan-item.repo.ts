@@ -11,8 +11,9 @@
  * （文件实体保留在项目资产空间，v6）。
  * appendAiSummary AI 进展摘要追加（工具专用通道，只增不改；v8，子系统 F）。
  */
-import { ipcMain } from "electron";
+import { handleUser } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
+import { PROJECT_NOT_FOUND } from "./project.entity";
 import {
   appendAiSummaryLine,
   PLAN_FIELD_TYPES,
@@ -80,48 +81,89 @@ export default class PlanItemRepository {
    * 注册IPC处理程序（11 通道：事项 6 + 自定义字段定义 2 + 附件 3）
    */
   private registerHandlers() {
-    ipcMain.handle("planItem:list", (_, projectId: number) =>
-      this.list(projectId),
+    // userId 由 token 解出（commons/ipc-user）；listMine/create 的用户身份不再信任前端传参
+    handleUser("planItem:list", (_, userId, projectId: number) =>
+      this.list(projectId, userId),
     );
-    ipcMain.handle("planItem:listMine", (_, userId: number) =>
-      this.listMine(userId),
+    handleUser("planItem:listMine", (_, userId) => this.listMine(userId));
+    handleUser("planItem:create", (_, userId, params: PlanItemCreateParams) =>
+      this.create(params, userId),
     );
-    ipcMain.handle("planItem:create", (_, params: PlanItemCreateParams) =>
-      this.create(params),
+    handleUser("planItem:update", (_, userId, params: PlanItemUpdateParams) =>
+      this.update(params, userId),
     );
-    ipcMain.handle("planItem:update", (_, params: PlanItemUpdateParams) =>
-      this.update(params),
+    handleUser("planItem:delete", (_, userId, id: number) =>
+      this.remove(id, userId),
     );
-    ipcMain.handle("planItem:delete", (_, id: number) => this.remove(id));
-    ipcMain.handle("planItem:move", (_, params: PlanItemMoveParams) =>
-      this.move(params),
+    handleUser("planItem:move", (_, userId, params: PlanItemMoveParams) =>
+      this.move(params, userId),
     );
-    ipcMain.handle("planItem:fields:list", (_, projectId: number) =>
-      this.listFields(projectId),
+    handleUser("planItem:fields:list", (_, userId, projectId: number) =>
+      this.listFields(projectId, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "planItem:fields:save",
-      (_, projectId: number, fields: PlanFieldDef[]) =>
-        this.saveFields(projectId, fields),
+      (_, userId, projectId: number, fields: PlanFieldDef[]) =>
+        this.saveFields(projectId, fields, userId),
     );
-    ipcMain.handle("planItem:attachments:list", (_, planItemId: number) =>
-      this.listAttachments(planItemId),
+    handleUser("planItem:attachments:list", (_, userId, planItemId: number) =>
+      this.listAttachments(planItemId, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "planItem:attachments:create",
-      (_, planItemId: number, input: { fileName: string; assetPath: string }) =>
-        this.createAttachment(planItemId, input),
+      (
+        _,
+        userId,
+        planItemId: number,
+        input: { fileName: string; assetPath: string },
+      ) => this.createAttachment(planItemId, input, userId),
     );
-    ipcMain.handle("planItem:attachments:delete", (_, id: number) =>
-      this.removeAttachment(id),
+    handleUser("planItem:attachments:delete", (_, userId, id: number) =>
+      this.removeAttachment(id, userId),
     );
+  }
+
+  /** 项目对当前用户可见（owner 或成员）；不可见与不存在同报错 */
+  private async assertProjectVisible(
+    projectId: number,
+    userId: number,
+  ): Promise<void> {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+    });
+    if (project && project.ownerId === userId) {
+      return;
+    }
+    const member = project
+      ? await prisma.projectMember.findFirst({
+          where: { projectId, userId },
+        })
+      : null;
+    if (!member) {
+      throw new Error(PROJECT_NOT_FOUND);
+    }
+  }
+
+  /** 事项行对当前用户可操作：项目事项=项目可见；本地任务（projectId null）=创建者 */
+  private async assertItemOperable(
+    row: { projectId: number | null; createdById: number },
+    userId: number,
+  ): Promise<void> {
+    if (row.projectId !== null) {
+      await this.assertProjectVisible(row.projectId, userId);
+      return;
+    }
+    if (row.createdById !== userId) {
+      throw new Error(PLAN_ITEM_NOT_FOUND);
+    }
   }
 
   /**
    * 项目全部事项（计划 Tab 数据源）：sortOrder asc + updatedAt desc
    * @param projectId 项目 id（本地任务 projectId null 不可见）
    */
-  async list(projectId: number): Promise<PlanItemRecord[]> {
+  async list(projectId: number, userId: number): Promise<PlanItemRecord[]> {
+    await this.assertProjectVisible(projectId, userId);
     const rows = await prisma.planItem.findMany({
       where: { projectId },
       orderBy: [{ sortOrder: "asc" }, { updatedAt: "desc" }],
@@ -148,7 +190,10 @@ export default class PlanItemRepository {
    * 本地任务（projectId 缺省）与项目任务按 projectId 值分列独立计数
    * @param params 创建参数
    */
-  async create(params: PlanItemCreateParams): Promise<PlanItemRecord> {
+  async create(
+    params: PlanItemCreateParams,
+    userId: number,
+  ): Promise<PlanItemRecord> {
     const title = params.title.trim();
     if (!title) {
       throw new Error("标题不能为空");
@@ -156,6 +201,9 @@ export default class PlanItemRepository {
     this.ensureEnumOrThrow(params.status, PLAN_STATUSES, "无效的状态");
     this.ensureEnumOrThrow(params.priority, PLAN_PRIORITIES, "无效的优先级");
     this.ensureEnumOrThrow(params.source, PLAN_SOURCES, "无效的来源");
+    if (params.projectId != null) {
+      await this.assertProjectVisible(params.projectId, userId);
+    }
     await this.ensureAssigneeIsMember(
       params.projectId ?? null,
       params.assigneeId,
@@ -175,7 +223,8 @@ export default class PlanItemRepository {
         tags: this.stringifyColumn(params.tags),
         customFields: this.stringifyColumn(params.customFields),
         sortOrder: await this.nextSortOrder(params.projectId ?? null, status),
-        createdById: params.createdById,
+        // v12 多用户隔离：创建人以 token 解出的用户为准，忽略前端传参
+        createdById: userId,
       },
     });
     return this.toRecord(row);
@@ -188,11 +237,12 @@ export default class PlanItemRepository {
    * update 路径绕过 move 通道造成的落列错位
    * @param params 更新参数
    */
-  async update(params: PlanItemUpdateParams): Promise<void> {
+  async update(params: PlanItemUpdateParams, userId: number): Promise<void> {
     const row = await prisma.planItem.findUnique({ where: { id: params.id } });
     if (!row) {
       throw new Error(PLAN_ITEM_NOT_FOUND);
     }
+    await this.assertItemOperable(row, userId);
     this.ensureUpdatable(params);
     await this.ensureAssigneeIsMember(row.projectId, params.assigneeId);
     const data = this.buildUpdateData(params);
@@ -206,7 +256,12 @@ export default class PlanItemRepository {
    * 删除事项：级联删附件关联行（文件实体保留在项目资产空间）
    * @param id 事项 id
    */
-  async remove(id: number): Promise<void> {
+  async remove(id: number, userId: number): Promise<void> {
+    const row = await prisma.planItem.findUnique({ where: { id } });
+    if (!row) {
+      throw new Error(PLAN_ITEM_NOT_FOUND);
+    }
+    await this.assertItemOperable(row, userId);
     await prisma.planItemAttachment.deleteMany({ where: { planItemId: id } });
     await prisma.planItem.delete({ where: { id } });
   }
@@ -215,11 +270,12 @@ export default class PlanItemRepository {
    * 看板拖拽落点持久化：目标状态列 + 列内新序（存在性 + 枚举校验）
    * @param params 落点参数
    */
-  async move(params: PlanItemMoveParams): Promise<void> {
+  async move(params: PlanItemMoveParams, userId: number): Promise<void> {
     const row = await prisma.planItem.findUnique({ where: { id: params.id } });
     if (!row) {
       throw new Error(PLAN_ITEM_NOT_FOUND);
     }
+    await this.assertItemOperable(row, userId);
     this.ensureEnumOrThrow(params.status, PLAN_STATUSES, "无效的状态");
     await prisma.planItem.update({
       where: { id: params.id },
@@ -245,7 +301,9 @@ export default class PlanItemRepository {
    */
   async listAttachments(
     planItemId: number,
+    userId: number,
   ): Promise<PlanItemAttachmentRecord[]> {
+    await this.assertAttachmentVisible(planItemId, userId);
     const rows = await prisma.planItemAttachment.findMany({
       where: { planItemId },
       orderBy: { id: "asc" },
@@ -261,7 +319,9 @@ export default class PlanItemRepository {
   async createAttachment(
     planItemId: number,
     input: { fileName: string; assetPath: string },
+    userId: number,
   ): Promise<PlanItemAttachmentRecord> {
+    await this.assertAttachmentVisible(planItemId, userId);
     const fileName = input.fileName.trim();
     const assetPath = input.assetPath.trim();
     if (!fileName || !assetPath) {
@@ -277,8 +337,28 @@ export default class PlanItemRepository {
    * 删附件关联（文件实体保留在资产空间）
    * @param id 附件关联行 id
    */
-  async removeAttachment(id: number): Promise<void> {
+  async removeAttachment(id: number, userId: number): Promise<void> {
+    const binding = await prisma.planItemAttachment.findUnique({
+      where: { id },
+    });
+    if (binding) {
+      await this.assertAttachmentVisible(binding.planItemId, userId);
+    }
     await prisma.planItemAttachment.delete({ where: { id } });
+  }
+
+  /** 附件按所属事项守门（项目事项=项目可见；本地任务=创建者） */
+  private async assertAttachmentVisible(
+    planItemId: number,
+    userId: number,
+  ): Promise<void> {
+    const item = await prisma.planItem.findUnique({
+      where: { id: planItemId },
+    });
+    if (!item) {
+      throw new Error(PLAN_ITEM_NOT_FOUND);
+    }
+    await this.assertItemOperable(item, userId);
   }
 
   /**
@@ -286,9 +366,10 @@ export default class PlanItemRepository {
    * （value=字段名，note=类型），name asc；note 缺失/非枚举的畸形行丢弃
    * @param projectId 项目 id
    */
-  async listFields(projectId: number): Promise<PlanFieldDef[]> {
+  async listFields(projectId: number, userId: number): Promise<PlanFieldDef[]> {
+    await this.assertProjectVisible(projectId, userId);
     const rows = await prisma.option.findMany({
-      where: { type: planFieldsType(projectId) },
+      where: { type: planFieldsType(projectId), userId },
       orderBy: { value: "asc" },
     });
     return rows.flatMap((row) =>
@@ -303,18 +384,23 @@ export default class PlanItemRepository {
    * @param projectId 项目 id
    * @param fields 字段定义全集
    */
-  async saveFields(projectId: number, fields: PlanFieldDef[]): Promise<void> {
+  async saveFields(
+    projectId: number,
+    fields: PlanFieldDef[],
+    userId: number,
+  ): Promise<void> {
+    await this.assertProjectVisible(projectId, userId);
     const normalized = this.normalizeFieldsOrThrow(fields);
     const type = planFieldsType(projectId);
     const existingRows = await prisma.option.findMany({
-      where: { type },
+      where: { type, userId },
       select: { value: true },
     });
     const keptNames = new Set(normalized.map((field) => field.name));
     const removedNames = existingRows
       .map((row) => row.value)
       .filter((name) => !keptNames.has(name));
-    await prisma.option.deleteMany({ where: { type } });
+    await prisma.option.deleteMany({ where: { type, userId } });
     if (normalized.length > 0) {
       await prisma.option.createMany({
         data: normalized.map((field) => ({
@@ -322,6 +408,7 @@ export default class PlanItemRepository {
           name: field.name,
           value: field.name,
           note: field.type,
+          userId,
         })),
       });
     }

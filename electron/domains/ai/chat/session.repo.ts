@@ -1,6 +1,7 @@
-import { dialog, ipcMain, shell } from "electron";
+import { dialog, shell } from "electron";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
+import { handleUser } from "../../../commons/ipc-user";
 import fs from "node:fs/promises";
 import path from "node:path";
 
@@ -46,7 +47,6 @@ export interface AppendMessageParams {
 export class SessionRepository {
   constructor() {
     this.registerIpcHandlers();
-    void this.ensureDefaultWorkspace();
   }
 
   private toWorkspace(row: WorkspaceRow): WorkspaceRecord {
@@ -89,92 +89,149 @@ export class SessionRepository {
   }
 
   private registerIpcHandlers() {
-    ipcMain.handle("workspace:list", () => this.listWorkspaces());
-    ipcMain.handle("workspace:create", (_, p: WorkspaceCreateParams) =>
-      this.createWorkspace(p),
+    // userId 由 token 解出（commons/ipc-user），业务参数依次排在其后
+    handleUser("workspace:list", (_, userId) => this.listWorkspaces(userId));
+    handleUser("workspace:create", (_, userId, p: WorkspaceCreateParams) =>
+      this.createWorkspace(p, userId),
     );
-    ipcMain.handle("workspace:update", (_, p: WorkspaceUpdateParams) =>
-      this.updateWorkspace(p),
+    handleUser("workspace:update", (_, userId, p: WorkspaceUpdateParams) =>
+      this.updateWorkspace(p, userId),
     );
-    ipcMain.handle("workspace:delete", (_, id: number) =>
-      this.deleteWorkspace(id),
+    handleUser("workspace:delete", (_, userId, id: number) =>
+      this.deleteWorkspace(id, userId),
     );
-    ipcMain.handle("session:listByWorkspace", (_, workspaceId: number) =>
-      this.listSessions(workspaceId),
+    handleUser("session:listByWorkspace", (_, userId, workspaceId: number) =>
+      this.listSessions(workspaceId, userId),
     );
-    ipcMain.handle("session:create", (_, p: SessionCreateParams) =>
-      this.createSession(p),
+    handleUser("session:create", (_, userId, p: SessionCreateParams) =>
+      this.createSession(p, userId),
     );
-    ipcMain.handle("session:rename", (_, id: number, title: string) =>
-      this.renameSession(id, title),
+    handleUser("session:rename", (_, userId, id: number, title: string) =>
+      this.renameSession(id, title, userId),
     );
-    ipcMain.handle("session:delete", (_, id: number) => this.deleteSession(id));
-    ipcMain.handle(
+    handleUser("session:delete", (_, userId, id: number) =>
+      this.deleteSession(id, userId),
+    );
+    handleUser(
       "session:setModel",
-      (_, id: number, modelId: number | null) =>
-        this.setSessionModel(id, modelId),
+      (_, userId, id: number, modelId: number | null) =>
+        this.setSessionModel(id, modelId, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "session:setAssistant",
-      (_, id: number, assistantId: number | null) =>
-        this.setSessionAssistant(id, assistantId),
+      (_, userId, id: number, assistantId: number | null) =>
+        this.setSessionAssistant(id, assistantId, userId),
     );
-    ipcMain.handle("session:setMode", (_, id: number, mode: SessionMode) =>
-      this.setSessionMode(id, mode),
+    handleUser("session:setMode", (_, userId, id: number, mode: SessionMode) =>
+      this.setSessionMode(id, mode, userId),
     );
-    ipcMain.handle("session:listAll", () => this.listAllSessions());
-    ipcMain.handle("session:pin", (_, id: number, pinned: boolean) =>
-      this.pinSession(id, pinned),
+    handleUser("session:listAll", (_, userId) => this.listAllSessions(userId));
+    handleUser("session:pin", (_, userId, id: number, pinned: boolean) =>
+      this.pinSession(id, pinned, userId),
     );
-    ipcMain.handle("session:archive", (_, id: number, archived: boolean) =>
-      this.archiveSession(id, archived),
+    handleUser("session:archive", (_, userId, id: number, archived: boolean) =>
+      this.archiveSession(id, archived, userId),
     );
-    ipcMain.handle("session:searchByTitle", (_, keyword: string) =>
-      this.searchSessionsByTitle(keyword),
+    handleUser("session:searchByTitle", (_, userId, keyword: string) =>
+      this.searchSessionsByTitle(keyword, userId),
     );
-    ipcMain.handle("workspace:openDirectory", (_, workspaceId: number) =>
-      this.openWorkspaceDirectory(workspaceId),
+    handleUser("workspace:openDirectory", (_, userId, workspaceId: number) =>
+      this.openWorkspaceDirectory(workspaceId, userId),
     );
     // 双通道差异：workspace:readFile（产物面板预览）fullAccess 语义——绝对路径
     // 直接用，服务会话内 write_file 记录的任意路径；既有 file:readWorkspaceFile
     // （chat.service.ts，AI 工具读取）走 resolveSafePath 沙箱校验。两通道有意
     // 不同，后续可将读取上限/NUL 逻辑整合进 file-tools.ts。
-    ipcMain.handle(
+    handleUser(
       "workspace:readFile",
-      (_, workspaceId: number, relPath: string) =>
-        this.readWorkspaceFileById(workspaceId, relPath),
+      (_, userId, workspaceId: number, relPath: string) =>
+        this.readWorkspaceFileById(workspaceId, relPath, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "workspace:revealFile",
-      (_, workspaceId: number, relPath: string) =>
-        this.revealWorkspaceFile(workspaceId, relPath),
+      (_, userId, workspaceId: number, relPath: string) =>
+        this.revealWorkspaceFile(workspaceId, relPath, userId),
     );
-    ipcMain.handle(
+    handleUser(
       "workspace:exportFile",
-      (_, workspaceId: number, relPath: string) =>
-        this.exportWorkspaceFile(workspaceId, relPath),
+      (_, userId, workspaceId: number, relPath: string) =>
+        this.exportWorkspaceFile(workspaceId, relPath, userId),
     );
-    ipcMain.handle("message:listBySession", (_, sessionId: number) =>
-      this.listMessages(sessionId),
+    handleUser("message:listBySession", (_, userId, sessionId: number) =>
+      this.listMessages(sessionId, userId),
     );
-    ipcMain.handle("message:search", (_, keyword: string) =>
-      this.searchMessages(keyword),
+    handleUser("message:search", (_, userId, keyword: string) =>
+      this.searchMessages(keyword, userId),
     );
   }
 
-  /** 空库时建默认工作空间（首启体验） */
-  private async ensureDefaultWorkspace(): Promise<void> {
-    const count = await prisma.workspace.count();
-    if (count === 0) {
-      await prisma.workspace.create({ data: { name: "默认工作空间" } });
+  /** 校验工作空间归当前用户（不存在与他人所有同报错，不泄露存在性） */
+  async assertWorkspaceOwned(id: number, userId: number): Promise<void> {
+    const row = await prisma.workspace.findFirst({ where: { id, userId } });
+    if (!row) {
+      throw new Error("WORKSPACE_NOT_FOUND");
     }
   }
 
-  /** AI 侧边栏空间列表：过滤项目资产空间（projectId 非空不进分组树，二期 §3.2） */
-  async listWorkspaces(): Promise<WorkspaceRecord[]> {
+  /** 校验会话归当前用户（v12 起 session 冗余 userId）；chat.service 流式链路共用 */
+  async assertSessionOwned(id: number, userId: number): Promise<void> {
+    const row = await prisma.session.findFirst({ where: { id, userId } });
+    if (!row) {
+      throw new Error("SESSION_NOT_FOUND");
+    }
+  }
+
+  /** 校验模型经 provider 链归当前用户（防把他人的 provider key 设进自己会话） */
+  private async assertModelOwnedByUser(
+    modelId: number,
+    userId: number,
+  ): Promise<void> {
+    // model 与 provider 无 Prisma relation（裸列 providerId），两步查询
+    const model = await prisma.model.findUnique({
+      where: { id: modelId },
+      select: { providerId: true },
+    });
+    const provider = model
+      ? await prisma.provider.findUnique({
+          where: { id: model.providerId },
+          select: { userId: true },
+        })
+      : null;
+    if (!provider || provider.userId !== userId) {
+      throw new Error("MODEL_NOT_FOUND");
+    }
+  }
+
+  /** 校验助手归当前用户（builtin 已按用户播种，直接比对 userId） */
+  private async assertAssistantOwnedByUser(
+    assistantId: number,
+    userId: number,
+  ): Promise<void> {
+    const row = await prisma.assistant.findFirst({
+      where: { id: assistantId, userId },
+    });
+    if (!row) {
+      throw new Error("ASSISTANT_NOT_FOUND");
+    }
+  }
+
+  /**
+   * AI 侧边栏空间列表：过滤项目资产空间（projectId 非空不进分组树，二期 §3.2）。
+   * 用户首次进入无空间时补建默认工作空间（原启动期 ensureDefaultWorkspace
+   * 因多用户隔离改为按用户补建）
+   */
+  async listWorkspaces(userId: number): Promise<WorkspaceRecord[]> {
+    const ownedCount = await prisma.workspace.count({
+      where: { userId },
+    });
+    if (ownedCount === 0) {
+      await prisma.workspace.create({
+        data: { name: "默认工作空间", userId },
+      });
+    }
     return (
       await prisma.workspace.findMany({
-        where: { projectId: null },
+        where: { projectId: null, userId },
         orderBy: { createdAt: "asc" },
       })
     ).map((row) => this.toWorkspace(row));
@@ -184,7 +241,10 @@ export class SessionRepository {
     return prisma.workspace.findUnique({ where: { id } });
   }
 
-  async createWorkspace(p: WorkspaceCreateParams): Promise<WorkspaceRecord> {
+  async createWorkspace(
+    p: WorkspaceCreateParams,
+    userId: number,
+  ): Promise<WorkspaceRecord> {
     const row = await prisma.workspace.create({
       data: {
         name: p.name,
@@ -192,12 +252,21 @@ export class SessionRepository {
         defaultModelId: p.defaultModelId,
         // 「打开本地空间」一步建绑（其余入口不传 = 不设置）
         directoryPath: p.directoryPath,
+        userId,
       },
     });
     return this.toWorkspace(row);
   }
 
-  async updateWorkspace(p: WorkspaceUpdateParams): Promise<WorkspaceRecord> {
+  async updateWorkspace(
+    p: WorkspaceUpdateParams,
+    userId: number,
+  ): Promise<WorkspaceRecord> {
+    await this.assertWorkspaceOwned(p.id, userId);
+    // v12 隔离：默认模型经 provider 链校验归属
+    if (p.defaultModelId != null) {
+      await this.assertModelOwnedByUser(p.defaultModelId, userId);
+    }
     const row = await prisma.workspace.update({
       where: { id: p.id },
       data: { name: p.name, icon: p.icon, defaultModelId: p.defaultModelId },
@@ -212,7 +281,9 @@ export class SessionRepository {
   async updateWorkspaceBoundDirectory(
     id: number,
     directoryPath: string | null,
+    userId: number,
   ): Promise<WorkspaceRecord> {
+    await this.assertWorkspaceOwned(id, userId);
     const row = await prisma.workspace.update({
       where: { id },
       data: { directoryPath },
@@ -220,7 +291,8 @@ export class SessionRepository {
     return this.toWorkspace(row);
   }
 
-  async deleteWorkspace(id: number): Promise<void> {
+  async deleteWorkspace(id: number, userId: number): Promise<void> {
+    await this.assertWorkspaceOwned(id, userId);
     const sessions = await prisma.session.findMany({
       where: { workspaceId: id },
       select: { id: true },
@@ -232,7 +304,11 @@ export class SessionRepository {
     await prisma.workspace.delete({ where: { id } });
   }
 
-  async listSessions(workspaceId: number): Promise<SessionRecord[]> {
+  async listSessions(
+    workspaceId: number,
+    userId: number,
+  ): Promise<SessionRecord[]> {
+    await this.assertWorkspaceOwned(workspaceId, userId);
     return (
       await prisma.session.findMany({
         // 项目会话不进 AI 任务树（项目模块一期会话隔离）
@@ -246,13 +322,31 @@ export class SessionRepository {
     return prisma.session.findUnique({ where: { id } });
   }
 
-  async createSession(p: SessionCreateParams): Promise<SessionRecord> {
+  async createSession(
+    p: SessionCreateParams,
+    userId: number,
+  ): Promise<SessionRecord> {
+    // 归属校验；会话 userId 冗余列随工作空间写入
+    const workspace = await prisma.workspace.findFirst({
+      where: { id: p.workspaceId, userId },
+    });
+    if (!workspace) {
+      throw new Error("WORKSPACE_NOT_FOUND");
+    }
     // 新会话继承同工作空间最近一次选择的模型（用户反馈：默认丢失上次选择）
+    // v12 隔离：继承源自本人会话；显式指定助手时校验归属
     const latest = await prisma.session.findFirst({
-      where: { workspaceId: p.workspaceId, currentModelId: { not: null } },
+      where: {
+        workspaceId: p.workspaceId,
+        currentModelId: { not: null },
+        userId,
+      },
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
       select: { currentModelId: true },
     });
+    if (p.assistantId != null) {
+      await this.assertAssistantOwnedByUser(p.assistantId, userId);
+    }
     const row = await prisma.session.create({
       data: {
         workspaceId: p.workspaceId,
@@ -260,16 +354,17 @@ export class SessionRepository {
         scenario: p.scenario ?? null,
         currentModelId: latest?.currentModelId ?? undefined,
         title: "新会话",
+        userId,
       },
     });
     return this.toSession(row);
   }
 
   /** v5：全部未归档任务（标准侧边栏分组树数据源）；项目会话隔离在外 */
-  async listAllSessions(): Promise<SessionRecord[]> {
+  async listAllSessions(userId: number): Promise<SessionRecord[]> {
     return (
       await prisma.session.findMany({
-        where: { archivedAt: null, projectId: null },
+        where: { archivedAt: null, projectId: null, userId },
         orderBy: { lastMessageAt: "desc" },
       })
     ).map((row) => this.toSession(row));
@@ -291,7 +386,8 @@ export class SessionRepository {
   }
 
   /** v5 置顶：置 true 记时间戳（前端按其倒序排列），false 清空 */
-  async pinSession(id: number, pinned: boolean): Promise<void> {
+  async pinSession(id: number, pinned: boolean, userId: number): Promise<void> {
+    await this.assertSessionOwned(id, userId);
     await prisma.session.update({
       where: { id },
       data: { pinnedAt: pinned ? new Date() : null },
@@ -299,7 +395,12 @@ export class SessionRepository {
   }
 
   /** v5 归档：归档任务从列表/搜索消失，撤销即清空 */
-  async archiveSession(id: number, archived: boolean): Promise<void> {
+  async archiveSession(
+    id: number,
+    archived: boolean,
+    userId: number,
+  ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
     await prisma.session.update({
       where: { id },
       data: { archivedAt: archived ? new Date() : null },
@@ -307,11 +408,19 @@ export class SessionRepository {
   }
 
   /** v5 任务标题搜索：空关键词退化为最近任务（spec §4.1）；项目会话隔离在外 */
-  async searchSessionsByTitle(keyword: string): Promise<SessionRecord[]> {
+  async searchSessionsByTitle(
+    keyword: string,
+    userId: number,
+  ): Promise<SessionRecord[]> {
     const trimmed = keyword.trim();
     const where = trimmed
-      ? { title: { contains: trimmed }, archivedAt: null, projectId: null }
-      : { archivedAt: null, projectId: null };
+      ? {
+          title: { contains: trimmed },
+          archivedAt: null,
+          projectId: null,
+          userId,
+        }
+      : { archivedAt: null, projectId: null, userId };
     return (
       await prisma.session.findMany({
         where,
@@ -322,7 +431,11 @@ export class SessionRepository {
   }
 
   /** v5 打开空间绑定目录（上下文菜单「打开文件夹」） */
-  async openWorkspaceDirectory(workspaceId: number): Promise<void> {
+  async openWorkspaceDirectory(
+    workspaceId: number,
+    userId: number,
+  ): Promise<void> {
+    await this.assertWorkspaceOwned(workspaceId, userId);
     const workspace = await this.getWorkspace(workspaceId);
     if (workspace?.directoryPath) {
       await shell.openPath(workspace.directoryPath);
@@ -333,7 +446,9 @@ export class SessionRepository {
   async readWorkspaceFileById(
     workspaceId: number,
     relPath: string,
+    userId: number,
   ): Promise<WorkspaceFileContent> {
+    await this.assertWorkspaceOwned(workspaceId, userId);
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace?.directoryPath) throw new Error("工作空间未绑定目录");
     return readWorkspaceFile(resolveFilePath(workspace.directoryPath, relPath));
@@ -343,7 +458,9 @@ export class SessionRepository {
   async revealWorkspaceFile(
     workspaceId: number,
     relPath: string,
+    userId: number,
   ): Promise<void> {
+    await this.assertWorkspaceOwned(workspaceId, userId);
     const workspace = await this.getWorkspace(workspaceId);
     if (workspace?.directoryPath) {
       shell.showItemInFolder(resolveFilePath(workspace.directoryPath, relPath));
@@ -354,7 +471,9 @@ export class SessionRepository {
   async exportWorkspaceFile(
     workspaceId: number,
     relPath: string,
+    userId: number,
   ): Promise<string | null> {
+    await this.assertWorkspaceOwned(workspaceId, userId);
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace?.directoryPath) throw new Error("工作空间未绑定目录");
     const absPath = resolveFilePath(workspace.directoryPath, relPath);
@@ -371,11 +490,17 @@ export class SessionRepository {
     return filePath;
   }
 
-  async renameSession(id: number, title: string): Promise<void> {
+  async renameSession(
+    id: number,
+    title: string,
+    userId: number,
+  ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
     await prisma.session.update({ where: { id }, data: { title } });
   }
 
-  async deleteSession(id: number): Promise<void> {
+  async deleteSession(id: number, userId: number): Promise<void> {
+    await this.assertSessionOwned(id, userId);
     // automationRun.sessionId 为裸列（无外键级联）——先置空再删会话，
     // 避免运行记录残留指向已删会话的死链（历史 run 保留供任务统计）
     await prisma.$transaction([
@@ -388,7 +513,15 @@ export class SessionRepository {
     ]);
   }
 
-  async setSessionModel(id: number, modelId: number | null): Promise<void> {
+  async setSessionModel(
+    id: number,
+    modelId: number | null,
+    userId: number,
+  ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
+    if (modelId !== null) {
+      await this.assertModelOwnedByUser(modelId, userId);
+    }
     await prisma.session.update({
       where: { id },
       data: { currentModelId: modelId },
@@ -398,7 +531,12 @@ export class SessionRepository {
   async setSessionAssistant(
     id: number,
     assistantId: number | null,
+    userId: number,
   ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
+    if (assistantId !== null) {
+      await this.assertAssistantOwnedByUser(assistantId, userId);
+    }
     await prisma.session.update({
       where: { id },
       data: { assistantId },
@@ -406,14 +544,23 @@ export class SessionRepository {
   }
 
   /** P3 会话模式："agent" 写 null（缺省不落盘，保持 DB 干净） */
-  async setSessionMode(id: number, mode: SessionMode): Promise<void> {
+  async setSessionMode(
+    id: number,
+    mode: SessionMode,
+    userId: number,
+  ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
     await prisma.session.update({
       where: { id },
       data: { mode: mode === "agent" ? null : mode },
     });
   }
 
-  async listMessages(sessionId: number): Promise<MessageRecord[]> {
+  async listMessages(
+    sessionId: number,
+    userId: number,
+  ): Promise<MessageRecord[]> {
+    await this.assertSessionOwned(sessionId, userId);
     return (
       await prisma.message.findMany({
         where: { sessionId },
@@ -423,10 +570,13 @@ export class SessionRepository {
   }
 
   /** P0 历史搜索：LIKE 查询（spec §4.2），附带所属会话信息供搜索结果跳转 */
-  async searchMessages(keyword: string): Promise<SearchMessageResult[]> {
-    // 消息按 blocks 全库搜会带出项目消息——先取非项目会话 id 集限定搜索范围
+  async searchMessages(
+    keyword: string,
+    userId: number,
+  ): Promise<SearchMessageResult[]> {
+    // 消息按 blocks 全库搜会带出项目消息——先取当前用户非项目会话 id 集限定搜索范围
     const visibleSessions = await prisma.session.findMany({
-      where: { projectId: null },
+      where: { projectId: null, userId },
       select: { id: true },
     });
     const rows = (
@@ -487,10 +637,14 @@ export class SessionRepository {
   }
 
   /** chat.service 专用：首条用户消息生成标题 */
-  async autotitleIfDefault(sessionId: number, content: string): Promise<void> {
+  async autotitleIfDefault(
+    sessionId: number,
+    content: string,
+    userId: number,
+  ): Promise<void> {
     const session = await this.getSession(sessionId);
     if (session && session.title === "新会话") {
-      await this.renameSession(sessionId, content.slice(0, 20));
+      await this.renameSession(sessionId, content.slice(0, 20), userId);
     }
   }
 }

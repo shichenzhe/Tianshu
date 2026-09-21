@@ -461,7 +461,6 @@ describe("PlanItemDialog 保存链路", () => {
 
     await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.create).toHaveBeenCalledWith({
-      createdById: 1,
       assigneeId: 1,
       projectId: 1,
       title: "新事项",
@@ -504,8 +503,9 @@ describe("PlanItemDialog 保存链路", () => {
 
     await waitFor(() => expect(PlanItemApi.create).toHaveBeenCalledTimes(1));
     expect(PlanItemApi.create).toHaveBeenCalledWith({
-      createdById: 1,
       assigneeId: 1,
+      // 本地任务 projectId 传 undefined 键（后端落 null）；createdById 不再由前端传（v12 token 注入）
+      projectId: undefined,
       title: "本地任务",
       description: null,
       status: "not_started",

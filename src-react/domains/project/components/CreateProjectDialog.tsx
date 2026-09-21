@@ -42,7 +42,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { AssistantApi } from "@/domains/ai/api/assistant.api";
 import { McpServerApi } from "@/domains/ai/api/mcp.api";
 import SkillApi from "@/domains/ai/skills/api/skill.api";
-import { useUserStore } from "@/domains/user/store/user.store";
 import { getTemplate, PROJECT_TEMPLATES } from "../model/project-templates";
 import ProjectApi from "../api/project.api";
 import PickerDialog, { type PickerItem } from "./PickerDialog";
@@ -92,7 +91,6 @@ export default function CreateProjectDialog({
 }: CreateProjectDialogProps) {
   const { t } = useTranslation(["project", "common"]);
   const queryClient = useQueryClient();
-  const user = useUserStore((state) => state.user);
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
@@ -218,7 +216,6 @@ export default function CreateProjectDialog({
     setCreating(true);
     try {
       const record = await ProjectApi.create({
-        ownerId: user.id,
         name: trimmed,
         systemPrompt: prompt.trim() || undefined,
         templateKey: selectedTemplateKey ?? undefined,

@@ -3,9 +3,10 @@
  * 二期起挂接资产空间生命周期——create/remove/getDetail 维护
  * userData/projects/<id>/assets 目录与对应 workspace 行（二期 spec §3.2）
  */
-import { app, ipcMain } from "electron";
+import { app } from "electron";
 import prisma from "../../commons/prisma-client";
 import Log from "../../commons/Log";
+import { handleUser } from "../../commons/ipc-user";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -58,23 +59,60 @@ export default class ProjectRepository {
    * 注册IPC处理程序
    */
   private registerHandlers() {
-    ipcMain.handle("project:list", (_, ownerId: number) => this.list(ownerId));
-    ipcMain.handle("project:getDetail", (_, id: number) => this.getDetail(id));
-    ipcMain.handle("project:create", (_, params: ProjectCreateParams) =>
-      this.create(params),
+    // userId 由 token 解出（commons/ipc-user）；ownerId 不再信任前端传参
+    handleUser("project:list", (_, userId) => this.list(userId));
+    handleUser("project:getDetail", (_, userId, id: number) =>
+      this.getDetail(id, userId),
     );
-    ipcMain.handle("project:update", (_, params: ProjectUpdateParams) =>
-      this.update(params),
+    handleUser("project:create", (_, userId, params: ProjectCreateParams) =>
+      this.create(params, userId),
     );
-    ipcMain.handle("project:delete", (_, id: number) => this.remove(id));
-    ipcMain.handle(
+    handleUser("project:update", (_, userId, params: ProjectUpdateParams) =>
+      this.update(params, userId),
+    );
+    handleUser("project:delete", (_, userId, id: number) =>
+      this.remove(id, userId),
+    );
+    handleUser(
       "project:setBindings",
-      (_, projectId: number, items: ProjectBindingInput[]) =>
-        this.setBindings(projectId, items),
+      (_, userId, projectId: number, items: ProjectBindingInput[]) =>
+        this.setBindings(projectId, items, userId),
     );
-    ipcMain.handle("project:listMembers", (_, projectId: number) =>
-      this.listMembers(projectId),
+    handleUser("project:listMembers", (_, userId, projectId: number) =>
+      this.listMembers(projectId, userId),
     );
+  }
+
+  /** 项目对当前用户可见（owner 或成员）；不可见与不存在同报错 */
+  private async assertProjectVisible(
+    id: number,
+    userId: number,
+  ): Promise<ProjectRow> {
+    const row = await prisma.project.findUnique({ where: { id } });
+    if (row && row.ownerId === userId) {
+      return row;
+    }
+    const member = row
+      ? await prisma.projectMember.findFirst({
+          where: { projectId: id, userId },
+        })
+      : null;
+    if (!row || !member) {
+      throw new Error(PROJECT_NOT_FOUND);
+    }
+    return row;
+  }
+
+  /** 写操作校验：仅 owner 可改 */
+  private async assertProjectOwned(
+    id: number,
+    userId: number,
+  ): Promise<ProjectRow> {
+    const row = await this.assertProjectVisible(id, userId);
+    if (row.ownerId !== userId) {
+      throw new Error(PROJECT_NOT_FOUND);
+    }
+    return row;
   }
 
   /**
@@ -93,7 +131,8 @@ export default class ProjectRepository {
    * 项目详情：项目 + 资产空间（自愈） + 能力挂载 + 动态流会话
    * @param id 项目 id
    */
-  async getDetail(id: number): Promise<ProjectDetail> {
+  async getDetail(id: number, userId: number): Promise<ProjectDetail> {
+    await this.assertProjectVisible(id, userId);
     const row = await prisma.project.findUnique({ where: { id } });
     const session = await prisma.session.findFirst({
       where: { projectId: id },
@@ -116,22 +155,28 @@ export default class ProjectRepository {
    * 创建项目：重名检查 → project + owner 成员 + 初始挂载 + 资产空间 + 动态流会话（含欢迎消息）
    * @param params 创建参数
    */
-  async create(params: ProjectCreateParams): Promise<ProjectRecord> {
-    await this.ensureNameAvailable(params.ownerId, params.name);
+  async create(
+    params: ProjectCreateParams,
+    userId: number,
+  ): Promise<ProjectRecord> {
+    // v12 多用户隔离：ownerId 以 token 解出的用户为准，忽略前端传参
+    const owned: ProjectCreateParams = { ...params, ownerId: userId };
+    await this.ensureNameAvailable(userId, owned.name);
     const row = await prisma.project.create({
       data: {
-        name: params.name,
-        systemPrompt: params.systemPrompt,
-        templateKey: params.templateKey,
-        ownerId: params.ownerId,
+        name: owned.name,
+        systemPrompt: owned.systemPrompt,
+        templateKey: owned.templateKey,
+        ownerId: userId,
       },
     });
-    await this.createOwnerAndBindings(row.id, params);
+    await this.createOwnerAndBindings(row.id, userId, owned);
     const workspace = await this.ensureAssetWorkspace(row);
     const session = await this.createProjectSession(
       row.id,
-      params,
+      owned,
       workspace.id,
+      userId,
     );
     return this.toRecord(row, session.id);
   }
@@ -144,7 +189,8 @@ export default class ProjectRepository {
    * 路径的附件关联解绑会保留文件实体在资产空间）
    * @param id 项目 id
    */
-  async remove(id: number): Promise<void> {
+  async remove(id: number, userId: number): Promise<void> {
+    await this.assertProjectOwned(id, userId);
     await this.removeAssetWorkspace(id);
     // 级联清计划事项附件关联（v6 附件表无 projectId 列，按事项 id 集删；
     // 文件实体已随上面的资产目录树销毁——"保留在资产空间"仅是删除单个
@@ -179,11 +225,8 @@ export default class ProjectRepository {
    * 更新项目基础字段；改名时校验同用户重名
    * @param params 更新参数
    */
-  async update(params: ProjectUpdateParams): Promise<void> {
-    const row = await prisma.project.findUnique({ where: { id: params.id } });
-    if (!row) {
-      throw new Error(PROJECT_NOT_FOUND);
-    }
+  async update(params: ProjectUpdateParams, userId: number): Promise<void> {
+    const row = await this.assertProjectOwned(params.id, userId);
     // 显式判空：name 缺席跳过校验；空串绕过重名校验（truthiness 漏洞）
     if (
       params.name !== undefined &&
@@ -206,6 +249,16 @@ export default class ProjectRepository {
   async setBindings(
     projectId: number,
     items: ProjectBindingInput[],
+    userId: number,
+  ): Promise<void> {
+    await this.assertProjectOwned(projectId, userId);
+    await this.replaceBindings(projectId, items);
+  }
+
+  /** 挂载全量替换实现（创建流程内部复用，免权限校验） */
+  private async replaceBindings(
+    projectId: number,
+    items: ProjectBindingInput[],
   ): Promise<void> {
     await prisma.projectBinding.deleteMany({ where: { projectId } });
     if (items.length > 0) {
@@ -223,7 +276,11 @@ export default class ProjectRepository {
    * 项目成员列表（joinedAt asc，owner 在前不保证——按加入序），
    * join user 取昵称（缺昵称回退用户名）
    */
-  async listMembers(projectId: number): Promise<ProjectMemberItem[]> {
+  async listMembers(
+    projectId: number,
+    userId: number,
+  ): Promise<ProjectMemberItem[]> {
+    await this.assertProjectVisible(projectId, userId);
     const members = await prisma.projectMember.findMany({
       where: { projectId },
       orderBy: { joinedAt: "asc" },
@@ -345,14 +402,15 @@ export default class ProjectRepository {
   /** 建 owner 成员行 + 初始能力挂载 */
   private async createOwnerAndBindings(
     projectId: number,
+    userId: number,
     params: ProjectCreateParams,
   ): Promise<void> {
     await prisma.projectMember.create({
-      data: { projectId, userId: params.ownerId, role: "owner" },
+      data: { projectId, userId, role: "owner" },
     });
     const bindings = params.bindings ?? [];
     if (bindings.length > 0) {
-      await this.setBindings(projectId, bindings);
+      await this.replaceBindings(projectId, bindings);
     }
   }
 
@@ -377,6 +435,8 @@ export default class ProjectRepository {
         name: `资产 · ${project.name}`,
         directoryPath,
         projectId: project.id,
+        // v12 多用户隔离：资产空间随项目 owner
+        userId: project.ownerId,
       },
     });
     await this.rebindProjectSessions(project.id, workspace.id);
@@ -459,9 +519,10 @@ export default class ProjectRepository {
     projectId: number,
     params: ProjectCreateParams,
     workspaceId: number,
+    userId: number,
   ): Promise<SessionRow> {
     const latest = await prisma.session.findFirst({
-      where: { currentModelId: { not: null } },
+      where: { currentModelId: { not: null }, userId },
       orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
       select: { currentModelId: true },
     });
@@ -471,6 +532,7 @@ export default class ProjectRepository {
         workspaceId,
         title: params.name,
         currentModelId: latest?.currentModelId ?? undefined,
+        userId,
       },
     });
     if (params.welcomeMessage) {

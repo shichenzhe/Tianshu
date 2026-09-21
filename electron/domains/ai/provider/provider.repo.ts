@@ -1,4 +1,4 @@
-import { ipcMain } from "electron";
+import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
 import type {
   ProviderCreateParams,
@@ -29,29 +29,49 @@ export class ProviderRepository {
   }
 
   private registerIpcHandlers() {
-    ipcMain.handle("provider:list", () => this.list());
-    ipcMain.handle("provider:getById", (_, id: number) => this.getById(id));
-    ipcMain.handle("provider:create", (_, p: ProviderCreateParams) =>
-      this.create(p),
+    handleUser("provider:list", (_, userId) => this.list(userId));
+    handleUser("provider:getById", (_, userId, id: number) =>
+      this.getById(id, userId),
     );
-    ipcMain.handle("provider:update", (_, p: ProviderUpdateParams) =>
-      this.update(p),
+    handleUser("provider:create", (_, userId, p: ProviderCreateParams) =>
+      this.create(p, userId),
     );
-    ipcMain.handle("provider:delete", (_, id: number) => this.delete(id));
+    handleUser("provider:update", (_, userId, p: ProviderUpdateParams) =>
+      this.update(p, userId),
+    );
+    handleUser("provider:delete", (_, userId, id: number) =>
+      this.delete(id, userId),
+    );
   }
 
-  async list(): Promise<ProviderRecord[]> {
+  /**
+   * 校验 provider 归当前用户（不存在与他人所有同报错，不泄露存在性）
+   */
+  async assertOwned(id: number, userId: number): Promise<void> {
+    const row = await prisma.provider.findFirst({ where: { id, userId } });
+    if (!row) {
+      throw new Error("PROVIDER_NOT_FOUND");
+    }
+  }
+
+  async list(userId: number): Promise<ProviderRecord[]> {
     return (
-      await prisma.provider.findMany({ orderBy: { createdAt: "desc" } })
+      await prisma.provider.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+      })
     ).map((row) => this.toRecord(row));
   }
 
-  async getById(id: number): Promise<ProviderRecord | null> {
-    const row = await prisma.provider.findUnique({ where: { id } });
+  async getById(id: number, userId: number): Promise<ProviderRecord | null> {
+    const row = await prisma.provider.findFirst({ where: { id, userId } });
     return row ? this.toRecord(row) : null;
   }
 
-  async create(p: ProviderCreateParams): Promise<ProviderRecord> {
+  async create(
+    p: ProviderCreateParams,
+    userId: number,
+  ): Promise<ProviderRecord> {
     const row = await prisma.provider.create({
       data: {
         name: p.name,
@@ -60,12 +80,17 @@ export class ProviderRepository {
         apiKey: p.apiKey,
         extraHeaders: p.extraHeaders,
         enabled: p.enabled ?? true,
+        userId,
       },
     });
     return this.toRecord(row);
   }
 
-  async update(p: ProviderUpdateParams): Promise<ProviderRecord> {
+  async update(
+    p: ProviderUpdateParams,
+    userId: number,
+  ): Promise<ProviderRecord> {
+    await this.assertOwned(p.id, userId);
     const row = await prisma.provider.update({
       where: { id: p.id },
       data: {
@@ -80,7 +105,8 @@ export class ProviderRepository {
     return this.toRecord(row);
   }
 
-  async delete(id: number): Promise<void> {
+  async delete(id: number, userId: number): Promise<void> {
+    await this.assertOwned(id, userId);
     await prisma.model.deleteMany({ where: { providerId: id } });
     await prisma.provider.delete({ where: { id } });
   }

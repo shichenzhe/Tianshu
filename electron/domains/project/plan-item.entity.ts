@@ -147,9 +147,9 @@ export interface PlanItemAttachmentRecord {
  */
 export interface PlanItemCreateParams {
   /**
-   * 创建人用户 id
+   * 创建人用户 id（v12 起主进程以 token 解出的用户为准，可缺省）
    */
-  createdById: number;
+  createdById?: number;
 
   /**
    * 标题（trim 后不得为空）

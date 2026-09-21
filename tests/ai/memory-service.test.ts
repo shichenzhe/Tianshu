@@ -336,7 +336,7 @@ describe("共享在途互斥（scheduler × service，spec §5.2）", () => {
             modelId: "m1",
             enabled: true,
           }),
-          listAll: async () => [
+          listAllEnabledAnyUser: async () => [
             { id: 1, providerId: 1, modelId: "m1", enabled: true },
           ],
         },

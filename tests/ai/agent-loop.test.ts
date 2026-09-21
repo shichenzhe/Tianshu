@@ -548,6 +548,8 @@ describe("agent:approve 审批接线", () => {
     expect(await approveHandler({}, "t9", true, token)).toBe(true);
     await expect(pending).resolves.toBe(true);
     expect(await approveHandler({}, "ghost", true, token)).toBe(false);
-    await expect(approveHandler({}, "t9", true, "not-a-token")).rejects.toThrow();
+    await expect(
+      approveHandler({}, "t9", true, "not-a-token"),
+    ).rejects.toThrow();
   });
 });

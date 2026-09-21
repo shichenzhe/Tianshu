@@ -114,6 +114,17 @@ export default function LibrarySidebarTree({
         data-testid="library-sidebar-collapsed"
         className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border/50 py-2"
       >
+        {/* 展开按钮置顶：贴底（mt-auto）时用户收起后找不到入口，
+            误以为无法展开；与展开态顶部按钮行的位置保持延续 */}
+        <button
+          type="button"
+          title={t("chat:library.expandSidebar")}
+          aria-label={t("chat:library.expandSidebar")}
+          className={ICON_BTN}
+          onClick={onToggleCollapse}
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
         <button
           type="button"
           title={t("chat:library.searchLabel")}
@@ -135,15 +146,6 @@ export default function LibrarySidebarTree({
           onClick={onBackToList}
         >
           <ListTree className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          title={t("chat:library.expandSidebar")}
-          aria-label={t("chat:library.expandSidebar")}
-          className={`${ICON_BTN} mt-auto`}
-          onClick={onToggleCollapse}
-        >
-          <PanelLeftOpen className="h-4 w-4" />
         </button>
       </aside>
     );

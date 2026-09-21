@@ -67,7 +67,7 @@ const FULL_MD =
   "## 工作背景\na\n\n## 个人背景\nb\n\n## 当前关注\nc\n\n## 近期动态\nd";
 
 describe("validateMemoryOutput", () => {
-  it("四标题齐备：剥围栏 + 截断后返回", () => {
+  it("四标题齐备：剥围栏 + 归一化后返回（标准输入幂等）", () => {
     const raw = "```\n" + FULL_MD + "\n```";
     expect(validateMemoryOutput(raw)).toBe(FULL_MD);
   });
@@ -75,9 +75,27 @@ describe("validateMemoryOutput", () => {
     expect(validateMemoryOutput("我无法完成这个任务")).toBeNull();
     expect(validateMemoryOutput("")).toBeNull();
   });
-  it("只含部分四节标题（如仅一节/缺节）→ null（I2 四标题齐备校验）", () => {
-    expect(validateMemoryOutput("## 工作背景\nabc")).toBeNull();
-    expect(validateMemoryOutput("## 工作背景\na\n## 当前关注\nc")).toBeNull();
+  it("缺节 → 归一化保留已有节（I2 放宽：模型省略空节不再整轮作废）", () => {
+    expect(validateMemoryOutput("## 工作背景\nabc")).toBe("## 工作背景\nabc");
+    expect(validateMemoryOutput("## 工作背景\na\n## 当前关注\nc")).toBe(
+      "## 工作背景\na\n\n## 当前关注\nc",
+    );
+  });
+  it("节序乱 → 归一化按固定节序重排", () => {
+    expect(validateMemoryOutput("## 近期动态\nd\n## 工作背景\na")).toBe(
+      "## 工作背景\na\n\n## 近期动态\nd",
+    );
+  });
+  it("标题变体（**加粗**/说明后缀/三级标题/无空格）归一为标准标题行", () => {
+    expect(validateMemoryOutput("## **工作背景**\na")).toBe("## 工作背景\na");
+    expect(validateMemoryOutput("### 工作背景 —— 职业与项目\nd")).toBe(
+      "## 工作背景\nd",
+    );
+    expect(validateMemoryOutput("##近期动态\nd")).toBe("## 近期动态\nd");
+    expect(validateMemoryOutput("## _个人背景_\nb")).toBe("## 个人背景\nb");
+  });
+  it("标题词延续不误伤：「工作背景补充」不识别为标题", () => {
+    expect(validateMemoryOutput("## 工作背景补充\n内容")).toBeNull();
   });
   it("超 MEMORY_PROFILE_LIMIT 从头部截断", () => {
     const raw = `## 工作背景\n${"旧".repeat(9000)}\n## 个人背景\nb\n## 当前关注\nc\n## 近期动态\n新`;
@@ -251,15 +269,14 @@ describe("compileMemory", () => {
       }),
     ).rejects.toThrow("MEMORY_COMPILE_FAILED");
   });
-  it("输出只含部分四节标题 → 抛 MEMORY_COMPILE_FAILED（I2）", async () => {
-    await expect(
-      compileMemory({
-        currentMemory: "",
-        material: "材料",
-        instructionMode: false,
-        model,
-        modelText: async () => "## 工作背景\n只有一节",
-      }),
-    ).rejects.toThrow("MEMORY_COMPILE_FAILED");
+  it("输出只含部分四节标题 → 归一化保留（I2 放宽，不再抛错）", async () => {
+    const memory = await compileMemory({
+      currentMemory: "",
+      material: "材料",
+      instructionMode: false,
+      model,
+      modelText: async () => "## 工作背景\n只有一节",
+    });
+    expect(memory).toBe("## 工作背景\n只有一节");
   });
 });

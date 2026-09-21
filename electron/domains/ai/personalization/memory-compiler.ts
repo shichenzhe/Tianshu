@@ -13,6 +13,9 @@ import { createLanguageModel } from "../provider/provider-factory";
 import type { ProviderRuntimeInfo } from "../provider/provider-factory";
 import {
   MEMORY_PROFILE_LIMIT,
+  buildMemoryMarkdown,
+  hasMemoryHeadings,
+  parseMemoryMarkdown,
   stripCodeFence,
   truncateMemoryMarkdown,
 } from "../../../../src-react/domains/app-settings/model/memory-markdown";
@@ -81,18 +84,40 @@ export function buildInstructionUserPrompt(
   return `当前记忆：\n${currentMemory || "（空）"}\n\n用户指令（应用增删改后输出完整新记忆）：\n${instruction}`;
 }
 
-/** 校验 AI 输出（I2 四标题齐备）：剥围栏、截断；四节标题缺一 → null */
+/**
+ * 标题变体修复：模型常见偏差（`## **工作背景**`、`## 工作背景 —— 说明`、
+ * `### 标题`、`##标题`）统一重写为标准标题行；标题词延续（如
+ * 「工作背景补充」）不满足后缀约束，不误伤
+ */
+const HEADING_VARIANT =
+  /^#{2,}\s*[*_]{0,2}(工作背景|个人背景|当前关注|近期动态)[*_]{0,2}(?:\s*$|\s*[—–-].*)$/;
+
+function normalizeHeadingLines(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => {
+      const m = HEADING_VARIANT.exec(line.trim());
+      return m ? `## ${m[1]}` : line;
+    })
+    .join("\n");
+}
+
+/**
+ * 校验 AI 输出（I2 放宽修订 2026-09-21）：剥围栏 + 标题变体修复后，
+ * 含任一四节标题即合格——归一化固定节序、丢弃节外杂散；消费端
+ * parseMemoryMarkdown 本就缺节容错（缺节空串），原「四标题字面齐备」
+ * 校验致模型省略空节（如近期无里程碑）时整轮作废并 10 分钟无限重试。
+ * 空输出/无任何标题 → null
+ */
 export function validateMemoryOutput(raw: string): string | null {
-  const text = stripCodeFence(raw ?? "");
-  if (
-    text === "" ||
-    !["工作背景", "个人背景", "当前关注", "近期动态"].every((t) =>
-      text.includes(`## ${t}`),
-    )
-  ) {
+  const text = normalizeHeadingLines(stripCodeFence(raw ?? ""));
+  if (text === "" || !hasMemoryHeadings(text)) {
     return null;
   }
-  return truncateMemoryMarkdown(text, MEMORY_PROFILE_LIMIT);
+  const normalized = buildMemoryMarkdown(parseMemoryMarkdown(text));
+  return normalized === ""
+    ? null
+    : truncateMemoryMarkdown(normalized, MEMORY_PROFILE_LIMIT);
 }
 
 /**
@@ -247,7 +272,10 @@ export async function compileMemory(
   const validated = validateMemoryOutput(raw);
   if (validated === null) {
     Log.warn("记忆整理输出无法解析", (raw ?? "").slice(0, 200));
-    throw new Error("MEMORY_COMPILE_FAILED");
+    // 诊断随异常透出（memoryLastError 限长 200，摘要取 100 字）
+    throw new Error(
+      `MEMORY_COMPILE_FAILED（模型输出为空或无任何记忆标题，前 100 字：${(raw ?? "").slice(0, 100)}）`,
+    );
   }
   return validated;
 }

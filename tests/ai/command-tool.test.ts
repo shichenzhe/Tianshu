@@ -85,6 +85,17 @@ const DANGEROUS: string[] = [
   "chmod -R 777 /",
   "chmod -R 777 /Users",
   "chmod -R 777 '~/x'",
+  // Windows 递归删除（rd/rmdir/del/erase + /s 旗标，大小写不敏感）
+  "rd /s /q C:\\Users",
+  "rmdir /s /q D:\\data",
+  "del /s /q C:\\*.tmp",
+  "del /f /s /q *.log",
+  "erase /S logs",
+  "cmd /c rd /s /q C:\\",
+  // Windows 格式化/磁盘分区
+  "format C:",
+  "format /FS:NTFS X:",
+  "diskpart",
 ];
 
 const SAFE: string[] = [
@@ -99,6 +110,12 @@ const SAFE: string[] = [
   // 长旗标的相对路径形态不误伤
   "rm --recursive ./dist",
   "chmod --recursive 755 ./x",
+  // Windows 族不误伤：无 /s 的删除、format 子命令词、非盘符 format 句
+  "del file.txt",
+  "del /q *.tmp",
+  "rd empty-dir",
+  "git format-patch HEAD~2",
+  "echo formatted output",
 ];
 
 let ws: string;

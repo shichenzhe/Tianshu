@@ -60,6 +60,10 @@ const FORK_BOMB = /:\(\)\{/;
 const CHMOD_ROOT = new RegExp(
   /\bchmod\s+(?:(?:-\w+|--[\w-]+)\s+)*\d{3,4}\s+/.source + ABSOLUTE_PATH_TOKEN,
 );
+/** Windows 递归删除（rd/rmdir/del/erase 带 /s 旗标，cmd 旗标不分大小写） */
+const WIN_RM_RECURSIVE = /\b(?:rd|rmdir|del|erase)\b[^&|;]*\/[a-z]*s[a-z]*/i;
+/** Windows 格式化/磁盘分区（format 指向盘符、diskpart 任意形态） */
+const WIN_FORMAT = /\bformat\s[^&|;]*\b[a-z]:|\bdiskpart\b/i;
 
 /** 高危破坏性命令拦截：命中即拒（与权限无关常开，spec §3） */
 export function isDangerousCommand(command: string): boolean {
@@ -68,7 +72,9 @@ export function isDangerousCommand(command: string): boolean {
     MKFS_ANY.test(command) ||
     DD_TO_DEVICE.test(command) ||
     FORK_BOMB.test(command) ||
-    CHMOD_ROOT.test(command)
+    CHMOD_ROOT.test(command) ||
+    WIN_RM_RECURSIVE.test(command) ||
+    WIN_FORMAT.test(command)
   );
 }
 

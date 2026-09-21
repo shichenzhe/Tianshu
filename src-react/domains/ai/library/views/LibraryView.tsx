@@ -1,7 +1,7 @@
 /**
  * 资料库「我的资料」（spec §5 + 树改迭代）：左树形栏（文件夹导航 +
  * 搜索/列表按钮行，可收起成窄条）+ 主区三态互斥——列表态（当前层文件
- * + 工具栏：类型筛选/排序/上传/新建文件夹）/ 搜索态（树栏搜索输入驱动
+ * + 工具栏：类型筛选/上传/新建文件夹；排序在列表列头）/ 搜索态（树栏搜索输入驱动
  * 的跨层结果）/ 详情态（选中文件预览 + 元信息 + 行操作，
  * LibraryDetailPanel）。排序与类型筛选前端本地（单层数据量小，
  * skill 页先例）；拖拽入库（拖到页面任意处）。
@@ -54,6 +54,8 @@ export default function LibraryView() {
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("activity");
+  // activity 默认降序（最近优先），与 handleToggleSort 的 name→升序约定一致
+  const [sortAsc, setSortAsc] = useState(false);
   const [dialog, setDialog] = useState<{
     mode: "createFolder" | "rename";
     item?: LibraryItem;
@@ -81,8 +83,13 @@ export default function LibraryView() {
     ? (searchQuery.data ?? [])
     : (listQuery.data?.items ?? []);
   const items = useMemo(
-    () => sortItems(filterByType(rawItems, typeFilter), sortField, "desc"),
-    [rawItems, typeFilter, sortField],
+    () =>
+      sortItems(
+        filterByType(rawItems, typeFilter),
+        sortField,
+        sortAsc ? "asc" : "desc",
+      ),
+    [rawItems, typeFilter, sortField, sortAsc],
   );
 
   // 主区三态互斥：详情态优先（搜索结果点文件进入），次搜索态，默认列表态
@@ -92,6 +99,37 @@ export default function LibraryView() {
     await queryClient.invalidateQueries({ queryKey: ["libraryItems"] });
     await queryClient.invalidateQueries({ queryKey: ["librarySearch"] });
     await queryClient.invalidateQueries({ queryKey: ["libraryTree"] });
+  };
+
+  /** 列头排序：同列点切换升降；换列回落该列默认向（name 升 / activity 降） */
+  const handleToggleSort = (field: SortField) => {
+    if (field === sortField) {
+      setSortAsc((v) => !v);
+    } else {
+      setSortField(field);
+      setSortAsc(field === "name");
+    }
+  };
+
+  /** 收藏切换：直调 + invalidate 重拉（失败 toast 不阻断） */
+  const handleToggleFavorite = async (item: LibraryItem) => {
+    try {
+      await LibraryApi.toggleFavorite(item.id);
+      await invalidate();
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  };
+
+  /** 进入详情态的唯一入口：file 顺带 markViewed 打点（NEW 徽标随重拉消失，
+   *  打点失败不阻断预览） */
+  const openDetail = (item: LibraryItem) => {
+    setDetailItem(item);
+    if (item.kind === "file") {
+      void LibraryApi.markViewed(item.id)
+        .then(() => invalidate())
+        .catch(() => undefined);
+    }
   };
 
   /** 上传：系统选择器多选 → addFiles 到当前层 */
@@ -248,8 +286,8 @@ export default function LibraryView() {
           </div>
         ) : (
           <>
-            {/* 工具栏（列表/搜索态共用）：类型筛选 / 排序切换 / 新建
-                文件夹 / 上传；搜索入口与导航在左树栏 */}
+            {/* 工具栏（列表/搜索态共用）：类型筛选 / 新建文件夹 / 上传；
+                搜索入口在左树栏，排序移至列表列头 */}
             <div className="flex flex-wrap items-center gap-2 py-3">
               <div className="ml-auto flex items-center gap-2">
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -272,18 +310,6 @@ export default function LibraryView() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-                  onClick={() =>
-                    setSortField(sortField === "activity" ? "name" : "activity")
-                  }
-                >
-                  {sortField === "activity"
-                    ? t("chat:library.recent")
-                    : t("chat:library.colName")}
-                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -324,8 +350,12 @@ export default function LibraryView() {
                   loading={
                     searching ? searchQuery.isLoading : listQuery.isLoading
                   }
+                  sortField={sortField}
+                  sortAsc={sortAsc}
+                  onToggleSort={handleToggleSort}
+                  onToggleFavorite={(item) => void handleToggleFavorite(item)}
                   onOpen={(item) => setFolderId(item.id)}
-                  onPreview={(item) => setDetailItem(item)}
+                  onPreview={openDetail}
                   onRename={(item) => setDialog({ mode: "rename", item })}
                   onMove={(item) => setMoveIds([item.id])}
                   onReveal={(item) =>

@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { invoke } from "@/lib/ipc";
+// 复用 AI 域 markdown 渲染（react-markdown 无 rehype-raw，转义输出规避 XSS）
+import MarkdownView from "@/domains/ai/chat/components/MarkdownView";
 
 interface AppInfo {
   name: string;
@@ -80,44 +82,8 @@ export default function UpdateLogDialog({
     }
   }, [open]);
 
-  // 渲染 markdown 内容
-  const renderMarkdown = (content: string) => {
-    return (
-      <div
-        className="prose prose-sm max-w-none"
-        dangerouslySetInnerHTML={{
-          __html: content
-            .replace(
-              /^# (.*$)/gim,
-              '<h1 class="text-2xl font-bold mb-4 text-foreground">$1</h1>',
-            )
-            .replace(
-              /^## (.*$)/gim,
-              '<h2 class="text-xl font-semibold mb-3 text-foreground/90">$1</h2>',
-            )
-            .replace(
-              /^### (.*$)/gim,
-              '<h3 class="text-lg font-medium mb-2 text-foreground/80">$1</h3>',
-            )
-            .replace(
-              /^- (.*$)/gim,
-              '<li class="ml-4 mb-1 text-muted-foreground">$1</li>',
-            )
-            .replace(
-              /\*\*(.*?)\*\*/g,
-              '<strong class="font-semibold">$1</strong>',
-            )
-            .replace(/\*(.*?)\*/g, '<em class="italic">$1</em>')
-            .replace(
-              /`(.*?)`/g,
-              '<code class="bg-muted px-1 py-0.5 rounded text-sm font-mono">$1</code>',
-            )
-            .replace(/\n/g, "<br>"),
-        }}
-      />
-    );
-  };
-
+  // 渲染 markdown 内容（MarkdownView：react-markdown 转义输出，
+  // 替代原手搓 innerHTML——更新日志含 HTML 时不再构成注入面）
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[700px]">
@@ -144,7 +110,9 @@ export default function UpdateLogDialog({
 
           {/* 更新日志内容 */}
           <div className="log-container max-h-[400px] overflow-y-auto">
-            <div className="update-log-text">{renderMarkdown(updateLog)}</div>
+            <div className="update-log-text">
+              <MarkdownView text={updateLog} />
+            </div>
           </div>
         </div>
 

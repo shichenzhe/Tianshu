@@ -26,6 +26,13 @@ describe("sanitizeLibraryName", () => {
   it("清洗后为空抛错", () => {
     expect(() => sanitizeLibraryName(" /? ")).toThrow();
   });
+  it("超长截断至 200（保留扩展名）", () => {
+    const long = "a".repeat(300) + ".pdf";
+    const cleaned = sanitizeLibraryName(long);
+    expect(cleaned.length).toBe(200);
+    expect(cleaned.endsWith(".pdf")).toBe(true);
+    expect(sanitizeLibraryName("文".repeat(250)).length).toBe(200);
+  });
 });
 
 describe("uniqueDbName", () => {

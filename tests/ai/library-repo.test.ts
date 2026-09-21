@@ -130,6 +130,12 @@ describe("LibraryRepository 元数据通道", () => {
     await expect(repo.move([f1.id], f2.id, UID)).rejects.toThrow();
   });
 
+  it("revealItem 对 folder 防御性拒绝（纯 DB 无磁盘实体）", async () => {
+    const repo = new LibraryRepository();
+    const f1 = await repo.createFolder("A", null, UID);
+    await expect(repo.revealItem(f1.id, UID)).rejects.toThrow("无实体");
+  });
+
   it("delete 级联删除子树记录", async () => {
     const repo = new LibraryRepository();
     const f1 = await repo.createFolder("A", null, UID);

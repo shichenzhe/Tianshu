@@ -145,15 +145,17 @@ export default class LibraryRepository {
     return { items, breadcrumbs };
   }
 
-  /** 跨层文件名搜索（仅 file；contains = SQLite LIKE，ASCII 大小写不敏感） */
+  /** 跨层文件名搜索（仅 file；contains = SQLite LIKE，ASCII 大小写不敏感；
+   *  keyword 截 100 防超长 LIKE） */
   async search(keyword: string, userId: number): Promise<LibraryItem[]> {
-    if (!keyword.trim()) {
+    const trimmed = keyword.trim().slice(0, 100);
+    if (!trimmed) {
       return [];
     }
     const rows = await this.prismaClient.libraryItem.findMany({
       where: {
         kind: "file",
-        name: { contains: keyword.trim() },
+        name: { contains: trimmed },
         userId,
       },
     });
@@ -239,6 +241,11 @@ export default class LibraryRepository {
             where: { id: row.id },
             data: { size: stat.size },
           });
+          // 成功路径一次收口（size 用本地 stat，免二次查询）
+          siblingNames.add(name);
+          result.added.push(
+            toClientItem({ ...row, size: stat.size }, this.libraryRoot),
+          );
         } catch (error) {
           // 入库中途失败：回滚记录与目录（吞错——清理失败仅日志）
           await this.prismaClient.libraryItem
@@ -247,13 +254,6 @@ export default class LibraryRepository {
           await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
           throw error;
         }
-        siblingNames.add(name);
-        result.added.push(
-          toClientItem(
-            { ...row, size: (await this.mustGet(row.id, userId)).size ?? null },
-            this.libraryRoot,
-          ),
-        );
       } catch (error) {
         result.failed.push({
           path: baseName,
@@ -264,13 +264,15 @@ export default class LibraryRepository {
     return result;
   }
 
-  /** Finder/资源管理器定位（file 定位文件本体、folder 定位其目录） */
+  /** Finder/资源管理器定位（仅 file 有磁盘实体——folder 纯 DB 无目录，
+   *  reveal 需求由前端对 folder 隐藏入口，此处防御性拒绝） */
   async revealItem(id: number, userId: number): Promise<null> {
     const row = await this.mustGet(id, userId);
+    if (row.kind !== "file") {
+      throw new Error("文件夹无实体文件可定位");
+    }
     shell.showItemInFolder(
-      row.kind === "file"
-        ? path.join(this.libraryRoot, String(row.id), row.name)
-        : storageDirOf(this.libraryRoot, id),
+      path.join(this.libraryRoot, String(row.id), row.name),
     );
     return null;
   }
@@ -278,7 +280,8 @@ export default class LibraryRepository {
   /**
    * rename 升级（Task 3 review 裁决）：file 的重命名先同步磁盘文件名再
    * update DB（storagePath 派生自当前 name，纯 DB rename 会使其断裂）；
-   * 磁盘失败抛错、DB 不动。folder 无磁盘实体，仍走纯 DB。
+   * 磁盘失败抛错、DB 不动；DB 失败回滚磁盘名（防断裂，见 renameDiskThenDb）。
+   * folder 无磁盘实体，仍走纯 DB。
    */
   async rename(id: number, name: string, userId: number): Promise<LibraryItem> {
     const row = await this.mustGet(id, userId);
@@ -287,7 +290,16 @@ export default class LibraryRepository {
       sanitizeLibraryName(name),
     );
     if (row.kind === "file" && finalName !== row.name) {
-      await this.renameDiskFile(id, row.name, finalName);
+      await this.renameDiskThenDb(id, row.name, finalName, () =>
+        this.prismaClient.libraryItem.update({
+          where: { id },
+          data: { name: finalName },
+        }),
+      );
+      return toClientItem(
+        { ...row, name: finalName, updatedAt: new Date() },
+        this.libraryRoot,
+      );
     }
     const updated = await this.prismaClient.libraryItem.update({
       where: { id },
@@ -337,12 +349,18 @@ export default class LibraryRepository {
       // DB——storagePath 派生自 name，纯 DB 改名会使路径指向不存在文件且
       // rename() 后续按错名 fs.rename ENOENT 无法自愈；folder 纯 DB
       if (current.kind === "file" && finalName !== current.name) {
-        await this.renameDiskFile(id, current.name, finalName);
+        await this.renameDiskThenDb(id, current.name, finalName, () =>
+          this.prismaClient.libraryItem.update({
+            where: { id },
+            data: { parentId: targetParentId, name: finalName },
+          }),
+        );
+      } else {
+        await this.prismaClient.libraryItem.update({
+          where: { id },
+          data: { parentId: targetParentId, name: finalName },
+        });
       }
-      await this.prismaClient.libraryItem.update({
-        where: { id },
-        data: { parentId: targetParentId, name: finalName },
-      });
     }
     return null;
   }
@@ -395,6 +413,33 @@ export default class LibraryRepository {
       throw new Error(`磁盘文件同步失败（${oldName}）: ${reason}`, {
         cause: error,
       });
+    }
+  }
+
+  /**
+   * 磁盘改名 + DB 落库的断裂补偿：磁盘成功后 DB 失败时把文件名改回
+   * 旧名——否则 storagePath 指向不存在文件且后续 rename 按旧名 ENOENT
+   * 无法自愈；恢复失败仅日志（与现状同 worst case，不恶化）
+   */
+  private async renameDiskThenDb(
+    id: number,
+    oldName: string,
+    newName: string,
+    dbUpdate: () => Promise<unknown>,
+  ): Promise<void> {
+    await this.renameDiskFile(id, oldName, newName);
+    try {
+      await dbUpdate();
+    } catch (error) {
+      await fs
+        .rename(
+          path.join(this.libraryRoot, String(id), newName),
+          path.join(this.libraryRoot, String(id), oldName),
+        )
+        .catch((rollbackError) =>
+          Log.warn(`资料库磁盘名回滚失败（id=${id}）`, rollbackError),
+        );
+      throw error;
     }
   }
 

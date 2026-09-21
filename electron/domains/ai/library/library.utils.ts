@@ -9,12 +9,29 @@ import path from "node:path";
 /** 名称非法字符：Windows 保留符号 + 控制字符（\p{Cc} 覆盖 C0/C1/DEL） */
 const ILLEGAL_NAME_CHARS = /[\\/:*?"<>|\p{Cc}]/gu;
 
-/** 名称清洗：剥离非法字符与首尾空白/点号；清洗后为空抛错 */
+/** 名称长度上限：文件系统普遍 255 字符内，留 " (2)" 重名序号余量 */
+export const LIBRARY_NAME_MAX = 200;
+
+/** 超长截断（保留扩展名；扩展名自身超限则整名硬截） */
+function truncateName(name: string): string {
+  if (name.length <= LIBRARY_NAME_MAX) {
+    return name;
+  }
+  const ext = path.extname(name);
+  const stemBudget = LIBRARY_NAME_MAX - ext.length;
+  return stemBudget > 0
+    ? name.slice(0, stemBudget) + ext
+    : name.slice(0, LIBRARY_NAME_MAX);
+}
+
+/** 名称清洗：剥离非法字符与首尾空白/点号、超长截断；清洗后为空抛错 */
 export function sanitizeLibraryName(name: string): string {
-  const cleaned = name
-    .replace(ILLEGAL_NAME_CHARS, "")
-    .replace(/^[\s.]+/, "")
-    .replace(/[\s.]+$/, "");
+  const cleaned = truncateName(
+    name
+      .replace(ILLEGAL_NAME_CHARS, "")
+      .replace(/^[\s.]+/, "")
+      .replace(/[\s.]+$/, ""),
+  );
   if (!cleaned) {
     throw new Error("名称无效");
   }

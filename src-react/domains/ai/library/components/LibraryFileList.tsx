@@ -143,7 +143,11 @@ export default function LibraryFileList({
               <DropdownMenuItem onClick={() => onMove(item)}>
                 {t("chat:library.move")}
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onReveal(item)}>
+              {/* folder 纯 DB 无磁盘实体，无「在 Finder 中显示」语义 */}
+              <DropdownMenuItem
+                disabled={item.kind === "folder"}
+                onClick={() => onReveal(item)}
+              >
                 {t("chat:library.reveal")}
               </DropdownMenuItem>
               <DropdownMenuItem

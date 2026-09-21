@@ -1,44 +1,42 @@
 /**
- * 资料库树形栏（左）：顶部按钮行（搜索 / 切回文件列表 / 收起）+
- * 文件夹树。树数据 library:tree 全量平铺经 buildFolderTree 组嵌套；
- * 选中文件夹即主区导航（替代面包屑）；当前层祖先链自动展开保证
- * 选中项可见。收起成窄条（仅图标列）；搜索输入内嵌于顶部行——
- * 输入即主区切搜索态，清空/Esc 回列表态。
+ * 资料库树形栏（左，spec §2.1 重排版）：标题行 + 搜索框（点击唤起
+ * 命令面板，非输入框）+ 快捷入口（「最近」/「我的资料」，后者带「+」
+ * 新建）+ 根的子层文件夹树。树数据 libraryTree 全量平铺经
+ * buildFolderTree 组嵌套；选中文件夹即主区导航；folder 视图祖先链
+ * 自动展开保证选中项可见。收起按钮移交主区标题行；窄条仅保留置顶
+ * 展开按钮与搜索入口。
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronRight,
+  Clock,
   Folder,
   FolderOpen,
-  ListTree,
-  PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Search,
-  X,
 } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
 import LibraryApi from "../api/library.api";
 import {
   buildFolderTree,
   type FolderTreeNode,
+  type LibraryViewRoute,
 } from "../lib/library-view-model";
 
 interface LibrarySidebarTreeProps {
   collapsed: boolean;
+  /** 窄条置顶展开按钮（收起按钮已移交主区标题行） */
   onToggleCollapse: () => void;
-  /** 主区当前层（null = 根）；选中文件夹即导航 */
-  folderId: number | null;
-  onSelectFolder: (id: number | null) => void;
-  /** 搜索词（主区三态判据之一；由本栏输入驱动） */
-  keyword: string;
-  onKeywordChange: (keyword: string) => void;
-  /** 切回文件列表（清搜索词 + 关详情） */
-  onBackToList: () => void;
-  /** 详情/搜索态时可用（列表态已在列表，禁用） */
-  backEnabled: boolean;
+  /** 主区当前视图路由；folder 态选中项高亮，recent 态无选中 */
+  view: LibraryViewRoute;
+  onSelectView: (view: LibraryViewRoute) => void;
+  /** 唤起搜索命令面板（Task 6 完整实现） */
+  onOpenSearch: () => void;
+  /** 「我的资料」行「+」新建文件夹 */
+  onCreateFolder: () => void;
 }
 
 const ICON_BTN =
@@ -47,15 +45,12 @@ const ICON_BTN =
 export default function LibrarySidebarTree({
   collapsed,
   onToggleCollapse,
-  folderId,
-  onSelectFolder,
-  keyword,
-  onKeywordChange,
-  onBackToList,
-  backEnabled,
+  view,
+  onSelectView,
+  onOpenSearch,
+  onCreateFolder,
 }: LibrarySidebarTreeProps) {
   const { t } = useTranslation(["chat"]);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
   const treeQuery = useQuery({
@@ -74,6 +69,9 @@ export default function LibrarySidebarTree({
     }
     return map;
   }, [treeQuery.data]);
+
+  // 主区当前选中文件夹（recent 态无选中）
+  const folderId = view.type === "folder" ? view.id : null;
 
   // 选中变化：沿 parentId 链补展开（深层选中项在树上可见）
   useEffect(() => {
@@ -103,11 +101,6 @@ export default function LibrarySidebarTree({
     });
   };
 
-  const closeSearch = () => {
-    setSearchOpen(false);
-    onKeywordChange("");
-  };
-
   if (collapsed) {
     return (
       <aside
@@ -115,7 +108,7 @@ export default function LibrarySidebarTree({
         className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border/50 py-2"
       >
         {/* 展开按钮置顶：贴底（mt-auto）时用户收起后找不到入口，
-            误以为无法展开；与展开态顶部按钮行的位置保持延续 */}
+            误以为无法展开 */}
         <button
           type="button"
           title={t("chat:library.expandSidebar")}
@@ -130,22 +123,9 @@ export default function LibrarySidebarTree({
           title={t("chat:library.searchLabel")}
           aria-label={t("chat:library.searchLabel")}
           className={ICON_BTN}
-          onClick={() => {
-            onToggleCollapse();
-            setSearchOpen(true);
-          }}
+          onClick={onOpenSearch}
         >
           <Search className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          title={t("chat:library.backToList")}
-          aria-label={t("chat:library.backToList")}
-          className={ICON_BTN}
-          disabled={!backEnabled}
-          onClick={onBackToList}
-        >
-          <ListTree className="h-4 w-4" />
         </button>
       </aside>
     );
@@ -156,90 +136,72 @@ export default function LibrarySidebarTree({
       data-testid="library-sidebar"
       className="flex w-56 shrink-0 flex-col border-r border-border/50"
     >
-      {/* 顶部按钮行：搜索（点开内嵌输入）/ 切回列表 / 收起 */}
-      <div className="flex items-center gap-1 border-b border-border/50 px-2 py-1.5">
-        {searchOpen ? (
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={keyword}
-              autoFocus
-              onChange={(e) => onKeywordChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  closeSearch();
-                }
-              }}
-              placeholder={t("chat:library.searchPlaceholder")}
-              className="h-7 pl-7 pr-7 text-xs"
-            />
-            {keyword !== "" && (
-              <button
-                type="button"
-                aria-label={t("common:cancel")}
-                onClick={closeSearch}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-primary"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <>
-            <button
-              type="button"
-              title={t("chat:library.searchLabel")}
-              aria-label={t("chat:library.searchLabel")}
-              className={ICON_BTN}
-              onClick={() => setSearchOpen(true)}
-            >
-              <Search className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title={t("chat:library.backToList")}
-              aria-label={t("chat:library.backToList")}
-              className={ICON_BTN}
-              disabled={!backEnabled}
-              onClick={onBackToList}
-            >
-              <ListTree className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              title={t("chat:library.collapseSidebar")}
-              aria-label={t("chat:library.collapseSidebar")}
-              className={`${ICON_BTN} ml-auto`}
-              onClick={onToggleCollapse}
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </button>
-          </>
-        )}
+      {/* 标题行（spec §2.1）：大号标题，砍分享/导出 */}
+      <div className="px-3 pb-1 pt-3">
+        <h2 className="text-base font-semibold">{t("chat:library.title")}</h2>
       </div>
-      {/* 树：根「我的资料」+ 递归层 */}
-      <div className="flex-1 overflow-y-auto p-1.5">
+      {/* 搜索框：点击唤起命令面板（非输入框） */}
+      <div className="px-2 pb-2">
         <button
           type="button"
-          onClick={() => onSelectFolder(null)}
-          className={`mb-0.5 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-sm font-medium ${
-            folderId === null
+          onClick={onOpenSearch}
+          className="flex w-full items-center gap-2 rounded-md border border-border/50 px-2 py-1.5 text-sm text-muted-foreground hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span>{t("chat:library.commandPlaceholder")}</span>
+        </button>
+      </div>
+      {/* 快捷入口：最近 / 我的资料（后者带「+」新建） */}
+      <div className="space-y-0.5 px-1.5">
+        <button
+          type="button"
+          onClick={() => onSelectView({ type: "recent" })}
+          className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-sm ${
+            view.type === "recent"
               ? "bg-primary-subtle text-primary"
               : "text-foreground hover:bg-primary-subtle hover:text-primary"
           }`}
         >
-          <FolderOpen className="h-4 w-4 shrink-0" />
-          <span className="truncate">{t("chat:library.mine")}</span>
+          <Clock className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t("chat:library.recentEntry")}</span>
         </button>
+        <div
+          className={`flex items-center rounded-md text-sm ${
+            view.type === "folder"
+              ? "bg-primary-subtle text-primary"
+              : "text-foreground hover:bg-primary-subtle hover:text-primary"
+          }`}
+        >
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left"
+            onClick={() => onSelectView({ type: "folder", id: null })}
+          >
+            <FolderOpen className="h-4 w-4 shrink-0" />
+            <span className="truncate">{t("chat:library.mine")}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={t("chat:library.newFolder")}
+            title={t("chat:library.newFolder")}
+            className="mr-1 shrink-0 rounded p-1 hover:text-primary"
+            onClick={onCreateFolder}
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {/* 文件夹树：根的子层（根行即上方「我的资料」） */}
+      <div className="flex-1 overflow-y-auto p-1.5">
         {nodes.map((node) => (
           <TreeNodeRow
             key={node.id}
             node={node}
             depth={1}
             expanded={expanded}
-            folderId={folderId}
+            selectedFolderId={folderId ?? undefined}
             onToggleExpand={toggleExpand}
-            onSelectFolder={onSelectFolder}
+            onSelectFolder={(id) => onSelectView({ type: "folder", id })}
           />
         ))}
       </div>
@@ -252,19 +214,19 @@ function TreeNodeRow({
   node,
   depth,
   expanded,
-  folderId,
+  selectedFolderId,
   onToggleExpand,
   onSelectFolder,
 }: {
   node: FolderTreeNode;
   depth: number;
   expanded: Set<number>;
-  folderId: number | null;
+  selectedFolderId: number | undefined;
   onToggleExpand: (id: number) => void;
-  onSelectFolder: (id: number | null) => void;
+  onSelectFolder: (id: number) => void;
 }) {
   const isExpanded = expanded.has(node.id);
-  const isSelected = folderId === node.id;
+  const isSelected = selectedFolderId === node.id;
   return (
     <div>
       <div
@@ -303,7 +265,7 @@ function TreeNodeRow({
             node={child}
             depth={depth + 1}
             expanded={expanded}
-            folderId={folderId}
+            selectedFolderId={selectedFolderId}
             onToggleExpand={onToggleExpand}
             onSelectFolder={onSelectFolder}
           />

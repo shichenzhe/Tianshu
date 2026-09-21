@@ -151,3 +151,7 @@ export function activityTimeOf(
 export function formatLocation(location: string[], rootLabel: string): string {
   return location.length === 0 ? rootLabel : location.join(" / ");
 }
+
+/** 资料库主区视图路由（spec §5）：「最近」快捷入口 or 文件夹层（null=根） */
+export type LibraryViewRoute =
+  { type: "recent" } | { type: "folder"; id: number | null };

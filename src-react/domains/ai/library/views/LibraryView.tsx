@@ -1,16 +1,17 @@
 /**
- * 资料库「我的资料」（spec §5 + 树改迭代）：左树形栏（文件夹导航 +
- * 搜索/列表按钮行，可收起成窄条）+ 主区三态互斥——列表态（当前层文件
- * + 工具栏：类型筛选/上传/新建文件夹；排序在列表列头）/ 搜索态（树栏搜索输入驱动
- * 的跨层结果）/ 详情态（选中文件预览 + 元信息 + 行操作，
- * LibraryDetailPanel）。排序与类型筛选前端本地（单层数据量小，
- * skill 页先例）；拖拽入库（拖到页面任意处）。
+ * 资料库「我的资料」（spec §5 + 树改迭代）：左树形栏（标题/搜索入口/
+ * 最近+我的资料快捷项/文件夹树，可收起成窄条；收起按钮在主区标题行）+
+ * 主区两态——列表态（全部|收藏 Tab + 当前数据源文件 + 工具栏：类型筛选/
+ * 上传；排序在列表列头，新建文件夹在树栏「+」）/ 详情态（选中文件预览 +
+ * 元信息 + 行操作，LibraryDetailPanel）。视图路由三态（recent 默认 /
+ * folder），Tab 优先于视图（收藏=全局收藏）；排序与类型筛选前端本地
+ * （单层数据量小，skill 页先例）；拖拽入库（拖到页面任意处）。
  */
 import { useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FolderPlus, Upload } from "lucide-react";
+import { PanelLeftClose, Upload } from "lucide-react";
 
 import PageTitle from "@/components/layout/PageTitle";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import LibraryApi, { type LibraryItem } from "../api/library.api";
 import {
   filterByType,
   sortItems,
+  type LibraryViewRoute,
   type SortField,
 } from "../lib/library-view-model";
 import LibraryFileList, { TYPE_LABEL_KEY } from "../components/LibraryFileList";
@@ -42,16 +44,23 @@ import LibraryItemDialogs from "../components/LibraryItemDialogs";
 import LibraryMoveDialog from "../components/LibraryMoveDialog";
 import LibrarySidebarTree from "../components/LibrarySidebarTree";
 import LibraryDetailPanel from "../components/LibraryDetailPanel";
+import LibraryCommandDialog from "../components/LibraryCommandDialog";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { invoke } from "@/lib/ipc";
 
 const TYPE_FILTERS = ["all", ...Object.keys(TYPE_LABEL_KEY)];
 
+/** 列表数据源返回形态：list（分页对象）或 recent/favorites（平铺数组） */
+type ListQueryData =
+  LibraryItem[] | { items: LibraryItem[]; breadcrumbs: LibraryItem[] };
+
 export default function LibraryView() {
   const { t } = useTranslation(["chat", "common"]);
   const queryClient = useQueryClient();
-  const [folderId, setFolderId] = useState<number | null>(null);
-  const [keyword, setKeyword] = useState("");
+  // 主区视图路由（spec §5）：默认「最近」；folder 为文件夹层（null=根）
+  const [view, setView] = useState<LibraryViewRoute>({ type: "recent" });
+  const [tab, setTab] = useState<"all" | "favorites">("all");
+  const [commandOpen, setCommandOpen] = useState(false);
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortField, setSortField] = useState<SortField>("activity");
   // activity 默认降序（最近优先），与 handleToggleSort 的 name→升序约定一致
@@ -68,20 +77,36 @@ export default function LibraryView() {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const [detailItem, setDetailItem] = useState<LibraryItem | null>(null);
 
-  const searching = keyword.trim().length > 0;
-  const listQuery = useQuery({
-    queryKey: ["libraryItems", folderId],
-    queryFn: () => LibraryApi.list(folderId ?? undefined),
+  // Tab 优先于视图：收藏为全局收藏，其余按视图路由取数
+  // （返回形态联合，显式泛型避免 useQuery 推断失败）
+  const listQuery = useQuery<ListQueryData>({
+    queryKey:
+      tab === "favorites"
+        ? ["libraryFavorites"]
+        : view.type === "recent"
+          ? ["libraryRecent"]
+          : ["libraryItems", view.id],
+    queryFn: () =>
+      tab === "favorites"
+        ? LibraryApi.listFavorites()
+        : view.type === "recent"
+          ? LibraryApi.listRecent()
+          : LibraryApi.list(view.id ?? undefined),
   });
-  const searchQuery = useQuery({
-    queryKey: ["librarySearch", keyword.trim()],
-    queryFn: () => LibraryApi.search(keyword.trim()),
-    enabled: searching,
+  // 动态标题的文件夹名来源（与树栏共用 libraryTree 缓存）
+  const treeQuery = useQuery({
+    queryKey: ["libraryTree"],
+    queryFn: () => LibraryApi.tree(),
   });
 
-  const rawItems = searching
-    ? (searchQuery.data ?? [])
-    : (listQuery.data?.items ?? []);
+  // list（分页对象）与 recent/favorites（平铺数组）返回形态不同，统一为列表
+  const rawItems = useMemo(() => {
+    const data = listQuery.data;
+    if (!data) {
+      return [];
+    }
+    return Array.isArray(data) ? data : data.items;
+  }, [listQuery.data]);
   const items = useMemo(
     () =>
       sortItems(
@@ -92,13 +117,36 @@ export default function LibraryView() {
     [rawItems, typeFilter, sortField, sortAsc],
   );
 
-  // 主区三态互斥：详情态优先（搜索结果点文件进入），次搜索态，默认列表态
-  const viewMode = detailItem ? "detail" : searching ? "search" : "list";
+  // 主区两态互斥：详情态优先，默认列表态（搜索态已由命令面板取代）
+  const viewMode = detailItem ? "detail" : "list";
+
+  // 新建/上传目标层：folder 视图即当前层，recent 无层语境落根
+  const activeFolderId = view.type === "folder" ? view.id : null;
+
+  // 动态标题：Tab 名 > 视图名（folder 取树数据实时名，缺失回退根名）
+  const folderName = (id: number) =>
+    treeQuery.data?.find((row) => row.id === id)?.name;
+  const pageTitle =
+    tab === "favorites"
+      ? t("chat:library.tabFavorites")
+      : view.type === "recent"
+        ? t("chat:library.recentEntry")
+        : ((view.type === "folder" && view.id !== null
+            ? folderName(view.id)
+            : undefined) ?? t("chat:library.mine"));
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["libraryItems"] });
-    await queryClient.invalidateQueries({ queryKey: ["librarySearch"] });
+    await queryClient.invalidateQueries({ queryKey: ["libraryRecent"] });
+    await queryClient.invalidateQueries({ queryKey: ["libraryFavorites"] });
     await queryClient.invalidateQueries({ queryKey: ["libraryTree"] });
+  };
+
+  /** 树栏/列表的视图导航统一入口：切视图回落「全部」Tab 并关详情 */
+  const handleSelectView = (next: LibraryViewRoute) => {
+    setView(next);
+    setTab("all");
+    setDetailItem(null);
   };
 
   /** 列头排序：同列点切换升降；换列回落该列默认向（name 升 / activity 降） */
@@ -132,7 +180,7 @@ export default function LibraryView() {
     }
   };
 
-  /** 上传：系统选择器多选 → addFiles 到当前层 */
+  /** 上传：系统选择器多选 → addFiles 到目标层 */
   const handleUpload = async () => {
     let paths: string[] | null;
     try {
@@ -149,7 +197,10 @@ export default function LibraryView() {
 
   const ingest = async (paths: string[]) => {
     try {
-      const result = await LibraryApi.addFiles(paths, folderId ?? undefined);
+      const result = await LibraryApi.addFiles(
+        paths,
+        activeFolderId ?? undefined,
+      );
       if (result.added.length > 0 || result.failed.length > 0) {
         // 重名自动编号告知（spec 裁定 7）：按 added 条目自身口径比对——
         // 入库后名与源文件名（originalPath 尾段）不同的条目计数；不按
@@ -197,7 +248,7 @@ export default function LibraryView() {
     setSubmitting(true);
     try {
       if (dialog.mode === "createFolder") {
-        await LibraryApi.createFolder(name, folderId ?? undefined);
+        await LibraryApi.createFolder(name, activeFolderId ?? undefined);
       } else if (dialog.item) {
         await LibraryApi.rename(dialog.item.id, name);
       }
@@ -251,24 +302,27 @@ export default function LibraryView() {
     >
       <LibrarySidebarTree
         collapsed={treeCollapsed}
-        onToggleCollapse={() => setTreeCollapsed((v) => !v)}
-        folderId={folderId}
-        onSelectFolder={(id) => {
-          // 选中文件夹即主区导航（回列表态，清搜索与详情）
-          setFolderId(id);
-          setKeyword("");
-          setDetailItem(null);
-        }}
-        keyword={keyword}
-        onKeywordChange={setKeyword}
-        onBackToList={() => {
-          setKeyword("");
-          setDetailItem(null);
-        }}
-        backEnabled={viewMode !== "list"}
+        onToggleCollapse={() => setTreeCollapsed(false)}
+        view={view}
+        onSelectView={handleSelectView}
+        onOpenSearch={() => setCommandOpen(true)}
+        onCreateFolder={() => setDialog({ mode: "createFolder" })}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
-        <PageTitle title={t("chat:library.title")} />
+        <PageTitle title={pageTitle}>
+          {/* 收起按钮（Task 5 移入主区标题行；展开态树栏顶部行不再有） */}
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              title={t("chat:library.collapseSidebar")}
+              aria-label={t("chat:library.collapseSidebar")}
+              className="rounded-md p-1 hover:bg-primary-foreground/20"
+              onClick={() => setTreeCollapsed(true)}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          </div>
+        </PageTitle>
         {viewMode === "detail" && detailItem ? (
           <div className="min-h-0 flex-1">
             <LibraryDetailPanel
@@ -286,9 +340,29 @@ export default function LibraryView() {
           </div>
         ) : (
           <>
-            {/* 工具栏（列表/搜索态共用）：类型筛选 / 新建文件夹 / 上传；
-                搜索入口在左树栏，排序移至列表列头 */}
+            {/* 工具栏：全部|收藏 Tab（左）+ 类型筛选/上传（右）；
+                排序在列表列头，新建文件夹在树栏「+」 */}
             <div className="flex flex-wrap items-center gap-2 py-3">
+              <div className="inline-flex items-center rounded-lg border border-border/50 bg-primary-subtle/30 p-0.5 text-sm">
+                {(["all", "favorites"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`rounded-md px-3 py-1 ${
+                      tab === key
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-primary"
+                    }`}
+                    onClick={() => setTab(key)}
+                  >
+                    {t(
+                      key === "all"
+                        ? "chat:library.tabAll"
+                        : "chat:library.tabFavorites",
+                    )}
+                  </button>
+                ))}
+              </div>
               <div className="ml-auto flex items-center gap-2">
                 <Select value={typeFilter} onValueChange={setTypeFilter}>
                   <SelectTrigger
@@ -310,15 +384,6 @@ export default function LibraryView() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-                  onClick={() => setDialog({ mode: "createFolder" })}
-                >
-                  <FolderPlus className="mr-1 h-4 w-4" />
-                  {t("chat:library.newFolder")}
-                </Button>
                 <Button size="sm" onClick={() => void handleUpload()}>
                   <Upload className="mr-1 h-4 w-4" />
                   {t("chat:library.upload")}
@@ -326,11 +391,7 @@ export default function LibraryView() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              {searching && searchQuery.data?.length === 0 ? (
-                <p className="py-10 text-center text-sm text-muted-foreground">
-                  {t("chat:library.noSearchResult")}
-                </p>
-              ) : !searching && listQuery.isError ? (
+              {listQuery.isError ? (
                 <div className="py-10 text-center">
                   <p className="text-sm text-muted-foreground">
                     {t("chat:library.loadFailed")}
@@ -347,14 +408,19 @@ export default function LibraryView() {
               ) : (
                 <LibraryFileList
                   items={items}
-                  loading={
-                    searching ? searchQuery.isLoading : listQuery.isLoading
+                  loading={listQuery.isLoading}
+                  emptyText={
+                    view.type === "recent" && tab === "all"
+                      ? t("chat:library.recentEmpty")
+                      : undefined
                   }
                   sortField={sortField}
                   sortAsc={sortAsc}
                   onToggleSort={handleToggleSort}
                   onToggleFavorite={(item) => void handleToggleFavorite(item)}
-                  onOpen={(item) => setFolderId(item.id)}
+                  onOpen={(item) =>
+                    handleSelectView({ type: "folder", id: item.id })
+                  }
                   onPreview={openDetail}
                   onRename={(item) => setDialog({ mode: "rename", item })}
                   onMove={(item) => setMoveIds([item.id])}
@@ -428,6 +494,14 @@ export default function LibraryView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <LibraryCommandDialog
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onSelect={(item) => {
+          setCommandOpen(false);
+          openDetail(item);
+        }}
+      />
     </div>
   );
 }

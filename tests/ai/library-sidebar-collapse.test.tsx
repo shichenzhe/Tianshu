@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
  * 资料库中间面板（树形栏）收起/展开回归测试：state 提升在
- * LibraryView——完整渲染走真实交互（点收起按钮 → 窄条 → 点展开
- * 按钮 → 回展开态）。mock 骨架同 tests/layout/main-layout.test.tsx：
- * i18n 直返 key、LibraryApi/invoke stub。
+ * LibraryView——完整渲染走真实交互（点主区标题行的收起按钮（Task 5
+ * 移入 PageTitle children）→ 窄条 → 点窄条置顶展开按钮 → 回展开态）。
+ * mock 骨架同 tests/layout/main-layout.test.tsx：i18n 直返 key、
+ * LibraryApi/invoke stub。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -30,6 +31,10 @@ vi.mock("@/domains/ai/library/api/library.api", () => ({
     list: vi.fn().mockResolvedValue({ items: [], breadcrumbs: [] }),
     search: vi.fn().mockResolvedValue([]),
     tree: vi.fn().mockResolvedValue([]),
+    listRecent: vi.fn().mockResolvedValue([]),
+    listFavorites: vi.fn().mockResolvedValue([]),
+    toggleFavorite: vi.fn().mockResolvedValue(null),
+    markViewed: vi.fn().mockResolvedValue(null),
     addFiles: vi.fn(),
     createFolder: vi.fn(),
     rename: vi.fn(),
@@ -56,10 +61,11 @@ function renderView() {
 afterEach(cleanup);
 
 describe("资料库树形栏收起/展开", () => {
-  it("收起成窄条后点展开按钮回到展开态", async () => {
+  it("点主区标题行收起按钮成窄条，再点窄条置顶展开按钮回展开态", async () => {
     renderView();
 
-    // 展开态 → 点「收起侧边栏」
+    // 展开态 → 点主区标题行的「收起侧边栏」（Task 5 起按钮在 PageTitle，
+    // 树栏展开态顶部行不再有；默认视图「最近」下树栏无选中项）
     const collapseBtn = await screen.findByLabelText(
       "chat:library.collapseSidebar",
     );
@@ -75,6 +81,8 @@ describe("资料库树形栏收起/展开", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("library-sidebar-collapsed")).toBeNull();
     });
+    expect(screen.getByTestId("library-sidebar")).toBeTruthy();
+    // 收起按钮仍在主区标题行，可再次收起
     expect(
       await screen.findByLabelText("chat:library.collapseSidebar"),
     ).toBeTruthy();

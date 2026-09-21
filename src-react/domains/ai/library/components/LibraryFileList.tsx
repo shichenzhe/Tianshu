@@ -50,6 +50,8 @@ export const TYPE_LABEL_KEY: Record<string, string> = {
 interface LibraryFileListProps {
   items: LibraryItem[];
   loading: boolean;
+  /** 空态文案覆盖（如「最近」视图的专用空态）；缺省 t("chat:library.empty") */
+  emptyText?: string;
   sortField: SortField;
   sortAsc: boolean;
   onToggleSort: (field: SortField) => void;
@@ -65,6 +67,7 @@ interface LibraryFileListProps {
 export default function LibraryFileList({
   items,
   loading,
+  emptyText,
   sortField,
   sortAsc,
   onToggleSort,
@@ -85,7 +88,7 @@ export default function LibraryFileList({
     return (
       <div className="flex flex-col items-center gap-2 rounded-lg border border-border/50 p-10 text-sm text-muted-foreground">
         <FolderOpen className="h-6 w-6" />
-        {t("chat:library.empty")}
+        {emptyText ?? t("chat:library.empty")}
       </div>
     );
   }

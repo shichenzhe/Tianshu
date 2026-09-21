@@ -5,7 +5,7 @@
  */
 import type { LibraryItem } from "../api/library.api";
 
-export type SortField = "name" | "updatedAt";
+export type SortField = "name" | "activity";
 
 /** 排序：文件夹恒置前，同类按字段升降序（名称本地化比较） */
 export function sortItems(
@@ -21,7 +21,7 @@ export function sortItems(
     if (field === "name") {
       return a.name.localeCompare(b.name) * factor;
     }
-    return a.updatedAt.localeCompare(b.updatedAt) * factor;
+    return activityTimeOf(a).localeCompare(activityTimeOf(b)) * factor;
   });
 }
 
@@ -130,4 +130,24 @@ export function buildFolderTree(
   };
   sortTree(roots);
   return roots;
+}
+
+/** NEW 判定（spec §3）：file 且从未预览过（lastViewedAt 为 null）；
+ *  rename/move 触碰 updatedAt 不影响判定 */
+export function isNewItem(
+  item: Pick<LibraryItem, "kind" | "lastViewedAt">,
+): boolean {
+  return item.kind === "file" && item.lastViewedAt === null;
+}
+
+/** 「最近访问」列与排序的显示值：lastViewedAt ?? createdAt */
+export function activityTimeOf(
+  item: Pick<LibraryItem, "lastViewedAt" | "createdAt">,
+): string {
+  return item.lastViewedAt ?? item.createdAt;
+}
+
+/** 位置列显示：空链（根层）显示根名；非空「名 / 名」连接（不打根名前缀） */
+export function formatLocation(location: string[], rootLabel: string): string {
+  return location.length === 0 ? rootLabel : location.join(" / ");
 }

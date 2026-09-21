@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  activityTimeOf,
   buildFolderTree,
   fileUrlOf,
   filterByType,
+  formatLocation,
   formatSize,
+  isNewItem,
   previewModeOf,
   sortItems,
 } from "../../src-react/domains/ai/library/lib/library-view-model";
@@ -19,6 +22,9 @@ function item(partial: Partial<LibraryItem>): LibraryItem {
     mimeType: null,
     size: null,
     originalPath: null,
+    favorite: false,
+    lastViewedAt: null,
+    location: [],
     storagePath: null,
     createdAt: "2026-09-18T00:00:00Z",
     updatedAt: "2026-09-18T00:00:00Z",
@@ -37,16 +43,16 @@ describe("sortItems", () => {
   });
   it("时间降序时 folder 仍置前", () => {
     const withTime = [
-      item({ id: 1, name: "a", updatedAt: "2026-01-01T00:00:00Z" }),
+      item({ id: 1, name: "a", createdAt: "2026-01-01T00:00:00Z" }),
       item({
         id: 2,
         name: "f",
         kind: "folder",
-        updatedAt: "2026-02-01T00:00:00Z",
+        createdAt: "2026-02-01T00:00:00Z",
       }),
-      item({ id: 3, name: "b", updatedAt: "2026-03-01T00:00:00Z" }),
+      item({ id: 3, name: "b", createdAt: "2026-03-01T00:00:00Z" }),
     ];
-    expect(sortItems(withTime, "updatedAt", "desc").map((i) => i.id)).toEqual([
+    expect(sortItems(withTime, "activity", "desc").map((i) => i.id)).toEqual([
       2, 3, 1,
     ]);
   });
@@ -138,5 +144,61 @@ describe("buildFolderTree 组树", () => {
 
   it("空输入返回空数组", () => {
     expect(buildFolderTree([])).toEqual([]);
+  });
+});
+
+describe("isNewItem", () => {
+  it("file 且从未访问 → true；访问过或 folder → false", () => {
+    expect(isNewItem({ kind: "file", lastViewedAt: null })).toBe(true);
+    expect(
+      isNewItem({ kind: "file", lastViewedAt: "2026-01-01T00:00:00Z" }),
+    ).toBe(false);
+    expect(isNewItem({ kind: "folder", lastViewedAt: null })).toBe(false);
+  });
+});
+
+describe("activityTimeOf", () => {
+  it("lastViewedAt 优先，缺省回落 createdAt", () => {
+    expect(
+      activityTimeOf({
+        lastViewedAt: "2026-02-01T00:00:00Z",
+        createdAt: "2026-01-01T00:00:00Z",
+      }),
+    ).toBe("2026-02-01T00:00:00Z");
+    expect(
+      activityTimeOf({ lastViewedAt: null, createdAt: "2026-01-01T00:00:00Z" }),
+    ).toBe("2026-01-01T00:00:00Z");
+  });
+});
+
+describe("formatLocation", () => {
+  it("空链显示根名；非空以「 / 」连接（根名不打头）", () => {
+    expect(formatLocation([], "我的资料")).toBe("我的资料");
+    expect(formatLocation(["F1", "F2"], "我的资料")).toBe("F1 / F2");
+  });
+});
+
+describe("sortItems activity", () => {
+  it("folder 恒置前，file 按 activityTimeOf 升降序", () => {
+    const items = [
+      { kind: "file", name: "a", createdAt: "2026-01-01", lastViewedAt: null },
+      {
+        kind: "folder",
+        name: "z",
+        createdAt: "2026-03-01",
+        lastViewedAt: null,
+      },
+      { kind: "file", name: "b", createdAt: "2026-02-01", lastViewedAt: null },
+    ] as LibraryItem[];
+    expect(sortItems(items, "activity", "asc").map((i) => i.name)).toEqual([
+      "z",
+      "a",
+      "b",
+    ]);
+    expect(sortItems(items, "activity", "desc").map((i) => i.name)).toEqual([
+      "z",
+      "b",
+      "a",
+    ]);
   });
 });

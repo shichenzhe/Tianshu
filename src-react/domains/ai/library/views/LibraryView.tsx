@@ -53,7 +53,7 @@ export default function LibraryView() {
   const [folderId, setFolderId] = useState<number | null>(null);
   const [keyword, setKeyword] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [sortField, setSortField] = useState<SortField>("updatedAt");
+  const [sortField, setSortField] = useState<SortField>("activity");
   const [dialog, setDialog] = useState<{
     mode: "createFolder" | "rename";
     item?: LibraryItem;
@@ -277,12 +277,10 @@ export default function LibraryView() {
                   size="sm"
                   className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
                   onClick={() =>
-                    setSortField(
-                      sortField === "updatedAt" ? "name" : "updatedAt",
-                    )
+                    setSortField(sortField === "activity" ? "name" : "activity")
                   }
                 >
-                  {sortField === "updatedAt"
+                  {sortField === "activity"
                     ? t("chat:library.recent")
                     : t("chat:library.colName")}
                 </Button>

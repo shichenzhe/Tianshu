@@ -110,6 +110,18 @@ export function buildBreadcrumbChain(
   return chain;
 }
 
+/** 项的位置链：祖代 folder 名序列（根→父；file 的 parent 必为 folder，
+ *  根层/孤儿返回 []）——「位置」列与命令面板路径显示共用 */
+export function locationChainOf(
+  folderRows: readonly ItemRow[],
+  parentId: number | null,
+): string[] {
+  if (parentId === null) {
+    return [];
+  }
+  return buildBreadcrumbChain(folderRows, parentId).map((row) => row.name);
+}
+
 /** 扩展名 → 简化分类（spec §3，预览分级与类型筛选共用） */
 const FILE_TYPE_BY_EXT: Record<string, string> = {
   html: "html",

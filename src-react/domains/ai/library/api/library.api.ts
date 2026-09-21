@@ -14,6 +14,10 @@ export interface LibraryItem {
   mimeType: string | null;
   size: number | null;
   originalPath: string | null;
+  favorite: boolean;
+  lastViewedAt: string | null;
+  /** 祖代文件夹名（根→父）；根层为 []；单条出口（create/rename 等）恒 [] */
+  location: string[];
   storagePath: string | null;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +54,11 @@ const LibraryApi = {
   revealItem: (id: number) => invoke<null>("library:revealItem", id),
   subtreeCount: (id: number) => invoke<number>("library:subtreeCount", id),
   tree: () => invoke<LibraryFolderNode[]>("library:tree"),
+  toggleFavorite: (id: number) =>
+    invoke<LibraryItem>("library:toggleFavorite", id),
+  markViewed: (id: number) => invoke<LibraryItem>("library:markViewed", id),
+  listRecent: () => invoke<LibraryItem[]>("library:listRecent"),
+  listFavorites: () => invoke<LibraryItem[]>("library:listFavorites"),
 };
 
 export default LibraryApi;

@@ -28,6 +28,7 @@ import {
   classifyFileType,
   mimeOf,
   storageDirOf,
+  locationChainOf,
   type ItemRow,
 } from "./library.utils";
 
@@ -45,6 +46,8 @@ type LibraryRowInput = {
   fileType?: string | null;
   mimeType?: string | null;
   size?: number | null;
+  favorite?: boolean;
+  lastViewedAt?: Date | null;
   originalPath?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
@@ -62,6 +65,12 @@ function toClientItem(row: LibraryRowInput, libraryRoot: string): LibraryItem {
     mimeType: (row.mimeType as string | null) ?? null,
     size: (row.size as number | null) ?? null,
     originalPath: (row.originalPath as string | null) ?? null,
+    favorite: row.favorite ?? false,
+    lastViewedAt:
+      row.lastViewedAt instanceof Date
+        ? row.lastViewedAt.toISOString()
+        : (row.lastViewedAt ?? null),
+    location: [],
     storagePath: isFile
       ? path.join(libraryRoot, String(row.id), row.name as string)
       : null,
@@ -114,6 +123,80 @@ export default class LibraryRepository {
       this.subtreeCount(id, userId),
     );
     handleUser("library:tree", (_, userId) => this.tree(userId));
+    handleUser("library:toggleFavorite", (_, userId, id: number) =>
+      this.toggleFavorite(id, userId),
+    );
+    handleUser("library:markViewed", (_, userId, id: number) =>
+      this.markViewed(id, userId),
+    );
+    handleUser("library:listRecent", (_, userId) => this.listRecent(userId));
+    handleUser("library:listFavorites", (_, userId) =>
+      this.listFavorites(userId),
+    );
+  }
+
+  /** 出口统一拼位置链：rows → LibraryItem[]（含 location） */
+  private async withLocation(
+    rows: readonly LibraryRowInput[],
+    userId: number,
+  ): Promise<LibraryItem[]> {
+    const folderRows = await this.prismaClient.libraryItem.findMany({
+      where: { kind: "folder", userId },
+    });
+    const chain: ItemRow[] = folderRows.map((row) => ({
+      ...row,
+      kind: row.kind as "folder" | "file",
+    }));
+    return rows.map((row) => ({
+      ...toClientItem(row, this.libraryRoot),
+      location: locationChainOf(chain, row.parentId ?? null),
+    }));
+  }
+
+  /** 收藏切换（file 专属语义，folder 不显示入口；DB 不设限） */
+  async toggleFavorite(id: number, userId: number): Promise<LibraryItem> {
+    const row = await this.mustGet(id, userId);
+    const updated = await this.prismaClient.libraryItem.update({
+      where: { id: row.id },
+      data: { favorite: !row.favorite },
+    });
+    return toClientItem(updated, this.libraryRoot);
+  }
+
+  /** 预览/打开打点：置 lastViewedAt（NEW 标记随之消失；幂等） */
+  async markViewed(id: number, userId: number): Promise<LibraryItem> {
+    await this.mustGet(id, userId);
+    const updated = await this.prismaClient.libraryItem.update({
+      where: { id },
+      data: { lastViewedAt: new Date() },
+    });
+    return toClientItem(updated, this.libraryRoot);
+  }
+
+  /** 最近访问：file 且已看过，lastViewedAt 倒序限 50（JS 排序——
+   *  个人库量级小，与 list 的 compareLibraryItems 同口径） */
+  async listRecent(userId: number): Promise<LibraryItem[]> {
+    const rows = await this.prismaClient.libraryItem.findMany({
+      where: { kind: "file", lastViewedAt: { not: null }, userId },
+    });
+    const sorted = rows
+      .sort(
+        (a, b) =>
+          (b.lastViewedAt?.getTime() ?? 0) - (a.lastViewedAt?.getTime() ?? 0),
+      )
+      .slice(0, 50);
+    return this.withLocation(sorted, userId);
+  }
+
+  /** 全局收藏：favorite 的 file，updatedAt 倒序 */
+  async listFavorites(userId: number): Promise<LibraryItem[]> {
+    const rows = await this.prismaClient.libraryItem.findMany({
+      where: { kind: "file", favorite: true, userId },
+    });
+    const sorted = rows.sort(
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
+    );
+    return this.withLocation(sorted, userId);
   }
 
   /** 单层列表（folder 置前基准序）+ 祖先链面包屑一次返回 */
@@ -127,9 +210,10 @@ export default class LibraryRepository {
     const rows = await this.prismaClient.libraryItem.findMany({
       where: { parentId, userId },
     });
-    const items = rows
-      .map((row) => toClientItem(row, this.libraryRoot))
-      .sort(compareLibraryItems);
+    const items = await this.withLocation(
+      [...rows].sort(compareLibraryItems),
+      userId,
+    );
     let breadcrumbs: LibraryItem[] = [];
     if (parentId !== null) {
       const all = await this.prismaClient.libraryItem.findMany({
@@ -159,7 +243,7 @@ export default class LibraryRepository {
         userId,
       },
     });
-    return rows.map((row) => toClientItem(row, this.libraryRoot));
+    return this.withLocation(rows, userId);
   }
 
   /** 全量文件夹平铺（树形栏数据源；个人库量级小一次拉全，元数据

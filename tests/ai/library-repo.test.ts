@@ -1,8 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import fs from "node:fs/promises";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
-  app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
+  // userData 与 library-files.test.ts 错开：两文件 ID 寻址目录均为
+  // library/{id} 且各自 nextId 从 1 起，vitest 并行跑同路径会互相删/改盘
+  app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data-repo") },
   shell: { showItemInFolder: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
 }));
@@ -23,6 +26,13 @@ vi.mock("../../electron/commons/prisma-client", () => ({
         async ({ where }: { where?: Record<string, unknown> } = {}) =>
           table.filter((row) =>
             Object.entries(where ?? {}).every(([key, value]) => {
+              if (
+                value !== null &&
+                typeof value === "object" &&
+                "not" in (value as Record<string, unknown>)
+              ) {
+                return row[key] !== (value as { not: unknown }).not;
+              }
               if (key === "parentId") {
                 return row.parentId === value;
               }
@@ -56,6 +66,8 @@ vi.mock("../../electron/commons/prisma-client", () => ({
           id: nextId++,
           createdAt: new Date(),
           updatedAt: new Date(),
+          favorite: false,
+          lastViewedAt: null,
           ...data,
         };
         table.push(row);
@@ -186,5 +198,71 @@ describe("LibraryRepository 元数据通道", () => {
     expect(tree.find((n) => n.id === f1.id)?.parentId).toBeNull();
     expect(tree.find((n) => n.name === "B")?.parentId).toBe(f1.id);
     expect(tree.some((n) => n.id === file.id)).toBe(false);
+  });
+});
+
+describe("收藏 / 最近访问 / 位置链", () => {
+  // addFiles 走真实 fs（源文件须存在，拷入 mock 的 userData 目录）
+  const SRC_A = "/tmp/a.txt";
+  const SRC_B = "/tmp/b.txt";
+
+  beforeEach(async () => {
+    table.length = 0;
+    nextId = 1;
+    await fs.writeFile(SRC_A, "a");
+    await fs.writeFile(SRC_B, "b");
+  });
+
+  it("toggleFavorite 切换并返回最新项", async () => {
+    const repo = new LibraryRepository();
+    const file = await repo.addFiles([SRC_A], null, UID);
+    const on = await repo.toggleFavorite(file.added[0].id, UID);
+    expect(on.favorite).toBe(true);
+    const off = await repo.toggleFavorite(file.added[0].id, UID);
+    expect(off.favorite).toBe(false);
+  });
+
+  it("markViewed 置 lastViewedAt（ISO 字符串）", async () => {
+    const repo = new LibraryRepository();
+    const file = await repo.addFiles([SRC_A], null, UID);
+    const viewed = await repo.markViewed(file.added[0].id, UID);
+    expect(typeof viewed.lastViewedAt).toBe("string");
+    expect(new Date(viewed.lastViewedAt).getTime()).toBeGreaterThan(0);
+  });
+
+  it("listRecent 仅已访问 file，按 lastViewedAt 倒序", async () => {
+    const repo = new LibraryRepository();
+    const folder = await repo.createFolder("F", null, UID);
+    const a = await repo.addFiles([SRC_A], null, UID);
+    const b = await repo.addFiles([SRC_B], folder.id, UID);
+    await repo.markViewed(a.added[0].id, UID);
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.markViewed(b.added[0].id, UID);
+    const recent = await repo.listRecent(UID);
+    expect(recent.map((i) => i.name)).toEqual(["b.txt", "a.txt"]);
+    expect(recent.every((i) => i.kind === "file")).toBe(true);
+  });
+
+  it("listFavorites 仅收藏 file", async () => {
+    const repo = new LibraryRepository();
+    const a = await repo.addFiles([SRC_A], null, UID);
+    await repo.createFolder("F", null, UID);
+    await repo.toggleFavorite(a.added[0].id, UID);
+    const favorites = await repo.listFavorites(UID);
+    expect(favorites).toHaveLength(1);
+    expect(favorites[0].name).toBe("a.txt");
+  });
+
+  it("search 项含 location 祖代名序列（根→父）", async () => {
+    const repo = new LibraryRepository();
+    const f1 = await repo.createFolder("F1", null, UID);
+    const f2 = await repo.createFolder("F2", f1.id, UID);
+    await repo.addFiles([SRC_A], f2.id, UID);
+    const results = await repo.search("a", UID);
+    expect(results[0].location).toEqual(["F1", "F2"]);
+    // 根层文件 location 为空数组
+    await repo.addFiles([SRC_B], null, UID);
+    const rootResults = await repo.search("b", UID);
+    expect(rootResults[0].location).toEqual([]);
   });
 });

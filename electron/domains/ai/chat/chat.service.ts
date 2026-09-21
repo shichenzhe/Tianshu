@@ -867,13 +867,19 @@ export async function runChatStream(
   let errorCode: string | undefined;
   let errorMessage: string | undefined;
 
-  const messages = truncateHistory(options.history, options.contextWindow, {
-    reserveTokens: estimateReserveTokens(
-      options.params.maxTokens,
-      options.system,
-      options.toolDefinitions ?? [],
-    ),
-  }).flatMap((m) => blocksToModelMessages(parseBlocks(m.blocks), m.role));
+  // 解析一次复用：token 估算与模型消息转换共享同一 parse 结果，
+  // 避免长会话下同一批 blocks 被 JSON.parse 两遍
+  const messages = truncateHistory(
+    options.history.map((m) => ({ ...m, blocks: parseBlocks(m.blocks) })),
+    options.contextWindow,
+    {
+      reserveTokens: estimateReserveTokens(
+        options.params.maxTokens,
+        options.system,
+        options.toolDefinitions ?? [],
+      ),
+    },
+  ).flatMap((m) => blocksToModelMessages(m.blocks, m.role));
 
   const streamOptions = {
     model: options.model,
@@ -1999,18 +2005,18 @@ export default class ChatService {
     // 宽松判空:旧会话/测试 stub 字段可能为 undefined,均视为未压缩
     const compacted =
       session.compactedUpToId != null && session.summary != null;
+    // 压缩点下推到 SQL(id gt),已压缩的旧消息不再读回大 blocks 字段
     const history = (
       await prisma.message.findMany({
-        where: { sessionId },
+        where: {
+          sessionId,
+          ...(compacted ? { id: { gt: session.compactedUpToId ?? 0 } } : {}),
+        },
         orderBy: { createdAt: "asc" },
+        select: { role: true, blocks: true, error: true, createdAt: true },
       })
     )
-      .filter(
-        (row) =>
-          row.role !== "system" &&
-          !row.error &&
-          (!compacted || row.id > (session.compactedUpToId ?? 0)),
-      )
+      .filter((row) => row.role !== "system" && !row.error)
       .map((row) => ({
         role: row.role as "user" | "assistant",
         blocks: row.blocks,

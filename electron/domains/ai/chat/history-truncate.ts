@@ -1,4 +1,4 @@
-import { parseBlocks } from "./blocks";
+import { parseBlocks, type MessageBlock } from "./blocks";
 
 /**
  * token 估算：1 token ≈ 2 字符（P0 近似，中文场景够用）
@@ -10,10 +10,12 @@ export function estimateTokens(text: string): number {
 /**
  * 单条消息 token 估算（text/thinking 块按文本计入；tool_call 块按
  * args JSON + 输出全文计入——blocksToModelMessages 会原样回喂工具调用，
- * 若按 0 计则工具密集会话会被截断误判为未超窗，导致下一次请求失败）
+ * 若按 0 计则工具密集会话会被截断误判为未超窗，导致下一次请求失败）。
+ * 入参兼容 JSON 串与已解析数组：热路径预解析一次后复用，避免重复 JSON.parse
  */
-export function estimateMessageTokens(blocksJson: string): number {
-  return parseBlocks(blocksJson).reduce((sum, block) => {
+export function estimateMessageTokens(blocks: string | MessageBlock[]): number {
+  const parsed = typeof blocks === "string" ? parseBlocks(blocks) : blocks;
+  return parsed.reduce((sum, block) => {
     if (block.type === "text" || block.type === "thinking") {
       return sum + estimateTokens(block.text);
     }
@@ -63,7 +65,7 @@ export function estimateReserveTokens(
  * (1 - headroom)，之后多轮只追加尾部、不再动头部，避免前缀缓存
  * 每轮失效。至少保留最近一条（keep-at-least-one）
  */
-export function truncateHistory<T extends { blocks: string }>(
+export function truncateHistory<T extends { blocks: string | MessageBlock[] }>(
   messages: T[],
   contextWindow?: number,
   options: TruncateHistoryOptions = {},

@@ -1,6 +1,7 @@
 import type { SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import type { ToolDefinition } from "../agent/file-tools";
+import { parseBlocks } from "./blocks";
 import type { ChatModelParams } from "./param-merge";
 import {
   estimateMessageTokens,
@@ -64,8 +65,9 @@ export function computeUsageBreakdown(
     params.toolDefinitions.filter((def) => !isMcp(def)),
   );
   const mcp = toolDefinitionTokens(params.toolDefinitions.filter(isMcp));
+  // 解析一次复用：截断估算与合计共享同一 parse 结果
   const messages = truncateHistory(
-    params.history,
+    params.history.map((m) => ({ ...m, blocks: parseBlocks(m.blocks) })),
     params.contextWindow ?? undefined,
     {
       reserveTokens: estimateReserveTokens(

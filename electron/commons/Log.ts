@@ -41,31 +41,35 @@ export default class Log {
     this.registerHandlers();
   }
 
+  /**
+   * 单参归一：Error 取 name/message/stack——其 message/stack 为不可枚举
+   * 属性，直接 JSON.stringify 只会得到 {}（失败原因丢失）；普通对象输出
+   * pretty JSON（循环引用等不可序列化时回退 String）
+   */
+  private static format(arg: unknown): string {
+    if (arg instanceof Error) {
+      return `${arg.name}: ${arg.message}\n${arg.stack || ""}`;
+    }
+    if (typeof arg === "object" && arg !== null) {
+      try {
+        return JSON.stringify(arg, null, 2);
+      } catch {
+        return String(arg);
+      }
+    }
+    return String(arg);
+  }
+
   static info(...args: unknown[]): void {
-    const message = args
-      .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
-      .join(" ");
-    logger.info(message);
+    logger.info(args.map(Log.format).join(" "));
   }
 
   static error(...args: unknown[]): void {
-    const message = args
-      .map((a) => {
-        if (a instanceof Error) {
-          // 特殊处理 Error 对象
-          return `${a.name}: ${a.message}\n${a.stack || ""}`;
-        }
-        return typeof a === "object" ? JSON.stringify(a, null, 2) : String(a);
-      })
-      .join(" ");
-    logger.error(message);
+    logger.error(args.map(Log.format).join(" "));
   }
 
   static warn(...args: unknown[]): void {
-    const message = args
-      .map((a) => (typeof a === "object" ? JSON.stringify(a) : String(a)))
-      .join(" ");
-    logger.warn(message);
+    logger.warn(args.map(Log.format).join(" "));
   }
 
   /**

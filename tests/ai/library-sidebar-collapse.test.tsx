@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 /**
  * 资料库中间面板（树形栏）收起/展开回归测试：state 提升在
- * LibraryView——完整渲染走真实交互（点主区标题行的收起按钮（Task 5
- * 移入 PageTitle children）→ 窄条 → 点窄条置顶展开按钮 → 回展开态）。
- * mock 骨架同 tests/layout/main-layout.test.tsx：i18n 直返 key、
- * LibraryApi/invoke stub。
+ * LibraryView——完整渲染走真实交互（点树栏「最近」左侧的收展切换
+ * 按钮（单 toggle，主区标题行不再有）→ 窄条 → 点窄条置顶的同源
+ * 按钮展开形态 → 回展开态）。mock 骨架同 tests/layout/main-layout.
+ * test.tsx：i18n 直返 key、LibraryApi/invoke stub。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -13,6 +13,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -61,16 +62,17 @@ function renderView() {
 afterEach(cleanup);
 
 describe("资料库树形栏收起/展开", () => {
-  it("点主区标题行收起按钮成窄条，再点窄条置顶展开按钮回展开态", async () => {
+  it("点树栏「最近」左侧切换按钮收起成窄条，再点窄条置顶按钮回展开态", async () => {
     renderView();
 
-    // 展开态 → 点主区标题行的「收起侧边栏」（Task 5 起按钮在 PageTitle，
-    // 树栏展开态顶部行不再有；默认视图「最近」下树栏无选中项）
-    const collapseBtn = await screen.findByLabelText(
+    // 展开态 → 收起按钮（toggle 的收起形态）在树栏「最近」行左侧，
+    // 主区标题行不再有
+    const sidebar = await screen.findByTestId("library-sidebar");
+    const collapseBtn = within(sidebar).getByLabelText(
       "chat:library.collapseSidebar",
     );
     fireEvent.click(collapseBtn);
-    // 收起态 → 展开按钮须在窄条首位（贴底 mt-auto 曾导致用户找不到入口）
+    // 收起态 → 同一 toggle 的展开形态须在窄条首位（贴底 mt-auto 曾导致用户找不到入口）
     const rail = screen.getByTestId("library-sidebar-collapsed");
     const expandBtn = screen.getByLabelText("chat:library.expandSidebar");
     expect(rail.querySelector("button")).toBe(expandBtn);
@@ -81,10 +83,10 @@ describe("资料库树形栏收起/展开", () => {
     await waitFor(() => {
       expect(screen.queryByTestId("library-sidebar-collapsed")).toBeNull();
     });
-    expect(screen.getByTestId("library-sidebar")).toBeTruthy();
-    // 收起按钮仍在主区标题行，可再次收起
+    // 收起按钮回到树栏「最近」左侧（单按钮 toggle，可再次收起）
+    const sidebarAgain = screen.getByTestId("library-sidebar");
     expect(
-      await screen.findByLabelText("chat:library.collapseSidebar"),
+      within(sidebarAgain).getByLabelText("chat:library.collapseSidebar"),
     ).toBeTruthy();
   });
 });

@@ -2609,6 +2609,8 @@ export const LibraryItemScalarFieldEnum = {
   mimeType: 'mimeType',
   size: 'size',
   originalPath: 'originalPath',
+  favorite: 'favorite',
+  lastViewedAt: 'lastViewedAt',
   userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

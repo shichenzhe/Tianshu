@@ -344,6 +344,8 @@ model libraryItem {
   mimeType     String?
   size         Int?
   originalPath String?
+  favorite     Boolean  @default(false)
+  lastViewedAt DateTime?
   userId       Int? // v12 多用户隔离（新建时随根继承）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

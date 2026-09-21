@@ -1,0 +1,2 @@
+-- /electron/infrastructure/script/v14/upgrade-data.sql
+-- v14 仅新增列（favorite 默认 false / lastViewedAt 默认 NULL），无存量数据迁移

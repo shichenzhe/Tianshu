@@ -49,6 +49,8 @@ export type LibraryItemMinAggregateOutputType = {
   mimeType: string | null
   size: number | null
   originalPath: string | null
+  favorite: boolean | null
+  lastViewedAt: Date | null
   userId: number | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -63,6 +65,8 @@ export type LibraryItemMaxAggregateOutputType = {
   mimeType: string | null
   size: number | null
   originalPath: string | null
+  favorite: boolean | null
+  lastViewedAt: Date | null
   userId: number | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -77,6 +81,8 @@ export type LibraryItemCountAggregateOutputType = {
   mimeType: number
   size: number
   originalPath: number
+  favorite: number
+  lastViewedAt: number
   userId: number
   createdAt: number
   updatedAt: number
@@ -107,6 +113,8 @@ export type LibraryItemMinAggregateInputType = {
   mimeType?: true
   size?: true
   originalPath?: true
+  favorite?: true
+  lastViewedAt?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -121,6 +129,8 @@ export type LibraryItemMaxAggregateInputType = {
   mimeType?: true
   size?: true
   originalPath?: true
+  favorite?: true
+  lastViewedAt?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -135,6 +145,8 @@ export type LibraryItemCountAggregateInputType = {
   mimeType?: true
   size?: true
   originalPath?: true
+  favorite?: true
+  lastViewedAt?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -236,6 +248,8 @@ export type LibraryItemGroupByOutputType = {
   mimeType: string | null
   size: number | null
   originalPath: string | null
+  favorite: boolean
+  lastViewedAt: Date | null
   userId: number | null
   createdAt: Date
   updatedAt: Date
@@ -273,6 +287,8 @@ export type libraryItemWhereInput = {
   mimeType?: Prisma.StringNullableFilter<"libraryItem"> | string | null
   size?: Prisma.IntNullableFilter<"libraryItem"> | number | null
   originalPath?: Prisma.StringNullableFilter<"libraryItem"> | string | null
+  favorite?: Prisma.BoolFilter<"libraryItem"> | boolean
+  lastViewedAt?: Prisma.DateTimeNullableFilter<"libraryItem"> | Date | string | null
   userId?: Prisma.IntNullableFilter<"libraryItem"> | number | null
   createdAt?: Prisma.DateTimeFilter<"libraryItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"libraryItem"> | Date | string
@@ -287,6 +303,8 @@ export type libraryItemOrderByWithRelationInput = {
   mimeType?: Prisma.SortOrderInput | Prisma.SortOrder
   size?: Prisma.SortOrderInput | Prisma.SortOrder
   originalPath?: Prisma.SortOrderInput | Prisma.SortOrder
+  favorite?: Prisma.SortOrder
+  lastViewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -304,6 +322,8 @@ export type libraryItemWhereUniqueInput = Prisma.AtLeast<{
   mimeType?: Prisma.StringNullableFilter<"libraryItem"> | string | null
   size?: Prisma.IntNullableFilter<"libraryItem"> | number | null
   originalPath?: Prisma.StringNullableFilter<"libraryItem"> | string | null
+  favorite?: Prisma.BoolFilter<"libraryItem"> | boolean
+  lastViewedAt?: Prisma.DateTimeNullableFilter<"libraryItem"> | Date | string | null
   userId?: Prisma.IntNullableFilter<"libraryItem"> | number | null
   createdAt?: Prisma.DateTimeFilter<"libraryItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"libraryItem"> | Date | string
@@ -318,6 +338,8 @@ export type libraryItemOrderByWithAggregationInput = {
   mimeType?: Prisma.SortOrderInput | Prisma.SortOrder
   size?: Prisma.SortOrderInput | Prisma.SortOrder
   originalPath?: Prisma.SortOrderInput | Prisma.SortOrder
+  favorite?: Prisma.SortOrder
+  lastViewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -340,6 +362,8 @@ export type libraryItemScalarWhereWithAggregatesInput = {
   mimeType?: Prisma.StringNullableWithAggregatesFilter<"libraryItem"> | string | null
   size?: Prisma.IntNullableWithAggregatesFilter<"libraryItem"> | number | null
   originalPath?: Prisma.StringNullableWithAggregatesFilter<"libraryItem"> | string | null
+  favorite?: Prisma.BoolWithAggregatesFilter<"libraryItem"> | boolean
+  lastViewedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"libraryItem"> | Date | string | null
   userId?: Prisma.IntNullableWithAggregatesFilter<"libraryItem"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"libraryItem"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"libraryItem"> | Date | string
@@ -353,6 +377,8 @@ export type libraryItemCreateInput = {
   mimeType?: string | null
   size?: number | null
   originalPath?: string | null
+  favorite?: boolean
+  lastViewedAt?: Date | string | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -367,6 +393,8 @@ export type libraryItemUncheckedCreateInput = {
   mimeType?: string | null
   size?: number | null
   originalPath?: string | null
+  favorite?: boolean
+  lastViewedAt?: Date | string | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -380,6 +408,8 @@ export type libraryItemUpdateInput = {
   mimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   size?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   originalPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  favorite?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastViewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -394,6 +424,8 @@ export type libraryItemUncheckedUpdateInput = {
   mimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   size?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   originalPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  favorite?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastViewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -408,6 +440,8 @@ export type libraryItemCreateManyInput = {
   mimeType?: string | null
   size?: number | null
   originalPath?: string | null
+  favorite?: boolean
+  lastViewedAt?: Date | string | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -421,6 +455,8 @@ export type libraryItemUpdateManyMutationInput = {
   mimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   size?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   originalPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  favorite?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastViewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -435,6 +471,8 @@ export type libraryItemUncheckedUpdateManyInput = {
   mimeType?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   size?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   originalPath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  favorite?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastViewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -449,6 +487,8 @@ export type libraryItemCountOrderByAggregateInput = {
   mimeType?: Prisma.SortOrder
   size?: Prisma.SortOrder
   originalPath?: Prisma.SortOrder
+  favorite?: Prisma.SortOrder
+  lastViewedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -470,6 +510,8 @@ export type libraryItemMaxOrderByAggregateInput = {
   mimeType?: Prisma.SortOrder
   size?: Prisma.SortOrder
   originalPath?: Prisma.SortOrder
+  favorite?: Prisma.SortOrder
+  lastViewedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -484,6 +526,8 @@ export type libraryItemMinOrderByAggregateInput = {
   mimeType?: Prisma.SortOrder
   size?: Prisma.SortOrder
   originalPath?: Prisma.SortOrder
+  favorite?: Prisma.SortOrder
+  lastViewedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -507,6 +551,8 @@ export type libraryItemSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   mimeType?: boolean
   size?: boolean
   originalPath?: boolean
+  favorite?: boolean
+  lastViewedAt?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -521,6 +567,8 @@ export type libraryItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   mimeType?: boolean
   size?: boolean
   originalPath?: boolean
+  favorite?: boolean
+  lastViewedAt?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -535,6 +583,8 @@ export type libraryItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   mimeType?: boolean
   size?: boolean
   originalPath?: boolean
+  favorite?: boolean
+  lastViewedAt?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -549,12 +599,14 @@ export type libraryItemSelectScalar = {
   mimeType?: boolean
   size?: boolean
   originalPath?: boolean
+  favorite?: boolean
+  lastViewedAt?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type libraryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "parentId" | "name" | "kind" | "fileType" | "mimeType" | "size" | "originalPath" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["libraryItem"]>
+export type libraryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "parentId" | "name" | "kind" | "fileType" | "mimeType" | "size" | "originalPath" | "favorite" | "lastViewedAt" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["libraryItem"]>
 
 export type $libraryItemPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "libraryItem"
@@ -568,6 +620,8 @@ export type $libraryItemPayload<ExtArgs extends runtime.Types.Extensions.Interna
     mimeType: string | null
     size: number | null
     originalPath: string | null
+    favorite: boolean
+    lastViewedAt: Date | null
     userId: number | null
     createdAt: Date
     updatedAt: Date
@@ -1002,6 +1056,8 @@ export interface libraryItemFieldRefs {
   readonly mimeType: Prisma.FieldRef<"libraryItem", 'String'>
   readonly size: Prisma.FieldRef<"libraryItem", 'Int'>
   readonly originalPath: Prisma.FieldRef<"libraryItem", 'String'>
+  readonly favorite: Prisma.FieldRef<"libraryItem", 'Boolean'>
+  readonly lastViewedAt: Prisma.FieldRef<"libraryItem", 'DateTime'>
   readonly userId: Prisma.FieldRef<"libraryItem", 'Int'>
   readonly createdAt: Prisma.FieldRef<"libraryItem", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"libraryItem", 'DateTime'>

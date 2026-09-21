@@ -8,5 +8,5 @@ export class Constants {
   static readonly SKILLHUB_API_KEY: string =
     process.env.SKILLHUB_API_KEY ?? "skh-your-api-key";
   // 数据库版本（新增升级脚本时 +1，并在 script/ 下建 vN 目录）
-  static readonly DATABASE_VERSION: number = 12;
+  static readonly DATABASE_VERSION: number = 13;
 }

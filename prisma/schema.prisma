@@ -116,6 +116,7 @@ model session {
 
   @@index([projectId], map: "session_projectId_index")
   @@index([userId], map: "session_userId_index")
+  @@index([workspaceId], map: "session_workspaceId_index")
 }
 
 model message {
@@ -130,6 +131,7 @@ model message {
   createdAt   DateTime @default(now())
 
   @@index([sessionId])
+  @@index([createdAt], map: "message_createdAt_index")
 }
 
 model mcpServer {

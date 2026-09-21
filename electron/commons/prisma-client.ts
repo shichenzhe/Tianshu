@@ -28,4 +28,12 @@ const prisma = new PrismaClient({
   log: ["info", "warn", "error"], // 输出日志到控制台,方便调试
 });
 
+// SQLite 调优（WAL + NORMAL 同步）：应用有多个后台写源（chat 落库、
+// automation 定时 tick、audit 批量 flush），默认 DELETE 日志模式下读写
+// 互斥会周期性互卡；WAL 持久化到库文件头（幂等），失败仅记日志不阻塞启动
+void prisma
+  .$queryRawUnsafe("PRAGMA journal_mode=WAL")
+  .then(() => prisma.$queryRawUnsafe("PRAGMA synchronous=NORMAL"))
+  .catch((e) => console.error("SQLite PRAGMA 调优失败:", e));
+
 export default prisma;

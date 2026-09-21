@@ -95,7 +95,10 @@
     "style": {
       "label": "Response style",
       "options": {
-        "default": { "label": "Default", "desc": "No specific style" },
+        "default": {
+          "label": "Default",
+          "desc": "No specific style"
+        },
         "professional": {
           "label": "Professional",
           "desc": "Clear, accurate, trustworthy"
@@ -116,7 +119,10 @@
           "label": "Pragmatic",
           "desc": "Minimal words, maximum information"
         },
-        "snarky": { "label": "Snarky", "desc": "Sharp wit, never hurtful" },
+        "snarky": {
+          "label": "Snarky",
+          "desc": "Sharp wit, never hurtful"
+        },
         "socratic": {
           "label": "Socratic",
           "desc": "Guide thinking with questions"
@@ -213,6 +219,11 @@
     "toggle": {
       "label": "Conversation Memory",
       "desc": "Allow Tianshu to extract context from conversations and build personalized memory for more precise responses."
+    },
+    "model": {
+      "label": "Memory Compilation Model",
+      "desc": "Choose the model for automatic memory compilation. Leave empty to auto-select from default/enabled models.",
+      "auto": "Auto (default model first)"
     },
     "manage": {
       "title": "Manage Memory",

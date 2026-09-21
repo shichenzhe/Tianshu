@@ -14,11 +14,12 @@ import type { ProviderRuntimeInfo } from "../provider/provider-factory";
 import {
   MEMORY_PROFILE_LIMIT,
   buildMemoryMarkdown,
-  hasMemoryHeadings,
   parseMemoryMarkdown,
   stripCodeFence,
   truncateMemoryMarkdown,
 } from "../../../../src-react/domains/app-settings/model/memory-markdown";
+import { getAppOptionMap } from "../../app-settings/option-store";
+import { PERSONALIZATION_KEYS } from "./personalization.config";
 
 /** provider 运行时信息查询面（ProviderRepository 可直接满足） */
 export interface ProviderRuntimeSource {
@@ -103,21 +104,20 @@ function normalizeHeadingLines(text: string): string {
 }
 
 /**
- * 校验 AI 输出（I2 放宽修订 2026-09-21）：剥围栏 + 标题变体修复后，
- * 含任一四节标题即合格——归一化固定节序、丢弃节外杂散；消费端
- * parseMemoryMarkdown 本就缺节容错（缺节空串），原「四标题字面齐备」
- * 校验致模型省略空节（如近期无里程碑）时整轮作废并 10 分钟无限重试。
- * 空输出/无任何标题 → null
+ * 校验 AI 输出（2026-09-21 二次放宽）：剥围栏 + 标题变体修复后，非空即
+ * 接受——无任何四节标题时整段进工作背景节（parseMemoryMarkdown 的
+ * fallback 语义，与导入粘贴一致）。小模型不守格式时输出仍生效，
+ * 质量由下次整理迭代收敛（用户裁决：暂时不管质量）。空输出 → null
  */
 export function validateMemoryOutput(raw: string): string | null {
   const text = normalizeHeadingLines(stripCodeFence(raw ?? ""));
-  if (text === "" || !hasMemoryHeadings(text)) {
+  if (text === "") {
     return null;
   }
-  const normalized = buildMemoryMarkdown(parseMemoryMarkdown(text));
-  return normalized === ""
-    ? null
-    : truncateMemoryMarkdown(normalized, MEMORY_PROFILE_LIMIT);
+  return truncateMemoryMarkdown(
+    buildMemoryMarkdown(parseMemoryMarkdown(text)),
+    MEMORY_PROFILE_LIMIT,
+  );
 }
 
 /**
@@ -198,23 +198,42 @@ export async function fetchRecentConversation(
   );
 }
 
-/** 候选模型 id 序：workspace.defaultModelId 优先，其后全部启用模型 */
+/**
+ * 设置页强指定的记忆整理模型 id（option memoryModelId）：空/非正整数 →
+ * null（保持既有解析逻辑）；指定但不可用（已删/禁用/服务商缺配置）时由
+ * 候选序自然回退，不额外报错
+ */
+async function preferredMemoryModelId(): Promise<number | null> {
+  const map = await getAppOptionMap(prisma.option, [
+    PERSONALIZATION_KEYS.memoryModelId,
+  ]);
+  const raw = map.get(PERSONALIZATION_KEYS.memoryModelId)?.trim() ?? "";
+  const id = Number(raw);
+  return raw !== "" && Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/** 候选模型 id 序：设置页强指定优先，其后 workspace 默认、全部启用模型 */
 async function listModelCandidateIds(
   listModels: () => Promise<MemoryModelRow[]>,
 ): Promise<number[]> {
-  const workspaces = await prisma.workspace.findMany({
-    // P2 遍历面核查：只取用户空间——资产空间（projectId 非空）的
-    // defaultModelId 恒空，显式过滤防未来语义漂移
-    where: { projectId: null },
-    orderBy: { id: "asc" },
-    select: { defaultModelId: true },
-  });
+  const [preferred, workspaces, enabled] = await Promise.all([
+    preferredMemoryModelId(),
+    prisma.workspace.findMany({
+      // P2 遍历面核查：只取用户空间——资产空间（projectId 非空）的
+      // defaultModelId 恒空，显式过滤防未来语义漂移
+      where: { projectId: null },
+      orderBy: { id: "asc" },
+      select: { defaultModelId: true },
+    }),
+    listModels(),
+  ]);
   const defaults = workspaces
     .map((w) => w.defaultModelId)
     .filter((id): id is number => id !== null);
   return [
+    ...(preferred !== null ? [preferred] : []),
     ...defaults,
-    ...(await listModels()).filter((m) => m.enabled).map((m) => m.id),
+    ...enabled.filter((m) => m.enabled).map((m) => m.id),
   ];
 }
 
@@ -274,7 +293,7 @@ export async function compileMemory(
     Log.warn("记忆整理输出无法解析", (raw ?? "").slice(0, 200));
     // 诊断随异常透出（memoryLastError 限长 200，摘要取 100 字）
     throw new Error(
-      `MEMORY_COMPILE_FAILED（模型输出为空或无任何记忆标题，前 100 字：${(raw ?? "").slice(0, 100)}）`,
+      `MEMORY_COMPILE_FAILED（模型输出为空，前 100 字：${(raw ?? "").slice(0, 100)}）`,
     );
   }
   return validated;

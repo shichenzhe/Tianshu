@@ -10,17 +10,22 @@ vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/tmp/tianshu-test-user-data") },
 }));
 
-// resolveMemoryModel 经全局 prisma 查 workspace.defaultModelId，
-// 屏蔽 prisma-client 模块初始化对 electron app 路径的依赖（既有模式）
+// resolveMemoryModel 经全局 prisma 查 workspace.defaultModelId 与
+// option.memoryModelId（强指定），屏蔽 prisma-client 模块初始化对
+// electron app 路径的依赖（既有模式）
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     workspace: {
       findMany: (...args: unknown[]) => workspaceStub.findMany(...args),
     },
+    option: {
+      findMany: (...args: unknown[]) => optionStub.findMany(...args),
+    },
   },
 }));
 
 const workspaceStub = { findMany: vi.fn() };
+const optionStub = { findMany: vi.fn() };
 
 import {
   MEMORY_COMPILER_SYSTEM_PROMPT,
@@ -71,8 +76,10 @@ describe("validateMemoryOutput", () => {
     const raw = "```\n" + FULL_MD + "\n```";
     expect(validateMemoryOutput(raw)).toBe(FULL_MD);
   });
-  it("无任何已知标题 → null（彻底失败）", () => {
-    expect(validateMemoryOutput("我无法完成这个任务")).toBeNull();
+  it("无任何已知标题 → 全进工作背景节（二次放宽：小模型输出也生效）", () => {
+    expect(validateMemoryOutput("我无法完成这个任务")).toBe(
+      "## 工作背景\n我无法完成这个任务",
+    );
     expect(validateMemoryOutput("")).toBeNull();
   });
   it("缺节 → 归一化保留已有节（I2 放宽：模型省略空节不再整轮作废）", () => {
@@ -94,8 +101,10 @@ describe("validateMemoryOutput", () => {
     expect(validateMemoryOutput("##近期动态\nd")).toBe("## 近期动态\nd");
     expect(validateMemoryOutput("## _个人背景_\nb")).toBe("## 个人背景\nb");
   });
-  it("标题词延续不误伤：「工作背景补充」不识别为标题", () => {
-    expect(validateMemoryOutput("## 工作背景补充\n内容")).toBeNull();
+  it("标题词延续不识别为标题：「工作背景补充」整段进工作背景节", () => {
+    expect(validateMemoryOutput("## 工作背景补充\n内容")).toBe(
+      "## 工作背景\n## 工作背景补充\n内容",
+    );
   });
   it("超 MEMORY_PROFILE_LIMIT 从头部截断", () => {
     const raw = `## 工作背景\n${"旧".repeat(9000)}\n## 个人背景\nb\n## 当前关注\nc\n## 近期动态\n新`;
@@ -180,6 +189,45 @@ describe("resolveMemoryModel", () => {
   };
   beforeEach(() => {
     workspaceStub.findMany.mockReset();
+    optionStub.findMany.mockReset();
+    optionStub.findMany.mockResolvedValue([]); // 无强指定（默认态）
+  });
+  it("设置页强指定 memoryModelId 优先于 workspace 默认", async () => {
+    optionStub.findMany.mockResolvedValue([
+      { name: "personalization.memoryModelId", value: "7" },
+    ]);
+    workspaceStub.findMany.mockResolvedValue([{ defaultModelId: 2 }]);
+    const getById = vi.fn(async (id: number) => ({
+      id,
+      providerId: 8,
+      modelId: `m${id}`,
+      enabled: true,
+    }));
+    const ctx = await resolveMemoryModel(
+      { getRuntimeInfo: async () => providerInfo },
+      { getById },
+      async () => [],
+    );
+    expect(ctx?.modelId).toBe("m7");
+    expect(getById).toHaveBeenNthCalledWith(1, 7);
+  });
+  it("强指定模型禁用 → 回退 workspace 默认（候选序自然回退）", async () => {
+    optionStub.findMany.mockResolvedValue([
+      { name: "personalization.memoryModelId", value: "7" },
+    ]);
+    workspaceStub.findMany.mockResolvedValue([{ defaultModelId: 2 }]);
+    const getById = vi.fn(async (id: number) => ({
+      id,
+      providerId: 8,
+      modelId: `m${id}`,
+      enabled: id === 7 ? false : true,
+    }));
+    const ctx = await resolveMemoryModel(
+      { getRuntimeInfo: async () => providerInfo },
+      { getById },
+      async () => [],
+    );
+    expect(ctx?.modelId).toBe("m2");
   });
   it("workspace 默认模型优先（须存在且启用）", async () => {
     workspaceStub.findMany.mockResolvedValue([{ defaultModelId: 2 }]);
@@ -258,14 +306,24 @@ describe("compileMemory", () => {
     expect(modelText.mock.calls[0][1]).toContain("用户指令");
     expect(modelText.mock.calls[0][1]).toContain("删掉天气");
   });
-  it("输出无任何已知标题 → 抛 MEMORY_COMPILE_FAILED", async () => {
+  it("输出无任何标题 → 全进工作背景节（二次放宽，不再抛错）", async () => {
+    const memory = await compileMemory({
+      currentMemory: "",
+      material: "材料",
+      instructionMode: false,
+      model,
+      modelText: async () => "无法完成",
+    });
+    expect(memory).toBe("## 工作背景\n无法完成");
+  });
+  it("输出为空串 → 抛 MEMORY_COMPILE_FAILED（唯一拒绝形态）", async () => {
     await expect(
       compileMemory({
         currentMemory: "",
         material: "材料",
         instructionMode: false,
         model,
-        modelText: async () => "无法完成",
+        modelText: async () => "",
       }),
     ).rejects.toThrow("MEMORY_COMPILE_FAILED");
   });

@@ -29,6 +29,7 @@ export const PERSONALIZATION_KEYS = {
   memory: "personalization.memory",
   memoryProfile: "personalization.memoryProfile",
   memoryEnabled: "personalization.memoryEnabled",
+  memoryModelId: "personalization.memoryModelId",
   memoryLastCompiledAt: "personalization.memoryLastCompiledAt",
   memoryLastError: "personalization.memoryLastError",
 } as const;
@@ -41,6 +42,8 @@ export const PERSONALIZATION_LIMITS = {
   persona: 4000,
   memory: 1500,
   memoryProfile: 8000,
+  /** 强指定记忆整理模型 id（model.id 十进制字符串；空 = 自动解析） */
+  memoryModelId: 10,
   /** 上次整理时间（ISO 字符串，正常 24 字符，留余量防脏数据） */
   memoryLastCompiledAt: 40,
   /** 最近一次整理失败原因截断（修订 A：失败可观测） */
@@ -58,6 +61,8 @@ export interface PersonalizationConfig {
   memory: string;
   memoryProfile: string;
   memoryEnabled: boolean;
+  /** 强指定记忆整理模型（model.id 字符串；空 = 自动解析候选序） */
+  memoryModelId: string;
   memoryLastCompiledAt: string;
   memoryLastError: string;
 }
@@ -85,6 +90,7 @@ export function defaultPersonalization(): PersonalizationConfig {
     memory: "",
     memoryProfile: "",
     memoryEnabled: true,
+    memoryModelId: "",
     memoryLastCompiledAt: "",
     memoryLastError: "",
   };
@@ -139,6 +145,7 @@ export function fromAppOptions(
       map.get(keys.memoryEnabled),
       defaultPersonalization().memoryEnabled,
     ),
+    memoryModelId: textValue(map, keys.memoryModelId, limit.memoryModelId, ""),
     memoryLastCompiledAt: textValue(
       map,
       keys.memoryLastCompiledAt,

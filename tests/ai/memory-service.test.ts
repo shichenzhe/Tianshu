@@ -173,7 +173,8 @@ describe("applyMemoryInstruction", () => {
       }),
       fetchMaterial: async () => "m",
       resolveModel: async () => MODEL,
-      compile: async () => "完全不是记忆格式",
+      // 二次放宽后仅空输出非法（无标题文本全进工作背景节）
+      compile: async () => "",
       save,
       ...mkLockDeps(),
     });

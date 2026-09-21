@@ -95,17 +95,38 @@
     "style": {
       "label": "回复风格",
       "options": {
-        "default": { "label": "默认", "desc": "不设定特定风格" },
-        "professional": { "label": "专业严谨", "desc": "清晰、准确、值得信赖" },
-        "friendly": { "label": "亲和友善", "desc": "温暖、平易近人、鼓励支持" },
-        "direct": { "label": "直言不讳", "desc": "简明扼要、直击要点" },
+        "default": {
+          "label": "默认",
+          "desc": "不设定特定风格"
+        },
+        "professional": {
+          "label": "专业严谨",
+          "desc": "清晰、准确、值得信赖"
+        },
+        "friendly": {
+          "label": "亲和友善",
+          "desc": "温暖、平易近人、鼓励支持"
+        },
+        "direct": {
+          "label": "直言不讳",
+          "desc": "简明扼要、直击要点"
+        },
         "imaginative": {
           "label": "天马行空",
           "desc": "富有想象力、善用比喻类比"
         },
-        "pragmatic": { "label": "高效务实", "desc": "最少文字、最大信息量" },
-        "snarky": { "label": "毒舌吐槽", "desc": "犀利吐槽、但绝不伤人" },
-        "socratic": { "label": "启发引导", "desc": "用提问引导思考、授人以渔" }
+        "pragmatic": {
+          "label": "高效务实",
+          "desc": "最少文字、最大信息量"
+        },
+        "snarky": {
+          "label": "毒舌吐槽",
+          "desc": "犀利吐槽、但绝不伤人"
+        },
+        "socratic": {
+          "label": "启发引导",
+          "desc": "用提问引导思考、授人以渔"
+        }
       }
     },
     "welcomeLoading": {
@@ -198,6 +219,11 @@
     "toggle": {
       "label": "生成对话记忆",
       "desc": "允许 Tianshu 从对话中提取上下文，生成个性化记忆，提供更精准的回应。"
+    },
+    "model": {
+      "label": "记忆整理模型",
+      "desc": "指定自动整理记忆所用的模型，留空则按默认模型/启用模型自动选择。",
+      "auto": "自动（默认模型优先）"
     },
     "manage": {
       "title": "管理记忆",

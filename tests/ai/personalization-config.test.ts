@@ -23,6 +23,7 @@ describe("defaultPersonalization", () => {
       memory: "",
       memoryProfile: "",
       memoryEnabled: true,
+      memoryModelId: "",
       memoryLastCompiledAt: "",
       memoryLastError: "",
     });

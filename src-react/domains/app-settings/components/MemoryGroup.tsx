@@ -27,6 +27,15 @@ import { toast } from "sonner";
 import { getDateFnsLocale } from "@/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ModelApi } from "@/domains/ai/api/model.api";
 import { MemoryApi } from "../api/memory.api";
 import { SettingsApi } from "../api/settings.api";
 import {
@@ -95,6 +104,9 @@ export default function MemoryGroup() {
 
   const [enabled, setEnabled] = useState(options.memoryEnabled);
   useEffect(() => setEnabled(options.memoryEnabled), [options.memoryEnabled]);
+  // 强指定记忆整理模型（空 = 自动解析：默认模型优先，回退启用池）
+  const [modelId, setModelId] = useState(options.memoryModelId);
+  useEffect(() => setModelId(options.memoryModelId), [options.memoryModelId]);
   // 指令模式开关：开 = 卡片底部显示 AI 指令框（记忆正文始终只读）
   const [editing, setEditing] = useState(false);
   const [instruction, setInstruction] = useState("");
@@ -158,6 +170,17 @@ export default function MemoryGroup() {
     [persistQuiet, revert],
   );
 
+  const changeModelId = useCallback(
+    (value: string) => {
+      const previous = modelId;
+      setModelId(value);
+      revert(persistQuiet(PERSONALIZATION_KEYS.memoryModelId, value), () =>
+        setModelId(previous),
+      );
+    },
+    [modelId, persistQuiet, revert],
+  );
+
   const hasProfile = options.memoryProfile.trim() !== "";
 
   return (
@@ -177,6 +200,7 @@ export default function MemoryGroup() {
           checked={enabled}
           onCheckedChange={changeEnabled}
         />
+        <MemoryModelRow value={modelId} onChange={changeModelId} />
       </section>
       <ManageMemoryCard
         editing={editing}
@@ -211,6 +235,64 @@ export default function MemoryGroup() {
         />
       )}
       {!enabled && <DisabledNotice />}
+    </div>
+  );
+}
+
+/** Radix Select 禁止空串 value：空（自动）选项用哨兵值 */
+const AUTO_MODEL_VALUE = "auto";
+
+/**
+ * 记忆整理模型选择行：自动（默认/启用池解析）或强指定某模型。
+ * 即时生效（乐观更新 + revert 回滚，与开关行同构）；指定模型被删除/
+ * 禁用时主进程解析会自动回退，不阻塞记忆整理
+ */
+function MemoryModelRow({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation(["settings"]);
+  const { data: models } = useQuery({
+    queryKey: ["models", "all"],
+    queryFn: () => ModelApi.listAll(),
+  });
+
+  return (
+    <div className="mt-4 flex items-center justify-between gap-4 border-t border-border/50 pt-4">
+      <div className="space-y-0.5">
+        <Label className="text-sm font-normal">
+          {t("settings:memory.model.label")}
+        </Label>
+        <p className="text-xs text-muted-foreground">
+          {t("settings:memory.model.desc")}
+        </p>
+      </div>
+      <Select
+        value={value === "" ? AUTO_MODEL_VALUE : value}
+        onValueChange={(next) =>
+          onChange(next === AUTO_MODEL_VALUE ? "" : next)
+        }
+      >
+        <SelectTrigger
+          aria-label={t("settings:memory.model.label")}
+          className="w-[220px]"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="rounded-lg border-border/50 shadow-lg">
+          <SelectItem value={AUTO_MODEL_VALUE}>
+            {t("settings:memory.model.auto")}
+          </SelectItem>
+          {(models ?? []).map((model) => (
+            <SelectItem key={model.id} value={String(model.id)}>
+              {model.name?.trim() !== "" ? model.name : model.modelId}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

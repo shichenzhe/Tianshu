@@ -22,7 +22,7 @@ function statements(sql: string): string[] {
     .filter(Boolean);
 }
 
-/** 全部 16 张表(含 db_version 由代码建,此处为脚本建的 15 张) */
+/** 全部 23 张表(含 db_version 由代码建,此处为脚本建的 22 张) */
 const TABLES = [
   "user",
   "option",
@@ -40,6 +40,13 @@ const TABLES = [
   "automationRun",
   "automationStat",
   "libraryItem",
+  "project",
+  "projectMember",
+  "projectBinding",
+  "planItem",
+  "planView",
+  "planItemAttachment",
+  "securityAuditLog",
 ];
 
 function createDb(): DatabaseSync {
@@ -139,6 +146,105 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     const db = createDb();
     expect(indexesOf(db, "message")).toContain("message_createdAt_index");
     expect(indexesOf(db, "session")).toContain("session_workspaceId_index");
+  });
+
+  it("v2 project 域三表并入(owner+name 与成员唯一索引生效)", () => {
+    const db = createDb();
+    db.exec(
+      `INSERT INTO project (name, ownerId, createdAt, updatedAt)
+       VALUES ('官网改版', 1, '2026-09-01 00:00:00', '2026-09-01 00:00:00')`,
+    );
+    expect(() =>
+      db.exec(
+        `INSERT INTO project (name, ownerId, createdAt, updatedAt)
+         VALUES ('官网改版', 1, '2026-09-02 00:00:00', '2026-09-02 00:00:00')`,
+      ),
+    ).toThrow();
+    db.exec("INSERT INTO projectMember (projectId, userId) VALUES (1, 1)");
+    expect(() =>
+      db.exec("INSERT INTO projectMember (projectId, userId) VALUES (1, 1)"),
+    ).toThrow();
+  });
+
+  it("v4-v8 planItem 排期/描述/AI 摘要列并入(默认值正确)", () => {
+    const db = createDb();
+    db.exec(
+      `INSERT INTO planItem (title, createdById, createdAt, updatedAt)
+       VALUES ('t', 1, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
+    );
+    expect(
+      db
+        .prepare(
+          "SELECT startDate, dueDate, source, description, aiSummary FROM planItem WHERE id = 1",
+        )
+        .get(),
+    ).toEqual({
+      startDate: null,
+      dueDate: null,
+      source: "manual",
+      description: null,
+      aiSummary: null,
+    });
+  });
+
+  it("v5 planView 部分唯一索引(空名播种豁免,非空名冲突抛错)", () => {
+    const db = createDb();
+    const insert = (name: string, sortOrder: number) =>
+      db.exec(
+        `INSERT INTO planView (projectId, name, type, filterJson, sortJson, sortOrder, createdAt, updatedAt)
+         VALUES (1, '${name}', 'table', '{}', '[]', ${sortOrder}, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
+      );
+    expect(() => insert("", 0)).not.toThrow();
+    expect(() => insert("", 1)).not.toThrow();
+    insert("我的看板", 2);
+    expect(() => insert("我的看板", 3)).toThrow();
+  });
+
+  it("v5 planView 存量库修复:旧全列唯一索引重放 v1 后替换为部分索引", () => {
+    const db = createDb();
+    // 模拟旧版迁移产物:换上旧全列唯一索引(空表,直接建不冲突)
+    db.exec("DROP INDEX idx_plan_view_project_name");
+    db.exec(
+      "CREATE UNIQUE INDEX idx_plan_view_project_name ON planView (projectId, name)",
+    );
+    // 重放 v1 全量脚本:DROP 旧索引 + 重建部分索引
+    for (const stmt of statements(V1_SQL)) {
+      db.exec(stmt);
+    }
+    const insert = (name: string, sortOrder: number) =>
+      db.exec(
+        `INSERT INTO planView (projectId, name, type, filterJson, sortJson, sortOrder, createdAt, updatedAt)
+         VALUES (1, '${name}', 'table', '{}', '[]', ${sortOrder}, '2026-09-14 00:00:00', '2026-09-14 00:00:00')`,
+      );
+    expect(() => insert("", 0)).not.toThrow();
+    expect(() => insert("", 1)).not.toThrow();
+  });
+
+  it("v6/v9 planItemAttachment 与 securityAuditLog 并入(索引存在)", () => {
+    const db = createDb();
+    expect(indexesOf(db, "planItemAttachment")).toContain(
+      "plan_item_attachment_planItemId_index",
+    );
+    expect(indexesOf(db, "securityAuditLog")).toEqual(
+      expect.arrayContaining([
+        "idx_audit_sequence",
+        "idx_audit_createdAt",
+        "idx_audit_category",
+      ]),
+    );
+  });
+
+  it("v2/v3/v7/v10 项目化与场景列并入对应表", () => {
+    const db = createDb();
+    expect(columnsOf(db, "session")).toEqual(
+      expect.arrayContaining(["projectId", "scenario"]),
+    );
+    expect(columnsOf(db, "workspace")).toContain("projectId");
+    expect(columnsOf(db, "automationTask")).toContain("projectId");
+    expect(columnsOf(db, "skillRecord")).toContain("scenarios");
+    expect(indexesOf(db, "automationTask")).toContain(
+      "automation_task_projectId_index",
+    );
   });
 
   it("skillRecord name 唯一约束生效", () => {

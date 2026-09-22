@@ -7,6 +7,7 @@ export class Constants {
   // SkillHub 市场 API Key（env 覆盖优先；默认占位符 = 不发送，真实值由 npm run init 写入）
   static readonly SKILLHUB_API_KEY: string =
     process.env.SKILLHUB_API_KEY ?? "skh-your-api-key";
-  // 数据库版本（新增升级脚本时 +1，并在 script/ 下建 vN 目录）
-  static readonly DATABASE_VERSION: number = 14;
+  // 数据库版本（v1 为发布前合并 v2–v14 的全量建表快照；发布后 schema
+  // 变更再 +1 并在 script/ 下建 vN 目录）
+  static readonly DATABASE_VERSION: number = 10;
 }

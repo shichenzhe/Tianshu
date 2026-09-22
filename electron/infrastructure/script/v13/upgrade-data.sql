@@ -1,2 +1,0 @@
--- /electron/infrastructure/script/v13/upgrade-data.sql
--- v13 仅新增性能索引（upgrade-table.sql），无存量数据迁移

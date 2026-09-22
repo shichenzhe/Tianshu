@@ -22,7 +22,7 @@ function statements(sql: string): string[] {
     .filter(Boolean);
 }
 
-/** 全部 14 张表(含 db_version 由代码建,此处为脚本建的 13 张) */
+/** 全部 16 张表(含 db_version 由代码建,此处为脚本建的 15 张) */
 const TABLES = [
   "user",
   "option",
@@ -39,6 +39,7 @@ const TABLES = [
   "automationTask",
   "automationRun",
   "automationStat",
+  "libraryItem",
 ];
 
 function createDb(): DatabaseSync {
@@ -55,7 +56,13 @@ function columnsOf(db: DatabaseSync, table: string): string[] {
   ).map((c) => c.name);
 }
 
-describe("v1 全量建表脚本(合并 v2-v10 后的最终结构)", () => {
+function indexesOf(db: DatabaseSync, table: string): string[] {
+  return (
+    db.prepare(`PRAGMA index_list(${table})`).all() as Array<{ name: string }>
+  ).map((i) => i.name);
+}
+
+describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
   it("重复执行两次幂等(IF NOT EXISTS)", () => {
     const db = new DatabaseSync(":memory:");
     for (let i = 0; i < 2; i += 1) {
@@ -86,6 +93,52 @@ describe("v1 全量建表脚本(合并 v2-v10 后的最终结构)", () => {
       ]),
     );
     expect(columnsOf(db, "message")).toContain("durationMs");
+  });
+
+  it("v12 多用户隔离列与索引已并入(userId 归属)", () => {
+    const db = createDb();
+    for (const table of [
+      "option",
+      "provider",
+      "assistant",
+      "workspace",
+      "session",
+      "mcpServer",
+      "automationTask",
+      "libraryItem",
+    ]) {
+      expect(columnsOf(db, table)).toContain("userId");
+    }
+    // option 唯一索引扩含 userId(旧两列唯一索引已替换)
+    expect(indexesOf(db, "option")).toContain("idx_option_type_name_user");
+    expect(indexesOf(db, "option")).not.toContain("idx_option_type_name");
+  });
+
+  it("v11/v14 资料库条目表并入最终形态(含收藏与最近访问列)", () => {
+    const db = createDb();
+    expect(columnsOf(db, "libraryItem")).toEqual(
+      expect.arrayContaining([
+        "parentId",
+        "kind",
+        "fileType",
+        "favorite",
+        "lastViewedAt",
+      ]),
+    );
+    db.exec(
+      `INSERT INTO libraryItem (name, kind, createdAt, updatedAt)
+       VALUES ('调研报告', 'file', '2026-09-21 00:00:00', '2026-09-21 00:00:00')`,
+    );
+    // favorite 默认 0(未收藏)、lastViewedAt 默认 NULL(NEW 判定依据)
+    expect(
+      db.prepare("SELECT favorite, lastViewedAt FROM libraryItem").get(),
+    ).toEqual({ favorite: 0, lastViewedAt: null });
+  });
+
+  it("v13 性能索引已并入(消息创建时间/会话工作空间)", () => {
+    const db = createDb();
+    expect(indexesOf(db, "message")).toContain("message_createdAt_index");
+    expect(indexesOf(db, "session")).toContain("session_workspaceId_index");
   });
 
   it("skillRecord name 唯一约束生效", () => {

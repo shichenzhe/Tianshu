@@ -1,6 +1,6 @@
 /**
  * 资料库「我的资料」（spec §5）：左树形栏（搜索入口/「最近」+「我的
- * 资料」快捷项/文件夹树，可收起成窄条——收展切换按钮在「最近」左侧）+ 主区
+ * 资料」快捷项/文件夹树，可收起成窄条，收展切换按钮在主区标题行左侧）+ 主区
  * 两态——列表态（全部|收藏 Tab + 类型筛选 + 上传；排序在列头，新建
  * 文件夹在树栏「+」）/ 详情态（文件预览 + 元信息 + 行操作）。搜索态
  * 已收敛为命令面板（⌘K 或树栏搜索入口唤起，空输入最近浏览/输入实时
@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { PanelLeftClose, Upload } from "lucide-react";
 
 import PageTitle from "@/components/layout/PageTitle";
 import { Button } from "@/components/ui/button";
@@ -323,7 +323,22 @@ export default function LibraryView() {
         onCreateFolder={() => setDialog({ mode: "createFolder" })}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
-        <PageTitle title={pageTitle} />
+        {/* 收/展切换按钮在标题左侧（用户裁定单按钮，收起态窄条顶部
+            为同源展开形态） */}
+        <PageTitle
+          title={pageTitle}
+          leading={
+            <button
+              type="button"
+              title={t("chat:library.collapseSidebar")}
+              aria-label={t("chat:library.collapseSidebar")}
+              className="rounded-md p-1 hover:bg-primary-foreground/20"
+              onClick={() => setTreeCollapsed((v) => !v)}
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          }
+        />
         {viewMode === "detail" && detailItem ? (
           <div className="min-h-0 flex-1">
             <LibraryDetailPanel

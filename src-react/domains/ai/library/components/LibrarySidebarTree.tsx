@@ -1,10 +1,10 @@
 /**
  * 资料库树形栏（左，spec §2.1 重排版）：标题行 + 搜索框（点击唤起
- * 命令面板，非输入框）+ 快捷入口（「最近」/「我的资料」，前者左侧带
- * 侧栏收展切换按钮，后者带「+」新建）+ 根的子层文件夹树。树数据
- * libraryTree 全量平铺经 buildFolderTree 组嵌套；选中文件夹即主区
- * 导航；folder 视图祖先链自动展开保证选中项可见。收起态窄条顶部是
- * 同一切换按钮的展开形态（收/展始终一处入口）。
+ * 命令面板，非输入框）+ 快捷入口（「最近」/「我的资料」，后者带「+」
+ * 新建）+ 根的子层文件夹树。树数据 libraryTree 全量平铺经
+ * buildFolderTree 组嵌套；选中文件夹即主区导航；folder 视图祖先链
+ * 自动展开保证选中项可见。收/展切换按钮在主区标题行左侧，收起态
+ * 窄条顶部为同源展开形态（收/展始终一处入口）。
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,6 @@ import {
   Clock,
   Folder,
   FolderOpen,
-  PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Search,
@@ -29,7 +28,7 @@ import {
 
 interface LibrarySidebarTreeProps {
   collapsed: boolean;
-  /** 侧栏收/展切换（展开态按钮在「最近」左侧，收起态在窄条顶部） */
+  /** 窄条顶部展开按钮（收/展切换按钮在主区标题行左侧，同源 toggle） */
   onToggleCollapse: () => void;
   /** 主区当前视图路由；folder 态选中项高亮，recent 态无选中 */
   view: LibraryViewRoute;
@@ -152,38 +151,20 @@ export default function LibrarySidebarTree({
           <span>{t("chat:library.commandPlaceholder")}</span>
         </button>
       </div>
-      {/* 快捷入口：最近（左侧带收展切换按钮）/ 我的资料（带「+」新建） */}
+      {/* 快捷入口：最近 / 我的资料（后者带「+」新建） */}
       <div className="space-y-0.5 px-1.5">
-        {/* 外层 div + 切换/导航两个平级 button（HTML 禁 button 嵌套，
-            同下方「我的资料」行模式） */}
-        <div
-          className={`flex items-center rounded-md text-sm ${
+        <button
+          type="button"
+          onClick={() => onSelectView({ type: "recent" })}
+          className={`flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-sm ${
             view.type === "recent"
               ? "bg-primary-subtle text-primary"
               : "text-foreground hover:bg-primary-subtle hover:text-primary"
           }`}
         >
-          {/* 收/展单按钮（用户裁定）：与窄条顶部展开按钮同源，均走
-              onToggleCollapse 切向另一态；常显 muted 灰不依赖行色，
-              避免过淡看不见（窄条按钮同风格） */}
-          <button
-            type="button"
-            title={t("chat:library.collapseSidebar")}
-            aria-label={t("chat:library.collapseSidebar")}
-            className="ml-0.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-            onClick={onToggleCollapse}
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-1.5 px-1.5 py-1 text-left"
-            onClick={() => onSelectView({ type: "recent" })}
-          >
-            <Clock className="h-4 w-4 shrink-0" />
-            <span className="truncate">{t("chat:library.recentEntry")}</span>
-          </button>
-        </div>
+          <Clock className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t("chat:library.recentEntry")}</span>
+        </button>
         <div
           className={`flex items-center rounded-md text-sm ${
             view.type === "folder"

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { PanelLeftClose, Upload } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Upload } from "lucide-react";
 
 import PageTitle from "@/components/layout/PageTitle";
 import { Button } from "@/components/ui/button";
@@ -316,26 +316,37 @@ export default function LibraryView() {
     >
       <LibrarySidebarTree
         collapsed={treeCollapsed}
-        onToggleCollapse={() => setTreeCollapsed((v) => !v)}
         view={view}
         onSelectView={handleSelectView}
         onOpenSearch={() => setCommandOpen(true)}
         onCreateFolder={() => setDialog({ mode: "createFolder" })}
       />
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden p-4">
-        {/* 收/展切换按钮在标题左侧（用户裁定单按钮，收起态窄条顶部
-            为同源展开形态） */}
+        {/* 收/展唯一开关（用户裁定）：随收/展换图标换文案；收起态窄条
+            内不再有展开按钮 */}
         <PageTitle
           title={pageTitle}
           leading={
             <button
               type="button"
-              title={t("chat:library.collapseSidebar")}
-              aria-label={t("chat:library.collapseSidebar")}
+              title={
+                treeCollapsed
+                  ? t("chat:library.expandSidebar")
+                  : t("chat:library.collapseSidebar")
+              }
+              aria-label={
+                treeCollapsed
+                  ? t("chat:library.expandSidebar")
+                  : t("chat:library.collapseSidebar")
+              }
               className="rounded-md p-1 hover:bg-primary-foreground/20"
               onClick={() => setTreeCollapsed((v) => !v)}
             >
-              <PanelLeftClose className="h-4 w-4" />
+              {treeCollapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
             </button>
           }
         />

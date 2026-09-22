@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
  * 资料库中间面板（树形栏）收起/展开回归测试：state 提升在
- * LibraryView——完整渲染走真实交互（点主区标题行左侧的收展切换
- * 按钮（单 toggle，PageTitle leading 槽；树栏内无此按钮）→ 窄条 →
- * 点窄条置顶的同源按钮展开形态 → 回展开态）。mock 骨架同
- * tests/layout/main-layout.test.tsx：i18n 直返 key、LibraryApi/invoke
- * stub。
+ * LibraryView——完整渲染走真实交互（点主区标题行左侧的收展开关
+ * （唯一入口，PageTitle leading 槽，随态换 label/图标；收起态窄条
+ * 无展开按钮——用户裁定多余）→ 窄条 → 再点同开关的展开形态 → 回
+ * 展开态）。mock 骨架同 tests/layout/main-layout.test.tsx：i18n
+ * 直返 key、LibraryApi/invoke stub。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -63,11 +63,11 @@ function renderView() {
 afterEach(cleanup);
 
 describe("资料库树形栏收起/展开", () => {
-  it("点主区标题行左侧切换按钮收起成窄条，再点窄条置顶按钮回展开态", async () => {
+  it("点主区标题行左侧开关收起成窄条，窄条无展开按钮，再点同开关展开", async () => {
     renderView();
 
-    // 展开态 → 收起按钮（toggle 的收起形态）在主区标题行标题左侧，
-    // 树栏内不再有
+    // 展开态 → 收起按钮（开关的收起形态）在主区标题行标题左侧，
+    // 树栏内无此按钮
     const sidebar = await screen.findByTestId("library-sidebar");
     const collapseBtn = await screen.findByLabelText(
       "chat:library.collapseSidebar",
@@ -76,20 +76,21 @@ describe("资料库树形栏收起/展开", () => {
       within(sidebar).queryByLabelText("chat:library.collapseSidebar"),
     ).toBeNull();
     fireEvent.click(collapseBtn);
-    // 收起态 → 同一 toggle 的展开形态须在窄条首位（贴底 mt-auto 曾导致用户找不到入口）
-    const rail = screen.getByTestId("library-sidebar-collapsed");
-    const expandBtn = screen.getByLabelText("chat:library.expandSidebar");
-    expect(rail.querySelector("button")).toBe(expandBtn);
-    expect(rail.lastElementChild).not.toBe(expandBtn);
 
-    // 收起态 → 点「展开侧边栏」
+    // 收起态 → 窄条仅剩搜索入口（展开按钮已按用户裁定移除）；
+    // 同一开关在主区标题行换为展开形态（唯一展开入口）
+    const rail = screen.getByTestId("library-sidebar-collapsed");
+    expect(
+      within(rail).queryByLabelText("chat:library.expandSidebar"),
+    ).toBeNull();
+    const expandBtn = screen.getByLabelText("chat:library.expandSidebar");
+    expect(rail.contains(expandBtn)).toBe(false);
     fireEvent.click(expandBtn);
+
+    // 回展开态：开关换回收起形态，可再次收起
     await waitFor(() => {
       expect(screen.queryByTestId("library-sidebar-collapsed")).toBeNull();
     });
-    // 收起按钮回到主区标题行（单按钮 toggle，可再次收起）
-    expect(
-      await screen.findByLabelText("chat:library.collapseSidebar"),
-    ).toBeTruthy();
+    expect(screen.getByLabelText("chat:library.collapseSidebar")).toBeTruthy();
   });
 });

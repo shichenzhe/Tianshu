@@ -3,8 +3,8 @@
  * 命令面板，非输入框）+ 快捷入口（「最近」/「我的资料」，后者带「+」
  * 新建）+ 根的子层文件夹树。树数据 libraryTree 全量平铺经
  * buildFolderTree 组嵌套；选中文件夹即主区导航；folder 视图祖先链
- * 自动展开保证选中项可见。收/展切换按钮在主区标题行左侧，收起态
- * 窄条顶部为同源展开形态（收/展始终一处入口）。
+ * 自动展开保证选中项可见。收/展单按钮在主区标题行左侧（唯一入口，
+ * 随收/展换图标）；收起态窄条仅保留搜索入口。
  */
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,6 @@ import {
   Clock,
   Folder,
   FolderOpen,
-  PanelLeftOpen,
   Plus,
   Search,
 } from "lucide-react";
@@ -28,8 +27,6 @@ import {
 
 interface LibrarySidebarTreeProps {
   collapsed: boolean;
-  /** 窄条顶部展开按钮（收/展切换按钮在主区标题行左侧，同源 toggle） */
-  onToggleCollapse: () => void;
   /** 主区当前视图路由；folder 态选中项高亮，recent 态无选中 */
   view: LibraryViewRoute;
   onSelectView: (view: LibraryViewRoute) => void;
@@ -44,7 +41,6 @@ const ICON_BTN =
 
 export default function LibrarySidebarTree({
   collapsed,
-  onToggleCollapse,
   view,
   onSelectView,
   onOpenSearch,
@@ -107,17 +103,8 @@ export default function LibrarySidebarTree({
         data-testid="library-sidebar-collapsed"
         className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-border/50 py-2"
       >
-        {/* 展开按钮置顶：贴底（mt-auto）时用户收起后找不到入口，
-            误以为无法展开 */}
-        <button
-          type="button"
-          title={t("chat:library.expandSidebar")}
-          aria-label={t("chat:library.expandSidebar")}
-          className={ICON_BTN}
-          onClick={onToggleCollapse}
-        >
-          <PanelLeftOpen className="h-4 w-4" />
-        </button>
+        {/* 窄条仅保留搜索入口：收/展唯一开关在主区标题行左侧（随收/展
+            换向），窄条内展开按钮已按用户裁定移除 */}
         <button
           type="button"
           title={t("chat:library.searchLabel")}

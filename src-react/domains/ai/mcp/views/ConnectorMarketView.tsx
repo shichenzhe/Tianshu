@@ -1,11 +1,11 @@
 /**
- * 连接器市场：工具栏（搜索 / 自定义连接器→结构化表单 / 配置 MCP→管理弹窗）
- * + 24 卡片响应式网格（2/3/4 列）。已添加判定：DB name === 市场 id
+ * 连接器市场：工具栏（搜索 / 自定义连接器→管理弹窗）+ 24 卡片响应式
+ * 网格（2/3/4 列）。已添加判定：DB name === 市场 id
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, Search, Settings2 } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,6 @@ import {
 } from "../lib/market-connectors";
 import ConnectorCard from "../components/ConnectorCard";
 import McpManageDialog from "../components/McpManageDialog";
-import McpServerDialog from "../components/McpServerDialog";
 
 const SERVERS_KEY = ["mcpServers"] as const;
 
@@ -29,7 +28,6 @@ export default function ConnectorMarketView() {
   const [manageTemplate, setManageTemplate] = useState<
     Record<string, McpServerJsonEntry> | undefined
   >();
-  const [customOpen, setCustomOpen] = useState(false);
 
   const serversQuery = useQuery({
     queryKey: SERVERS_KEY,
@@ -78,18 +76,10 @@ export default function ConnectorMarketView() {
         <Button
           variant="outline"
           className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-          onClick={() => setCustomOpen(true)}
+          onClick={() => openManage()}
         >
           <Plus className="mr-1 h-4 w-4" />
           {t("ai:mcp.market.customConnector")}
-        </Button>
-        <Button
-          variant="outline"
-          className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-          onClick={() => openManage()}
-        >
-          <Settings2 className="mr-1 h-4 w-4" />
-          {t("ai:mcp.market.configureMcp")}
         </Button>
       </div>
 
@@ -115,7 +105,6 @@ export default function ConnectorMarketView() {
         onOpenChange={setManageOpen}
         initialTemplate={manageTemplate}
       />
-      <McpServerDialog open={customOpen} onOpenChange={setCustomOpen} />
     </div>
   );
 }

@@ -132,7 +132,6 @@
     "market": {
       "searchPlaceholder": "Search connectors",
       "customConnector": "Custom connector",
-      "configureMcp": "Configure MCP",
       "added": "Added",
       "add": "Add",
       "hub": "MCP Hub",

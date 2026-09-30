@@ -132,7 +132,6 @@
     "market": {
       "searchPlaceholder": "搜索连接器",
       "customConnector": "自定义连接器",
-      "configureMcp": "配置 MCP",
       "added": "已添加",
       "add": "添加",
       "hub": "MCP Hub",

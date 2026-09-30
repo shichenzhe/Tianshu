@@ -1,5 +1,6 @@
 /**
  * 代码块：shiki 双主题高亮（懒加载，语言按需注册）
+ * getHighlighter：共享（CodeBlock 与 JsonConfigEditor 复用）
  *
  * shiki 4.x API 说明（已核对 node_modules 类型定义）：
  * - createHighlighter 的 langs 默认 []，后续语言用 highlighter.loadLanguage() 补充注册
@@ -21,7 +22,9 @@ const loadedLangs = new Set<string>();
  * 获取共享 highlighter，并确保目标语言已注册。
  * 未知语言或初始化失败返回 null（回退纯文本渲染）；失败不缓存 rejection，下次可重试。
  */
-async function getHighlighter(lang: string): Promise<Highlighter | null> {
+export async function getHighlighter(
+  lang: string,
+): Promise<Highlighter | null> {
   try {
     const { createHighlighter, bundledLanguages } = await import("shiki");
     highlighterPromise ??= createHighlighter({

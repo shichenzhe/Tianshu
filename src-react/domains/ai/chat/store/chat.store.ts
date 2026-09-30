@@ -41,8 +41,6 @@ function definedPatch(
 interface ChatStore {
   streams: Record<number, StreamContent>;
   isStreaming: Record<number, boolean>;
-  /** 每会话发送版本号：底栏成功发送后自增（编辑态持有方订阅以丢弃过期编辑） */
-  sendVersions: Record<number, number>;
   startStream: (sessionId: number) => void;
   setStreamContent: (sessionId: number, content: StreamContent) => void;
   appendDelta: (
@@ -57,14 +55,11 @@ interface ChatStore {
     patch: Partial<ToolStreamState> & { toolName: string },
   ) => void;
   finishStream: (sessionId: number) => void;
-  /** 成功发送广播：版本 +1（动态流面板订阅后退出过期编辑态，非流式临时态、不随流结束清除） */
-  bumpSendVersion: (sessionId: number) => void;
 }
 
 export const useChatStore = create<ChatStore>((set) => ({
   streams: {},
   isStreaming: {},
-  sendVersions: {},
   startStream: (sessionId) =>
     set((state) => ({
       isStreaming: { ...state.isStreaming, [sessionId]: true },
@@ -132,11 +127,4 @@ export const useChatStore = create<ChatStore>((set) => ({
       delete isStreaming[sessionId];
       return { streams, isStreaming };
     }),
-  bumpSendVersion: (sessionId) =>
-    set((state) => ({
-      sendVersions: {
-        ...state.sendVersions,
-        [sessionId]: (state.sendVersions[sessionId] ?? 0) + 1,
-      },
-    })),
 }));

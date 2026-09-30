@@ -60,10 +60,6 @@ interface PlusMenuProps {
   sessionId: number;
   currentMode: SessionMode;
   currentAssistantId?: number;
-  /** 项目动态流：仅展示已挂载专家（透传为专家子菜单 allowedIds）；未传不过滤 */
-  boundAssistantIds?: number[];
-  /** 项目动态流：仅展示已挂载技能（透传为技能子菜单 allowedNames）；未传不过滤 */
-  boundSkillNames?: string[];
   /** 项目底栏本地任务开关（T8）：传入时在模式子菜单后渲染开关项；
       未传不渲染（AI 模块 ChatView 零改动） */
   localTask?: LocalTaskToggle;
@@ -87,8 +83,6 @@ export default function PlusMenu({
   sessionId,
   currentMode,
   currentAssistantId,
-  boundAssistantIds,
-  boundSkillNames,
   localTask,
   onPickPaths,
   onPickLibraryFiles,
@@ -220,12 +214,8 @@ export default function PlusMenu({
           <ExpertSubMenu
             sessionId={sessionId}
             currentAssistantId={currentAssistantId}
-            allowedIds={boundAssistantIds}
           />
-          <SkillSubMenu
-            onImport={handleImportSkill}
-            allowedNames={boundSkillNames}
-          />
+          <SkillSubMenu onImport={handleImportSkill} />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onOpenMcp}>
             <Plug />

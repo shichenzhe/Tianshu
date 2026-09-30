@@ -4,7 +4,8 @@
  * setBindings 全量替换、getDetail 一期旧项目资产空间自愈（二期 spec §3.2）、
  * listMembers 成员列表（joinedAt 序 + join user 昵称回退，三期子系统 A）、
  * remove 级联清计划事项附件关联（v6：按事项 id 集删，先于 planItem 删除）、
- * remove 级联清项目定时任务（子系统 E：projectId 精确匹配，全局任务不受影响）。
+ * remove 级联清项目定时任务（子系统 E：projectId 精确匹配，全局任务不受影响）、
+ * list 主会话 D2 定序（createdAt 最早，多会话语义稳定）。
  * 依赖经 vi.mock 替换（electron ipcMain+app / Log / node:fs/promises /
  * prisma client），沿用 personalization-repo.test.ts 的 mock 模式。
  */
@@ -437,6 +438,65 @@ describe("ProjectRepository.getDetail（一期旧项目自愈）", () => {
     prismaStub.session.findFirst.mockResolvedValue(null);
     await expect(repo.getDetail(99, UID)).rejects.toThrow(PROJECT_NOT_FOUND);
     expect(prismaStub.workspace.create).not.toHaveBeenCalled();
+  });
+
+  it("项目会话被删光 → 自愈重建主会话（D10：title=项目名、无欢迎消息、继承最近模型），不再 404", async () => {
+    prismaStub.project.findUnique.mockResolvedValue(projectRow);
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      id: 30,
+      directoryPath: assetsDir(11),
+      projectId: 11,
+    });
+    // 主会话查询无命中 → 触发自愈；随后为模型继承查询（命中 42）
+    prismaStub.session.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ currentModelId: 42 });
+    prismaStub.session.create.mockResolvedValue({ id: 99, projectId: 11 });
+    prismaStub.projectBinding.findMany.mockResolvedValue([]);
+
+    const detail = await repo.getDetail(11, UID);
+
+    expect(prismaStub.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          projectId: 11,
+          workspaceId: 30,
+          title: "旧项目",
+          currentModelId: 42,
+          userId: UID,
+        },
+      }),
+    );
+    // 不传 welcomeMessage：不写欢迎 message
+    expect(prismaStub.message.create).not.toHaveBeenCalled();
+    expect(detail.project.sessionId).toBe(99);
+  });
+});
+
+describe("ProjectRepository.list（主会话 D2 定序）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("主会话按 createdAt 升序取最早——多会话后仍指向项目创建时建的那条", async () => {
+    prismaStub.project.findMany.mockResolvedValue([
+      {
+        id: 11,
+        name: "p",
+        systemPrompt: null,
+        templateKey: null,
+        ownerId: UID,
+        createdAt: new Date("2026-09-01T00:00:00Z"),
+        updatedAt: new Date("2026-09-02T00:00:00Z"),
+      },
+    ]);
+    prismaStub.session.findFirst.mockResolvedValue({ id: 21 });
+
+    const rows = await repo.list(UID);
+
+    expect(prismaStub.session.findFirst).toHaveBeenCalledWith({
+      where: { projectId: 11 },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(rows[0].sessionId).toBe(21);
   });
 });
 

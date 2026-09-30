@@ -24,13 +24,24 @@ export interface SessionRecord {
   compactedUpToId?: number | null;
   /** 发起场景 daily|coding|design；缺省落 null */
   scenario?: string | null;
+  /** 会话归属项目；null = 普通会话（一期统一：项目/任务会话进会话域） */
+  projectId?: number | null;
+  /** 任务会话关联事项 id；null = 非任务会话（D1：一任务一会话由 create 查重保证） */
+  planItemId?: number | null;
 }
 
 export interface SessionCreateParams {
-  workspaceId: number;
+  /** 目标工作空间；projectId 非空时可缺省（后端解析项目资产空间） */
+  workspaceId?: number;
   assistantId?: number;
   /** 发起场景 daily|coding|design；缺省不落库 */
   scenario?: string;
+  /** 会话归属项目；非空时后端强制挂项目资产空间（防传错） */
+  projectId?: number;
+  /** 任务会话关联事项 id；非空时后端查重复用既有会话（一任务一会话） */
+  planItemId?: number;
+  /** 会话标题；缺省落「新会话」（任务会话由推进入口传任务标题） */
+  title?: string;
 }
 
 export interface MessageRecord {

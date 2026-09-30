@@ -90,13 +90,19 @@ function createWindow() {
       process.platform !== "darwin" && process.env.NODE_ENV === "development"
         ? "default"
         : "hidden",
+    // macOS 红绿灯垂直对齐 TopBar(h-11=44px) 内容行：钮径约 12px，
+    // y=16 使钮中心落在 22px——与 TopBar 左段按钮组（h-7 居中）同水平
+    // 线；x 取系统默认左缘。Windows 不适用（overlay 自绘）不传
+    ...(process.platform === "darwin"
+      ? { trafficLightPosition: { x: 13, y: 16 } }
+      : {}),
     titleBarOverlay:
       process.platform === "darwin"
         ? undefined
         : {
             color: "#ffffff", // 白色背景
             symbolColor: "#000000", // 黑色图标
-            height: 36, // 控制按钮高度，与前端 TopBar h-9 (36px) 保持一致
+            height: 44, // 控制按钮高度，与前端 TopBar h-11 (44px) 保持一致
           },
   });
 

@@ -1,6 +1,7 @@
 /**
  * 任务树主体（原 AiSidebar 主体拆出，全局侧边栏 GlobalSidebar 的 AI 侧内容）：
- * 空间分组任务树 + 批量管理 + 空间/任务对话框。
+ * 空间分组任务树 + 项目分组（一期会话统一 D4：项目/任务会话进会话域，
+ * 渲染在空间组之后）+ 批量管理 + 空间/任务对话框。
  * 任务选中态在 URL（?session=），当前空间由选中任务派生。
  */
 import { useMemo, useState } from "react";
@@ -14,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   FolderInput,
+  FolderKanban,
   ListChecks,
   MoreVertical,
   Pencil,
@@ -26,6 +28,7 @@ import {
 
 import { getDateFnsLocale } from "@/i18n";
 import { cn } from "@/lib/utils";
+import { useUserStore } from "@/domains/user/store/user.store";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,8 +59,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import WorkspaceApi, { type WorkspaceRecord } from "../../api/workspace.api";
 import SessionApi, { type SessionRecord } from "../../api/session.api";
+import ProjectApi from "@/domains/project/api/project.api";
 import {
   filterSessionsByTime,
+  projectSessionGroups,
   sortSessions,
 } from "../../chat/lib/session-list";
 import { mapIpcError } from "../../chat/lib/error-message";
@@ -80,7 +85,7 @@ type WorkspaceDialogState =
   | { mode: "rename"; name: string; workspaceId: number };
 
 export default function SessionTreePanel() {
-  const { t } = useTranslation(["chat", "common"]);
+  const { t } = useTranslation(["chat", "common", "project"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -90,6 +95,10 @@ export default function SessionTreePanel() {
 
   const [spacesOpen, setSpacesOpen] = useState(true);
   const [collapsedSpaces, setCollapsedSpaces] = useState<
+    Record<number, boolean>
+  >({});
+  // 项目组折叠态（与空间组同构，键为 projectId）
+  const [collapsedProjects, setCollapsedProjects] = useState<
     Record<number, boolean>
   >({});
   const [workspaceDialog, setWorkspaceDialog] =
@@ -119,13 +128,37 @@ export default function SessionTreePanel() {
     queryKey: ["sessions", "all"],
     queryFn: () => SessionApi.listAll(),
   });
+  // 项目组组名来源：与 hub 共用 ["projects", ownerId] 缓存
+  // （GlobalSidebar 常驻预热，「我的项目」区移除后由本体兼任，批 7）；失败/加载中不阻塞
+  // 空间组——组名兜底「已删除项目」，查询就绪后自然纠正
+  const user = useUserStore((state) => state.user);
+  const projectsQuery = useQuery({
+    queryKey: ["projects", user.id],
+    queryFn: () => ProjectApi.list(),
+  });
   const workspaces = workspacesQuery.data ?? [];
+  const projects = projectsQuery.data ?? [];
   // 渲染列表 = 时间筛选 + 排序（仅用于渲染，不参与空间派生）
   const sessions = useMemo(
     () =>
       sortSessions(filterSessionsByTime(sessionsQuery.data ?? [], timeFilter)),
     [sessionsQuery.data, timeFilter],
   );
+  // 项目分组（D4）：项目/任务会话按项目聚合，渲染在空间组之后
+  const projectGroups = useMemo(
+    () =>
+      projectSessionGroups(
+        sessions,
+        projects.map((p) => p.id),
+      ),
+    [sessions, projects],
+  );
+
+  /** 组名解析：项目已删（或项目查询未就绪）时兜底 i18n 文案——项目删除
+   *  正常会级联删会话，此为并发窗口与查询未就绪的防御 */
+  const projectNameOf = (projectId: number) =>
+    projects.find((p) => p.id === projectId)?.name ??
+    t("project:sidebar.deletedProject");
 
   const handleError = (e: unknown) => {
     toast.error(mapIpcError(e));
@@ -392,7 +425,11 @@ export default function SessionTreePanel() {
               key={workspace.id}
               workspace={workspace}
               collapsedGroup={collapsedSpaces[workspace.id] ?? false}
-              sessions={sessions.filter((s) => s.workspaceId === workspace.id)}
+              // projectId 判空守卫：项目会话（资产空间）不进空间组，
+              // 由下方项目组承接（资产空间本就不在 listWorkspaces 内，双保险）
+              sessions={sessions.filter(
+                (s) => s.projectId == null && s.workspaceId === workspace.id,
+              )}
               selectedSessionId={selectedSessionId}
               batchMode={batchMode}
               batchSelectedIds={selectedIds}
@@ -431,6 +468,41 @@ export default function SessionTreePanel() {
               onSessionPin={(s) => void handlePin(s)}
               onSessionArchive={(s) => void handleArchive(s)}
               onOpenFolder={() => void handleOpenFolder(workspace.id)}
+            />
+          ))}
+        {/* 项目分组（一期会话统一 D4）：项目/任务会话按项目聚合，
+            排在空间组之后，不改变空间组现有排序 */}
+        {spacesOpen &&
+          projectGroups.map((group) => (
+            <ProjectGroup
+              key={`project-${group.projectId}`}
+              projectId={group.projectId}
+              name={projectNameOf(group.projectId)}
+              sessions={group.sessions}
+              collapsedGroup={collapsedProjects[group.projectId] ?? false}
+              selectedSessionId={selectedSessionId}
+              batchMode={batchMode}
+              batchSelectedIds={selectedIds}
+              isStreaming={isStreaming}
+              onBatchToggleIds={toggleBatchIds}
+              onBatchEnter={() => setBatchMode(true)}
+              onToggleGroup={() =>
+                setCollapsedProjects((prev) => ({
+                  ...prev,
+                  [group.projectId]: !(prev[group.projectId] ?? false),
+                }))
+              }
+              onOpenProject={() =>
+                navigate(`/module/project/${group.projectId}`)
+              }
+              onSelect={selectSession}
+              onSessionRename={(session) => {
+                setSessionTitle(session.title);
+                setRenamingSession(session);
+              }}
+              onSessionDelete={(session) => setDeletingSession(session)}
+              onSessionPin={(s) => void handlePin(s)}
+              onSessionArchive={(s) => void handleArchive(s)}
             />
           ))}
       </div>
@@ -651,6 +723,50 @@ interface WorkspaceGroupProps {
   onOpenFolder: () => void;
 }
 
+interface GroupBatchCheckboxProps {
+  sessions: SessionRecord[];
+  selectedSessionId: number | null;
+  batchSelectedIds: Set<number>;
+  isStreaming: Record<string, boolean>;
+  /** 组名（复选框无障碍标签） */
+  label: string;
+  onToggleIds: (ids: number[], on: boolean) => void;
+}
+
+/** 组级批量复选框（空间/项目组共用）：勾选=组内可选会话全选，半选=部分（PRD 3.1） */
+function GroupBatchCheckbox({
+  sessions,
+  selectedSessionId,
+  batchSelectedIds,
+  isStreaming,
+  label,
+  onToggleIds,
+}: GroupBatchCheckboxProps) {
+  const selectableIds = sessions
+    .filter((s) => s.id !== selectedSessionId && !isStreaming[s.id])
+    .map((s) => s.id);
+  const selectedCount = selectableIds.filter((id) =>
+    batchSelectedIds.has(id),
+  ).length;
+  const checked: boolean | "indeterminate" =
+    selectableIds.length > 0 && selectedCount === selectableIds.length
+      ? true
+      : selectedCount > 0
+        ? "indeterminate"
+        : false;
+  return (
+    <Checkbox
+      checked={checked}
+      onCheckedChange={() =>
+        onToggleIds(selectableIds, selectedCount !== selectableIds.length)
+      }
+      disabled={selectableIds.length === 0}
+      aria-label={label}
+      className="mr-1.5 shrink-0"
+    />
+  );
+}
+
 /** 单空间分组：标题行（折叠钮 + 空间名 + 悬停 +/...）+ 任务列表 */
 function WorkspaceGroup({
   workspace,
@@ -677,37 +793,19 @@ function WorkspaceGroup({
   onOpenFolder,
 }: WorkspaceGroupProps) {
   const { t } = useTranslation(["chat", "common"]);
-  // 组级复选框（PRD 3.1 父级联动）：勾选=组内可选会话全选；半选=部分
-  const groupSelectableIds = sessions
-    .filter((s) => s.id !== selectedSessionId && !isStreaming[s.id])
-    .map((s) => s.id);
-  const groupSelectedCount = groupSelectableIds.filter((id) =>
-    batchSelectedIds.has(id),
-  ).length;
-  const groupChecked: boolean | "indeterminate" =
-    groupSelectableIds.length > 0 &&
-    groupSelectedCount === groupSelectableIds.length
-      ? true
-      : groupSelectedCount > 0
-        ? "indeterminate"
-        : false;
 
   return (
     // pl-3 缩进：与顶层「空间」标题拉开层级（任务行在其内再缩 ml-2）
     <div className="group/workspace mt-1 pl-3">
       <div className="relative flex items-center">
         {batchMode && (
-          <Checkbox
-            checked={groupChecked}
-            onCheckedChange={() =>
-              onBatchToggleIds(
-                groupSelectableIds,
-                groupSelectedCount !== groupSelectableIds.length,
-              )
-            }
-            disabled={groupSelectableIds.length === 0}
-            aria-label={workspace.name}
-            className="mr-1.5 shrink-0"
+          <GroupBatchCheckbox
+            sessions={sessions}
+            selectedSessionId={selectedSessionId}
+            batchSelectedIds={batchSelectedIds}
+            isStreaming={isStreaming}
+            label={workspace.name}
+            onToggleIds={onBatchToggleIds}
           />
         )}
         <button
@@ -790,6 +888,136 @@ function WorkspaceGroup({
   );
 }
 
+interface ProjectGroupProps {
+  projectId: number;
+  /** 组名（项目名；已删/查询未就绪时为兜底文案，由父组件解析） */
+  name: string;
+  collapsedGroup: boolean;
+  sessions: SessionRecord[];
+  selectedSessionId: number | null;
+  batchMode: boolean;
+  batchSelectedIds: Set<number>;
+  isStreaming: Record<string, boolean>;
+  onBatchToggleIds: (ids: number[], on: boolean) => void;
+  /** 菜单「批量操作」入口：进入批量模式 */
+  onBatchEnter: () => void;
+  onToggleGroup: () => void;
+  /** 组名区点击 → 进入项目页（二期批 7 D8：项目导航并入任务树组头） */
+  onOpenProject: () => void;
+  onSelect: (sessionId: number) => void;
+  onSessionRename: (session: SessionRecord) => void;
+  onSessionDelete: (session: SessionRecord) => void;
+  onSessionPin: (session: SessionRecord) => void;
+  onSessionArchive: (session: SessionRecord) => void;
+}
+
+/**
+ * 项目分组（一期会话统一 D4）：与空间组同构可折叠，行操作复用
+ * TaskTreeItem（选中/重命名/删除/置顶/归档/批量）；无空间管理钮——
+ * 新建任务与目录绑定属项目域（资产空间）职责，不在会话树挂入口。
+ * 二期批 7 D8：组名区点击进项目页（折叠钮独立，两者事件天然隔离）
+ */
+function ProjectGroup({
+  projectId,
+  name,
+  collapsedGroup,
+  sessions,
+  selectedSessionId,
+  batchMode,
+  batchSelectedIds,
+  isStreaming,
+  onBatchToggleIds,
+  onBatchEnter,
+  onToggleGroup,
+  onOpenProject,
+  onSelect,
+  onSessionRename,
+  onSessionDelete,
+  onSessionPin,
+  onSessionArchive,
+}: ProjectGroupProps) {
+  const { t } = useTranslation(["chat", "project"]);
+  return (
+    <div className="group/project mt-1 pl-3">
+      <div className="relative flex items-center">
+        {batchMode && (
+          <GroupBatchCheckbox
+            sessions={sessions}
+            selectedSessionId={selectedSessionId}
+            batchSelectedIds={batchSelectedIds}
+            isStreaming={isStreaming}
+            label={name}
+            onToggleIds={onBatchToggleIds}
+          />
+        )}
+        {/* 折叠钮独立：点按仅折叠/展开（aria-expanded 表状态，title 沿组名） */}
+        <button
+          type="button"
+          className="flex shrink-0 items-center rounded-md py-1 pl-1 text-foreground/90 hover:bg-primary-subtle/60"
+          onClick={onToggleGroup}
+          aria-expanded={!collapsedGroup}
+          aria-controls={`project-group-${projectId}`}
+          aria-label={name}
+        >
+          {collapsedGroup ? (
+            <ChevronRight
+              size={14}
+              className="shrink-0 text-muted-foreground"
+            />
+          ) : (
+            <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
+          )}
+        </button>
+        {/* 组名区点击进项目页（批 7 D8）：title 悬停提示；可及名加动作
+            后缀与折叠钮（aria-label=组名）区分 */}
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pr-1 text-left text-sm text-foreground/90 hover:bg-primary-subtle/60"
+          onClick={onOpenProject}
+          title={t("project:sidebar.enterProject")}
+          aria-label={`${name} · ${t("project:sidebar.enterProject")}`}
+        >
+          <FolderKanban
+            size={14}
+            className="shrink-0 text-muted-foreground"
+            aria-hidden
+          />
+          <span className="truncate">{name}</span>
+        </button>
+      </div>
+      {!collapsedGroup && (
+        <div id={`project-group-${projectId}`} className="ml-2">
+          {sessions.map((session) => (
+            <TaskTreeItem
+              key={session.id}
+              session={session}
+              selected={session.id === selectedSessionId}
+              batchMode={batchMode}
+              batchChecked={batchSelectedIds.has(session.id)}
+              batchDisabled={
+                session.id === selectedSessionId ||
+                Boolean(isStreaming[session.id])
+              }
+              onBatchToggle={() =>
+                onBatchToggleIds(
+                  [session.id],
+                  !batchSelectedIds.has(session.id),
+                )
+              }
+              onBatchEnter={onBatchEnter}
+              onSelect={() => onSelect(session.id)}
+              onRename={() => onSessionRename(session)}
+              onDelete={() => onSessionDelete(session)}
+              onPin={() => onSessionPin(session)}
+              onArchive={() => onSessionArchive(session)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface TaskTreeItemProps {
   session: SessionRecord;
   workspaceDirectoryPath?: string;
@@ -807,7 +1035,8 @@ interface TaskTreeItemProps {
   onDelete: () => void;
   onPin: () => void;
   onArchive: () => void;
-  onOpenFolder: () => void;
+  /** 打开空间绑定目录；项目组行不传（资产空间目录不在树数据内，菜单项随之禁用） */
+  onOpenFolder?: () => void;
 }
 
 /** 任务项：标题+相对时间；悬停出 .../归档/置顶 快捷钮；流式中显示绿点；

@@ -9,6 +9,7 @@ import { generateText } from "ai";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { parseBlocks } from "../chat/blocks";
+import { formatTimeContext } from "../chat/time-context";
 import { createLanguageModel } from "../provider/provider-factory";
 import type { ProviderRuntimeInfo } from "../provider/provider-factory";
 import {
@@ -280,9 +281,16 @@ export async function compileMemory(
       });
       return result.text;
     });
-  const prompt = opts.instructionMode
-    ? buildInstructionUserPrompt(opts.currentMemory, opts.material)
-    : buildCompileUserPrompt(opts.currentMemory, opts.material);
+  // prompt 头部注入时间行：条目格式 [YYYY-MM-DD]/近期动态倒序/淘汰
+  // 过时内容都需要「今天」基准（模型无时钟，缺基准时只能凭训练期的
+  // 静态时间感猜日期）。与 chat 注入同一原则：时间放 user prompt
+  //（每请求唯一变化部分），system 保持逐字节稳定（前缀缓存考量见
+  // time-context 头注释）
+  const prompt = `当前时间：${formatTimeContext(new Date())}\n\n${
+    opts.instructionMode
+      ? buildInstructionUserPrompt(opts.currentMemory, opts.material)
+      : buildCompileUserPrompt(opts.currentMemory, opts.material)
+  }`;
   const raw = await modelText(
     MEMORY_COMPILER_SYSTEM_PROMPT,
     prompt,

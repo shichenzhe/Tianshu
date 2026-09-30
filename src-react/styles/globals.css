@@ -86,6 +86,16 @@
   --color-ring: hsl(18 65% 60%);
 }
 
+/* 应用 Logo 品牌色：固定绿色主题主色，不随 hue 主题切换；
+   值与 [data-theme="green"]（亮色）及 skins.css 暗色 green 特例同步维护 */
+.app-logo {
+  --logo-primary: hsl(150 60% 40%);
+}
+
+[data-mode="dark"] .app-logo {
+  --logo-primary: hsl(150 55% 47%);
+}
+
 /* =====================================================
    字体系统
    避免常见字体（Inter、Roboto、Arial）

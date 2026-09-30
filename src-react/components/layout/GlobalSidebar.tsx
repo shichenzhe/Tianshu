@@ -1,8 +1,9 @@
 /**
  * 全局侧边栏（所有 /module/* 路由共用，MainLayout 渲染）：
  * 壳（w-64 右边框 + macOS Logo 区）+ 功能入口（新建任务/项目/专家/自动化/
- * 资料库，路由命中高亮）+ 主体区随模块切换——项目模块渲染项目列表，
- * 其余渲染 AI 空间分组任务树（SessionTreePanel）。
+ * 资料库，路由命中高亮）+ 主体区空间分组任务树（SessionTreePanel，二期
+ * 批 7 D8「我的项目」区移除——项目导航 = 顶部 nav「项目」+ 任务树项目组
+ * 组头点击进入）+ 底部用户区（UserMenu，含语言切换，原顶栏右上角移入）。
  * 布局级快捷键分发（useAiLayoutKeybindings）在此挂载（原 AiLayout 职责迁入）。
  */
 import { useTranslation } from "react-i18next";
@@ -21,8 +22,10 @@ import AppLogo from "@/components/common/AppLogo";
 import SessionTreePanel from "@/domains/ai/layout/components/SessionTreePanel";
 import { useAiLayoutKeybindings } from "@/domains/ai/layout/hooks/use-ai-layout-keybindings";
 import WorkspaceApi from "@/domains/ai/api/workspace.api";
+import ProjectApi from "@/domains/project/api/project.api";
 import { useAiUiStore } from "@/domains/ai/store/ai-ui.store";
-import ProjectSidebarList from "@/domains/project/components/ProjectSidebarList";
+import { useUserStore } from "@/domains/user/store/user.store";
+import UserMenu from "./UserMenu";
 
 export default function GlobalSidebar() {
   useAiLayoutKeybindings();
@@ -30,6 +33,7 @@ export default function GlobalSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const collapsed = useAiUiStore((s) => s.sidebarCollapsed);
+  const user = useUserStore((state) => state.user);
   const isMac = window.platform === "darwin";
 
   const isProjectRoute = location.pathname.startsWith("/module/project");
@@ -40,6 +44,14 @@ export default function GlobalSidebar() {
   useQuery({
     queryKey: ["workspaces"],
     queryFn: () => WorkspaceApi.list(),
+  });
+
+  /** 项目列表预热（key 与 SessionTreePanel/ChatView 面包屑一致）：
+   *  「我的项目」区移除后（批 7 D8）由本体兼任原 ProjectSidebarList 的
+   *  预热职责，保证任务树项目组名与面包屑的项目名数据源不空 */
+  useQuery({
+    queryKey: ["projects", user.id],
+    queryFn: () => ProjectApi.list(),
   });
 
   /** 新建任务：进入 /module/ai/new 落地页（发送时才创建会话） */
@@ -116,14 +128,15 @@ export default function GlobalSidebar() {
           ))}
         </div>
 
-        {/* 主体区分区滚动：我的项目（限高自滚，不挤压空间区）+ 空间分组
-            任务树（占剩余高度独立滚动）——任一列表再长另一区始终可见 */}
-        <div className="flex min-h-0 flex-1 flex-col">
-          {/* 收展仅由外层 aside 宽度裁切完成（组件内容常驻，避免动画闪动） */}
-          <ProjectSidebarList />
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <SessionTreePanel />
-          </div>
+        {/* 主体区：空间分组任务树独占（「我的项目」区已移除，批 7 D8；
+            收展仅由外层 aside 宽度裁切完成，内容常驻避免动画闪动） */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <SessionTreePanel />
+        </div>
+
+        {/* 用户区（原顶栏右上角移入）：菜单含语言切换，向上弹出 */}
+        <div className="shrink-0 border-t border-border/50 p-2">
+          <UserMenu />
         </div>
       </div>
     </aside>

@@ -1,20 +1,18 @@
 // @vitest-environment jsdom
 /**
- * ProjectChatBar 底栏测试（jsdom + testing-library；mock 骨架同
- * tests/ai/chat-view-edit-optimistic.test.tsx + tests/project/project-workspace.test.tsx，
- * t 直接返回 key）：
+ * ProjectChatBar 快速发起条测试（批 3 一期会话统一 D3；jsdom +
+ * testing-library；mock 骨架同 tests/ai/chat-view-edit-optimistic.test.tsx +
+ * tests/project/project-workspace.test.tsx，t 直接返回 key）：
  * - ChatInput stub 捕获 props：sessionId=detail.session.id、
- *   workspaceId=detail.assetWorkspaceId、boundAssistantIds/boundSkillNames
- *   过滤（同 ActivityPane 原逻辑——仅 valid 项、技能按 itemName）
+ *   workspaceId=detail.assetWorkspaceId（能力不做挂载过滤——预设≠围墙）
  * - placeholder 有生效模型传 project:chatBar.placeholder、无模型不传
- *   （ChatInput 自身回退 modelRequired 提示，渲染断言在
- *   tests/ai/chat-input-todo.test.tsx 占位回退用例）（t mock 返回 key）
- * - onSend('hi', []) → ChatApi.send 被调（经 useChatSend 真实例链路）；
- *   文件/技能引用按 ChatPane 同语义注入前缀块
- * - 成功发送 → chat.store 发送版本 +1（ActivityPane 订阅丢弃过期编辑态）；
- *   失败不递增 + toast 兜底
- * - sending（chat.store isStreaming）→ AgentProgress stub 出现/消失
- * ChatApi 模块级 mock（含 onChatStream 空订阅），chat.store 用真实实现
+ * - 发送受理即跳转 /module/ai?session=<id>（不等流结束——chat:send 至流末
+ *   才 resolve；sendVersions 机制已随 ActivityPane 删除移除，批 6 清理）
+ * - 计划缓存失效改一次性流结束监听（finish/error chunk 失效并自解绑）——
+ *   替代原 prevSendingRef effect（跳转卸载后组件 effect 不可观测）
+ * - 发送失败 → toast 兜底恰一次 + rethrow（ChatInput void catch 链）
+ * - AgentProgress 与审批横幅不再渲染（mock/store 预置探测，防回归）
+ * ChatApi 模块级 mock（onChatStream 捕获监听可发 chunk），chat.store 真实实现
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -28,10 +26,12 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 
-/** 位置探针：读取当前 search（「查看上下文」跳转断言用） */
+/** 位置探针：读取当前 pathname+search（跳转断言用） */
 function LocationProbe() {
   const location = useLocation();
-  return <div data-testid="location">{location.search}</div>;
+  return (
+    <div data-testid="location">{`${location.pathname}${location.search}`}</div>
+  );
 }
 
 // localStorage stub：模块加载链上的 store 在 Node 环境访问原生全局会打
@@ -66,8 +66,21 @@ vi.mock("react-i18next", async (importOriginal) => {
 const toastMock = vi.hoisted(() => ({ error: vi.fn(), info: vi.fn() }));
 vi.mock("sonner", () => ({ toast: toastMock }));
 
-// ChatApi mock：send/status/getPermission 等全量替身；onChatStream 返回空
-// 卸载函数（useChatSend 真实例挂载时订阅流，隔离真实 IPC）
+// onChatStream 监听捕获：按 sessionId 多监听共存（组件 useChatSend 实例与
+// 发送时挂的计划缓存失效监听各一份），emit 模拟主进程推 chunk
+const streamMock = vi.hoisted(() => {
+  const listeners = new Map<number, Set<(chunk: unknown) => void>>();
+  return {
+    listeners,
+    emit: (sessionId: number, chunk: unknown) => {
+      for (const listener of listeners.get(sessionId) ?? []) {
+        listener(chunk);
+      }
+    },
+  };
+});
+
+// ChatApi mock：send/status/getPermission 等全量替身
 const chatApiMock = vi.hoisted(() => ({
   status: vi.fn(),
   send: vi.fn(),
@@ -86,7 +99,14 @@ vi.mock("@/domains/ai/api/chat.api", async (importOriginal) => {
   return {
     ...actual,
     default: chatApiMock,
-    onChatStream: () => () => {},
+    onChatStream: (sessionId: number, listener: (chunk: unknown) => void) => {
+      const set = streamMock.listeners.get(sessionId) ?? new Set();
+      set.add(listener);
+      streamMock.listeners.set(sessionId, set);
+      return () => {
+        set.delete(listener);
+      };
+    },
   };
 });
 
@@ -129,17 +149,13 @@ vi.mock("@/domains/ai/chat/components/ChatInput", async () => {
   };
 });
 
-// AgentProgress stub：占位可定位节点（是否渲染由 sending 门控）
-const progressProps = vi.hoisted(() => ({
-  current: null as Record<string, unknown> | null,
-}));
+// AgentProgress stub：组件已不引用（快速发起删进度块）——保留 mock 作
+// 回归探测：若未来重新引入渲染，stub 节点会出现在断言中
 vi.mock("@/domains/ai/chat/components/AgentProgress", async () => {
   const { createElement } = await import("react");
   return {
-    default: (props: Record<string, unknown>) => {
-      progressProps.current = props;
-      return createElement("div", { "data-testid": "agent-progress-stub" });
-    },
+    default: () =>
+      createElement("div", { "data-testid": "agent-progress-stub" }),
   };
 });
 
@@ -234,7 +250,7 @@ beforeEach(() => {
     tools: { order: [], map: {} },
   });
   inputProps.current = null;
-  progressProps.current = null;
+  streamMock.listeners.clear();
 });
 
 // vitest 未开 globals，RTL 自动清理不生效，显式清理；流式标记防跨用例泄漏
@@ -243,7 +259,7 @@ afterEach(() => {
   useChatStore.getState().finishStream(SESSION_ID);
 });
 
-describe("ProjectChatBar 底栏", () => {
+describe("ProjectChatBar 快速发起条", () => {
   it("渲染 ChatInput 并传入 sessionId/workspaceId 与 valid 过滤后的能力集", async () => {
     renderBar();
     expect(await screen.findByTestId("chat-input-stub")).toBeTruthy();
@@ -255,9 +271,9 @@ describe("ProjectChatBar 底栏", () => {
       hasModel: false,
       sending: false,
     });
-    // 失效挂载不下发（同 ActivityPane 原逻辑）；技能以 itemName 匹配
-    expect(inputProps.current?.boundAssistantIds).toEqual([1]);
-    expect(inputProps.current?.boundSkillNames).toEqual(["联网搜索"]);
+    // 能力不做挂载过滤（§3.7 修正：挂载集是预设而非过滤边界）
+    expect(inputProps.current?.boundAssistantIds).toBeUndefined();
+    expect(inputProps.current?.boundSkillNames).toBeUndefined();
     // 权限态初始化（自 ChatPane 复制的 getPermission effect）
     expect(chatApiMock.getPermission).toHaveBeenCalledWith(SESSION_ID);
   });
@@ -282,8 +298,33 @@ describe("ProjectChatBar 底栏", () => {
     expect(inputProps.current?.placeholder).toBeUndefined();
   });
 
-  it("成功发送 → 发送版本 +1（ActivityPane 据此丢弃过期编辑态）；失败不递增并 toast", async () => {
-    // 当前用户 id 固定 1（MINE key 断言锚点；store 初始 id=0）
+  it("发送受理即跳转 /module/ai?session=<id>（不等流结束，chat:send 至流末才 resolve）", async () => {
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    // send 以未决 promise 模拟流未结束（chat:send 至流末才 resolve），
+    // navigate 应在受理时即发生——不受流时长影响
+    let resolveSend: () => void = () => {};
+    chatApiMock.send.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    fireEvent.click(screen.getByTestId("stub-send"));
+
+    // 跳转先于流结束发生（此时 send 尚未 resolve）
+    expect(screen.getByTestId("location").textContent).toBe(
+      `/module/ai?session=${SESSION_ID}`,
+    );
+
+    // 流结束（send resolve）不产生其他副作用（sendVersions 机制已随
+    // ActivityPane 删除移除，批 6 清理）
+    await act(async () => {
+      resolveSend();
+    });
+  });
+
+  it("流结束监听失效计划缓存（finish chunk → 双失效并自解绑，跨卸载存活）", async () => {
     useUserStore.setState({
       user: { ...useUserStore.getState().user, id: 1 },
     });
@@ -291,35 +332,45 @@ describe("ProjectChatBar 底栏", () => {
     await screen.findByTestId("chat-input-stub");
     const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
 
-    // 成功路径：send resolve 后广播版本 +1（sendVersions 为持久计数，非流式态）
-    const before = useChatStore.getState().sendVersions[SESSION_ID] ?? 0;
     fireEvent.click(screen.getByTestId("stub-send"));
     await waitFor(() => expect(chatApiMock.send).toHaveBeenCalled());
-    await act(async () => {});
-    expect(useChatStore.getState().sendVersions[SESSION_ID] ?? 0).toBe(
-      before + 1,
-    );
-    // 模拟流结束（真实链路由流事件 finishStream；mock 无流）→ sending
-    // true→false 转换触发计划缓存双失效（AI 工具写入渲染侧传播）
+    invalidateSpy.mockClear();
+
+    // finish chunk（模拟主进程流结束推送，此时组件可能已随跳转卸载）
     act(() => {
-      useChatStore.getState().finishStream(SESSION_ID);
+      streamMock.emit(SESSION_ID, { type: "finish" });
+    });
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: PLAN_ITEMS_KEY(DETAIL.project.id),
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: PLAN_ITEMS_MINE_KEY(1),
+      });
+    });
+    // 自解绑：再次 finish 不重复失效
+    invalidateSpy.mockClear();
+    act(() => {
+      streamMock.emit(SESSION_ID, { type: "finish" });
     });
     await act(async () => {});
-    expect(invalidateSpy).toHaveBeenCalledWith({
+    expect(invalidateSpy).not.toHaveBeenCalledWith({
       queryKey: PLAN_ITEMS_KEY(DETAIL.project.id),
     });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: PLAN_ITEMS_MINE_KEY(1),
-    });
+  });
 
-    // 失败路径：版本不递增（编辑态保留）+ toast 兜底恰一次
+  it("发送失败 → toast 兜底恰一次且 rethrow（ChatInput catch 链，批 6 后无版本断言）", async () => {
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
     chatApiMock.send.mockRejectedValueOnce(new Error("no model"));
+    let rejected = false;
     await act(async () => {
-      await inputProps.current?.onSend("再试", []).catch(() => {});
+      await inputProps.current?.onSend("再试", []).catch(() => {
+        rejected = true;
+      });
     });
-    expect(useChatStore.getState().sendVersions[SESSION_ID] ?? 0).toBe(
-      before + 1,
-    );
+    expect(rejected).toBe(true);
     expect(toastMock.error).toHaveBeenCalledTimes(1);
   });
 
@@ -352,7 +403,7 @@ describe("ProjectChatBar 底栏", () => {
     });
   });
 
-  it("sending 时 AgentProgress 出现，流结束消失", async () => {
+  it("AgentProgress 不再渲染（流式中也不出现——进度由 ChatView ChatPane 承载）", async () => {
     renderBar();
     await screen.findByTestId("chat-input-stub");
     expect(screen.queryByTestId("agent-progress-stub")).toBeNull();
@@ -360,12 +411,36 @@ describe("ProjectChatBar 底栏", () => {
     act(() => {
       useChatStore.getState().startStream(SESSION_ID);
     });
-    expect(screen.getByTestId("agent-progress-stub")).toBeTruthy();
-
-    act(() => {
-      useChatStore.getState().finishStream(SESSION_ID);
-    });
     expect(screen.queryByTestId("agent-progress-stub")).toBeNull();
+  });
+
+  it("审批横幅不再渲染（挂起审批工具在输入区上方无横幅——审批由 ChatView ChatPane 承载）", async () => {
+    // store 预置挂起审批的工具流（原 approval-request chunk 的终态形状）
+    useChatStore.setState({
+      streams: {
+        [SESSION_ID]: {
+          text: "",
+          thinking: "",
+          tools: {
+            order: ["tc1"],
+            map: {
+              tc1: {
+                toolName: "plan_update_status",
+                state: "awaiting-approval",
+                argSummary: "更新任务 #3 状态为进行中",
+              },
+            },
+          },
+        },
+      },
+    });
+    renderBar();
+    await screen.findByTestId("chat-input-stub");
+
+    expect(screen.queryByText("更新任务 #3 状态为进行中")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "project:chatBar.viewContext" }),
+    ).toBeNull();
   });
 
   it("本地任务开关默认关闭并透传 ChatInput（label 为 project:chatBar.localTask）；关闭发送 content 无 [用户要求]", async () => {
@@ -416,65 +491,5 @@ describe("ProjectChatBar 底栏", () => {
       modelId: undefined,
       overrides: undefined,
     });
-  });
-
-  it("审批横幅：awaiting-approval 工具在输入区上方渲染（非动态 Tab 可见），决议走 approveToolCall；允许并记住写 toolPermission", async () => {
-    chatApiMock.approveToolCall.mockResolvedValue(undefined);
-    chatApiMock.rememberTool.mockResolvedValue(undefined);
-    toastMock.error.mockClear();
-    // store 预置挂起审批的工具流（approval-request chunk 的 updateTool 终态形状）
-    useChatStore.setState({
-      streams: {
-        [SESSION_ID]: {
-          text: "",
-          thinking: "",
-          tools: {
-            order: ["tc1"],
-            map: {
-              tc1: {
-                toolName: "plan_update_status",
-                state: "awaiting-approval",
-                argSummary: "更新任务 #3 状态为进行中",
-              },
-            },
-          },
-        },
-      },
-    });
-    renderBar();
-    await screen.findByTestId("chat-input-stub");
-
-    // 横幅出现（argSummary 可见）+ 三按钮（工作空间 30 非空 → 含记住）
-    expect(screen.getByText("更新任务 #3 状态为进行中")).toBeTruthy();
-    // 查看上下文链接：点击合并式切 ?tab=activity（保留其余参数语义，replace）
-    fireEvent.click(
-      screen.getByRole("button", { name: "project:chatBar.viewContext" }),
-    );
-    await waitFor(() =>
-      expect(screen.getByTestId("location").textContent).toBe("?tab=activity"),
-    );
-    fireEvent.click(screen.getByRole("button", { name: "chat:tool.approve" }));
-    await waitFor(() =>
-      expect(chatApiMock.approveToolCall).toHaveBeenCalledWith("tc1", true),
-    );
-
-    // 允许并记住：先写工作空间记忆再放行（顺序）
-    fireEvent.click(
-      screen.getByRole("button", { name: "chat:tool.approveRemember" }),
-    );
-    await waitFor(() =>
-      expect(chatApiMock.rememberTool).toHaveBeenCalledWith(
-        ASSET_WORKSPACE_ID,
-        "plan_update_status",
-      ),
-    );
-    expect(chatApiMock.approveToolCall).toHaveBeenCalledTimes(2);
-    expect(toastMock.error).not.toHaveBeenCalled();
-
-    // 无挂起审批（终态 chunk 后 state 离开 awaiting）→ 横幅消失
-    useChatStore.getState().updateTool(SESSION_ID, "tc1", { state: "done" });
-    await waitFor(() =>
-      expect(screen.queryByText("更新任务 #3 状态为进行中")).toBeNull(),
-    );
   });
 });

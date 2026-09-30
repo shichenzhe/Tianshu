@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { useUserStore } from "@/domains/user/store/user.store";
 import { UserApi } from "@/domains/user/api/user.api";
 import AiTopbarActions from "@/domains/ai/layout/components/AiTopbarActions";
-import SessionSearchBox from "@/domains/ai/layout/components/SessionSearchBox";
 import GlobalSidebar from "./GlobalSidebar";
 import TopBar from "./TopBar";
 import { useSkinStore } from "@/stores/skin.store";
@@ -31,9 +30,10 @@ export default function MainLayout() {
   const shouldShowNav =
     location.pathname !== "/" && !location.pathname.includes("/login");
 
-  // 折叠/全局搜索/时间筛选三按钮作用于全局侧边栏（所有 /module 路由共用），
-  // 项目等非 AI 路由同样注入；会话内搜索仍为 AI 会话专属
-  const isAiRoute = location.pathname.startsWith("/module/ai");
+  // 折叠/全局搜索/时间筛选三按钮作用于全局侧边栏（所有 /module 路由
+  // 共用），项目等非 AI 路由同样注入；侧边栏收起时搜索/筛选随收起隐藏
+  // （见 AiTopbarActions）；会话内搜索已随 ChatView 顶行迁入 TopBar
+  // 中段（page-header），此处不再注入
 
   // 验证登录状态
   useEffect(() => {
@@ -85,17 +85,13 @@ export default function MainLayout() {
   return (
     <div className="app-container">
       {shouldShowNav && (
-        <TopBar
-          leftSlot={<AiTopbarActions />}
-          rightLeadingSlot={isAiRoute ? <SessionSearchBox /> : undefined}
-          panelClass={panelClass}
-        />
+        <TopBar leftSlot={<AiTopbarActions />} panelClass={panelClass} />
       )}
 
       <div
         className="main-content flex"
         style={{
-          marginTop: shouldShowNav ? 36 : 0,
+          marginTop: shouldShowNav ? 44 : 0,
           transition: "margin-top 0.2s",
         }}
       >
@@ -114,7 +110,7 @@ export default function MainLayout() {
         }
 
         .main-content {
-          height: calc(100vh - ${shouldShowNav ? 36 : 0}px);
+          height: calc(100vh - ${shouldShowNav ? 44 : 0}px);
           overflow: hidden;
         }
       `}</style>

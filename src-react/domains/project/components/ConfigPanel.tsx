@@ -1,5 +1,8 @@
 /**
  * 项目配置面板（spec §6.3，工作台右列）：
+ * - 标题（project:panel.title）由 ProjectWorkspaceView 经 page-header
+ *   slot.right 渲染于 TopBar 右段（本组件注册的右宽条带），组件自身
+ *   无 header 行，内容直接从顶栏下缘起
  * - 指令：MarkdownView 只读渲染 systemPrompt（空 → 占位文案）+ 编辑弹窗
  * - 能力挂载：三行（连接器/专家/技能）CapabilityRow + PickerDialog；
  *   失效挂载灰显 + X 显式移除，Picker 确认只替换该类型 valid 集，
@@ -191,12 +194,6 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-border/50 px-4 py-3">
-        <h2 className="text-sm font-medium text-foreground">
-          {t("project:panel.title")}
-        </h2>
-      </header>
-
       <div className="flex-1 space-y-6 overflow-y-auto p-4">
         {/* 区块1 指令：只读 markdown + 编辑入口 */}
         <section

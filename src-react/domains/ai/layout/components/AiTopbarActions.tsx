@@ -1,5 +1,7 @@
 /**
- * 顶栏 AI 动作区：侧边栏折叠 / 全局搜索 / 时间筛选（均带冒泡提示）
+ * 顶栏 AI 动作区：侧边栏折叠 / 全局搜索 / 时间筛选（均带冒泡提示）。
+ * 侧边栏收起时任务列表不可见，搜索与时间筛选无作用对象，随收起隐藏
+ * （折叠开关保留——展开侧边栏的唯一入口）。
  */
 import { useTranslation } from "react-i18next";
 import { PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
@@ -49,23 +51,27 @@ export default function AiTopbarActions() {
             : t("layout:sidebar.collapse")}
         </TooltipContent>
       </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            onClick={() => setSearchOpen(true)}
-            aria-label={t("layout:sidebar.search")}
-          >
-            <Search className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          {t("layout:sidebar.search")}
-        </TooltipContent>
-      </Tooltip>
-      <FilterPopover />
+      {!collapsed && (
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setSearchOpen(true)}
+                aria-label={t("layout:sidebar.search")}
+              >
+                <Search className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {t("layout:sidebar.search")}
+            </TooltipContent>
+          </Tooltip>
+          <FilterPopover />
+        </>
+      )}
       <GlobalSearchDialog />
     </TooltipProvider>
   );

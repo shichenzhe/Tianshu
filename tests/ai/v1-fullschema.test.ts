@@ -247,6 +247,19 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     );
   });
 
+  it("一期任务会话列 planItemId 并入(可空、免索引——一任务一会话由 create 查重保证)", () => {
+    const db = createDb();
+    expect(columnsOf(db, "session")).toContain("planItemId");
+    const col = (
+      db.prepare("PRAGMA table_info(session)").all() as Array<{
+        name: string;
+        notnull: number;
+      }>
+    ).find((c) => c.name === "planItemId");
+    expect(col?.notnull).toBe(0);
+    expect(indexesOf(db, "session")).not.toContain("session_planItemId_index");
+  });
+
   it("skillRecord name 唯一约束生效", () => {
     const db = createDb();
     db.exec(

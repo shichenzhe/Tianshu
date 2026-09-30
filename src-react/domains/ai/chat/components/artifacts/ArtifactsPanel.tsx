@@ -4,7 +4,7 @@
  * 流式 tools 派生（deriveSessionFiles），selector 只订 tools 避免 text
  * delta 重渲染。preview 返回后回到前一列表视图（不落入 artifactsView）
  */
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -37,11 +37,15 @@ const VIEWS: readonly AiArtifactsView[] = [
 interface ArtifactsPanelProps {
   sessionId: number;
   workspaceId: number;
+  /** 顶部插槽（批 4 任务概览等）：渲染于内容区顶部、视图切换头之下；
+   *  预览态（聚焦阅读）不渲染 */
+  topSection?: ReactNode;
 }
 
 export default function ArtifactsPanel({
   sessionId,
   workspaceId,
+  topSection,
 }: ArtifactsPanelProps) {
   const { t } = useTranslation(["chat"]);
   const view = useAiUiStore((s) => s.artifactsView);
@@ -120,6 +124,8 @@ export default function ArtifactsPanel({
           </DropdownMenu>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* 顶部插槽（任务概览）：预览态为聚焦阅读场景，让位不渲染 */}
+          {!previewFile && topSection}
           {previewFile && !previewFullscreen ? (
             <FilePreview
               file={previewFile}
@@ -192,7 +198,7 @@ export function ArtifactsPanelToggle() {
       aria-label={label}
       aria-pressed={open}
       onClick={toggle}
-      className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+      className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
     >
       {open ? (
         <PanelRightClose className="h-4 w-4" />

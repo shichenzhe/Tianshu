@@ -1,11 +1,13 @@
 // src-react/domains/ai/automation/views/TemplateMarketView.tsx
-/** 模版市场:双列卡片,点击复用模板进 CreateTaskDialog(spec §5) */
+/** 模版市场:双列卡片,点击复用模板进 CreateTaskDialog(spec §5);
+ *  顶行(返回/标题)迁入顶栏（TopBar 中段） */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import * as Icons from "lucide-react";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageHeader } from "@/components/layout/page-header.store";
 import { AutomationApi, type TemplateRecord } from "../api/automation.api";
 import { camelSlug } from "../lib/camel-slug";
 import { CreateTaskDialog } from "../components/CreateTaskDialog";
@@ -27,22 +29,30 @@ export default function TemplateMarketView() {
     queryFn: () => AutomationApi.templates(),
   });
 
+  // 顶行（TopBar 中段）：返回 + 标题（AutomationView 的 Tab 工具栏
+  // 已在此视图前置空，不叠加）
+  usePageHeader({
+    leading: (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        onClick={() => setView("list")}
+        aria-label={t("chat:automation.template.back")}
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Button>
+    ),
+    title: (
+      <h2 className="truncate text-sm font-medium text-foreground">
+        {t("chat:automation.template.marketTitle")}
+      </h2>
+    ),
+  });
+
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setView("list")}
-          aria-label={t("chat:automation.template.back")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-sm font-medium">
-          {t("chat:automation.template.marketTitle")}
-        </h2>
-      </div>
-      <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-4 pt-0">
+      <div className="grid flex-1 grid-cols-2 gap-3 overflow-y-auto p-4">
         {templates.map((tpl) => (
           <button
             key={tpl.slug}

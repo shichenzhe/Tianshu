@@ -30,8 +30,6 @@ interface ExpertSubMenuProps {
   /** 会话模式必传（写会话）；草稿模式（onPick）下忽略 */
   sessionId?: number;
   currentAssistantId?: number;
-  /** 已挂载专家白名单（项目动态流）；未传不过滤（AI 模块行为不变） */
-  allowedIds?: number[];
   /** 草稿模式回调（新建任务落地页 PlusMenu 对齐）：传入时选中纯前端
       暂存不写会话（session 创建后由 dispatch 落库），null = 默认助手 */
   onPick?: (assistantId: number | null) => void;
@@ -40,7 +38,6 @@ interface ExpertSubMenuProps {
 export default function ExpertSubMenu({
   sessionId,
   currentAssistantId,
-  allowedIds,
   onPick,
 }: ExpertSubMenuProps) {
   const { t } = useTranslation(["chat"]);
@@ -52,16 +49,7 @@ export default function ExpertSubMenu({
     queryKey: ASSISTANTS_KEY,
     queryFn: () => AssistantApi.list(),
   });
-  // 挂载过滤在前、关键字过滤在后：未传 allowedIds 时数组原样透传
-  const mounted = useMemo(
-    () =>
-      allowedIds
-        ? (assistantsQuery.data ?? []).filter((assistant) =>
-            allowedIds.includes(assistant.id),
-          )
-        : (assistantsQuery.data ?? []),
-    [assistantsQuery.data, allowedIds],
-  );
+  const mounted = assistantsQuery.data ?? [];
   const keyword = query.trim().toLowerCase();
   const filtered = useMemo(
     () =>

@@ -184,7 +184,26 @@ describe("LibraryRepository 元数据通道", () => {
     await expect(repo.subtreeCount(999, UID)).rejects.toThrow("条目不存在");
   });
 
-  it("tree 返回全量 folder 平铺（含层级 id，不含 file）", async () => {
+  it("writeFileContent 写盘 + 更新 size/updatedAt；folder 拒绝", async () => {
+    const repo = new LibraryRepository();
+    const folder = await repo.createFolder("A", null, UID);
+    const file = await repo.createFile("note.md", folder.id, UID);
+    // createFile 建的是空文件——覆写后内容与 size 落盘
+    const content = "# 标题\n\n正文";
+    const updated = await repo.writeFileContent(file.id, content, UID);
+    expect(updated.size).toBe(Buffer.byteLength(content, "utf8"));
+    expect(updated.kind).toBe("file");
+    const onDisk = await fs.readFile(
+      `/tmp/tianshu-test-user-data-repo/library/${file.id}/note.md`,
+      "utf8",
+    );
+    expect(onDisk).toBe(content);
+    await expect(repo.writeFileContent(folder.id, "x", UID)).rejects.toThrow(
+      "仅文件支持编辑",
+    );
+  });
+
+  it("tree 返回全量平铺（folder+file，树上文件夹下需挂文件）", async () => {
     const repo = new LibraryRepository();
     const f1 = await repo.createFolder("A", null, UID);
     await repo.createFolder("B", f1.id, UID);
@@ -194,10 +213,10 @@ describe("LibraryRepository 元数据通道", () => {
       { kind: "file" },
     );
     const tree = await repo.tree(UID);
-    expect(tree).toHaveLength(2);
+    expect(tree).toHaveLength(3);
     expect(tree.find((n) => n.id === f1.id)?.parentId).toBeNull();
     expect(tree.find((n) => n.name === "B")?.parentId).toBe(f1.id);
-    expect(tree.some((n) => n.id === file.id)).toBe(false);
+    expect(tree.find((n) => n.id === file.id)?.kind).toBe("file");
   });
 });
 

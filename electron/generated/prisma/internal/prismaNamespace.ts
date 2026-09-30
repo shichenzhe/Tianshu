@@ -420,7 +420,8 @@ export const ModelName = {
   planView: 'planView',
   planItemAttachment: 'planItemAttachment',
   securityAuditLog: 'securityAuditLog',
-  libraryItem: 'libraryItem'
+  libraryItem: 'libraryItem',
+  artifactFavorite: 'artifactFavorite'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -436,7 +437,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "automationStat" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem" | "artifactFavorite"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2216,6 +2217,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    artifactFavorite: {
+      payload: Prisma.$artifactFavoritePayload<ExtArgs>
+      fields: Prisma.artifactFavoriteFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.artifactFavoriteFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.artifactFavoriteFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        findFirst: {
+          args: Prisma.artifactFavoriteFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.artifactFavoriteFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        findMany: {
+          args: Prisma.artifactFavoriteFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>[]
+        }
+        create: {
+          args: Prisma.artifactFavoriteCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        createMany: {
+          args: Prisma.artifactFavoriteCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.artifactFavoriteCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>[]
+        }
+        delete: {
+          args: Prisma.artifactFavoriteDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        update: {
+          args: Prisma.artifactFavoriteUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        deleteMany: {
+          args: Prisma.artifactFavoriteDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.artifactFavoriteUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.artifactFavoriteUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>[]
+        }
+        upsert: {
+          args: Prisma.artifactFavoriteUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$artifactFavoritePayload>
+        }
+        aggregate: {
+          args: Prisma.ArtifactFavoriteAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateArtifactFavorite>
+        }
+        groupBy: {
+          args: Prisma.artifactFavoriteGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ArtifactFavoriteGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.artifactFavoriteCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ArtifactFavoriteCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2365,7 +2440,8 @@ export const SessionScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   lastMessageAt: 'lastMessageAt',
-  userId: 'userId'
+  userId: 'userId',
+  planItemId: 'planItemId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -2609,6 +2685,7 @@ export const LibraryItemScalarFieldEnum = {
   mimeType: 'mimeType',
   size: 'size',
   originalPath: 'originalPath',
+  url: 'url',
   favorite: 'favorite',
   lastViewedAt: 'lastViewedAt',
   userId: 'userId',
@@ -2617,6 +2694,17 @@ export const LibraryItemScalarFieldEnum = {
 } as const
 
 export type LibraryItemScalarFieldEnum = (typeof LibraryItemScalarFieldEnum)[keyof typeof LibraryItemScalarFieldEnum]
+
+
+export const ArtifactFavoriteScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  relPath: 'relPath',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type ArtifactFavoriteScalarFieldEnum = (typeof ArtifactFavoriteScalarFieldEnum)[keyof typeof ArtifactFavoriteScalarFieldEnum]
 
 
 export const SortOrder = {
@@ -2850,6 +2938,7 @@ export type GlobalOmitConfig = {
   planItemAttachment?: Prisma.planItemAttachmentOmit
   securityAuditLog?: Prisma.securityAuditLogOmit
   libraryItem?: Prisma.libraryItemOmit
+  artifactFavorite?: Prisma.artifactFavoriteOmit
 }
 
 /* Types for Logging */

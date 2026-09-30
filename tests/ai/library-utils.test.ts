@@ -67,10 +67,17 @@ describe("classifyFileType / mimeOf", () => {
   it("扩展名小写分类，未命中归 other", () => {
     expect(classifyFileType("A.PDF")).toBe("pdf");
     expect(classifyFileType("x.html")).toBe("html");
-    expect(classifyFileType("a.md")).toBe("text");
+    expect(classifyFileType("a.md")).toBe("markdown");
     expect(classifyFileType("app.tsx")).toBe("code");
     expect(classifyFileType("movie.Mp4")).toBe("video");
     expect(classifyFileType("noext")).toBe("other");
+  });
+  it("类型细分：csv/xlsx 归表格、pptx/key 归幻灯片", () => {
+    expect(classifyFileType("data.csv")).toBe("spreadsheet");
+    expect(classifyFileType("report.xlsx")).toBe("spreadsheet");
+    expect(classifyFileType("deck.pptx")).toBe("slides");
+    expect(classifyFileType("keynote.key")).toBe("slides");
+    expect(classifyFileType("note.markdown")).toBe("markdown");
   });
   it("mime 常见表命中，未命中 null", () => {
     expect(mimeOf("a.md")).toBe("text/markdown");

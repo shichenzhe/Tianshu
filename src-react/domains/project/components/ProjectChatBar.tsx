@@ -1,29 +1,29 @@
 /**
- * 项目工作台底部全局操作栏（spec §6.3/§3）：ChatInput 提升为工作台级——
- * 贯穿动态/计划/任务/资产四 Tab，由 ProjectWorkspaceView 在 Tab 内容区
- * 下方渲染（providers/models 双空引导态不渲染，判据与 ActivityPane 的
- * SetupGuide 同源）。
- * 发送状态块自 ChatPane 复制（useChatSend/accessMode + getPermission 初始化
- * + handleSend 文件引用前缀注入 + handleRunCommand /compact——项目模块
- * 不经私有导入改动 AI 域）；全工作台仅此一个 useChatSend 实例：流订阅与
- * sending 单一来源，动态流消息区（ChatMessages，由 ActivityPane 渲染）的
- * 编辑/重发接线经 ChatApi 直调，不在此二次订阅。
+ * 项目页快速发起条（一期会话统一 D3）：ChatInput 贯穿工作台各 Tab，发送
+ * 受理即跳转 /module/ai?session=<id>——流式输出、进度与审批横幅由 ChatView
+ * 的 ChatPane 承载（chat.store 全局流态；ChatPane 挂载先订阅流再经
+ * chat:status 快照恢复，跨视图无内容丢失，见 use-chat-send.ts）。
+ * 保留：权限胶囊/本地任务开关/#待办联想/能力挂载过滤集、计划缓存失效联动
+ * （发送时挂一次性流结束监听——跳转卸载后组件 effect 不再可观测）、/compact。
+ * 另导出 needsChatSetup/chatSettingsRoute（批 6 自 ActivityPane 迁入：
+ * 动态 Tab 删除后该文件不再存在，ProjectWorkspaceView 消费链保持）。
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import ChatApi, { type ChatModelParams } from "@/domains/ai/api/chat.api";
+import ChatApi, {
+  onChatStream,
+  type ChatModelParams,
+} from "@/domains/ai/api/chat.api";
 import ChatInput from "@/domains/ai/chat/components/ChatInput";
-import AgentProgress from "@/domains/ai/chat/components/AgentProgress";
-import ApprovalBanner from "@/domains/ai/chat/components/ApprovalBanner";
 import type { AccessMode } from "@/domains/ai/chat/components/PermissionCapsule";
 import type { PendingFile } from "@/domains/ai/chat/lib/pending-file";
 import { buildInjectedContent } from "@/domains/ai/chat/lib/build-injected-content";
 import { useChatSend } from "@/domains/ai/chat/hooks/use-chat-send";
-import { useChatStore } from "@/domains/ai/chat/store/chat.store";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useUserStore } from "@/domains/user/store/user.store";
 import PlanItemApi, {
@@ -32,73 +32,34 @@ import PlanItemApi, {
 } from "@/domains/project/api/plan-item.api";
 import type { ProjectDetail } from "../../../../electron/domains/project/project.entity";
 
-/** 挂起审批的工具（输入区上方横幅数据源，与 MessageList 的门控同口径） */
-function usePendingApprovals(
-  sessionId: number,
-): Array<{ toolCallId: string; toolName: string; argSummary: string }> {
-  const tools = useChatStore((state) => state.streams[sessionId]?.tools);
-  return useMemo(() => {
-    if (!tools) {
-      return [];
-    }
-    return tools.order.flatMap((toolCallId) => {
-      const tool = tools.map[toolCallId];
-      if (tool?.state !== "awaiting-approval" || !tool.argSummary) {
-        return [];
-      }
-      return [
-        { toolCallId, toolName: tool.toolName, argSummary: tool.argSummary },
-      ];
-    });
-  }, [tools]);
-}
+const PROVIDERS_ROUTE = "/module/ai/providers";
+const EXPERTS_ROUTE = "/module/ai/experts";
+const CONNECTORS_ROUTE = "/module/ai/experts?tab=connectors";
 
-/** 审批横幅行：write 工具挂起时于底栏输入区上方渲染（可见性跟输入框走） */
-function BarApprovalBanner({
-  sessionId,
-  workspaceId,
-}: {
-  sessionId: number;
-  workspaceId: number | null;
-}) {
-  const { t } = useTranslation(["chat", "project"]);
-  const [, setSearchParams] = useSearchParams();
-  const pending = usePendingApprovals(sessionId);
-  if (pending.length === 0) {
-    return null;
-  }
-  return (
-    <div className="px-4 pt-3">
-      {pending.map((entry) => (
-        <ApprovalBanner
-          key={entry.toolCallId}
-          toolCallId={entry.toolCallId}
-          toolName={entry.toolName}
-          argSummary={entry.argSummary}
-          workspaceId={workspaceId}
-          onDecided={() => {}}
-        />
-      ))}
-      {/* 查看上下文：跳动态流 Tab 看 AI 完整推理消息流（流仍挂起等决议，非强制）。
-          合并式写入与 switchTab 同构（保留 viewId 等既有参数） */}
-      <button
-        type="button"
-        onClick={() =>
-          setSearchParams(
-            (prev) => {
-              prev.set("tab", "activity");
-              return prev;
-            },
-            { replace: true },
-          )
-        }
-        className="mt-1 text-xs text-muted-foreground transition-colors hover:text-primary"
-      >
-        {t("project:chatBar.viewContext")}
-      </button>
-    </div>
-  );
-}
+/** 能力管理目标 → 管理页路由（底栏 onOpenSettings 回调的映射，批 6 自
+ *  ActivityPane 迁入） */
+export const chatSettingsRoute = (
+  target: "providers" | "assistants" | "mcp",
+): string =>
+  target === "providers"
+    ? PROVIDERS_ROUTE
+    : target === "mcp"
+      ? CONNECTORS_ROUTE
+      : EXPERTS_ROUTE;
+
+/**
+ * 底栏渲染判据（双查询都成功返回且为空才引导——避免加载/出错期间误判，
+ * 同 ChatView）：providers/models 双空时不渲染输入框（批 6 自 ActivityPane
+ * 迁入，ProjectWorkspaceView 消费）
+ */
+export const needsChatSetup = (
+  providersQuery: { isSuccess: boolean; data?: unknown[] },
+  modelsQuery: { isSuccess: boolean; data?: unknown[] },
+): boolean =>
+  providersQuery.isSuccess &&
+  modelsQuery.isSuccess &&
+  (providersQuery.data ?? []).length === 0 &&
+  (modelsQuery.data ?? []).length === 0;
 
 interface ProjectChatBarProps {
   detail: ProjectDetail;
@@ -110,16 +71,43 @@ interface ProjectChatBarProps {
 const LOCAL_TASK_DIRECTIVE =
   "\n\n[用户要求] 本次创建或更新的待办事项请存储为本地任务（projectId 置空，不出现在项目计划中）。";
 
+/**
+ * 流结束失效计划缓存（跨组件生命周期）：快速发起受理即跳转后本组件随
+ * 路由卸载，原 prevSendingRef effect 无法再观测 sending 收尾——改为发送
+ * 时挂一次性 chat:stream 监听（finish/error 时失效并自解绑）。AI 工具可
+ * 能已在主进程直写计划清单（plan_* 工具），失效驱动五视图/徽标/#待办
+ * 建议实时反映（spec 决策 6 渲染侧补完）
+ */
+function invalidatePlanCachesOnStreamEnd(options: {
+  sessionId: number;
+  projectId: number;
+  userId: number;
+  queryClient: QueryClient;
+}): void {
+  const { sessionId, projectId, userId, queryClient } = options;
+  const off = onChatStream(sessionId, (chunk) => {
+    if (chunk.type !== "finish" && chunk.type !== "error") {
+      return;
+    }
+    off();
+    void queryClient.invalidateQueries({
+      queryKey: PLAN_ITEMS_KEY(projectId),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: PLAN_ITEMS_MINE_KEY(userId),
+    });
+  });
+}
+
 export default function ProjectChatBar({
   detail,
   onOpenSettings,
 }: ProjectChatBarProps) {
   const { t } = useTranslation(["chat", "project"]);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const session = detail.session;
   const { sending, send, stop } = useChatSend(session.id);
-  // 发送版本广播（引用稳定）：成功发送后 +1，动态流面板据此丢弃过期编辑态
-  const bumpSendVersion = useChatStore((state) => state.bumpSendVersion);
   const [accessMode, setAccessMode] = useState<AccessMode>("default");
   // 本地任务开关（T8）：＋菜单内切换，发送时按开关态追加指令
   const [localTask, setLocalTask] = useState(false);
@@ -130,22 +118,7 @@ export default function ProjectChatBar({
     queryKey: PLAN_ITEMS_KEY(detail.project.id),
     queryFn: () => PlanItemApi.list(detail.project.id),
   });
-
-  // AI 工具可能已在主进程直写计划清单（plan_* 工具）——发送结束失效
-  // 计划缓存，驱动五视图/徽标/#待办建议实时反映（spec 决策 6 渲染侧补完）
   const userId = useUserStore((state) => state.user.id);
-  const prevSendingRef = useRef(false);
-  useEffect(() => {
-    if (prevSendingRef.current && !sending) {
-      void queryClient.invalidateQueries({
-        queryKey: PLAN_ITEMS_KEY(detail.project.id),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: PLAN_ITEMS_MINE_KEY(userId),
-      });
-    }
-    prevSendingRef.current = sending;
-  }, [sending, queryClient, detail.project.id, userId]);
 
   // 会话权限态：挂载时拉取初始化（key=session.id 保证切换会话重建）；
   // 拉取失败保持默认态，后续 setPermission 失败会 toast 兜底
@@ -175,47 +148,14 @@ export default function ProjectChatBar({
     }
   };
 
-  // Agent 进度数据：选择器只返回原始值（活跃工具 id/名、步数），流式 delta
-  // 不触发本组件重渲染，仅轮次切换或活跃工具变化时更新
-  const activeToolId = useChatStore((state) => {
-    const tools = state.streams[session.id]?.tools;
-    if (!tools) {
-      return undefined;
-    }
-    for (let i = tools.order.length - 1; i >= 0; i -= 1) {
-      const id = tools.order[i];
-      const entry = tools.map[id];
-      if (
-        entry &&
-        (entry.state === "running" || entry.state === "awaiting-approval")
-      ) {
-        return id;
-      }
-    }
-    return undefined;
-  });
-  const activeTool = useChatStore((state) => {
-    if (!activeToolId) {
-      return undefined;
-    }
-    return state.streams[session.id]?.tools.map[activeToolId]?.toolName;
-  });
-  // 工具执行中：步数 = 该工具在调用序中的位置（从 1 计）；
-  // 纯文本生成轮：步数 = 下一轮 = 已有工具条数 + 1
-  const stepCount = useChatStore((state) => {
-    const tools = state.streams[session.id]?.tools;
-    if (!tools) {
-      return 1;
-    }
-    if (activeToolId) {
-      const index = tools.order.indexOf(activeToolId);
-      return (index === -1 ? tools.order.length : index) + 1;
-    }
-    return tools.order.length + 1;
-  });
-
-  /** 文件引用注入在渲染层完成（spec §5）：逐文件前缀块 + 原输入，主进程零改动；
-      本地任务开关开启时末尾追加指令 */
+  /**
+   * 快速发起（D3）：发送受理即跳 ChatView，流式/审批由 ChatPane 承接。
+   * chat:send 直至整条流结束才 resolve（chat.service.ts send 内
+   * await streamAndPersist），若 await 到底再跳，用户将在无进度（本批删
+   * AgentProgress）、无审批入口（本批删横幅）的项目页枯等整轮生成——
+   * 故不等流结束（R1 分析：ChatPane 同 session.id 挂载后先订阅流再经
+   * chat:status 快照恢复，卸载窗口的 chunk 由主进程照常持久化，不丢内容）
+   */
   const handleSend = async (
     content: string,
     files: PendingFile[],
@@ -226,15 +166,23 @@ export default function ProjectChatBar({
       ? `${injected}${LOCAL_TASK_DIRECTIVE}`
       : injected;
     try {
-      await send(finalContent, undefined, overrides);
-      // 防呆（跨组件版 ChatPane handleSend 的 setEditing(null)）：成功发出
-      // 新消息后广播版本 +1——ActivityPane 持有的编辑态随之过期，否则随后
-      // 提交的编辑重发会经 editAndResend 截断其后的全部消息（刚发的往来
-      // 静默丢失）。发送与编辑态分属两组件，经 store 版本号传递信号
-      bumpSendVersion(session.id);
+      const inFlight = send(finalContent, undefined, overrides);
+      invalidatePlanCachesOnStreamEnd({
+        sessionId: session.id,
+        projectId: detail.project.id,
+        userId,
+        queryClient,
+      });
+      navigate(`/module/ai?session=${session.id}`);
+      // 等到流末仅取其拒绝语义：早期失败（并发/无模型等）时此处抛出 →
+      // catch 全局 toast；卸载后继续执行不影响。原 bumpSendVersion 广播
+      // 已随 ActivityPane 删除移除（消费方不复存在，批 6 清理）
+      await inFlight;
     } catch (e) {
+      // 早期失败（并发/无模型等）时已跳走：sonner 全局 toast 在 ChatView 仍
+      // 可见；流中错误经 error chunk 由 ChatPane 侧提示
       toast.error(mapIpcError(e));
-      // rethrow：保持调用链 Promise 拒绝语义（ChatInput 已乐观清空，此处静默防双弹由其 catch 处理）
+      // rethrow：保持调用链 Promise 拒绝语义（ChatInput 乐观清空后的 void catch）
       throw e;
     }
   };
@@ -256,15 +204,6 @@ export default function ProjectChatBar({
 
   return (
     <div className="flex flex-col border-t border-border/50">
-      {sending && (
-        <AgentProgress stepCount={stepCount} activeTool={activeTool} />
-      )}
-      {/* 审批可见性跟输入框走：write 工具挂起审批时横幅渲染于输入区上方，
-          否则非动态 Tab（无 MessageList）下流将永久挂起（sending 卡死） */}
-      <BarApprovalBanner
-        sessionId={session.id}
-        workspaceId={detail.assetWorkspaceId}
-      />
       <div className="p-4 pt-3">
         <ChatInput
           hasModel={Boolean(session.currentModelId)}
@@ -275,12 +214,6 @@ export default function ProjectChatBar({
           currentAssistantId={session.assistantId}
           currentModelId={session.currentModelId}
           workspaceId={detail.assetWorkspaceId}
-          boundAssistantIds={detail.bindings
-            .filter((b) => b.itemType === "assistant" && b.valid)
-            .map((b) => b.itemId)}
-          boundSkillNames={detail.bindings
-            .filter((b) => b.itemType === "skill" && b.valid)
-            .map((b) => b.itemName)}
           todoItems={planItems}
           localTask={{
             enabled: localTask,

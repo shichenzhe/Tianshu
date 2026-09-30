@@ -1,9 +1,9 @@
 /**
- * 用户下拉菜单组件
- * 整合用户信息、修改密码、帮助、退出登录等功能
+ * 用户下拉菜单组件（全局侧边栏底部触发，菜单向上弹出）
+ * 整合用户信息、修改密码、语言切换、帮助、退出登录等功能
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -16,6 +16,7 @@ import {
   RefreshCw,
   FileText,
   ChevronDown,
+  Languages,
   Palette,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,12 +48,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { useClearWallpaper } from "@/lib/hooks";
+
+/** 可选语言（原顶栏语言按钮收进此处；文案 key 见 layout:language.*） */
+const languages = [
+  { code: "zh-CN", key: "zhCN" },
+  { code: "en-US", key: "enUS" },
+];
 
 export default function UserMenu() {
-  const { t } = useTranslation(["layout", "common"]);
-  // 清晰壁纸路由（新建任务详情页）触发按钮切实底，与主题色区分
-  const solid = useClearWallpaper();
+  const { t, i18n } = useTranslation(["layout", "common"]);
   const navigate = useNavigate();
   const { user, reset } = useUserStore();
 
@@ -69,10 +73,6 @@ export default function UserMenu() {
     useState(false);
   const [updateDownloadedDialogOpen, setUpdateDownloadedDialogOpen] =
     useState(false);
-
-  // 下拉菜单 hover 状态
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuTimer = useRef<NodeJS.Timeout | null>(null);
 
   // 退出登录
   const handleLogout = () => {
@@ -141,48 +141,23 @@ export default function UserMenu() {
 
   return (
     <>
-      <DropdownMenu
-        open={menuOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            menuTimer.current = setTimeout(() => setMenuOpen(false), 200);
-          }
-        }}
-        modal={false}
-      >
+      <DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <div
-            className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md cursor-pointer ${
-              solid
-                ? "bg-card border border-border/50 hover:bg-muted"
-                : "hover:bg-accent"
-            } text-foreground transition-all duration-200`}
-            onMouseEnter={() => {
-              if (menuTimer.current) clearTimeout(menuTimer.current);
-              setMenuOpen(true);
-            }}
-            onMouseLeave={() => {
-              menuTimer.current = setTimeout(() => setMenuOpen(false), 200);
-            }}
-          >
-            <User size={16} />
-            <span className="text-sm max-w-[80px] truncate">
+          {/* 侧边栏底部入口行（与 SidebarNavButton 同风格，点击展开） */}
+          <div className="flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-primary-subtle hover:text-primary">
+            <User size={16} className="shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-left">
               {user?.username || t("layout:userMenu.defaultUser")}
             </span>
-            <ChevronDown size={14} className="text-muted-foreground" />
+            <ChevronDown size={14} className="shrink-0" />
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          align="end"
+          align="start"
+          side="top"
+          sideOffset={4}
           className="w-44"
-          sideOffset={2}
           onCloseAutoFocus={(e) => e.preventDefault()}
-          onMouseEnter={() => {
-            if (menuTimer.current) clearTimeout(menuTimer.current);
-          }}
-          onMouseLeave={() => {
-            menuTimer.current = setTimeout(() => setMenuOpen(false), 200);
-          }}
         >
           <DropdownMenuItem
             onClick={() => setUserInfoDialogOpen(true)}
@@ -222,6 +197,29 @@ export default function UserMenu() {
             <Palette size={14} className="mr-2" />
             {t("layout:userMenu.appearance")}
           </DropdownMenuItem>
+          {/* 语言切换（原顶栏语言按钮移入） */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="cursor-pointer">
+              <Languages size={14} className="mr-2" />
+              {t("layout:language.label")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {languages.map((lang) => (
+                <DropdownMenuItem
+                  key={lang.code}
+                  onClick={() => i18n.changeLanguage(lang.code)}
+                  className="flex cursor-pointer items-center gap-2"
+                >
+                  <span>{t(`layout:language.${lang.key}`)}</span>
+                  {lang.code === i18n.language && (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      ✓
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-pointer">
               <HelpCircle size={14} className="mr-2" />

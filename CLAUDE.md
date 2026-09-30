@@ -70,6 +70,7 @@ npm run typecheck
 - Schema 定义：`prisma/schema.prisma`
 - Prisma Client 输出：`electron/generated/prisma`
 - 当前数据库版本：1（`electron/Constants.ts`；v1 为发布前全量建表脚本，已并入原 v2–v14 的全部变更；发布后 schema 变更再逐版新增 `script/vN`；业务表带 userId 隔离，IPC 层经 token 解出 userId，前端不传用户 id）
+- 快照指纹守卫（`electron/infrastructure/version/snapshot-guard.ts`）：发布前直接改 v1 快照不加版——旧库 `CREATE TABLE IF NOT EXISTS` 不补列，靠快照 sha256 指纹（存 option 表 `db.v1SnapshotHash`）识别「同版本但快照已变」及版本倒挂，自动 drop 全部业务表重放 v1 重建（开发期数据可弃）
 
 主要数据表：`user`、`option`、`modelConfig`、`db_version`、`skillRecord`、`skillStat`
 
@@ -101,7 +102,7 @@ npm run typecheck
 - 翻译文件目录：`src-react/i18n/locales/{zh-CN,en-US}/`
 - 命名空间：`common`、`layout`、`user`、`ai`、`chat`
 - 语言持久化：localStorage key `tianshu-locale`（由 `npm run init` 一并替换）
-- 语言切换组件：`src-react/components/common/LanguageSelector.tsx`
+- 语言切换入口：用户菜单（`src-react/components/layout/UserMenu.tsx`，全局侧边栏底部）的「语言」子菜单
 
 **编码规范：**
 

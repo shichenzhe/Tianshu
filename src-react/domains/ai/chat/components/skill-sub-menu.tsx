@@ -27,14 +27,9 @@ const EXPERTS_SKILLS_ROUTE = "/module/ai/experts?tab=skills&view=installed";
 interface SkillSubMenuProps {
   /** 触发本地导入流程（PlusMenu 持有 SkillImportDialog） */
   onImport: () => void;
-  /** 已挂载技能白名单（项目动态流，skillRecord.name 匹配）；未传不过滤 */
-  allowedNames?: string[];
 }
 
-export default function SkillSubMenu({
-  onImport,
-  allowedNames,
-}: SkillSubMenuProps) {
+export default function SkillSubMenu({ onImport }: SkillSubMenuProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -44,13 +39,13 @@ export default function SkillSubMenu({
     queryKey: SKILLS_KEY,
     queryFn: () => SkillApi.list(),
   });
-  // 挂载过滤在前（未传 allowedNames 时不过滤）、名称字母序保持不变
+  // 名称字母序保持不变
   const skills = useMemo(
     () =>
-      [...(skillsQuery.data ?? [])]
-        .filter((skill) => !allowedNames || allowedNames.includes(skill.name))
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [skillsQuery.data, allowedNames],
+      [...(skillsQuery.data ?? [])].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      ),
+    [skillsQuery.data],
   );
   const keyword = query.trim().toLowerCase();
   const filtered = keyword

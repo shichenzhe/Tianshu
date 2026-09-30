@@ -178,9 +178,10 @@ export default class UserRepository {
   /**
    * 验证密码
    * @param params 用户登录参数
-   * @returns 验证结果
+   * @returns 验证结果；凭证无效返回 null（可预期业务失败不抛异常，
+   * IPC 抛错会让前端落到「登录失败」兜底文案而非「用户名或密码错误」）
    */
-  async login(params: UserLoginParams): Promise<UserAuth> {
+  async login(params: UserLoginParams): Promise<UserAuth | null> {
     const user = await prisma.user.findFirst({
       where: {
         username: params.username,
@@ -195,7 +196,7 @@ export default class UserRepository {
     });
 
     if (!user || !verifyPassword(params.password, user.password)) {
-      throw new Error("用户名或密码错误");
+      return null;
     }
     // 存量明文密码平滑迁移：校验通过后原地升级为 scrypt 哈希
     // （迁移失败不阻断登录，下次登录再试）

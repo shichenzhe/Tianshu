@@ -129,18 +129,32 @@ export default class ProjectRepository {
 
   /**
    * 项目详情：项目 + 资产空间（自愈） + 能力挂载 + 动态流会话
+   * （主会话缺失自愈重建，二期 D10——对齐既有「自愈重绑」模式）
    * @param id 项目 id
    */
   async getDetail(id: number, userId: number): Promise<ProjectDetail> {
     await this.assertProjectVisible(id, userId);
     const row = await prisma.project.findUnique({ where: { id } });
-    const session = await prisma.session.findFirst({
-      where: { projectId: id },
-    });
-    if (!row || !session) {
+    if (!row) {
       throw new Error(PROJECT_NOT_FOUND);
     }
     const workspace = await this.ensureAssetWorkspace(row);
+    let session = await prisma.session.findFirst({
+      where: { projectId: id },
+      // 项目主会话=最早创建（D2）：与 toRecordWithSession 同口径，多会话后取值一致
+      orderBy: { createdAt: "asc" },
+    });
+    if (!session) {
+      // 主会话自愈重建（D10）：用户经会话树删光项目会话后项目页不再 404
+      // ——复用创建链（title=项目名、不传 welcomeMessage、继承最近模型），
+      // 与上方资产空间自愈同构；list 侧缺会话兜底 0 不自愈（轻列表路径）
+      session = await this.createProjectSession(
+        id,
+        { ownerId: userId, name: row.name },
+        workspace.id,
+        userId,
+      );
+    }
     const bindings = await this.listBindingItems(id);
     return {
       project: this.toRecord(row, session.id),
@@ -563,6 +577,8 @@ export default class ProjectRepository {
   private async toRecordWithSession(row: ProjectRow): Promise<ProjectRecord> {
     const session = await prisma.session.findFirst({
       where: { projectId: row.id },
+      // 项目主会话=最早创建（D2）：多会话后语义稳定，指向项目创建时建的那条
+      orderBy: { createdAt: "asc" },
     });
     return this.toRecord(row, session?.id ?? 0);
   }

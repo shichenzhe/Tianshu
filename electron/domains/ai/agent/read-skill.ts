@@ -1,7 +1,9 @@
 /**
  * read_skill 内置工具（P2）：按名查 skills 表读 SKILL.md 正文
  * 纯 Node 实现（禁止 import electron），可被 vitest 直接测试；
- * execute 只查表内 name，不拼接任何外部路径 → 表外路径天然不可达
+ * execute 只查表内 name，不拼接任何外部路径 → 表外路径天然不可达。
+ * 项目会话传全量启用扫描集（挂载集是预设而非围墙，预设外技能
+ * 会话中按需可读，见 project-prompt 预设能力声明）
  */
 import { readFileSync } from "node:fs";
 import { z } from "zod";

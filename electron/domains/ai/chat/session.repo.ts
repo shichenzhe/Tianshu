@@ -10,6 +10,13 @@ import {
   resolveFilePath,
   type WorkspaceFileContent,
 } from "./workspace-files";
+import {
+  aggregateArtifacts,
+  type ArtifactMessageRow,
+} from "./artifact-aggregate";
+import type { ArtifactListItem } from "../../../../src-react/domains/ai/api/artifact.api";
+import { classifyFileType } from "../library/library.utils";
+import { PROJECT_NOT_FOUND } from "../../project/project.entity";
 import type {
   MessageRecord,
   SearchMessageResult,
@@ -151,6 +158,14 @@ export class SessionRepository {
       "workspace:revealFile",
       (_, userId, workspaceId: number, relPath: string) =>
         this.revealWorkspaceFile(workspaceId, relPath, userId),
+    );
+    handleUser("workspace:listArtifacts", (_, userId) =>
+      this.listArtifacts(userId),
+    );
+    handleUser(
+      "workspace:toggleArtifactFavorite",
+      (_, userId, workspaceId: number, relPath: string) =>
+        this.toggleArtifactFavorite(userId, workspaceId, relPath),
     );
     handleUser(
       "workspace:exportFile",
@@ -326,45 +341,94 @@ export class SessionRepository {
     p: SessionCreateParams,
     userId: number,
   ): Promise<SessionRecord> {
-    // 归属校验；会话 userId 冗余列随工作空间写入
-    const workspace = await prisma.workspace.findFirst({
-      where: { id: p.workspaceId, userId },
-    });
-    if (!workspace) {
+    // 任务会话复用（一期统一 D1：一任务一会话）——已有会话绑定该事项
+    // 直接返回既有会话（复用语义不报错，并发双击兜底）
+    if (p.planItemId != null) {
+      const existing = await this.findSessionByPlanItem(p.planItemId, userId);
+      if (existing) {
+        return this.toSession(existing);
+      }
+    }
+    // 项目会话 workspaceId 强制取项目资产空间（D1：防前端传错/未传；与
+    // project.repo 解析口径一致——直接查 workspace 表避免循环依赖）
+    const workspaceId =
+      p.projectId != null
+        ? await this.resolveProjectWorkspaceId(p.projectId, userId)
+        : (p.workspaceId ?? null);
+    // 两键皆空：无目标空间可挂（projectId 与 workspaceId 至少其一非空）
+    if (workspaceId == null) {
       throw new Error("WORKSPACE_NOT_FOUND");
     }
-    // 新会话继承同工作空间最近一次选择的模型（用户反馈：默认丢失上次选择）
-    // v12 隔离：继承源自本人会话；显式指定助手时校验归属
-    const latest = await prisma.session.findFirst({
-      where: {
-        workspaceId: p.workspaceId,
-        currentModelId: { not: null },
-        userId,
-      },
-      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
-      select: { currentModelId: true },
-    });
+    // 归属校验；会话 userId 冗余列随工作空间写入
+    await this.assertWorkspaceOwned(workspaceId, userId);
+    // v12 隔离：显式指定助手时校验归属
     if (p.assistantId != null) {
       await this.assertAssistantOwnedByUser(p.assistantId, userId);
     }
-    const row = await prisma.session.create({
-      data: {
-        workspaceId: p.workspaceId,
-        assistantId: p.assistantId,
-        scenario: p.scenario ?? null,
-        currentModelId: latest?.currentModelId ?? undefined,
-        title: "新会话",
-        userId,
-      },
-    });
+    const row = await this.createSessionRow(p, workspaceId, userId);
     return this.toSession(row);
   }
 
-  /** v5：全部未归档任务（标准侧边栏分组树数据源）；项目会话隔离在外 */
+  /** 任务会话查重（D1：planItemId 一任务一会话；查询携 userId 隔离） */
+  private async findSessionByPlanItem(
+    planItemId: number,
+    userId: number,
+  ): Promise<SessionRow | null> {
+    return prisma.session.findFirst({ where: { planItemId, userId } });
+  }
+
+  /** 项目资产空间解析：workspace.projectId 命中行（查不到即项目不可见，同报错） */
+  private async resolveProjectWorkspaceId(
+    projectId: number,
+    userId: number,
+  ): Promise<number> {
+    const workspace = await prisma.workspace.findFirst({
+      where: { projectId, userId },
+    });
+    if (!workspace) {
+      throw new Error(PROJECT_NOT_FOUND);
+    }
+    return workspace.id;
+  }
+
+  /**
+   * 会话落库：projectId/planItemId/title 透传；新会话继承同工作空间最近
+   * 一次选择的模型（用户反馈：默认丢失上次选择；v12 隔离：继承源自本人
+   * 会话）。title 缺省「新会话」（普通会话行为不变；任务会话由推进入口
+   * 传任务标题，非默认标题亦不参与首条消息自动改名）
+   */
+  private async createSessionRow(
+    p: SessionCreateParams,
+    workspaceId: number,
+    userId: number,
+  ): Promise<SessionRow> {
+    const latest = await prisma.session.findFirst({
+      where: { workspaceId, currentModelId: { not: null }, userId },
+      orderBy: [{ lastMessageAt: "desc" }, { updatedAt: "desc" }],
+      select: { currentModelId: true },
+    });
+    return prisma.session.create({
+      data: {
+        workspaceId,
+        projectId: p.projectId ?? null,
+        planItemId: p.planItemId ?? null,
+        assistantId: p.assistantId,
+        scenario: p.scenario ?? null,
+        currentModelId: latest?.currentModelId ?? undefined,
+        title: p.title ?? "新会话",
+        userId,
+      },
+    });
+  }
+
+  /**
+   * v5：全部未归档任务（标准侧边栏分组树数据源）；一期统一：项目/任务
+   * 会话一并返回（D4——侧边栏项目分组数据源，批 2 做分组渲染）
+   */
   async listAllSessions(userId: number): Promise<SessionRecord[]> {
     return (
       await prisma.session.findMany({
-        where: { archivedAt: null, projectId: null, userId },
+        where: { archivedAt: null, userId },
         orderBy: { lastMessageAt: "desc" },
       })
     ).map((row) => this.toSession(row));
@@ -407,20 +471,18 @@ export class SessionRepository {
     });
   }
 
-  /** v5 任务标题搜索：空关键词退化为最近任务（spec §4.1）；项目会话隔离在外 */
+  /**
+   * v5 任务标题搜索：空关键词退化为最近任务（spec §4.1）；一期统一
+   * （D4）：项目/任务会话可被搜到——验收标准 1「标题搜索可命中」
+   */
   async searchSessionsByTitle(
     keyword: string,
     userId: number,
   ): Promise<SessionRecord[]> {
     const trimmed = keyword.trim();
     const where = trimmed
-      ? {
-          title: { contains: trimmed },
-          archivedAt: null,
-          projectId: null,
-          userId,
-        }
-      : { archivedAt: null, projectId: null, userId };
+      ? { title: { contains: trimmed }, archivedAt: null, userId }
+      : { archivedAt: null, userId };
     return (
       await prisma.session.findMany({
         where,
@@ -465,6 +527,111 @@ export class SessionRepository {
     if (workspace?.directoryPath) {
       shell.showItemInFolder(resolveFilePath(workspace.directoryPath, relPath));
     }
+  }
+
+  /**
+   * 本地产物列表（资料库「本地产物」视图）：跨会话聚合 write_file 记录，
+   * 已删除/非文件条目直接剔除（用户裁定：不进列表）
+   */
+  async listArtifacts(userId: number): Promise<ArtifactListItem[]> {
+    const sessions = await prisma.session.findMany({
+      where: { userId },
+      select: { id: true, workspaceId: true, title: true },
+    });
+    if (sessions.length === 0) return [];
+    const messages = await this.findArtifactMessages(sessions);
+    const aggregated = aggregateArtifacts(
+      messages,
+      await this.findArtifactWorkspaces(sessions),
+      new Map(sessions.map((s) => [s.id, s.title])),
+    );
+    const favorites = await prisma.artifactFavorite.findMany({
+      where: { userId },
+      select: { workspaceId: true, relPath: true },
+    });
+    const favSet = new Set(
+      favorites.map((f) => `${f.workspaceId}:${f.relPath}`),
+    );
+    return this.filterExistingArtifacts(aggregated, favSet);
+  }
+
+  /** 产物收藏开关（独立表 toggle：命中则删返回 false，否则建返回 true） */
+  async toggleArtifactFavorite(
+    userId: number,
+    workspaceId: number,
+    relPath: string,
+  ): Promise<boolean> {
+    const removed = await prisma.artifactFavorite.deleteMany({
+      where: { workspaceId, relPath, userId },
+    });
+    if (removed.count > 0) return false;
+    await prisma.artifactFavorite.create({
+      data: { workspaceId, relPath, userId },
+    });
+    return true;
+  }
+
+  /** 含 write_file 的消息（LIKE 粗筛，精确过滤在聚合纯函数），补所属工作空间 id */
+  private async findArtifactMessages(
+    sessions: Array<{ id: number; workspaceId: number }>,
+  ): Promise<ArtifactMessageRow[]> {
+    const wsOfSession = new Map(sessions.map((s) => [s.id, s.workspaceId]));
+    const rows = await prisma.message.findMany({
+      where: {
+        sessionId: { in: sessions.map((s) => s.id) },
+        blocks: { contains: "write_file" },
+      },
+      select: {
+        id: true,
+        sessionId: true,
+        role: true,
+        blocks: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((row) => ({
+      ...row,
+      workspaceId: wsOfSession.get(row.sessionId)!,
+    }));
+  }
+
+  /** 涉及的工作空间来源表（name 供展示、directoryPath 供路径 resolve） */
+  private async findArtifactWorkspaces(
+    sessions: Array<{ workspaceId: number }>,
+  ): Promise<Map<number, { name: string; directoryPath: string | null }>> {
+    const ids = [...new Set(sessions.map((s) => s.workspaceId))];
+    const rows = await prisma.workspace.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, directoryPath: true },
+    });
+    return new Map(
+      rows.map((w) => [w.id, { name: w.name, directoryPath: w.directoryPath }]),
+    );
+  }
+
+  /** stat 校验存在且为普通文件，附文件大小/扩展名分类/收藏态；失败剔除不抛 */
+  private async filterExistingArtifacts(
+    aggregated: ReturnType<typeof aggregateArtifacts>,
+    favorites: ReadonlySet<string>,
+  ): Promise<ArtifactListItem[]> {
+    const out: ArtifactListItem[] = [];
+    for (const item of aggregated) {
+      try {
+        const stat = await fs.stat(item.path);
+        if (stat.isFile()) {
+          out.push({
+            ...item,
+            fileType: classifyFileType(item.name),
+            size: stat.size,
+            favorite: favorites.has(`${item.workspaceId}:${item.relPath}`),
+          });
+        }
+      } catch {
+        // 已删除或不可访问——直接剔除（保留会与磁盘现状不符）
+      }
+    }
+    return out;
   }
 
   /** 产物面板：另存为副本（"下载"）。用户取消返回 null */
@@ -574,9 +741,10 @@ export class SessionRepository {
     keyword: string,
     userId: number,
   ): Promise<SearchMessageResult[]> {
-    // 消息按 blocks 全库搜会带出项目消息——先取当前用户非项目会话 id 集限定搜索范围
+    // 会话域统一（D11）：项目会话消息一并可搜——按当前用户全部会话
+    // id 集限定搜索范围（v12 隔离口径不变，仅去掉 projectId 过滤）
     const visibleSessions = await prisma.session.findMany({
-      where: { projectId: null, userId },
+      where: { userId },
       select: { id: true },
     });
     const rows = (

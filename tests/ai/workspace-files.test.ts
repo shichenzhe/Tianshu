@@ -80,6 +80,24 @@ describe("readWorkspaceFile", () => {
     );
   });
 
+  it("webview 类（html/pdf/音视频）返回绝对路径，不读内容、不受 512KB 上限", async () => {
+    for (const name of ["doc.html", "report.pdf", "clip.mp4", "track.flac"]) {
+      const p = path.join(base, name);
+      // 超 512KB 的假字节：webview 分支在读取上限检查之前返回
+      await writeFile(p, Buffer.alloc(600 * 1024, 1));
+      const r = await readWorkspaceFile(p);
+      expect(r.kind).toBe("webview");
+      expect(r.absPath).toBe(p);
+      expect(r.size).toBe(600 * 1024);
+    }
+  });
+
+  it("webview 类不存在同样抛中文文案（stat 校验在前）", async () => {
+    await expect(
+      readWorkspaceFile(path.join(base, "nope.pdf")),
+    ).rejects.toThrow("文件不存在");
+  });
+
   it("目录抛中文文案", async () => {
     await mkdir(path.join(base, "dir"), { recursive: true });
     await expect(readWorkspaceFile(path.join(base, "dir"))).rejects.toThrow(

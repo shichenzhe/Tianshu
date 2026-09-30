@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS session (
     updatedAt DATETIME NOT NULL,
     lastMessageAt DATETIME NULL,
     projectId INTEGER NULL,
+    planItemId INTEGER NULL,
     scenario TEXT NULL,
     userId INTEGER NULL
 );
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS libraryItem (
     mimeType TEXT,
     size INTEGER,
     originalPath TEXT,
+    url TEXT,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL,
     userId INTEGER NULL,
@@ -298,6 +300,20 @@ CREATE TABLE IF NOT EXISTS libraryItem (
 CREATE INDEX IF NOT EXISTS libraryItem_parentId_index ON libraryItem (parentId);
 --/ignore
 CREATE INDEX IF NOT EXISTS libraryItem_userId_index ON libraryItem (userId);
+
+--/p 新建产物收藏表（本地产物「我的收藏」；产物无 DB 实体，键 workspaceId+relPath 与文件生命周期解耦，userId 仅记录归属）
+CREATE TABLE IF NOT EXISTS artifactFavorite (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    workspaceId INTEGER NOT NULL,
+    relPath TEXT NOT NULL,
+    userId INTEGER NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+--/ignore
+CREATE UNIQUE INDEX IF NOT EXISTS artifactFavorite_workspaceId_relPath_key ON artifactFavorite (workspaceId, relPath);
+--/ignore
+CREATE INDEX IF NOT EXISTS artifactFavorite_userId_index ON artifactFavorite (userId);
 
 --/p 新建项目表（项目模块一期；ownerId + name 唯一）
 CREATE TABLE IF NOT EXISTS project (

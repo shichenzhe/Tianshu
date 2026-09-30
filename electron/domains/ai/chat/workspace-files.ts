@@ -15,9 +15,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 export interface WorkspaceFileContent {
-  kind: "text" | "image";
+  kind: "text" | "image" | "webview";
   content?: string;
   dataUrl?: string;
+  /** webview 类（html/pdf/音视频）：绝对路径（前端拼编码 file:// URL） */
+  absPath?: string;
   size: number;
 }
 
@@ -29,6 +31,27 @@ const IMAGE_MIME: Record<string, string> = {
   ".webp": "image/webp",
   ".svg": "image/svg+xml",
 };
+
+/**
+ * webview 类扩展名（与资料库预览口径一致）：不读内容（音频/视频/PDF
+ * 普遍超 512KB 上限，且无需进渲染进程），stat 校验存在后交 webview
+ * 以 file:// 自行加载
+ */
+const WEBVIEW_EXTS = new Set([
+  ".html",
+  ".htm",
+  ".pdf",
+  ".mp3",
+  ".wav",
+  ".ogg",
+  ".m4a",
+  ".flac",
+  ".mp4",
+  ".mov",
+  ".avi",
+  ".mkv",
+  ".webm",
+]);
 
 const READ_LIMIT = 512 * 1024;
 
@@ -91,6 +114,10 @@ export async function readWorkspaceFile(
     throw localizedReadError(e);
   }
   if (!stat.isFile()) throw new Error("目标是目录，无法预览");
+  // webview 类：不读内容、不受文本上限（前端 <webview file://> 自行加载）
+  if (WEBVIEW_EXTS.has(path.extname(absPath).toLowerCase())) {
+    return { kind: "webview", absPath, size: stat.size };
+  }
   if (stat.size > READ_LIMIT) throw new Error("文件超过 512KB 预览上限");
   const buf = await readFileLocalized(absPath);
   const image = toImageContent(absPath, buf, stat.size);

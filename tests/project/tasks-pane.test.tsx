@@ -98,6 +98,12 @@ vi.mock("@/domains/project/api/project.api", () => ({
   },
 }));
 
+// 推进入口（批 5）：openTaskSession 的会话创建桩（跳转经 LocationProbe 断言）
+const sessionApiMock = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock("@/domains/ai/api/session.api", () => ({
+  default: { create: sessionApiMock.create },
+}));
+
 vi.mock("@/domains/user/store/user.store", () => ({
   useUserStore: (selector?: (state: { user: { id: number } }) => unknown) =>
     selector ? selector({ user: { id: 1 } }) : { user: { id: 1 } },
@@ -280,6 +286,7 @@ const awaitRows = async () => {
 beforeEach(() => {
   vi.mocked(PlanItemApi.listMine).mockReset().mockResolvedValue(ITEMS);
   vi.mocked(ProjectApi.list).mockReset().mockResolvedValue(PROJECTS);
+  sessionApiMock.create.mockReset().mockResolvedValue({ id: 60 });
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -348,6 +355,10 @@ describe("TasksPane 列表渲染", () => {
     renderTasksPane();
     expect(await screen.findByText("project:tasks.empty")).toBeTruthy();
     expect(screen.queryByRole("listitem")).toBeNull();
+    // 空态不重复渲染新建按钮：仅工具栏右上角一个
+    expect(
+      screen.getAllByRole("button", { name: "project:tasks.newLocalTask" }),
+    ).toHaveLength(1);
   });
 });
 
@@ -443,5 +454,41 @@ describe("TasksPane 行为", () => {
     const dialog = screen.getByTestId("plan-item-dialog");
     expect(dialog.textContent).toBe("create");
     expect(dialog.dataset.projectId).toBe("null");
+  });
+});
+
+describe("TasksPane 推进入口（批 5 D6：任务 → 专属会话直达）", () => {
+  it("项目任务行尾推进按钮 → create 任务会话（不传 workspaceId）→ 跳 ChatView", async () => {
+    renderTasksPane();
+    await awaitRows();
+
+    fireEvent.click(
+      within(rowOf("官网首页改版")).getByRole("button", {
+        name: "project:plan.advance",
+      }),
+    );
+    await waitFor(() =>
+      expect(sessionApiMock.create).toHaveBeenCalledWith({
+        projectId: 10,
+        planItemId: 22,
+        title: "官网首页改版",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?session=60",
+      ),
+    );
+  });
+
+  it("本地任务行不渲染推进按钮（无项目资产空间）", async () => {
+    renderTasksPane();
+    await awaitRows();
+
+    expect(
+      within(rowOf("买装修建材")).queryByRole("button", {
+        name: "project:plan.advance",
+      }),
+    ).toBeNull();
   });
 });

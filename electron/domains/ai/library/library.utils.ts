@@ -56,12 +56,12 @@ export function uniqueDbName(
   }
 }
 
-/** 子树/面包屑共用的最小行结构 */
+/** 子树/面包屑共用的最小行结构（link 不作父级，仅随子树级联） */
 export interface ItemRow {
   id: number;
   parentId: number | null;
   name: string;
-  kind: "folder" | "file";
+  kind: "folder" | "file" | "link";
 }
 
 /** 收集 rootIds（含自身）在 rows 中的全部后代 id */
@@ -172,20 +172,20 @@ const FILE_TYPE_BY_EXT: Record<string, string> = {
   yml: "code",
   xml: "code",
   txt: "text",
-  md: "text",
-  markdown: "text",
+  md: "markdown",
+  markdown: "markdown",
   log: "text",
-  csv: "text",
+  csv: "spreadsheet",
   rtf: "text",
   doc: "document",
   docx: "document",
-  xls: "document",
-  xlsx: "document",
-  ppt: "document",
-  pptx: "document",
+  xls: "spreadsheet",
+  xlsx: "spreadsheet",
+  ppt: "slides",
+  pptx: "slides",
   pages: "document",
   numbers: "document",
-  key: "document",
+  key: "slides",
   wps: "document",
   et: "document",
   dps: "document",

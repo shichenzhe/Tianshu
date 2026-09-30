@@ -93,6 +93,17 @@ describe("read_skill execute", () => {
     ).resolves.toBe("错误: 技能不存在");
   });
 
+  it("传入全量启用集即可读任意启用技能（项目挂载集是预设，不收窄工具）", async () => {
+    // 模拟项目会话预设语义：即使挂载预设只含 greeting，工具收全量集
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute({ workspacePath: root, sessionId: 1 }, { name: "deploy" }),
+    ).resolves.toBe(SKILL("deploy", "部署"));
+    await expect(
+      tool.execute({ workspacePath: root, sessionId: 1 }, { name: "no-such" }),
+    ).resolves.toBe("错误: 技能不存在");
+  });
+
   it("文件总字节超过 256KB 时按字节截断至上限并追加尾部标记", async () => {
     // 正文 + frontmatter 整体超限；frontmatter 用纯 ASCII 保证断言可精确预测
     const big = "a".repeat(300 * 1024);

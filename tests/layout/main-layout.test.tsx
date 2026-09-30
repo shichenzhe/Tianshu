@@ -4,10 +4,11 @@
  * - 折叠/全局搜索/时间筛选三按钮（AiTopbarActions）作用于全局侧边栏——
  *   所有 /module 路由注入（项目详情页同样可见，回归锚点：曾因 isAiRoute
  *   判断被限制在 /module/ai 导致项目页三按钮消失）
- * - 会话内搜索（SessionSearchBox）仍为 AI 会话专属
+ * - 会话内搜索已随 ChatView 顶行迁入 TopBar 中段（page-header），
+ *   MainLayout 不再注入（原「AI 会话专属」注入逻辑移除）
  * mock 骨架同 tests/ai/chat-input-todo.test.tsx：i18n 直返 key、
- * GlobalSidebar/UserMenu/LanguageSelector/AppLogo 重依赖
- * stub、user.store 固定有效登录态（verifyToken resolve）
+ * GlobalSidebar/UserMenu/AppLogo 重依赖 stub、user.store 固定有效登录态
+ * （verifyToken resolve）
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -69,18 +70,12 @@ vi.mock("@/domains/user/api/user.api", () => ({
 vi.mock("@/domains/ai/layout/components/AiTopbarActions", () => ({
   default: () => <div data-testid="topbar-actions" />,
 }));
-vi.mock("@/domains/ai/layout/components/SessionSearchBox", () => ({
-  default: () => <div data-testid="session-search" />,
-}));
 
-// 重依赖子组件 stub（折叠键接线/菜单/主题语言切换与注入逻辑无关）
+// 重依赖子组件 stub（折叠键接线/菜单与注入逻辑无关）
 vi.mock("../../src-react/components/layout/GlobalSidebar", () => ({
   default: () => null,
 }));
 vi.mock("../../src-react/components/layout/UserMenu", () => ({
-  default: () => null,
-}));
-vi.mock("@/components/common/LanguageSelector", () => ({
   default: () => null,
 }));
 vi.mock("@/components/common/AppLogo", () => ({ default: () => null }));
@@ -108,14 +103,8 @@ describe("顶栏左侧按钮注入（全局侧边栏配套）", () => {
     expect(screen.getByTestId("topbar-actions")).toBeTruthy();
   });
 
-  it("AI 路由 /module/ai → 三按钮 + 会话内搜索均注入", () => {
+  it("AI 路由 /module/ai → 三按钮注入", () => {
     renderLayout("/module/ai");
     expect(screen.getByTestId("topbar-actions")).toBeTruthy();
-    expect(screen.getByTestId("session-search")).toBeTruthy();
-  });
-
-  it("项目详情页 → 会话内搜索不注入（AI 会话专属）", () => {
-    renderLayout("/module/project/1");
-    expect(screen.queryByTestId("session-search")).toBeNull();
   });
 });

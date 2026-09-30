@@ -104,10 +104,6 @@ interface ChatInputProps {
   currentModelId?: number;
   /** 工作空间（@ 文件联想与读取）；未绑定为 null */
   workspaceId: number | null;
-  /** 项目动态流：仅展示已挂载专家；未传不过滤（AI 模块行为不变） */
-  boundAssistantIds?: number[];
-  /** 项目动态流：仅展示已挂载技能（skillRecord.name 匹配） */
-  boundSkillNames?: string[];
   /** 项目待办引用（# 联想数据源）；缺省不启用 # 触发（AI 模块行为不变） */
   todoItems?: TodoSuggestItem[];
   /** 项目底栏本地任务开关（T8）：透传 ＋菜单开关项；缺省不渲染（AI 模块行为不变） */
@@ -162,8 +158,6 @@ export default function ChatInput({
   currentAssistantId,
   currentModelId,
   workspaceId,
-  boundAssistantIds,
-  boundSkillNames,
   todoItems,
   localTask,
   onOpenMcp,
@@ -939,8 +933,6 @@ export default function ChatInput({
             sessionId={sessionId}
             currentMode={currentMode}
             currentAssistantId={currentAssistantId}
-            boundAssistantIds={boundAssistantIds}
-            boundSkillNames={boundSkillNames}
             localTask={localTask}
             onPickPaths={(paths) => {
               for (const filePath of paths) {

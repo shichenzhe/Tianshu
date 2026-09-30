@@ -37,23 +37,19 @@ interface ChatPaneProps {
   workspace: Pick<WorkspaceRecord, "id"> | null;
   hasModel: boolean;
   onOpenSettings: (target: "providers" | "assistants" | "mcp") => void;
-  /** 项目动态流：仅展示已挂载专家；未传不过滤（AI 模块行为不变） */
-  boundAssistantIds?: number[];
-  /** 项目动态流：仅展示已挂载技能（skillRecord.name 匹配） */
-  boundSkillNames?: string[];
 }
 
 /**
- * 单会话面板：useChatSend 唯一实例在此，输入框与消息列表共享 sending
- * 状态；key 取会话 id，切换会话时重建（流监听与节流缓冲随之隔离）
+ * 单会话面板：useChatSend 实例之一（另一实例在项目页 ProjectChatBar 快速
+ * 发起条，各自随挂载订阅/卸载；跨视图衔接经 chat:status 快照恢复，见
+ * use-chat-send.ts），输入框与消息列表共享 sending 状态；key 取会话 id，
+ * 切换会话时重建（流监听与节流缓冲随之隔离）
  */
 export default function ChatPane({
   session,
   workspace,
   hasModel,
   onOpenSettings,
-  boundAssistantIds,
-  boundSkillNames,
 }: ChatPaneProps) {
   const { t } = useTranslation(["chat", "common"]);
   const queryClient = useQueryClient();
@@ -247,8 +243,6 @@ export default function ChatPane({
           currentAssistantId={session.assistantId}
           currentModelId={session.currentModelId}
           workspaceId={workspace?.id ?? null}
-          boundAssistantIds={boundAssistantIds}
-          boundSkillNames={boundSkillNames}
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
           onOpenMcp={() => onOpenSettings("mcp")}
           onRunCommand={handleRunCommand}

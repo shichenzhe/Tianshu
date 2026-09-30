@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 /**
- * ＋菜单能力过滤测试（Task 9：项目动态流仅展示已挂载能力）：
- * - 传 boundAssistantIds/boundSkillNames → 专家/技能子菜单仅显示白名单项
- * - 未传 → 不过滤、全量显示（AI 模块 ChatView 不传，行为不变的回归锚点）
+ * ＋菜单能力展示测试（§3.7 修正后：挂载集是预设而非过滤边界）：
+ * - 专家/技能子菜单全量显示（项目挂载过滤已随硬隔离一并移除，
+ *   预设外能力会话中按需可选——本文件保留全量回归锚点）
  * 全链路交互：渲染真实 PlusMenu，经 ＋ 触发按钮（pointerDown+click 开根，
  * 点二级触发器开浮层）驱动。触发嵌套已修复：TooltipProvider 最外层、
  * 两个 asChild 触发器直连 Button 合并事件 props（b68d536 回归，正确
  * 嵌套参照 context-usage-button.tsx，与主仓 tests/ai/plus-menu.test.tsx
  * 同驱动方式）。数据源 mock：AssistantApi.list / SkillApi.list 返回固定
  * 列表（两子菜单 useQuery 的 queryFn 即此二者），i18n 直返 key。
- * SkillImportDialog 与过滤无关且依赖较重，mock 为空组件。
+ * SkillImportDialog 与展示无关且依赖较重，mock 为空组件。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -149,22 +149,14 @@ async function openSubMenu(subTriggerLabel: string): Promise<void> {
 
 afterEach(cleanup);
 
-describe("＋菜单能力过滤", () => {
+describe("＋菜单能力展示（预设不过滤）", () => {
   it("点击 ＋ 触发按钮应打开扩展菜单（嵌套修复回归锚点）", async () => {
     renderPlusMenu({});
     await openPlusMenu();
     expect(screen.getByText("chat:plus.connector")).toBeTruthy();
   });
 
-  it("传入 boundAssistantIds → 专家子菜单仅显示已挂载专家", async () => {
-    renderPlusMenu({ boundAssistantIds: [1] });
-    await openSubMenu("chat:plus.expert");
-    expect(await screen.findByText("专家A")).toBeTruthy();
-    expect(screen.queryByText("专家B")).toBeNull();
-    expect(screen.queryByText("专家C")).toBeNull();
-  });
-
-  it("未传 boundAssistantIds → 不过滤，全量显示", async () => {
+  it("专家子菜单全量显示（挂载集是预设，不收窄可选项）", async () => {
     renderPlusMenu({});
     await openSubMenu("chat:plus.expert");
     expect(await screen.findByText("专家A")).toBeTruthy();
@@ -172,14 +164,7 @@ describe("＋菜单能力过滤", () => {
     expect(screen.getByText("专家C")).toBeTruthy();
   });
 
-  it("传入 boundSkillNames → 技能子菜单仅显示已挂载技能", async () => {
-    renderPlusMenu({ boundSkillNames: ["alpha-skill"] });
-    await openSubMenu("chat:plus.skill");
-    expect(await screen.findByText("alpha-skill")).toBeTruthy();
-    expect(screen.queryByText("beta-skill")).toBeNull();
-  });
-
-  it("未传 boundSkillNames → 不过滤，全量显示", async () => {
+  it("技能子菜单全量显示（挂载集是预设，不收窄可选项）", async () => {
     renderPlusMenu({});
     await openSubMenu("chat:plus.skill");
     expect(await screen.findByText("alpha-skill")).toBeTruthy();

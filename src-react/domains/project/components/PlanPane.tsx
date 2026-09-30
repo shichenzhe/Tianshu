@@ -29,6 +29,7 @@
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
@@ -61,6 +62,7 @@ import PlanFilterPopover from "./PlanFilterPopover";
 import PlanItemDialog from "./PlanItemDialog";
 import PlanGanttView from "./PlanGanttView";
 import PlanKanbanView, { computeSortOrder } from "./PlanKanbanView";
+import { openTaskSession } from "../lib/task-session";
 import PlanCalendarView from "./PlanCalendarView";
 import PlanListView from "./PlanListView";
 import PlanTableView from "./PlanTableView";
@@ -96,6 +98,7 @@ export default function PlanPane({
 }: PlanPaneProps) {
   const { t } = useTranslation(["project", "common"]);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const user = useUserStore((state) => state.user);
   const setAdvancePrompt = usePlanAdvanceStore((state) => state.setPrompt);
 
@@ -358,6 +361,12 @@ export default function PlanPane({
     );
   };
 
+  /** 推进（会话直达，批 5 D6）统一回调：三视图行内按钮 → openTaskSession
+   *  （复用/新建任务专属会话后跳 ChatView；本地任务由按钮渲染方防御） */
+  const handleAdvanceSession = (item: PlanItemRecord) => {
+    void openTaskSession(queryClient, navigate, item);
+  };
+
   /** 工具栏按钮共用样式 */
   const toolbarButtonClass =
     "h-8 gap-1 px-2 text-xs hover:border-primary/30 hover:bg-primary-subtle hover:text-primary";
@@ -455,6 +464,7 @@ export default function PlanPane({
           onMoveItem={handleMoveItem}
           onQuickCreate={openQuickCreateIn}
           onEdit={openEdit}
+          onAdvanceSession={handleAdvanceSession}
         />
       ) : activeView?.type === "list" ? (
         // 列表视图：状态分组折叠清单（勾选完成走 move；组内 + 携组状态快速新增）
@@ -470,6 +480,7 @@ export default function PlanPane({
           }
           onEdit={openEdit}
           onAiAdvance={handleAiAdvance}
+          onAdvanceSession={handleAdvanceSession}
         />
       ) : activeView?.type === "calendar" ? (
         // 日历视图：点格空白预置该日 dueDate 开新建弹窗（其余预置复位），点 chip 开编辑
@@ -503,6 +514,7 @@ export default function PlanPane({
             onOpenFieldEditor={() => setFieldEditorOpen(true)}
             onDeleteItem={setDeleting}
             onAiAdvance={handleAiAdvance}
+            onAdvanceSession={handleAdvanceSession}
           />
         </div>
       )}

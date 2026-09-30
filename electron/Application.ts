@@ -1,6 +1,12 @@
 import { app } from "electron";
 import path from "path";
 import VersionRepository from "./infrastructure/version/version.repo";
+import {
+  dropAllTables,
+  readSnapshotHash,
+  recordSnapshotHash,
+  shouldResetDatabase,
+} from "./infrastructure/version/snapshot-guard";
 import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
 import { ProviderRepository } from "./domains/ai/provider/provider.repo";
@@ -93,13 +99,41 @@ export default class Application {
     });
 
     try {
-      const currentVersion = await VersionRepository.getCurrent();
+      let currentVersion = await VersionRepository.getCurrent();
       Log.info(
         `当前数据库版本: ${currentVersion}, 目标版本: ${this.databaseVerson}`,
       );
 
       if (currentVersion === 0) {
         await VersionRepository.initTable();
+      }
+
+      // 快照守卫（snapshot-guard）：版本倒挂或同版本指纹不符（发布前
+      // 改 v1 快照不加版）→ drop 全部业务表重放 v1 全量重建（开发期数据可弃）
+      const snapshotPath = path.join(
+        __dirname,
+        "script",
+        "v1",
+        "upgrade-table.sql",
+      );
+      const snapshotHash = await readSnapshotHash(snapshotPath);
+      if (
+        await shouldResetDatabase(
+          prisma.option,
+          currentVersion,
+          this.databaseVerson,
+          snapshotHash,
+        )
+      ) {
+        Log.warn(
+          "数据库结构与 v1 全量快照不一致（版本倒挂或快照已修改），重置开发库重建",
+        );
+        await dropAllTables({
+          query: (sql) => prisma.$queryRawUnsafe(sql),
+          execute: (sql) => prisma.$executeRawUnsafe(sql),
+        });
+        await VersionRepository.initTable();
+        currentVersion = 0;
       }
 
       if (currentVersion < this.databaseVerson) {
@@ -122,6 +156,7 @@ export default class Application {
         }
 
         await VersionRepository.update(currentVersion, this.databaseVerson);
+        await recordSnapshotHash(prisma.option, snapshotHash);
       }
 
       Log.info("init database success");

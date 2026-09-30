@@ -78,8 +78,10 @@ function toMatchInput(
   };
 }
 
-/** 焦点是否位于文本输入类元素（input/textarea/select/contenteditable） */
-function isTextEntryFocused(): boolean {
+/** 焦点是否位于文本输入类元素（input/textarea/select/contenteditable）——
+ *  分发匹配的裸键守卫采集；个别命令（如会话内搜索）需要更强的
+ *  「输入框聚焦即整体不劫持」语义，也从这里取判定（单一口径） */
+export function isTextEntryFocused(): boolean {
   const element = document.activeElement;
   if (!element) {
     return false;

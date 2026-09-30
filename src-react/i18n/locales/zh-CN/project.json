@@ -43,12 +43,9 @@
     "all": "全部"
   },
   "workspace": {
-    "tabActivity": "动态",
     "tabPlan": "计划",
     "tabTasks": "任务",
     "tabAssets": "资产",
-    "filterMine": "与我相关",
-    "filterMembers": "成员动态",
     "togglePanel": "项目配置",
     "notFound": "项目不存在或已删除"
   },
@@ -104,6 +101,7 @@
     "tagPlaceholder": "输入标签，回车添加",
     "deleted": "已删除",
     "aiAdvance": "AI 推进",
+    "advance": "推进（会话）",
     "aiSummary": "AI 进展",
     "advancePrompt": "请推进 #{{id}}《{{title}}》：结合项目上下文与此任务的进展记录，推进下一步工作，并更新任务状态与进展。"
   },
@@ -231,13 +229,12 @@
   },
   "chatBar": {
     "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能",
-    "viewContext": "查看上下文（动态流）",
     "localTask": "本地任务"
   },
   "sidebar": {
     "projects": "项目",
-    "myProjects": "我的项目",
-    "empty": "还没有项目"
+    "enterProject": "进入项目",
+    "deletedProject": "已删除项目"
   },
   "toast": {
     "created": "项目创建成功",
@@ -246,5 +243,14 @@
     "createFailed": "创建失败，请重试",
     "operationFailed": "操作失败，请重试",
     "saved": "已保存"
+  },
+  "handover": {
+    "title": "转办为待办",
+    "titlePlaceholder": "请输入待办标题…",
+    "summaryLabel": "交接摘要",
+    "generating": "AI 摘要生成中…",
+    "retry": "重试",
+    "failedHint": "生成失败，请手动输入",
+    "created": "已创建转办待办"
   }
 }

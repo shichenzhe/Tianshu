@@ -2,7 +2,8 @@
  * 列表视图（子系统 C spec §2，Todo 式紧凑清单）：引擎 groupItems 按状态四组
  * 折叠（组头 = 折叠箭头 + 状态名 + 计数 + 组内 +，空组保留）；行 = 完成
  * checkbox + 标题（点击编辑）+ 标签（2+N）+ 优先级色点 + 截止日（超期
- * destructive）+ 处理人头像点 + 行尾 AI 推进 hover 渐显按钮（子系统 F：
+ * destructive）+ 处理人头像点 + 行尾推进（会话直达，批 5 D6）与 AI 推进
+ * hover 渐显按钮（子系统 F：
  * onAiAdvance 通道，AssetFileTable hover 先例）+ aiSummary 常驻 Sparkles
  * 徽标（title=末行进展）+ source ai 标题前 AI Badge；组内 + 展开行内
  * Input 回车快速新增（预置该组状态）。纯展示+回调，变更逻辑在 PlanPane；
@@ -10,7 +11,13 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Plus, Sparkles } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  MessageSquareText,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,6 +68,8 @@ interface PlanListViewProps {
   onEdit: (item: PlanItemRecord) => void;
   /** 行尾「AI 推进」→ 父层写底栏预填（子系统 F） */
   onAiAdvance: (item: PlanItemRecord) => void;
+  /** 推进（会话直达，批 5 D6）→ 父层 openTaskSession；本地任务不渲染按钮 */
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }
 
 /** 单行：紧凑布局（纯展示） */
@@ -70,12 +79,14 @@ function ListRow({
   onToggleDone,
   onEdit,
   onAiAdvance,
+  onAdvanceSession,
 }: {
   item: PlanItemRecord;
   members: ProjectMemberItem[];
   onToggleDone: (id: number, done: boolean) => void;
   onEdit: (item: PlanItemRecord) => void;
   onAiAdvance: (item: PlanItemRecord) => void;
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }) {
   const { t } = useTranslation(["project", "common"]);
   const done = item.status === "done";
@@ -151,6 +162,19 @@ function ListRow({
       >
         {assignee ? assignee.nickname.charAt(0) : "?"}
       </span>
+      {/* 推进（会话直达，批 5 D6）：hover 渐显同 AI 推进先例；本地任务
+          （防御——计划 Tab 事项恒属项目）不渲染 */}
+      {item.projectId != null && (
+        <button
+          type="button"
+          aria-label={t("project:plan.advance")}
+          title={t("project:plan.advance")}
+          onClick={() => onAdvanceSession(item)}
+          className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-primary focus-visible:opacity-100 group-hover/row:opacity-100"
+        >
+          <MessageSquareText className="h-3.5 w-3.5" />
+        </button>
+      )}
       {/* AI 推进入口：hover 渐显（AssetFileTable 先例） */}
       <button
         type="button"
@@ -171,6 +195,7 @@ export default function PlanListView({
   onQuickCreate,
   onEdit,
   onAiAdvance,
+  onAdvanceSession,
 }: PlanListViewProps) {
   const { t } = useTranslation(["project", "common"]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -246,6 +271,7 @@ export default function PlanListView({
                   onToggleDone={onToggleDone}
                   onEdit={onEdit}
                   onAiAdvance={onAiAdvance}
+                  onAdvanceSession={onAdvanceSession}
                 />
               ))}
               {addingIn === group.key && (

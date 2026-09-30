@@ -110,6 +110,7 @@ function renderList(overrides: Partial<ListProps> = {}) {
     onQuickCreate: vi.fn(),
     onEdit: vi.fn(),
     onAiAdvance: vi.fn(),
+    onAdvanceSession: vi.fn(),
     ...overrides,
   } as ListProps & Record<string, ReturnType<typeof vi.fn>>;
   render(<PlanListView {...props} />);
@@ -308,5 +309,32 @@ describe("AI 推进入口与呈现（子系统 F）", () => {
       1,
     );
     expect(within(rowContaining("手动项")).queryByText("AI")).toBeNull();
+  });
+
+  it("行尾推进（会话直达）按钮 → onAdvanceSession(item)；本地任务行不渲染", () => {
+    const props = renderList({
+      items: [
+        ...ITEMS,
+        makeItem({ id: 9, projectId: null, title: "本地任务" }),
+      ],
+    });
+
+    // 项目事项行：hover 渐显推进钮（同 AI 推进先例）→ 回调上抛
+    const advanceButton = within(rowContaining("需求梳理")).getByRole(
+      "button",
+      { name: "project:plan.advance" },
+    );
+    expect(advanceButton.className).toContain("group-hover/row:opacity-100");
+    fireEvent.click(advanceButton);
+    expect(props.onAdvanceSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, title: "需求梳理" }),
+    );
+
+    // 本地任务行：无推进按钮（无项目资产空间）
+    expect(
+      within(rowContaining("本地任务")).queryByRole("button", {
+        name: "project:plan.advance",
+      }),
+    ).toBeNull();
   });
 });

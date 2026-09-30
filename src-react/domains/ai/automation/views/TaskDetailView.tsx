@@ -3,6 +3,7 @@
  * 任务详情/编辑页(spec §6):顶栏(返回/标题/测试运行/删除/取消/保存) +
  * 左配置右历史分栏。左侧经 useTaskForm 复用弹窗表单(名称/提示词输入卡/
  * 工作空间/权限胶囊/频率卡片),右侧 RunHistoryPanel 任务运行历史。
+ * 顶栏迁入 TopBar 中段（page-header），页内直接分栏上移。
  */
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +15,7 @@ import { ArrowLeft, Loader2, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { usePageHeader } from "@/components/layout/page-header.store";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,8 +77,6 @@ export default function TaskDetailView() {
       navigate("/module/ai/automation", { replace: true });
     }
   }, [isLoading, task, navigate, t]);
-
-  if (!task) return null;
 
   const invalidateTasks = async () => {
     await queryClient.invalidateQueries({ queryKey: ["automation", "tasks"] });
@@ -160,56 +160,78 @@ export default function TaskDetailView() {
     }
   }
 
+  // 顶栏（TopBar 中段）：返回 + 任务名 + 测试运行/删除/取消/保存
+  // （任务未加载完置空，避免闪现占位标题）
+  usePageHeader(
+    task
+      ? {
+          leading: (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              aria-label={t("chat:automation.detail.back")}
+              onClick={handleLeave}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          ),
+          title: (
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {task.name}
+            </h2>
+          ),
+          trailing: (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                disabled={running}
+                onClick={() => void handlePlay()}
+              >
+                {running ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                {t("chat:automation.detail.play")}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground"
+                aria-label={t("chat:automation.detail.deleteTitle")}
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={handleLeave}
+              >
+                {t("chat:automation.detail.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                className="h-7"
+                disabled={!form.isDirty || !form.canSubmit || saving}
+                onClick={() => void handleSave()}
+              >
+                {t("chat:automation.detail.save")}
+              </Button>
+            </>
+          ),
+        }
+      : null,
+  );
+
+  if (!task) return null;
+
   return (
     <div className="flex h-full flex-col">
-      {/* 顶栏 */}
-      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t("chat:automation.detail.back")}
-          onClick={handleLeave}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <h1 className="truncate text-base font-semibold">{task.name}</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            disabled={running}
-            onClick={() => void handlePlay()}
-          >
-            {running ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4" />
-            )}
-            {t("chat:automation.detail.play")}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label={t("chat:automation.detail.deleteTitle")}
-            className="text-muted-foreground"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleLeave}>
-            {t("chat:automation.detail.cancel")}
-          </Button>
-          <Button
-            size="sm"
-            disabled={!form.isDirty || !form.canSubmit || saving}
-            onClick={() => void handleSave()}
-          >
-            {t("chat:automation.detail.save")}
-          </Button>
-        </div>
-      </div>
-
       {/* 左配置右历史分栏(右侧任务运行历史) */}
       <div className="flex flex-1 overflow-hidden">
         <div className="w-[62%] space-y-5 overflow-y-auto p-4">

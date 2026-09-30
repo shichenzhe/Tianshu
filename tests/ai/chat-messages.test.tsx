@@ -7,7 +7,7 @@
  * - props 透传：session/workspace/editing 与编辑回调原样下发 MessageList
  * - DOM 结构与拆分前一致：外壳/内列类名、children 插槽紧随消息列表
  *   （组合壳注入 AgentProgress + ChatInput 的位置；产物面板已上移至
- *   ChatView/ActivityPane 调用方层旁挂，不在本组件）
+ *   ChatView 调用方层旁挂，不在本组件）
  * MessageList 以捕获 props 的 stub 替代（避免挂全量 markdown/react-query
  * 渲染管道，骨架参照 chat-view-edit-optimistic.test.tsx）
  */

@@ -290,6 +290,10 @@ describe("compileMemory", () => {
     expect(modelText).toHaveBeenCalledTimes(1);
     const [system, prompt] = modelText.mock.calls[0];
     expect(system).toBe(MEMORY_COMPILER_SYSTEM_PROMPT);
+    // 头部注入时间行（条目 [YYYY-MM-DD]/倒序/过时判断的「今天」基准）
+    expect(prompt).toMatch(
+      /^当前时间：\d{4}-\d{2}-\d{2} \d{2}:\d{2} 周[日一二三四五六] UTC[+-]\d{2}:\d{2}\n\n/,
+    );
     expect(prompt).toContain("（空）");
     expect(prompt).toContain("近期对话材料");
     expect(prompt).toContain("对话材料");

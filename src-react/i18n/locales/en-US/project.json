@@ -43,12 +43,9 @@
     "all": "All"
   },
   "workspace": {
-    "tabActivity": "Activity",
     "tabPlan": "Plan",
     "tabTasks": "Tasks",
     "tabAssets": "Assets",
-    "filterMine": "Involving me",
-    "filterMembers": "Member activity",
     "togglePanel": "Project Settings",
     "notFound": "Project not found or has been deleted"
   },
@@ -104,6 +101,7 @@
     "tagPlaceholder": "Type a tag and press Enter to add",
     "deleted": "Deleted",
     "aiAdvance": "AI advance",
+    "advance": "Advance (session)",
     "aiSummary": "AI progress",
     "advancePrompt": "Please advance #{{id}} \"{{title}}\": with project context and this task's progress history, drive the next step, then update its status and progress."
   },
@@ -231,13 +229,12 @@
   },
   "chatBar": {
     "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills",
-    "viewContext": "View context (activity)",
     "localTask": "Local tasks"
   },
   "sidebar": {
     "projects": "Projects",
-    "myProjects": "My Projects",
-    "empty": "No projects yet"
+    "enterProject": "Enter project",
+    "deletedProject": "Deleted project"
   },
   "toast": {
     "created": "Project created",
@@ -246,5 +243,14 @@
     "createFailed": "Failed to create. Please try again",
     "operationFailed": "Operation failed. Please try again",
     "saved": "Saved"
+  },
+  "handover": {
+    "title": "Handover as todo",
+    "titlePlaceholder": "Enter a todo title…",
+    "summaryLabel": "Handover summary",
+    "generating": "Generating AI summary…",
+    "retry": "Retry",
+    "failedHint": "Generation failed, please enter manually",
+    "created": "Handover todo created"
   }
 }

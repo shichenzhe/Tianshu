@@ -96,7 +96,7 @@ function FileListItem({ file, workspaceId, onPreview }: FileListItemProps) {
           <button
             type="button"
             aria-label={t("chat:artifacts.moreActions")}
-            className="absolute right-1 hidden shrink-0 rounded p-0.5 text-muted-foreground group-hover:block hover:text-primary"
+            className="absolute right-1 rounded p-0.5 text-muted-foreground opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto hover:text-primary"
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-4 w-4" />

@@ -3,7 +3,7 @@
  * 只承载 MessageList（编辑态接线由组合壳以 props 透传）；底部插槽
  * （children）渲染于消息列表之后，组合壳据此注入 AgentProgress 与
  * ChatInput，DOM 结构与拆分前一致。产物面板由调用方旁挂为全高右列
- * （ChatView/ActivityPane 层渲染，与项目详情右栏同构）。
+ * （ChatView 层渲染，与项目详情右栏同构）。
  */
 import type { ReactNode } from "react";
 

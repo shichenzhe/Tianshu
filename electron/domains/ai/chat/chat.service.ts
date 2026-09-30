@@ -27,6 +27,7 @@ import {
 } from "./blocks";
 import { mergeParams, type ChatModelParams } from "./param-merge";
 import { buildScenarioSystem } from "./scenario-prompt";
+import { withTimeBlock } from "./time-context";
 import { estimateReserveTokens, truncateHistory } from "./history-truncate";
 import {
   computeUsageBreakdown,
@@ -39,6 +40,10 @@ import {
   isExternalReadAllowed,
 } from "./external-file-gate";
 import { createLanguageModel } from "../provider/provider-factory";
+import {
+  runHandoverSummary,
+  type HandoverModelTextFn,
+} from "./handover-summary";
 import { SessionRepository, type AppendMessageParams } from "./session.repo";
 import {
   registry,
@@ -281,17 +286,16 @@ function buildModeSystem(
 
 /** 项目会话工具硬隔离结果（项目模块二期 §3.7）：ask 模式不适用（零工具零技能） */
 interface ProjectToolIsolation {
-  /** 过滤后技能清单（= 启用扫描结果 ∩ 挂载技能名） */
+  /** 过滤后技能清单（= 启用扫描结果 ∩ 挂载技能名，system 清单预设聚焦用） */
   skills: SkillInfo[];
-  /** 声明段消费的项目上下文（技能名收窄到实际可用集，声明与实际一致） */
+  /** 声明段消费的项目上下文（技能名收窄到实际可用集，防声明未安装技能名） */
   declaredCtx: ProjectPromptContext;
-  /** 挂载连接器名集合（mcp__ 工具前缀白名单；空数组 = 全隔离） */
-  allowedMcpServers: string[];
 }
 
 /**
- * 项目会话工具硬隔离（项目模块二期 §3.7）：技能清单按挂载集过滤、
- * 声明段技能名同步收窄、连接器名透传为 mcp__ 前缀白名单。
+ * 项目会话能力预设（二期 §3.7 修正：预设≠围墙）：技能清单与声明段
+ * 按挂载集收窄（system prompt 引导优先），但工具集不做硬过滤——
+ * 会话中可按需使用预设外的技能/连接器（read_skill 全量、mcp 全量）。
  * 纯函数：由 assembleContext 在项目上下文非空且非 ask 模式时调用
  */
 function isolateProjectTools(
@@ -307,7 +311,6 @@ function isolateProjectTools(
       ...projectCtx,
       boundSkillNames: mounted.map((skill) => skill.name),
     },
-    allowedMcpServers: projectCtx.boundConnectorNames,
   };
 }
 
@@ -1042,6 +1045,9 @@ export default class ChatService {
     // 运行时工具过滤（SP6 裁定 2）：Application 注入安全配置禁用清单闭包；
     // 缺席（测试）不滤，行为与接入前一致
     private runtimeFilter?: () => string[],
+    // 转办交接摘要模型补全（批 12）：缺席走真实 generateText；
+    // 测试注入 stub（memory-compiler ModelTextFn 同款模式）
+    private handoverModelText?: HandoverModelTextFn,
   ) {
     this.registerHandlers();
   }
@@ -1086,6 +1092,10 @@ export default class ChatService {
         userId,
         p: { workspaceId: number; text: string; style: PolishStyle },
       ) => this.polishText(p, userId),
+    );
+    // 转办交接摘要（批 12）：一次性补全不落库，摘要经弹框确认后另存待办
+    handleUser("chat:handoverSummary", (_, userId, sessionId: number) =>
+      this.handoverSummary(sessionId, userId),
     );
     // P1 审批决议：渲染层 → 主进程，resolve 挂起的 write 工具。
     // 审批卡产生于已校验归属的会话流内（toolCallId 一次性），运行态不落库；
@@ -1394,6 +1404,18 @@ export default class ChatService {
       }
       grantExternalPaths(result.filePaths);
       return result.filePaths;
+    });
+    // 资料库「上传文件夹」：目录选择器（单选）；路径由主进程
+    // library:importFolder 直接消费（不经 readExternalFile 授权链），
+    // 取消返回 null
+    handleUser("file:pickLocalFolder", async (): Promise<string | null> => {
+      const result = await dialog.showOpenDialog({
+        properties: ["openDirectory"],
+      });
+      if (result.canceled || result.filePaths.length === 0) {
+        return null;
+      }
+      return result.filePaths[0] ?? null;
     });
   }
 
@@ -1819,18 +1841,17 @@ export default class ChatService {
 
   /**
    * 注入工具集（P2 spec 决策 #3）：read_skill 常驻（未绑定目录也注入，与
-   * system prompt 消费同一次 skills 扫描）；mcp__* 经 registry 透传——
-   * 项目会话工具硬隔离（二期 §3.7）：allowedMcpServers 非 null 时仅保留
-   * 挂载连接器前缀的工具（前缀 `mcp__<server>__` 精确到 server 边界），
-   * 非 mcp 工具不受影响；null = 非项目/ask 会话，全量（plan_* 除外——
-   * 项目专属工具，全局会话无计划上下文，子系统 F）；
+   * system prompt 消费同一次 skills 扫描——项目会话传全量启用集，预设外
+   * 技能会话中按需可读）；mcp__* 经 registry 透传——项目会话不做挂载
+   * 硬过滤（二期 §3.7 修正：挂载集是预设软约束，见 project-prompt），
+   * plan_* 为项目专属工具，仅项目会话注入（全局会话无计划上下文）；
    * create_skill 落盘到用户技能目录、不依赖工作空间，未绑定目录也放行（P-D）；
    * 文件四件依赖工作空间路径，仅绑定目录后注入
    */
   private collectToolDefinitions(
     agent: AgentStreamOptions,
     skills: SkillInfo[],
-    allowedMcpServers: string[] | null = null,
+    isProjectSession: boolean,
   ): ToolDefinition[] {
     const registered = registry.getDefinitions();
     const workspaceScoped = agent.workspacePath
@@ -1838,14 +1859,8 @@ export default class ChatService {
       : registered.filter(
           (def) => def.name.startsWith("mcp__") || def.name === "create_skill",
         );
-    const injected = allowedMcpServers
-      ? workspaceScoped.filter(
-          (def) =>
-            !def.name.startsWith("mcp__") ||
-            allowedMcpServers.some((server) =>
-              def.name.startsWith(`mcp__${server}__`),
-            ),
-        )
+    const injected = isProjectSession
+      ? workspaceScoped
       : workspaceScoped.filter((def) => !def.name.startsWith("plan_"));
     // 注入层过滤（SP6 裁定 2）：禁用=对模型不存在；闭包实时读配置，
     // runtimeFilter 缺席（测试）不滤
@@ -1920,8 +1935,8 @@ export default class ChatService {
             ? []
             : this.collectToolDefinitions(
                 ctx.agent,
-                ctx.skills,
-                ctx.allowedMcpServers,
+                ctx.allSkills,
+                ctx.isProjectSession,
               ),
         agent: ctx.agent,
         maxSteps,
@@ -2038,6 +2053,19 @@ export default class ChatService {
         role: row.role as "user" | "assistant",
         blocks: row.blocks,
       }));
+    // 时间行注入（time-context）：最后一条 user 消息 blocks 头部——每次
+    // 请求重拼随请求刷新（计划工具 dueDate 的「今天」基准）；放这里而非
+    // system 是为前缀缓存（见 time-context 头注释），system 与历史保持
+    // 逐字节稳定。倒序找（findLastIndex 为 ES2023，lib 只到 ES2022）
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") {
+        history[i] = {
+          ...history[i],
+          blocks: withTimeBlock(history[i].blocks, new Date()),
+        };
+        break;
+      }
+    }
 
     const agent = await this.resolveAgentOptions(session, sessionId);
     // P3 模式组装（spec R5）：DB null/未识别值归一 agent；ask 零工具零技能
@@ -2052,10 +2080,10 @@ export default class ChatService {
         : await this.collectEnabledSkills(agent.workspacePath);
     // 压缩态摘要段:拼在模式 system 之后(无 base 时单独成段)
     // 个性化段注入（spec §4.5）：persona 前置 + 行为段后置，全默认时逐字节还原
-    // 项目会话（项目模块一期 spec §5）：base 换为项目上下文（项目指令+挂载专家
-    // prompt+能力软约束声明）；非项目会话或项目上下文为空 → 原助手 prompt 不变。
-    // 工具硬隔离（二期 §3.7）：ask 外的项目会话，技能清单按挂载集过滤、
-    // mcp 工具按挂载连接器前缀过滤（声明段同步收窄到实际可用集）
+    // 项目会话（项目模块一期 spec §5）：base = 项目指令 + 挂载专家（预设）+
+    // 会话所选助手 prompt + 预设能力声明；非项目会话为原助手 prompt。
+    // 能力预设（二期 §3.7 修正）：技能清单按挂载集收窄（system 预设聚焦），
+    // 工具集不硬过滤——read_skill/mcp 全量可用，会话中可按需用预设外能力
     const projectCtx = session.projectId
       ? await this.projectRepo?.getPromptContext(session.projectId)
       : null;
@@ -2064,10 +2092,9 @@ export default class ChatService {
         ? isolateProjectTools(skills, projectCtx)
         : null;
     const sessionSkills = isolation ? isolation.skills : skills;
-    const allowedMcpServers = isolation?.allowedMcpServers ?? null;
     const baseProjectCtx = isolation ? isolation.declaredCtx : projectCtx;
     const base = baseProjectCtx
-      ? (buildProjectSystemBase(baseProjectCtx) ?? assistantRow?.systemPrompt)
+      ? buildProjectSystemBase(baseProjectCtx, assistantRow?.systemPrompt)
       : assistantRow?.systemPrompt;
     const personalization = await loadPersonalization();
     // 场景提示段注入（新建任务 spec §4.2）：session.scenario 非空且已知时
@@ -2095,7 +2122,10 @@ export default class ChatService {
       agent,
       mode,
       skills: sessionSkills,
-      allowedMcpServers,
+      /** 全量启用扫描集（挂载收窄前——read_skill 工具消费） */
+      allSkills: skills,
+      /** 项目会话标记（plan_* 项目专属工具注入判定） */
+      isProjectSession: isolation !== null,
       baseSystem,
       systemWithSummary,
     };
@@ -2116,8 +2146,8 @@ export default class ChatService {
           ? []
           : this.collectToolDefinitions(
               ctx.agent,
-              ctx.skills,
-              ctx.allowedMcpServers,
+              ctx.allSkills,
+              ctx.isProjectSession,
             );
       return computeUsageBreakdown({
         systemWithSummary: ctx.systemWithSummary,
@@ -2327,6 +2357,26 @@ export default class ChatService {
       prompt: p.text,
     });
     return { text: result.text };
+  }
+
+  /**
+   * 会话转办交接摘要（批 12）：归属校验 → 读会话消息生成五段式 markdown
+   * （模型=会话当前模型，回落默认候选序，见 handover-summary.ts）。
+   * 公开方法（与 send/status 同口径）：无消息/无模型/调用失败抛中文错误，
+   * 前端 toast 直显
+   */
+  async handoverSummary(sessionId: number, userId: number): Promise<string> {
+    await this.sessions.assertSessionOwned(sessionId, userId);
+    const session = await this.sessions.getSession(sessionId);
+    if (!session) {
+      throw new Error("SESSION_NOT_FOUND");
+    }
+    return runHandoverSummary({
+      prismaLike: prisma,
+      sessionId,
+      currentModelId: session.currentModelId,
+      modelText: this.handoverModelText,
+    });
   }
 
   stop(sessionId: number): void {

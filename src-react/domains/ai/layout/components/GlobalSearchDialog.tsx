@@ -15,7 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import WorkspaceApi from "../../api/workspace.api";
-import SessionApi from "../../api/session.api";
+import SessionApi, { type SessionRecord } from "../../api/session.api";
+import ProjectApi from "@/domains/project/api/project.api";
+import { useUserStore } from "@/domains/user/store/user.store";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { useAiUiStore } from "../../store/ai-ui.store";
 
@@ -42,14 +44,26 @@ export default function GlobalSearchDialog() {
     queryFn: () => WorkspaceApi.list(),
     enabled: searchOpen,
   });
+  // 项目名来源（结果行副标题兜底）：与 SessionTreePanel 共用缓存，
+  // 标题搜索一期起可命中项目会话（D4）
+  const user = useUserStore((state) => state.user);
+  const projectsQuery = useQuery({
+    queryKey: ["projects", user.id],
+    queryFn: () => ProjectApi.list(),
+    enabled: searchOpen,
+  });
   const resultsQuery = useQuery({
     queryKey: ["session-search", debounced],
     queryFn: () => SessionApi.searchByTitle(debounced),
     enabled: searchOpen,
   });
   const results = resultsQuery.data ?? [];
-  const workspaceName = (id: number) =>
-    workspacesQuery.data?.find((w) => w.id === id)?.name ?? "";
+  /** 结果行副标题：普通会话取空间名；项目会话（workspaceId 为资产空间，
+   *  不在空间列表）回退项目名，避免副标题空白 */
+  const resultOrigin = (session: SessionRecord) =>
+    workspacesQuery.data?.find((w) => w.id === session.workspaceId)?.name ??
+    projectsQuery.data?.find((p) => p.id === session.projectId)?.name ??
+    "";
 
   const handleSelect = (sessionId: number) => {
     setSearchOpen(false);
@@ -108,7 +122,7 @@ export default function GlobalSearchDialog() {
                     {session.title}
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {workspaceName(session.workspaceId)}
+                    {resultOrigin(session)}
                   </span>
                 </span>
               </button>

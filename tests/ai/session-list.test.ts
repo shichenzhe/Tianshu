@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   filterSessionsByTime,
+  projectSessionGroups,
   sortSessions,
+  type SessionGroupFields,
   type SessionTimeFields,
 } from "../../src-react/domains/ai/chat/lib/session-list";
 
-function item(overrides: Partial<SessionTimeFields> & { id: number }) {
+function item(
+  overrides: Partial<SessionTimeFields & SessionGroupFields> & { id: number },
+) {
   return {
     updatedAt: "2026-09-04T00:00:00.000Z",
     ...overrides,
@@ -92,5 +96,75 @@ describe("filterSessionsByTime 时间筛选", () => {
     expect(
       filterSessionsByTime(sessions, "month", now).map((s) => s.id),
     ).toEqual([2]);
+  });
+});
+
+describe("projectSessionGroups 项目分组派生（一期会话统一 D4）", () => {
+  it("projectId 非空会话按项目聚合，普通会话不进组；组内任务会话排主会话前", () => {
+    const groups = projectSessionGroups([
+      item({ id: 1 }),
+      item({ id: 2, projectId: 11 }),
+      item({ id: 3, projectId: 11, planItemId: 55 }),
+      item({ id: 4, projectId: 12 }),
+    ]);
+    expect(groups.map((g) => g.projectId)).toEqual([11, 12]);
+    // 组内 planItemId 非空（任务会话）在前，子集内保持传入序
+    expect(groups[0].sessions.map((s) => s.id)).toEqual([3, 2]);
+    expect(groups[1].sessions.map((s) => s.id)).toEqual([4]);
+  });
+
+  it("组间按 projectOrder（侧边栏项目列表序）取有会话的项目，已删项目兜底在后", () => {
+    const groups = projectSessionGroups(
+      [
+        item({ id: 1, projectId: 99 }), // 已删项目先出现（首现序兜底）
+        item({ id: 2, projectId: 11 }),
+        item({ id: 3, projectId: 12 }),
+      ],
+      [12, 11],
+    );
+    expect(groups.map((g) => g.projectId)).toEqual([12, 11, 99]);
+  });
+
+  it("projectOrder 内无会话的项目不产生空组", () => {
+    const groups = projectSessionGroups(
+      [item({ id: 1, projectId: 11 })],
+      [11, 12],
+    );
+    expect(groups.map((g) => g.projectId)).toEqual([11]);
+  });
+
+  it("与时间筛选组合：界外项目会话被滤掉后不产生组（时间筛选覆盖项目会话）", () => {
+    const now = new Date(2026, 8, 5, 15, 0, 0); // 本地 2026-09-05 15:00
+    const filtered = filterSessionsByTime(
+      [
+        item({
+          id: 1,
+          projectId: 11,
+          lastMessageAt: new Date(2026, 8, 5, 8, 0, 0).toISOString(),
+        }),
+        item({
+          id: 2,
+          projectId: 12,
+          lastMessageAt: new Date(2026, 8, 1, 0, 0, 0).toISOString(),
+        }),
+        item({
+          id: 3,
+          lastMessageAt: new Date(2026, 8, 1, 0, 0, 0).toISOString(),
+        }),
+      ],
+      "today",
+      now,
+    );
+    const groups = projectSessionGroups(filtered, [11, 12]);
+    expect(groups.map((g) => g.projectId)).toEqual([11]);
+  });
+
+  it("不修改入参数组", () => {
+    const input = [
+      item({ id: 1, projectId: 11 }),
+      item({ id: 2, projectId: 11, planItemId: 55 }),
+    ];
+    projectSessionGroups(input);
+    expect(input.map((s) => s.id)).toEqual([1, 2]);
   });
 });

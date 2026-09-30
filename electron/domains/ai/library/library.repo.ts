@@ -16,7 +16,6 @@ import type { PrismaClient } from "../../../generated/prisma/client";
 import type {
   LibraryItem,
   AddFilesResult,
-  LibraryFolderNode,
 } from "../../../../src-react/domains/ai/library/api/library.api";
 import {
   buildBreadcrumbChain,
@@ -49,22 +48,24 @@ type LibraryRowInput = {
   favorite?: boolean;
   lastViewedAt?: Date | null;
   originalPath?: string | null;
+  url?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
 
-/** DB 行 → 前端契约（file 附 storagePath 绝对路径；folder 恒 null） */
+/** DB 行 → 前端契约（file 附 storagePath 绝对路径；folder/link 恒 null） */
 function toClientItem(row: LibraryRowInput, libraryRoot: string): LibraryItem {
   const isFile = row.kind === "file";
   return {
     id: row.id,
     parentId: (row.parentId as number | null) ?? null,
     name: row.name as string,
-    kind: row.kind as "folder" | "file",
+    kind: row.kind as "folder" | "file" | "link",
     fileType: (row.fileType as string | null) ?? null,
     mimeType: (row.mimeType as string | null) ?? null,
     size: (row.size as number | null) ?? null,
     originalPath: (row.originalPath as string | null) ?? null,
+    url: (row.url as string | null) ?? null,
     favorite: row.favorite ?? false,
     lastViewedAt:
       row.lastViewedAt instanceof Date
@@ -100,6 +101,24 @@ export default class LibraryRepository {
       (_, userId, name: string, parentId: number | null) =>
         this.createFolder(name, parentId, userId),
     );
+    handleUser(
+      "library:createFile",
+      (_, userId, name: string, folderId: number | null) =>
+        this.createFile(name, folderId, userId),
+    );
+    handleUser(
+      "library:importFolder",
+      (_, userId, dirPath: string, parentId: number | null) =>
+        this.importFolder(dirPath, parentId, userId),
+    );
+    handleUser(
+      "library:addLink",
+      (_, userId, url: string, title: string | null, folderId: number | null) =>
+        this.addLink(url, title, folderId, userId),
+    );
+    handleUser("library:openLink", (_, userId, id: number) =>
+      this.openLink(id, userId),
+    );
     handleUser("library:rename", (_, userId, id: number, name: string) =>
       this.rename(id, name, userId),
     );
@@ -123,6 +142,11 @@ export default class LibraryRepository {
       this.subtreeCount(id, userId),
     );
     handleUser("library:tree", (_, userId) => this.tree(userId));
+    handleUser(
+      "library:writeFileContent",
+      (_, userId, id: number, content: string) =>
+        this.writeFileContent(id, content, userId),
+    );
     handleUser("library:toggleFavorite", (_, userId, id: number) =>
       this.toggleFavorite(id, userId),
     );
@@ -246,18 +270,13 @@ export default class LibraryRepository {
     return this.withLocation(rows, userId);
   }
 
-  /** 全量文件夹平铺（树形栏数据源；个人库量级小一次拉全，元数据
-   *  变更后由前端 invalidate 重拉） */
-  async tree(userId: number): Promise<LibraryFolderNode[]> {
+  /** 全量条目平铺（树形栏数据源，folder+file+link——树上文件夹下需
+   *  挂文件；个人库量级小一次拉全，元数据变更后由前端 invalidate 重拉） */
+  async tree(userId: number): Promise<LibraryItem[]> {
     const rows = await this.prismaClient.libraryItem.findMany({
-      where: { kind: "folder", userId },
-      select: { id: true, parentId: true, name: true },
+      where: { userId },
     });
-    return rows.map((row) => ({
-      id: row.id,
-      parentId: row.parentId ?? null,
-      name: row.name,
-    }));
+    return rows.map((row) => toClientItem(row, this.libraryRoot));
   }
 
   /** 新建文件夹：清洗 + 同层重名序号 */
@@ -280,6 +299,176 @@ export default class LibraryRepository {
       data: { parentId, name: finalName, kind: "folder", userId },
     });
     return toClientItem(row, this.libraryRoot);
+  }
+
+  /**
+   * 新建空文件（+菜单「新建文档 .md / 新建表格 .csv」）：同层重名序号；
+   * mkdir {libraryRoot}/{id} → writeFile 空内容 → size 0。写盘失败回滚
+   * 记录与目录（对齐 addFiles 逐条回滚口径）。
+   */
+  async createFile(
+    name: string,
+    folderId: number | null,
+    userId: number,
+  ): Promise<LibraryItem> {
+    if (folderId !== null) {
+      const parent = await this.mustGet(folderId, userId);
+      if (parent.kind !== "folder") {
+        throw new Error("上级必须是文件夹");
+      }
+    }
+    const finalName = uniqueDbName(
+      await this.siblingNames(folderId, userId),
+      sanitizeLibraryName(name),
+    );
+    const row = await this.prismaClient.libraryItem.create({
+      data: {
+        parentId: folderId,
+        name: finalName,
+        kind: "file",
+        fileType: classifyFileType(finalName),
+        mimeType: mimeOf(finalName),
+        userId,
+      },
+    });
+    const dir = storageDirOf(this.libraryRoot, row.id);
+    try {
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(path.join(dir, finalName), "");
+      await this.prismaClient.libraryItem.update({
+        where: { id: row.id },
+        data: { size: 0 },
+      });
+    } catch (error) {
+      await this.prismaClient.libraryItem
+        .deleteMany({ where: { id: { in: [row.id] } } })
+        .catch(() => {});
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+      throw error;
+    }
+    return toClientItem({ ...row, size: 0 }, this.libraryRoot);
+  }
+
+  /**
+   * 覆写文件内容（详情面板 md/csv 编辑保存）：ID 寻址写盘 + 更新
+   * size/updatedAt；folder/link 拒绝（无磁盘实体/无内容语义）；目录
+   * 理论上随 createFile 已建，mkdir 兜底覆盖「库目录被外部清空」场景。
+   */
+  async writeFileContent(
+    id: number,
+    content: string,
+    userId: number,
+  ): Promise<LibraryItem> {
+    const row = await this.mustGet(id, userId);
+    if (row.kind !== "file") {
+      throw new Error("仅文件支持编辑");
+    }
+    const dir = storageDirOf(this.libraryRoot, row.id);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, row.name), content, "utf8");
+    const updated = await this.prismaClient.libraryItem.update({
+      where: { id: row.id },
+      data: { size: Buffer.byteLength(content, "utf8"), updatedAt: new Date() },
+    });
+    return toClientItem(updated, this.libraryRoot);
+  }
+
+  /**
+   * 导入文件夹（+菜单「上传文件夹」）：以所选目录名建根文件夹，内容
+   * 递归入库——子目录递归建层、文件走 addFiles；结果累计对齐 addFiles
+   * 口径（单条失败不阻断批次）。
+   */
+  async importFolder(
+    dirPath: string,
+    parentId: number | null,
+    userId: number,
+  ): Promise<AddFilesResult> {
+    if (!existsSync(dirPath)) {
+      throw new Error("源目录不存在");
+    }
+    const rootFolder = await this.createFolder(
+      path.basename(dirPath),
+      parentId,
+      userId,
+    );
+    return this.importDirContents(dirPath, rootFolder.id, userId);
+  }
+
+  /** 递归铺目录内容（importFolder 内部步骤；隐藏文件/符号链接跳过） */
+  private async importDirContents(
+    dirPath: string,
+    folderId: number,
+    userId: number,
+  ): Promise<AddFilesResult> {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const result: AddFilesResult = { added: [], failed: [] };
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) {
+        continue;
+      }
+      const absPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        const sub = await this.createFolder(entry.name, folderId, userId);
+        const subResult = await this.importDirContents(absPath, sub.id, userId);
+        result.added.push(...subResult.added);
+        result.failed.push(...subResult.failed);
+      } else if (entry.isFile()) {
+        const batch = await this.addFiles([absPath], folderId, userId);
+        result.added.push(...batch.added);
+        result.failed.push(...batch.failed);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * 添加链接（+菜单「添加链接」）：kind=link 纯 DB 条目（无磁盘实体，
+   * delete 走纯 DB 分支）；地址限 http(s)，标题缺省取域名。
+   */
+  async addLink(
+    url: string,
+    title: string | null,
+    folderId: number | null,
+    userId: number,
+  ): Promise<LibraryItem> {
+    let host: string;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        throw new Error("bad protocol");
+      }
+      host = parsed.hostname;
+    } catch {
+      throw new Error("链接地址无效");
+    }
+    if (folderId !== null) {
+      const parent = await this.mustGet(folderId, userId);
+      if (parent.kind !== "folder") {
+        throw new Error("上级必须是文件夹");
+      }
+    }
+    const name = uniqueDbName(
+      await this.siblingNames(folderId, userId),
+      sanitizeLibraryName((title ?? "").trim() || host),
+    );
+    const row = await this.prismaClient.libraryItem.create({
+      data: { parentId: folderId, name, kind: "link", url, userId },
+    });
+    return toClientItem(row, this.libraryRoot);
+  }
+
+  /** 打开链接（默认浏览器；仅 link 条目，http(s) 再校验防库内数据被改） */
+  async openLink(id: number, userId: number): Promise<null> {
+    const row = await this.mustGet(id, userId);
+    if (row.kind !== "link") {
+      throw new Error("仅链接条目可打开");
+    }
+    const url = row.url ?? "";
+    if (!/^https?:\/\//.test(url)) {
+      throw new Error("链接地址无效");
+    }
+    await shell.openExternal(url);
+    return null;
   }
 
   /**
@@ -477,7 +666,7 @@ export default class LibraryRepository {
       id: row.id,
       parentId: row.parentId ?? null,
       name: row.name,
-      kind: row.kind as "folder" | "file",
+      kind: row.kind as "folder" | "file" | "link",
     }));
   }
 

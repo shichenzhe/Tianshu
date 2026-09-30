@@ -387,6 +387,7 @@ function renderKanban(
   const onMoveItem = vi.fn();
   const onQuickCreate = vi.fn();
   const onEdit = vi.fn();
+  const onAdvanceSession = vi.fn();
   render(
     <PlanKanbanView
       items={items}
@@ -396,9 +397,10 @@ function renderKanban(
       onMoveItem={onMoveItem}
       onQuickCreate={onQuickCreate}
       onEdit={onEdit}
+      onAdvanceSession={onAdvanceSession}
     />,
   );
-  return { onMoveItem, onQuickCreate, onEdit };
+  return { onMoveItem, onQuickCreate, onEdit, onAdvanceSession };
 }
 
 /** 四态覆盖：not_started 两张（含 5 标签截断用例）、in_progress 一张、paused 空、done 一张 */
@@ -602,6 +604,29 @@ describe("PlanKanbanView 渲染（DOM）", () => {
     fireEvent.click(cardOf("需求评审"));
     expect(onEdit).toHaveBeenCalledWith(KANBAN_ITEMS[0]);
     expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it("卡片标题区推进（会话直达）按钮 → onAdvanceSession(item)，不触发行点击；本地任务卡不渲染", () => {
+    const { onEdit, onAdvanceSession } = renderKanban([
+      ...KANBAN_ITEMS,
+      makeItem({ id: 99, projectId: null, title: "本地防御卡" }),
+    ]);
+
+    // 推进钮为卡体按钮的兄弟节点（同 wrapper，避免 button 嵌套）
+    const wrapper = cardOf("需求评审").closest("div") as HTMLElement;
+    fireEvent.click(
+      within(wrapper).getByRole("button", { name: "project:plan.advance" }),
+    );
+    expect(onAdvanceSession).toHaveBeenCalledWith(KANBAN_ITEMS[0]);
+    // 点击推进不冒泡到卡体（卡体点击 = onEdit）
+    expect(onEdit).not.toHaveBeenCalled();
+
+    const localWrapper = cardOf("本地防御卡").closest("div") as HTMLElement;
+    expect(
+      within(localWrapper).queryByRole("button", {
+        name: "project:plan.advance",
+      }),
+    ).toBeNull();
   });
 });
 

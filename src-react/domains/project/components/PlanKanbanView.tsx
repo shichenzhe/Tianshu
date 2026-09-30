@@ -36,7 +36,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus } from "lucide-react";
+import { MessageSquareText, Plus } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -177,6 +177,9 @@ interface PlanKanbanViewProps {
   onQuickCreate: (preset: KanbanQuickCreatePreset) => void;
   /** 点击卡片 → 父层打开编辑弹窗 */
   onEdit: (item: PlanItemRecord) => void;
+  /** 卡片标题区推进（会话直达，批 5 D6）→ 父层 openTaskSession；
+   *  本地任务不渲染按钮（计划 Tab 事项恒属项目，防御性判空） */
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }
 
 /**
@@ -206,10 +209,12 @@ function KanbanCard({
   item,
   members,
   onEdit,
+  onAdvanceSession,
 }: {
   item: PlanItemRecord;
   members: ProjectMemberItem[];
   onEdit: (item: PlanItemRecord) => void;
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }) {
   const { t } = useTranslation(["project"]);
   const {
@@ -227,55 +232,74 @@ function KanbanCard({
   const assignee = members.find((member) => member.userId === item.assigneeId);
 
   return (
-    <button
-      type="button"
-      ref={setNodeRef}
-      onClick={() => onEdit(item)}
-      title={item.title}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        "flex w-full flex-col gap-1.5 rounded-lg border border-border/50 border-l-4 bg-background px-3 py-2 text-left shadow-sm transition-shadow hover:shadow-md",
-        PRIORITY_BORDER_CLASSES[item.priority],
-        isDragging && "opacity-50",
-      )}
-      {...attributes}
-      {...listeners}
-    >
-      <span className="text-sm font-medium leading-snug">{item.title}</span>
-      {(visibleTags.length > 0 || hiddenTagCount > 0) && (
-        <span className="flex flex-wrap gap-1">
-          {visibleTags.map((tag) => (
-            <Badge key={tag} variant="secondary" className="px-1.5 text-[10px]">
-              {tag}
-            </Badge>
-          ))}
-          {hiddenTagCount > 0 && (
-            <Badge
-              variant="outline"
-              className="px-1.5 text-[10px] text-muted-foreground"
+    // 推进钮以兄弟节点叠放标题区右上（批 5 D6）：卡体为承载 dnd listeners
+    // 的按钮，button 嵌套不合法——overlay 兄弟按钮避免嵌套且保键盘可达
+    <div className="group/card relative w-full">
+      <button
+        type="button"
+        ref={setNodeRef}
+        onClick={() => onEdit(item)}
+        title={item.title}
+        style={{ transform: CSS.Transform.toString(transform), transition }}
+        className={cn(
+          "flex w-full flex-col gap-1.5 rounded-lg border border-border/50 border-l-4 bg-background px-3 py-2 text-left shadow-sm transition-shadow hover:shadow-md",
+          PRIORITY_BORDER_CLASSES[item.priority],
+          isDragging && "opacity-50",
+        )}
+        {...attributes}
+        {...listeners}
+      >
+        <span className="text-sm font-medium leading-snug">{item.title}</span>
+        {(visibleTags.length > 0 || hiddenTagCount > 0) && (
+          <span className="flex flex-wrap gap-1">
+            {visibleTags.map((tag) => (
+              <Badge
+                key={tag}
+                variant="secondary"
+                className="px-1.5 text-[10px]"
+              >
+                {tag}
+              </Badge>
+            ))}
+            {hiddenTagCount > 0 && (
+              <Badge
+                variant="outline"
+                className="px-1.5 text-[10px] text-muted-foreground"
+              >
+                +{hiddenTagCount}
+              </Badge>
+            )}
+          </span>
+        )}
+        <span className="flex items-center justify-end">
+          {assignee ? (
+            <span
+              title={assignee.nickname}
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-subtle text-[10px] font-medium text-primary"
             >
-              +{hiddenTagCount}
-            </Badge>
+              {assignee.nickname.charAt(0)}
+            </span>
+          ) : (
+            <span
+              title={t("project:plan.unassigned")}
+              aria-label={t("project:plan.unassigned")}
+              className="h-5 w-5 rounded-full bg-muted-foreground/25"
+            />
           )}
         </span>
+      </button>
+      {item.projectId != null && (
+        <button
+          type="button"
+          aria-label={t("project:plan.advance")}
+          title={t("project:plan.advance")}
+          onClick={() => onAdvanceSession(item)}
+          className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-primary-subtle hover:text-primary focus-visible:opacity-100 group-hover/card:opacity-100"
+        >
+          <MessageSquareText className="h-3.5 w-3.5" />
+        </button>
       )}
-      <span className="flex items-center justify-end">
-        {assignee ? (
-          <span
-            title={assignee.nickname}
-            className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-subtle text-[10px] font-medium text-primary"
-          >
-            {assignee.nickname.charAt(0)}
-          </span>
-        ) : (
-          <span
-            title={t("project:plan.unassigned")}
-            aria-label={t("project:plan.unassigned")}
-            className="h-5 w-5 rounded-full bg-muted-foreground/25"
-          />
-        )}
-      </span>
-    </button>
+    </div>
   );
 }
 
@@ -287,6 +311,7 @@ function KanbanColumn({
   members,
   onQuickCreate,
   onEdit,
+  onAdvanceSession,
 }: {
   columnKey: string;
   items: PlanItemRecord[];
@@ -294,6 +319,7 @@ function KanbanColumn({
   members: ProjectMemberItem[];
   onQuickCreate: (preset: KanbanQuickCreatePreset) => void;
   onEdit: (item: PlanItemRecord) => void;
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }) {
   const { t } = useTranslation(["project"]);
   const { setNodeRef, isOver } = useDroppable({ id: columnKey });
@@ -345,6 +371,7 @@ function KanbanColumn({
               item={item}
               members={members}
               onEdit={onEdit}
+              onAdvanceSession={onAdvanceSession}
             />
           ))}
         </div>
@@ -360,6 +387,7 @@ export default function PlanKanbanView({
   onMoveItem,
   onQuickCreate,
   onEdit,
+  onAdvanceSession,
 }: PlanKanbanViewProps) {
   const sensors = useSensors(
     // 距离阈值：6px 内视为点击（开编辑），超过才进入拖拽
@@ -400,6 +428,7 @@ export default function PlanKanbanView({
             members={members}
             onQuickCreate={onQuickCreate}
             onEdit={onEdit}
+            onAdvanceSession={onAdvanceSession}
           />
         ))}
       </div>

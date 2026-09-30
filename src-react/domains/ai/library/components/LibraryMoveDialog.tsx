@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { ChevronLeft, Folder } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import IconTooltip from "./icon-tooltip";
 import {
   Dialog,
   DialogContent,
@@ -62,54 +64,57 @@ export default function LibraryMoveDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
-      <DialogContent className="border border-border/50 rounded-lg shadow-lg sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {folderId !== null && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0"
-                aria-label={t("common:back")}
-                title={t("common:back")}
-                onClick={() => setFolderId(null)}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
+    <TooltipProvider>
+      <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
+        <DialogContent className="border border-border/50 rounded-lg shadow-lg sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {folderId !== null && (
+                <IconTooltip label={t("common:back")}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    aria-label={t("common:back")}
+                    onClick={() => setFolderId(null)}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </IconTooltip>
+              )}
+              {folderId === null
+                ? t("chat:library.moveTargetRoot")
+                : (data?.breadcrumbs ?? []).slice(-1)[0]?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-56 overflow-y-auto">
+            {folders.length === 0 && (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {t("chat:library.empty")}
+              </p>
             )}
-            {folderId === null
-              ? t("chat:library.moveTargetRoot")
-              : (data?.breadcrumbs ?? []).slice(-1)[0]?.name}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="max-h-56 overflow-y-auto">
-          {folders.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              {t("chat:library.empty")}
-            </p>
-          )}
-          {folders.map((folder) => (
-            <button
-              key={folder.id}
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-primary-subtle hover:text-primary"
-              onClick={() => setFolderId(folder.id)}
-            >
-              <Folder className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate">{folder.name}</span>
-            </button>
-          ))}
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={handleClose}>
-            {t("common:cancel")}
-          </Button>
-          <Button disabled={submitting} onClick={() => void handleMove()}>
-            {t("chat:library.moveHere")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {folders.map((folder) => (
+              <button
+                key={folder.id}
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-primary-subtle hover:text-primary"
+                onClick={() => setFolderId(folder.id)}
+              >
+                <Folder className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate">{folder.name}</span>
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleClose}>
+              {t("common:cancel")}
+            </Button>
+            <Button disabled={submitting} onClick={() => void handleMove()}>
+              {t("chat:library.moveHere")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </TooltipProvider>
   );
 }

@@ -74,7 +74,8 @@ export const ModelName = {
   planView: 'planView',
   planItemAttachment: 'planItemAttachment',
   securityAuditLog: 'securityAuditLog',
-  libraryItem: 'libraryItem'
+  libraryItem: 'libraryItem',
+  artifactFavorite: 'artifactFavorite'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -203,7 +204,8 @@ export const SessionScalarFieldEnum = {
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   lastMessageAt: 'lastMessageAt',
-  userId: 'userId'
+  userId: 'userId',
+  planItemId: 'planItemId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -447,6 +449,7 @@ export const LibraryItemScalarFieldEnum = {
   mimeType: 'mimeType',
   size: 'size',
   originalPath: 'originalPath',
+  url: 'url',
   favorite: 'favorite',
   lastViewedAt: 'lastViewedAt',
   userId: 'userId',
@@ -455,6 +458,17 @@ export const LibraryItemScalarFieldEnum = {
 } as const
 
 export type LibraryItemScalarFieldEnum = (typeof LibraryItemScalarFieldEnum)[keyof typeof LibraryItemScalarFieldEnum]
+
+
+export const ArtifactFavoriteScalarFieldEnum = {
+  id: 'id',
+  workspaceId: 'workspaceId',
+  relPath: 'relPath',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type ArtifactFavoriteScalarFieldEnum = (typeof ArtifactFavoriteScalarFieldEnum)[keyof typeof ArtifactFavoriteScalarFieldEnum]
 
 
 export const SortOrder = {

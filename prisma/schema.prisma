@@ -113,6 +113,7 @@ model session {
   updatedAt      DateTime  @updatedAt
   lastMessageAt  DateTime?
   userId         Int? // v12 多用户隔离（冗余列，创建时随工作空间写入）
+  planItemId     Int? // 任务会话关联事项（一期统一 D1：会话持有；一任务一会话由 create 查重保证，免索引）
 
   @@index([projectId], map: "session_projectId_index")
   @@index([userId], map: "session_userId_index")
@@ -344,6 +345,7 @@ model libraryItem {
   mimeType     String?
   size         Int?
   originalPath String?
+  url          String? // 链接条目（kind=link）的目标地址；文件/文件夹恒 null
   favorite     Boolean  @default(false)
   lastViewedAt DateTime?
   userId       Int? // v12 多用户隔离（新建时随根继承）
@@ -352,4 +354,17 @@ model libraryItem {
 
   @@index([parentId])
   @@index([userId], map: "libraryItem_userId_index")
+}
+
+// 产物收藏（本地产物「我的收藏」）：产物无 DB 实体（消息聚合+磁盘 stat 虚拟视图），
+// 键 workspaceId+relPath 与文件生命周期解耦；userId 仅记录归属（workspace 本身已隔离用户）
+model artifactFavorite {
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
+  relPath     String
+  userId      Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, relPath])
+  @@index([userId])
 }

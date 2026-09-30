@@ -1,13 +1,13 @@
 /**
  * 项目工作台 /module/project/:projectId（spec §6.3）：
- * 左列 Tab 容器（动态/计划/任务/资产，读写 ?tab= 缺省 activity）+ 筛选
- * 下拉（与我相关/成员动态——单成员等价，UI 预留）+ 配置面板开关；
- * 动态/计划/资产 Tab 分别渲染 ActivityPane（ChatMessages 消息区）/PlanPane/
- * AssetsPane，任务 Tab 渲染 TasksPane（个人聚合清单，自身拉取
- * planItemsMine 不依赖 projectId）；左列底部为全局操作栏 ProjectChatBar
- * （ChatInput 贯穿四 Tab，providers/models 双空引导态不渲染）；右列
- * ConfigPanel（w-80 border-l，可收起）。Tab 切换为合并式 query 写入
- * （保留 ?view= 等既有参数）。
+ * 左列 Tab 容器（计划/任务/资产，读写 ?tab= 缺省 plan；一期会话统一批 6
+ * 删动态 Tab——项目会话统一在会话域 ChatView 查看，发起走底栏快速发起条）
+ * + 配置面板开关——已迁入顶栏（TopBar 中段 page-header，44px 行高 pill
+ * 风格），页面内容相应上移；计划/资产 Tab 分别渲染 PlanPane/AssetsPane，
+ * 任务 Tab 渲染 TasksPane（个人聚合清单，自身拉取 planItemsMine 不依赖
+ * projectId）；左列底部为快速发起条 ProjectChatBar（ChatInput 贯穿三 Tab，
+ * providers/models 双空引导态不渲染）；右列 ConfigPanel（w-80 border-l，
+ * 可收起）。Tab 切换为合并式 query 写入（保留 ?view= 等既有参数）。
  * getDetail 抛 PROJECT_NOT_FOUND → toast + 跳回 /module/project。
  */
 import { useEffect, useState } from "react";
@@ -17,35 +17,26 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   CalendarDays,
-  ChevronDown,
   FolderOpen,
   ListChecks,
-  ListFilter,
-  MessageSquareText,
   PanelRightClose,
   PanelRightOpen,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { usePageHeader } from "@/components/layout/page-header.store";
 import { cn } from "@/lib/utils";
 import { ProviderApi } from "@/domains/ai/api/provider.api";
 import { ModelApi } from "@/domains/ai/api/model.api";
 import ProjectApi from "../api/project.api";
-import ActivityPane, {
-  chatSettingsRoute,
-  needsChatSetup,
-} from "../components/ActivityPane";
 import AssetsPane from "../components/AssetsPane";
 import ConfigPanel from "../components/ConfigPanel";
 import PlanPane from "../components/PlanPane";
-import ProjectChatBar from "../components/ProjectChatBar";
+import ProjectChatBar, {
+  chatSettingsRoute,
+  needsChatSetup,
+} from "../components/ProjectChatBar";
 import TasksPane from "../components/TasksPane";
 
 const HUB_ROUTE = "/module/project";
@@ -56,18 +47,13 @@ const HUB_ROUTE = "/module/project";
  */
 const PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND";
 
-type WorkspaceTab = "activity" | "plan" | "tasks" | "assets";
+type WorkspaceTab = "plan" | "tasks" | "assets";
 
 const TABS: Array<{
   value: WorkspaceTab;
   icon: LucideIcon;
   labelKey: string;
 }> = [
-  {
-    value: "activity",
-    icon: MessageSquareText,
-    labelKey: "project:workspace.tabActivity",
-  },
   { value: "plan", icon: CalendarDays, labelKey: "project:workspace.tabPlan" },
   { value: "tasks", icon: ListChecks, labelKey: "project:workspace.tabTasks" },
   {
@@ -75,13 +61,6 @@ const TABS: Array<{
     icon: FolderOpen,
     labelKey: "project:workspace.tabAssets",
   },
-];
-
-type ActivityFilter = "mine" | "members";
-
-const FILTERS: Array<{ value: ActivityFilter; labelKey: string }> = [
-  { value: "mine", labelKey: "project:workspace.filterMine" },
-  { value: "members", labelKey: "project:workspace.filterMembers" },
 ];
 
 const isWorkspaceTab = (value: string | null): value is WorkspaceTab =>
@@ -93,7 +72,6 @@ export default function ProjectWorkspaceView() {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [panelOpen, setPanelOpen] = useState(true);
-  const [filter, setFilter] = useState<ActivityFilter>("mine");
 
   const id = Number(projectId);
   const detailQuery = useQuery({
@@ -103,7 +81,7 @@ export default function ProjectWorkspaceView() {
     retry: false,
   });
 
-  // 底栏渲染判据：镜像 ActivityPane 的 SetupGuide 条件（同 key 共享缓存），
+  // 底栏渲染判据（needsChatSetup 自 ProjectChatBar 导出，批 6 迁移）：
   // 引导态（providers/models 双成功且双空）不渲染输入框
   const providersQuery = useQuery({
     queryKey: ["providers"],
@@ -125,7 +103,8 @@ export default function ProjectWorkspaceView() {
   }, [detailQuery.error, navigate, t]);
 
   const tabParam = searchParams.get("tab");
-  const tab: WorkspaceTab = isWorkspaceTab(tabParam) ? tabParam : "activity";
+  // 缺省 plan（批 6 起三 Tab）；旧链接 ?tab=activity 非法值回落 plan
+  const tab: WorkspaceTab = isWorkspaceTab(tabParam) ? tabParam : "plan";
 
   const switchTab = (value: WorkspaceTab) => {
     if (value !== tab) {
@@ -138,6 +117,64 @@ export default function ProjectWorkspaceView() {
       );
     }
   };
+
+  // 页面顶行（TopBar 中段）：Tab 组（44px 行高改 pill 风格）+ 配置面板
+  // 开关（原页内 header 行迁入，内容相应上移）；详情未加载置空
+  // （hook 无条件调用，置于下方早退之前）
+  usePageHeader(
+    detailQuery.data
+      ? {
+          title: (
+            <div
+              className="flex min-w-0 items-center gap-1 overflow-x-auto"
+              role="tablist"
+            >
+              {TABS.map(({ value, icon: Icon, labelKey }) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === value}
+                  onClick={() => switchTab(value)}
+                  className={cn(
+                    "flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1 text-sm transition-colors",
+                    tab === value
+                      ? "bg-primary-subtle text-primary"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+          ),
+          trailing: (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={t("project:workspace.togglePanel")}
+              aria-pressed={panelOpen}
+              onClick={() => setPanelOpen((open) => !open)}
+              className="h-7 w-7 p-0 text-muted-foreground hover:text-primary"
+            >
+              {panelOpen ? (
+                <PanelRightClose className="h-4 w-4" />
+              ) : (
+                <PanelRightOpen className="h-4 w-4" />
+              )}
+            </Button>
+          ),
+          // 右段：配置面板标题（迁入 TopBar 右段——面板上方空出的条带），
+          // 面板收起时不渲染（ConfigPanel 同步卸载）
+          right: panelOpen && (
+            <span className="truncate text-sm font-medium text-foreground">
+              {t("project:panel.title")}
+            </span>
+          ),
+        }
+      : null,
+  );
 
   if (detailQuery.isError) {
     const message =
@@ -153,93 +190,12 @@ export default function ProjectWorkspaceView() {
     return null;
   }
 
-  const filterLabel = t(
-    FILTERS.find((entry) => entry.value === filter)?.labelKey ?? "",
-  );
-
   return (
     <div className="flex h-full">
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* 顶栏：Tab 切换 + 筛选下拉 + 配置面板开关 */}
-        <header className="flex items-center justify-between gap-2 border-b border-border/50 px-4 py-1.5">
-          <div
-            className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-            role="tablist"
-          >
-            {TABS.map(({ value, icon: Icon, labelKey }) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => switchTab(value)}
-                className={cn(
-                  "flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-sm transition-colors",
-                  tab === value
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {t(labelKey)}
-              </button>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label={filterLabel}
-                  className="gap-1 text-muted-foreground hover:text-primary"
-                >
-                  <ListFilter className="h-4 w-4" />
-                  <span className="hidden text-xs md:inline">
-                    {filterLabel}
-                  </span>
-                  <ChevronDown className="h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="rounded-lg border border-border/50 shadow-lg"
-              >
-                {FILTERS.map(({ value, labelKey }) => (
-                  <DropdownMenuItem
-                    key={value}
-                    onClick={() => setFilter(value)}
-                    className={cn(
-                      filter === value && "text-primary focus:text-primary",
-                    )}
-                  >
-                    {t(labelKey)}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label={t("project:workspace.togglePanel")}
-              aria-pressed={panelOpen}
-              onClick={() => setPanelOpen((open) => !open)}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
-            >
-              {panelOpen ? (
-                <PanelRightClose className="h-4 w-4" />
-              ) : (
-                <PanelRightOpen className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </header>
-
-        {/* 内容区：动态/计划/任务/资产 Tab 渲染对应面板（flex-1 满高，底栏外置） */}
+        {/* 内容区：计划/任务/资产 Tab 渲染对应面板（flex-1 满高，底栏外置） */}
         <div className="flex min-h-0 flex-1 flex-col">
-          {tab === "activity" ? (
-            <ActivityPane detail={detailQuery.data} />
-          ) : tab === "plan" ? (
+          {tab === "plan" ? (
             <PlanPane
               key={detailQuery.data.project.id}
               projectId={detailQuery.data.project.id}
@@ -256,7 +212,7 @@ export default function ProjectWorkspaceView() {
           )}
         </div>
 
-        {/* 底部全局操作栏（spec §3）：贯穿四 Tab，key 取会话 id 保证切换重建 */}
+        {/* 底部快速发起条（批 3 瘦身）：贯穿三 Tab，key 取会话 id 保证切换重建 */}
         {chatReady && (
           <ProjectChatBar
             key={detailQuery.data.session.id}

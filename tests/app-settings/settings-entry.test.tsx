@@ -122,9 +122,15 @@ function renderUserMenu() {
   );
 }
 
-/** 悬停展开用户下拉菜单（触发器 onMouseEnter 受控展开），返回目标菜单项 */
-async function hoverMenuAndGetItem(itemText: string) {
-  fireEvent.mouseEnter(screen.getByText("测试用户"));
+/** 点击展开用户下拉菜单（原顶栏 hover 展开改侧边栏点击模式：
+ *  pointerDown 展开，同 tests/project/tasks-pane.test.tsx 先例），返回目标菜单项 */
+async function openMenuAndGetItem(itemText: string) {
+  // 触发器 div 无 role（Radix asChild），用用户名文本定位、pointerDown 冒泡展开
+  fireEvent.pointerDown(screen.getByText("测试用户"), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: "mouse",
+  });
   return waitFor(() => screen.getByText(itemText));
 }
 
@@ -161,7 +167,7 @@ describe("UserMenu 设置入口直达", () => {
 
   it("点「记忆与进化」：面板打开并定位记忆页（memory.title）", async () => {
     renderUserMenu();
-    const item = await hoverMenuAndGetItem("layout:userMenu.memoryEvolution");
+    const item = await openMenuAndGetItem("layout:userMenu.memoryEvolution");
     fireEvent.click(item);
 
     await waitFor(() =>
@@ -174,7 +180,7 @@ describe("UserMenu 设置入口直达", () => {
 
   it("点「设置」：面板打开默认通用页（groups.general）", async () => {
     renderUserMenu();
-    const item = await hoverMenuAndGetItem("layout:userMenu.settings");
+    const item = await openMenuAndGetItem("layout:userMenu.settings");
     fireEvent.click(item);
 
     await waitFor(() =>

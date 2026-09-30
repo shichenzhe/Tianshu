@@ -5,14 +5,20 @@
  * 走 move 通道由父层重算目标列内序）| 处理人（单成员恒「我」）| 优先级行内
  * Select + 色徽标（P0 destructive / P1 primary / P2 muted → onSetPriority）|
  * 标签 Badge 组 | fields 动态列（值缺失 --）| 表头自定义字段列尾 +
- * （onOpenFieldEditor）| 行尾 ... 菜单（编辑 onOpenItem / AI 推进
+ * （onOpenFieldEditor）| 行尾推进（会话直达 onAdvanceSession，批 5 D6）
+ * + ... 菜单（编辑 onOpenItem / AI 推进
  * onAiAdvance / 删除 onDeleteItem，二次确认与 API 调用在 PlanPane 统一
  * 处理）；source ai 标题旁 AI Badge（子系统 F）。
  * 过滤/排序由父层（PlanPane）计算后传入；本组件只触发回调不持有数据。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MoreHorizontal, Plus, Sparkles } from "lucide-react";
+import {
+  MessageSquareText,
+  MoreHorizontal,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,6 +77,8 @@ interface PlanTableViewProps {
   onDeleteItem: (item: PlanItemRecord) => void;
   /** 行尾菜单「AI 推进」→ 父层写底栏预填（子系统 F） */
   onAiAdvance: (item: PlanItemRecord) => void;
+  /** 推进（会话直达，批 5 D6）→ 父层 openTaskSession；本地任务不渲染按钮 */
+  onAdvanceSession: (item: PlanItemRecord) => void;
 }
 
 /** 自定义字段单元格缺值占位 */
@@ -86,6 +94,7 @@ export default function PlanTableView({
   onOpenFieldEditor,
   onDeleteItem,
   onAiAdvance,
+  onAdvanceSession,
 }: PlanTableViewProps) {
   const { t } = useTranslation(["project", "common"]);
   const [quickAdd, setQuickAdd] = useState("");
@@ -256,6 +265,19 @@ export default function PlanTableView({
               {/* 与表头 + 列对齐的占位单元格 */}
               <TableCell />
               <TableCell>
+                {/* 推进（会话直达，批 5 D6）：本地任务（防御）不渲染 */}
+                {item.projectId != null && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={t("project:plan.advance")}
+                    title={t("project:plan.advance")}
+                    onClick={() => onAdvanceSession(item)}
+                    className="mr-1 h-7 w-7 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                  >
+                    <MessageSquareText className="h-4 w-4" />
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button

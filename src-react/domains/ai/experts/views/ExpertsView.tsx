@@ -1,6 +1,7 @@
 /**
  * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=技能管理 / 连接器=MCP）
- * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillsView（P-B 双视图）
+ * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillsView（P-B 双视图）；
+ * Tab 行迁入顶栏（TopBar 中段 pill 组），页面内容相应上移
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,6 +9,7 @@ import { useSearchParams } from "react-router-dom";
 import { Bot, Plug, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { usePageHeader } from "@/components/layout/page-header.store";
 import AssistantSettingsView from "../../assistant/views/AssistantSettingsView";
 import McpSettingsView from "../../mcp/views/McpSettingsView";
 import SkillsView from "../../skills/views/SkillsView";
@@ -54,18 +56,19 @@ export default function ExpertsView() {
     },
   ];
 
-  return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
-      <div className="mb-3 flex items-center gap-1 border-b border-border/50">
+  // Tab 行迁入顶栏（TopBar 中段，44px 行高改 pill 风格），内容相应上移
+  usePageHeader({
+    title: (
+      <div className="inline-flex items-center rounded-lg border border-border/50 bg-primary-subtle/30 p-0.5 text-sm">
         {tabs.map((item) => (
           <button
             key={item.value}
             type="button"
             className={cn(
-              "flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors",
+              "flex items-center gap-1.5 rounded-md px-3 py-1 transition-colors",
               tab === item.value
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-primary",
             )}
             onClick={() => setTab(item.value)}
           >
@@ -74,6 +77,11 @@ export default function ExpertsView() {
           </button>
         ))}
       </div>
+    ),
+  });
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto p-4">
       {tab === "assistants" && <AssistantSettingsView />}
       {tab === "skills" && (
         <SkillsView

@@ -137,3 +137,8 @@ export type securityAuditLog = Prisma.securityAuditLogModel
  * 
  */
 export type libraryItem = Prisma.libraryItemModel
+/**
+ * Model artifactFavorite
+ * 
+ */
+export type artifactFavorite = Prisma.artifactFavoriteModel

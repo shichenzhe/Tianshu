@@ -32,6 +32,7 @@ export function FilterMenu({ tasks }: { tasks: TaskRecord[] }) {
         <Button
           variant="ghost"
           size="icon"
+          className="h-7 w-7"
           aria-label={t("chat:automation.filter.all", { count: counts.all })}
         >
           <Filter className="h-4 w-4" />

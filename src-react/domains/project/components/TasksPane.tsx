@@ -14,9 +14,15 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronDown, ListChecks, Loader2, Plus } from "lucide-react";
+import {
+  ChevronDown,
+  ListChecks,
+  Loader2,
+  MessageSquareText,
+  Plus,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +38,7 @@ import { cn } from "@/lib/utils";
 import { useUserStore } from "@/domains/user/store/user.store";
 import PlanItemApi, { PLAN_ITEMS_MINE_KEY } from "../api/plan-item.api";
 import ProjectApi from "../api/project.api";
+import { openTaskSession } from "../lib/task-session";
 import PlanItemDialog, {
   PRIORITY_LABEL_KEYS,
   STATUS_LABEL_KEYS,
@@ -105,6 +112,7 @@ const formatRelative = (iso: string) =>
 export default function TasksPane() {
   const { t } = useTranslation(["project", "common"]);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const user = useUserStore((state) => state.user);
 
   const [scope, setScope] = useState<TaskScope>("mine");
@@ -269,14 +277,6 @@ export default function TasksPane() {
             <ListChecks className="h-6 w-6" />
           </span>
           <p className="text-sm">{t("project:tasks.empty")}</p>
-          <Button
-            size="sm"
-            onClick={openCreateLocal}
-            className="h-8 gap-1 px-2 text-xs hover:bg-primary-hover"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("project:tasks.newLocalTask")}
-          </Button>
         </div>
       ) : (
         <div role="list" className="min-h-0 flex-1 overflow-auto px-2 pb-4">
@@ -327,6 +327,24 @@ export default function TasksPane() {
               <span className="shrink-0 text-xs text-muted-foreground">
                 {formatRelative(item.updatedAt)}
               </span>
+              {/* 推进（会话直达，批 5 D6）：仅项目任务；本地任务行点击走
+                  编辑弹窗，不提供会话入口 */}
+              {item.projectId !== null && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={t("project:plan.advance")}
+                  title={t("project:plan.advance")}
+                  onClick={(event) => {
+                    // 阻止冒泡：不触发行点击的「跳项目工作台」
+                    event.stopPropagation();
+                    void openTaskSession(queryClient, navigate, item);
+                  }}
+                  className="h-7 w-7 shrink-0 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                >
+                  <MessageSquareText className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           ))}
         </div>

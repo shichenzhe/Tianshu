@@ -24,7 +24,10 @@ import ChatApi from "../../api/chat.api";
 import type { SessionRecord } from "../../api/session.api";
 import { neighborSessionId } from "../../chat/lib/session-actions";
 import { useChatStore } from "../../chat/store/chat.store";
-import { useKeybindingDispatcher } from "./use-keybinding-dispatcher";
+import {
+  isTextEntryFocused,
+  useKeybindingDispatcher,
+} from "./use-keybinding-dispatcher";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import { useSessionSearchStore } from "../../store/session-search.store";
 
@@ -65,9 +68,22 @@ export function useAiLayoutKeybindings(): void {
     }
   };
 
+  /**
+   * 会话内搜索（⌘F，二期批 7）：仅 AI 会话视图且 URL 有选中会话时唤起
+   * （搜索对象是当前会话消息；无选中会话不动作，避免 open 残留到下次
+   * 进 ChatView 时空开）。输入框聚焦时不劫持——焦点上下文优先，避免
+   * 打断输入（分发层的裸键守卫不拦修饰键组合，此处按命令单独收严）
+   */
+  const openSessionSearch = () => {
+    if (currentSessionId === null || isTextEntryFocused()) {
+      return;
+    }
+    useSessionSearchStore.getState().setOpen(true);
+  };
+
   useKeybindingDispatcher({
     openSettings: () => useSettingsUiStore.getState().openSettings(),
-    sessionSearch: () => useSessionSearchStore.getState().setOpen(true),
+    sessionSearch: openSessionSearch,
     newConversation: createConversation,
     stopGeneration,
     previousTask: () => switchToNeighborTask(-1),

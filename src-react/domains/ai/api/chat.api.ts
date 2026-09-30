@@ -163,6 +163,11 @@ export default class ChatApi {
   }): Promise<{ text: string }> {
     return invoke<{ text: string }>("chat:polish", params);
   }
+
+  /** 会话转办交接摘要（批 12）：五段式 markdown，一次性补全不落库 */
+  static async handoverSummary(sessionId: number): Promise<string> {
+    return invoke<string>("chat:handoverSummary", sessionId);
+  }
 }
 
 /**

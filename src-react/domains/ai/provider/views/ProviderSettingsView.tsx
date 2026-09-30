@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Edit, FolderOpen, Play, Plus, Trash2 } from "lucide-react";
 
-import PageTitle from "@/components/layout/PageTitle";
+import { usePageHeader } from "@/components/layout/page-header.store";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -160,9 +160,17 @@ export default function ProviderSettingsView() {
     }
   };
 
+  // 页面顶行（TopBar 中段）：标题迁入（原 PageTitle 横幅），页内留副标题
+  usePageHeader({
+    title: (
+      <h2 className="truncate text-sm font-medium text-foreground">
+        {t("ai:pageTitle")}
+      </h2>
+    ),
+  });
+
   return (
     <div className="p-6">
-      <PageTitle title={t("ai:pageTitle")} />
       <p className="mb-4 text-sm text-muted-foreground">{t("ai:pageDesc")}</p>
 
       {providersQuery.isPending ? (

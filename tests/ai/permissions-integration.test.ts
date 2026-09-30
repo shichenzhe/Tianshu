@@ -108,6 +108,8 @@ type ScriptStep =
 interface CapturedCall {
   toolNames: string[];
   system: string | undefined;
+  /** 最后一条 user 消息 content 序列化（时间行注入断言用） */
+  lastUserContent: string | undefined;
 }
 
 function scriptedModel(scripts: Array<{ steps: ScriptStep[] }>) {
@@ -120,6 +122,9 @@ function scriptedModel(scripts: Array<{ steps: ScriptStep[] }>) {
       const systemMessage = callOptions.prompt.find(
         (message) => message.role === "system",
       );
+      const lastUserMessage = [...callOptions.prompt]
+        .reverse()
+        .find((message) => message.role === "user");
       calls.push({
         toolNames: ((callOptions.tools ?? []) as Array<{ name: string }>).map(
           (tool) => tool.name,
@@ -128,6 +133,9 @@ function scriptedModel(scripts: Array<{ steps: ScriptStep[] }>) {
           systemMessage && systemMessage.role === "system"
             ? systemMessage.content
             : undefined,
+        lastUserContent: lastUserMessage
+          ? JSON.stringify(lastUserMessage.content)
+          : undefined,
       });
       return {
         stream: new ReadableStream({
@@ -516,7 +524,7 @@ describe("两级审批判定（send 级集成）", () => {
 });
 
 describe("模式组装（send 级）", () => {
-  it("ask 模式：ToolSet 为空且 system 仅助手原文（无技能段/无计划指令）", async () => {
+  it("ask 模式：ToolSet 为空且 system 仅助手原文（无技能段/无计划指令），时间行注入最后一条 user", async () => {
     prismaStub.assistantRow = { systemPrompt: "你是问答助手" };
     const { model, calls } = scriptedModel([
       { steps: [{ kind: "text", delta: "答" }] },
@@ -528,6 +536,11 @@ describe("模式组装（send 级）", () => {
 
     expect(calls[0]?.toolNames).toEqual([]);
     expect(calls[0]?.system).toBe("你是问答助手");
+    // 时间行注入 user 消息而非 system（前缀缓存考量见 time-context 注释）
+    expect(calls[0]?.lastUserContent).toMatch(
+      /当前时间：\d{4}-\d{2}-\d{2} \d{2}:\d{2} 周[日一二三四五六] UTC[+-]\d{2}:\d{2}/,
+    );
+    expect(calls[0]?.lastUserContent).toContain("hi");
   });
 
   it("plan 模式：system 追加计划指令段（spec §4 逐字）且工具照常注入", async () => {

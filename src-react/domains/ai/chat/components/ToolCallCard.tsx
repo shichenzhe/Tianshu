@@ -2,9 +2,14 @@
  * 工具调用卡片：折叠容器（沿用 thinking 块视觉语言），头部为工具名 + 状态标签
  * +（args.path 存在时的）路径摘要，展开区显完整参数与输出
  * 历史块（blocks 解析）与流式态（store）共用同一组件，props 平铺传入
+ * plan_* 四工具头部渲染结构化摘要行（三期批 11 D15）：plan-tool-summary
+ * 纯函数解析 args/output，null 时回退路径摘要（宁退不崩）；error/denied
+ * 态不渲染（动作未发生，摘要会误导）
  */
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+
+import { planToolDigest } from "../lib/plan-tool-summary";
 
 /** 状态值 → i18n key 映射（兼容 kebab-case 与 camelCase；未知值含空串按 ready 兜底） */
 const STATE_I18N_KEYS: Record<string, string> = {
@@ -76,12 +81,27 @@ function ToolCallCardImpl({
   output,
   defaultOpen,
 }: ToolCallCardProps) {
-  const { t } = useTranslation(["chat"]);
+  // project ns：状态取值文案 key（project:plan.status*）经 statusKey 译出
+  const { t } = useTranslation(["chat", "project"]);
 
   const stateKey = STATE_I18N_KEYS[state] ?? "ready";
   const stateColor = STATE_COLORS[stateKey] ?? "";
   const path = extractPath(args);
   const shownOutput = output ? truncateOutput(output) : null;
+  // 富化摘要（批 11 D15）：解析成功且非失败态时优先于路径摘要段；
+  // statusKey 先译再插值（t 不做嵌套翻译）
+  const digest =
+    stateKey === "error" || stateKey === "denied"
+      ? null
+      : planToolDigest(toolName, args, output);
+  const digestText = digest
+    ? t(digest.key, {
+        ...(digest.values ?? {}),
+        ...(digest.statusKey !== undefined
+          ? { status: t(digest.statusKey) }
+          : {}),
+      })
+    : null;
   // error 态加左侧橙色竖线（PRD §2.3.B「插曲」语义色，同流式绿点先例）
   const containerClass = `my-1 rounded-md border border-border/50 bg-muted/30${
     stateKey === "error" ? " border-l-2 border-l-orange-400/80" : ""
@@ -95,7 +115,11 @@ function ToolCallCardImpl({
           <span className={`shrink-0 ${stateColor}`}>
             {t(`chat:tool.state.${stateKey}`)}
           </span>
-          {path && <span className="truncate">→ {path}</span>}
+          {digestText ? (
+            <span className="truncate">{digestText}</span>
+          ) : (
+            path && <span className="truncate">→ {path}</span>
+          )}
         </span>
       </summary>
       <div className="px-3 pb-2">

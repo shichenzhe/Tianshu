@@ -34,6 +34,7 @@ export type SessionAvgAggregateOutputType = {
   projectId: number | null
   compactedUpToId: number | null
   userId: number | null
+  planItemId: number | null
 }
 
 export type SessionSumAggregateOutputType = {
@@ -44,6 +45,7 @@ export type SessionSumAggregateOutputType = {
   projectId: number | null
   compactedUpToId: number | null
   userId: number | null
+  planItemId: number | null
 }
 
 export type SessionMinAggregateOutputType = {
@@ -63,6 +65,7 @@ export type SessionMinAggregateOutputType = {
   updatedAt: Date | null
   lastMessageAt: Date | null
   userId: number | null
+  planItemId: number | null
 }
 
 export type SessionMaxAggregateOutputType = {
@@ -82,6 +85,7 @@ export type SessionMaxAggregateOutputType = {
   updatedAt: Date | null
   lastMessageAt: Date | null
   userId: number | null
+  planItemId: number | null
 }
 
 export type SessionCountAggregateOutputType = {
@@ -101,6 +105,7 @@ export type SessionCountAggregateOutputType = {
   updatedAt: number
   lastMessageAt: number
   userId: number
+  planItemId: number
   _all: number
 }
 
@@ -113,6 +118,7 @@ export type SessionAvgAggregateInputType = {
   projectId?: true
   compactedUpToId?: true
   userId?: true
+  planItemId?: true
 }
 
 export type SessionSumAggregateInputType = {
@@ -123,6 +129,7 @@ export type SessionSumAggregateInputType = {
   projectId?: true
   compactedUpToId?: true
   userId?: true
+  planItemId?: true
 }
 
 export type SessionMinAggregateInputType = {
@@ -142,6 +149,7 @@ export type SessionMinAggregateInputType = {
   updatedAt?: true
   lastMessageAt?: true
   userId?: true
+  planItemId?: true
 }
 
 export type SessionMaxAggregateInputType = {
@@ -161,6 +169,7 @@ export type SessionMaxAggregateInputType = {
   updatedAt?: true
   lastMessageAt?: true
   userId?: true
+  planItemId?: true
 }
 
 export type SessionCountAggregateInputType = {
@@ -180,6 +189,7 @@ export type SessionCountAggregateInputType = {
   updatedAt?: true
   lastMessageAt?: true
   userId?: true
+  planItemId?: true
   _all?: true
 }
 
@@ -286,6 +296,7 @@ export type SessionGroupByOutputType = {
   updatedAt: Date
   lastMessageAt: Date | null
   userId: number | null
+  planItemId: number | null
   _count: SessionCountAggregateOutputType | null
   _avg: SessionAvgAggregateOutputType | null
   _sum: SessionSumAggregateOutputType | null
@@ -328,6 +339,7 @@ export type sessionWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"session"> | Date | string
   lastMessageAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   userId?: Prisma.IntNullableFilter<"session"> | number | null
+  planItemId?: Prisma.IntNullableFilter<"session"> | number | null
 }
 
 export type sessionOrderByWithRelationInput = {
@@ -347,6 +359,7 @@ export type sessionOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   lastMessageAt?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
+  planItemId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type sessionWhereUniqueInput = Prisma.AtLeast<{
@@ -369,6 +382,7 @@ export type sessionWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"session"> | Date | string
   lastMessageAt?: Prisma.DateTimeNullableFilter<"session"> | Date | string | null
   userId?: Prisma.IntNullableFilter<"session"> | number | null
+  planItemId?: Prisma.IntNullableFilter<"session"> | number | null
 }, "id">
 
 export type sessionOrderByWithAggregationInput = {
@@ -388,6 +402,7 @@ export type sessionOrderByWithAggregationInput = {
   updatedAt?: Prisma.SortOrder
   lastMessageAt?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
+  planItemId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.sessionCountOrderByAggregateInput
   _avg?: Prisma.sessionAvgOrderByAggregateInput
   _max?: Prisma.sessionMaxOrderByAggregateInput
@@ -415,6 +430,7 @@ export type sessionScalarWhereWithAggregatesInput = {
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"session"> | Date | string
   lastMessageAt?: Prisma.DateTimeNullableWithAggregatesFilter<"session"> | Date | string | null
   userId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
+  planItemId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
 }
 
 export type sessionCreateInput = {
@@ -433,6 +449,7 @@ export type sessionCreateInput = {
   updatedAt?: Date | string
   lastMessageAt?: Date | string | null
   userId?: number | null
+  planItemId?: number | null
 }
 
 export type sessionUncheckedCreateInput = {
@@ -452,6 +469,7 @@ export type sessionUncheckedCreateInput = {
   updatedAt?: Date | string
   lastMessageAt?: Date | string | null
   userId?: number | null
+  planItemId?: number | null
 }
 
 export type sessionUpdateInput = {
@@ -470,6 +488,7 @@ export type sessionUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionUncheckedUpdateInput = {
@@ -489,6 +508,7 @@ export type sessionUncheckedUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionCreateManyInput = {
@@ -508,6 +528,7 @@ export type sessionCreateManyInput = {
   updatedAt?: Date | string
   lastMessageAt?: Date | string | null
   userId?: number | null
+  planItemId?: number | null
 }
 
 export type sessionUpdateManyMutationInput = {
@@ -526,6 +547,7 @@ export type sessionUpdateManyMutationInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionUncheckedUpdateManyInput = {
@@ -545,6 +567,7 @@ export type sessionUncheckedUpdateManyInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionCountOrderByAggregateInput = {
@@ -564,6 +587,7 @@ export type sessionCountOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
   lastMessageAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  planItemId?: Prisma.SortOrder
 }
 
 export type sessionAvgOrderByAggregateInput = {
@@ -574,6 +598,7 @@ export type sessionAvgOrderByAggregateInput = {
   projectId?: Prisma.SortOrder
   compactedUpToId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  planItemId?: Prisma.SortOrder
 }
 
 export type sessionMaxOrderByAggregateInput = {
@@ -593,6 +618,7 @@ export type sessionMaxOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
   lastMessageAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  planItemId?: Prisma.SortOrder
 }
 
 export type sessionMinOrderByAggregateInput = {
@@ -612,6 +638,7 @@ export type sessionMinOrderByAggregateInput = {
   updatedAt?: Prisma.SortOrder
   lastMessageAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  planItemId?: Prisma.SortOrder
 }
 
 export type sessionSumOrderByAggregateInput = {
@@ -622,6 +649,7 @@ export type sessionSumOrderByAggregateInput = {
   projectId?: Prisma.SortOrder
   compactedUpToId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
+  planItemId?: Prisma.SortOrder
 }
 
 
@@ -643,6 +671,7 @@ export type sessionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   updatedAt?: boolean
   lastMessageAt?: boolean
   userId?: boolean
+  planItemId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -662,6 +691,7 @@ export type sessionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   updatedAt?: boolean
   lastMessageAt?: boolean
   userId?: boolean
+  planItemId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -681,6 +711,7 @@ export type sessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   updatedAt?: boolean
   lastMessageAt?: boolean
   userId?: boolean
+  planItemId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectScalar = {
@@ -700,9 +731,10 @@ export type sessionSelectScalar = {
   updatedAt?: boolean
   lastMessageAt?: boolean
   userId?: boolean
+  planItemId?: boolean
 }
 
-export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "scenario" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt" | "userId", ExtArgs["result"]["session"]>
+export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "scenario" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt" | "userId" | "planItemId", ExtArgs["result"]["session"]>
 
 export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "session"
@@ -724,6 +756,7 @@ export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     updatedAt: Date
     lastMessageAt: Date | null
     userId: number | null
+    planItemId: number | null
   }, ExtArgs["result"]["session"]>
   composites: {}
 }
@@ -1163,6 +1196,7 @@ export interface sessionFieldRefs {
   readonly updatedAt: Prisma.FieldRef<"session", 'DateTime'>
   readonly lastMessageAt: Prisma.FieldRef<"session", 'DateTime'>
   readonly userId: Prisma.FieldRef<"session", 'Int'>
+  readonly planItemId: Prisma.FieldRef<"session", 'Int'>
 }
     
 

@@ -87,6 +87,12 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
 }));
 
+// 推进入口（批 5）：openTaskSession 的会话创建桩（跳转经 LocationProbe 断言）
+const sessionApiMock = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock("@/domains/ai/api/session.api", () => ({
+  default: { create: sessionApiMock.create },
+}));
+
 // PlanItemApi 静态类 + 三个 query key 工厂整体 mock（key 形状与真实实现一致）
 vi.mock("@/domains/project/api/plan-item.api", () => ({
   default: {
@@ -369,6 +375,7 @@ beforeEach(() => {
   vi.mocked(PlanItemApi.move).mockReset().mockResolvedValue(undefined);
   planViewMock.list.mockReset().mockResolvedValue(VIEWS);
   projectApiMock.listMembers.mockReset().mockResolvedValue(MEMBERS);
+  sessionApiMock.create.mockReset().mockResolvedValue({ id: 40 });
   toastMock.success.mockClear();
   toastMock.error.mockClear();
 });
@@ -939,5 +946,42 @@ describe("PlanPane AI 推进入口与呈现（子系统 F）", () => {
       1,
     );
     expect(within(rowContaining("手动项")).queryByText("AI")).toBeNull();
+  });
+
+  it("行尾推进（会话直达）按钮 → create 任务会话（不传 workspaceId）→ 跳 ChatView", async () => {
+    renderPlanPane();
+    await screen.findByText("需求梳理");
+
+    fireEvent.click(
+      within(rowContaining("需求梳理")).getByRole("button", {
+        name: "project:plan.advance",
+      }),
+    );
+    await waitFor(() =>
+      expect(sessionApiMock.create).toHaveBeenCalledWith({
+        projectId: 1,
+        planItemId: 11,
+        title: "需求梳理",
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?session=40",
+      ),
+    );
+  });
+
+  it("本地任务（projectId null）行不渲染推进按钮（防御：计划 Tab 恒属项目）", async () => {
+    vi.mocked(PlanItemApi.list).mockResolvedValueOnce([
+      makeItem({ id: 15, projectId: null, title: "本地防御项" }),
+    ]);
+    renderPlanPane();
+    await screen.findByText("本地防御项");
+
+    expect(
+      within(rowContaining("本地防御项")).queryByRole("button", {
+        name: "project:plan.advance",
+      }),
+    ).toBeNull();
   });
 });

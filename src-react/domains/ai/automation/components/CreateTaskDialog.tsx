@@ -52,6 +52,9 @@ export interface CreateTaskDialogProps {
   /** 项目预设(项目模块调用方传入):锁定资产空间并把 projectId 写入
    * 保存载荷(workspaceName 供锁定态显示);未传时行为零变化 */
   project?: { id: number; workspaceId: number; workspaceName: string };
+  /** 预填(资料库「添加到任务」):open 时注入 name/prompt 初值,
+   *  与 template 互斥使用(外部入口不带模板) */
+  prefill?: { name: string; prompt: string };
 }
 
 export function CreateTaskDialog({
@@ -60,6 +63,7 @@ export function CreateTaskDialog({
   template,
   onSaved,
   project,
+  prefill,
 }: CreateTaskDialogProps) {
   const { t } = useTranslation(["chat"]);
   const navigate = useNavigate();
@@ -79,7 +83,13 @@ export function CreateTaskDialog({
     // 源变化信号兼 SchedulePicker remount key:打开来源(模板/新建)
     // 或开合态变化时必变,关闭即重置,保证同一来源取消后重开也会
     // remount 回填已存配置
-    resetKey: open ? (template ? `tpl-${template.slug}` : "new") : "closed",
+    resetKey: open
+      ? prefill
+        ? "prefill"
+        : template
+          ? `tpl-${template.slug}`
+          : "new"
+      : "closed",
     workspaces,
     project: project && { id: project.id, workspaceId: project.workspaceId },
   });
@@ -89,6 +99,14 @@ export function CreateTaskDialog({
   useEffect(() => {
     switchCountRef.current = 0;
   }, [form.pickerKey]);
+
+  /** 资料库「添加到任务」预填：reset 重置后注入（effect 晚于 render 内
+   *  reset，保证不被覆盖；仅 open 首帧执行一次，patch 为稳定 setter） */
+  useEffect(() => {
+    if (open && prefill) {
+      patch({ name: prefill.name, prompt: prefill.prompt });
+    }
+  }, [open, form.pickerKey, prefill]);
 
   const canSubmit = form.canSubmit && !saving;
 

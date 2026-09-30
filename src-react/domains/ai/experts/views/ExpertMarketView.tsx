@@ -128,18 +128,22 @@ export default function ExpertMarketView({
 
   /** 新会话绑定专家直达聊天页（添加并对话/已添加去对话共用） */
   const handleGoChat = async (assistantId: number) => {
-    const workspaces = await queryClient.ensureQueryData({
-      queryKey: ["workspaces"],
-      queryFn: () => WorkspaceApi.list(),
-    });
-    const workspaceId = workspaces[0]?.id;
-    if (workspaceId === undefined) {
-      toast.error(t("chat:experts.myExperts.noWorkspace"));
-      return;
+    try {
+      const workspaces = await queryClient.ensureQueryData({
+        queryKey: ["workspaces"],
+        queryFn: () => WorkspaceApi.list(),
+      });
+      const workspaceId = workspaces[0]?.id;
+      if (workspaceId === undefined) {
+        toast.error(t("chat:experts.myExperts.noWorkspace"));
+        return;
+      }
+      const session = await SessionApi.create({ workspaceId, assistantId });
+      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      navigate(`/module/ai?session=${session.id}`);
+    } catch (e) {
+      toast.error(mapIpcError(e));
     }
-    const session = await SessionApi.create({ workspaceId, assistantId });
-    await queryClient.invalidateQueries({ queryKey: ["sessions"] });
-    navigate(`/module/ai?session=${session.id}`);
   };
 
   /** 添加并对话：添加后新会话绑定专家直达聊天页 */
@@ -231,30 +235,32 @@ export default function ExpertMarketView({
         </section>
       )}
 
-      {/* 筛选行：类型 + 排序 + 分类横滚 */}
+      {/* 筛选行：类型 + 排序 + 分类横滚（场景聚合态显示全部类型，隐藏类型切换） */}
       <div className="flex items-center gap-2">
-        <div className="inline-flex items-center rounded-lg border border-border/50 bg-primary-subtle/30 p-0.5 text-xs">
-          {(
-            [
-              ["expert", t("chat:experts.market.typeExpert")],
-              ["team", t("chat:experts.market.typeTeam")],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              className={cn(
-                "rounded-md px-2.5 py-1 transition-colors",
-                type === value
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-primary",
-              )}
-              onClick={() => setType(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {!scenario && (
+          <div className="inline-flex items-center rounded-lg border border-border/50 bg-primary-subtle/30 p-0.5 text-xs">
+            {(
+              [
+                ["expert", t("chat:experts.market.typeExpert")],
+                ["team", t("chat:experts.market.typeTeam")],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                className={cn(
+                  "rounded-md px-2.5 py-1 transition-colors",
+                  type === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-primary",
+                )}
+                onClick={() => setType(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {(
           [
             ["comprehensive", t("chat:experts.market.sortComprehensive")],

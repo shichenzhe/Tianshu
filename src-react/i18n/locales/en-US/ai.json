@@ -122,6 +122,7 @@
       "subtitle": "Install MCP services to extend AI tool capabilities",
       "empty": "No MCP server yet",
       "emptyTip": "Click Configure to add an MCP server",
+      "loadError": "Failed to load MCP servers, please retry",
       "configure": "Configure",
       "backToList": "Back to MCP list",
       "save": "Save",

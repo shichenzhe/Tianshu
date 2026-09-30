@@ -1,6 +1,8 @@
 /**
  * MCP 服务管理弹窗：列表态（已安装表格 + 空态插画）/ 编辑态（JSON 编辑器）。
- * 打开带 initialTemplate（市场 + 入口）直入编辑态并合入模板；
+ * 打开带 initialTemplate（市场 + 入口）在 list 数据就绪后直入编辑态并合入模板；
+ * 编辑基线懒计算：进入编辑态瞬间以最新已就绪数据为源——打开瞬间的空/旧快照
+ * 会让保存把库内全部服务 diff 删除，故 list pending/error 时禁入编辑态兜底；
  * 保存流：parseMcpConfig 前端校验（错误码 → i18n）→ sync → invalidate 回列表态。
  * 行内启停/重连/删除迁自原 McpSettingsView；编辑统一走 JSON 编辑器（无行内编辑）
  */
@@ -106,24 +108,46 @@ export default function McpManageDialog({
   const servers = serversQuery.data ?? [];
   const [mode, setMode] = useState<"list" | "edit">("list");
   const [jsonText, setJsonText] = useState("");
+  // 挂起模板：打开时带模板但 list 数据未就绪，待就绪后由 effect 直入编辑态
+  const [pendingTemplate, setPendingTemplate] = useState<
+    Record<string, McpServerJsonEntry> | undefined
+  >();
   const [invalid, setInvalid] = useState(false);
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<McpServerRecord | null>(null);
 
-  // 打开时按入口决定初始态：带模板直入编辑态并合入；否则列表态
+  // 打开时重置：先落列表态，模板挂起等待数据就绪（不用打开瞬间快照定基线）
   useEffect(() => {
     if (!open) {
       return;
     }
-    const base = recordsToJsonText(servers);
-    setJsonText(initialTemplate ? mergeTemplate(base, initialTemplate) : base);
     setInvalid(false);
     setSearch("");
-    setMode(initialTemplate ? "edit" : "list");
-    // servers 为异步数据，打开时可能尚未就绪——就绪后重算初始文本（仅编辑态且未改动前）
-    // 简化：以打开瞬间为准，编辑态文本由用户主导；列表态数据照常刷新
+    setMode("list");
+    setPendingTemplate(initialTemplate);
   }, [open, initialTemplate]);
+
+  // 挂起模板消费：list 数据就绪后以就绪数据为基线合入模板直入编辑态；
+  // 消费即清——后台 refetch 变更 data 不再重入编辑态覆盖用户输入
+  useEffect(() => {
+    if (!open || !pendingTemplate) {
+      return;
+    }
+    if (serversQuery.isPending || serversQuery.isError) {
+      return;
+    }
+    const base = recordsToJsonText(servers);
+    setJsonText(mergeTemplate(base, pendingTemplate));
+    setPendingTemplate(undefined);
+    setMode("edit");
+  }, [
+    open,
+    pendingTemplate,
+    serversQuery.isPending,
+    serversQuery.isError,
+    servers,
+  ]);
 
   const statusById = new Map(
     (statusesQuery.data ?? []).map((status) => [status.id, status]),
@@ -135,6 +159,13 @@ export default function McpManageDialog({
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: SERVERS_KEY });
     await queryClient.invalidateQueries({ queryKey: STATUSES_KEY });
+  };
+
+  /** 进编辑态：基线懒计算，以点击瞬间的最新已就绪数据为源（pending/error 时按钮已禁用） */
+  const enterEdit = () => {
+    setJsonText(recordsToJsonText(servers));
+    setPendingTemplate(undefined);
+    setMode("edit");
   };
 
   const syncErrorMessage = (e: unknown): string => {
@@ -218,7 +249,8 @@ export default function McpManageDialog({
             search={search}
             onSearch={setSearch}
             loading={serversQuery.isPending}
-            onConfigure={() => setMode("edit")}
+            loadError={serversQuery.isError}
+            onConfigure={enterEdit}
             onToggle={handleToggle}
             onReconnect={handleReconnect}
             onDelete={setDeleting}
@@ -274,6 +306,7 @@ function ListPane({
   search,
   onSearch,
   loading,
+  loadError,
   onConfigure,
   onToggle,
   onReconnect,
@@ -285,12 +318,16 @@ function ListPane({
   search: string;
   onSearch: (v: string) => void;
   loading: boolean;
+  loadError: boolean;
   onConfigure: () => void;
   onToggle: (server: McpServerRecord, enabled: boolean) => void;
   onReconnect: (server: McpServerRecord) => void;
   onDelete: (server: McpServerRecord) => void;
   t: TFunction;
 }) {
+  // 空基线防线：loading/loadError 时禁入编辑态（配置按钮禁用），
+  // 否则编辑器以空快照为基线，保存会把库内全部服务 diff 删除
+  const configureDisabled = loading || loadError;
   return (
     <>
       <DialogHeader className="border-b border-border/50 p-5 pb-4">
@@ -303,7 +340,7 @@ function ListPane({
               {t("ai:mcp.manage.subtitle")}
             </DialogDescription>
           </div>
-          <Button size="sm" onClick={onConfigure}>
+          <Button size="sm" disabled={configureDisabled} onClick={onConfigure}>
             <Plus className="mr-1 h-4 w-4" />
             {t("ai:mcp.manage.configure")}
           </Button>
@@ -333,6 +370,11 @@ function ListPane({
         {loading ? (
           <p className="py-12 text-center text-sm text-muted-foreground">
             {t("common:loading")}
+          </p>
+        ) : loadError ? (
+          // 加载失败不复用空态文案——空态会引导用户进编辑器（空基线误删路径）
+          <p className="py-12 text-center text-sm text-destructive">
+            {t("ai:mcp.manage.loadError")}
           </p>
         ) : servers.length === 0 ? (
           <EmptyPane onConfigure={onConfigure} t={t} />

@@ -122,6 +122,7 @@
       "subtitle": "安装 MCP 服务，为 AI 扩展更多工具能力",
       "empty": "暂无 MCP 服务器",
       "emptyTip": "点击配置按钮添加 MCP 服务器",
+      "loadError": "MCP 服务加载失败，请重试",
       "configure": "配置",
       "backToList": "返回 MCP 列表",
       "save": "保存",

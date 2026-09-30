@@ -4,6 +4,9 @@
  * shiki 未就绪/失败（getHighlighter 会 rethrow）回退纯文本（React 文本节点自动转义）。
  * 对齐保证：overlay 与 textarea 共用 font-mono/text-[13px]/leading-6/
  * p-3 pl-12/whitespace-pre-wrap/break-all，gutter 固定 w-10 逐行堆叠（每行 leading-6）
+ * 高度模型：编辑区随内容增长（无内滚封顶，textarea absolute inset-0 随容器
+ * 等高），超长时由外层 Dialog 的 flex-1 overflow-y-auto 滚动——内滚会使
+ * 高亮层/行号与 textarea 滚动位错开
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -81,13 +84,13 @@ export default function JsonConfigEditor({
           // bg-transparent 加 v4 尾缀 !：压过 shiki pre 内联 background-color，
           // 否则深色模式高亮文字落在白底上；pre/code 补 font-mono 压过 preflight
           // 对 code,kbd,samp,pre 的元素级默认 mono 栈（与 textarea 同 --font-mono）
-          className="pointer-events-none max-h-[55vh] overflow-hidden py-0 [&_code]:font-mono [&_code]:leading-6 [&_pre]:bg-transparent! [&_pre]:font-mono [&_pre]:p-3 [&_pre]:pl-12 [&_pre]:whitespace-pre-wrap [&_pre]:break-all"
+          className="pointer-events-none py-0 [&_code]:font-mono [&_code]:leading-6 [&_pre]:bg-transparent! [&_pre]:font-mono [&_pre]:p-3 [&_pre]:pl-12 [&_pre]:whitespace-pre-wrap [&_pre]:break-all"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       ) : (
         <div
           aria-hidden
-          className="pointer-events-none max-h-[55vh] overflow-hidden whitespace-pre-wrap break-all p-3 pl-12"
+          className="pointer-events-none whitespace-pre-wrap break-all p-3 pl-12"
         >
           {value}
         </div>

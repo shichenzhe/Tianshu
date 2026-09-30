@@ -10,29 +10,24 @@ type AssistantRow = NonNullable<
   Awaited<ReturnType<typeof prisma.assistant.findFirst>>
 >;
 
-const BUILTIN_ASSISTANTS: AssistantCreateParams[] = [
-  {
-    name: "通用助手",
-    icon: "🤖",
-    systemPrompt: "你是一个乐于助人的通用 AI 助手，回答简洁准确。",
-  },
-  {
-    name: "翻译助手",
-    icon: "🌍",
-    systemPrompt:
-      "你是一名专业翻译。用户输入什么语言，就翻译成另一种语言：中文输入译成英文，其他语言输入译成中文。只输出译文，不解释。",
-  },
-  {
-    name: "代码审查",
-    icon: "🔍",
-    systemPrompt:
-      "你是一名资深代码审查员。针对用户给出的代码，指出正确性问题、可读性问题与潜在风险，按严重程度排序，并给出修改建议。",
-  },
-];
-
 export class AssistantRepository {
   constructor() {
     this.registerIpcHandlers();
+  }
+
+  /** tags 列为 JSON 数组字符串；坏数据回退空数组不抛错（展示字段） */
+  private parseTags(raw: string | null): string[] {
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((v): v is string => typeof v === "string")
+        : [];
+    } catch {
+      return [];
+    }
   }
 
   private toRecord(row: AssistantRow): AssistantRecord {
@@ -42,6 +37,9 @@ export class AssistantRepository {
       temperature: row.temperature ?? undefined,
       topP: row.topP ?? undefined,
       maxTokens: row.maxTokens ?? undefined,
+      description: row.description ?? undefined,
+      tags: this.parseTags(row.tags),
+      sourceSlug: row.sourceSlug ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -60,23 +58,6 @@ export class AssistantRepository {
     );
   }
 
-  /**
-   * 播种内置助手（每用户一份；原启动期 seedIfEmpty 因多用户隔离改为
-   * 首次 list 时按用户补种）
-   */
-  private async seedIfEmptyFor(userId: number): Promise<void> {
-    const count = await prisma.assistant.count({ where: { userId } });
-    if (count === 0) {
-      await prisma.assistant.createMany({
-        data: BUILTIN_ASSISTANTS.map((a) => ({
-          ...a,
-          builtin: true,
-          userId,
-        })),
-      });
-    }
-  }
-
   /** 校验助手归当前用户（不存在与他人所有同报错，不泄露存在性） */
   private async assertOwned(id: number, userId: number): Promise<void> {
     const row = await prisma.assistant.findFirst({ where: { id, userId } });
@@ -86,7 +67,6 @@ export class AssistantRepository {
   }
 
   async list(userId: number): Promise<AssistantRecord[]> {
-    await this.seedIfEmptyFor(userId);
     return (
       await prisma.assistant.findMany({
         where: { userId },
@@ -112,6 +92,9 @@ export class AssistantRepository {
         temperature: p.temperature,
         topP: p.topP,
         maxTokens: p.maxTokens,
+        description: p.description,
+        tags: p.tags ? JSON.stringify(p.tags) : undefined,
+        sourceSlug: p.sourceSlug,
         userId,
       },
     });
@@ -132,6 +115,11 @@ export class AssistantRepository {
         temperature: p.temperature,
         topP: p.topP,
         maxTokens: p.maxTokens,
+        description: p.description,
+        // tags undefined 时键整体不出现在 data（区别于 null = 清空）
+        ...(p.tags === undefined
+          ? {}
+          : { tags: p.tags === null ? null : JSON.stringify(p.tags) }),
       },
     });
     return this.toRecord(row);

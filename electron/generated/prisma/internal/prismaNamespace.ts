@@ -2400,6 +2400,9 @@ export const AssistantScalarFieldEnum = {
   topP: 'topP',
   maxTokens: 'maxTokens',
   builtin: 'builtin',
+  description: 'description',
+  tags: 'tags',
+  sourceSlug: 'sourceSlug',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   userId: 'userId'

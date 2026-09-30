@@ -73,6 +73,9 @@ model assistant {
   topP         Float?
   maxTokens    Int?
   builtin      Boolean  @default(false)
+  description  String?
+  tags         String?
+  sourceSlug   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userId       Int? // v12 多用户隔离

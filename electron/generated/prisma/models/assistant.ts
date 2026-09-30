@@ -51,6 +51,9 @@ export type AssistantMinAggregateOutputType = {
   topP: number | null
   maxTokens: number | null
   builtin: boolean | null
+  description: string | null
+  tags: string | null
+  sourceSlug: string | null
   createdAt: Date | null
   updatedAt: Date | null
   userId: number | null
@@ -65,6 +68,9 @@ export type AssistantMaxAggregateOutputType = {
   topP: number | null
   maxTokens: number | null
   builtin: boolean | null
+  description: string | null
+  tags: string | null
+  sourceSlug: string | null
   createdAt: Date | null
   updatedAt: Date | null
   userId: number | null
@@ -79,6 +85,9 @@ export type AssistantCountAggregateOutputType = {
   topP: number
   maxTokens: number
   builtin: number
+  description: number
+  tags: number
+  sourceSlug: number
   createdAt: number
   updatedAt: number
   userId: number
@@ -111,6 +120,9 @@ export type AssistantMinAggregateInputType = {
   topP?: true
   maxTokens?: true
   builtin?: true
+  description?: true
+  tags?: true
+  sourceSlug?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -125,6 +137,9 @@ export type AssistantMaxAggregateInputType = {
   topP?: true
   maxTokens?: true
   builtin?: true
+  description?: true
+  tags?: true
+  sourceSlug?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -139,6 +154,9 @@ export type AssistantCountAggregateInputType = {
   topP?: true
   maxTokens?: true
   builtin?: true
+  description?: true
+  tags?: true
+  sourceSlug?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -240,6 +258,9 @@ export type AssistantGroupByOutputType = {
   topP: number | null
   maxTokens: number | null
   builtin: boolean
+  description: string | null
+  tags: string | null
+  sourceSlug: string | null
   createdAt: Date
   updatedAt: Date
   userId: number | null
@@ -277,6 +298,9 @@ export type assistantWhereInput = {
   topP?: Prisma.FloatNullableFilter<"assistant"> | number | null
   maxTokens?: Prisma.IntNullableFilter<"assistant"> | number | null
   builtin?: Prisma.BoolFilter<"assistant"> | boolean
+  description?: Prisma.StringNullableFilter<"assistant"> | string | null
+  tags?: Prisma.StringNullableFilter<"assistant"> | string | null
+  sourceSlug?: Prisma.StringNullableFilter<"assistant"> | string | null
   createdAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   userId?: Prisma.IntNullableFilter<"assistant"> | number | null
@@ -291,6 +315,9 @@ export type assistantOrderByWithRelationInput = {
   topP?: Prisma.SortOrderInput | Prisma.SortOrder
   maxTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   builtin?: Prisma.SortOrder
+  description?: Prisma.SortOrderInput | Prisma.SortOrder
+  tags?: Prisma.SortOrderInput | Prisma.SortOrder
+  sourceSlug?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -308,6 +335,9 @@ export type assistantWhereUniqueInput = Prisma.AtLeast<{
   topP?: Prisma.FloatNullableFilter<"assistant"> | number | null
   maxTokens?: Prisma.IntNullableFilter<"assistant"> | number | null
   builtin?: Prisma.BoolFilter<"assistant"> | boolean
+  description?: Prisma.StringNullableFilter<"assistant"> | string | null
+  tags?: Prisma.StringNullableFilter<"assistant"> | string | null
+  sourceSlug?: Prisma.StringNullableFilter<"assistant"> | string | null
   createdAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"assistant"> | Date | string
   userId?: Prisma.IntNullableFilter<"assistant"> | number | null
@@ -322,6 +352,9 @@ export type assistantOrderByWithAggregationInput = {
   topP?: Prisma.SortOrderInput | Prisma.SortOrder
   maxTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   builtin?: Prisma.SortOrder
+  description?: Prisma.SortOrderInput | Prisma.SortOrder
+  tags?: Prisma.SortOrderInput | Prisma.SortOrder
+  sourceSlug?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -344,6 +377,9 @@ export type assistantScalarWhereWithAggregatesInput = {
   topP?: Prisma.FloatNullableWithAggregatesFilter<"assistant"> | number | null
   maxTokens?: Prisma.IntNullableWithAggregatesFilter<"assistant"> | number | null
   builtin?: Prisma.BoolWithAggregatesFilter<"assistant"> | boolean
+  description?: Prisma.StringNullableWithAggregatesFilter<"assistant"> | string | null
+  tags?: Prisma.StringNullableWithAggregatesFilter<"assistant"> | string | null
+  sourceSlug?: Prisma.StringNullableWithAggregatesFilter<"assistant"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"assistant"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"assistant"> | Date | string
   userId?: Prisma.IntNullableWithAggregatesFilter<"assistant"> | number | null
@@ -357,6 +393,9 @@ export type assistantCreateInput = {
   topP?: number | null
   maxTokens?: number | null
   builtin?: boolean
+  description?: string | null
+  tags?: string | null
+  sourceSlug?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -371,6 +410,9 @@ export type assistantUncheckedCreateInput = {
   topP?: number | null
   maxTokens?: number | null
   builtin?: boolean
+  description?: string | null
+  tags?: string | null
+  sourceSlug?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -384,6 +426,9 @@ export type assistantUpdateInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sourceSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -398,6 +443,9 @@ export type assistantUncheckedUpdateInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sourceSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -412,6 +460,9 @@ export type assistantCreateManyInput = {
   topP?: number | null
   maxTokens?: number | null
   builtin?: boolean
+  description?: string | null
+  tags?: string | null
+  sourceSlug?: string | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -425,6 +476,9 @@ export type assistantUpdateManyMutationInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sourceSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -439,6 +493,9 @@ export type assistantUncheckedUpdateManyInput = {
   topP?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   maxTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   builtin?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tags?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sourceSlug?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -453,6 +510,9 @@ export type assistantCountOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   builtin?: Prisma.SortOrder
+  description?: Prisma.SortOrder
+  tags?: Prisma.SortOrder
+  sourceSlug?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -475,6 +535,9 @@ export type assistantMaxOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   builtin?: Prisma.SortOrder
+  description?: Prisma.SortOrder
+  tags?: Prisma.SortOrder
+  sourceSlug?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -489,6 +552,9 @@ export type assistantMinOrderByAggregateInput = {
   topP?: Prisma.SortOrder
   maxTokens?: Prisma.SortOrder
   builtin?: Prisma.SortOrder
+  description?: Prisma.SortOrder
+  tags?: Prisma.SortOrder
+  sourceSlug?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -513,6 +579,9 @@ export type assistantSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   topP?: boolean
   maxTokens?: boolean
   builtin?: boolean
+  description?: boolean
+  tags?: boolean
+  sourceSlug?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -527,6 +596,9 @@ export type assistantSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   topP?: boolean
   maxTokens?: boolean
   builtin?: boolean
+  description?: boolean
+  tags?: boolean
+  sourceSlug?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -541,6 +613,9 @@ export type assistantSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   topP?: boolean
   maxTokens?: boolean
   builtin?: boolean
+  description?: boolean
+  tags?: boolean
+  sourceSlug?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -555,12 +630,15 @@ export type assistantSelectScalar = {
   topP?: boolean
   maxTokens?: boolean
   builtin?: boolean
+  description?: boolean
+  tags?: boolean
+  sourceSlug?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
 }
 
-export type assistantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "systemPrompt" | "temperature" | "topP" | "maxTokens" | "builtin" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["assistant"]>
+export type assistantOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "icon" | "systemPrompt" | "temperature" | "topP" | "maxTokens" | "builtin" | "description" | "tags" | "sourceSlug" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["assistant"]>
 
 export type $assistantPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "assistant"
@@ -574,6 +652,9 @@ export type $assistantPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     topP: number | null
     maxTokens: number | null
     builtin: boolean
+    description: string | null
+    tags: string | null
+    sourceSlug: string | null
     createdAt: Date
     updatedAt: Date
     userId: number | null
@@ -1008,6 +1089,9 @@ export interface assistantFieldRefs {
   readonly topP: Prisma.FieldRef<"assistant", 'Float'>
   readonly maxTokens: Prisma.FieldRef<"assistant", 'Int'>
   readonly builtin: Prisma.FieldRef<"assistant", 'Boolean'>
+  readonly description: Prisma.FieldRef<"assistant", 'String'>
+  readonly tags: Prisma.FieldRef<"assistant", 'String'>
+  readonly sourceSlug: Prisma.FieldRef<"assistant", 'String'>
   readonly createdAt: Prisma.FieldRef<"assistant", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"assistant", 'DateTime'>
   readonly userId: Prisma.FieldRef<"assistant", 'Int'>

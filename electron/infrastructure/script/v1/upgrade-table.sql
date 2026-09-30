@@ -80,10 +80,15 @@ CREATE TABLE IF NOT EXISTS assistant (
     topP REAL NULL,
     maxTokens INTEGER NULL,
     builtin BOOLEAN NOT NULL DEFAULT 0,
+    description TEXT NULL,
+    tags TEXT NULL,
+    sourceSlug TEXT NULL,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL,
     userId INTEGER NULL
 );
+
+--/p 专家市场：描述/标签(JSON数组字符串)/市场来源slug
 
 --/p v12 多用户隔离：助手归属用户
 --/ignore

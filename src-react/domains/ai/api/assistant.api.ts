@@ -13,6 +13,9 @@ export interface AssistantRecord {
   topP?: number;
   maxTokens?: number;
   builtin: boolean;
+  description?: string;
+  tags?: string[];
+  sourceSlug?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,6 +27,9 @@ export interface AssistantCreateParams {
   temperature?: number;
   topP?: number;
   maxTokens?: number;
+  description?: string;
+  tags?: string[];
+  sourceSlug?: string;
 }
 
 export interface AssistantUpdateParams {
@@ -35,6 +41,8 @@ export interface AssistantUpdateParams {
   temperature?: number | null;
   topP?: number | null;
   maxTokens?: number | null;
+  description?: string | null;
+  tags?: string[] | null;
 }
 
 export class AssistantApi {

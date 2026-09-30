@@ -1,6 +1,6 @@
 /**
  * 专家·技能·连接器统一管理：Tab 切换（专家=市场+我的专家双视图 /
- * 技能=技能管理 / 连接器=MCP）；专家 Tab 由 ?view=market|mine 驱动；
+ * 技能=技能管理 / 连接器=连接器市场）；专家 Tab 由 ?view=market|mine 驱动；
  * Tab 行挂 TopBar（usePageHeader pill 组），页面内容相应上移
  */
 import { useEffect, useState } from "react";
@@ -10,7 +10,7 @@ import { Bot, Plug, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { usePageHeader } from "@/components/layout/page-header.store";
-import McpSettingsView from "../../mcp/views/McpSettingsView";
+import ConnectorMarketView from "../../mcp/views/ConnectorMarketView";
 import SkillsView from "../../skills/views/SkillsView";
 import ExpertMarketView from "./ExpertMarketView";
 import MyExpertsView from "./MyExpertsView";
@@ -106,7 +106,7 @@ export default function ExpertsView() {
           initialView={viewParam === "installed" ? "installed" : "discover"}
         />
       )}
-      {tab === "connectors" && <McpSettingsView />}
+      {tab === "connectors" && <ConnectorMarketView />}
     </div>
   );
 }

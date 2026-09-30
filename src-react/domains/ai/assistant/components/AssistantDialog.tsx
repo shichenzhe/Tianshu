@@ -28,6 +28,27 @@ interface AssistantDialogProps {
   editing?: AssistantRecord;
 }
 
+/** 标签输入解析：逗号分隔 → 去空白去空项的数组 */
+function parseTagsInput(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+/** 标签差量：与原值一致 undefined（不改），空数组 null（清空），否则新数组 */
+function diffTagsInput(
+  raw: string,
+  original: string[] | undefined,
+): string[] | null | undefined {
+  const next = parseTagsInput(raw);
+  const joined = next.join(",");
+  if (joined === (original ?? []).join(",")) {
+    return undefined;
+  }
+  return joined ? next : null;
+}
+
 export default function AssistantDialog({
   open,
   onOpenChange,
@@ -41,6 +62,8 @@ export default function AssistantDialog({
   const [temperature, setTemperature] = useState("");
   const [topP, setTopP] = useState("");
   const [maxTokens, setMaxTokens] = useState("");
+  const [description, setDescription] = useState("");
+  const [tagsInput, setTagsInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -55,6 +78,8 @@ export default function AssistantDialog({
       setMaxTokens(
         editing?.maxTokens === undefined ? "" : String(editing.maxTokens),
       );
+      setDescription(editing?.description ?? "");
+      setTagsInput((editing?.tags ?? []).join(", "));
     }
   }, [open, editing]);
 
@@ -71,6 +96,8 @@ export default function AssistantDialog({
         temperature: parseOptionalNumber(temperature),
         topP: parseOptionalNumber(topP),
         maxTokens: parseOptionalInt(maxTokens),
+        description: description.trim() || undefined,
+        tags: parseTagsInput(tagsInput),
       };
     } catch {
       toast.error(t("ai:model.invalidNumber"));
@@ -91,6 +118,8 @@ export default function AssistantDialog({
           ),
           topP: diffOptionalValue(params.topP, editing.topP),
           maxTokens: diffOptionalValue(params.maxTokens, editing.maxTokens),
+          description: diffOptionalString(description, editing.description),
+          tags: diffTagsInput(tagsInput, editing.tags),
         });
       } else {
         await AssistantApi.create(params);
@@ -133,6 +162,21 @@ export default function AssistantDialog({
               rows={5}
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("ai:assistant.description")}</Label>
+            <Textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("ai:assistant.tags")}</Label>
+            <Input
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
             />
           </div>
           <p className="text-xs text-muted-foreground">

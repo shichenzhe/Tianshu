@@ -57,6 +57,8 @@
     "name": "名称",
     "icon": "图标（emoji）",
     "systemPrompt": "系统提示词",
+    "description": "描述",
+    "tags": "标签",
     "builtin": "内置",
     "deleteConfirmTitle": "删除助手",
     "deleteConfirmDesc": "删除后不影响已有会话的历史消息。"

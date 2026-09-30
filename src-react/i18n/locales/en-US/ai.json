@@ -57,6 +57,8 @@
     "name": "Name",
     "icon": "Icon (emoji)",
     "systemPrompt": "System Prompt",
+    "description": "Description",
+    "tags": "Tags",
     "builtin": "Built-in",
     "deleteConfirmTitle": "Delete Assistant",
     "deleteConfirmDesc": "Deleting an assistant does not affect the history of existing sessions."

@@ -76,7 +76,7 @@ export default function MyExpertsView({
       });
       const workspaceId = workspaces[0]?.id;
       if (workspaceId === undefined) {
-        toast.info(t("chat:skills.comingSoon"));
+        toast.error(t("chat:experts.myExperts.noWorkspace"));
         return;
       }
       const created = await SessionApi.create({ workspaceId });

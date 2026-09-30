@@ -121,6 +121,13 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     expect(indexesOf(db, "option")).not.toContain("idx_option_type_name");
   });
 
+  it("专家市场 assistant 新列并入(描述/标签/市场来源 slug)", () => {
+    const db = createDb();
+    expect(columnsOf(db, "assistant")).toEqual(
+      expect.arrayContaining(["description", "tags", "sourceSlug"]),
+    );
+  });
+
   it("v11/v14 资料库条目表并入最终形态(含收藏与最近访问列)", () => {
     const db = createDb();
     expect(columnsOf(db, "libraryItem")).toEqual(

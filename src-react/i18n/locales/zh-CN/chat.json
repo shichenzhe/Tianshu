@@ -187,7 +187,6 @@
     "createPrompt": "帮我创建一个专家，擅长 [专家方向]。我的经验是：[请补充你的行业背景、相关经验]",
     "market": {
       "searchPlaceholder": "搜索专家职称或描述",
-      "myExperts": "我的专家",
       "myExpertsCount": "我的专家 {{count}}",
       "scenarios": "精选场景",
       "allExperts": "全部专家",
@@ -212,7 +211,8 @@
       "emptySubtitle": "创建属于你的专家，分享专业知识",
       "browseMarket": "去市场逛逛",
       "openChat": "开对话",
-      "chatFailed": "创建会话失败"
+      "chatFailed": "创建会话失败",
+      "noWorkspace": "请先创建工作空间"
     },
     "scenarios": {
       "back-to-school": "开学季",

@@ -187,7 +187,6 @@
     "createPrompt": "Help me create an expert skilled in [expert field]. My experience: [add your industry background and relevant experience]",
     "market": {
       "searchPlaceholder": "Search expert title or description",
-      "myExperts": "My Experts",
       "myExpertsCount": "My Experts ({{count}})",
       "scenarios": "Featured Scenarios",
       "allExperts": "All Experts",
@@ -212,7 +211,8 @@
       "emptySubtitle": "Create your own expert and share professional knowledge",
       "browseMarket": "Browse Marketplace",
       "openChat": "Chat",
-      "chatFailed": "Failed to create session"
+      "chatFailed": "Failed to create session",
+      "noWorkspace": "Create a workspace first"
     },
     "scenarios": {
       "back-to-school": "Back to School",

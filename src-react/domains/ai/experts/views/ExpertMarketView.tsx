@@ -82,7 +82,8 @@ export default function ExpertMarketView({
   const visible = useMemo(() => {
     const filtered = filterExperts(MARKET_EXPERTS, {
       keyword: keyword || undefined,
-      type,
+      // 场景聚合显示该场景全部类型（专家+专家团），不受类型筛选截断
+      type: scenario ? undefined : type,
       category: category ?? undefined,
       scenarioSlugs: scenario ? new Set(scenario.expertSlugs) : undefined,
     });
@@ -93,6 +94,16 @@ export default function ExpertMarketView({
     () => MARKET_EXPERTS.find((e) => e.slug === detailSlug) ?? null,
     [detailSlug],
   );
+
+  /** 详情弹窗已添加态「去对话」：按市场 slug 反查已建专家的 id */
+  const detailAssistantId = useMemo(() => {
+    if (!detailItem) {
+      return undefined;
+    }
+    return (assistantsQuery.data ?? []).find(
+      (a) => a.sourceSlug === detailItem.slug,
+    )?.id;
+  }, [detailItem, assistantsQuery.data]);
 
   /** 添加 = 以市场专家为模板建一条自己的专家 */
   const handleAdd = async (item: ExpertMarketItem) => {
@@ -115,6 +126,22 @@ export default function ExpertMarketView({
     }
   };
 
+  /** 新会话绑定专家直达聊天页（添加并对话/已添加去对话共用） */
+  const handleGoChat = async (assistantId: number) => {
+    const workspaces = await queryClient.ensureQueryData({
+      queryKey: ["workspaces"],
+      queryFn: () => WorkspaceApi.list(),
+    });
+    const workspaceId = workspaces[0]?.id;
+    if (workspaceId === undefined) {
+      toast.error(t("chat:experts.myExperts.noWorkspace"));
+      return;
+    }
+    const session = await SessionApi.create({ workspaceId, assistantId });
+    await queryClient.invalidateQueries({ queryKey: ["sessions"] });
+    navigate(`/module/ai?session=${session.id}`);
+  };
+
   /** 添加并对话：添加后新会话绑定专家直达聊天页 */
   const handleAddAndChat = async (item: ExpertMarketItem) => {
     setAddingSlug(item.slug);
@@ -128,20 +155,7 @@ export default function ExpertMarketView({
         sourceSlug: item.slug,
       });
       await queryClient.invalidateQueries({ queryKey: ASSISTANTS_KEY });
-      const workspaces = await queryClient.ensureQueryData({
-        queryKey: ["workspaces"],
-        queryFn: () => WorkspaceApi.list(),
-      });
-      const workspaceId = workspaces[0]?.id;
-      if (workspaceId === undefined) {
-        return;
-      }
-      const session = await SessionApi.create({
-        workspaceId,
-        assistantId: created.id,
-      });
-      await queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      navigate(`/module/ai?session=${session.id}`);
+      await handleGoChat(created.id);
     } catch (e) {
       toast.error(mapIpcError(e));
     } finally {
@@ -154,15 +168,20 @@ export default function ExpertMarketView({
       {/* 工具栏 */}
       <div className="flex items-center gap-2">
         {scenario ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-            onClick={() => setScenarioSlug(null)}
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t("chat:experts.market.allExperts")}
-          </Button>
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1 text-xs text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+              onClick={() => setScenarioSlug(null)}
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              {t("chat:experts.market.allExperts")}
+            </Button>
+            <span className="text-sm font-medium text-foreground">
+              {t(`chat:experts.scenarios.${scenario.titleKey}`)}
+            </span>
+          </>
         ) : (
           <Button
             variant="ghost"
@@ -302,6 +321,11 @@ export default function ExpertMarketView({
         adding={detailItem ? addingSlug === detailItem.slug : false}
         onAdd={() => detailItem && void handleAdd(detailItem)}
         onAddAndChat={() => detailItem && void handleAddAndChat(detailItem)}
+        onGoChat={
+          detailAssistantId !== undefined
+            ? () => void handleGoChat(detailAssistantId)
+            : undefined
+        }
         onOpenChange={(open) => {
           if (!open) {
             setDetailSlug(null);

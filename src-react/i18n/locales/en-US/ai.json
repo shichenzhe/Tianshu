@@ -49,11 +49,7 @@
     "importSuccess": "Import finished"
   },
   "assistant": {
-    "pageTitle": "Assistants",
-    "pageDesc": "Assistants define each session's system prompt and default parameters, and can be switched anytime within a session.",
     "add": "New Assistant",
-    "empty": "No assistants yet",
-    "emptyTip": "Add your first assistant to use it in chats",
     "name": "Name",
     "icon": "Icon (emoji)",
     "systemPrompt": "System Prompt",

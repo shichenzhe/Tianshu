@@ -1,6 +1,6 @@
 /**
  * 市场专家详情弹窗：完整描述 + 提示词折叠预览 +
- * 「添加到我的专家」（已添加时禁用）/「添加并对话」双动作
+ * 「添加到我的专家」（已添加时禁用）/「添加并对话」/已添加态「去对话」
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +24,7 @@ export default function ExpertDetailDialog({
   adding,
   onAdd,
   onAddAndChat,
+  onGoChat,
   onOpenChange,
 }: {
   item: ExpertMarketItem | null;
@@ -31,6 +32,7 @@ export default function ExpertDetailDialog({
   adding: boolean;
   onAdd: () => void;
   onAddAndChat: () => void;
+  onGoChat?: () => void;
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation(["chat", "common"]);
@@ -96,10 +98,21 @@ export default function ExpertDetailDialog({
         </div>
         <DialogFooter>
           {added ? (
-            <Button variant="outline" disabled className="gap-1">
-              <Check className="h-4 w-4" />
-              {t("chat:experts.market.added")}
-            </Button>
+            <>
+              <Button variant="outline" disabled className="gap-1">
+                <Check className="h-4 w-4" />
+                {t("chat:experts.market.added")}
+              </Button>
+              {onGoChat && (
+                <Button
+                  variant="outline"
+                  onClick={onGoChat}
+                  className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                >
+                  {t("chat:experts.market.goChat")}
+                </Button>
+              )}
+            </>
           ) : (
             <>
               <Button

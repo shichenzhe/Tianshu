@@ -49,11 +49,7 @@
     "importSuccess": "导入完成"
   },
   "assistant": {
-    "pageTitle": "助手预设",
-    "pageDesc": "助手决定会话的系统提示词与默认参数，可在会话中随时切换。",
     "add": "新建助手",
-    "empty": "暂无助手",
-    "emptyTip": "添加第一个助手后即可在会话中选用",
     "name": "名称",
     "icon": "图标（emoji）",
     "systemPrompt": "系统提示词",

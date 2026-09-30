@@ -1,7 +1,7 @@
 /**
- * 专家·技能·连接器统一管理：Tab 切换（专家=助手预设 / 技能=技能管理 / 连接器=MCP）
- * 专家与连接器 Tab 复用既有设置视图；技能 Tab 挂 SkillsView（P-B 双视图）；
- * Tab 行迁入顶栏（TopBar 中段 pill 组），页面内容相应上移
+ * 专家·技能·连接器统一管理：Tab 切换（专家=市场+我的专家双视图 /
+ * 技能=技能管理 / 连接器=MCP）；专家 Tab 由 ?view=market|mine 驱动；
+ * Tab 行挂 TopBar（usePageHeader pill 组），页面内容相应上移
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,15 +10,16 @@ import { Bot, Plug, Sparkles } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { usePageHeader } from "@/components/layout/page-header.store";
-import AssistantSettingsView from "../../assistant/views/AssistantSettingsView";
 import McpSettingsView from "../../mcp/views/McpSettingsView";
 import SkillsView from "../../skills/views/SkillsView";
+import ExpertMarketView from "./ExpertMarketView";
+import MyExpertsView from "./MyExpertsView";
 
 type ExpertTab = "assistants" | "skills" | "connectors";
 
 export default function ExpertsView() {
   const { t } = useTranslation(["chat", "common"]);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<ExpertTab>("assistants");
   // 入口直达：?tab=skills|connectors|assistants（挂载与变化都切换）
   const tabParam = searchParams.get("tab");
@@ -56,6 +57,14 @@ export default function ExpertsView() {
     },
   ];
 
+  // 专家子视图路由态：?tab=assistants&view=market|mine（skills 分支不受影响）
+  const navigateToMine = () => {
+    setSearchParams({ tab: "assistants", view: "mine" });
+  };
+  const navigateToMarket = () => {
+    setSearchParams({ tab: "assistants", view: "market" });
+  };
+
   // Tab 行迁入顶栏（TopBar 中段，44px 行高改 pill 风格），内容相应上移
   usePageHeader({
     title: (
@@ -82,7 +91,15 @@ export default function ExpertsView() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4">
-      {tab === "assistants" && <AssistantSettingsView />}
+      {tab === "assistants" &&
+        (viewParam === "mine" ? (
+          <MyExpertsView
+            onBack={navigateToMarket}
+            onBrowseMarket={navigateToMarket}
+          />
+        ) : (
+          <ExpertMarketView onOpenMine={navigateToMine} />
+        ))}
       {tab === "skills" && (
         <SkillsView
           key={viewParam ?? "discover"}

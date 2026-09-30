@@ -56,9 +56,7 @@ export default function MyExpertsView({
   const { t } = useTranslation(["ai", "chat", "common"]);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const setPendingPrompt = useCreateSkillPromptStore(
-    (s) => s.setPendingPrompt,
-  );
+  const setPendingPrompt = useCreateSkillPromptStore((s) => s.setPendingPrompt);
   const assistantsQuery = useQuery({
     queryKey: ASSISTANTS_KEY,
     queryFn: () => AssistantApi.list(),
@@ -68,11 +66,6 @@ export default function MyExpertsView({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<AssistantRecord>();
   const [deleting, setDeleting] = useState<AssistantRecord | null>(null);
-
-  const openCreate = () => {
-    setEditing(undefined);
-    setDialogOpen(true);
-  };
 
   /** 对话式创建：新开会话+预填模板→跳聊天页（同创建技能流） */
   const handleChatCreate = async () => {
@@ -169,7 +162,11 @@ export default function MyExpertsView({
               <ArrowLeft className="h-3.5 w-3.5" />
               {t("chat:experts.market.allExperts")}
             </Button>
-            <Button size="sm" className="ml-auto" onClick={() => void handleChatCreate()}>
+            <Button
+              size="sm"
+              className="ml-auto"
+              onClick={() => void handleChatCreate()}
+            >
               <Plus className="mr-1 h-4 w-4" />
               {t("chat:experts.myExperts.create")}
             </Button>
@@ -292,7 +289,8 @@ function ExpertCardMine({
   const { t } = useTranslation(["ai", "chat", "common"]);
   const description =
     assistant.description ||
-    assistant.systemPrompt.slice(0, 60) + (assistant.systemPrompt.length > 60 ? "…" : "");
+    assistant.systemPrompt.slice(0, 60) +
+      (assistant.systemPrompt.length > 60 ? "…" : "");
   return (
     <Card className="flex flex-col border-border/50 rounded-lg shadow-sm">
       <CardHeader>

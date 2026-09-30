@@ -183,7 +183,57 @@
     "tabSkills": "技能",
     "tabConnectors": "连接器",
     "skillsDesc": "技能存放在本地技能目录中，可编辑 Markdown 技能文件",
-    "openSkillDir": "打开技能目录"
+    "openSkillDir": "打开技能目录",
+    "createPrompt": "帮我创建一个专家，擅长 [专家方向]。我的经验是：[请补充你的行业背景、相关经验]",
+    "market": {
+      "searchPlaceholder": "搜索专家职称或描述",
+      "myExperts": "我的专家",
+      "myExpertsCount": "我的专家 {{count}}",
+      "scenarios": "精选场景",
+      "allExperts": "全部专家",
+      "typeExpert": "专家",
+      "typeTeam": "专家团",
+      "sortComprehensive": "综合",
+      "sortHot": "最热",
+      "sortNewest": "最新",
+      "allCategories": "全部",
+      "add": "添加",
+      "added": "已添加",
+      "addSuccess": "已添加到我的专家",
+      "addToMine": "添加到我的专家",
+      "addAndChat": "添加并对话",
+      "goChat": "去对话",
+      "systemPromptPreview": "提示词预览",
+      "noResult": "没有符合条件的专家"
+    },
+    "myExperts": {
+      "create": "创建专家",
+      "emptyTitle": "还没有创建任何专家",
+      "emptySubtitle": "创建属于你的专家，分享专业知识",
+      "browseMarket": "去市场逛逛",
+      "openChat": "开对话",
+      "chatFailed": "创建会话失败"
+    },
+    "scenarios": {
+      "back-to-school": "开学季",
+      "content-creation": "内容创作",
+      "investment": "投资分析",
+      "legal": "法律咨询",
+      "small-business": "小微企业",
+      "ecommerce": "电商运营"
+    },
+    "categories": {
+      "tech": "技术工程",
+      "product": "产品设计",
+      "finance": "金融投资",
+      "data": "数据智能",
+      "content": "内容创作",
+      "marketing": "营销增长",
+      "sales": "销售商务",
+      "ops": "运营人力",
+      "education": "教育学习",
+      "legal": "法务安全"
+    }
   },
   "library": {
     "title": "资料库",

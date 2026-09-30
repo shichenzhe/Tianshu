@@ -183,7 +183,57 @@
     "tabSkills": "Skills",
     "tabConnectors": "Connectors",
     "skillsDesc": "Skills live in the local skill directory as editable Markdown files",
-    "openSkillDir": "Open skill directory"
+    "openSkillDir": "Open skill directory",
+    "createPrompt": "Help me create an expert skilled in [expert field]. My experience: [add your industry background and relevant experience]",
+    "market": {
+      "searchPlaceholder": "Search expert title or description",
+      "myExperts": "My Experts",
+      "myExpertsCount": "My Experts ({{count}})",
+      "scenarios": "Featured Scenarios",
+      "allExperts": "All Experts",
+      "typeExpert": "Experts",
+      "typeTeam": "Teams",
+      "sortComprehensive": "Recommended",
+      "sortHot": "Popular",
+      "sortNewest": "Newest",
+      "allCategories": "All",
+      "add": "Add",
+      "added": "Added",
+      "addSuccess": "Added to My Experts",
+      "addToMine": "Add to My Experts",
+      "addAndChat": "Add & Chat",
+      "goChat": "Chat",
+      "systemPromptPreview": "System Prompt",
+      "noResult": "No matching experts"
+    },
+    "myExperts": {
+      "create": "Create Expert",
+      "emptyTitle": "No experts created yet",
+      "emptySubtitle": "Create your own expert and share professional knowledge",
+      "browseMarket": "Browse Marketplace",
+      "openChat": "Chat",
+      "chatFailed": "Failed to create session"
+    },
+    "scenarios": {
+      "back-to-school": "Back to School",
+      "content-creation": "Content Creation",
+      "investment": "Investment Analysis",
+      "legal": "Legal Advice",
+      "small-business": "Small Business",
+      "ecommerce": "E-commerce"
+    },
+    "categories": {
+      "tech": "Engineering",
+      "product": "Product Design",
+      "finance": "Finance",
+      "data": "Data & AI",
+      "content": "Content",
+      "marketing": "Marketing",
+      "sales": "Sales",
+      "ops": "Operations & HR",
+      "education": "Education",
+      "legal": "Legal & Compliance"
+    }
   },
   "library": {
     "title": "Library",

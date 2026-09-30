@@ -42,8 +42,10 @@ describe("JsonConfigEditor", () => {
         onChange={vi.fn()}
       />,
     );
-    // gutter 带 aria-hidden（getByRole 会排除），用 DOM 查询
+    // gutter 带 aria-hidden（getByRole 会排除），用 DOM 查询；
+    // 逐行堆叠：子元素数 === 行数（防退化为无分隔的横排串被 w-10 裁剪）
     const gutter = container.querySelector('div[role="presentation"]');
+    expect(gutter?.children.length).toBe(5);
     expect(gutter?.textContent).toBe("12345");
   });
 

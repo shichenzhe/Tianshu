@@ -331,7 +331,8 @@ function ListPane({
   return (
     <>
       <DialogHeader className="border-b border-border/50 p-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
+        {/* pr-8：给 DialogContent 右上角自带的 X 关闭钮让位，防与「配置」重叠 */}
+        <div className="flex items-start justify-between gap-4 pr-8">
           <div>
             <DialogTitle className="text-base">
               {t("ai:mcp.manage.title")}
@@ -514,7 +515,8 @@ function EditPane({
   return (
     <>
       <DialogHeader className="border-b border-border/50 p-5 pb-4">
-        <div className="flex items-center justify-between gap-4">
+        {/* pr-8：右上角让位自带 X 关闭钮，防与「保存」重叠 */}
+        <div className="flex items-center justify-between gap-4 pr-8">
           <Button
             variant="ghost"
             size="sm"

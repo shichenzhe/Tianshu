@@ -120,6 +120,34 @@
       "tushare": { "description": "Financial data service covering A-shares, indices, funds and macro." },
       "dun-bradstreet": { "description": "Query Dun & Bradstreet global company profiles via natural language." },
       "xinhua-finance": { "description": "Announcements, news and policy data incl. stock and macro info." }
+    },
+    "manage": {
+      "title": "MCP Services",
+      "subtitle": "Install MCP services to extend AI tool capabilities",
+      "empty": "No MCP server yet",
+      "emptyTip": "Click Configure to add an MCP server",
+      "configure": "Configure",
+      "backToList": "Back to MCP list",
+      "save": "Save",
+      "searchPlaceholder": "Search MCP",
+      "searchMcp": "Search MCP"
+    },
+    "market": {
+      "searchPlaceholder": "Search connectors",
+      "customConnector": "Custom connector",
+      "configureMcp": "Configure MCP",
+      "added": "Added",
+      "add": "Add",
+      "hub": "MCP Hub",
+      "jsonSyncNote": "JSON syncs with installed services; takes effect after save",
+      "syncSaved": "Saved ({{created}} added · {{updated}} updated · {{deleted}} removed)",
+      "errParse": "Line {{value}}: invalid JSON, please check",
+      "errName": "\"{{value}}\": name must not contain consecutive underscores",
+      "errTransport": "\"{{value}}\": provide either command (stdio) or url (http)",
+      "errArgs": "\"{{value}}\": args must be an array of strings",
+      "errEnv": "\"{{value}}\": env must be an object of string values",
+      "errHeaders": "\"{{value}}\": headers must be an object of string values",
+      "errStructure": "Missing mcpServers object at top level"
     }
   },
   "errors": {

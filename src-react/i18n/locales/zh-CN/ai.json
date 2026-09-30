@@ -120,6 +120,34 @@
       "tushare": { "description": "金融数据服务，支持 A 股、指数、基金与宏观等多类数据。" },
       "dun-bradstreet": { "description": "通过自然语言查询邓白氏全球企业档案与商业信息。" },
       "xinhua-finance": { "description": "公告、新闻、政策数据，包含股票资讯与宏观经济信息。" }
+    },
+    "manage": {
+      "title": "MCP 服务管理",
+      "subtitle": "安装 MCP 服务，为 AI 扩展更多工具能力",
+      "empty": "暂无 MCP 服务器",
+      "emptyTip": "点击配置按钮添加 MCP 服务器",
+      "configure": "配置",
+      "backToList": "返回 MCP 列表",
+      "save": "保存",
+      "searchPlaceholder": "搜索 MCP",
+      "searchMcp": "搜索 MCP"
+    },
+    "market": {
+      "searchPlaceholder": "搜索连接器",
+      "customConnector": "自定义连接器",
+      "configureMcp": "配置 MCP",
+      "added": "已添加",
+      "add": "添加",
+      "hub": "MCP Hub",
+      "jsonSyncNote": "JSON 与已安装服务实时同步，保存后生效",
+      "syncSaved": "保存成功（新增 {{created}} · 更新 {{updated}} · 移除 {{deleted}}）",
+      "errParse": "第 {{value}} 行：JSON 格式错误，请检查",
+      "errName": "「{{value}}」：名称不能包含连续下划线",
+      "errTransport": "「{{value}}」：需提供 command（stdio）或 url（http）之一",
+      "errArgs": "「{{value}}」：args 必须为字符串数组",
+      "errEnv": "「{{value}}」：env 必须为字符串值对象",
+      "errHeaders": "「{{value}}」：headers 必须为字符串值对象",
+      "errStructure": "顶层缺少 mcpServers 对象"
     }
   },
   "errors": {

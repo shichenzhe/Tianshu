@@ -3,6 +3,9 @@
  */
 
 import { invoke } from "@/lib/ipc";
+import type { McpServerSyncEntry } from "../mcp/lib/mcp-json";
+
+export type { McpServerSyncEntry } from "../mcp/lib/mcp-json";
 
 /** 传输类型：stdio 子进程 / http 流式端点 */
 export type McpTransport = "stdio" | "http";
@@ -59,6 +62,13 @@ export interface McpServerStatus {
   error?: string;
 }
 
+/** sync 结果计数（toast 汇总用） */
+export interface McpServerSyncResult {
+  created: number;
+  updated: number;
+  deleted: number;
+}
+
 export class McpServerApi {
   static async list(): Promise<McpServerRecord[]> {
     return invoke<McpServerRecord[]>("mcpServer:list");
@@ -86,6 +96,18 @@ export class McpServerApi {
 
   static async statuses(): Promise<McpServerStatus[]> {
     return invoke<McpServerStatus[]>("mcpServer:statuses");
+  }
+
+  /** JSON 编辑器保存：按 name 全量 diff 回写（增/改/删），返回计数 */
+  static async sync(
+    entries: Record<string, McpServerSyncEntry>,
+  ): Promise<McpServerSyncResult> {
+    return invoke<McpServerSyncResult>("mcpServer:sync", entries);
+  }
+
+  /** MCP Hub 外链（主进程写死白名单地址，渲染层不可传 URL） */
+  static async openHub(): Promise<void> {
+    return invoke<void>("mcpServer:openHub");
   }
 }
 

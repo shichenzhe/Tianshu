@@ -1,13 +1,20 @@
+import { shell } from "electron";
 import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import { McpManager, parseMcpRow } from "../agent/mcp-manager";
+import { syncParamsChanged } from "../../../../src-react/domains/ai/mcp/lib/mcp-json";
+import type { McpServerSyncEntry } from "../../../../src-react/domains/ai/mcp/lib/mcp-json";
 import type {
   McpServerCreateParams,
   McpServerRecord,
   McpServerStatus,
+  McpServerSyncResult,
   McpServerUpdateParams,
 } from "../../../../src-react/domains/ai/api/mcp.api";
+
+/** MCP Hub 外链地址（spec 假设：占位可替换；渲染层不传 URL 防任意跳转） */
+const MCP_HUB_URL = "https://mcp.so";
 
 type McpServerRow = NonNullable<
   Awaited<ReturnType<typeof prisma.mcpServer.findFirst>>
@@ -63,6 +70,12 @@ export class McpRepository {
         this.setEnabled(id, enabled, userId),
     );
     handleUser("mcpServer:statuses", (_, userId) => this.statuses(userId));
+    handleUser(
+      "mcpServer:sync",
+      (_, userId, entries: Record<string, McpServerSyncEntry>) =>
+        this.sync(entries, userId),
+    );
+    handleUser("mcpServer:openHub", () => this.openHub());
   }
 
   /** 校验服务器记录归当前用户（不存在与他人所有同报错） */
@@ -194,5 +207,52 @@ export class McpRepository {
     });
     const owned = new Set(rows.map((row) => row.id));
     return this.manager.getStatuses().filter((status) => owned.has(status.id));
+  }
+
+  /** MCP Hub 外链（主进程写死地址，渲染层不可传 URL） */
+  private async openHub(): Promise<void> {
+    await shell.openExternal(MCP_HUB_URL);
+  }
+
+  /**
+   * JSON 编辑器保存：与本人现有行按 name 全量 diff——
+   * JSON 有/库无→create（enabled: true）；JSON 无/库有→delete；
+   * 同名参数变→update（enabled 保留库值，参数变更不自动重连，语义同 update）。
+   * 逐条复用 create/update/delete（内含 userId 归属校验与 McpManager 联动）；
+   * 不包 $transaction——create 的 connect 为 fire-and-forget 不入事务，
+   * 中途失败由下次 sync 重新 diff 自愈（编辑器内容即用户意图）
+   */
+  async sync(
+    entries: Record<string, McpServerSyncEntry>,
+    userId: number,
+  ): Promise<McpServerSyncResult> {
+    const rows = await this.prismaClient.mcpServer.findMany({
+      where: { userId },
+    });
+    const byName = new Map(rows.map((row) => [row.name, row]));
+    let created = 0;
+    let updated = 0;
+    let deleted = 0;
+    for (const [name, entry] of Object.entries(entries)) {
+      const existing = byName.get(name);
+      if (!existing) {
+        await this.create({ name, ...entry, enabled: true }, userId);
+        created += 1;
+        continue;
+      }
+      if (syncParamsChanged(existing, entry)) {
+        await this.update(
+          { id: existing.id, name, ...entry, enabled: existing.enabled },
+          userId,
+        );
+        updated += 1;
+      }
+      byName.delete(name);
+    }
+    for (const row of byName.values()) {
+      await this.delete(row.id, userId);
+      deleted += 1;
+    }
+    return { created, updated, deleted };
   }
 }

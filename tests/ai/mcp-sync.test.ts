@@ -162,6 +162,24 @@ describe("McpRepository.sync", () => {
     expect(table[0]).toMatchObject({ url: "https://new", enabled: false });
   });
 
+  it("transport 切换（http→stdio）→ 可空字段清空（null）且重复 sync 幂等", async () => {
+    seed({
+      userId: 1,
+      name: "h2s",
+      transport: "http",
+      url: "https://old",
+      headers: '{"A":"1"}',
+    });
+    const repo = await makeRepo();
+    const entry = { transport: "stdio", command: "npx" } as const;
+    const first = await repo.sync({ h2s: entry }, 1);
+    expect(first).toEqual({ created: 0, updated: 1, deleted: 0 });
+    expect(table[0].url).toBeNull();
+    expect(table[0].headers).toBeNull();
+    const second = await repo.sync({ h2s: entry }, 1);
+    expect(second).toEqual({ created: 0, updated: 0, deleted: 0 });
+  });
+
   it("同名参数未变 → 跳过（updated=0）", async () => {
     seed({ userId: 1, name: "a", command: "npx", args: '["--x"]' });
     const repo = await makeRepo();

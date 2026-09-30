@@ -205,4 +205,18 @@ describe("syncParamsChanged", () => {
       ),
     ).toBe(true);
   });
+
+  it("DB null（清空态）与 entry 缺省（undefined）视为相等（清空后幂等）", () => {
+    expect(
+      syncParamsChanged(
+        {
+          transport: "stdio",
+          command: "npx",
+          url: null,
+          headers: null,
+        },
+        { transport: "stdio", command: "npx" },
+      ),
+    ).toBe(false);
+  });
 });

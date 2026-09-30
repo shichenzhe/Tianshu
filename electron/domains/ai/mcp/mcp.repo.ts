@@ -242,7 +242,19 @@ export class McpRepository {
       }
       if (syncParamsChanged(existing, entry)) {
         await this.update(
-          { id: existing.id, name, ...entry, enabled: existing.enabled },
+          {
+            id: existing.id,
+            name,
+            transport: entry.transport,
+            // 可空字段缺省显式置 null：undefined 会被 Prisma 跳过致旧值残留
+            // （对齐 McpServerDialog 编辑态清空传 null 的差量语义）
+            command: entry.command ?? null,
+            args: entry.args ?? null,
+            env: entry.env ?? null,
+            url: entry.url ?? null,
+            headers: entry.headers ?? null,
+            enabled: existing.enabled,
+          },
           userId,
         );
         updated += 1;

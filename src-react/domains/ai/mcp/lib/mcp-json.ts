@@ -173,7 +173,11 @@ export function mergeTemplate(
   return JSON.stringify(parsed, null, 2);
 }
 
-/** 与现有行比较连接参数是否实质变化（args/env/headers canonical 化后比较） */
+/**
+ * 与现有行比较连接参数是否实质变化（args/env/headers canonical 化后比较）；
+ * command/url 的 null（DB 清空态）与 undefined（entry 缺省）视为相等，
+ * 否则清空后的下次 sync 会误判已变（重复 update，非幂等）
+ */
 export function syncParamsChanged(
   existing: {
     transport: string;
@@ -187,8 +191,8 @@ export function syncParamsChanged(
 ): boolean {
   return (
     existing.transport !== entry.transport ||
-    existing.command !== entry.command ||
-    existing.url !== entry.url ||
+    (existing.command ?? undefined) !== (entry.command ?? undefined) ||
+    (existing.url ?? undefined) !== (entry.url ?? undefined) ||
     canonical(existing.args) !== canonical(entry.args) ||
     canonical(existing.env) !== canonical(entry.env) ||
     canonical(existing.headers) !== canonical(entry.headers)

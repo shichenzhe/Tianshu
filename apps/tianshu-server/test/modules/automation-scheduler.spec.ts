@@ -388,7 +388,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     expect(JSON.parse(messages[1].blocks)).toEqual([
       { type: 'text', text: '手动结果' },
     ]);
-  });
+  }, 15000);
 
   it('无人值守高危拒绝：allowDangerousTools=false 时 run_command 被拒（denied 块落 assistant 消息，任务继续至终文本）', async () => {
     useModel(

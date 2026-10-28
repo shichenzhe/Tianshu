@@ -31,6 +31,13 @@ export class LocalConnectProxy {
     return this.portValue;
   }
 
+  /** 活动接管连接数（tunnels 集）——测试/诊断观测缝：RST 到达客户端的
+   * 可观测性随时序窗口漂移（destroy 早晚决定 FIN-only/RST，跨平台不稳），
+   * 兜底终结断言以此为准 */
+  get activeTunnelCount(): number {
+    return this.tunnels.size;
+  }
+
   async start(): Promise<number> {
     if (this.starting) return this.starting;
     const server = http.createServer((req, res) => {

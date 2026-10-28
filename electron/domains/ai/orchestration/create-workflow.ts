@@ -406,16 +406,31 @@ export interface WorkflowRunPrismaLike {
   } | null>;
 }
 
+/** graphRunNode 查询注入（get_workflow_run 终点完整输出口）：节点级执行
+ *  详情行（executor writeNodeRecord 落全量 output，trace 只有 200 字预览） */
+export interface WorkflowRunNodePrismaLike {
+  findMany(args: {
+    where: { runId: number };
+  }): Promise<Array<{ nodeId: string; status: string; output: string | null }>>;
+}
+
+/** 终点完整输出上限：防巨型行集灌爆回喂上下文（超出截断标注） */
+const FINAL_OUTPUT_LIMIT = 4_000;
+
 const getWorkflowRunSchema = z.object({
   id: z.number().int().positive().describe("工作流 id"),
 });
 
 /** get_workflow_run：查该工作流最近一次运行（status/耗时/终点输出
- * 预览/失败原因）；graphTrace 缺失时只报状态 */
+ * 预览/失败原因）；graphTrace 缺失时只报状态。终点完整输出自 graphRunNode
+ * 节点级详情行反查（demo 切片 2026-10-28：trace 预览仅 200 字，查账明细
+ * 一类行集结果会被截断，聊天模型拿不到全量即无法透传 show_table 渲染——
+ * runNodes delegate 缺席时回退仅预览，行为与旧装配一致） */
 export function makeGetWorkflowRunTool(deps: {
   graphDefinition: WorkflowGraphPrismaLike;
   session: SessionPrismaLike;
   runs: WorkflowRunPrismaLike;
+  runNodes?: WorkflowRunNodePrismaLike;
 }): ToolDefinition<z.infer<typeof getWorkflowRunSchema>> {
   return {
     name: "get_workflow_run",
@@ -447,13 +462,25 @@ export function makeGetWorkflowRunTool(deps: {
       if (run.error) {
         lines.push(`失败原因: ${run.error}`);
       }
-      const preview = lastTraceOutput(run.graphTrace);
-      if (preview !== null) {
+      const last = lastSuccessTrace(run.graphTrace);
+      if (last?.preview != null) {
         lines.push(
-          preview.length > 500
-            ? `输出: ${preview.slice(0, 500)}…`
-            : `输出: ${preview}`,
+          last.preview.length > 500
+            ? `输出: ${last.preview.slice(0, 500)}…`
+            : `输出: ${last.preview}`,
         );
+      }
+      // 终点完整输出（≤FINAL_OUTPUT_LIMIT，超出截断标注）：行集结果
+      // 回喂聊天模型的透传通道（show_table/show_summary 消费）
+      if (deps.runNodes && last?.nodeId) {
+        const full = await finalNodeOutput(deps.runNodes, run.id, last.nodeId);
+        if (full !== null) {
+          lines.push(
+            full.length > FINAL_OUTPUT_LIMIT
+              ? `完整输出: ${full.slice(0, FINAL_OUTPUT_LIMIT)}…（已截断）`
+              : `完整输出: ${full}`,
+          );
+        }
       }
       return lines.join("\n");
     },
@@ -465,20 +492,42 @@ function formatRunDuration(durationMs: number | null): string {
   return durationMs === null ? "-" : `${(durationMs / 1000).toFixed(1)}s`;
 }
 
-/** graphTrace JSON → 最后一个 success 节点的输出预览（executor traceSuccess
- * 只写 outputPreview——200 字截断，无 output 字段；无则 null） */
-function lastTraceOutput(graphTrace: string | null): string | null {
+/** graphTrace JSON → 最后一个 success 节点（预览 + 节点 id——完整输出
+ * 经 id 反查 graphRunNode；executor traceSuccess 只写 outputPreview——
+ * 200 字截断，无 output 字段；无 success 条目/解析失败返回 null） */
+function lastSuccessTrace(
+  graphTrace: string | null,
+): { nodeId?: string; preview: string | null } | null {
   if (!graphTrace) {
     return null;
   }
   try {
     const entries = JSON.parse(graphTrace) as Array<{
+      id?: string;
       status?: string;
       outputPreview?: string;
     }>;
     const hit = [...entries].reverse().find((e) => e.status === "success");
-    return hit?.outputPreview ?? null;
+    if (!hit) {
+      return null;
+    }
+    return {
+      nodeId: typeof hit.id === "string" ? hit.id : undefined,
+      preview: typeof hit.outputPreview === "string" ? hit.outputPreview : null,
+    };
   } catch {
     return null;
   }
+}
+
+/** 终点节点全量输出（graphRunNode 详情行反查；无匹配行/非 success/
+ * 空输出 → null——保持「无则不附加」的旧形态） */
+async function finalNodeOutput(
+  runNodes: WorkflowRunNodePrismaLike,
+  runId: number,
+  nodeId: string,
+): Promise<string | null> {
+  const rows = await runNodes.findMany({ where: { runId } });
+  const row = rows.find((r) => r.nodeId === nodeId && r.status === "success");
+  return row?.output ? row.output : null;
 }

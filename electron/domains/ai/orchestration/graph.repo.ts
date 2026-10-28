@@ -35,6 +35,7 @@ import {
   type SessionPrismaLike,
   type WorkspacePrismaLike,
   type WorkflowGraphPrismaLike,
+  type WorkflowRunNodePrismaLike,
   type WorkflowRunPrismaLike,
 } from "./create-workflow";
 import type {
@@ -202,6 +203,9 @@ export default class GraphRepository {
         graphDefinition: graphDelegate,
         session: sessionDelegate,
         runs: prisma.automationRun as unknown as WorkflowRunPrismaLike,
+        // 终点完整输出反查（demo 切片 2026-10-28）：trace 预览 200 字截断，
+        // 节点级详情行有全量 output
+        runNodes: prisma.graphRunNode as unknown as WorkflowRunNodePrismaLike,
       }),
     ]);
     this.registerHandlers();

@@ -24,6 +24,10 @@ import {
 const ProviderSettingsView = lazy(
   () => import("@/domains/ai/provider/views/ProviderSettingsView"),
 );
+// 数据源设置（PG 首选通道，切片 B 2026-10-29）
+const DataSourceSettingsView = lazy(
+  () => import("@/domains/ai/data-sources/views/DataSourceSettingsView"),
+);
 // AI 对话主界面
 const ChatView = lazy(() => import("@/domains/ai/chat/views/ChatView"));
 // 新建任务落地页
@@ -177,6 +181,14 @@ export const router = createHashRouter([
             element: (
               <LazyWrapper>
                 <ProviderSettingsView />
+              </LazyWrapper>
+            ),
+          },
+          {
+            path: "data-sources",
+            element: (
+              <LazyWrapper>
+                <DataSourceSettingsView />
               </LazyWrapper>
             ),
           },

@@ -548,5 +548,29 @@
       "extraHeadersHint": "JSON object, e.g. {\"X-Key\":\"v\"}",
       "extraHeadersInvalid": "Extra headers must be a JSON object"
     }
+  },
+  "dataSource": {
+    "sectionTitle": "Data Sources",
+    "sectionTip": "Referenced by database nodes via dataSourceId; credentials are write-only and never enter chat context",
+    "add": "Add Data Source",
+    "addTitle": "Add Data Source",
+    "editTitle": "Edit Data Source",
+    "formTip": "PostgreSQL connection (postgres only for now); database nodes reference it by id",
+    "name": "Name",
+    "host": "Host",
+    "port": "Port",
+    "database": "Database",
+    "username": "Username",
+    "password": "Password",
+    "passwordKeep": "Leave blank to keep unchanged",
+    "ssl": "SSL Encryption",
+    "sslTip": "Self-signed certificates allowed (relaxed verification)",
+    "test": "Test Connection",
+    "testSuccess": "Connected ({{latencyMs}}ms)",
+    "testFailed": "Connection failed",
+    "empty": "No data sources",
+    "emptyTip": "Add a PostgreSQL connection for database nodes to reference via dataSourceId (credentials stay out of graph definitions)",
+    "deleteConfirmTitle": "Delete Data Source",
+    "deleteConfirmDesc": "Workflow nodes referencing this data source will fail to run"
   }
 }

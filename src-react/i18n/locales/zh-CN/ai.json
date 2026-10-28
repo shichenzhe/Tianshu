@@ -548,5 +548,29 @@
       "extraHeadersHint": "JSON 对象，如 {\"X-Key\":\"v\"}",
       "extraHeadersInvalid": "额外请求头必须是 JSON 对象"
     }
+  },
+  "dataSource": {
+    "sectionTitle": "数据源",
+    "sectionTip": "database 节点经 dataSourceId 引用此处配置；凭据只写不读，不进聊天上下文",
+    "add": "新增数据源",
+    "addTitle": "新增数据源",
+    "editTitle": "编辑数据源",
+    "formTip": "PostgreSQL 连接信息（首版仅 postgres）；database 节点以数据源 id 引用",
+    "name": "名称",
+    "host": "主机",
+    "port": "端口",
+    "database": "数据库",
+    "username": "用户名",
+    "password": "密码",
+    "passwordKeep": "留空保持不变",
+    "ssl": "SSL 加密",
+    "sslTip": "自签证书亦可连（宽松校验）",
+    "test": "测试连接",
+    "testSuccess": "连接成功（{{latencyMs}}ms）",
+    "testFailed": "连接失败",
+    "empty": "暂无数据源",
+    "emptyTip": "新增一个 PostgreSQL 连接，工作流 database 节点即可经 dataSourceId 引用（凭据不进图定义）",
+    "deleteConfirmTitle": "删除数据源",
+    "deleteConfirmDesc": "引用此数据源的工作流节点将无法运行"
   }
 }

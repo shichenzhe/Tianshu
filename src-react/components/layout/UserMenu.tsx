@@ -19,6 +19,7 @@ import {
   Languages,
   Palette,
   Bot,
+  Database,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -189,6 +190,14 @@ export default function UserMenu() {
           >
             <Bot size={14} className="mr-2" />
             {t("layout:userMenu.modelSettings")}
+          </DropdownMenuItem>
+          {/* 数据源配置（PG 首选通道，切片 B）：database 节点引用的连接管理 */}
+          <DropdownMenuItem
+            onClick={() => navigate("/module/ai/data-sources")}
+            className="cursor-pointer"
+          >
+            <Database size={14} className="mr-2" />
+            {t("layout:userMenu.dataSources")}
           </DropdownMenuItem>
           {/* 记忆与进化：直达设置面板记忆页 */}
           <DropdownMenuItem

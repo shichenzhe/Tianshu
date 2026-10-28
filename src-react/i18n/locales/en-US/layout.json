@@ -34,7 +34,8 @@
     "installNow": "Install Now",
     "installLaterHint": "Update will be installed on next launch",
     "checkUpdateTitle": "Check Update",
-    "checkUpdateDesc": "Check for application updates?"
+    "checkUpdateDesc": "Check for application updates?",
+    "dataSources": "Data Sources"
   },
   "auth": {
     "loginRequired": "Please log in first",

@@ -42,7 +42,9 @@ import { createTestDb, type TestDb } from '../support/test-db';
  * try/catch 漏接造成假通过，本组 DB 轮询用例需异步版；同步检查亦可收） */
 async function waitForDb(
   check: () => void | Promise<void>,
-  timeoutMs = 5000,
+  // CI 重负载 runner 的 runNow 异步链路可超 5s（2026-10-28 两轮实证），
+  // 快机器轮询 20ms 粒度通过即返回、提额零代价
+  timeoutMs = 12000,
 ): Promise<void> {
   const startedAt = Date.now();
   for (;;) {

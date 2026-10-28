@@ -1,0 +1,53 @@
+{
+  "name": "记账·月度汇总",
+  "description": "按月聚合支出并组装为 show_summary 摘要结构（终点输出可直接透传 show_summary 工具）：总额/笔数/均值 + Top 3 分类。inputs：month 月份 yyyy-MM（空串=当月，SQL 内 date('now') 兜底）。两个 database 节点串行聚合，code 节点组装 {title, items}。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {
+      "month": "string"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": ["month"],
+        "position": { "x": 80, "y": 200 }
+      },
+      {
+        "id": "summary-total",
+        "name": "月度总额聚合",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT COUNT(*) AS cnt, ROUND(TOTAL(amount), 2) AS total, ROUND(AVG(amount), 2) AS avg_amount FROM expense WHERE strftime('%Y-%m', spent_at) = COALESCE(NULLIF(?, ''), strftime('%Y-%m', 'now', 'localtime'))",
+        "params": ["{{input.month}}"],
+        "position": { "x": 300, "y": 200 }
+      },
+      {
+        "id": "summary-by-category",
+        "name": "分类聚合",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT category, COUNT(*) AS cnt, ROUND(TOTAL(amount), 2) AS total FROM expense WHERE strftime('%Y-%m', spent_at) = COALESCE(NULLIF(?, ''), strftime('%Y-%m', 'now', 'localtime')) GROUP BY category ORDER BY total DESC",
+        "params": ["{{input.month}}"],
+        "position": { "x": 520, "y": 200 }
+      },
+      {
+        "id": "build-summary",
+        "name": "组装摘要结构",
+        "kind": "code",
+        "language": "nodejs",
+        "script": "const total = {{nodes.summary-total.output}}[0];\nconst byCategory = {{nodes.summary-by-category.output}};\nconst items = [\n  { label: \"总支出\", value: \"¥\" + total.total },\n  { label: \"笔数\", value: total.cnt, hint: \"平均 ¥\" + (total.avg_amount === null ? 0 : total.avg_amount) },\n];\nfor (const c of byCategory.slice(0, 3)) {\n  items.push({ label: c.category, value: \"¥\" + c.total, hint: c.cnt + \" 笔\" });\n}\nconsole.log(JSON.stringify({ title: \"月度汇总\", items }));",
+        "position": { "x": 760, "y": 200 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "summary-total" },
+      { "from": "summary-total", "to": "summary-by-category" },
+      { "from": "summary-by-category", "to": "build-summary" },
+      { "from": "build-summary", "to": "END" }
+    ]
+  }
+}

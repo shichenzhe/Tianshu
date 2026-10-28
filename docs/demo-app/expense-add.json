@@ -1,0 +1,41 @@
+{
+  "name": "记账·记一笔",
+  "description": "向 demo 记账库（demo.db/expense）插入一笔支出。inputs 四键全传、无值传空串：amount 金额（数字字符串，如 35.5）、category 类别、note 备注（空串存 NULL）、spent_at 日期 yyyy-MM-dd（空串=今天，SQL 内兜底）。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {
+      "amount": "string",
+      "category": "string",
+      "note": "string",
+      "spent_at": "string"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": ["amount", "category", "note", "spent_at"],
+        "position": { "x": 80, "y": 160 }
+      },
+      {
+        "id": "insert-expense",
+        "name": "插入一笔支出",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "INSERT INTO expense (amount, category, note, spent_at) VALUES (CAST(NULLIF(?, '') AS REAL), ?, NULLIF(?, ''), COALESCE(NULLIF(?, ''), date('now', 'localtime')))",
+        "params": [
+          "{{input.amount}}",
+          "{{input.category}}",
+          "{{input.note}}",
+          "{{input.spent_at}}"
+        ],
+        "position": { "x": 320, "y": 160 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "insert-expense" },
+      { "from": "insert-expense", "to": "END" }
+    ]
+  }
+}

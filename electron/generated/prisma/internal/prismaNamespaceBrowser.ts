@@ -82,7 +82,8 @@ export const ModelName = {
   vectorChunk: 'vectorChunk',
   llmCallEvent: 'llmCallEvent',
   toolCallEvent: 'toolCallEvent',
-  dataSourceConfig: 'dataSourceConfig'
+  dataSourceConfig: 'dataSourceConfig',
+  appDefinition: 'appDefinition'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -223,7 +224,8 @@ export const SessionScalarFieldEnum = {
   lastMessageAt: 'lastMessageAt',
   userId: 'userId',
   planItemId: 'planItemId',
-  lastReadMessageId: 'lastReadMessageId'
+  lastReadMessageId: 'lastReadMessageId',
+  appId: 'appId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -604,6 +606,19 @@ export const DataSourceConfigScalarFieldEnum = {
 } as const
 
 export type DataSourceConfigScalarFieldEnum = (typeof DataSourceConfigScalarFieldEnum)[keyof typeof DataSourceConfigScalarFieldEnum]
+
+
+export const AppDefinitionScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  graphIds: 'graphIds',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type AppDefinitionScalarFieldEnum = (typeof AppDefinitionScalarFieldEnum)[keyof typeof AppDefinitionScalarFieldEnum]
 
 
 export const SortOrder = {

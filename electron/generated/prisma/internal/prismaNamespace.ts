@@ -428,7 +428,8 @@ export const ModelName = {
   vectorChunk: 'vectorChunk',
   llmCallEvent: 'llmCallEvent',
   toolCallEvent: 'toolCallEvent',
-  dataSourceConfig: 'dataSourceConfig'
+  dataSourceConfig: 'dataSourceConfig',
+  appDefinition: 'appDefinition'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -444,7 +445,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "graphRunNode" | "automationStat" | "artifact" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem" | "artifactFavorite" | "graphDefinition" | "vectorChunk" | "llmCallEvent" | "toolCallEvent" | "dataSourceConfig"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "graphRunNode" | "automationStat" | "artifact" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem" | "artifactFavorite" | "graphDefinition" | "vectorChunk" | "llmCallEvent" | "toolCallEvent" | "dataSourceConfig" | "appDefinition"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2816,6 +2817,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    appDefinition: {
+      payload: Prisma.$appDefinitionPayload<ExtArgs>
+      fields: Prisma.appDefinitionFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.appDefinitionFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.appDefinitionFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        findFirst: {
+          args: Prisma.appDefinitionFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.appDefinitionFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        findMany: {
+          args: Prisma.appDefinitionFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>[]
+        }
+        create: {
+          args: Prisma.appDefinitionCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        createMany: {
+          args: Prisma.appDefinitionCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.appDefinitionCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>[]
+        }
+        delete: {
+          args: Prisma.appDefinitionDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        update: {
+          args: Prisma.appDefinitionUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        deleteMany: {
+          args: Prisma.appDefinitionDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.appDefinitionUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.appDefinitionUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>[]
+        }
+        upsert: {
+          args: Prisma.appDefinitionUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$appDefinitionPayload>
+        }
+        aggregate: {
+          args: Prisma.AppDefinitionAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAppDefinition>
+        }
+        groupBy: {
+          args: Prisma.appDefinitionGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AppDefinitionGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.appDefinitionCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AppDefinitionCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -2977,7 +3052,8 @@ export const SessionScalarFieldEnum = {
   lastMessageAt: 'lastMessageAt',
   userId: 'userId',
   planItemId: 'planItemId',
-  lastReadMessageId: 'lastReadMessageId'
+  lastReadMessageId: 'lastReadMessageId',
+  appId: 'appId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -3360,6 +3436,19 @@ export const DataSourceConfigScalarFieldEnum = {
 export type DataSourceConfigScalarFieldEnum = (typeof DataSourceConfigScalarFieldEnum)[keyof typeof DataSourceConfigScalarFieldEnum]
 
 
+export const AppDefinitionScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  graphIds: 'graphIds',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type AppDefinitionScalarFieldEnum = (typeof AppDefinitionScalarFieldEnum)[keyof typeof AppDefinitionScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -3599,6 +3688,7 @@ export type GlobalOmitConfig = {
   llmCallEvent?: Prisma.llmCallEventOmit
   toolCallEvent?: Prisma.toolCallEventOmit
   dataSourceConfig?: Prisma.dataSourceConfigOmit
+  appDefinition?: Prisma.appDefinitionOmit
 }
 
 /* Types for Logging */

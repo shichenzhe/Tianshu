@@ -126,6 +126,9 @@ model session {
   planItemId     Int? // 任务会话关联事项（一期统一 D1：会话持有；一任务一会话由 create 查重保证，免索引）
   /// P1 未读角标批：已读游标（NULL=全计，不回填存量；查询期动态算未读）
   lastReadMessageId Int?
+  /// 应用绑定（切片 C 2026-10-29）：null=普通会话；绑定后工作流工具面
+  /// 收窄到 appDefinition.graphIds（run/list/create 作用域）
+  appId Int?
 
   @@index([projectId], map: "session_projectId_index")
   @@index([userId], map: "session_userId_index")
@@ -514,6 +517,21 @@ model dataSourceConfig {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   userId    Int? // 多用户隔离（provider 口径）
+
+  @@index([userId])
+}
+
+// 应用定义（聚合期核心，切片 C 2026-10-29）：一组工作流组成"一个应用"，
+// 会话绑定后进入该应用语境（工具面收窄）。graphIds 为 JSON 数组字符串
+// （最小形态不做关联表）；数据 schema 声明留对话式创建批
+model appDefinition {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  graphIds    String   @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int? // 多用户隔离（provider 口径）
 
   @@index([userId])
 }

@@ -201,3 +201,8 @@ export type toolCallEvent = Prisma.toolCallEventModel
  * 
  */
 export type dataSourceConfig = Prisma.dataSourceConfigModel
+/**
+ * Model appDefinition
+ * 
+ */
+export type appDefinition = Prisma.appDefinitionModel

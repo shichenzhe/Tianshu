@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS session (
     scenario TEXT NULL,
     userId INTEGER NULL,
     lastReadMessageId INTEGER NULL -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
+    appId INTEGER NULL,
 );
 
 --/p v12 多用户隔离：会话归属用户（冗余列，创建时随工作空间写入）
@@ -502,3 +503,18 @@ CREATE TABLE IF NOT EXISTS dataSourceConfig (
 );
 --/ignore
 CREATE INDEX IF NOT EXISTS dataSourceConfig_userId_index ON dataSourceConfig (userId);
+
+
+--/p 新建应用定义表（聚合期核心，切片 C 2026-10-29）：一组工作流组成一个应用，
+--/p 会话绑定（session.appId）后工作流工具面收窄到 graphIds
+CREATE TABLE IF NOT EXISTS appDefinition (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    graphIds TEXT NOT NULL DEFAULT '[]',
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL,
+    userId INTEGER NULL
+);
+--/ignore
+CREATE INDEX IF NOT EXISTS appDefinition_userId_index ON appDefinition (userId);

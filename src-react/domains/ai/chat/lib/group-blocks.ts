@@ -14,6 +14,13 @@ export const WIDGET_TOOL_NAME = "show_widget";
  *  electron/domains/ai/agent/recommend-expert-tool.ts 同名约定） */
 export const RECOMMEND_TOOL_NAME = "recommend_experts";
 
+/** show_table 工具名（会话内数据表格卡；与后端
+ *  electron/domains/ai/agent/display-tools.ts 同名约定——工具块按名分流） */
+export const SHOW_TABLE_TOOL_NAME = "show_table";
+
+/** show_summary 工具名（会话内摘要指标卡；同名约定同上） */
+export const SHOW_SUMMARY_TOOL_NAME = "show_summary";
+
 /** 面板内工具条目（平铺 ToolCallCard props，与流式 ToolStreamState 同构） */
 export interface ToolPanelItem {
   toolName: string;
@@ -42,6 +49,32 @@ export interface RecommendPanelItem {
   state: string;
 }
 
+/** 表格卡列定义（show_table args.columns；与 display-tools schema 同形） */
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+
+/** 表格卡条目（show_table 工具块分流；args 为
+ *  { title?, columns, rows }，渲染层经 TableViewCard 呈现；rows 单元格
+ *  仅标量——args 渐进期未过校验时按空表渲染） */
+export interface TablePanelItem {
+  toolCallId: string;
+  title?: string;
+  columns: TableColumn[];
+  rows: Array<Record<string, unknown>>;
+  state: string;
+}
+
+/** 摘要卡条目（show_summary 工具块分流；args 为
+ *  { title?, items }，渲染层经 SummaryCard 呈现） */
+export interface SummaryPanelItem {
+  toolCallId: string;
+  title?: string;
+  items: Array<{ label: string; value: string | number; hint?: string }>;
+  state: string;
+}
+
 export interface GroupedBlocks {
   /** 全部 thinking 块按序以空行拼接 */
   thinkingText: string;
@@ -50,6 +83,10 @@ export interface GroupedBlocks {
   widgets: WidgetPanelItem[];
   /** recommend_experts 工具块（消息流内推荐卡，不进思考面板） */
   recommends: RecommendPanelItem[];
+  /** show_table 工具块（消息流内表格卡，不进思考面板） */
+  tables: TablePanelItem[];
+  /** show_summary 工具块（消息流内摘要卡，不进思考面板） */
+  summaries: SummaryPanelItem[];
   texts: TextBlock[];
   usage?: UsageBlock;
   /** thinking 或 tool_call 存在任一即为 true（面板渲染门槛） */
@@ -61,6 +98,8 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
   const tools: ToolPanelItem[] = [];
   const widgets: WidgetPanelItem[] = [];
   const recommends: RecommendPanelItem[] = [];
+  const tables: TablePanelItem[] = [];
+  const summaries: SummaryPanelItem[] = [];
   const texts: TextBlock[] = [];
   let usage: UsageBlock | undefined;
 
@@ -100,6 +139,36 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
           });
           break;
         }
+        // show_table 分流消息流（正文位表格卡渲染）
+        if (block.toolName === SHOW_TABLE_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            columns?: TableColumn[];
+            rows?: Array<Record<string, unknown>>;
+          };
+          tables.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            columns: Array.isArray(args.columns) ? args.columns : [],
+            rows: Array.isArray(args.rows) ? args.rows : [],
+            state: block.state,
+          });
+          break;
+        }
+        // show_summary 分流消息流（正文位摘要卡渲染）
+        if (block.toolName === SHOW_SUMMARY_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            items?: SummaryPanelItem["items"];
+          };
+          summaries.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            items: Array.isArray(args.items) ? args.items : [],
+            state: block.state,
+          });
+          break;
+        }
         tools.push({
           toolName: block.toolName,
           args: block.args,
@@ -121,13 +190,17 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
     tools,
     widgets,
     recommends,
+    tables,
+    summaries,
     texts,
     usage,
     hasProcess:
       thinkingText.length > 0 ||
       tools.length > 0 ||
       widgets.length > 0 ||
-      recommends.length > 0,
+      recommends.length > 0 ||
+      tables.length > 0 ||
+      summaries.length > 0,
   };
 }
 

@@ -1677,5 +1677,15 @@
         }
       }
     }
+  },
+  "showTable": {
+    "defaultTitle": "数据表",
+    "loading": "表格生成中…",
+    "empty": "暂无数据"
+  },
+  "showSummary": {
+    "defaultTitle": "摘要",
+    "loading": "摘要生成中…",
+    "empty": "暂无内容"
   }
 }

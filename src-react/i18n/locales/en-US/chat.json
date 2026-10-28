@@ -1677,5 +1677,15 @@
         }
       }
     }
+  },
+  "showTable": {
+    "defaultTitle": "Table",
+    "loading": "Generating table…",
+    "empty": "No data"
+  },
+  "showSummary": {
+    "defaultTitle": "Summary",
+    "loading": "Generating summary…",
+    "empty": "No content"
   }
 }

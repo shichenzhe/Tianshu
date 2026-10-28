@@ -82,6 +82,7 @@ import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { makePlanTools } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
+import { makeShowSummaryTool, makeShowTableTool } from "../agent/display-tools";
 import {
   DISPATCH_MEMBER_TOOL_NAME,
   makeDispatchMemberTool,
@@ -147,6 +148,11 @@ type ChatMessageRow = Awaited<
 registerTools(makePlanTools({ prisma }));
 // show_widget：聊天面板可视化组件（渲染层消费 args，无工作空间依赖）
 registerTools([makeWidgetTool()]);
+// show_table/show_summary：工作流查询结果的消息流渲染卡（demo 切片
+// 2026-10-28）。门控进展示组（tool-groups，与工作流组同门），未开工作流
+// 语境的会话不注入；未绑定目录的会话被 collectToolDefinitions 的无工作
+// 空间过滤剔除（无 run_workflow 即无查询结果可渲染）
+registerTools([makeShowTableTool(), makeShowSummaryTool()]);
 
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 export const COMPACT_DIRECTIVE =

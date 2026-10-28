@@ -73,7 +73,69 @@ export interface WorkspacePrismaLike {
 export interface SessionPrismaLike {
   findUnique(args: {
     where: { id: number };
-  }): Promise<{ userId: number } | null>;
+  }): Promise<{ userId: number; appId?: number | null } | null>;
+}
+
+/** appDefinition 查询注入（会话应用作用域，切片 C 2026-10-29）：graphIds
+ *  为 JSON 数组字符串（最小形态不做关联表） */
+export interface AppDefinitionPrismaLike {
+  findFirst(args: {
+    where: { id: number; userId: number };
+  }): Promise<{ id: number; name: string; graphIds: string } | null>;
+  update(args: {
+    where: { id: number };
+    data: { graphIds: string };
+  }): Promise<unknown>;
+}
+
+/** 会话应用作用域解析结果：dangling = 绑定存在但应用行已删（悬空按
+ *  未作用域处理，回执注记提示重绑） */
+export interface SessionAppScope {
+  appId: number;
+  name: string;
+  graphIds: Set<number>;
+  dangling: boolean;
+}
+
+/**
+ * 会话应用作用域（切片 C P1）：run/list/create_workflow 的可见集合在此
+ * 收窄——比 filterToolsBySession（纯函数、按工具名）更顺的层次是工具
+ * execute 内按会话 appId 做数据级过滤（作用域是数据语义）。未绑定 →
+ * null（全量，零行为变化）；应用行缺失 → dangling 提示态
+ */
+export async function resolveSessionAppScope(
+  ctx: { sessionId: number | null },
+  session: SessionPrismaLike,
+  app: AppDefinitionPrismaLike | undefined,
+  userId: number,
+): Promise<SessionAppScope | null> {
+  if (ctx.sessionId === null || !app) {
+    return null;
+  }
+  const row = await session.findUnique({ where: { id: ctx.sessionId } });
+  const appId = row?.appId ?? null;
+  if (appId === null) {
+    return null;
+  }
+  const def = await app.findFirst({ where: { id: appId, userId } });
+  if (!def) {
+    return { appId, name: "", graphIds: new Set(), dangling: true };
+  }
+  let ids: number[] = [];
+  try {
+    const parsed: unknown = JSON.parse(def.graphIds);
+    if (Array.isArray(parsed)) {
+      ids = parsed.filter((v): v is number => Number.isInteger(v));
+    }
+  } catch {
+    // 非法 JSON 容错为空集（应用面可修复）
+  }
+  return {
+    appId,
+    name: def.name,
+    graphIds: new Set(ids),
+    dangling: false,
+  };
 }
 
 const createWorkflowSchema = z.object({
@@ -126,6 +188,8 @@ export async function userIdOf(
 export function makeCreateWorkflowTool(deps: {
   graphDefinition: WorkflowGraphPrismaLike;
   session: SessionPrismaLike;
+  /** 会话应用作用域（切片 C）：应用会话内新建的图自动入应用集合 */
+  app?: AppDefinitionPrismaLike;
   /** 写库成功后通知（repo 注 notifyGraphsChanged 广播渲染层失效——
    *  全局 staleTime 30s 失效驱动，工具写库无此广播则列表页 30s 内
    *  不见新图；纯 Node 禁 electron 故经注入） */
@@ -133,7 +197,8 @@ export function makeCreateWorkflowTool(deps: {
 }): ToolDefinition<z.infer<typeof createWorkflowSchema>> {
   return {
     name: "create_workflow",
-    description: "创建并保存新工作流（校验失败返回问题清单）；写操作需批准",
+    description:
+      "创建并保存新工作流（校验失败返回问题清单；应用会话内创建会自动加入该应用）；写操作需批准",
     parameters: createWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {
@@ -157,8 +222,25 @@ export function makeCreateWorkflowTool(deps: {
             userId,
           },
         });
+        // 应用会话内新建 → 自动入应用集合（切片 C 作用域闭环：create 的
+        // 图立即可被本会话 run/list 看见）；悬空绑定不入集（应用已删）
+        const scope = await resolveSessionAppScope(
+          ctx,
+          deps.session,
+          deps.app,
+          userId,
+        );
+        let appNote = "";
+        if (scope && !scope.dangling) {
+          scope.graphIds.add(row.id);
+          await deps.app?.update({
+            where: { id: scope.appId },
+            data: { graphIds: JSON.stringify([...scope.graphIds]) },
+          });
+          appNote = `；已加入应用「${scope.name}」`;
+        }
         deps.notify?.();
-        return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑`;
+        return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑${appNote}`;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         if (message.includes("UNIQUE")) {
@@ -173,10 +255,13 @@ export function makeCreateWorkflowTool(deps: {
 export function makeListWorkflowsTool(deps: {
   graphDefinition: WorkflowGraphPrismaLike;
   session: SessionPrismaLike;
+  /** 会话应用作用域（切片 C）：应用会话内仅列该应用的工作流 */
+  app?: AppDefinitionPrismaLike;
 }): ToolDefinition<Record<string, never>> {
   return {
     name: "list_workflows",
-    description: "列出已保存工作流（id/名称/说明）；子图引用须用真实 id",
+    description:
+      "列出已保存工作流（应用会话内仅该应用的工作流）；子图引用须用真实 id",
     parameters: listWorkflowsSchema,
     kind: "read",
     execute: async (ctx) => {
@@ -188,15 +273,36 @@ export function makeListWorkflowsTool(deps: {
         where: { userId },
         orderBy: { createdAt: "desc" },
       });
-      if (rows.length === 0) {
-        return "暂无已保存的工作流";
+      const scope = await resolveSessionAppScope(
+        ctx,
+        deps.session,
+        deps.app,
+        userId,
+      );
+      // 作用域收窄：仅应用集合内的图；悬空绑定按全量回退并注记（应用
+      // 已删，提示用户重绑）——LLM 经回执感知作用域
+      const visible =
+        scope && !scope.dangling
+          ? rows.filter((row) => scope.graphIds.has(row.id))
+          : rows;
+      if (visible.length === 0) {
+        return scope && !scope.dangling
+          ? `当前会话已绑定应用「${scope.name}」，其中暂无工作流`
+          : "暂无已保存的工作流";
       }
-      return rows
+      const listing = visible
         .map(
           (row) =>
             `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ""}`,
         )
         .join("\n");
+      if (scope && !scope.dangling) {
+        return `当前会话已绑定应用「${scope.name}」，仅列出该应用的工作流：\n${listing}`;
+      }
+      if (scope?.dangling) {
+        return `${listing}\n（注：会话绑定的应用已不存在，暂列全部工作流，可让用户重新绑定）`;
+      }
+      return listing;
     },
   };
 }
@@ -352,10 +458,13 @@ export function makeRunWorkflowTool(deps: {
   session: SessionPrismaLike;
   workspace: WorkspacePrismaLike;
   launch: LaunchTestRunFn;
+  /** 会话应用作用域（切片 C）：应用会话内仅可运行该应用的工作流 */
+  app?: AppDefinitionPrismaLike;
 }): ToolDefinition<z.infer<typeof runWorkflowSchema>> {
   return {
     name: "run_workflow",
-    description: "异步试运行工作流（真实执行，触发即返）；写操作需批准",
+    description:
+      "异步试运行工作流（真实执行，触发即返；应用会话内仅可运行该应用的工作流）；写操作需批准",
     parameters: runWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {
@@ -371,6 +480,17 @@ export function makeRunWorkflowTool(deps: {
       });
       if (!row) {
         return "错误: 工作流不存在（可先用 list_workflows 核对 id）";
+      }
+      // 应用作用域闸（切片 C）：集合外的工作流对该会话不可运行——
+      // 悬空绑定不拦（应用已删，按未作用域处理）
+      const scope = await resolveSessionAppScope(
+        ctx,
+        deps.session,
+        deps.app,
+        userId,
+      );
+      if (scope && !scope.dangling && !scope.graphIds.has(args.id)) {
+        return `错误: 工作流 id=${args.id} 不在当前应用「${scope.name}」的作用域内（该应用的可用工作流见 list_workflows）`;
       }
       const ws = await deps.workspace.findFirst({
         where: { directoryPath: ctx.workspacePath, userId },

@@ -11,6 +11,7 @@ import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
 import { ProviderRepository } from "./domains/ai/provider/provider.repo";
 import { DataSourceRepository } from "./domains/ai/data-source/data-source.repo";
+import { AppRepository } from "./domains/ai/apps/app.repo";
 import { ModelRepository } from "./domains/ai/provider/model.repo";
 import { AssistantRepository } from "./domains/ai/chat/assistant.repo";
 import { SessionRepository } from "./domains/ai/chat/session.repo";
@@ -246,6 +247,8 @@ export default class Application {
     // 数据源配置（PG 首选通道，切片 B）：database 节点 dataSourceId 的
     // 配置面 CRUD + 连通测试
     new DataSourceRepository();
+    // 应用定义（聚合期核心，切片 C）：appDefinition CRUD + 会话绑定作用域
+    new AppRepository();
     // 记忆调度器：每晚窗口整理 + 启动补跑（spec §5.2），复用上方 repo 实例
     this.memoryScheduler = new MemoryScheduler({ providerRepo, modelRepo });
     // 记忆 IPC 服务（spec §4）：编辑指令应用 + 手动整理触发，复用 repo 实例

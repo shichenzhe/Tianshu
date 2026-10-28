@@ -111,6 +111,8 @@ export class SessionRepository {
       ...row,
       assistantId: row.assistantId ?? undefined,
       currentModelId: row.currentModelId ?? undefined,
+      // 应用绑定（切片 C）：null 归一 undefined（普通会话）
+      appId: row.appId ?? undefined,
       // P3：DB null（agent 缺省不落盘）归一为显式 "agent"
       mode: (row.mode as SessionMode | null) ?? "agent",
       lastMessageAt: row.lastMessageAt?.toISOString() ?? undefined,
@@ -166,6 +168,12 @@ export class SessionRepository {
       "session:setAssistant",
       (_, userId, id: number, assistantId: number | null) =>
         this.setSessionAssistant(id, assistantId, userId),
+    );
+    // 会话绑定/解绑应用（切片 C P1）：appId null=解绑
+    handleUser(
+      "session:setApp",
+      (_, userId, id: number, appId: number | null) =>
+        this.setSessionApp(id, appId, userId),
     );
     handleUser("session:setMode", (_, userId, id: number, mode: SessionMode) =>
       this.setSessionMode(id, mode, userId),
@@ -1156,6 +1164,31 @@ export class SessionRepository {
     await prisma.session.update({
       where: { id },
       data: { assistantId },
+    });
+  }
+
+  /**
+   * 会话绑定/解绑应用（切片 C P1）：appId 校验归属（他人/不存在同报错，
+   * 不泄露存在性）；null = 解绑。作用域生效在工具 execute 层（create-workflow
+   * 的 resolveSessionAppScope 读 session.appId），会话无需重启即时生效
+   */
+  async setSessionApp(
+    id: number,
+    appId: number | null,
+    userId: number,
+  ): Promise<void> {
+    await this.assertSessionOwned(id, userId);
+    if (appId !== null) {
+      const app = await prisma.appDefinition.findFirst({
+        where: { id: appId, userId },
+      });
+      if (!app) {
+        throw new Error("APP_NOT_FOUND");
+      }
+    }
+    await prisma.session.update({
+      where: { id },
+      data: { appId },
     });
   }
 

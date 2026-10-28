@@ -32,6 +32,7 @@ import {
   makeListWorkflowsTool,
   makeRunWorkflowTool,
   makeUpdateWorkflowTool,
+  type AppDefinitionPrismaLike,
   type SessionPrismaLike,
   type WorkspacePrismaLike,
   type WorkflowGraphPrismaLike,
@@ -171,16 +172,21 @@ export default class GraphRepository {
     const graphDelegate =
       prisma.graphDefinition as unknown as WorkflowGraphPrismaLike;
     const sessionDelegate = prisma.session as unknown as SessionPrismaLike;
+    // 会话应用作用域（切片 C）：run/list/create 三工具按会话 appId 收窄
+    const appDelegate =
+      prisma.appDefinition as unknown as AppDefinitionPrismaLike;
     registerTools([
       makeCreateWorkflowTool({
         graphDefinition: graphDelegate,
         session: sessionDelegate,
+        app: appDelegate,
         // 对话建图无前端调用方 invalidate，落库即广播列表失效
         notify: () => notifyGraphsChanged(),
       }),
       makeListWorkflowsTool({
         graphDefinition: graphDelegate,
         session: sessionDelegate,
+        app: appDelegate,
       }),
       makeGetWorkflowTool({
         graphDefinition: graphDelegate,
@@ -194,6 +200,7 @@ export default class GraphRepository {
       makeRunWorkflowTool({
         graphDefinition: graphDelegate,
         session: sessionDelegate,
+        app: appDelegate,
         workspace: prisma.workspace as unknown as WorkspacePrismaLike,
         // 异步发射（fire-and-forget）：互斥/收尾在 launchTestRun 内
         launch: (p) =>

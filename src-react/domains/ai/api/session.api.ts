@@ -31,6 +31,8 @@ export interface SessionRecord {
   projectId?: number | null;
   /** 任务会话关联事项 id；null = 非任务会话（D1：一任务一会话由 create 查重保证） */
   planItemId?: number | null;
+  /** 绑定应用 id（切片 C）；缺省 = 普通会话（工作流工具面全量） */
+  appId?: number;
   /** P1 未读角标批：未读数（远端会话经被控面动态算；本地会话缺省不显示角标） */
   unreadCount?: number;
   /** P1 未读角标批：末条消息摘要（远端会话透出；本地会话缺省） */
@@ -145,6 +147,14 @@ export class SessionApi {
       { ch: "session:setAssistant", args: [id, assistantId] },
       (connId) => remote.remoteUpdate(id, { assistantId }, connId),
     );
+  }
+
+  /**
+   * 绑定/解绑应用（切片 C P1）：appId null = 解绑。本地 IPC——远程被控面
+   * 无对应端点（应用概念暂不跨主机，远程会话缺省普通会话）
+   */
+  static async setApp(id: number, appId: number | null): Promise<void> {
+    return invoke<void>("session:setApp", id, appId);
   }
 
   /** 切换会话模式（P3）：agent 时主进程落 null，保持 DB 干净 */

@@ -27,6 +27,13 @@ export const IPC_INVOKE_ALLOWLIST = [
   "provider:delete",
   // provider 级连通测试（终审 I-2：comfyui 无模型行，设置页「测试连接」）
   "provider:test",
+  // 数据源配置（PG 首选通道，切片 B 2026-10-29）：database 节点
+  // dataSourceId 的配置面 CRUD + 连通测试（凭据只写不读）
+  "dataSource:list",
+  "dataSource:create",
+  "dataSource:update",
+  "dataSource:delete",
+  "dataSource:test",
   "model:listByProvider",
   "model:listAll",
   "model:create",

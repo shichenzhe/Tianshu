@@ -352,7 +352,9 @@ describe("LocalConnectProxy", () => {
       // 写回调=数据已刷出（localhost 回环≈对端接收队列已持有）——先确保
       // 未读队列非空再 stop，destroy 必得 RST；否则 ubuntu 慢调度下 destroy
       // 可先于包到达，无 RST 则已收过 FIN 的半开端无事件可观测（CI 挂点）
-      await new Promise<void>((resolve) => client.write("hold", () => resolve()));
+      await new Promise<void>((resolve) =>
+        client.write("hold", () => resolve()),
+      );
       const terminated = new Promise<void>((resolve) => {
         client.once("close", () => resolve());
         client.once("error", () => resolve());

@@ -1,0 +1,739 @@
+// tests/ai/automation-runner.test.ts
+import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
+
+// 传递依赖 resolve-attachments 的 skillsRootDir 惰性读 app.getPath
+// ("userData")，照 chat.service.test.ts 先例 mock electron（无断言涉及）
+vi.mock("electron", () => ({
+  app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
+}));
+vi.mock("../../electron/commons/prisma-client", () => ({
+  default: {
+    workspace: { findUnique: vi.fn() },
+    model: { findUnique: vi.fn() },
+    provider: { findUnique: vi.fn() },
+    // 子系统 E：项目指令查询（全局任务不触达，项目任务按需 stub）
+    project: { findUnique: vi.fn() },
+    session: { create: vi.fn(), update: vi.fn() },
+    message: { create: vi.fn() },
+    automationRun: { create: vi.fn(), update: vi.fn() },
+    automationTask: { update: vi.fn() },
+    // targetKind=graph 分流：图存在性查询
+    graphDefinition: { findUnique: vi.fn() },
+  },
+}));
+// graph 分流单测隔离：executor 整模块 stub（真实链路由 graph-executor.test.ts
+// 覆盖），runner 用例只断言分流参数与失败语义
+vi.mock("../../electron/domains/ai/orchestration/graph-executor", () => ({
+  executeGraphRun: vi.fn(async () => "success"),
+}));
+// Log 顶层读 app.getPath("userData")（winston 目录），vitest 里 import 即崩——
+// 照 Task 3/5 mock 三件套先例补（断言不涉及 Log，零改动）
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+vi.mock("../../electron/domains/ai/chat/chat.service", () => ({
+  runChatStream: vi.fn(),
+}));
+// loadSkills 默认行为同先前空清单；vi.fn 化供引用注入用例按需覆写
+// （技能聚焦用例改返回 A/B 清单，既有用例不受影响）
+vi.mock("../../electron/domains/ai/agent/skill-loader", () => ({
+  loadSkills: vi.fn(() => []),
+}));
+// 引用注入测试基建(brief mock 组合指示)：workspace-files 整模块 stub
+// (resolveFilePath 拼接 + readWorkspaceFile 按用例覆写)；fs/promises 仅替
+// readFile——runner 走 defaultResolveDeps.readSkillFile(fs.readFile)，技能
+// 正文内容经此注入。importActual 保留 stat/writeFile 等(测试图内
+// file-tools 仍引用，仅在工具 execute 时调用，此处不被触达)
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  const readFile = vi.fn();
+  return { ...actual, readFile, default: { ...actual, readFile } };
+});
+vi.mock("../../electron/domains/ai/chat/workspace-files", () => ({
+  resolveFilePath: (dir: string, rel: string) => `${dir}/${rel}`,
+  readWorkspaceFile: vi.fn(),
+}));
+
+import fs from "node:fs/promises";
+import prisma from "../../electron/commons/prisma-client";
+import { runChatStream } from "../../electron/domains/ai/chat/chat.service";
+import { loadSkills } from "../../electron/domains/ai/agent/skill-loader";
+import { buildSystemPrompt } from "../../electron/domains/ai/agent/skill-prompt";
+import { readWorkspaceFile } from "../../electron/domains/ai/chat/workspace-files";
+import { executeGraphRun } from "../../electron/domains/ai/orchestration/graph-executor";
+import {
+  replaceVariables,
+  extractUsage,
+  executeTask,
+} from "../../electron/domains/ai/automation/automation-runner";
+
+describe("replaceVariables", () => {
+  it("三个变量全部替换(2026-09-06 为周日)", () => {
+    const out = replaceVariables(
+      "今天 {{date}} 星期{{weekday}} {{time}}",
+      new Date("2026-09-06T09:05:00"),
+    );
+    expect(out).toBe("今天 2026-09-06 星期日 09:05");
+  });
+  it("无变量原样返回", () => {
+    expect(replaceVariables("plain", new Date())).toBe("plain");
+  });
+});
+
+describe("extractUsage", () => {
+  it("从 usage 块取 input/output;无块返回 undefined", () => {
+    expect(
+      extractUsage([
+        { type: "text", text: "hi" },
+        { type: "usage", input: 12, output: 34 },
+      ] as never),
+    ).toEqual({ promptTokens: 12, completionTokens: 34 });
+    expect(
+      extractUsage([{ type: "text", text: "hi" }] as never),
+    ).toBeUndefined();
+  });
+});
+
+/** executeTask 用例共用任务行（automationTask 表形状） */
+const taskRow = {
+  id: 1,
+  name: "t",
+  prompt: "p",
+  workspaceId: 9,
+  modelId: 1,
+  temperature: 0.7,
+  targetKind: "prompt",
+  graphId: null,
+  eventJson: null,
+  userId: 7,
+  scheduleJson: '{"mode":"periodic","kind":"daily","time":"09:00"}',
+  scheduleText: "每天 09:00",
+  startAt: null,
+  endAt: null,
+  missedPolicy: "skip",
+  enabled: true,
+  status: "active",
+  statusNote: null,
+  lastRunAt: null,
+  nextRunAt: null,
+  templateSlug: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
+
+/** once 任务行(advanceTask 终态语义用例:成功才 expired,失败留待重试扫描)。
+ * runAt 相对真实时钟动态取过去时刻:nextRunAt=null 断言(需 runAt ≤ now)
+ * 不依赖固定日历日期,任意时间运行均稳定 */
+const onceRow = {
+  ...taskRow,
+  scheduleJson: JSON.stringify({
+    mode: "periodic",
+    kind: "once",
+    runAt: new Date(Date.now() - 60_000).toISOString(),
+  }),
+};
+
+describe("executeTask 失败短路", () => {
+  it("workspace 缺失 → run failed(workspace_missing) + task error", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue(null);
+    // create 桩缺省 resolve undefined 会让 run.id 直接抛——补桩(仅 mock 值,断言零改动)
+    vi.mocked(prisma.automationRun.create).mockResolvedValue({
+      id: 1,
+    } as never);
+    await executeTask(taskRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ taskId: 1, status: "running" }),
+      }),
+    );
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: "workspace_missing",
+          finishedAt: expect.any(Date),
+        }),
+      }),
+    );
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "error",
+          enabled: false,
+          statusNote: "workspace_missing",
+        }),
+      }),
+    );
+    expect(runChatStream).not.toHaveBeenCalled();
+  });
+});
+
+/** targetKind=graph 任务行（分流用例共用；graphId=5） */
+const graphTask = { ...taskRow, targetKind: "graph" as const, graphId: 5 };
+
+/** graph 分流共用前置：workspace 存在；图存在性缺省 null（按用例覆写） */
+function stubGraphTaskWorkspace() {
+  vi.mocked(prisma.automationRun.create).mockResolvedValue({
+    id: 1,
+  } as never);
+  vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+    id: 9,
+    directoryPath: null,
+  } as never);
+  vi.mocked(prisma.graphDefinition.findUnique).mockResolvedValue(null);
+}
+
+describe("executeTask targetKind=graph 分流", () => {
+  it("运行前图被删 → run failed(graph_missing) + task error 停调度，不进执行器", async () => {
+    stubGraphTaskWorkspace();
+    vi.mocked(executeGraphRun).mockClear();
+    const out = await executeTask(graphTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(out).toBe("failed");
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: "graph_missing",
+        }),
+      }),
+    );
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "error",
+          enabled: false,
+          statusNote: "graph_missing",
+        }),
+      }),
+    );
+    expect(executeGraphRun).not.toHaveBeenCalled();
+  });
+
+  it("图存在且 enabled → 分流 executeGraphRun，run 行由执行器落库不重复建", async () => {
+    stubGraphTaskWorkspace();
+    vi.mocked(prisma.graphDefinition.findUnique).mockResolvedValue({
+      id: 5,
+      name: "demo",
+      enabled: true,
+    } as never);
+    vi.mocked(executeGraphRun).mockClear();
+    vi.mocked(prisma.automationRun.create).mockClear();
+    const abort = new AbortController().signal;
+    const out = await executeTask({ ...graphTask, projectId: 11 } as never, {
+      triggerType: "schedule",
+      attempt: 2,
+      abort,
+      inputs: { topic: "AI" },
+    });
+    expect(out).toBe("success");
+    expect(executeGraphRun).toHaveBeenCalledTimes(1);
+    expect(executeGraphRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        graph: expect.objectContaining({ id: 5 }),
+        task: expect.objectContaining({ id: 1, projectId: 11 }),
+        inputs: { topic: "AI" },
+        triggerType: "schedule",
+        attempt: 2,
+        abort,
+        workspace: { id: 9, directoryPath: null },
+      }),
+    );
+    // run 行交执行器落库（防同次执行出现两条 run 记录）
+    expect(prisma.automationRun.create).not.toHaveBeenCalled();
+  });
+
+  it("图被禁用 → run failed(graph_disabled)，不进执行器、不停调度", async () => {
+    stubGraphTaskWorkspace();
+    vi.mocked(prisma.graphDefinition.findUnique).mockResolvedValue({
+      id: 5,
+      name: "demo",
+      enabled: false,
+    } as never);
+    vi.mocked(executeGraphRun).mockClear();
+    vi.mocked(prisma.automationTask.update).mockClear();
+    const out = await executeTask(graphTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(out).toBe("failed");
+    expect(executeGraphRun).not.toHaveBeenCalled();
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: "graph_disabled",
+        }),
+      }),
+    );
+    // 图禁用是用户主动状态（非系统故障）：任务不置 error 停调度
+    expect(prisma.automationTask.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ enabled: false }),
+      }),
+    );
+  });
+});
+
+describe("executeTask 成功路径", () => {
+  it("run 终态 update 关联 sessionId 且 status=success(spec §4 步骤7/§5 跳转)", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    vi.mocked(prisma.automationRun.create).mockResolvedValue({
+      id: 1,
+    } as never);
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+      id: 9,
+      directoryPath: null,
+    } as never);
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 1,
+      providerId: 2,
+      modelId: "gpt-test",
+    } as never);
+    vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+      type: "openai-compatible",
+      baseUrl: "https://api.test/v1",
+      apiKey: "k",
+      extraHeaders: null,
+    } as never);
+    vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(taskRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    // 执行会话归属用户（漏写会致 listAll where userId 滤掉——运行历史
+    // 「查看会话」跳转空态）：task.userId 透传
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: 7 }),
+      }),
+    );
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sessionId: 99,
+          status: "success",
+        }),
+      }),
+    );
+    expect(prisma.message.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("工具装配剔除 plan_*（定时任务无 projectId，注册表有也不进模型上下文）", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    const { registerTools, unregisterTools } =
+      await import("../../electron/domains/ai/agent/tool-registry");
+    const probeTool = {
+      name: "zz_probe_read",
+      description: "探针",
+      parameters: z.object({}),
+      kind: "read",
+      execute: async () => "",
+    } as never;
+    const planStub = {
+      name: "plan_list_items",
+      description: "项目计划",
+      parameters: z.object({}),
+      kind: "read",
+      execute: async () => "",
+    } as never;
+    unregisterTools("plan_");
+    registerTools([probeTool, planStub]);
+    try {
+      vi.mocked(prisma.automationRun.create).mockResolvedValue({
+        id: 1,
+      } as never);
+      vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+        id: 9,
+        // 非空目录路径 → collectTools 全量注入分支（mcp-only 分支会滤掉探针）
+        directoryPath: "/tmp/probe-ws",
+      } as never);
+      vi.mocked(prisma.model.findUnique).mockResolvedValue({
+        id: 1,
+        providerId: 2,
+        modelId: "gpt-test",
+      } as never);
+      vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+        type: "openai-compatible",
+        baseUrl: "https://api.test/v1",
+        apiKey: "k",
+        extraHeaders: null,
+      } as never);
+      vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+      vi.mocked(runChatStream).mockResolvedValue({
+        blocks: [{ type: "text", text: "ok" }],
+      } as never);
+      await executeTask(taskRow as never, {
+        triggerType: "schedule",
+        attempt: 1,
+        abort: new AbortController().signal,
+      });
+      const names = vi
+        .mocked(runChatStream)
+        .mock.calls.at(-1)?.[0]
+        .toolDefinitions.map((def) => def.name);
+      expect(names).toContain("zz_probe_read");
+      expect(names?.filter((name) => name.startsWith("plan_"))).toEqual([]);
+    } finally {
+      // 清理探针注册，避免污染后续用例/其他测试文件的注册表
+      unregisterTools("zz_probe_");
+      unregisterTools("plan_");
+    }
+  });
+});
+
+/** once 终态两用例共用前置 stub(workspace/model/provider/session 均有效) */
+async function stubOnceHappyPath() {
+  const { executeTask } =
+    await import("../../electron/domains/ai/automation/automation-runner");
+  vi.mocked(prisma.automationRun.create).mockResolvedValue({ id: 1 } as never);
+  vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+    id: 9,
+    directoryPath: null,
+  } as never);
+  vi.mocked(prisma.model.findUnique).mockResolvedValue({
+    id: 1,
+    providerId: 2,
+    modelId: "gpt-test",
+  } as never);
+  vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+    type: "openai-compatible",
+    baseUrl: "https://api.test/v1",
+    apiKey: "k",
+    extraHeaders: null,
+  } as never);
+  vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+  vi.mocked(prisma.automationTask.update).mockClear();
+  return executeTask;
+}
+
+describe("executeTask once 终态(成功才 expired,失败留待重试)", () => {
+  it("once 成功 → task status=expired 且 nextRunAt=null", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "expired",
+          nextRunAt: null,
+          lastRunAt: expect.any(Date),
+        }),
+      }),
+    );
+  });
+  it("once 非系统失败(stream 异常) → 不置 expired(nextRunAt=null 留给重试扫描)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockRejectedValue(new Error("ECONNRESET"));
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const data = vi.mocked(prisma.automationTask.update).mock.calls[0]?.[0]
+      .data;
+    expect(data).toMatchObject({
+      nextRunAt: null,
+      lastRunAt: expect.any(Date),
+    });
+    expect(data).not.toHaveProperty("status");
+  });
+});
+
+describe("executeTask 手动触发不消耗调度(manual 不推进调度字段)", () => {
+  it("manual 成功 → run 照常收口 success,task 零推进(once 不 expired,nextRunAt/lastRunAt 不动)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "manual",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "success" }),
+      }),
+    );
+    expect(prisma.automationTask.update).not.toHaveBeenCalled();
+  });
+  it("manual 非系统失败 → 同样零推进(once 不因测试失败被决策树提前回收)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockRejectedValue(new Error("ECONNRESET"));
+    await executeTask(onceRow as never, {
+      triggerType: "manual",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: "failed" }),
+      }),
+    );
+    expect(prisma.automationTask.update).not.toHaveBeenCalled();
+  });
+  it("对照:schedule 成功 → 推进调度字段(once 置 expired,见上「once 终态」用例)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(onceRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "expired",
+          nextRunAt: null,
+        }),
+      }),
+    );
+  });
+});
+
+describe("executeTask 权限接线(agent 回调随任务 accessMode 分流)", () => {
+  it("full 任务 → fullAccess=true 且审批/工具放行;default 任务 → 全 false", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(runChatStream).mockClear();
+    await executeTask({ ...taskRow, accessMode: "full" } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const fullAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
+    expect(fullAgent.fullAccess()).toBe(true);
+    await expect(fullAgent.requestApproval("t", "s")).resolves.toBe(true);
+    await expect(fullAgent.isToolAllowed("write_file")).resolves.toBe(true);
+
+    vi.mocked(runChatStream).mockClear();
+    await executeTask({ ...taskRow, accessMode: "default" } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const defaultAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
+    expect(defaultAgent.fullAccess()).toBe(false);
+    await expect(defaultAgent.requestApproval("t", "s")).resolves.toBe(false);
+    await expect(defaultAgent.isToolAllowed("write_file")).resolves.toBe(false);
+  });
+});
+
+describe("executeTask 引用注入", () => {
+  const wsTask = {
+    ...taskRow,
+    id: 2,
+    prompt: "@daily.md 汇总",
+    workspaceId: 9,
+  };
+
+  function stubOkWorkspace() {
+    // run.id 桩(brief stubOkWorkspace 未列：vi.fn 缺省 resolve undefined
+    // 会在 streamAndRecord 读 run.id 抛错，照既有用例补桩，断言零改动)
+    vi.mocked(prisma.automationRun.create).mockResolvedValue({
+      id: 1,
+    } as never);
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+      id: 9,
+      name: "ws",
+      directoryPath: "/ws",
+    } as never);
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 1,
+      providerId: 1,
+      modelId: "m",
+    } as never);
+    vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+      id: 1,
+      type: "openai",
+      baseUrl: "http://x",
+      apiKey: "k",
+      extraHeaders: null,
+    } as never);
+    vi.mocked(prisma.session.create).mockResolvedValue({ id: 77 } as never);
+  }
+
+  it("带文件引用的任务:user 消息含 [引用文件] 前缀块", async () => {
+    stubOkWorkspace();
+    vi.mocked(readWorkspaceFile).mockResolvedValue({
+      kind: "text",
+      content: "AAA",
+      size: 3,
+    } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(wsTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.message.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          role: "user",
+          blocks: expect.stringContaining("[引用文件 daily.md]"),
+        }),
+      }),
+    );
+  });
+
+  it("引用文件缺失 → run failed(attachment_missing)", async () => {
+    stubOkWorkspace();
+    vi.mocked(readWorkspaceFile).mockRejectedValue(new Error("ENOENT"));
+    await executeTask(wsTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.automationRun.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "failed",
+          error: expect.stringContaining("attachment_missing"),
+        }),
+      }),
+    );
+  });
+
+  it("技能聚焦:⚡引用 → system 只含引用技能", async () => {
+    stubOkWorkspace();
+    // 被引用技能名须为纯 token 字符(⚡[\w-]+，CJK 不入 token)故名 "A"；
+    // 未引用方保留 "B 技能"：聚焦失效时 system 必含该串，断言不落空
+    vi.mocked(loadSkills).mockReturnValue([
+      { name: "A", dir: "/s/a" },
+      { name: "B 技能", dir: "/s/b" },
+    ] as never);
+    // defaultResolveDeps.readSkillFile 走 fs.readFile，技能正文经此注入
+    vi.mocked(fs.readFile).mockResolvedValue("SKILL-A" as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    // mock 跨用例累积，清calls保 [0] 为本次调用
+    vi.mocked(runChatStream).mockClear();
+    await executeTask({ ...wsTask, prompt: "⚡A 汇总" } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const call = vi.mocked(runChatStream).mock.calls[0]![0]!;
+    expect(call.system).not.toContain("B 技能");
+  });
+});
+
+describe("executeTask 项目化(子系统 E:会话归属+项目指令注入)", () => {
+  /** 项目任务行(clone 共用行,projectId=11;不动既有用例的 taskRow) */
+  const projectTask = { ...taskRow, projectId: 11 };
+
+  it("项目任务:session.create 带 projectId 且 system prompt 注入项目指令", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      systemPrompt: "# 角色：项目经理",
+    } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    // mock 跨用例累积,清 calls 保证断言只看本次调用
+    vi.mocked(prisma.project.findUnique).mockClear();
+    vi.mocked(prisma.session.create).mockClear();
+    await executeTask(projectTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).toHaveBeenCalledWith({
+      where: { id: 11 },
+      select: { systemPrompt: true },
+    });
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: 11 }),
+      }),
+    );
+    expect(runChatStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("# 角色：项目经理"),
+      }),
+    );
+  });
+
+  it("全局任务(projectId null):不查 project,会话 projectId 归一 null(行为不变)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(prisma.project.findUnique).mockClear();
+    vi.mocked(prisma.session.create).mockClear();
+    await executeTask({ ...taskRow, projectId: null } as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).not.toHaveBeenCalled();
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ projectId: null }),
+      }),
+    );
+  });
+
+  it("项目存在但指令空白:system 仅技能段(空白指令 trim 后不作 base)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(prisma.project.findUnique).mockResolvedValue({
+      systemPrompt: "   ",
+    } as never);
+    // 无 ⚡ 引用 → skills=全量清单;system 应恰等于 buildSystemPrompt(undefined, skills)
+    const skills = [
+      {
+        name: "A",
+        description: "用途说明",
+        dir: "/s/a",
+        bodyPath: "/s/a/SKILL.md",
+      },
+    ];
+    vi.mocked(loadSkills).mockReturnValue(skills as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    vi.mocked(runChatStream).mockClear();
+    await executeTask(projectTask as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(prisma.project.findUnique).toHaveBeenCalledWith({
+      where: { id: 11 },
+      select: { systemPrompt: true },
+    });
+    const call = vi.mocked(runChatStream).mock.calls[0]![0]!;
+    expect(call.system).toBe(buildSystemPrompt(undefined, skills));
+  });
+});

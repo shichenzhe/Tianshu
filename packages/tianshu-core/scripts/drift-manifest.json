@@ -1,0 +1,416 @@
+{
+  "serverRoot": "apps/tianshu-server",
+  "note": "session 仓储两仓实现形态不同构，不入比对——语义一致性由 server test/modules/session.spec 对齐用例守护（RC-T6）；library_search 工具（server src/core/library/library-tools.ts，PL-2）为 server 新建，mirror 无对应源文件（工具位查证见 PL-T2 报告）——不入比对，注册面（registry/chat bindTools/graph collectTools）由 server test/core/library-tools.spec.ts 守护",
+  "pairs": [
+    {
+      "id": "agent-file-tools",
+      "mirrorPath": "electron/domains/ai/agent/file-tools.ts",
+      "serverPath": "src/core/tools/file-tools.ts",
+      "baselineDiff": true,
+      "baselineLines": 74,
+      "note": "工具集五件文件工具本体；server 为无头摘取版（emitPanel/commandWatchBlacklist 不移植）——有意分叉，基线守护"
+    },
+    {
+      "id": "agent-command-tool",
+      "mirrorPath": "electron/domains/ai/agent/command-tool.ts",
+      "serverPath": "src/core/tools/command-tool.ts",
+      "baselineDiff": true,
+      "baselineLines": 49,
+      "note": "run_command 工具；server 无 electron child-monitor 监控——有意分叉"
+    },
+    {
+      "id": "agent-web-tools",
+      "mirrorPath": "electron/domains/ai/agent/web-tools.ts",
+      "serverPath": "src/core/tools/web-tools.ts",
+      "baselineDiff": true,
+      "baselineLines": 25,
+      "note": "web_fetch/web_search；server 摘取改造版"
+    },
+    {
+      "id": "agent-plan-tools",
+      "mirrorPath": "electron/domains/ai/agent/plan-tools.ts",
+      "serverPath": "src/core/tools/plan-tools.ts",
+      "baselineDiff": true,
+      "baselineLines": 22,
+      "note": "plan_ 落库工具（prisma 两仓 client 不同——import 行已归一剔除）"
+    },
+    {
+      "id": "agent-skill-loader",
+      "mirrorPath": "electron/domains/ai/agent/skill-loader.ts",
+      "serverPath": "src/core/tools/skill-loader.ts",
+      "baselineDiff": true,
+      "baselineLines": 2,
+      "note": "SKILL.md frontmatter 扫描"
+    },
+    {
+      "id": "agent-skill-prompt",
+      "mirrorPath": "electron/domains/ai/agent/skill-prompt.ts",
+      "serverPath": "src/core/skill-prompt.ts",
+      "baselineDiff": true,
+      "baselineLines": 6,
+      "note": "buildSystemPrompt；server 侧 SkillInfo 收敛为 SkillSummary（RC-T5 裁定保留件）"
+    },
+    {
+      "id": "agent-tool-gate",
+      "mirrorPath": "electron/domains/ai/agent/tool-gate.ts",
+      "serverPath": "src/core/tools/tool-gate.ts",
+      "baselineDiff": true,
+      "baselineLines": 187,
+      "note": "工具门禁主表；server 摘取改造版（安全中心出口不同）；权限放宽批（2026-10-24）server 已同构危险分级/write 兜底收窄/网络域免审/write_file 直执行留痕（§4.7，Task 5 review 补齐），残余分叉=allowDangerousTools 前置门+autoDenyApprovals（T7）取代 mirror unattended 三段强拒+BRIDGE_TOOL_NAMES+denyWithChunk 重构（基线 169→197 复核过账）"
+    },
+    {
+      "id": "agent-tool-registry",
+      "mirrorPath": "electron/domains/ai/agent/tool-registry.ts",
+      "serverPath": "src/core/tools/tool-registry.ts",
+      "baselineDiff": true,
+      "baselineLines": 8,
+      "note": "工具注册表"
+    },
+    {
+      "id": "agent-workspace-path",
+      "mirrorPath": "electron/domains/ai/agent/workspace-path.ts",
+      "serverPath": "src/core/tools/workspace-path.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "workspace 路径语义"
+    },
+    {
+      "id": "agent-create-skill",
+      "mirrorPath": "electron/domains/ai/agent/create-skill.ts",
+      "serverPath": "src/core/tools/create-skill.ts",
+      "baselineDiff": true,
+      "baselineLines": 23,
+      "note": "create_skill 工具"
+    },
+    {
+      "id": "agent-approval",
+      "mirrorPath": "electron/domains/ai/agent/approval.ts",
+      "serverPath": "src/core/tools/approval.ts",
+      "baselineDiff": true,
+      "baselineLines": 6,
+      "note": "审批决议类型+审批协调器；2026-10 并行批后有意分叉：mirror 缺省 10min 超时（7e22f5f，桌面远控台受益）vs server 5min+config approvalTimeoutMs 覆盖（dbe8eb5 移动端 spec）——GA-T9 入册时基线重置固化登记该分叉"
+    },
+    {
+      "id": "agent-permission-mode",
+      "mirrorPath": "electron/domains/ai/agent/permission-mode.ts",
+      "serverPath": "src/core/tools/permission-mode.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "权限模式词汇"
+    },
+    {
+      "id": "agent-read-skill",
+      "mirrorPath": "electron/domains/ai/agent/read-skill.ts",
+      "serverPath": "src/core/tools/read-skill.ts",
+      "baselineDiff": true,
+      "baselineLines": 31,
+      "note": "read_skill 工具"
+    },
+    {
+      "id": "agent-browser-bridge-tools",
+      "mirrorPath": "electron/domains/ai/agent/browser-tools.ts",
+      "serverPath": "src/core/tools/bridge/browser-bridge-tools.ts",
+      "baselineDiff": true,
+      "baselineLines": 159,
+      "note": "browser 四工具（TB-T3 入册，TB-T1 review 移交）：仅定义段同构（name/description/zod/kind 逐字）——执行体分叉为桥挂起（server emitToolRequest 广播 tool.request 等控制端 respond）vs mirror GuestControl 本地执行，基线必然大"
+    },
+    {
+      "id": "security-ssrf-hosts",
+      "mirrorPath": "electron/domains/security/ssrf-hosts.ts",
+      "serverPath": "src/core/tools/ssrf-hosts.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "SSRF 封锁清单（server 头注释自称逐字移植——期望 diff 趋零）"
+    },
+    {
+      "id": "security-command-gate",
+      "mirrorPath": "electron/domains/security/command-gate.ts",
+      "serverPath": "src/core/security/command-gate.ts",
+      "baselineDiff": true,
+      "baselineLines": 19,
+      "note": "命令判定门单例；server 摘取版（装配 install 模式同构，未安装/异常 fail-open）"
+    },
+    {
+      "id": "security-command-policy",
+      "mirrorPath": "electron/domains/security/command-policy.ts",
+      "serverPath": "src/core/security/command-policy.ts",
+      "baselineDiff": true,
+      "baselineLines": 5,
+      "note": "命令安全判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零"
+    },
+    {
+      "id": "security-file-gate",
+      "mirrorPath": "electron/domains/security/file-gate.ts",
+      "serverPath": "src/core/security/file-gate.ts",
+      "baselineDiff": true,
+      "baselineLines": 9,
+      "note": "文件判定门单例；server 版 grantedOf（文件窗口会话级授权覆盖）未随移植——无文件窗口语义不变"
+    },
+    {
+      "id": "security-file-policy",
+      "mirrorPath": "electron/domains/security/file-policy.ts",
+      "serverPath": "src/core/security/file-policy.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "文件路径判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零"
+    },
+    {
+      "id": "security-file-blocklist",
+      "mirrorPath": "electron/domains/security/defaults.ts",
+      "serverPath": "src/core/security/file-blocklist.ts",
+      "baselineDiff": true,
+      "baselineLines": 159,
+      "note": "内置敏感路径清单；server 仅摘 defaults.ts 的 BUILTIN_FILE_BLOCKLIST_ALL/defaultFileBlocklist（恶意域清单与 SECURITY_DEFAULTS 其余项未移植）——子集摘取，基线必然大"
+    },
+    {
+      "id": "security-file-history-estimate",
+      "mirrorPath": "electron/domains/security/file-history.ts",
+      "serverPath": "src/core/security/file-history-estimate.ts",
+      "baselineDiff": true,
+      "baselineLines": 147,
+      "note": "批量删除预估；server 仅摘 file-history.ts 的 countFilesForEstimate 模块级纯函数（FileHistoryService 快照/manifest/配额 LRU 未移植）——子集摘取，基线必然大"
+    },
+    {
+      "id": "skill-archive",
+      "mirrorPath": "electron/domains/ai/skill/skill-archive.ts",
+      "serverPath": "src/core/tools/skill-archive.ts",
+      "baselineDiff": true,
+      "baselineLines": 25,
+      "note": "server 仅摘 validateSkillMd + isInsideDir（zip 安装通道/对账埋点未移植）——子集摘取，基线必然大"
+    },
+    {
+      "id": "langchain-tool-adapter",
+      "mirrorPath": "electron/domains/ai/orchestration/langchain-tool-adapter.ts",
+      "serverPath": "src/core/tools/langchain-tool-adapter.ts",
+      "baselineDiff": true,
+      "baselineLines": 8,
+      "note": "LangChain DynamicTool 适配器"
+    },
+    {
+      "id": "langchain-model-factory",
+      "mirrorPath": "electron/domains/ai/orchestration/langchain-model-factory.ts",
+      "serverPath": "src/core/provider/model-factory.ts",
+      "baselineDiff": true,
+      "baselineLines": 24,
+      "note": "模型构造收口；server 版并入 provider-runtime 的 ProviderRuntimeInfo/parseExtraHeaders——controller 清单第 2 项，mirror 侧实际文件在 orchestration/（provider/ 仓内同名工厂不存在）"
+    },
+    {
+      "id": "chat-context-usage",
+      "mirrorPath": "electron/domains/ai/chat/context-usage.ts",
+      "serverPath": "src/core/context-usage.ts",
+      "baselineDiff": true,
+      "baselineLines": 12,
+      "note": "上下文用量拆解；server 版类型收敛 ToolDefinitionLike/SkillSummary（RC-T5 裁定双保留入巡检）"
+    },
+    {
+      "id": "chat-expert-catalog",
+      "mirrorPath": "electron/domains/ai/chat/expert-catalog.ts",
+      "serverPath": "src/core/expert-catalog.ts",
+      "baselineDiff": true,
+      "baselineLines": 15,
+      "note": "专家目录"
+    },
+    {
+      "id": "chat-blocks",
+      "mirrorPath": "src-react/domains/ai/chat/model/blocks.ts",
+      "serverPath": "../../packages/tianshu-core/src/blocks.ts",
+      "baselineDiff": true,
+      "baselineLines": 84,
+      "tolerance": 0,
+      "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。"
+    },
+    {
+      "id": "security-events-shape",
+      "mirrorPath": "src-react/domains/security/model/types.ts",
+      "serverPath": "src/core/tools/security-events.ts",
+      "baselineDiff": true,
+      "baselineLines": 69,
+      "note": "SecurityEvent/SecurityEventSink 载荷形状——server 仅收敛事件形状（安全中心未移植），mirror 侧为渲染层完整类型文件"
+    },
+    {
+      "id": "prisma-schema",
+      "mirrorPath": "prisma/schema.prisma",
+      "serverPath": "prisma/schema.prisma",
+      "baselineDiff": true,
+      "baselineLines": null,
+      "skip": true,
+      "note": "业务表段落级双份：语义等价但格式/关联（relation/索引/枚举挂载）不同，文本比对只会产噪声——仅登记存在性，不入比对"
+    },
+    {
+      "id": "graph-executor",
+      "mirrorPath": "electron/domains/ai/orchestration/graph-executor.ts",
+      "serverPath": "src/core/graph/graph-executor.ts",
+      "baselineDiff": true,
+      "baselineLines": 219,
+      "note": "图执行器（GA-T4 副本，executor 4095→4314 行）：授权面 7 条+环境适配——prisma→运行时句柄、Electron 副作用→钩子、事件出口 graph.run.updated、automation-runner 断环摘取段尾部追加；逐 hunk 改造点登记见 server 文件头注释——基线必然大。PL-3 裁定（PL-T2 concern ①）：断环摘取段 collectTools 无工作空间白名单加入 library_search（mirror 无该工具，server 独有偏离，头注释改造点 9）。随行支撑件 executor-runtime.ts（GraphRunStore 类型+进程级 install/accessor）为 server 新建、无 mirror 单文件对应（类型散在 mirror graph.repo/graph-executor），不入比对。2026-10-28 去会话化同批双改（Task 3+6）：旧 session/message 双份段（createGraphSession/writeNodeMessages/writeNodeFailure）拆除、节点详情落 graphRunNode——基线 231→219（旧段 server 侧 this.prisma 前缀行本就多差 12 行，拆除后回落）；残余 2 行 = prisma→runtime 句柄（db.graphRunNode.create）授权差异"
+    },
+    {
+      "id": "graph-inflight",
+      "mirrorPath": "electron/domains/ai/orchestration/graph-inflight.ts",
+      "serverPath": "src/core/graph/graph-inflight.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "图试运行在途互斥注册表（GA-T4，头注释外零差异）"
+    },
+    {
+      "id": "graph-db-client",
+      "mirrorPath": "electron/domains/ai/orchestration/db-client.ts",
+      "serverPath": "src/core/graph/db-client.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "多数据库连接客户端（GA-T4，零逻辑改动；九驱动未装走 vendor-decls 懒加载）"
+    },
+    {
+      "id": "graph-vector-store",
+      "mirrorPath": "electron/domains/ai/orchestration/vector-store.ts",
+      "serverPath": "src/core/graph/vector-store.ts",
+      "baselineDiff": true,
+      "baselineLines": 10,
+      "note": "向量存取（GA-T4；仅 prisma→运行时句柄改造点）"
+    },
+    {
+      "id": "graph-acs3-sign",
+      "mirrorPath": "electron/domains/ai/orchestration/acs3-sign.ts",
+      "serverPath": "src/core/graph/acs3-sign.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "http 节点 acs3 鉴权（executor 闭包随行件，Ruling 5；零逻辑改动）"
+    },
+    {
+      "id": "graph-doc-extract",
+      "mirrorPath": "electron/domains/ai/orchestration/doc-extract.ts",
+      "serverPath": "src/core/graph/doc-extract.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "docExtract 节点（executor 闭包随行件，Ruling 5；pdf/mammoth 懒加载未装）"
+    },
+    {
+      "id": "automation-runner",
+      "mirrorPath": "electron/domains/ai/automation/automation-runner.ts",
+      "serverPath": "src/modules/automation/automation-runner.ts",
+      "baselineDiff": true,
+      "baselineLines": 139,
+      "note": "自动化执行器（GA-T5 副本）：授权面 11 条——prisma→graphExecutorRuntime().db、chat.service→server chat-runner、@tianshu/core 引用、四符号（advanceTask 等）单向引自 executor 副本尾段（Ruling 8 勿复制成双份）"
+    },
+    {
+      "id": "automation-scheduler",
+      "mirrorPath": "electron/domains/ai/automation/automation-scheduler.ts",
+      "serverPath": "src/modules/automation/automation-scheduler.ts",
+      "baselineDiff": true,
+      "baselineLines": 125,
+      "note": "调度器（GA-T5 副本）：BrowserWindow 推送→publishAutomationChanged 钩子、NestJS 生命周期、tickMs 可配（config tianshu.automation.tickMs）；决策树/重试扫描逐行保持；2026-10-22 基线 +8：server 独有 automationStat 90 天裁剪段（onApplicationBootstrap fire-and-forget，controller 裁定有意分叉；mirror 对应物在 commons ensureEventStatMaintenance 启动链，不属 scheduler）"
+    },
+    {
+      "id": "automation-inflight",
+      "mirrorPath": "electron/domains/ai/automation/automation-inflight.ts",
+      "serverPath": "src/modules/automation/automation-inflight.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "任务在途互斥注册表（GA-T5，零逻辑改动）"
+    },
+    {
+      "id": "automation-stat",
+      "mirrorPath": "electron/domains/ai/automation/automation-stat.ts",
+      "serverPath": "src/modules/automation/automation-stat.ts",
+      "baselineDiff": true,
+      "baselineLines": 3,
+      "note": "任务事件埋点（GA-T5；仅 Log→Nest Logger）"
+    },
+    {
+      "id": "automation-inline-tokens",
+      "mirrorPath": "src-react/domains/ai/chat/lib/inline-tokens.ts",
+      "serverPath": "src/modules/automation/inline-tokens.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "行内 token 解析（resolveAttachments 依赖闭包随行件，Ruling 9；纯函数零依赖，期望 diff 趋零）"
+    },
+    {
+      "id": "automation-resolve-attachments",
+      "mirrorPath": "electron/domains/ai/automation/resolve-attachments.ts",
+      "serverPath": "src/modules/automation/resolve-attachments.ts",
+      "baselineDiff": true,
+      "baselineLines": 62,
+      "note": "prompt 引用解析（@文件/⚡技能，runner 闭包随行件 Ruling 9）；server 侧 workspace-files.readWorkspaceFile/resolveFilePath 以最小面内联（判定序同款、图片分支不生成 base64）、appDataHome→resolveDataRoot"
+    },
+    {
+      "id": "graph-repository",
+      "mirrorPath": "electron/domains/ai/orchestration/graph.repo.ts",
+      "serverPath": "src/modules/graph/graph.repository.ts",
+      "baselineDiff": true,
+      "baselineLines": 628,
+      "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）"
+    },
+    {
+      "id": "automation-repository",
+      "mirrorPath": "electron/domains/ai/automation/automation.repo.ts",
+      "serverPath": "src/modules/automation/automation.repository.ts",
+      "baselineDiff": true,
+      "baselineLines": 427,
+      "note": "任务仓储（GA-T3 摘取+GA-T5 runNow 接线：deps 钩子替换 IPC/广播）。含 GA-T3 移交（T9 入册）的内联契约类型对：server 本文件内联 TaskCreateParams/TaskRecord/RunRecord 等逐字段自 mirror src-react/domains/ai/automation/api/automation.api.ts（同文件多对不重复登记，合并于此条）。2026-10-28 去会话化批（Task 5+6）：deleteTasks 级联删 graphRunNode 双端同构；基线 388→427 增量 = 级联新行 server 侧 this.prisma 前缀与 mirror 裸 prisma 不成对（既有授权分叉形态在新代码段的再现）"
+    },
+    {
+      "id": "webhook-service",
+      "mirrorPath": "electron/domains/ai/orchestration/webhook-server.ts",
+      "serverPath": "src/modules/webhook/webhook.service.ts",
+      "baselineDiff": true,
+      "baselineLines": 513,
+      "note": "入站 webhook（GA-T7）：语义重写非逐字——mirror 本地 http server（127.0.0.1:27400）收敛为 Nest 控制器+应用生命周期，22 条语义对照见 GA-T7 报告——基线必然大"
+    },
+    {
+      "id": "personalization-repo-read",
+      "mirrorPath": "electron/domains/ai/personalization/personalization.repo.ts",
+      "serverPath": "src/core/personalization.ts",
+      "baselineDiff": true,
+      "baselineLines": 106,
+      "note": "个性化读段（PL-1，一多对拆两条之一·读段）：loadPersonalization 现查不缓存/异常回退全默认语义逐字——mirror getAppOptionMap+Log.warn vs server db.findMany+Nest Logger 适配；server 文件另含解析段（同 serverPath 与 config 对共比整文件，读段本条基线必然大）"
+    },
+    {
+      "id": "personalization-config-parse",
+      "mirrorPath": "electron/domains/ai/personalization/personalization.config.ts",
+      "serverPath": "src/core/personalization.ts",
+      "baselineDiff": true,
+      "baselineLines": 40,
+      "note": "fromAppOptions 解析段（PL-1，一多对拆两条之二·解析段）：option 行→配置逐字段同构（RESPONSE_STYLES/parseStyle/textValue/fromAppOptions；KEYS/LIMITS/default 经 @tianshu/core 双仓单份）——server 将 mirror import 的 parseBoolOption 内联为本地同语义函数（解析段自包含）"
+    },
+    {
+      "id": "library-repository-search",
+      "mirrorPath": "electron/domains/ai/library/library.repo.ts",
+      "serverPath": "src/core/library/library.repository.ts",
+      "baselineDiff": true,
+      "baselineLines": 672,
+      "note": "资料库仓储（PL-2）：仅检索段同构（search keyword trim 截 100 contains 仅 file / getById↔mustGet 同报不泄露存在性）——mirror 写面（addFiles/importFolder/rename/move/delete 等磁盘双写）与 location 面包屑投影不在本文件（graph 检索消费面零改动，library 批不回归）；写面 golden 移植见 library-disk-repository 对。文件名 library.repository.ts 沿 server *.repository.ts 先例（graph/automation repository 同形）"
+    },
+    {
+      "id": "automation-retention",
+      "mirrorPath": "electron/domains/ai/automation/automation-retention.ts",
+      "serverPath": "src/modules/automation/automation-retention.ts",
+      "baselineDiff": true,
+      "baselineLines": 5,
+      "note": "执行历史保留裁剪（2026 方案 A：双限分级+graphTrace 先行降级）：照 automation-stat 形态逐行同构——仅引号风格/trailingComma/Log→Nest Logger/头注释差异，期望 diff 趋零；条数窗 SQL 双端 better-sqlite3 同引擎窗口函数。2026-10-28 去会话化批（Task 5+6）：run 删除级联删节点行（按天 findMany+deleteMany 两档、条数窗 trimKeepNodesSql 同窗子查询）双端同构，diff 持平 5"
+    },
+    {
+      "id": "security-command-risk",
+      "mirrorPath": "electron/domains/security/command-risk.ts",
+      "serverPath": "src/core/security/command-risk.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "危险命令分级表（权限放宽 2026-10-24）；双份逐字节一致（表内无字符串字面量，仅正则+注释）——期望 diff 恒零，任何漂移即正则表不同步，属安全问题须立即修复"
+    },
+    {
+      "id": "library-utils",
+      "mirrorPath": "electron/domains/ai/library/library.utils.ts",
+      "serverPath": "src/core/library/library.utils.ts",
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "资料库纯函数 golden 逐行移植（library 批 spec 2026-10-26 §1.2）——清洗/重名序号/子树收集/面包屑/分类/mime/基准序/storageDirOf 全量对齐；server 单引号风格差异归一化后应近零差异，漂移即警"
+    },
+    {
+      "id": "library-disk-repository",
+      "mirrorPath": "electron/domains/ai/library/library.repo.ts",
+      "serverPath": "src/core/library/library-disk.repository.ts",
+      "baselineDiff": true,
+      "baselineLines": 151,
+      "note": "资料库磁盘管理仓储（library 批）：mirror library.repo.ts 业务逻辑逐行对齐（addFiles 复制入库/递归导入跳隐藏软链/move/delete 级联/subtreeCount/rename/move 撞名磁盘双写+断裂补偿）；有意分叉留档头注释——无 IPC handler 注册、openLink/revealItem（shell 专属）不移植、Log.warn→可注入 onWarn、libraryRoot 构造注入、AddFilesResult 内联本文件；检索面摘取在 library-repository-search 对"
+    }
+  ]
+}

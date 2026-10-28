@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  relationMode = "prisma" //不使用外键
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  phone         String?
+  userType      UserType  @map("user_type")
+  isActive      Boolean   @default(true) @map("is_active")
+  note          String?
+  email         String?
+  lastLoginTime DateTime? @map("last_login_time")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  creatorId     String    @map("creator_id")
+  creatorName   String    @map("creator_name")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  updatorId     String    @map("updator_id")
+  updatorName   String    @map("updator_name")
+
+  @@index([username])
+  @@index([userType])
+  @@index([isActive])
+  @@index([phone])
+  @@index([lastLoginTime(sort: Desc)])
+  @@map("user")
+}
+
+model OperationLog {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  operation     String
+  details       Json?
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  executionTime Int?     @map("execution_time")
+  status        String   @default("SUCCESS")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([operation])
+  @@index([status])
+  @@index([ipAddress])
+  @@map("operation_log")
+}
+
+model option {
+  id    Int    @id @default(autoincrement())
+  type  String
+  name  String
+  value String
+  note  String?
+
+  @@unique([type, name], map: "idx_option_type_name")
+  @@index([type], map: "option_type_index")
+}
+
+enum UserType {
+  admin
+  user
+}

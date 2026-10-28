@@ -1,0 +1,19 @@
+{
+  "title": "Workspaces",
+  "back": "Back",
+  "newWorkspace": "New Workspace",
+  "name": "Name",
+  "icon": "Icon (optional)",
+  "iconPlaceholder": "Enter an emoji, e.g. 🚀",
+  "rename": "Rename",
+  "delete": "Delete",
+  "deleteConfirm": "Deleting \"{{name}}\" also deletes all of its sessions and messages. This cannot be undone. Delete anyway?",
+  "boundOnDesktop": "Bound on desktop",
+  "unbound": "No directory bound",
+  "defaultModelTag": "Default model",
+  "empty": "No workspaces yet",
+  "unsupported": "This host does not support workspace management",
+  "loadFailed": "Failed to load workspaces",
+  "retry": "Retry",
+  "writeFailed": "Operation failed, please retry"
+}

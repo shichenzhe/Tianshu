@@ -1,0 +1,9 @@
+{
+  "approvalTitle": "Approval request",
+  "graphDoneTitle": "Graph run finished",
+  "state": {
+    "succeeded": "Succeeded",
+    "failed": "Failed",
+    "aborted": "Aborted"
+  }
+}

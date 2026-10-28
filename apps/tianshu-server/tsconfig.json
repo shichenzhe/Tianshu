@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "target": "ES2023",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    // langgraph 子路径经 package exports 暴露（无物理 prebuilt/ 目录），
+    // module commonjs（node10 解析）读不到——paths 显式指到 dist 类型；
+    // esModuleInterop 供 node:path 等 CJS 默认导入（mirror 同款写法移植）。
+    // monorepo workspace hoist：@langchain/* 提升至根 node_modules 单副本
+    // （与 mirror 共享——原「两份 @langchain/core 类型分叉」由根 install
+    // 消除），锚点由本仓 ./node_modules 改指 ../../node_modules
+    "esModuleInterop": true,
+    "paths": {
+      "@langchain/langgraph/prebuilt": [
+        "../../node_modules/@langchain/langgraph/dist/prebuilt/index.d.ts"
+      ],
+      "@langchain/core/*": ["../../node_modules/@langchain/core/dist/*"],
+      // SK-2：SDK 生成类型编译锚——优先解析 sdk:generate 产物；产物缺失
+      // （fresh clone 未生成）回退 test 桩 d.ts 保 sdk-contract.spec 编译
+      // （运行时该 spec 因产物缺失 SKIP，桩不会静默放行断言——见桩头注释）
+      "#sdk/api-types": [
+        "./sdk/api-types.d.ts",
+        "./test/support/sdk-types-fallback.d.ts"
+      ]
+    },
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false
+  }
+}

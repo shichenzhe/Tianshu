@@ -1,0 +1,369 @@
+{
+  "title": "设置",
+  "nav": {
+    "general": "通用",
+    "services": "对外服务",
+    "profile": "个性化",
+    "memory": "记忆与进化",
+    "appearance": "外观",
+    "shortcuts": "快捷键",
+    "security": "安全中心"
+  },
+  "groups": {
+    "general": "常规",
+    "permission": "权限",
+    "storage": "存储",
+    "notification": "通知",
+    "webhook": "Webhook 入站",
+    "localFace": "本机被控面"
+  },
+  "general": {
+    "language": "界面语言",
+    "zhCN": "简体中文",
+    "enUS": "English",
+    "fontSize": "字体大小",
+    "fontSmall": "小",
+    "fontDefault": "默认",
+    "fontLarge": "大",
+    "webhookPort": "Webhook 端口",
+    "webhookPortSave": "保存",
+    "webhookPortHint": "所有工作流的入站 webhook 共用此端口；修改后立即生效，已开启 webhook 的 URL 端口会变化，外部调用方需更新",
+    "webhookPortInvalid": "端口须为 1-65535 的整数",
+    "webhookPortSaved": "Webhook 端口已更新",
+    "webhookPortFailed": "端口设置失败：{{message}}"
+  },
+  "appearance": {
+    "title": "外观",
+    "preview": "主题预览",
+    "allSkins": "全部皮肤",
+    "basicType": "基础主题",
+    "premiumType": "精选皮肤",
+    "selected": "当前主题",
+    "colorTheme": "颜色主题"
+  },
+  "permission": {
+    "keepAwake": "锁屏运行",
+    "keepAwakeDesc": "锁屏后设备保持唤醒状态，保障远程控制与后台 Agent 任务持续执行",
+    "autoLaunch": "开机自启",
+    "autoLaunchDesc": "开启后 Tianshu 会在你登录电脑后自动启动",
+    "autoInstallTrustedSkills": "自动安装可信技能",
+    "autoInstallTrustedSkillsDesc": "安全检测通过后自动安装，高风险项始终要求手动确认",
+    "autoUpdateSkills": "技能自动更新",
+    "autoUpdateSkillsDesc": "开启后将自动更新已安装的技能为最新版本，不会更新你在 Tianshu 中编辑过的技能",
+    "proxy": "网络代理",
+    "proxyDirect": "直连",
+    "proxySystem": "跟随系统",
+    "proxyCustom": "自定义代理",
+    "proxyHost": "服务器地址",
+    "proxyPort": "端口"
+  },
+  "storage": {
+    "cacheDirectory": "数据目录",
+    "cacheDirectoryDesc": "存放数据库、技能、资料库、日志等应用数据",
+    "openDirectory": "打开目录",
+    "diskCaption": "已用 {{used}} / 共 {{total}}",
+    "cacheLegend": "应用数据",
+    "otherLegend": "其他占用",
+    "freeLegend": "可用空间",
+    "workspacePath": "默认工作空间路径",
+    "workspacePathDesc": "新建任务、工作空间时将自动存放在该路径下；修改后不影响已有数据",
+    "workspaceNotSet": "未设置",
+    "change": "更改",
+    "changeDataRoot": "修改",
+    "restoreDefaultDataRoot": "恢复默认",
+    "dataRootRestartPending": "数据目录已修改，重启应用后生效；首次启动会将数据复制到新位置，原目录保留作备份",
+    "relaunchNow": "立即重启",
+    "relaunchFailed": "重启失败，请手动重启应用",
+    "dataRootSetFailed": "数据目录修改失败",
+    "dataRootNested": "新目录不能位于当前数据目录之内",
+    "dataRootNotAbsolute": "数据目录必须为绝对路径"
+  },
+  "executionHistory": {
+    "title": "执行历史保留",
+    "desc": "定时任务与工作流运行记录自动清理，轨迹数据先于记录清理，防止无限增长",
+    "enabledLabel": "自动清理执行历史",
+    "successDaysLabel": "成功记录保留天数",
+    "failureDaysLabel": "失败记录保留天数",
+    "saved": "执行历史保留设置已保存"
+  },
+  "backupTitle": "数据备份",
+  "backupDesc": "将本机数据库与技能、资料库等资产打包上传至所选主机，用于换机或灾难恢复",
+  "backupTargetHost": "备份目标主机",
+  "backupNow": "立即备份",
+  "backupNote": "备注（可选）",
+  "backupProgress": "进度",
+  "backupPhasePacking": "打包中",
+  "backupPhaseUploading": "上传中",
+  "backupPhaseDownloading": "下载中",
+  "backupPhaseRestoring": "恢复中",
+  "backupListEmpty": "暂无备份",
+  "backupRestore": "恢复",
+  "backupRestoreConfirmTitle": "恢复此备份？",
+  "backupRestoreConfirmBody": "恢复前将自动保留当前数据的保护副本（数据目录 backups-local/），恢复完成后需重启应用生效。",
+  "backupDelete": "删除",
+  "backupDeleteConfirm": "确定要删除这份备份吗？删除后无法恢复。",
+  "backupOnlyDirect": "备份仅支持直连连接，请先在主机页添加或启用直连连接",
+  "backupRelaunching": "恢复完成，重启应用后生效",
+  "backupCreatedToast": "备份已完成",
+  "backupClaimTitle": "邀请码申领",
+  "backupClaimDesc": "用管理员发放的一次性邀请码为本连接申领备份身份，成功后自动填入备份 token",
+  "backupClaimInviteCodeLabel": "邀请码",
+  "backupClaimInviteCodePlaceholder": "TS-XXXXXXXX",
+  "backupClaimDeviceNameLabel": "设备名",
+  "backupClaimDeviceNamePlaceholder": "如 new-imac",
+  "backupClaimAction": "申领",
+  "backupClaimSuccess": "申领成功，已自动填入备份 token",
+  "backupClaimStaleHint": "当前备份身份可能已失效，重新申领将自动覆盖",
+  "backupOwnerAdmin": "管理员",
+  "backupAdminTitle": "备份管理",
+  "backupAdminDesc": "生成邀请码供其他设备申领备份身份，并可管理已申领设备",
+  "backupInvitesTitle": "邀请码",
+  "backupInviteCountLabel": "生成数量",
+  "backupInviteNoteLabel": "备注",
+  "backupInviteNotePlaceholder": "备注（可选）",
+  "backupInviteGenerate": "生成",
+  "backupInviteGeneratedToast": "已生成 {{count}} 个邀请码",
+  "backupInviteEmpty": "暂无邀请码",
+  "backupInviteUnused": "未使用",
+  "backupInviteUsedBy": "已被 {{device}} 使用",
+  "backupInviteCopy": "复制",
+  "backupInviteCopied": "邀请码已复制",
+  "backupInviteCopyFailed": "复制失败",
+  "backupInviteRevoke": "撤销",
+  "backupClientsTitle": "已申领设备",
+  "backupClientEmpty": "暂无已申领设备",
+  "backupClientKick": "踢除",
+  "notification": {
+    "desktop": "桌面通知",
+    "desktopDesc": "任务完成或有新消息时，通过系统弹窗提醒你",
+    "granted": "已授权",
+    "notGranted": "未授权",
+    "authorize": "去授权",
+    "testNotification": "测试通知",
+    "testBody": "桌面通知已开启，任务完成或有新消息时会在这里提醒你",
+    "testSent": "测试通知已发送，若未显示请检查系统设置中的通知权限",
+    "client": "客户端通知",
+    "clientDesc": "运营消息优先在应用内显示，应用切换到后台以后自动转桌面通知",
+    "sound": "提示音",
+    "soundNone": "无音效",
+    "soundDefault": "默认提示音"
+  },
+  "error": {
+    "saveFailed": "保存失败，请重试",
+    "loadFailed": "读取设置失败",
+    "openFailed": "打开目录失败",
+    "openExternalFailed": "打开系统设置失败",
+    "testNotificationFailed": "发送测试通知失败，请重试"
+  },
+  "personalization": {
+    "charCount": "{{count}} / {{max}}",
+    "savedToast": "保存成功",
+    "groups": {
+      "basic": "基础交互",
+      "instructions": "自定义指令",
+      "identity": "称呼与身份",
+      "advanced": "高级人设与记忆"
+    },
+    "style": {
+      "label": "回复风格",
+      "options": {
+        "default": {
+          "label": "默认",
+          "desc": "不设定特定风格"
+        },
+        "professional": {
+          "label": "专业严谨",
+          "desc": "清晰、准确、值得信赖"
+        },
+        "friendly": {
+          "label": "亲和友善",
+          "desc": "温暖、平易近人、鼓励支持"
+        },
+        "direct": {
+          "label": "直言不讳",
+          "desc": "简明扼要、直击要点"
+        },
+        "imaginative": {
+          "label": "天马行空",
+          "desc": "富有想象力、善用比喻类比"
+        },
+        "pragmatic": {
+          "label": "高效务实",
+          "desc": "最少文字、最大信息量"
+        },
+        "snarky": {
+          "label": "毒舌吐槽",
+          "desc": "犀利吐槽、但绝不伤人"
+        },
+        "socratic": {
+          "label": "启发引导",
+          "desc": "用提问引导思考、授人以渔"
+        }
+      }
+    },
+    "welcomeLoading": {
+      "label": "加载欢迎语",
+      "desc": "AI 响应较久时轮换显示随机问候语，缓解等待焦虑"
+    },
+    "fileChangeDetails": {
+      "label": "展示文件变更过程详情",
+      "desc": "AI 执行文件操作时实时展开操作步骤；历史消息不受影响"
+    },
+    "customInstructions": {
+      "label": "自定义指令",
+      "desc": "全局生效的补充规则，自动拼接在每次对话中",
+      "placeholder": "如：回答先给结论再展开；始终使用 Python 代码示例"
+    },
+    "userNickname": {
+      "label": "Tianshu 对你的称呼",
+      "desc": "AI 在对话中以此称呼你",
+      "placeholder": "留空则使用默认称呼"
+    },
+    "aiName": {
+      "label": "Tianshu 的名字",
+      "desc": "AI 在对话中的自称，默认「天枢」",
+      "placeholder": "天枢"
+    },
+    "persona": {
+      "label": "人设 / 人格描述",
+      "desc": "AI 的底层 System Prompt，定义其世界观与行为准则",
+      "empty": "未设置，点击编辑启用"
+    },
+    "memory": {
+      "label": "长期记忆",
+      "desc": "希望 AI 永远记住的信息，每轮对话自动携带",
+      "empty": "暂无内容，点击编辑添加"
+    },
+    "edit": "编辑",
+    "editor": {
+      "save": "保存",
+      "cancel": "取消",
+      "unsavedTitle": "放弃未保存的修改？",
+      "unsavedBody": "关闭后本次修改将丢失。",
+      "discard": "丢弃修改",
+      "keepEditing": "继续编辑"
+    }
+  },
+  "shortcut": {
+    "searchPlaceholder": "搜索快捷键",
+    "resetAll": "全部恢复默认",
+    "resetTitle": "恢复默认快捷键",
+    "resetMessage": "确定要恢复所有快捷键为默认设置吗？",
+    "columnCommand": "命令",
+    "columnBinding": "按键绑定",
+    "columnAction": "操作",
+    "unbound": "未绑定",
+    "listening": "请按下新的快捷键组合",
+    "setBinding": "设置",
+    "editHint": "修改「{{name}}」的快捷键",
+    "noResults": "暂无搜索结果",
+    "invalidBinding": "无效的快捷键组合，请配合修饰键（⌘/Ctrl、⌥/Alt）使用，或使用 Enter/Esc 等按键",
+    "conflictTitle": "快捷键冲突",
+    "conflictMessage": "该组合已被「{{name}}」占用，是否替换？",
+    "conflictFixed": "该组合已被系统固定快捷键「{{name}}」占用，无法替换",
+    "replace": "替换",
+    "deleteTitle": "删除快捷键",
+    "deleteMessage": "确定要删除此快捷键绑定吗？",
+    "systemWarning": "该组合为系统级快捷键，绑定后可能被系统行为拦截",
+    "commands": {
+      "openSettings": "打开设置",
+      "sessionSearch": "搜索会话",
+      "sendMessage": "发送消息",
+      "newlineInInput": "输入框换行",
+      "newConversation": "新建对话",
+      "stopGeneration": "停止生成",
+      "previousTask": "上一个任务",
+      "nextTask": "下一个任务",
+      "toggleSidebar": "切换侧边栏",
+      "toggleArtifacts": "切换产物面板",
+      "toggleFullscreen": "切换全屏",
+      "showHideWindow": "显示/隐藏主窗口",
+      "zoomIn": "放大界面",
+      "zoomOut": "缩小界面",
+      "zoomReset": "重置缩放",
+      "atMention": "@ 提及",
+      "slashCommand": "/ 命令"
+    }
+  },
+  "memory": {
+    "title": "记忆与进化",
+    "description": "开启后，Tianshu 会从对话中提取上下文信息，生成关于您的个性化记忆，以便提供更贴合您需求的回应。详见隐私政策。",
+    "toggle": {
+      "label": "生成对话记忆",
+      "desc": "允许 Tianshu 从对话中提取上下文，生成个性化记忆，提供更精准的回应。"
+    },
+    "model": {
+      "label": "记忆整理模型",
+      "desc": "指定自动整理记忆所用的模型，留空则按默认模型/启用模型自动选择。",
+      "auto": "自动（默认模型优先）"
+    },
+    "manage": {
+      "title": "管理记忆",
+      "subtitle": "记忆每晚自动整理更新"
+    },
+    "actions": {
+      "reset": "重置",
+      "compileNow": "立即整理",
+      "edit": "编辑",
+      "import": "导入"
+    },
+    "sections": {
+      "work": "工作背景",
+      "personal": "个人背景",
+      "current": "当前关注",
+      "recent": "近期动态"
+    },
+    "edit": {
+      "done": "完成",
+      "instructionPlaceholder": "输入指令调整记忆，如：记住我在厦门 / 删掉天气相关记忆",
+      "applying": "应用中…",
+      "send": "发送指令"
+    },
+    "status": {
+      "lastCompiledAt": "上次整理：{{time}}",
+      "neverCompiled": "待首次整理",
+      "errorPrefix": "上次整理失败："
+    },
+    "resetDialog": {
+      "title": "重置记忆",
+      "warning1": "此操作将清空全部记忆且不可恢复。",
+      "warning2": "若「生成对话记忆」功能已开启，后续仍会生成新记忆。",
+      "warning3": "如需彻底停用，请关闭记忆功能。",
+      "confirm": "重置记忆"
+    },
+    "importDialog": {
+      "title": "导入其他记忆",
+      "step1": {
+        "title": "复制以下提示词到其他 AI 对话中",
+        "copy": "复制",
+        "copied": "已复制"
+      },
+      "step2": {
+        "title": "将结果粘贴到下方，添加到 Tianshu 记忆",
+        "placeholder": "在此粘贴你的记忆"
+      },
+      "confirm": "导入"
+    },
+    "empty": {
+      "title": "开启对话记忆后，AI 将自动为您整理使用偏好与背景信息",
+      "pending": "记忆将在每晚自动整理时生成",
+      "enable": "去开启"
+    },
+    "disabledNotice": "已关闭对话记忆生成，记忆内容将不再自动更新",
+    "toast": {
+      "reset": "记忆已重置",
+      "compiled": "记忆已更新",
+      "imported": "记忆导入成功",
+      "importFallback": "未能识别分类标记，全部内容已存入工作背景",
+      "instructionFailed": "记忆指令应用失败",
+      "copyFailed": "复制失败，请手动选择复制"
+    },
+    "error": {
+      "MEMORY_DISABLED": "记忆功能已关闭",
+      "MEMORY_MODEL_MISSING": "暂无可用模型，请先在服务商设置中配置",
+      "MEMORY_COMPILE_FAILED": "记忆整理失败，请稍后重试",
+      "MEMORY_NO_MATERIAL": "暂无可整理的对话内容",
+      "MEMORY_BUSY": "记忆整理进行中，请稍后再试"
+    }
+  }
+}

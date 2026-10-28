@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  relationMode = "prisma" //不使用外键
+  url      = "file:./local.db"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  username      String    @unique
+  passwordHash  String    @map("password_hash")
+  name          String
+  phone         String?
+  userType      UserType  @map("user_type")
+  isActive      Boolean   @default(true) @map("is_active")
+  note          String?
+  email         String?
+  lastLoginTime DateTime? @map("last_login_time")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  creatorId     String    @map("creator_id")
+  creatorName   String    @map("creator_name")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  updatorId     String    @map("updator_id")
+  updatorName   String    @map("updator_name")
+
+  @@index([username])
+  @@index([userType])
+  @@index([isActive])
+  @@index([phone])
+  @@index([lastLoginTime(sort: Desc)])
+  @@map("user")
+}
+
+model OperationLog {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  operation     String
+  details       Json?
+  ipAddress     String?  @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  executionTime Int?     @map("execution_time")
+  status        String   @default("SUCCESS")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([operation])
+  @@index([status])
+  @@index([ipAddress])
+  @@map("operation_log")
+}
+
+model option {
+  id    Int    @id @default(autoincrement())
+  type  String
+  name  String
+  value String
+  note  String?
+
+  @@unique([type, name], map: "idx_option_type_name")
+  @@index([type], map: "option_type_index")
+}
+
+// ===== 天枢桌面端摘表（自 mirror prisma/schema.prisma 逐字段复制，relationMode=prisma 无外键，
+// userId 等关联列为普通列，关联在 service 层维护；@@map 保留 mirror 原表名便于数据互通/排查）=====
+
+model Provider {
+  id           Int      @id @default(autoincrement())
+  name         String
+  type         String
+  baseUrl      String
+  apiKey       String?
+  extraHeaders String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       Int? // 多用户隔离
+
+  @@index([userId], map: "provider_userId_index")
+  @@map("provider")
+}
+
+model Model {
+  id            Int      @id @default(autoincrement())
+  providerId    Int
+  modelId       String
+  name          String?
+  type          String   @default("llm") // llm | embedding | tts | reranker | asr
+  enabled       Boolean  @default(true)
+  temperature   Float?
+  topP          Float?
+  maxTokens     Int?
+  contextWindow Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([providerId])
+  @@map("model")
+}
+
+model Assistant {
+  id           Int      @id @default(autoincrement())
+  name         String
+  icon         String?
+  systemPrompt String
+  temperature  Float?
+  topP         Float?
+  maxTokens    Int?
+  builtin      Boolean  @default(false)
+  description  String?
+  tags         String?
+  sourceSlug   String?
+  profession   String?
+  quickPrompts String?
+  categoryId   String?
+  skillNames   String?
+  expertType   String? // agent | team；NULL = 默认单专家（agent）
+  members      String? // 专家团成员 JSON（TeamMember[]，expertType=team 时有效）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       Int? // 多用户隔离
+
+  @@index([userId], map: "assistant_userId_index")
+  @@map("assistant")
+}
+
+model Workspace {
+  id              Int       @id @default(autoincrement())
+  name            String
+  icon            String?
+  directoryPath   String?
+  defaultModelId  Int?
+  writeApprovedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  projectId       Int?
+  userId          Int? // 多用户隔离
+
+  @@index([projectId], map: "workspace_projectId_index")
+  @@index([userId], map: "workspace_userId_index")
+  // spec §13 项 5 默认空间竞态收口：同用户同名唯一——getOrCreateDefaultWorkspace
+  // 并发 create 由唯一索引兜底败者（catch P2002 重查取胜者行）
+  @@unique([userId, name], map: "workspace_userId_name_key")
+  @@map("workspace")
+}
+
+// mirror 的 session 表改名（避开 starter 语义）
+model SessionRecord {
+  id              Int       @id @default(autoincrement())
+  workspaceId     Int
+  assistantId     Int?
+  currentModelId  Int?
+  title           String    @default("新会话")
+  mode            String?
+  scenario        String?
+  pinnedAt        DateTime?
+  archivedAt      DateTime?
+  projectId       Int?
+  summary         String?
+  compactedUpToId Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  lastMessageAt   DateTime?
+  userId          Int? // 多用户隔离（冗余列，创建时随工作空间写入）
+  planItemId      Int? // 任务会话关联事项
+  // P1 未读角标批：已读游标（message.id，全角色 max）——NULL=全新未读；
+  // 未读数查询期动态算（cursor 后 role=assistant 条数），单调推进不回退
+  lastReadMessageId Int?
+
+  @@index([projectId], map: "session_projectId_index")
+  @@index([userId], map: "session_userId_index")
+  @@index([workspaceId], map: "session_workspaceId_index")
+  @@map("session")
+}
+
+// mirror 的 message 表改名
+model MessageRecord {
+  id          Int      @id @default(autoincrement())
+  sessionId   Int
+  role        String
+  blocks      String
+  modelId     Int?
+  assistantId Int?
+  error       String?
+  durationMs  Int?
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt], map: "message_createdAt_index")
+  @@map("message")
+}
+
+// T6 移植 plan_* 工具组所需两表（逐字段复制自 mirror prisma/schema.prisma 的
+// project/planItem；@@map 保留原表名便于数据互通/排查）
+model Project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  systemPrompt String?
+  templateKey  String?
+  ownerId      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([ownerId, name], map: "idx_project_owner_name")
+  @@map("project")
+}
+
+model PlanItem {
+  id           Int       @id @default(autoincrement())
+  projectId    Int? // NULL = 本地任务
+  title        String
+  status       String    @default("not_started") // not_started|in_progress|paused|done
+  priority     String    @default("P1") // P0|P1|P2|P3
+  assigneeId   Int? // 预留，单成员恒当前用户
+  tags         String? // JSON string[]
+  customFields String? // JSON Record<fieldName, string|number>
+  startDate    DateTime? // 排期开始
+  dueDate      DateTime? // 截止日期
+  source       String    @default("manual") // manual|ai|template
+  description  String? // Markdown 原文
+  aiSummary    String? // AI 进展摘要（只经工具追加）
+  sortOrder    Int       @default(0)
+  createdById  Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // @@map 对齐 mirror 原表名 planItem（T6 复审 M1：Prisma 无 @@map 时表名=
+  // 模型名原样，mirror 表为 planItem/skillRecord；索引名随模型名自动生成，
+  // 故不再显式 map）
+  @@index([projectId])
+  @@index([assigneeId])
+  @@map("planItem")
+}
+
+// ===== GA-T3 摘表（自 mirror prisma/schema.prisma 逐字段复制：graphDefinition/
+// automationTask/automationRun/automationStat/vectorChunk；@@map 保留 mirror 物理表名，
+// 索引 map 名随 mirror 显式声明、无 map 的自动索引随本仓模型名生成——T6 复审 M1 先例。
+// 改造点：模型名 PascalCase 化+@@map；mirror 注释中「v1 快照/ensureEventStatMaintenance
+// 启动补建」等桌面端迁移机制注释不适用（本仓 db push 直接建表建索引）；userId 等关联列
+// 保持普通 Int 列，伴生语义见 tianshu-config.entity.ts COMPANION_USER_ID）=====
+
+model GraphDefinition {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  graphJson   String
+  version     Int      @default(1)
+  enabled     Boolean  @default(true)
+  userId      Int? // 多用户隔离
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId], map: "graphDefinition_userId_index")
+  @@map("graphDefinition")
+}
+
+model AutomationTask {
+  id           Int       @id @default(autoincrement())
+  name         String
+  prompt       String
+  workspaceId  Int
+  modelId      Int
+  temperature  Float?
+  scheduleJson String
+  scheduleText String
+  startAt      DateTime?
+  endAt        DateTime?
+  missedPolicy String    @default("skip")
+  accessMode   String    @default("default")
+  enabled      Boolean   @default(true)
+  status       String    @default("active")
+  statusNote   String?
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  templateSlug String?
+  targetKind   String    @default("prompt") // prompt | graph
+  graphId      Int?      // targetKind=graph 时必填；引用 graphDefinition.id
+  eventJson    String?   // 事件触发配置，与 scheduleJson 可并存
+  projectId    Int?      // NULL = 全局任务（子系统 E）
+  userId       Int?      // 多用户隔离
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([enabled])
+  @@index([projectId], map: "automation_task_projectId_index")
+  @@index([userId], map: "automation_task_userId_index")
+  @@map("automationTask")
+}
+
+model AutomationRun {
+  id               Int       @id @default(autoincrement())
+  taskId           Int?
+  sessionId        Int?
+  attempt          Int       @default(1)
+  triggerType      String
+  status           String
+  durationMs       Int?
+  promptTokens     Int?
+  completionTokens Int?
+  graphId          Int?   // 图运行（试运行 taskId=null）
+  graphTrace       String? // 节点级轨迹 JSON
+  error            String?
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+
+  @@index([taskId])
+  @@index([graphId], map: "automationRun_graphId_index")
+  @@index([startedAt])
+  @@map("automationRun")
+}
+
+// 图运行节点级执行详情（图执行留痕去会话化 spec 2026-10-28）：Coze 式
+// 运行记录体系——节点完整输入/输出取代原「节点消息对落聊天会话」。
+// 逐字段复制自 mirror prisma/schema.prisma 的 graphRunNode（@@map 保留
+// mirror 物理表名；本仓建表走 db push，GA-T3 摘表先例——server 不透出
+// 节点详情查询面（spec §5），仅供删 run 级联与运行排查）
+model GraphRunNode {
+  id               Int     @id @default(autoincrement())
+  runId            Int
+  nodeId           String
+  nodeName         String?
+  status           String // success | failed
+  input            String? // 渲染后完整输入，截 64KB
+  output           String? // 完整输出，截 64KB
+  errorJson        String? // { code, message, detail }，同 trace error
+  toolCallsJson    String? // 工具调用摘要数组，同 trace
+  promptTokens     Int?
+  completionTokens Int?
+  durationMs       Int
+  startedAt        String // ISO string，与 trace 条目同构
+  outputImage      String? // imageGen 产物相对数据根路径
+  errorOutput      String? // 循环节点死信（onItemError=continue）
+  fallbackJson     String? // 降级继续标记 { code, message }
+
+  @@unique([runId, nodeId])
+  @@index([runId])
+  @@map("graphRunNode")
+}
+
+model AutomationStat {
+  id        Int      @id @default(autoincrement())
+  event     String
+  detail    String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("automationStat")
+}
+
+// 向量块（向量管线 v1）：embedding 分块落库，vector 存 JSON number[]，
+// 检索全量载入内存余弦（桌面单机万级 chunk 够用；sqlite-vec 为后续升级路径）
+model VectorChunk {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  collection String
+  sourceName String
+  seq        Int
+  text       String
+  vector     String
+  model      String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, collection])
+  @@index([userId, model])
+  @@map("vectorChunk")
+}
+
+// T6 移植 create_skill 工具所需表（逐字段复制自 mirror skillRecord）
+model SkillRecord {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String?
+  version     String?
+  source      String
+  dir         String
+  description String?
+  enabled     Boolean  @default(true)
+  scenarios   String?
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // @@map 对齐 mirror 原表名 skillRecord（T6 复审 M1）
+  @@map("skillRecord")
+}
+
+// A3 尾摘表（自 mirror prisma/schema.prisma 逐字段复制：skillStat——技能
+// 埋点事件流，skills/stats 聚合读面数据源；installUpload 写 install 事件，
+// 其余写点（enable/disable 等）未移植，stats 如实聚合已有行）
+model SkillStat {
+  id        Int      @id @default(autoincrement())
+  name      String // 技能名
+  event     String // install | enable | disable | uninstall | batch_enable | batch_disable | batch_uninstall | create
+  createdAt DateTime @default(now())
+
+  @@index([name, createdAt])
+  @@map("skillStat")
+}
+
+// PL-T2 摘表（自 mirror prisma/schema.prisma 逐字段复制：libraryItem；@@map 保留
+// mirror 物理表名，userId 显式 map 索引随 mirror、parentId 自动索引随本仓模型名
+// 生成——GA-T3 先例。userId 关联列为普通列（relationMode=prisma），kind 值域
+// folder|file|link；library 批（2026-10-26）：十七端点管理写面随 LibraryModule
+// 全量落地（磁盘原语 golden 移植 src/core/library/library-disk.repository.ts），
+// 本表由「检索回联」升格为资料库管理面唯一数据源。
+// 既有库补表结论（照 skillStat 先例，skill-installer 批同裁定）：ensureDatabase
+// 库就绪即返回，不自动补表；db-url.ts 头注释铁律「DDL 单一事实源始终是
+// prisma/schema.prisma，不手写建表 SQL」——故本摘表仅覆盖新库；既有库升级 =
+// 手动 prisma db push 或删库重建，留档于此。
+model LibraryItem {
+  id           Int       @id @default(autoincrement())
+  parentId     Int?
+  name         String
+  kind         String // "folder" | "file" | "link"
+  fileType     String?
+  mimeType     String?
+  size         Int?
+  originalPath String?
+  url          String? // 链接条目（kind=link）的目标地址；文件/文件夹恒 null
+  favorite     Boolean   @default(false)
+  lastViewedAt DateTime?
+  userId       Int? // 多用户隔离（新建时随根继承）
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([parentId])
+  @@index([userId], map: "libraryItem_userId_index")
+  @@map("libraryItem")
+}
+
+// 审批记忆批摘表（自 mirror prisma/schema.prisma 逐字段复制：toolPermission；
+// @@map 保留 mirror 物理表名。session/approve remember 写入（记忆先落防竞速），
+// chat-runner isToolAllowed 查表消费——同工具同空间 write 免审；workspaceId
+// 关联列为普通列（relationMode=prisma），本仓无查看/撤销端点（远端记忆管理
+// 留桌面安全中心——无头端暂不透出）
+model ToolPermission {
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
+  toolName    String
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+  @@map("toolPermission")
+}
+
+enum UserType {
+  admin
+  user
+}
+
+// MO 批（2026-10-27）：监控事件两表——逐字段摘自 mirror schema（userId/createdAt
+// 聚合主路径索引 + toolName 排行分组索引）；埋点三处（chat-runner/graph-
+// executor/automation-runner）fire-and-forget 写入
+model llmCallEvent {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  scene       String // chat | graph | automation
+  modelId     Int? // chat/automation 有；graph 场景恒 null（trace 无 modelId）
+  sessionId   Int?
+  graphId     Int? // graph 场景
+  inputTokens Int
+  outputTokens Int
+  durationMs  Int?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model toolCallEvent {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  scene      String // chat | graph | automation
+  toolName   String
+  state      String // done | denied | error
+  durationMs Int?
+  sessionId  Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, toolName])
+}

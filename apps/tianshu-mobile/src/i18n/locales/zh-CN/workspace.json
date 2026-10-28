@@ -1,0 +1,19 @@
+{
+  "title": "工作空间",
+  "back": "返回",
+  "newWorkspace": "新建工作空间",
+  "name": "名称",
+  "icon": "图标（可选）",
+  "iconPlaceholder": "输入 emoji，如 🚀",
+  "rename": "重命名",
+  "delete": "删除",
+  "deleteConfirm": "删除「{{name}}」将同时删除其中的全部会话与消息，此操作不可恢复。确定删除？",
+  "boundOnDesktop": "桌面端绑定",
+  "unbound": "未绑定目录",
+  "defaultModelTag": "默认模型",
+  "empty": "暂无工作空间",
+  "unsupported": "当前主机不支持工作空间管理",
+  "loadFailed": "工作空间加载失败",
+  "retry": "重试",
+  "writeFailed": "操作失败，请重试"
+}

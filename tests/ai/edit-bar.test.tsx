@@ -1,0 +1,212 @@
+// @vitest-environment jsdom
+/**
+ * EditBar 组件交互测试（jsdom + testing-library）：
+ * - 回填 initialText，挂载即 focus 且光标置于文末
+ * - 内容 trim 为空时「重发」按钮禁用
+ * - Escape 取消；提交/换行读快捷键生效绑定（默认 Enter 提交、
+ *   Shift+Enter 手工插行；IME 组合中的 Enter 不触发）
+ * - 改绑发送键（localStorage 覆盖）：新键提交、裸 Enter 转为插行
+ * - 编辑对象直接切换（A→B 不经过取消）：EditBar 移入另一条消息的
+ *   MessageItem（不同实例）触发重挂载，文本按新 initialText 重建（此处以
+ *   key 变化模拟重挂载）
+ */
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+
+import EditBar from "../../src-react/domains/ai/chat/components/EditBar";
+
+// localStorage stub：本仓库 jsdom 环境无原生 localStorage（快捷键覆盖读取
+// tianshu-keybindings 需要它），与 tests/ai/chat-view-edit-optimistic.test.tsx
+// 同款内存 stub
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  const stub = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => void memory.set(key, value),
+    removeItem: (key: string) => void memory.delete(key),
+    clear: () => memory.clear(),
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: stub,
+    configurable: true,
+    writable: true,
+  });
+});
+
+// i18n mock：useTranslation 的 t 直接返回 key（按钮名即 key），断言行为不
+// 依赖具体文案；@/i18n（经 button → @/lib/utils 引入）以最小 stub 替代真实
+// 初始化——真实 LanguageDetector 读 localStorage，Node 26 无 --localstorage-file
+// 时会向 stderr 打一条 ExperimentalWarning
+vi.mock("@/i18n", () => ({
+  default: { t: (key: string) => key },
+}));
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-i18next")>();
+  return {
+    ...actual,
+    useTranslation: () => ({ t: (key: string) => key }),
+  };
+});
+
+/** 渲染 EditBar 并取回 textarea 与回调 spy */
+function renderEditBar(initialText: string) {
+  const onCancel = vi.fn();
+  const onSubmit = vi.fn();
+  render(
+    <EditBar
+      initialText={initialText}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />,
+  );
+  const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+  return { onCancel, onSubmit, textarea };
+}
+
+// vitest 未开 globals，RTL 自动清理不生效，显式清理
+afterEach(cleanup);
+
+describe("EditBar 回填与聚焦", () => {
+  it("回填 initialText 且挂载即聚焦、光标置于文末", () => {
+    const { textarea } = renderEditBar("原消息文本");
+    expect(textarea.value).toBe("原消息文本");
+    expect(document.activeElement).toBe(textarea);
+    expect(textarea.selectionStart).toBe("原消息文本".length);
+    expect(textarea.selectionEnd).toBe("原消息文本".length);
+  });
+});
+
+describe("EditBar 重发按钮禁用", () => {
+  it("空内容与纯空白内容均禁用，有内容恢复可用", () => {
+    const { textarea } = renderEditBar("");
+    const resend = screen.getByRole("button", {
+      name: "chat:message.resend",
+    }) as HTMLButtonElement;
+    expect(resend.disabled).toBe(true);
+    fireEvent.change(textarea, { target: { value: "   " } });
+    expect(resend.disabled).toBe(true);
+    fireEvent.change(textarea, { target: { value: "改后内容" } });
+    expect(resend.disabled).toBe(false);
+  });
+});
+
+describe("EditBar 键盘交互", () => {
+  it("Escape 触发 onCancel", () => {
+    const { onCancel, textarea } = renderEditBar("hello");
+    fireEvent.keyDown(textarea, { key: "Escape" });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("Enter（默认发送绑定）触发 onSubmit 并携带当前文本（去首尾空白）", () => {
+    const { onSubmit, textarea } = renderEditBar("hello");
+    fireEvent.change(textarea, { target: { value: "  改写后的内容  " } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("改写后的内容");
+  });
+
+  it("Shift+Enter 不触发提交并手工插入换行", () => {
+    const { onSubmit, textarea } = renderEditBar("hello");
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello\n");
+  });
+
+  it("IME 组合中的 Enter 不触发提交也不插行", () => {
+    const { onSubmit, textarea } = renderEditBar("hello");
+    fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello");
+  });
+});
+
+describe("EditBar 快捷键绑定读取（覆盖即时生效）", () => {
+  /** 桩 mac userAgent（⌘=metaKey 口径；组件每次按键时探测） */
+  const stubDarwin = () =>
+    Object.defineProperty(window.navigator, "userAgent", {
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      configurable: true,
+    });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("改绑发送键为 ⌘Enter：⌘Enter 提交，裸 Enter 转为插行", () => {
+    stubDarwin();
+    localStorage.setItem(
+      "tianshu-keybindings",
+      JSON.stringify({ sendMessage: "cmd+Enter", newlineInInput: "Enter" }),
+    );
+    const { onSubmit, textarea } = renderEditBar("hello");
+
+    fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("hello");
+
+    fireEvent.change(textarea, { target: { value: "second" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(textarea.value).toBe("second\n");
+  });
+
+  it("解除发送绑定且换行改绑 Enter：Enter 仅插行不提交", () => {
+    localStorage.setItem(
+      "tianshu-keybindings",
+      JSON.stringify({ sendMessage: "unbound", newlineInInput: "Enter" }),
+    );
+    const { onSubmit, textarea } = renderEditBar("hello");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea.value).toBe("hello\n");
+  });
+});
+
+describe("EditBar 按钮点击", () => {
+  it("取消按钮触发 onCancel", () => {
+    const { onCancel } = renderEditBar("hello");
+    fireEvent.click(screen.getByRole("button", { name: "common:cancel" }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("重发按钮触发 onSubmit 并携带文本", () => {
+    const { onSubmit } = renderEditBar("hello");
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:message.resend" }),
+    );
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith("hello");
+  });
+});
+
+describe("EditBar 编辑对象切换（重挂载）", () => {
+  it("重挂载后文本按新 initialText 重建并重新聚焦文末", () => {
+    const noop = () => {};
+    const { rerender } = render(
+      <EditBar
+        key={101}
+        initialText="消息A文本"
+        onCancel={noop}
+        onSubmit={noop}
+      />,
+    );
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toBe(
+      "消息A文本",
+    );
+    // 模拟切换编辑对象（A→B 不经过取消）：生产中 EditBar 随 MessageItem
+    // 实例更替重挂载（isEditing 移到另一条消息），此处以 key 变化等价模拟，
+    // 断言重挂载后 state 重建（而非保留 A 的旧文本）并重新聚焦文末
+    rerender(
+      <EditBar
+        key={202}
+        initialText="消息B文本"
+        onCancel={noop}
+        onSubmit={noop}
+      />,
+    );
+    const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
+    expect(textarea.value).toBe("消息B文本");
+    expect(document.activeElement).toBe(textarea);
+    expect(textarea.selectionStart).toBe("消息B文本".length);
+  });
+});

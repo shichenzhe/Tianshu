@@ -1,0 +1,321 @@
+/**
+ * 皮肤样式层（外观模块）
+ *
+ * 三部分：
+ * 1. [data-mode="dark"] 深色模式语义变量集——逐项覆盖 globals.css @theme 亮色值；
+ *    primary 系保持 data-theme 的 hue 驱动，暗色下整体提亮（hover/active 方向反转：
+ *    悬停更亮而非更深）
+ * 2. [data-wallpaper="<id>"] 8 款壁纸装饰变量：--skin-bg-image、
+ *    --skin-body-overlay、--skin-sidebar-bg（变量语义详见壁纸分区注释）
+ * 3. 消费点：body（背景色 + 壁纸渐变）与全局侧边栏壳 [data-sidebar-shell]
+ *
+ * 属性由 skin.store.applySkin 写入 documentElement（data-mode / data-theme /
+ * data-wallpaper），与 globals.css 的 [data-theme] 色相体系正交组合。
+ */
+
+/* =====================================================
+   深色模式变量集
+   逐项对应 globals.css @theme 亮色值（HSL 暗色映射）
+   ===================================================== */
+
+[data-mode="dark"] {
+  --color-background: hsl(222 14% 7%);
+  --color-foreground: hsl(210 20% 94%);
+  --color-card: hsl(220 12% 11%);
+  --color-card-foreground: hsl(210 20% 94%);
+  --color-popover: hsl(220 12% 11%);
+  --color-popover-foreground: hsl(210 20% 94%);
+  --color-secondary: hsl(220 12% 17%);
+  --color-secondary-foreground: hsl(210 20% 94%);
+  --color-muted: hsl(220 12% 15%);
+  --color-muted-foreground: hsl(215 10% 62%);
+  --color-accent: hsl(220 12% 17%);
+  --color-accent-foreground: hsl(210 20% 94%);
+  --color-destructive: hsl(0 70% 58%);
+  --color-destructive-foreground: hsl(0 0% 98%);
+  --color-border: hsl(218 12% 22%);
+  --color-input: hsl(218 12% 22%);
+
+  /* Tooltip 反转为浅底深字（暗色下大面积深底浮层缺少层次区分） */
+  --color-tooltip: hsl(220 14% 92%);
+  --color-tooltip-foreground: hsl(220 15% 12%);
+
+  --color-primary-foreground: hsl(0 0% 98%);
+
+  /* 主色系：hue 由 [data-theme] 提供，暗色下提高亮度保对比 */
+  --color-primary: hsl(var(--theme-hue) 60% 62%);
+  --color-primary-hover: hsl(var(--theme-hue) 62% 68%);
+  --color-primary-active: hsl(var(--theme-hue) 62% 74%);
+  --color-primary-subtle: hsl(var(--theme-hue) 30% 18%);
+  --color-ring: hsl(var(--theme-hue) 60% 62%);
+}
+
+/* 主色系加固：globals.css 的 [data-theme="..."] 规则（特异度同为 0,1,0 且源序在
+   skins.css 之后）会字面覆盖主色亮度公式——data-mode 写在 html 上，用 :root 前缀
+   提升特异度，保证暗色亮度（62%/68%/74%）与深色 subtle 底在任意 hue 下生效 */
+:root[data-mode="dark"] {
+  --color-primary: hsl(var(--theme-hue) 60% 62%);
+  --color-primary-hover: hsl(var(--theme-hue) 62% 68%);
+  --color-primary-active: hsl(var(--theme-hue) 62% 74%);
+  --color-primary-subtle: hsl(var(--theme-hue) 30% 18%);
+  --color-ring: hsl(var(--theme-hue) 60% 62%);
+}
+
+/* 绿色 hue 特例：G 通道主导亮度感知偏高，统一 62% 亮度下白字对比仅 1.69，
+   沿用亮色 green 主题的低亮度策略（亮色为 40%），hover/active 同亮色方向变深 */
+:root[data-theme="green"][data-mode="dark"] {
+  --color-primary: hsl(150 55% 47%);
+  --color-primary-hover: hsl(150 55% 43%);
+  --color-primary-active: hsl(150 58% 38%);
+  --color-primary-subtle: hsl(150 30% 15%);
+  --color-ring: hsl(150 55% 47%);
+}
+
+/* 局部作用域孪生规则（非 :root）：皮肤预览卡/缩略卡把三元组写在卡片根元素上，
+   上方 :root 版本不匹配卡片，globals.css 的 [data-theme="..."]（0,1,0、源序在
+   skins.css 之后）会以亮色字面值覆盖暗色主色公式（预览所见即所选会被破坏）。
+   此处 0,2,0 特异度对任意携带 data-mode+data-theme 的元素生效；html 上与
+   :root 版本值完全相同（计算结果 bit 级不变）。与上方 :root 版本值同步维护 */
+[data-mode="dark"][data-theme] {
+  --color-primary: hsl(var(--theme-hue) 60% 62%);
+  --color-primary-hover: hsl(var(--theme-hue) 62% 68%);
+  --color-primary-active: hsl(var(--theme-hue) 62% 74%);
+  --color-primary-subtle: hsl(var(--theme-hue) 30% 18%);
+  --color-ring: hsl(var(--theme-hue) 60% 62%);
+}
+
+/* 绿色 hue 特例（局部作用域孪生）：与 :root[data-theme="green"][data-mode="dark"]
+   同值；源序在后保证 green 暗色卡片仍取低亮度白字安全值。同步维护同上 */
+[data-theme="green"][data-mode="dark"] {
+  --color-primary: hsl(150 55% 47%);
+  --color-primary-hover: hsl(150 55% 43%);
+  --color-primary-active: hsl(150 58% 38%);
+  --color-primary-subtle: hsl(150 30% 15%);
+  --color-ring: hsl(150 55% 47%);
+}
+
+/* =====================================================
+   壁纸装饰层（8 款，ComfyUI 本地自产 AI 生成图——无版权问题可
+   自由商用；来源/风格/规格留档见 assets/skins/SOURCES.md。
+   图片本地打包于 ../assets/skins/，运行时零网络依赖）
+   每组三个变量：
+   - --skin-bg-image        背景大图（仅 body 主面板，cover 铺满）
+   - --skin-body-overlay    body 轻纱叠加层（低不透明度，柔化壁纸；文字对比
+                            主要由主面板底色保障）
+   - --skin-body-overlay-clear 新建任务详情页专用极淡纱（html data-clear-
+                            wallpaper 时 body 切换消费，壁纸近乎全清晰）
+   - --skin-sidebar-bg      侧栏背景（与壁纸主色调相近的实色渐变，
+                            侧栏不显示壁纸——壁纸集中在中间主面板）
+   浅色系叠白、深色系叠黑；图片缺失时 overlay 仍提供完整底色。
+   ===================================================== */
+
+/* 晨雾（light / 淡紫）— 九色鹿动画风：淡紫云雾山峦河谷（AI 生成） */
+[data-wallpaper="dawn-mist"] {
+  --skin-bg-image: url("../assets/skins/dawn-mist.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(260 26% 98% / 0.5) 0%,
+    hsl(257 22% 98% / 0.42) 55%,
+    hsl(252 18% 97% / 0.48) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(260 26% 98% / 0.12) 0%,
+    hsl(257 22% 98% / 0.1) 55%,
+    hsl(252 18% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: hsl(256 22% 95%);
+}
+
+/* 涟漪（light / 青绿）— 宫崎骏风：清澈青绿水纹波光（AI 生成） */
+[data-wallpaper="ripple"] {
+  --skin-bg-image: url("../assets/skins/ripple.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(180 26% 98% / 0.5) 0%,
+    hsl(178 22% 98% / 0.44) 50%,
+    hsl(175 18% 97% / 0.48) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(180 26% 98% / 0.12) 0%,
+    hsl(178 22% 98% / 0.1) 50%,
+    hsl(175 18% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: hsl(178 26% 95%);
+}
+
+/* 原野（light / 草绿）— 宫崎骏风：绿地大树蓝天白云（AI 生成） */
+[data-wallpaper="field"] {
+  --skin-bg-image: url("../assets/skins/field.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(100 25% 98% / 0.5) 0%,
+    hsl(105 20% 98% / 0.42) 55%,
+    hsl(110 18% 97% / 0.48) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(100 25% 98% / 0.12) 0%,
+    hsl(105 20% 98% / 0.1) 55%,
+    hsl(110 18% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: hsl(108 25% 95%);
+}
+
+/* 海空（light / 湛蓝）— 宫崎骏风：碧海天际线远岛灯塔（AI 生成） */
+[data-wallpaper="ocean-sky"] {
+  --skin-bg-image: url("../assets/skins/ocean-sky.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(205 40% 98% / 0.48) 0%,
+    hsl(203 32% 98% / 0.42) 50%,
+    hsl(199 38% 97% / 0.48) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(205 40% 98% / 0.12) 0%,
+    hsl(203 32% 98% / 0.1) 50%,
+    hsl(199 38% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: hsl(203 39% 95%);
+}
+
+/* 暖沙（light / 暖橙）— 宫崎骏风：金色沙丘暖阳（AI 生成） */
+[data-wallpaper="warm-sand"] {
+  --skin-bg-image: url("../assets/skins/warm-sand.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(38 45% 98% / 0.5) 0%,
+    hsl(36 38% 98% / 0.42) 55%,
+    hsl(33 40% 97% / 0.48) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(38 45% 98% / 0.12) 0%,
+    hsl(36 38% 98% / 0.1) 55%,
+    hsl(33 40% 97% / 0.12) 100%
+  );
+  --skin-sidebar-bg: hsl(37 43% 95%);
+}
+
+/* 暮色（dark / 暖橙夜）— 宫崎骏风：群山剪影橙紫暮光（AI 生成） */
+[data-wallpaper="dusk"] {
+  --skin-bg-image: url("../assets/skins/dusk.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(265 14% 7% / 0.55) 0%,
+    hsl(265 14% 7% / 0.62) 45%,
+    hsl(270 15% 8% / 0.7) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(265 14% 7% / 0.14) 0%,
+    hsl(265 14% 7% / 0.16) 45%,
+    hsl(270 15% 8% / 0.18) 100%
+  );
+  --skin-sidebar-bg: hsl(268 14% 8%);
+}
+
+/* 松林（dark / 墨绿）— 宫崎骏风：雾中暗绿松林（AI 生成） */
+[data-wallpaper="pine"] {
+  --skin-bg-image: url("../assets/skins/pine.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(155 18% 7% / 0.55) 0%,
+    hsl(152 16% 7% / 0.62) 45%,
+    hsl(150 18% 8% / 0.7) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(155 18% 7% / 0.14) 0%,
+    hsl(152 16% 7% / 0.16) 45%,
+    hsl(150 18% 8% / 0.18) 100%
+  );
+  --skin-sidebar-bg: hsl(152 16% 8%);
+}
+
+/* 墨韵（dark / 深蓝）— 中国水墨风：靛蓝墨云山水月夜（AI 生成） */
+[data-wallpaper="ink"] {
+  --skin-bg-image: url("../assets/skins/ink.png");
+  --skin-body-overlay: linear-gradient(
+    180deg,
+    hsl(225 20% 8% / 0.55) 0%,
+    hsl(222 16% 7% / 0.6) 50%,
+    hsl(228 18% 9% / 0.68) 100%
+  );
+  --skin-body-overlay-clear: linear-gradient(
+    180deg,
+    hsl(225 20% 8% / 0.14) 0%,
+    hsl(222 16% 7% / 0.15) 50%,
+    hsl(228 18% 9% / 0.17) 100%
+  );
+  --skin-sidebar-bg: hsl(224 18% 9%);
+}
+
+/* =====================================================
+   消费点
+   ===================================================== */
+
+/* body：语义背景色（globals 未设，暗色模式下必须显式落底，亮色下与默认白一致）
+   + 壁纸渐变叠加（无壁纸时回落 none）+ 全局默认字体色（未显式设色的文本
+   随明暗切换，深色下白字——验收反馈：漏网文本黑底黑字看不清） */
+body {
+  background-color: var(--color-background);
+  /* 壁纸模式间切换（新建任务↔其余路由纯色底）底色过渡，免硬切——
+     仅 background-color 可过渡，壁纸图随 data-* 属性瞬切被纱层掩盖 */
+  transition: background-color 0.24s ease;
+  background-image:
+    var(--skin-body-overlay, none),
+    var(--skin-bg-image, none);
+  background-size: cover, cover;
+  background-position: center, center;
+  background-attachment: fixed, fixed;
+  color: var(--color-foreground);
+}
+
+/* 新建任务详情页壁纸清晰模式（html data-clear-wallpaper 由 MainLayout 按路由
+   维护）：body 换极淡纱；主面板不叠底色（透 body），壁纸近乎全清晰；
+   无壁纸皮肤两变量皆回落 none，body 纯色不受影响 */
+[data-clear-wallpaper] body {
+  background-image:
+    var(--skin-body-overlay-clear, none),
+    var(--skin-bg-image, none);
+}
+
+/* 壁纸收窄模式（html data-no-wallpaper 由 MainLayout 按路由维护）：body
+   壁纸图与轻纱全部关闭，换 --skin-panel-bg 纯色底（用户指定淡色，暗色
+   回落语义背景）——壁纸仅新建任务主面板（clear）与登录页（bare）显示，
+   其余模块纯色保文字/控件可读（参照 WorkBuddy）；主面板/顶栏中段不再
+   叠底色（透 body 同色） */
+:root {
+  --skin-panel-bg: #f6f8f5;
+}
+
+[data-mode="dark"] {
+  --skin-panel-bg: var(--color-background);
+}
+
+[data-no-wallpaper] body {
+  background-image: none;
+  background-color: var(--skin-panel-bg);
+}
+
+/* 登录页裸壁纸模式（html data-bare-wallpaper 由 LoginView 挂载维护）：
+   不叠任何遮罩纱，壁纸 100% 可见（页面内容仅一卡片，无需减淡保可读） */
+[data-bare-wallpaper] body {
+  background-image: var(--skin-bg-image, none);
+}
+
+/* shiki 代码块深色高亮切换：shiki 双主题输出 --shiki-dark CSS 变量，
+   此前无消费规则——深色下代码块仍亮色高亮（外观模块验收 A3 跟进票） */
+[data-mode="dark"] .shiki span {
+  color: var(--shiki-dark);
+}
+
+/* 全局侧边栏壳（GlobalSidebar 内层 div，data-sidebar-shell 标记）：
+   主题相近背景色（不显示壁纸，壁纸集中在中间主面板），
+   未设置时回落 none（露出 aside 的 bg-muted/40 底） */
+[data-sidebar-shell] {
+  background: var(--skin-sidebar-bg, none);
+}

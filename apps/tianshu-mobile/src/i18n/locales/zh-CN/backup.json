@@ -1,0 +1,18 @@
+{
+  "title": "备份",
+  "unsupported": "当前连接不支持备份遥控（无 backup 能力，需连接桌面端）",
+  "triggerSection": "立即备份",
+  "triggerHint": "打包桌面端全部数据并上传至其配置的无头端（恢复请在桌面端操作）",
+  "notePlaceholder": "备注（可选）",
+  "trigger": "备份",
+  "phasePacking": "正在打包…",
+  "phaseUploading": "正在上传…",
+  "phaseUploadingPercent": "正在上传 {{percent}}%",
+  "createFailedTitle": "备份失败",
+  "empty": "暂无备份",
+  "emptyTip": "在桌面端配置直连的无头端后即可触发备份",
+  "unnamedBackup": "未命名备份",
+  "statusUploading": "上传中",
+  "deleteTitle": "删除备份",
+  "deleteConfirm": "删除 {{time}} 的备份？不可恢复。"
+}

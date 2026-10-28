@@ -1,0 +1,18 @@
+{
+  "title": "Approval Memory",
+  "back": "Back",
+  "rememberedTitle": "Remembered Tools",
+  "rememberedEmpty": "No remembered tools yet — approvals resolved with \"remember\" appear here",
+  "fullTitle": "Full Grants",
+  "fullEmpty": "No full grants yet — session-level \"always allow\" tool calls appear here",
+  "revoke": "Revoke",
+  "revokeAll": "Revoke All",
+  "clearAll": "Clear All",
+  "revokeAllConfirmTitle": "Revoke all remembered tools?",
+  "revokeAllConfirmMessage": "{{count}} entries will be revoked; these tools will require approval again",
+  "clearAllConfirmTitle": "Clear all full grants?",
+  "clearAllConfirmMessage": "{{count}} grants will be cleared; related tool calls will require approval again",
+  "loadFailed": "Failed to load",
+  "actionFailed": "Action failed, please try again",
+  "sessionLabel": "Session {{id}}"
+}

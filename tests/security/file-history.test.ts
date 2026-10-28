@@ -1,0 +1,190 @@
+/**
+ * FileHistoryService 单测（SP4 Task 2）：快照落盘 + manifest 追加 + 内容寻址
+ * 去重 + 超限/非文件 fail-open + manifest 损坏重建 + 跨会话配额 LRU（共享
+ * 快照不误删）+ countFilesForEstimate 目录树计数。
+ * file-history 传递依赖 Log（→ electron），经 vi.mock 替换（仓库既有模式）。
+ */
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+vi.mock("electron", () => ({
+  ipcMain: { handle: vi.fn() },
+  app: {
+    on: vi.fn(),
+    getPath: vi.fn(() => "/tmp"),
+    getAppPath: vi.fn(() => `/tmp/tianshu-test-app-${process.pid}`),
+    isPackaged: false,
+  },
+}));
+
+// M6 节流断言：包装 readdir 计数转发（ESM 命名空间不可 spyOn，须模块级
+// 包装；file-history 走 default 导入，default 命名空间须一并包装）
+const readdirCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  const wrapped = ((...args: Parameters<typeof actual.readdir>) => {
+    readdirCalls.count += 1;
+    return actual.readdir(...args);
+  }) as typeof actual.readdir;
+  return {
+    ...actual,
+    readdir: wrapped,
+    default: { ...actual.default, readdir: wrapped },
+  };
+});
+
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  countFilesForEstimate,
+  FileHistoryService,
+} from "../../electron/domains/security/file-history";
+import {
+  ESTIMATE_COUNT_LIMIT,
+  snapshotName,
+  type BackupEntry,
+} from "../../electron/domains/security/backup-policy";
+
+let ROOT = "";
+let WS = "";
+beforeAll(() => {
+  ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "sp4-fh-root-"));
+  WS = fs.mkdtempSync(path.join(os.tmpdir(), "sp4-fh-ws-"));
+});
+afterAll(() => {
+  fs.rmSync(ROOT, { recursive: true, force: true });
+  fs.rmSync(WS, { recursive: true, force: true });
+});
+
+const svc = (maxBytes: number) => new FileHistoryService(ROOT, () => maxBytes);
+
+function writeManifest(sessionId: number, entries: BackupEntry[]): void {
+  const dir = path.join(ROOT, String(sessionId));
+  fs.mkdirSync(dir, { recursive: true });
+  for (const e of entries) {
+    fs.writeFileSync(path.join(dir, e.hash), `snap-${e.hash}`);
+  }
+  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(entries));
+}
+function readManifest(sessionId: number): BackupEntry[] {
+  return JSON.parse(
+    fs.readFileSync(
+      path.join(ROOT, String(sessionId), "manifest.json"),
+      "utf8",
+    ),
+  );
+}
+
+describe("backupFile", () => {
+  it("落快照 + manifest 条目；同内容复用不重复写", async () => {
+    const target = path.join(WS, "a.txt");
+    fs.writeFileSync(target, "hello");
+    const r = await svc(1 << 30).backupFile(target, 7);
+    expect(r).toEqual({ ok: true, size: 5 });
+    const snap = path.join(ROOT, "7", snapshotName(Buffer.from("hello")));
+    expect(fs.existsSync(snap)).toBe(true);
+    expect(readManifest(7)).toMatchObject([
+      { path: target, size: 5, hash: snapshotName(Buffer.from("hello")) },
+    ]);
+    // 同内容再次备份（另一路径）：快照复用，manifest 各记一行
+    const t2 = path.join(WS, "b.txt");
+    fs.writeFileSync(t2, "hello");
+    await svc(1 << 30).backupFile(t2, 7);
+    expect(readManifest(7)).toHaveLength(2);
+    expect(fs.readdirSync(path.join(ROOT, "7"))).toContain(
+      snapshotName(Buffer.from("hello")),
+    );
+  });
+  it("不存在 / 目录 / 超限 → ok:false 带原因", async () => {
+    const s = svc(1 << 30);
+    expect(await s.backupFile(path.join(WS, "nope"), 7)).toMatchObject({
+      ok: false,
+      reason: expect.any(String),
+    });
+    expect(await s.backupFile(WS, 7)).toMatchObject({ ok: false });
+    const big = path.join(WS, "big.bin");
+    fs.writeFileSync(big, Buffer.alloc(101 * 1024 * 1024));
+    expect(await s.backupFile(big, 7)).toEqual({
+      ok: false,
+      reason: "oversize",
+    });
+    fs.rmSync(big);
+  });
+  it("manifest 损坏 → 丢弃重建不致损", async () => {
+    fs.mkdirSync(path.join(ROOT, "9"), { recursive: true });
+    fs.writeFileSync(path.join(ROOT, "9", "manifest.json"), "{broken");
+    const target = path.join(WS, "c.txt");
+    fs.writeFileSync(target, "x");
+    expect(await svc(1 << 30).backupFile(target, 9)).toEqual({
+      ok: true,
+      size: 1,
+    });
+    expect(readManifest(9)).toHaveLength(1);
+  });
+});
+
+describe("配额 LRU（跨会话）", () => {
+  it("超配额淘汰最旧条目并删 orphan 快照；共享 hash 不误删", async () => {
+    writeManifest(11, [
+      { path: "/old1", hash: "h_old", at: 1000, size: 600 },
+      { path: "/shared1", hash: "h_shared", at: 2000, size: 200 },
+    ]);
+    writeManifest(12, [
+      { path: "/shared2", hash: "h_shared", at: 3000, size: 200 },
+      { path: "/new", hash: "h_new", at: 4000, size: 200 },
+    ]);
+    // 总量 1200 > 1000：淘汰 /old1(600) 即达标
+    await svc(1000).enforceNow();
+    expect(readManifest(11).map((e) => e.path)).toEqual(["/shared1"]);
+    expect(fs.existsSync(path.join(ROOT, "11", "h_old"))).toBe(false);
+    expect(fs.existsSync(path.join(ROOT, "11", "h_shared"))).toBe(true);
+    expect(fs.existsSync(path.join(ROOT, "12", "h_shared"))).toBe(true);
+  });
+});
+
+describe("countFilesForEstimate", () => {
+  it("目录树文件计数；达 10000 上限即停", async () => {
+    fs.mkdirSync(path.join(WS, "tree", "sub"), { recursive: true });
+    fs.writeFileSync(path.join(WS, "tree", "1.txt"), "a");
+    fs.writeFileSync(path.join(WS, "tree", "sub", "2.txt"), "b");
+    expect(await countFilesForEstimate(path.join(WS, "tree"))).toBe(2);
+    expect(await countFilesForEstimate(path.join(WS, "tree", "1.txt"))).toBe(1);
+    expect(await countFilesForEstimate(path.join(WS, "nope"))).toBe(0);
+  });
+  it("真实达限：超上限文件数 → 恰返回 ESTIMATE_COUNT_LIMIT（达限即停）", async () => {
+    const huge = path.join(WS, "huge");
+    fs.mkdirSync(huge, { recursive: true });
+    const total = ESTIMATE_COUNT_LIMIT + 1;
+    const batch = 500; // 空文件分批并发创建
+    for (let i = 0; i < total; i += batch) {
+      await Promise.all(
+        Array.from({ length: Math.min(batch, total - i) }, (_, j) =>
+          fs.promises.writeFile(path.join(huge, `f${i + j}.txt`), ""),
+        ),
+      );
+    }
+    expect(await countFilesForEstimate(huge)).toBe(ESTIMATE_COUNT_LIMIT);
+  }, 20000);
+});
+
+describe("配额巡检节流（M6）", () => {
+  it("连续小文件备份不重复全扫会话 manifest（8MB/60s 水位内）", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fh-throttle-"));
+    try {
+      const svc = new FileHistoryService(dir, () => 10 * 1024 * 1024);
+      readdirCalls.count = 0;
+      const target = path.join(dir, "a.txt");
+      fs.writeFileSync(target, "hello");
+      await svc.backupFile(target, 1);
+      // 首跑校准（lastEnforceAt 初始 0 触发一次全扫）
+      const afterFirst = readdirCalls.count;
+      expect(afterFirst).toBeGreaterThanOrEqual(1);
+      fs.writeFileSync(target, "world");
+      await svc.backupFile(target, 1);
+      // 水位内第二次备份不再全扫（旧实现每次 backupFile 后都 enforce）
+      expect(readdirCalls.count).toBe(afterFirst);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

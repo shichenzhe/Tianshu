@@ -1,0 +1,552 @@
+{
+  "pageTitle": "模型管理",
+  "provider": {
+    "add": "添加服务商",
+    "empty": "暂无服务商",
+    "emptyTip": "添加第一个服务商后即可开始对话",
+    "name": "名称",
+    "type": "协议类型",
+    "baseUrl": "接口地址",
+    "apiKey": "API Key",
+    "extraHeaders": "自定义请求头（JSON）",
+    "extraHeadersInvalid": "自定义请求头必须是合法的 JSON",
+    "enabled": "启用",
+    "models": "个模型",
+    "masterTitle": "服务商",
+    "summary": "共 {{providers}} 个服务商 · {{models}} 个模型",
+    "disabledTag": "已停用",
+    "editConnection": "编辑连接",
+    "testConnection": "测试连接",
+    "comfyNoModelList": "ComfyUI 无模型列表概念（checkpoint 在 workflow JSON 内指定）",
+    "emptyDetail": "还没有模型，从服务商拉取或手动添加",
+    "selectFirst": "选择左侧服务商查看详情",
+    "deleteConfirmTitle": "删除服务商",
+    "deleteConfirmDesc": "将同时删除该服务商下的全部模型配置，无法恢复。",
+    "presetLabel": "快速开始",
+    "presetPlaceholder": "从模板选择服务商…",
+    "presetHint": "选择后自动填入名称、协议与接口地址，API Key 仍需自行填写",
+    "typePlaceholders": {
+      "openai-compatible": "https://api.deepseek.com/v1",
+      "anthropic": "https://api.anthropic.com",
+      "gemini": "https://generativelanguage.googleapis.com/v1beta",
+      "ollama": "http://localhost:11434",
+      "comfyui": "http://127.0.0.1:8188"
+    },
+    "remoteReadOnly": "远程桌面端为只读——模型配置写入仅无头端支持"
+  },
+  "model": {
+    "add": "添加模型",
+    "modelId": "模型 ID",
+    "displayName": "显示名",
+    "typeLabel": "模型类型",
+    "type": {
+      "llm": "对话模型",
+      "embedding": "向量",
+      "tts": "语音合成",
+      "reranker": "重排序",
+      "asr": "语音识别"
+    },
+    "temperature": "温度",
+    "topP": "Top P",
+    "maxTokens": "最大输出 Tokens",
+    "contextWindow": "上下文窗口",
+    "optionalHint": "留空使用请求时覆盖或模型默认",
+    "invalidNumber": "请输入有效数字",
+    "inputLimit": "输入",
+    "outputLimit": "输出",
+    "exceedsContext": "总长度超出模型限制：输出不应达到或超过输入窗口",
+    "positiveIntRequired": "请输入正整数",
+    "test": "测试",
+    "testing": "测试中…",
+    "testSuccess": "连接成功",
+    "fetchRemote": "从服务商拉取模型",
+    "fetchRemoteHint": "拉取成功即代表连接可用；失败会提示原因",
+    "addManually": "手动添加模型",
+    "defaultParams": "默认参数",
+    "fetchEmpty": "远端没有可导入的模型",
+    "importTitle": "从 {{name}} 拉取模型",
+    "imported": "已导入",
+    "retry": "重试",
+    "editAction": "编辑",
+    "deleteAction": "删除",
+    "selectAll": "全选",
+    "importSelected": "导入所选",
+    "importSuccess": "导入完成",
+    "searchPlaceholder": "搜索模型名",
+    "searchEmpty": "无匹配模型",
+    "summary": {
+      "context": "上下文 {{value}}",
+      "output": "输出 {{value}}",
+      "temperature": "T {{value}}",
+      "topP": "topP {{value}}"
+    }
+  },
+  "assistant": {
+    "add": "新建助手",
+    "name": "名称",
+    "icon": "图标（emoji）",
+    "systemPrompt": "系统提示词",
+    "description": "描述",
+    "tags": "标签",
+    "profession": "职业头衔",
+    "category": "分类",
+    "noCategory": "不限",
+    "quickPrompts": "推荐提示词",
+    "quickPromptHint": "用户可一键使用的开场提问（最多 3 条）",
+    "attachedSkills": "附带技能",
+    "noSkills": "暂无已安装技能",
+    "typeAgent": "单专家",
+    "typeTeam": "专家团",
+    "membersTitle": "团队成员",
+    "addMember": "+ 添加成员",
+    "memberName": "花名",
+    "memberId": "成员 id",
+    "memberIdHint": "调度标识（kebab-case），如 risk-officer",
+    "memberProfession": "职业头衔",
+    "memberPrompt": "人设",
+    "needMember": "专家团至少需要 1 名成员",
+    "needMemberId": "成员 id 不能为空：调度标识需为 kebab-case（如 risk-officer）",
+    "builtin": "内置",
+    "deleteConfirmTitle": "删除助手",
+    "deleteConfirmDesc": "删除后不影响已有会话的历史消息。",
+    "remoteUnavailable": "专家管理仅本机可用——远程主机的专家经发送选专家与＋菜单使用"
+  },
+  "mcp": {
+    "pageTitle": "MCP 服务",
+    "pageDesc": "接入 MCP 服务器（stdio 子进程或 HTTP 端点），其提供的工具将在 AI 对话中可用。",
+    "add": "添加 MCP 服务",
+    "name": "名称",
+    "transport": "传输类型",
+    "stdio": "stdio 子进程",
+    "http": "HTTP 端点",
+    "command": "启动命令",
+    "args": "启动参数（JSON 数组）",
+    "env": "环境变量（JSON 对象）",
+    "url": "服务地址",
+    "headers": "请求头（JSON 对象）",
+    "enabled": "启用",
+    "statusLabel": "状态",
+    "status": {
+      "connected": "已连接",
+      "connecting": "连接中",
+      "error": "错误",
+      "disabled": "已停用"
+    },
+    "tools": "工具数",
+    "reconnect": "重连",
+    "empty": "暂无 MCP 服务",
+    "emptyTip": "添加第一个 MCP 服务后，其工具即可在对话中使用",
+    "invalidJson": "存在非法的 JSON 输入，请检查格式",
+    "deleteConfirmTitle": "删除 MCP 服务",
+    "deleteConfirmDesc": "将断开连接并注销其提供的工具，无法恢复。",
+    "argsPlaceholder": "如 [\"--port\", \"8080\"]",
+    "envPlaceholder": "如 {\"KEY\": \"value\"}",
+    "headersPlaceholder": "如 {\"Authorization\": \"Bearer xxx\"}",
+    "invalidName": "名称不能包含连续下划线",
+    "connectors": {
+      "tongdaxin": {
+        "description": "查询全球股票行情数据、条件选股、研报与自选股管理。"
+      },
+      "tencent-stock": {
+        "description": "直连腾讯自选股，实时掌握毫秒级行情与持仓动态。"
+      },
+      "qq-mail": {
+        "description": "收发、搜索和整理 QQ 邮件，用自然语言读取与回复邮件。"
+      },
+      "ima": {
+        "description": "腾讯 AI 知识管家，连接后支持搜索、读取和写入个人知识库。"
+      },
+      "lexiang": {
+        "description": "搜索、创建和管理乐享知识库中的文档与页面。"
+      },
+      "tencent-docs": {
+        "description": "创建、编辑和协作腾讯文档，用自然语言管理在线文档。"
+      },
+      "tencent-meeting": {
+        "description": "通过命令创建、查询和管理腾讯会议与日程。"
+      },
+      "wecom": {
+        "description": "企业微信官方套件，覆盖消息、邮件、日程与通讯录能力。"
+      },
+      "feishu": {
+        "description": "通过命令行管理飞书/Lark 全产品能力：文档、多维表格与消息。"
+      },
+      "dingtalk": {
+        "description": "通过命令行管理钉钉全产品能力：AI 表格、待办与审批。"
+      },
+      "tencent-survey": {
+        "description": "创建、管理和分析腾讯问卷，用自然语言设计问卷。"
+      },
+      "tapd": {
+        "description": "管理需求、缺陷、任务和迭代，查询项目进度与报表。"
+      },
+      "neodata": {
+        "description": "一键安装免费使用，面向投研分析的专业金融数据库。"
+      },
+      "cnb": {
+        "description": "通过自然语言管理 CNB 平台：仓库、Issue 与流水线。"
+      },
+      "weiyun": {
+        "description": "查看、下载、删除微云文件，并支持上传新文件。"
+      },
+      "fubangshou": {
+        "description": "保留身份、场景、进度和礼包状态，跨会话延续服务。"
+      },
+      "jinshan-docs": {
+        "description": "金山文档官方技能：对话即操作，知识一键存入云文档。"
+      },
+      "beida-fabao": {
+        "description": "检索与核验一体：语义检索与关键词检索法律法规与案例。"
+      },
+      "qichacha": {
+        "description": "查询和核实企业工商登记信息，支持股东结构与关联分析。"
+      },
+      "tianyancha": {
+        "description": "查询多维度企业数据：工商、股权、风险与经营状况。"
+      },
+      "baidu-netdisk": {
+        "description": "文件与分类浏览、关键词搜索，支持下载与上传网盘文件。"
+      },
+      "tushare": {
+        "description": "金融数据服务，支持 A 股、指数、基金与宏观等多类数据。"
+      },
+      "dun-bradstreet": {
+        "description": "通过自然语言查询邓白氏全球企业档案与商业信息。"
+      },
+      "xinhua-finance": {
+        "description": "公告、新闻、政策数据，包含股票资讯与宏观经济信息。"
+      }
+    },
+    "manage": {
+      "title": "MCP 服务管理",
+      "subtitle": "安装 MCP 服务，为 AI 扩展更多工具能力",
+      "empty": "暂无 MCP 服务器",
+      "emptyTip": "点击配置按钮添加 MCP 服务器",
+      "loadError": "MCP 服务加载失败，请重试",
+      "configure": "配置",
+      "backToList": "返回 MCP 列表",
+      "save": "保存",
+      "searchPlaceholder": "搜索 MCP",
+      "searchMcp": "搜索 MCP"
+    },
+    "market": {
+      "searchPlaceholder": "搜索连接器",
+      "customConnector": "自定义连接器",
+      "added": "已添加",
+      "add": "添加",
+      "hub": "MCP Hub",
+      "jsonSyncNote": "JSON 与已安装服务实时同步，保存后生效",
+      "syncSaved": "保存成功（新增 {{created}} · 更新 {{updated}} · 移除 {{deleted}}）",
+      "errParse": "第 {{value}} 行：JSON 格式错误，请检查",
+      "errName": "「{{value}}」：名称不能包含连续下划线",
+      "errTransport": "「{{value}}」：需提供 command（stdio）或 url（http）之一",
+      "errArgs": "「{{value}}」：args 必须为字符串数组",
+      "errEnv": "「{{value}}」：env 必须为字符串值对象",
+      "errHeaders": "「{{value}}」：headers 必须为字符串值对象",
+      "errStructure": "顶层缺少 mcpServers 对象"
+    }
+  },
+  "errors": {
+    "AUTH_FAILED": "认证失败，请检查 API Key",
+    "RATE_LIMITED": "请求过于频繁，请稍后重试",
+    "MODEL_NOT_FOUND": "模型不存在，请检查模型 ID",
+    "TIMEOUT": "请求超时",
+    "NETWORK": "网络错误，请检查接口地址与网络",
+    "UNKNOWN": "未知错误",
+    "UNSUPPORTED_TYPE_TEST": "该服务商协议暂不支持此类模型的连通测试（仅 OpenAI 兼容协议支持）"
+  },
+  "server": {
+    "pageTitle": "主机",
+    "connection": {
+      "title": "连接",
+      "add": "添加连接",
+      "edit": "编辑连接",
+      "name": "名称",
+      "namePlaceholder": "给被控端起个名字",
+      "mode": "连接模式",
+      "modeDirect": "直连（HTTP/SSE）",
+      "modeRelay": "中继（WebSocket）",
+      "baseUrl": "被控端地址",
+      "token": "访问令牌",
+      "tokenPlaceholder": "未启用鉴权可留空",
+      "backupToken": "备份专用 token（可选）",
+      "backupTokenPlaceholder": "申领成功后自动填入，通常无需手填",
+      "backupTokenHint": "备份身份独立凭据（多设备备份隔离）；留空则复用访问令牌。可经设置面板的邀请码申领自动获取",
+      "relayUrl": "中继服务器地址",
+      "relayToken": "中继令牌",
+      "connectionId": "被控端标识",
+      "connectionIdPlaceholder": "被控端 instanceId（relay 注册键）",
+      "localTag": "本地",
+      "empty": "暂无连接",
+      "emptyTip": "添加被控端连接，或启动本地无头端",
+      "refresh": "刷新连接列表",
+      "delete": "删除连接",
+      "test": "测试连接",
+      "testing": "测试中…",
+      "testOk": "连接成功（{{instance}}）",
+      "testFailed": "连接失败：{{reason}}",
+      "testError": "测试异常：{{message}}",
+      "state": {
+        "idle": "未连接",
+        "connecting": "连接中",
+        "connected": "已连接",
+        "reconnecting": "重连中",
+        "invalid-token": "令牌失效",
+        "closed": "已关闭"
+      },
+      "testReason": {
+        "invalidConfig": "配置不合法",
+        "invalidToken": "令牌无效",
+        "unreachable": "无法连通",
+        "timeout": "连接超时"
+      },
+      "errors": {
+        "nameRequired": "请填写名称",
+        "baseUrlInvalid": "直连地址必须以 http(s):// 开头",
+        "relayUrlInvalid": "中继地址必须以 ws(s):// 开头",
+        "relayTokenRequired": "请填写中继令牌",
+        "connectionIdRequired": "请填写被控端标识"
+      },
+      "groupBasic": "基本信息",
+      "groupDirect": "直连",
+      "groupRelay": "中继"
+    },
+    "face": {
+      "title": "本机被控面",
+      "enabled": "启用被控面",
+      "state": {
+        "stopped": "已停止",
+        "pending": "已启用（未运行）",
+        "running": "运行中"
+      },
+      "port": "端口",
+      "host": "监听地址",
+      "hostLoopback": "仅本机（127.0.0.1）",
+      "hostAll": "所有网卡（0.0.0.0）",
+      "hostWarning": "对外监听有安全风险：同一网络内的其他设备都可访问本机被控面，请妥善保管令牌，不用时及时关闭",
+      "token": "访问令牌",
+      "tokenEmpty": "未生成（启用时自动生成）",
+      "tokenCopy": "复制令牌",
+      "tokenCopyFailed": "复制失败",
+      "tokenCopied": "令牌已复制",
+      "tokenRegenerate": "重新生成令牌",
+      "tokenRegenerated": "令牌已重新生成",
+      "relayUrl": "中继服务器地址",
+      "relayUrlPlaceholder": "可留空（纯直连）",
+      "relayToken": "中继令牌",
+      "relayPairHint": "中继地址与令牌需同时填写才会连接",
+      "relayConnected": "中继已连接",
+      "relayDisconnected": "中继未连接",
+      "portInvalid": "端口须为 1-65535 的整数",
+      "saved": "被控面配置已保存",
+      "saveFailed": "被控面配置保存失败：{{message}}",
+      "enabledToast": "本机被控面已启用",
+      "disabledToast": "本机被控面已停用",
+      "e2e": {
+        "mode": "端到端加密",
+        "modeAuto": "自动（优先加密，兼容旧控制端）",
+        "modeRequired": "强制加密（拒绝明文中继）",
+        "modeOff": "关闭（明文中继）",
+        "fingerprint": "密钥指纹",
+        "publicKey": "公钥",
+        "keyEmpty": "未生成",
+        "copyFingerprint": "复制指纹",
+        "copyPublicKey": "复制公钥",
+        "fingerprintCopied": "指纹已复制",
+        "publicKeyCopied": "公钥已复制",
+        "copyFailed": "复制失败",
+        "active": "加密已建立",
+        "inactive": "未加密",
+        "hint": "将指纹经其他可信渠道交给控制端核对，可防中继中间人；关闭或换钥后控制端需重新信任"
+      }
+    },
+    "e2e": {
+      "fingerprint": "密钥指纹（可选）",
+      "fingerprintPlaceholder": "留空 = 首次连接自动信任并保存（TOFU）",
+      "fingerprintHint": "填入被控端「端到端加密」卡展示的指纹可强制校验，防中继中间人；不匹配将断开并红色警示",
+      "fingerprintInvalid": "指纹须为 16 位十六进制（被控端设置卡可复制）",
+      "encrypted": "已加密",
+      "plaintext": "未加密",
+      "mitmSuspect": "指纹不匹配",
+      "mode": "端到端加密模式",
+      "modeAuto": "自动（握手失败可降级明文）",
+      "modeRequired": "强制加密（不降级，失败即断开）",
+      "requiredFailed": "强制加密失败",
+      "groupTitle": "端到端加密"
+    },
+    "session": {
+      "listTitle": "远程会话",
+      "empty": "暂无会话",
+      "emptyTip": "新建会话后即可遥控对话",
+      "newSession": "新建会话",
+      "loadMore": "加载更多",
+      "refresh": "刷新会话列表",
+      "back": "返回会话列表",
+      "untitled": "（未命名会话）",
+      "sendPlaceholder": "发送消息到远程会话…",
+      "send": "发送",
+      "abort": "停止",
+      "sendFailed": "发送失败：{{message}}",
+      "abortFailed": "停止失败：{{message}}",
+      "createFailed": "新建会话失败：{{message}}",
+      "sessionError": "会话执行失败：{{message}}",
+      "loadFailed": "会话加载失败",
+      "approvalTitle": "工具执行审批",
+      "approvalFallback": "该工具请求执行修改操作",
+      "approve": "批准",
+      "reject": "拒绝",
+      "approveStale": "该审批已被处理或被控端版本过旧",
+      "approveFailed": "审批应答失败：{{message}}",
+      "model": "模型",
+      "modelAuto": "自动（默认）",
+      "delete": "删除会话",
+      "deleteFailed": "删除失败：{{message}}",
+      "searchPlaceholder": "搜索会话标题…",
+      "rename": "重命名会话",
+      "renameFailed": "重命名失败：{{message}}",
+      "assistant": "专家",
+      "assistantNone": "默认（无专家）",
+      "emptyChat": "开始你的远程对话",
+      "emptyChatTip": "输入消息发送，或从上方选择模型与专家",
+      "scrollToBottom": "回到底部",
+      "accessModeFailed": "权限模式设置失败：{{message}}",
+      "mode": {
+        "agent": "智能体",
+        "ask": "问答",
+        "plan": "计划"
+      },
+      "archive": "归档会话",
+      "unarchive": "取消归档",
+      "archiveFailed": "归档操作失败：{{message}}",
+      "archivedPlaceholder": "会话已归档（只读）",
+      "noModelPlaceholder": "暂无可用模型——请先在「模型」页配置",
+      "pin": "置顶/取消置顶",
+      "archivedBanner": "会话已归档，消息只读"
+    },
+    "graph": {
+      "title": "编排图",
+      "refresh": "刷新编排图列表",
+      "empty": "暂无编排图",
+      "emptyTip": "在无头端创建编排图后即可在此触发",
+      "nodes": "{{count}} 个节点",
+      "run": "运行",
+      "abort": "中止",
+      "runFailed": "触发失败：{{message}}",
+      "abortFailed": "中止失败：{{message}}",
+      "loadFailed": "编排图加载失败",
+      "runState": {
+        "idle": "未运行",
+        "queued": "排队中",
+        "running": "运行中",
+        "succeeded": "已成功",
+        "failed": "已失败",
+        "aborted": "已中止"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "url": "触发 URL",
+        "urlHint": "相对路径——外部系统调用需拼主机地址",
+        "template": "响应模板",
+        "statusCode": "响应状态码",
+        "async": "异步模式",
+        "asyncHint": "202 受理 + 轮询（默认同步挂起）",
+        "fullAccess": "全权执行",
+        "fullAccessHint": "代码/文件写入节点放行",
+        "fullAccessOn": "已开启",
+        "fullAccessOff": "未开启",
+        "enableAction": "开启",
+        "disableAction": "关闭",
+        "rotate": "重开换 token",
+        "rotateHint": "重开或重新生成后旧 token 立即失效，外部集成需更新 URL",
+        "copy": "复制",
+        "statusFailed": "Webhook 状态获取失败：{{message}}",
+        "enableFailed": "Webhook 开启失败：{{message}}",
+        "disableFailed": "Webhook 关闭失败：{{message}}"
+      }
+    },
+    "automation": {
+      "title": "自动化任务",
+      "refresh": "刷新任务列表",
+      "empty": "暂无任务",
+      "emptyTip": "在无头端创建任务后即可在此管理",
+      "graphBadge": "编排图",
+      "runNow": "立即运行",
+      "runNowAccepted": "已触发",
+      "runNowFailed": "触发失败：{{message}}",
+      "toggleLabel": "启停任务",
+      "toggleFailed": "启停失败：{{message}}",
+      "enabledToast": "任务已启用",
+      "disabledToast": "任务已停用",
+      "nextRunLabel": "下次",
+      "nextRunNone": "不再调度",
+      "paused": "已停用",
+      "loadFailed": "任务加载失败"
+    },
+    "ui": {
+      "openInClient": "在被控端打开",
+      "opened": "已让被控端打开该会话",
+      "notOpened": "被控端未能打开（主窗口不可用）",
+      "openFailed": "在被控端打开失败：{{message}}"
+    },
+    "bridge": {
+      "approvalTitle": "桌面工具桥执行审批",
+      "approvalFallback": "远程会话请求在本机浏览器执行操作",
+      "approve": "允许",
+      "reject": "拒绝",
+      "stale": "该请求已失效（超时或已被处理）",
+      "failed": "应答失败：{{message}}",
+      "dismiss": "关闭"
+    },
+    "provider": {
+      "unknown": "未知服务商",
+      "providersTitle": "服务商",
+      "modelsTitle": "模型",
+      "addProvider": "新增服务商",
+      "addModel": "新增模型",
+      "name": "名称",
+      "baseUrl": "接口地址",
+      "apiKey": "API 密钥",
+      "belongProvider": "所属服务商",
+      "modelIdentity": "模型标识（上游名）",
+      "displayName": "展示名",
+      "type": "类型",
+      "typeLlm": "对话",
+      "typeEmbedding": "向量",
+      "typeTts": "语音合成",
+      "typeReranker": "重排",
+      "typeAsr": "语音识别",
+      "enable": "启用",
+      "keyConfigured": "密钥已配置",
+      "keyNotSet": "未配置密钥",
+      "formRequired": "请填写必填项（名称/地址或标识）",
+      "saved": "已保存",
+      "saveFailed": "保存失败：{{message}}",
+      "loadFailed": "模型配置加载失败",
+      "emptyProviders": "暂无服务商——新增一个开始配置模型",
+      "emptyModels": "暂无模型",
+      "readonlyHint": "桌面被控端模型配置只读（在其本机「AI 服务商」页管理）",
+      "title": "服务商与模型",
+      "edit": "编辑",
+      "apiKeyEdit": "API 密钥（换钥填新值）",
+      "apiKeyKeepHint": "留空保持现有密钥不变",
+      "temperature": "温度",
+      "topP": "topP",
+      "maxTokens": "最大输出",
+      "delete": "删除服务商（级联其模型）",
+      "deleteModel": "删除模型",
+      "deleted": "已删除",
+      "deleteFailed": "删除失败：{{message}}",
+      "test": "连通测试",
+      "testOk": "连通正常",
+      "testFailed": "连通失败：{{message}}",
+      "fetchImport": "从上游拉取模型",
+      "fetchFailed": "上游拉取失败",
+      "fetchEmpty": "上游无新模型可导入",
+      "importSelected": "导入所选 ({{count}})",
+      "imported": "已导入所选模型",
+      "extraHeaders": "额外请求头",
+      "extraHeadersHint": "JSON 对象，如 {\"X-Key\":\"v\"}",
+      "extraHeadersInvalid": "额外请求头必须是 JSON 对象"
+    }
+  }
+}

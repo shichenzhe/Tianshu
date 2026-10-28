@@ -1,0 +1,552 @@
+{
+  "pageTitle": "Model Settings",
+  "provider": {
+    "add": "Add Provider",
+    "empty": "No providers yet",
+    "emptyTip": "Add your first provider to start chatting",
+    "name": "Name",
+    "type": "Protocol",
+    "baseUrl": "Base URL",
+    "apiKey": "API Key",
+    "extraHeaders": "Custom Headers (JSON)",
+    "extraHeadersInvalid": "Custom headers must be valid JSON",
+    "enabled": "Enabled",
+    "models": "models",
+    "masterTitle": "Providers",
+    "summary": "{{providers}} providers · {{models}} models",
+    "disabledTag": "Disabled",
+    "editConnection": "Edit connection",
+    "testConnection": "Test connection",
+    "comfyNoModelList": "ComfyUI has no model list (checkpoints are specified in the workflow JSON)",
+    "emptyDetail": "No models yet — fetch from provider or add manually",
+    "selectFirst": "Select a provider to view details",
+    "deleteConfirmTitle": "Delete Provider",
+    "deleteConfirmDesc": "All model configs under this provider will be deleted as well. This cannot be undone.",
+    "presetLabel": "Quick start",
+    "presetPlaceholder": "Pick a provider template…",
+    "presetHint": "Fills name, protocol and base URL; API key still required",
+    "typePlaceholders": {
+      "openai-compatible": "https://api.deepseek.com/v1",
+      "anthropic": "https://api.anthropic.com",
+      "gemini": "https://generativelanguage.googleapis.com/v1beta",
+      "ollama": "http://localhost:11434",
+      "comfyui": "http://127.0.0.1:8188"
+    },
+    "remoteReadOnly": "Remote desktop host is read-only. Model config editing requires a headless host."
+  },
+  "model": {
+    "add": "Add Model",
+    "modelId": "Model ID",
+    "displayName": "Display Name",
+    "typeLabel": "Model Type",
+    "type": {
+      "llm": "Chat (LLM)",
+      "embedding": "Embedding",
+      "tts": "Text-to-Speech",
+      "reranker": "Reranker",
+      "asr": "Speech-to-Text"
+    },
+    "temperature": "Temperature",
+    "topP": "Top P",
+    "maxTokens": "Max Output Tokens",
+    "contextWindow": "Context Window",
+    "optionalHint": "Leave empty to use per-request overrides or model defaults",
+    "invalidNumber": "Please enter a valid number",
+    "inputLimit": "Input",
+    "outputLimit": "Output",
+    "exceedsContext": "Total exceeds model limit: output must stay below the context window",
+    "positiveIntRequired": "Please enter a positive integer",
+    "test": "Test",
+    "testing": "Testing…",
+    "testSuccess": "Connection succeeded",
+    "fetchRemote": "Fetch models from provider",
+    "fetchRemoteHint": "A successful fetch also verifies connectivity; failures show the reason",
+    "addManually": "Add model manually",
+    "defaultParams": "Default params",
+    "fetchEmpty": "No models available to import",
+    "importTitle": "Fetch models from {{name}}",
+    "imported": "Imported",
+    "retry": "Retry",
+    "editAction": "Edit",
+    "deleteAction": "Delete",
+    "selectAll": "Select all",
+    "importSelected": "Import selected",
+    "importSuccess": "Import finished",
+    "searchPlaceholder": "Search model names",
+    "searchEmpty": "No matching models",
+    "summary": {
+      "context": "Context {{value}}",
+      "output": "Output {{value}}",
+      "temperature": "T {{value}}",
+      "topP": "topP {{value}}"
+    }
+  },
+  "assistant": {
+    "add": "New Assistant",
+    "name": "Name",
+    "icon": "Icon (emoji)",
+    "systemPrompt": "System Prompt",
+    "description": "Description",
+    "tags": "Tags",
+    "profession": "Profession",
+    "category": "Category",
+    "noCategory": "No category",
+    "quickPrompts": "Suggested prompts",
+    "quickPromptHint": "One-tap opening questions (up to 3)",
+    "attachedSkills": "Attached skills",
+    "noSkills": "No installed skills",
+    "typeAgent": "Single expert",
+    "typeTeam": "Expert team",
+    "membersTitle": "Team members",
+    "addMember": "+ Add member",
+    "memberName": "Name",
+    "memberId": "Member ID",
+    "memberIdHint": "Dispatch key (kebab-case), e.g. risk-officer",
+    "memberProfession": "Profession",
+    "memberPrompt": "Persona",
+    "needMember": "An expert team needs at least 1 member",
+    "needMemberId": "Member id is required as a kebab-case dispatch key (e.g. risk-officer)",
+    "builtin": "Built-in",
+    "deleteConfirmTitle": "Delete Assistant",
+    "deleteConfirmDesc": "Deleting an assistant does not affect the history of existing sessions.",
+    "remoteUnavailable": "Expert management is local-only — use remote experts via send-picker and the + menu"
+  },
+  "mcp": {
+    "pageTitle": "MCP Servers",
+    "pageDesc": "Connect MCP servers (stdio subprocess or HTTP endpoint); the tools they provide become available in AI chats.",
+    "add": "Add MCP Server",
+    "name": "Name",
+    "transport": "Transport",
+    "stdio": "stdio subprocess",
+    "http": "HTTP endpoint",
+    "command": "Command",
+    "args": "Arguments (JSON array)",
+    "env": "Environment variables (JSON object)",
+    "url": "Server URL",
+    "headers": "Headers (JSON object)",
+    "enabled": "Enabled",
+    "statusLabel": "Status",
+    "status": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "error": "Error",
+      "disabled": "Disabled"
+    },
+    "tools": "Tools",
+    "reconnect": "Reconnect",
+    "empty": "No MCP servers yet",
+    "emptyTip": "Add your first MCP server to use its tools in chats",
+    "invalidJson": "Invalid JSON input, please check the format",
+    "deleteConfirmTitle": "Delete MCP Server",
+    "deleteConfirmDesc": "Its connection will be closed and its tools unregistered. This cannot be undone.",
+    "argsPlaceholder": "e.g. [\"--port\", \"8080\"]",
+    "envPlaceholder": "e.g. {\"KEY\": \"value\"}",
+    "headersPlaceholder": "e.g. {\"Authorization\": \"Bearer xxx\"}",
+    "invalidName": "Name must not contain \"__\"",
+    "connectors": {
+      "tongdaxin": {
+        "description": "Query global stock quotes, screen stocks, and manage research reports."
+      },
+      "tencent-stock": {
+        "description": "Connect to Tencent stock watchlist with real-time quotes."
+      },
+      "qq-mail": {
+        "description": "Send, search and organize QQ Mail; read and reply via natural language."
+      },
+      "ima": {
+        "description": "Tencent AI knowledge assistant: search, read and write your knowledge base."
+      },
+      "lexiang": {
+        "description": "Search, create and manage documents in Lexiang knowledge base."
+      },
+      "tencent-docs": {
+        "description": "Create, edit and collaborate on Tencent Docs via natural language."
+      },
+      "tencent-meeting": {
+        "description": "Create, query and manage Tencent Meetings from chat."
+      },
+      "wecom": {
+        "description": "Official WeCom suite covering messaging, mail, calendar and contacts."
+      },
+      "feishu": {
+        "description": "Manage all Feishu/Lark products: docs, base tables and messages."
+      },
+      "dingtalk": {
+        "description": "Manage all DingTalk products: AI tables, todos and approvals."
+      },
+      "tencent-survey": {
+        "description": "Create, manage and analyze Tencent Surveys via natural language."
+      },
+      "tapd": {
+        "description": "Manage requirements, bugs, tasks and iterations; track progress."
+      },
+      "neodata": {
+        "description": "Free professional financial database for investment research."
+      },
+      "cnb": {
+        "description": "Manage CNB platform via natural language: repos, issues and pipelines."
+      },
+      "weiyun": {
+        "description": "View, download and delete Weiyun files; upload new ones."
+      },
+      "fubangshou": {
+        "description": "Keeps identity, scenario, progress and gift state across sessions."
+      },
+      "jinshan-docs": {
+        "description": "Official Kingsoft Docs skill: act in chat, save to cloud docs."
+      },
+      "beida-fabao": {
+        "description": "Search and verify laws, regulations and cases via semantic and keyword search."
+      },
+      "qichacha": {
+        "description": "Query and verify business registration, shareholders and relations."
+      },
+      "tianyancha": {
+        "description": "Query multi-dimension company data: registration, equity and risk."
+      },
+      "baidu-netdisk": {
+        "description": "Browse and search files by category; download and upload."
+      },
+      "tushare": {
+        "description": "Financial data service covering A-shares, indices, funds and macro."
+      },
+      "dun-bradstreet": {
+        "description": "Query Dun & Bradstreet global company profiles via natural language."
+      },
+      "xinhua-finance": {
+        "description": "Announcements, news and policy data incl. stock and macro info."
+      }
+    },
+    "manage": {
+      "title": "MCP Services",
+      "subtitle": "Install MCP services to extend AI tool capabilities",
+      "empty": "No MCP server yet",
+      "emptyTip": "Click Configure to add an MCP server",
+      "loadError": "Failed to load MCP servers, please retry",
+      "configure": "Configure",
+      "backToList": "Back to MCP list",
+      "save": "Save",
+      "searchPlaceholder": "Search MCP",
+      "searchMcp": "Search MCP"
+    },
+    "market": {
+      "searchPlaceholder": "Search connectors",
+      "customConnector": "Custom connector",
+      "added": "Added",
+      "add": "Add",
+      "hub": "MCP Hub",
+      "jsonSyncNote": "JSON syncs with installed services; takes effect after save",
+      "syncSaved": "Saved ({{created}} added · {{updated}} updated · {{deleted}} removed)",
+      "errParse": "Line {{value}}: invalid JSON, please check",
+      "errName": "\"{{value}}\": name must not contain consecutive underscores",
+      "errTransport": "\"{{value}}\": provide either command (stdio) or url (http)",
+      "errArgs": "\"{{value}}\": args must be an array of strings",
+      "errEnv": "\"{{value}}\": env must be an object of string values",
+      "errHeaders": "\"{{value}}\": headers must be an object of string values",
+      "errStructure": "Missing mcpServers object at top level"
+    }
+  },
+  "errors": {
+    "AUTH_FAILED": "Authentication failed, please check the API Key",
+    "RATE_LIMITED": "Too many requests, please try again later",
+    "MODEL_NOT_FOUND": "Model not found, please check the model ID",
+    "TIMEOUT": "Request timed out",
+    "NETWORK": "Network error, please check the base URL and your network",
+    "UNKNOWN": "Unknown error",
+    "UNSUPPORTED_TYPE_TEST": "Connection test for this model type is only supported on OpenAI-compatible providers"
+  },
+  "server": {
+    "pageTitle": "Hosts",
+    "connection": {
+      "title": "Connections",
+      "add": "Add Connection",
+      "edit": "Edit Connection",
+      "name": "Name",
+      "namePlaceholder": "Name this controlled endpoint",
+      "mode": "Connection Mode",
+      "modeDirect": "Direct (HTTP/SSE)",
+      "modeRelay": "Relay (WebSocket)",
+      "baseUrl": "Endpoint URL",
+      "token": "Access Token",
+      "tokenPlaceholder": "Leave empty if auth is disabled",
+      "backupToken": "Backup Token (optional)",
+      "backupTokenPlaceholder": "Auto-filled after claiming; manual entry rarely needed",
+      "backupTokenHint": "Separate credential for the backup identity (isolates multi-device backups); leave empty to reuse the access token. Can be obtained automatically via invite-code claiming in Settings",
+      "relayUrl": "Relay Server URL",
+      "relayToken": "Relay Token",
+      "connectionId": "Endpoint ID",
+      "connectionIdPlaceholder": "Endpoint instanceId (relay register key)",
+      "localTag": "Local",
+      "empty": "No connections",
+      "emptyTip": "Add a controlled endpoint, or start the local headless server",
+      "refresh": "Refresh connections",
+      "delete": "Delete connection",
+      "test": "Test Connection",
+      "testing": "Testing…",
+      "testOk": "Connected ({{instance}})",
+      "testFailed": "Connection failed: {{reason}}",
+      "testError": "Test error: {{message}}",
+      "state": {
+        "idle": "Idle",
+        "connecting": "Connecting",
+        "connected": "Connected",
+        "reconnecting": "Reconnecting",
+        "invalid-token": "Token invalid",
+        "closed": "Closed"
+      },
+      "testReason": {
+        "invalidConfig": "Invalid configuration",
+        "invalidToken": "Invalid token",
+        "unreachable": "Unreachable",
+        "timeout": "Timed out"
+      },
+      "errors": {
+        "nameRequired": "Name is required",
+        "baseUrlInvalid": "Direct URL must start with http(s)://",
+        "relayUrlInvalid": "Relay URL must start with ws(s)://",
+        "relayTokenRequired": "Relay token is required",
+        "connectionIdRequired": "Endpoint ID is required"
+      },
+      "groupBasic": "Basics",
+      "groupDirect": "Direct",
+      "groupRelay": "Relay"
+    },
+    "face": {
+      "title": "Local Controlled Face",
+      "enabled": "Enable controlled face",
+      "state": {
+        "stopped": "Stopped",
+        "pending": "Enabled (not running)",
+        "running": "Running"
+      },
+      "port": "Port",
+      "host": "Listen Host",
+      "hostLoopback": "Loopback only (127.0.0.1)",
+      "hostAll": "All interfaces (0.0.0.0)",
+      "hostWarning": "Listening externally is risky: any device on the same network can reach this controlled face. Keep the token safe and turn it off when not in use",
+      "token": "Access Token",
+      "tokenEmpty": "Not generated (auto-generated on enable)",
+      "tokenCopy": "Copy token",
+      "tokenCopyFailed": "Copy failed",
+      "tokenCopied": "Token copied",
+      "tokenRegenerate": "Regenerate token",
+      "tokenRegenerated": "Token regenerated",
+      "relayUrl": "Relay Server URL",
+      "relayUrlPlaceholder": "Optional (direct only)",
+      "relayToken": "Relay Token",
+      "relayPairHint": "Relay URL and token must both be filled to connect",
+      "relayConnected": "Relay connected",
+      "relayDisconnected": "Relay not connected",
+      "portInvalid": "Port must be an integer between 1 and 65535",
+      "saved": "Controlled face settings saved",
+      "saveFailed": "Failed to save controlled face settings: {{message}}",
+      "enabledToast": "Local controlled face enabled",
+      "disabledToast": "Local controlled face disabled",
+      "e2e": {
+        "mode": "End-to-end encryption",
+        "modeAuto": "Auto (encrypt first, legacy compatible)",
+        "modeRequired": "Required (reject plaintext relay)",
+        "modeOff": "Off (plaintext relay)",
+        "fingerprint": "Key fingerprint",
+        "publicKey": "Public key",
+        "keyEmpty": "Not generated",
+        "copyFingerprint": "Copy fingerprint",
+        "copyPublicKey": "Copy public key",
+        "fingerprintCopied": "Fingerprint copied",
+        "publicKeyCopied": "Public key copied",
+        "copyFailed": "Copy failed",
+        "active": "Encrypted",
+        "inactive": "Not encrypted",
+        "hint": "Share the fingerprint with the controller via a trusted out-of-band channel to prevent relay man-in-the-middle; re-trust is required after key change or turning off"
+      }
+    },
+    "e2e": {
+      "fingerprint": "Key fingerprint (optional)",
+      "fingerprintPlaceholder": "Empty = trust on first use (TOFU), saved automatically",
+      "fingerprintHint": "Paste the fingerprint shown on the controlled end's end-to-end encryption card to enforce verification against relay man-in-the-middle; mismatch disconnects with a red warning",
+      "fingerprintInvalid": "Fingerprint must be 16 hex characters (copy from the controlled end settings)",
+      "encrypted": "Encrypted",
+      "plaintext": "Not encrypted",
+      "mitmSuspect": "Fingerprint mismatch",
+      "mode": "End-to-end encryption mode",
+      "modeAuto": "Auto (may fall back to plaintext)",
+      "modeRequired": "Required (no fallback, disconnect on failure)",
+      "requiredFailed": "E2E required, closed",
+      "groupTitle": "End-to-end encryption"
+    },
+    "session": {
+      "listTitle": "Remote Sessions",
+      "empty": "No sessions",
+      "emptyTip": "Create a session to start remote chatting",
+      "newSession": "New Session",
+      "loadMore": "Load more",
+      "refresh": "Refresh sessions",
+      "back": "Back to sessions",
+      "untitled": "(Untitled)",
+      "sendPlaceholder": "Send a message to the remote session…",
+      "send": "Send",
+      "abort": "Stop",
+      "sendFailed": "Send failed: {{message}}",
+      "abortFailed": "Stop failed: {{message}}",
+      "createFailed": "Create session failed: {{message}}",
+      "sessionError": "Session error: {{message}}",
+      "loadFailed": "Failed to load sessions",
+      "approvalTitle": "Tool approval required",
+      "approvalFallback": "This tool requests a modifying action",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveStale": "This approval was already handled or the controlled end is outdated",
+      "approveFailed": "Approval failed: {{message}}",
+      "model": "Model",
+      "modelAuto": "Auto (default)",
+      "delete": "Delete session",
+      "deleteFailed": "Delete failed: {{message}}",
+      "searchPlaceholder": "Search session title…",
+      "rename": "Rename session",
+      "renameFailed": "Rename failed: {{message}}",
+      "assistant": "Expert",
+      "assistantNone": "Default (none)",
+      "emptyChat": "Start your remote conversation",
+      "emptyChatTip": "Type a message, or pick a model & expert above",
+      "scrollToBottom": "Scroll to bottom",
+      "accessModeFailed": "Failed to set access mode: {{message}}",
+      "mode": {
+        "agent": "Agent",
+        "ask": "Ask",
+        "plan": "Plan"
+      },
+      "archive": "Archive session",
+      "unarchive": "Unarchive",
+      "archiveFailed": "Archive failed: {{message}}",
+      "archivedPlaceholder": "Session archived (read-only)",
+      "noModelPlaceholder": "No model available — configure in Models tab first",
+      "pin": "Pin/unpin",
+      "archivedBanner": "Session archived, messages read-only"
+    },
+    "graph": {
+      "title": "Graphs",
+      "refresh": "Refresh graph list",
+      "empty": "No graphs",
+      "emptyTip": "Create graphs on the headless server to run them here",
+      "nodes": "{{count}} nodes",
+      "run": "Run",
+      "abort": "Abort",
+      "runFailed": "Run failed: {{message}}",
+      "abortFailed": "Abort failed: {{message}}",
+      "loadFailed": "Failed to load graphs",
+      "runState": {
+        "idle": "Idle",
+        "queued": "Queued",
+        "running": "Running",
+        "succeeded": "Succeeded",
+        "failed": "Failed",
+        "aborted": "Aborted"
+      },
+      "webhook": {
+        "title": "Webhook",
+        "url": "Trigger URL",
+        "urlHint": "Relative path — external callers prepend the host address",
+        "template": "Response template",
+        "statusCode": "Response status code",
+        "async": "Async mode",
+        "asyncHint": "202 accepted + polling (sync wait by default)",
+        "fullAccess": "Full access",
+        "fullAccessHint": "Allow code/file-write nodes",
+        "fullAccessOn": "On",
+        "fullAccessOff": "Off",
+        "enableAction": "Enable",
+        "disableAction": "Disable",
+        "rotate": "Rotate token",
+        "rotateHint": "Rotating invalidates the old token immediately — update the URL in external integrations",
+        "copy": "Copy",
+        "statusFailed": "Failed to fetch webhook status: {{message}}",
+        "enableFailed": "Failed to enable webhook: {{message}}",
+        "disableFailed": "Failed to disable webhook: {{message}}"
+      }
+    },
+    "automation": {
+      "title": "Automation Tasks",
+      "refresh": "Refresh task list",
+      "empty": "No tasks",
+      "emptyTip": "Create tasks on the headless server to manage them here",
+      "graphBadge": "Graph",
+      "runNow": "Run Now",
+      "runNowAccepted": "Triggered",
+      "runNowFailed": "Trigger failed: {{message}}",
+      "toggleLabel": "Toggle task",
+      "toggleFailed": "Toggle failed: {{message}}",
+      "enabledToast": "Task enabled",
+      "disabledToast": "Task paused",
+      "nextRunLabel": "Next",
+      "nextRunNone": "Not scheduled",
+      "paused": "Paused",
+      "loadFailed": "Failed to load tasks"
+    },
+    "ui": {
+      "openInClient": "Open on controlled endpoint",
+      "opened": "Session opened on the controlled endpoint",
+      "notOpened": "Controlled endpoint could not open it (main window unavailable)",
+      "openFailed": "Failed to open on controlled endpoint: {{message}}"
+    },
+    "bridge": {
+      "approvalTitle": "Tool bridge approval",
+      "approvalFallback": "A remote session requests a browser action on this desktop",
+      "approve": "Allow",
+      "reject": "Deny",
+      "stale": "This request is no longer pending (timed out or already answered)",
+      "failed": "Failed to respond: {{message}}",
+      "dismiss": "Dismiss"
+    },
+    "provider": {
+      "unknown": "Unknown provider",
+      "providersTitle": "Providers",
+      "modelsTitle": "Models",
+      "addProvider": "Add provider",
+      "addModel": "Add model",
+      "name": "Name",
+      "baseUrl": "Base URL",
+      "apiKey": "API key",
+      "belongProvider": "Provider",
+      "modelIdentity": "Model ID (upstream)",
+      "displayName": "Display name",
+      "type": "Type",
+      "typeLlm": "LLM",
+      "typeEmbedding": "Embedding",
+      "typeTts": "TTS",
+      "typeReranker": "Reranker",
+      "typeAsr": "ASR",
+      "enable": "Enable",
+      "keyConfigured": "Key configured",
+      "keyNotSet": "No key set",
+      "formRequired": "Please fill required fields (name/URL or ID)",
+      "saved": "Saved",
+      "saveFailed": "Save failed: {{message}}",
+      "loadFailed": "Failed to load model config",
+      "emptyProviders": "No providers yet — add one to start configuring models",
+      "emptyModels": "No models yet",
+      "readonlyHint": "Desktop remote provider config is read-only (manage in its local AI providers page)",
+      "title": "Providers & Models",
+      "edit": "Edit",
+      "apiKeyEdit": "API key (fill new value to replace)",
+      "apiKeyKeepHint": "Leave empty to keep current key",
+      "temperature": "Temperature",
+      "topP": "topP",
+      "maxTokens": "Max tokens",
+      "delete": "Delete provider (cascades models)",
+      "deleteModel": "Delete model",
+      "deleted": "Deleted",
+      "deleteFailed": "Delete failed: {{message}}",
+      "test": "Test connectivity",
+      "testOk": "Connection OK",
+      "testFailed": "Connection failed: {{message}}",
+      "fetchImport": "Import models from upstream",
+      "fetchFailed": "Upstream fetch failed",
+      "fetchEmpty": "No new models to import",
+      "importSelected": "Import selected ({{count}})",
+      "imported": "Models imported",
+      "extraHeaders": "Extra headers",
+      "extraHeadersHint": "JSON object, e.g. {\"X-Key\":\"v\"}",
+      "extraHeadersInvalid": "Extra headers must be a JSON object"
+    }
+  }
+}

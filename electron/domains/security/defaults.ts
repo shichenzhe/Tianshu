@@ -1,0 +1,213 @@
+/**
+ * 安全配置默认值 + 内置敏感路径清单（SP1 spec §5.1/§5.2）。
+ * 内置清单永不落盘（WorkBuddy 同构三层防删的第一层），
+ * 展示合并与保存剔除见 config-store.ts 的 mergeRuleList/stripBuiltinItems。
+ * 2026-10-24 默认值调整见权限放宽 spec §4.3。
+ */
+import type { SecurityConfig } from "../../../src-react/domains/security/model/types";
+
+/** 15 项安全配置默认值（read-time fallback 的唯一事实源） */
+export const SECURITY_DEFAULTS: SecurityConfig = {
+  sandboxEnabled: true,
+  fileAllowlist: [],
+  fileBlocklist: [],
+  cmdAllow: [{ prefix: ["git", "push"] }, { prefix: ["npm", "install"] }],
+  // rm 移出黑名单入危险分级表（command-risk.ts：rm -rf 根/系统目录 CRITICAL
+  // 先判，其余 rm -r/-rf/通配符 HIGH；单文件 rm 放行）、curl/wget 移出
+  // cmdAsk（网络域免审顺延，spec §4.3）
+  cmdAsk: [],
+  programBlacklist: [],
+  domainAllow: [],
+  domainDeny: [],
+  blockAllNetwork: false,
+  maliciousDomainProtection: true,
+  fileBackupEnabled: true,
+  fileBackupMaxSizeMB: 3000,
+  deleteProtection: true,
+  bulkDeleteThreshold: 50,
+  disabledTools: [],
+};
+
+/** 内置文件黑名单全量清单（照 WorkBuddy 默认文件安全规则，PRD 同源） */
+export const BUILTIN_FILE_BLOCKLIST_ALL = [
+  "~/.ssh/",
+  "~/.aws/",
+  "~/.gnupg/",
+  "~/.gpg/",
+  "~/.kube/config",
+  "~/.docker/config.json",
+  "~/.docker/daemon.json",
+  "~/.netrc",
+  "~/.npmrc",
+  "~/.pypirc",
+  "~/.gem/credentials",
+  "~/.config/gh/hosts.yml",
+  "~/.git-credentials",
+  "~/.config/gcloud/",
+  "~/.azure/",
+  "~/.terraform.d/credentials.tfrc.json",
+  "~/Library/Keychains/",
+];
+
+/** 按平台过滤内置清单（Windows 剔除 macOS 钥匙串） */
+export function defaultFileBlocklist(platform: NodeJS.Platform): string[] {
+  if (platform === "win32") {
+    return BUILTIN_FILE_BLOCKLIST_ALL.filter(
+      (p) => p !== "~/Library/Keychains/",
+    );
+  }
+  return [...BUILTIN_FILE_BLOCKLIST_ALL];
+}
+
+/** 内置恶意域清单（SP5 spec §7）：静态代码常量永不落盘，随版本更新。
+ * 初版 114 条 = abuse.ch URLhaus + OpenPhish public feed 2026-09-16 快照，
+ * 按域名频次聚合，剔除 IP 主机与合法大站/托管平台 apex（pic.li、
+ * workers.dev、lovable.app、screenconnect.com 等）；未收录不代表安全，
+ * 防护面 = 清单命中 + 用户 domainDeny。
+ * 判定消费方 domain-policy.ts；展示消费方 SecurityService.getConfig defaults */
+export const BUILTIN_MALICIOUS_DOMAINS = [
+  "0akw8w.com",
+  "198-macros.com",
+  "22qq-client.com",
+  "2bxvrc1.com",
+  "acrobat.proposal.name.ng",
+  "adobecloud.pro",
+  "amaamn.com",
+  "angefundsu.sbs",
+  "apartament.biz",
+  "awarenessexhibition.com",
+  "bluehorizons.travel",
+  "bookingdirect.paymentarrival.com",
+  "botcheck-cf.top",
+  "breezeclient.com",
+  "cheetoclient.com",
+  "cid.gov.so",
+  "cloud-sharing.com",
+  "conti.pk",
+  "copiose.org",
+  "daylian.com",
+  "debloatex.com",
+  "digitalisonesapps.com",
+  "dnswwt.club",
+  "docmntageant.com",
+  "donutclients.net",
+  "dulkir-mod.com",
+  "executorhub.space",
+  "familyaddons.com",
+  "fingerprint-veri.info",
+  "floppaclient.com",
+  "fr-spotify.com",
+  "funnymap.net",
+  "gate-43985.com",
+  "get.acitvated.win",
+  "get.acivated.win",
+  "get.acrivated.win",
+  "get.activatedd.win",
+  "get.actiavted.win",
+  "get.actiated.win",
+  "get.activaed.win",
+  "get.activatd.win",
+  "get.activatde.win",
+  "get.activates.win",
+  "get.activeted.win",
+  "get.activtaed.win",
+  "get.activted.win",
+  "get.actrivated.win",
+  "get.acttivated.win",
+  "get.actvated.win",
+  "get.atcivated.win",
+  "get.ativated.win",
+  "get.cativated.win",
+  "get.ctivated.win",
+  "get.sctivated.win",
+  "ghostclient.net",
+  "gpsmarocpro.com",
+  "hashedsolver.icu",
+  "images.fishing-tools.cyou",
+  "invmove.com",
+  "jokely.icu",
+  "kammwv.cc",
+  "kryptonclient-cracked.com",
+  "luminexclient.com",
+  "marlowclient.com",
+  "massgravel.dev",
+  "megainviteoffice.com",
+  "meteorclientplus.com",
+  "meteorclients.com",
+  "meteorrejects.net",
+  "minpop.com",
+  "modhider.com",
+  "msteamsinvitees.com",
+  "ndigitals.in",
+  "noamaddons.com",
+  "nova-client.com",
+  "odinclient.com",
+  "onlocity.com",
+  "oss.cop.lat",
+  "phantom-client.com",
+  "polarclient.net",
+  "polinexclient.org",
+  "portal.onepansol.site",
+  "prestige-client.org",
+  "rbcode.net",
+  "roblox.com.hr",
+  "roblox.com.ml",
+  "roblox.ly",
+  "robloxc.com.es",
+  "rxder.com",
+  "sigmaclient.net",
+  "skyblock-addons.com",
+  "skyblock-extras.org",
+  "speddebug.com",
+  "startvsgame.com",
+  "surun.info",
+  "talkandtypeapp.com",
+  "tapped.top",
+  "themaintechnician.us",
+  "tinyurls.in",
+  "tripfarely.com",
+  "trouserstreak.net",
+  "true-soft.su",
+  "uno-play.xyz",
+  "update-notif.com",
+  "v7yp4wts.fourstarcampground.com",
+  "westernreigns.com",
+  "wielixclient.com",
+  "windowsdiagnostics.st",
+  "wir.consultingics.com",
+  "workerstats.net",
+  "www2-facebook.com",
+  "wizzyaddon.com",
+  "zenithclient.com",
+  "zoomeventlive.com",
+];
+
+/** 内置工具注册表（SP6 spec §3.1）：运行时开关的展示与白名单双源 */
+export const BUILTIN_TOOLS: ReadonlyArray<{
+  name: string;
+  group: "file" | "command" | "skill" | "plan" | "expert";
+  kind: "read" | "write";
+}> = [
+  { name: "read_file", group: "file", kind: "read" },
+  { name: "list_dir", group: "file", kind: "read" },
+  { name: "search_files", group: "file", kind: "read" },
+  { name: "write_file", group: "file", kind: "write" },
+  { name: "delete_file", group: "file", kind: "write" },
+  { name: "run_command", group: "command", kind: "write" },
+  { name: "read_skill", group: "skill", kind: "read" },
+  { name: "create_skill", group: "skill", kind: "write" },
+  { name: "create_expert", group: "expert", kind: "write" },
+  { name: "update_expert", group: "expert", kind: "write" },
+  { name: "recommend_experts", group: "expert", kind: "read" },
+  { name: "dispatch_member", group: "expert", kind: "read" },
+  { name: "plan_create_item", group: "plan", kind: "write" },
+  { name: "plan_update_status", group: "plan", kind: "write" },
+  { name: "plan_append_summary", group: "plan", kind: "write" },
+  { name: "plan_list_items", group: "plan", kind: "read" },
+  { name: "plan_get_item", group: "plan", kind: "read" },
+];
+
+/** disabledTools 白名单（BUILTIN_TOOLS 名单序） */
+export const BUILTIN_TOOL_NAMES: readonly string[] = BUILTIN_TOOLS.map(
+  (t) => t.name,
+);

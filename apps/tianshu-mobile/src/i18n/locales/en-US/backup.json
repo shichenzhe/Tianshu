@@ -1,0 +1,18 @@
+{
+  "title": "Backup",
+  "unsupported": "The active connection does not support backup remote control (no backup capability — connect to the desktop)",
+  "triggerSection": "Back Up Now",
+  "triggerHint": "Packs all desktop data and uploads to its configured headless server (restore on the desktop)",
+  "notePlaceholder": "Note (optional)",
+  "trigger": "Back Up",
+  "phasePacking": "Packing…",
+  "phaseUploading": "Uploading…",
+  "phaseUploadingPercent": "Uploading {{percent}}%",
+  "createFailedTitle": "Backup Failed",
+  "empty": "No backups yet",
+  "emptyTip": "Trigger a backup once the desktop has a direct headless connection configured",
+  "unnamedBackup": "Untitled backup",
+  "statusUploading": "Uploading",
+  "deleteTitle": "Delete Backup",
+  "deleteConfirm": "Delete the backup from {{time}}? This cannot be undone."
+}

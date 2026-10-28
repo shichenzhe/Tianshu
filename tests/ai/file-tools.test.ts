@@ -1,0 +1,324 @@
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  symlinkSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+} from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  FILE_TOOLS,
+  collectFiles,
+  resolveSafePath,
+} from "../../electron/domains/ai/agent/file-tools";
+
+let ws: string;
+const tool = (name: string) => FILE_TOOLS.find((t) => t.name === name)!;
+const ctx = () => ({ workspacePath: ws, sessionId: 1 });
+
+beforeEach(() => {
+  ws = mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  writeFileSync(
+    path.join(ws, "a.txt"),
+    Array.from({ length: 100 }, (_, i) => `line${i + 1}`).join("\n"),
+  );
+  mkdirSync(path.join(ws, "sub"));
+  writeFileSync(
+    path.join(ws, "sub", "b.ts"),
+    "export const x = 1;\nconst y = 2;\n",
+  );
+  mkdirSync(path.join(ws, "node_modules"));
+  writeFileSync(path.join(ws, "node_modules", "junk.js"), "line1\nline2\n");
+  symlinkSync("/etc/hosts", path.join(ws, "link.txt"));
+});
+afterEach(() => rmSync(ws, { recursive: true, force: true }));
+
+describe("resolveSafePath 逃逸矩阵", () => {
+  it("合法相对路径", () => {
+    expect(resolveSafePath(ws, "a.txt")).toBe(path.join(ws, "a.txt"));
+  });
+  it("子目录相对路径", () => {
+    expect(resolveSafePath(ws, "sub/b.ts").startsWith(ws)).toBe(true);
+  });
+  it("../ 逃逸拒绝", () => {
+    expect(() => resolveSafePath(ws, "../x")).toThrow("PATH_OUTSIDE_WORKSPACE");
+  });
+  it("绝对路径拒绝", () => {
+    expect(() => resolveSafePath(ws, "/etc/hosts")).toThrow(
+      "PATH_OUTSIDE_WORKSPACE",
+    );
+  });
+  it("拼接逃逸拒绝", () => {
+    expect(() => resolveSafePath(ws, "sub/../../x")).toThrow(
+      "PATH_OUTSIDE_WORKSPACE",
+    );
+  });
+  it("symlink 指向界外拒绝", () => {
+    expect(() => resolveSafePath(ws, "link.txt")).toThrow(
+      "PATH_OUTSIDE_WORKSPACE",
+    );
+  });
+  it("symlink 目录写入逃逸拒绝", async () => {
+    symlinkSync(os.tmpdir(), path.join(ws, "escdir"));
+    const out = await tool("write_file").execute(ctx(), {
+      path: "escdir/evil.txt",
+      content: "x",
+    });
+    expect(out).toContain("路径超出工作空间范围");
+    expect(existsSync(path.join(os.tmpdir(), "evil.txt"))).toBe(false);
+  });
+});
+
+describe("read_file", () => {
+  it("带行号输出", async () => {
+    const out = await tool("read_file").execute(ctx(), { path: "a.txt" });
+    expect(out).toContain("   1| line1");
+    expect(out).toContain(" 100| line100");
+  });
+  it("不存在 → 错误字符串", async () => {
+    const out = await tool("read_file").execute(ctx(), { path: "nope.txt" });
+    expect(out).toMatch(/^错误: /);
+  });
+  it("二进制（NUL）拒绝", async () => {
+    writeFileSync(path.join(ws, "bin.dat"), "a\0b");
+    const out = await tool("read_file").execute(ctx(), { path: "bin.dat" });
+    expect(out).toMatch(/^错误: /);
+  });
+  it("超 512KB 拒绝", async () => {
+    writeFileSync(path.join(ws, "big.txt"), "x".repeat(512 * 1024 + 1));
+    const out = await tool("read_file").execute(ctx(), { path: "big.txt" });
+    expect(out).toMatch(/^错误: /);
+  });
+});
+
+describe("write_file", () => {
+  it("写入并自动建父目录", async () => {
+    const out = await tool("write_file").execute(ctx(), {
+      path: "d1/d2/n.txt",
+      content: "hi",
+    });
+    expect(out).toContain("已写入");
+    expect(readFileSync(path.join(ws, "d1", "d2", "n.txt"), "utf8")).toBe("hi");
+  });
+  it("覆盖已有文件", async () => {
+    await tool("write_file").execute(ctx(), { path: "a.txt", content: "new" });
+    expect(readFileSync(path.join(ws, "a.txt"), "utf8")).toBe("new");
+  });
+  it("超 1MB 拒绝", async () => {
+    const out = await tool("write_file").execute(ctx(), {
+      path: "big.txt",
+      content: "x".repeat(1024 * 1024 + 1),
+    });
+    expect(out).toMatch(/^错误: /);
+  });
+  it("写盘成功后回调 onFileWritten（文件窗口广播钩子）；写失败不回调", async () => {
+    const onFileWritten = vi.fn();
+    const out = await tool("write_file").execute(
+      { ...ctx(), onFileWritten },
+      {
+        path: "hook/n.txt",
+        content: "hi",
+      },
+    );
+    expect(out).toContain("已写入");
+    expect(onFileWritten).toHaveBeenCalledWith(path.join(ws, "hook", "n.txt"));
+    // 越界拒绝路径：未写盘不回调
+    onFileWritten.mockClear();
+    await tool("write_file").execute(
+      { ...ctx(), onFileWritten },
+      {
+        path: "../escape.txt",
+        content: "x",
+      },
+    );
+    expect(onFileWritten).not.toHaveBeenCalled();
+  });
+});
+
+describe("list_dir", () => {
+  it("一层列表，目录在前，忽略隐藏与点开头", async () => {
+    writeFileSync(path.join(ws, ".hidden"), "x");
+    const out = await tool("list_dir").execute(ctx(), { path: "" });
+    expect(out).toContain("sub/");
+    expect(out).toContain("a.txt");
+    expect(out.indexOf("sub/")).toBeLessThan(out.indexOf("a.txt"));
+    expect(out).not.toContain(".hidden");
+  });
+});
+
+describe("search_files", () => {
+  it("content 模式带路径行号", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "const",
+      output_mode: "content",
+    });
+    expect(out).toContain("sub/b.ts:1:");
+  });
+  it("files_with_matches 只列文件", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "const",
+      output_mode: "files_with_matches",
+    });
+    expect(out.trim()).toBe("sub/b.ts");
+  });
+  it("glob 过滤", async () => {
+    writeFileSync(path.join(ws, "c.md"), "const z = 3;");
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "const",
+      glob: "*.ts",
+      output_mode: "files_with_matches",
+    });
+    expect(out).toContain("b.ts");
+    expect(out).not.toContain("c.md");
+  });
+  it("排除 node_modules", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "line",
+      output_mode: "files_with_matches",
+    });
+    expect(out).not.toContain("node_modules");
+  });
+  it("非法正则 → 错误字符串", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "([",
+      output_mode: "files_with_matches",
+    });
+    expect(out).toMatch(/^错误: /);
+  });
+  it("嵌套量词（(a+)* 形态）拒绝", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "(a+)*b",
+      output_mode: "files_with_matches",
+    });
+    expect(out).toContain("灾难性回溯");
+  });
+  it("有界量词组不受误伤（(\\w{2})+、(\\d+)、(a|b)*）放行", async () => {
+    writeFileSync(path.join(ws, "quant.txt"), "ab\n");
+    for (const pattern of ["(\\w{2})+", "(\\d+)", "(a|b)*"]) {
+      const out = await tool("search_files").execute(ctx(), {
+        pattern,
+        output_mode: "content",
+      });
+      expect(out).not.toMatch(/^错误: /);
+    }
+  });
+  it("超长正则拒绝（>200 字符）", async () => {
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "a".repeat(201),
+      output_mode: "files_with_matches",
+    });
+    expect(out).toContain("正则过长");
+  });
+  it("超长行截断后仍可匹配前缀", async () => {
+    writeFileSync(path.join(ws, "long.txt"), "x".repeat(3000) + "target");
+    const out = await tool("search_files").execute(ctx(), {
+      pattern: "^x+$",
+      output_mode: "content",
+    });
+    // 目标行超 2000 字符被截断，截断后行尾非 x → 不应崩溃且不产出错误
+    expect(out).toMatch(/未找到匹配内容|long\.txt/);
+  });
+});
+
+describe("fullAccess 完全访问边界", () => {
+  const fullCtx = () => ({ workspacePath: ws, sessionId: 1, fullAccess: true });
+
+  it("full 态读工作空间外文件成功（绝对路径）", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      writeFileSync(path.join(outside, "secret.txt"), "topsecret");
+      expect(resolveSafePath(ws, path.join(outside, "secret.txt"), true)).toBe(
+        path.join(outside, "secret.txt"),
+      );
+      const out = await tool("read_file").execute(fullCtx(), {
+        path: path.join(outside, "secret.txt"),
+      });
+      expect(out).toContain("topsecret");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("full 态写入工作空间外路径成功", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      const out = await tool("write_file").execute(fullCtx(), {
+        path: path.join(outside, "deep", "new.txt"),
+        content: "free",
+      });
+      expect(out).toContain("已写入");
+      expect(readFileSync(path.join(outside, "deep", "new.txt"), "utf8")).toBe(
+        "free",
+      );
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("default 态越界仍拒（回归锚）", async () => {
+    const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
+    try {
+      const outsideFile = path.join(outside, "secret.txt");
+      writeFileSync(outsideFile, "topsecret");
+      const read = await tool("read_file").execute(ctx(), {
+        path: outsideFile,
+      });
+      expect(read).toBe("错误: 路径超出工作空间范围");
+      const write = await tool("write_file").execute(ctx(), {
+        path: outsideFile,
+        content: "x",
+      });
+      expect(write).toBe("错误: 路径超出工作空间范围");
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("full 态相对路径仍基于工作空间", async () => {
+    const out = await tool("read_file").execute(fullCtx(), { path: "a.txt" });
+    expect(out).toContain("   1| line1");
+    expect(out).toContain("  100| line100");
+  });
+});
+
+describe("collectFiles 扫描预算（M3）", () => {
+  it("maxFiles 熔断：超限停止收集并返回截断信号", async () => {
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(path.join(ws, `f${i}.txt`), "x");
+    }
+    const acc: string[] = [];
+    const complete = await collectFiles(ws, acc, 0, {
+      maxFiles: 3,
+      maxDepth: 4,
+    });
+    expect(acc.length).toBe(3);
+    expect(complete).toBe(false);
+  });
+
+  it("maxDepth 熔断：超深目录不再递归", async () => {
+    mkdirSync(path.join(ws, "a/b/c"), { recursive: true });
+    writeFileSync(path.join(ws, "a/b/c/leaf.md"), "x");
+    const acc: string[] = [];
+    const complete = await collectFiles(ws, acc, 0, {
+      maxFiles: 10,
+      maxDepth: 1,
+    });
+    expect(acc.some((f) => f.endsWith("leaf.md"))).toBe(false);
+    expect(complete).toBe(false);
+  });
+
+  it("预算内完整收集返回 true", async () => {
+    writeFileSync(path.join(ws, "ok.txt"), "x");
+    const acc: string[] = [];
+    const complete = await collectFiles(ws, acc, 0, {
+      maxFiles: 10,
+      maxDepth: 4,
+    });
+    expect(complete).toBe(true);
+    expect(acc.some((f) => f.endsWith("ok.txt"))).toBe(true);
+  });
+});

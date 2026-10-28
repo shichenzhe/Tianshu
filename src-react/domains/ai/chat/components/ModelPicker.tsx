@@ -1,0 +1,150 @@
+/**
+ * 模型选择器：按服务商分组的下拉菜单，选中即写入会话当前模型；
+ * 面板底部固定「配置模型」入口（跳服务提供商管理页）
+ */
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Check, ChevronDown, Server } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ProviderApi } from "../../api/provider.api";
+import ModelApi from "../../api/model.api";
+import SessionApi from "../../api/session.api";
+import { mapIpcError } from "../lib/error-message";
+
+const PROVIDERS_KEY = ["providers"] as const;
+const MODELS_KEY = ["models"] as const;
+const SESSIONS_KEY = ["sessions"] as const;
+const PROVIDERS_ROUTE = "/module/ai/providers";
+
+interface ModelPickerProps {
+  /** 会话模型直写分支；新建任务页草稿态不传（经 onPickModel 回调） */
+  sessionId?: number;
+  currentModelId?: number;
+  /** 草稿分支（无 session 语境）：选中回调调用方，不落库不失效缓存 */
+  onPickModel?: (modelId: number) => void;
+}
+
+export default function ModelPicker({
+  sessionId,
+  currentModelId,
+  onPickModel,
+}: ModelPickerProps) {
+  const { t } = useTranslation(["chat"]);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const providersQuery = useQuery({
+    queryKey: PROVIDERS_KEY,
+    queryFn: () => ProviderApi.list(),
+  });
+  const modelsQuery = useQuery({
+    queryKey: MODELS_KEY,
+    queryFn: () => ModelApi.listAll(),
+  });
+
+  const groups = useMemo(() => {
+    const providers = providersQuery.data ?? [];
+    // 会话补全只认 llm（embedding/tts 等专项端点模型不可对话）
+    const models = (modelsQuery.data ?? []).filter(
+      (model) => model.enabled && (model.type ?? "llm") === "llm",
+    );
+    return providers
+      .map((provider) => ({
+        provider,
+        models: models.filter((model) => model.providerId === provider.id),
+      }))
+      .filter((group) => group.models.length > 0);
+  }, [providersQuery.data, modelsQuery.data]);
+
+  const currentModel = (modelsQuery.data ?? []).find(
+    (model) => model.id === currentModelId,
+  );
+  const currentLabel = currentModel
+    ? currentModel.name || currentModel.modelId
+    : t("chat:input.selectModel");
+
+  const handleSelect = async (modelId: number) => {
+    // 草稿分支在前：无 session 语境（新建任务页）仅回调，不落库不失效缓存
+    if (onPickModel) {
+      onPickModel(modelId);
+      return;
+    }
+    // 哨兵会话（文件窗占位 id<0，修复轮 1 Minor ③）：无真会话可写——
+    // 轻 toast 不发 IPC（防 setModel 报错弹窗）
+    if (sessionId !== undefined && sessionId < 0) {
+      toast.info(t("chat:input.lockedUntilFirstSend"));
+      return;
+    }
+    if (sessionId === undefined) {
+      return;
+    }
+    try {
+      await SessionApi.setModel(sessionId, modelId);
+      await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    }
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          // T27 窄容器：去 shrink-0 + min-w-0——空间不足时按钮随 truncate
+          // span 收缩截断（宽容器尺寸不变，仍受 max-w-44 上限）
+          className="min-w-0 max-w-44 border-0 hover:bg-primary-subtle hover:text-primary"
+          title={currentModel?.modelId}
+        >
+          <span className="truncate">{currentLabel}</span>
+          <ChevronDown className="ml-1 h-4 w-4 shrink-0 opacity-60" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-72 w-56 overflow-y-auto border border-border/50 rounded-lg shadow-lg"
+      >
+        {groups.length === 0 && (
+          <DropdownMenuLabel>{t("chat:input.modelRequired")}</DropdownMenuLabel>
+        )}
+        {groups.map((group, index) => (
+          <div key={group.provider.id}>
+            {index > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel>{group.provider.name}</DropdownMenuLabel>
+            {group.models.map((model) => (
+              <DropdownMenuItem
+                key={model.id}
+                onClick={() => void handleSelect(model.id)}
+              >
+                <span className="truncate" title={model.modelId}>
+                  {model.name || model.modelId}
+                </span>
+                {model.id === currentModelId && (
+                  <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
+                )}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => navigate(PROVIDERS_ROUTE)}>
+          <Server />
+          {t("chat:settings.configureModels")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}

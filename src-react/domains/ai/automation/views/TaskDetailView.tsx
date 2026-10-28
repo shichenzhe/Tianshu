@@ -1,0 +1,412 @@
+// src-react/domains/ai/automation/views/TaskDetailView.tsx
+/**
+ * 任务详情/编辑页(spec §6):顶栏(返回/标题/测试运行/删除/取消/保存) +
+ * 左配置右历史分栏。左侧经 useTaskForm 复用弹窗表单(名称/提示词输入卡/
+ * 工作空间/权限胶囊/频率卡片),右侧 RunHistoryPanel 任务运行历史。
+ * 顶栏迁入 TopBar 中段（page-header），页内直接分栏上移。
+ */
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ArrowLeft, Loader2, Play, Trash2, Workflow } from "lucide-react";
+
+import IconTooltip from "@/components/common/icon-tooltip";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { usePageHeader } from "@/components/layout/page-header.store";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
+import { useGraphs } from "@/domains/ai/orchestration/views/GraphListView";
+import { AutomationApi } from "../api/automation.api";
+import { useTaskForm } from "../lib/use-task-form";
+import { useAutomationTasks } from "../lib/use-automation-tasks";
+import { mapIpcError } from "../../chat/lib/error-message";
+import PermissionCapsule from "../../chat/components/PermissionCapsule";
+import TaskPromptInput from "../components/TaskPromptInput";
+import RunHistoryPanel from "../components/RunHistoryPanel";
+import { ScheduleDialog } from "../components/ScheduleDialog";
+
+export default function TaskDetailView() {
+  const { id } = useParams<{ id: string }>();
+  const taskId = Number(id);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation(["chat", "common"]);
+  const { data: tasks = [], isLoading } = useAutomationTasks();
+  const { data: workspaces = [] } = useQuery({
+    queryKey: ["workspaces"],
+    queryFn: () => WorkspaceApi.list(),
+  });
+  // 编排图候选:graph 任务提示词区换图名徽标 + 「查看编排」跳转(Task 15)
+  const { data: graphs = [] } = useGraphs();
+  const task = tasks.find((x) => x.id === taskId);
+  // resetKey 兼 SchedulePicker 回填 remount:任务落地即以 task-{id} 重置表单
+  const form = useTaskForm({
+    task,
+    resetKey: task ? `task-${task.id}` : "none",
+    workspaces,
+  });
+  const [running, setRunning] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const notFoundRef = useRef(false);
+
+  // 未找到:非加载态自动回列表(交给 useEffect,避免渲染期导航)
+  useEffect(() => {
+    if (!isLoading && !task && !notFoundRef.current) {
+      notFoundRef.current = true;
+      toast.error(t("chat:automation.detail.notFound"));
+      navigate("/module/ai/automation", { replace: true });
+    }
+  }, [isLoading, task, navigate, t]);
+
+  const invalidateTasks = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["automation", "tasks"] });
+  };
+
+  // canSubmit 已含编辑期 startAtUnchanged 语义(维持原生命周期免防倒流校验)
+  async function handleSave(): Promise<boolean> {
+    if (!form.canSubmit) {
+      return false;
+    }
+    setSaving(true);
+    try {
+      await AutomationApi.update(taskId, form.buildParams());
+      await invalidateTasks();
+      form.resetSnapshot();
+      toast.success(t("chat:automation.detail.saved"));
+      return true;
+    } catch (e) {
+      toast.error(mapIpcError(e));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handlePlay() {
+    setRunning(true);
+    try {
+      // 校验不过(如名称被清空)先中止并提示:handleSave 对此静默返回
+      // false,play 需给出可见反馈(API 失败路径已有专属 toast 不重复)
+      if (form.isDirty && !form.canSubmit) {
+        toast.error(t("chat:automation.detail.invalidForRun"));
+        return;
+      }
+      // 有未保存修改先落库(失败即中止本次触发)
+      if (form.isDirty && !(await handleSave())) {
+        return;
+      }
+      await AutomationApi.runNow(taskId);
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", "runs"],
+      });
+      toast.success(t("chat:automation.detail.playing"));
+    } catch (e) {
+      // runNow 互斥拒发(TASK_ALREADY_RUNNING)单独文案,其余保持通用触发失败
+      toast.error(
+        mapIpcError(e).includes("TASK_ALREADY_RUNNING")
+          ? t("chat:automation.detail.alreadyRunning")
+          : t("chat:automation.detail.runNowFailed"),
+      );
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function handleDelete() {
+    // 删除后 invalidateTasks 重拉会让 task 变 undefined,先封 notFound 口,
+    // 防 notFound effect 抢在导航前误报「任务不存在」
+    notFoundRef.current = true;
+    setDeleting(true);
+    try {
+      await AutomationApi.remove([taskId]);
+      await invalidateTasks();
+      await queryClient.invalidateQueries({
+        queryKey: ["automation", "runs"],
+      });
+      navigate("/module/ai/automation");
+    } catch (e) {
+      toast.error(mapIpcError(e));
+    } finally {
+      setDeleting(false);
+      setDeleteOpen(false);
+    }
+  }
+
+  function handleLeave() {
+    if (form.isDirty) {
+      setDiscardOpen(true);
+    } else {
+      navigate(-1);
+    }
+  }
+
+  // 顶栏（TopBar 中段）：返回 + 任务名 + 测试运行/删除/取消/保存
+  // （任务未加载完置空，避免闪现占位标题）
+  usePageHeader(
+    task
+      ? {
+          leading: (
+            <IconTooltip label={t("chat:automation.detail.back")}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                aria-label={t("chat:automation.detail.back")}
+                onClick={handleLeave}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </IconTooltip>
+          ),
+          title: (
+            <h2 className="truncate text-sm font-semibold text-foreground">
+              {task.name}
+            </h2>
+          ),
+          trailing: (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                disabled={running}
+                onClick={() => void handlePlay()}
+              >
+                {running ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                {t("chat:automation.detail.play")}
+              </Button>
+              <IconTooltip label={t("chat:automation.detail.deleteTitle")}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-muted-foreground"
+                  aria-label={t("chat:automation.detail.deleteTitle")}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </IconTooltip>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7"
+                onClick={handleLeave}
+              >
+                {t("chat:automation.detail.cancel")}
+              </Button>
+              <Button
+                size="sm"
+                className="h-7"
+                disabled={!form.isDirty || !form.canSubmit || saving}
+                onClick={() => void handleSave()}
+              >
+                {t("chat:automation.detail.save")}
+              </Button>
+            </>
+          ),
+        }
+      : null,
+  );
+
+  if (!task) return null;
+  // graph 任务关联图(名称/节点数徽标显示;图被删后端拒绝,查无兜底 id)
+  const linkedGraph = graphs.find((g) => g.id === form.values.graphId);
+
+  return (
+    <div className="flex h-full flex-col">
+      {/* 左配置右历史分栏(右侧任务运行历史) */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-[62%] space-y-5 overflow-y-auto p-4">
+          <div className="space-y-1.5">
+            <Label>{t("chat:automation.detail.name")}</Label>
+            <Input
+              value={form.values.name}
+              placeholder={t("chat:automation.detail.namePlaceholder")}
+              onChange={(e) => form.patch({ name: e.target.value })}
+            />
+          </div>
+
+          {form.values.targetKind === "graph" ? (
+            <div className="space-y-1.5">
+              <Label>{t("chat:automation.detail.graph")}</Label>
+              <div className="flex items-center gap-2 rounded-lg border border-border/50 px-3 py-2">
+                <Workflow className="h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                  {linkedGraph
+                    ? `${linkedGraph.name} · ${t("chat:orchestration.nodeCount", { count: linkedGraph.nodeCount })}`
+                    : `#${form.values.graphId}`}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 shrink-0 hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+                  onClick={() =>
+                    navigate(`/module/ai/graphs/${form.values.graphId}`)
+                  }
+                >
+                  {t("chat:automation.detail.viewGraph")}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>{t("chat:automation.detail.prompt")}</Label>
+              <TaskPromptInput
+                value={form.values.prompt}
+                onChange={(prompt) => form.patch({ prompt })}
+                workspaceId={form.values.workspaceId}
+                modelId={form.values.modelId ?? undefined}
+                onModelChange={(modelId) => form.patch({ modelId })}
+                onOpenMcp={() => navigate("/module/ai/experts?tab=connectors")}
+                placeholder={t("chat:automation.create.promptPlaceholder")}
+              />
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label>{t("chat:automation.detail.workspace")}</Label>
+            <Select
+              value={
+                form.values.workspaceId
+                  ? String(form.values.workspaceId)
+                  : undefined
+              }
+              onValueChange={(v) => form.patch({ workspaceId: Number(v) })}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={t("chat:automation.create.workspacePlaceholder")}
+                />
+              </SelectTrigger>
+              <SelectContent className="border border-border/50 rounded-lg shadow-lg">
+                {workspaces.map((w) => (
+                  <SelectItem key={w.id} value={String(w.id)}>
+                    {w.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("chat:automation.detail.permission")}</Label>
+            <PermissionCapsule
+              sessionId={task.id}
+              accessMode={form.values.accessMode}
+              onChange={(accessMode) => form.patch({ accessMode })}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>{t("chat:automation.detail.schedule")}</Label>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setScheduleOpen(true)}
+              >
+                {t("chat:automation.detail.scheduleEdit")}
+              </Button>
+            </div>
+            <p className="rounded-lg border border-border/50 px-3 py-2 text-sm text-muted-foreground">
+              {task.scheduleText}
+            </p>
+            {form.validation !== "ok" && (
+              <p className="text-sm text-destructive">
+                {t(
+                  `chat:automation.schedule.err${form.validation[0].toUpperCase()}${form.validation.slice(1)}`,
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="w-[38%] min-w-0 border-l border-border/50">
+          <RunHistoryPanel taskId={task.id} />
+        </div>
+      </div>
+
+      {/* 删除确认 */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="border border-border/50 rounded-lg shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("chat:automation.detail.deleteTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat:automation.detail.deleteDesc", { name: task.name })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleting}
+              onClick={() => void handleDelete()}
+            >
+              {t("common:confirm")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 放弃未保存修改确认 */}
+      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <AlertDialogContent className="border border-border/50 rounded-lg shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("chat:automation.detail.discardTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("chat:automation.detail.discardDesc")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>
+              {t("chat:automation.detail.keepEditing")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => navigate(-1)}>
+              {t("chat:automation.detail.discard")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ScheduleDialog
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        schedule={form.values.schedule}
+        validity={form.values.validity}
+        onChange={(schedule, validity) => form.patch({ schedule, validity })}
+      />
+    </div>
+  );
+}

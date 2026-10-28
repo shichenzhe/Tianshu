@@ -1,0 +1,133 @@
+# 服务配置
+app:
+  # 服务配置
+  port: 3000
+  # 监听地址（缺省 0.0.0.0 监听所有网卡；内网部署建议指定，如 127.0.0.1）
+  # hostname: '0.0.0.0'
+  # 上下文路径
+  contextPath: /
+  # 应用名称
+  name: 'tianshu-server'
+  # 压缩配置
+  compression:
+    enabled: true
+    threshold: 2048
+    level: 1
+    memLevel: 8
+
+# 数据库配置
+database:
+  url: 'file:./local.db' # SQLite 示例
+
+# 监控配置
+management:
+  # 健康检查
+  health:
+    diskSpace:
+      enabled: true
+      thresholdPercent: 0.9
+    memory:
+      enabled: true
+      thresholdPercent: 0.95
+  timeout: 5000
+  # 指标配置
+  metrics:
+    enabled: true
+    enable:
+      # 启用各类指标收集
+      system: true
+      http: true
+      process: true
+      datasource: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+      slo:
+        http.server.requests: 10ms,50ms,100ms,200ms,500ms,1s,2s,5s
+    tags:
+      application: 'tianshu-server'
+      service: backend
+      version: 1.0.0
+  # 安全配置
+  security:
+    enabled: false # 是否启用安全控制
+    requireAuth: false # 是否需要认证
+    allowedIps: # 允许访问的IP地址（支持CIDR格式）
+      - '127.0.0.1'
+      - '::1'
+      - '192.168.1.0/24' # 示例：局域网段
+    tokens: # 允许的Bearer tokens
+      - 'your-secret-token-here'
+    users: # Basic认证用户
+      - username: 'admin'
+        password: 'admin123'
+        roles: ['ACTUATOR_ADMIN']
+      - username: 'monitor'
+        password: 'monitor123'
+
+# 接口文档
+swagger:
+  enabled: true
+  path: /api-docs
+  title: 'tianshu-server API'
+  description: 'tianshu-server API Documentation'
+  version: 1.0.0
+
+# 响应配置
+response:
+  # 不需要统一响应包装的接口路径
+  excludePaths:
+    - /actuator/health
+    # SSE 事件流（GET /event）由 reply.raw 直写，不可统一包装（T7）
+    - /event
+    - /actuator/metrics
+    - /actuator/metrics/config
+    - /actuator/metrics/reset
+
+# 日志配置
+log:
+  level: info
+  dir: ./logs
+  maxSize: 50MB
+  maxFiles: 10
+  maxDays: 7
+  datePattern: YYYY-MM-DD
+  format: YYYY-MM-DD HH:mm:ss,SSS
+  pattern: '%d [%t] [%trace_id] %-5p %c - %m%n'
+
+# 认证配置
+auth:
+  global: true
+  defaultStrategy: jwt
+  jwt:
+    # 签名密钥已外移 .env 的 JWT_SECRET（spec §13 项 6，不入库）：
+    # npm run init 自动生成随机值写入，或手工 `openssl rand -hex 32`；
+    # 未配置时启动告警且 JWT 登录不可用（天枢远控面走 TIANSHU_TOKEN 不受影响）
+    expiresIn: '30m'
+    refreshExpiresIn: '12h'
+
+  basic:
+    users:
+      - username: 'guest'
+        password: 'guest'
+      - username: 'user'
+        password: 'user123'
+        roles: ['user']
+  oauth2:
+
+# 天枢桌面端联动配置
+tianshu:
+  # 数据根目录（与桌面端 ~/.tianshu 隔离）
+  dataRoot: ~/.tianshu-server
+  chat:
+    # 是否允许危险工具
+    allowDangerousTools: false
+    # 删除保护：true=delete_file 移入回收目录；false=永久删除（T6 复审 M3）
+    deleteProtection: true
+    # 工具审批模式（T7 裁定）：default=需审批操作自动拒绝（无应答方不挂起）；
+    # auto-approve=静默放行（等价 mirror 会话 full 模式）
+    accessMode: default
+  # 是否启用与桌面端的握手
+  handshake: true

@@ -1,0 +1,21 @@
+{
+  // witness 有牙（终审备案项 D）：tests/ 不在根 tsconfig include——两个
+  // 包接入测试（core-package / protocol-package）的断言此前只有运行时
+  // 牙（vitest），编译期类型 witness（如 re-export 类型同一性的 import 图）
+  // 无独立出口。本配置单独圈这些文件做 --noEmit 检查（npm run
+  // typecheck:witness）；编译器选项整体继承根配置（含 @tianshu/* paths
+  // 别名与 vitest 别名登记的一致性），import 链拉进的主仓代码由根
+  // typecheck 兜底，这里只保证测试文件自身及其类型断言不欠账。
+  // include 额外带 src-react/**/*.d.ts：import 链会拉进 src-react/lib/ipc.ts，
+  // 其 window.ipcRenderer 依赖 vite-env.d.ts 环境声明（根 include 专门
+  // 登记了该 glob，extends 不继承 include 故需在此重申）
+  // tests/agent/tool-gate-session-id-null（2026-10-28 去会话化 Task 2）：
+  // 纯类型 witness（sessionId 可空断言），运行时恒绿，牙全在本配置
+  "extends": "./tsconfig.json",
+  "include": [
+    "tests/ai/core-package.test.ts",
+    "tests/ai/server/protocol-package.test.ts",
+    "tests/agent/tool-gate-session-id-null.test.ts",
+    "src-react/**/*.d.ts"
+  ]
+}

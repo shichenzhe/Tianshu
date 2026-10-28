@@ -1,0 +1,362 @@
+@import "tailwindcss";
+@import "./skins.css";
+
+/* =====================================================
+   主题色系统
+   支持四种主题：蓝色(215°)、红色(350°)、绿色(150°)、橙色(18°)
+   ===================================================== */
+
+@theme {
+  /* 主题色变量 - 通过 --theme-hue 控制主题 */
+  --theme-hue: 150deg; /* 默认绿色，蓝色: 220deg, 红色: 355deg, 橙色: 18deg */
+
+  /* 主色系统 */
+  --color-primary: hsl(var(--theme-hue) 65% 60%);
+  --color-primary-hover: hsl(var(--theme-hue) 65% 53%);
+  --color-primary-active: hsl(var(--theme-hue) 65% 46%);
+  --color-primary-subtle: hsl(var(--theme-hue) 55% 95%);
+
+  /* shadcn/ui 颜色变量 */
+  --color-background: hsl(0 0% 100%);
+  --color-foreground: hsl(215 20% 10%);
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(215 20% 10%);
+  --color-popover: hsl(0 0% 100%);
+  --color-popover-foreground: hsl(215 20% 10%);
+  --color-primary-foreground: hsl(0 0% 100%);
+  --color-secondary: hsl(210 20% 96%);
+  --color-secondary-foreground: hsl(215 20% 10%);
+  --color-muted: hsl(210 20% 96%);
+  --color-muted-foreground: hsl(215 10% 45%);
+  --color-accent: hsl(210 20% 96%);
+  --color-accent-foreground: hsl(215 20% 10%);
+  --color-destructive: hsl(0 80% 55%);
+  --color-destructive-foreground: hsl(0 0% 100%);
+  --color-border: hsl(215 20% 90%);
+  --color-input: hsl(215 20% 90%);
+  --color-ring: hsl(var(--theme-hue) 65% 60%);
+
+  /* Tooltip 深色背景 */
+  --color-tooltip: hsl(220 20% 16%);
+  --color-tooltip-foreground: hsl(0 0% 96%);
+
+  /* 圆角系统 - 避免AI味，使用小圆角 */
+  --radius-sm: 0.25rem; /* 4px */
+  --radius-md: 0.375rem; /* 6px */
+  --radius-lg: 0.5rem; /* 8px */
+}
+
+/* 深色变体：跟随应用皮肤 data-mode（documentElement 属性），而非 OS prefers-color-scheme */
+@custom-variant dark (&:where([data-mode=dark], [data-mode=dark] *));
+
+/* 主题类 - 通过 data-theme 属性切换（GL 批起校准 Apple 系统色板，对齐
+   移动端 apps/tianshu-mobile/src/theme/colors.ts——systemBlue/Red/Green/Orange；
+   subtle 为 tint alpha 写法；暗色主色经 skins.css hue 公式自动继承新 hue） */
+[data-theme="blue"] {
+  --theme-hue: 211deg;
+  --color-primary: hsl(211 100% 50%);
+  --color-primary-hover: hsl(211 100% 42%);
+  --color-primary-active: hsl(211 100% 36%);
+  --color-primary-subtle: hsl(211 100% 50% / 0.12);
+  --color-ring: hsl(211 100% 50%);
+}
+
+[data-theme="red"] {
+  --theme-hue: 0deg;
+  --color-primary: hsl(0 100% 59%);
+  --color-primary-hover: hsl(0 100% 51%);
+  --color-primary-active: hsl(0 100% 45%);
+  --color-primary-subtle: hsl(0 100% 59% / 0.12);
+  --color-ring: hsl(0 100% 59%);
+}
+
+/* 绿色主题：用户裁定保留原色（2026-10-25 GL 批验收——同 orange，
+   原绿优于 systemGreen #34C759，两端有意分叉：移动端仍系统绿） */
+[data-theme="green"] {
+  --theme-hue: 150deg;
+  --color-primary: hsl(150 60% 40%);
+  --color-primary-hover: hsl(150 60% 35%);
+  --color-primary-active: hsl(150 60% 30%);
+  --color-primary-subtle: hsl(150 50% 94%);
+  --color-ring: hsl(150 60% 40%);
+}
+
+/* 橙色主题：用户裁定保留原色（2026-10-25 GL 批验收——原暖橙优于
+   systemOrange #FF9500，两端有意分叉：移动端仍系统橙） */
+[data-theme="orange"] {
+  --theme-hue: 18deg;
+  --color-primary: hsl(18 65% 60%);
+  --color-primary-hover: hsl(18 65% 53%);
+  --color-primary-active: hsl(18 65% 46%);
+  --color-primary-subtle: hsl(18 55% 95%);
+  --color-ring: hsl(18 65% 60%);
+}
+
+/* 应用 Logo 品牌色：固定绿色主题主色，不随 hue 主题切换；
+   值与 [data-theme="green"]（亮色）及 skins.css 暗色 green 特例同步维护 */
+.app-logo {
+  --logo-primary: hsl(150 60% 40%);
+}
+
+[data-mode="dark"] .app-logo {
+  --logo-primary: hsl(150 55% 47%);
+}
+
+/* =====================================================
+   字体系统
+   避免常见字体（Inter、Roboto、Arial）
+   ===================================================== */
+
+/* Google Fonts 引入 - 需要在 HTML 中添加 link 标签 */
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600;700&display=swap");
+
+:root {
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", Consolas, monospace;
+}
+
+/* =====================================================
+   全局样式重置
+   ===================================================== */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(215 20% 80%);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(215 20% 65%);
+}
+
+/* =====================================================
+   工具动画 - 简洁过渡，避免复杂动画
+   ===================================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.slide-in-top {
+  animation: slideInFromTop 0.2s ease-out;
+}
+
+.slide-in-bottom {
+  animation: slideInFromBottom 0.2s ease-out;
+}
+
+/* 页面切换进场（MainLayout Outlet 包装，按路由 key 重挂载触发）：
+   纯淡入——translateY 微上浮曾致内容瞬时撑高滚动容器，滚动条闪现
+   后消失；opacity 不产生滚动溢出，视觉顺滑且无此副作用 */
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.page-enter {
+  animation: pageEnter 0.24s ease-out;
+}
+
+/* =====================================================
+   侧栏任务树吸顶头（对齐 WorkBuddy conversation-section-label）
+   「空间」区头与各分组头 sticky 钉滚动容器顶，滚动内容从标题下
+   滚过（连续吸顶天然「上一个被下一个顶掉」）；背景复用皮肤侧栏
+   渐变（同色系微渐变，头自身色段与所在位置色差不可辨），无皮肤
+   时 color-mix 模拟 aside 的 bg-muted/40 叠底——必须不透明，否则
+   滚过的会话行从标题下透出
+   ===================================================== */
+
+.sidebar-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(
+    --skin-sidebar-bg,
+    color-mix(in srgb, var(--color-muted) 40%, var(--color-background))
+  );
+}
+
+/* =====================================================
+   React Flow 画布手柄（编排图编辑器）
+   RF 默认 6px 小黑点几乎不可见，「从圆点拖出连线」无从发现——
+   放大 + 主题色 + hover 放大。注意：RF 方位定位靠 .react-flow__handle-
+   right 等方位类的 transform translate，hover 放大必须走独立 scale 属性
+   叠加——写 transform: scale() 会覆盖定位，handle 跳位抖动抓不住
+   ===================================================== */
+
+.react-flow .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--color-primary);
+  border: 2px solid var(--color-card);
+  transition: scale 150ms ease-in-out;
+}
+
+.react-flow .react-flow__handle:hover {
+  scale: 1.4;
+}
+
+/* 连线拖拽中可作为落点的手柄高亮圈 */
+.react-flow .react-flow__handle.connectionindicator {
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+/* 试运行实时高亮：执行中的节点描边脉冲（GraphEditorView 监听
+ * node-status 事件驱动，RF 节点 className 注入） */
+.react-flow__node.node-running {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+  animation: node-running-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes node-running-pulse {
+  0%,
+  100% {
+    outline-color: var(--color-primary);
+  }
+  50% {
+    outline-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  }
+}
+
+/* =====================================================
+   主题相关工具类
+   ===================================================== */
+
+/* 主题色文字 */
+.text-primary {
+  color: var(--color-primary);
+}
+
+/* 主题色背景 */
+.bg-primary {
+  background-color: var(--color-primary);
+}
+
+/* 主题色浅色背景 */
+.bg-primary-subtle {
+  background-color: var(--color-primary-subtle);
+}
+
+/* 主题色边框 */
+.border-primary {
+  border-color: var(--color-primary);
+}
+
+/* 主题色 hover 效果 */
+.hover\:bg-primary-hover:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* =====================================================
+   组件过渡效果 - 统一 200ms
+   ===================================================== */
+
+.transition-base {
+  transition-property: color, background-color, border-color;
+  transition-duration: 200ms;
+  transition-timing-function: ease-in-out;
+}
+
+/* =====================================================
+   Agent「准备中」渐变扫光文字（WorkBuddy ShiningText 同配方：
+   110° 渐变、26%/55% 两档透明度亮带、200% 背景宽 2.2s 循环扫过；
+   色基取主题 muted-foreground，随主题切换；流式首字等待期显示）
+   ===================================================== */
+.agent-shimmer-text {
+  width: fit-content;
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--color-muted-foreground) 26%, transparent) 0%,
+    color-mix(in srgb, var(--color-muted-foreground) 26%, transparent) 35%,
+    color-mix(in srgb, var(--color-muted-foreground) 55%, transparent) 50%,
+    color-mix(in srgb, var(--color-muted-foreground) 26%, transparent) 65%,
+    color-mix(in srgb, var(--color-muted-foreground) 26%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: agent-shimmer-sweep 2.2s linear infinite;
+}
+
+@keyframes agent-shimmer-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 系统减少动效偏好：停扫光、保留静态渐变（无障碍） */
+@media (prefers-reduced-motion: reduce) {
+  .agent-shimmer-text {
+    animation: none;
+  }
+}

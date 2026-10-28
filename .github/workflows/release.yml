@@ -1,0 +1,85 @@
+# 发版流水线：tag（v*）触发——三平台打安装包，Artifacts + GitHub Releases 双通道
+# （与 ci.yml 的 push main 质量门解耦；日常 push 不出制品，打 tag 才出包）
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # runner 无证书：mac 走 adhoc、win 跳过签名（与本地打包口径一致）
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build (renderer + main)
+        run: npx vite build
+      # postinstall 的 install-app-deps 已按 Electron ABI 编好原生模块（各平台
+      # runner 工具链已实证可编），此处直接打包；--publish never = 只打不传，
+      # generic publish url 为空由我们统一走 upload/Release
+      - name: Package (electron-builder)
+        run: npx electron-builder --publish never
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tianshu-${{ runner.os }}
+          path: |
+            release/**/*.dmg
+            release/**/*.exe
+            release/**/*.AppImage
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/**/*.dmg
+            release/**/*.exe
+            release/**/*.AppImage
+            release/**/latest*.yml
+
+  # Android APK：debug 签名起步（expo 模板 release 构型默认 signingConfig
+  # debug，出 release 优化 bundle + debug 证书，可独立安装分发；正式分发
+  # 再升 keystore 走 secrets）。CNG 模式：android/ 由 prebuild 每次动态
+  # 生成不入库；nativewind 本地树由 postinstall 恢复（metro transform 依赖）
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Build shared packages
+        run: npm run build -w packages/tianshu-core
+      - name: Prebuild (CNG)
+        run: npx expo prebuild -p android --no-install
+        working-directory: apps/tianshu-mobile
+      - name: Build APK (release 构型 + debug 签名)
+        run: ./gradlew assembleRelease --no-daemon
+        working-directory: apps/tianshu-mobile/android
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tianshu-Android
+          path: apps/tianshu-mobile/android/app/build/outputs/apk/release/*.apk
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/tianshu-mobile/android/app/build/outputs/apk/release/*.apk

@@ -1,0 +1,207 @@
+{
+  "title": "Security Center",
+  "loadFailed": "Failed to load, please retry",
+  "sandbox": {
+    "title": "Sandbox Security",
+    "enabled": "Sandbox security",
+    "enabledDesc": "When enabled, all AI execution is governed by file, command, and network security rules",
+    "file": "File Security",
+    "fileDesc": "Manage file read/write permissions and allow/block lists",
+    "command": "Command Security",
+    "commandDesc": "Manage allow/ask/block lists for shell commands",
+    "network": "Network Security",
+    "networkDesc": "Manage network requests and domain lists",
+    "runtime": "Runtime tools",
+    "runtimeDesc": "Control built-in tools available to AI"
+  },
+  "dataSafety": {
+    "title": "Data Safety",
+    "backup": "Auto backup",
+    "backupDesc": "Automatically back up files before each conversational modification",
+    "quota": "Backup quota {{size}} MB",
+    "openBackupDir": "Open backup folder",
+    "deleteProtection": "Delete protection",
+    "deleteProtectionDesc": "Deleted files go to the trash instead of being permanently removed",
+    "bulkThreshold": "Bulk delete approval threshold",
+    "bulkThresholdDesc": "Pause and ask for confirmation when deleting more files than this threshold",
+    "invalidThreshold": "Threshold must be an integer between 1 and 10000"
+  },
+  "audit": {
+    "title": "Audit Center",
+    "empty": "No records",
+    "viewAll": "View all",
+    "back": "Back",
+    "refresh": "Refresh",
+    "exportJson": "Export JSON",
+    "exportCsv": "Export CSV",
+    "clear": "Clear records",
+    "clearTitle": "Clear audit records?",
+    "clearDesc": "This deletes all security operation logs and cannot be undone.",
+    "searchPlaceholder": "Search commands or paths…",
+    "pageInfo": "Page {{page}} / {{totalPages}} · {{total}} entries",
+    "prev": "Previous",
+    "next": "Next",
+    "categories": {
+      "command-safety": "Command Safety",
+      "file-safety": "File Safety",
+      "network": "Network Security",
+      "data-safety": "Data Safety",
+      "config": "Config"
+    },
+    "events": {
+      "command-safety_blocked": "Blocked dangerous command: {{command}}",
+      "command-safety_approved": "Command approved: {{summary}}",
+      "command-safety_rejected": "Command rejected: {{summary}}",
+      "command-safety_cwd-fallback": "Working directory out of bounds, fell back: {{requested}}",
+      "file-safety_approved": "File operation approved: {{summary}}",
+      "file-safety_rejected": "File operation rejected: {{summary}}",
+      "config_updated": "Security config updated: {{key}}",
+      "audit_cleared": "Audit records cleared",
+      "command-safety_needs-approval": "Command requires approval: {{command}}",
+      "command-safety_allow-listed": "Command allow-listed: {{command}}",
+      "command-safety_child-blocked": "Killed blacklisted child process: {{program}}",
+      "command-safety_remembered": "Tool added to allowlist memory: {{tool}}",
+      "file-safety_remembered": "Tool added to allowlist memory: {{tool}}",
+      "config_commandRules_reset": "Command lists reset to defaults",
+      "file-safety_needs-approval": "File access requires approval: {{path}}",
+      "file-safety_allow-listed": "File access allow-listed: {{path}}",
+      "config_fileRules_reset": "File lists reset to defaults",
+      "data-safety_backup-created": "File backed up: {{path}} ({{size}} bytes)",
+      "data-safety_backup-skipped": "File backup skipped: {{path}} ({{reason}})",
+      "data-safety_delete-trashed": "Moved to trash: {{path}}",
+      "data-safety_delete-permanent": "Permanently deleted: {{path}} ({{files}} files)",
+      "data-safety_delete-failed": "Delete failed: {{path}} ({{error}})",
+      "data-safety_bulk-delete-needs-approval": "Bulk delete needs approval: {{path}} (~{{estimated}} files)",
+      "data-safety_bulk-delete-rejected": "Bulk delete rejected: {{path}} (~{{estimated}} files)",
+      "network_blocked": "Blocked network request: {{host}} (rule: {{rule}}, layer: {{source}})",
+      "permission_full-revoked": "Revoked all full access ({{count}} sessions)",
+      "permission_remembered-revoked": "Revoked tool memory: {{tool}} ({{workspace}})",
+      "permission_remembered-revoked-all": "Revoked all tool memories ({{count}})"
+    }
+  },
+  "invalidEntry": "Please enter a valid entry",
+  "commandDetail": {
+    "title": "Command Security",
+    "priorityNote": "Priority: program blocklist (absolute, incl. child processes) > ask list > allow list > default approval",
+    "reset": "Reset to defaults",
+    "resetDone": "Lists reset to defaults",
+    "invalidCommand": "Please enter a valid command",
+    "programBlacklist": {
+      "title": "Program blocklist",
+      "desc": "Programs that must never run (incl. child process detection); enter program names only, without paths or arguments",
+      "placeholder": "e.g. mkfs",
+      "invalid": "Program names only (no / \\ or whitespace)"
+    },
+    "allow": {
+      "title": "Allow list",
+      "desc": "Runs directly without approval when matched (treated as trusted; does not match child processes)",
+      "placeholder": "e.g. git push"
+    },
+    "ask": {
+      "title": "Ask list",
+      "desc": "Prompts for approval when matched (also effective in full-access mode); execution continues after approval",
+      "placeholder": "e.g. curl"
+    },
+    "add": "Add",
+    "confirm": "Save",
+    "cancel": "Cancel",
+    "remove": "Remove",
+    "empty": "No entries"
+  },
+  "fileDetail": {
+    "title": "File Security",
+    "priorityNote": "Priority: builtin sensitive paths (immutable, incl. app data) > user allowlist > user blocklist; reads and writes to blocklisted paths require approval (even in full access mode)",
+    "reset": "Reset to defaults",
+    "resetDone": "Lists reset to defaults",
+    "builtin": {
+      "title": "Built-in sensitive paths",
+      "desc": "Preset sensitive config paths (SSH keys, cloud credentials, etc.); immutable — reads/writes require approval on hit"
+    },
+    "builtinTag": "Built-in",
+    "blocklist": {
+      "title": "User blocklist",
+      "desc": "Reads and writes to matched paths require approval; supports ~/-prefixed, absolute, or workspace-relative paths",
+      "placeholder": "e.g. ~/.config/myapp"
+    },
+    "allowlist": {
+      "title": "User allowlist",
+      "desc": "Writes to matched paths skip approval (takes precedence over blocklist, but cannot bypass builtin paths)",
+      "placeholder": "e.g. ~/projects"
+    }
+  },
+  "networkDetail": {
+    "title": "Network Safety",
+    "priorityNote": "Priority: built-in exemptions (model APIs/localhost) > denylist > allowlist > offline mode > malicious domains; patterns support *.example.com wildcards.",
+    "blockAllNetwork": "Offline mode",
+    "blockAllNetworkDesc": "All requests outside the allowlist and built-in exemptions will be denied",
+    "malicious": "Malicious site blocking",
+    "maliciousDesc": "Block access to domains in the built-in malicious list",
+    "denylist": {
+      "title": "Denylist",
+      "desc": "Match denies (takes precedence over allowlist)",
+      "placeholder": "e.g. evil.com or *.evil.com"
+    },
+    "allowlist": {
+      "title": "Allowlist",
+      "desc": "Match allows (still allowed in offline mode)",
+      "placeholder": "e.g. api.example.com or *.example.com"
+    },
+    "builtin": {
+      "title": "Built-in malicious domains",
+      "desc": "Code-built-in, updated with app versions, cannot be removed; not enforced when the switch above is off",
+      "expand": "Expand {{count}} entries"
+    },
+    "builtinTag": "Built-in",
+    "boundaryNote": "Coverage: main-process requests (model calls/MCP/skill market), renderer images and links, and command subprocesses honoring proxy env vars; deep bypasses such as raw sockets are out of scope."
+  },
+  "systemGrant": {
+    "title": "System grants",
+    "desc": "Manage permissions currently granted to AI",
+    "fullTitle": "Active full access",
+    "fullDesc": "The following sessions skip file-write and command approvals",
+    "fullBadge": "Full access",
+    "revokeAllFull": "Revoke all",
+    "revokeAllFullConfirm": "These sessions will return to per-action approval. Continue?",
+    "rememberedTitle": "Workspace tool memories",
+    "rememberedDesc": "Memory entries created by \"Allow and remember\"; revoking returns to per-action approval",
+    "emptyFull": "No full-access sessions",
+    "emptyRemembered": "No tool memories",
+    "revoke": "Revoke",
+    "revokeAll": "Revoke all",
+    "revokeAllConfirm": "This revokes all tool memories. Continue?",
+    "revoked": "Revoked"
+  },
+  "runtimeDetail": {
+    "title": "Runtime tools",
+    "note": "Closed tools are hidden from all AI sessions and automations on this machine, effective immediately",
+    "groupFile": "File",
+    "groupCommand": "Command",
+    "groupSkill": "Skill",
+    "groupExpert": "Expert",
+    "groupPlan": "Plan",
+    "kindRead": "Read",
+    "kindWrite": "Write",
+    "tools": {
+      "read_file": "Read files in the workspace",
+      "list_dir": "List directory contents",
+      "search_files": "Search files by keyword",
+      "write_file": "Write or create files",
+      "delete_file": "Delete files or directories (protected by data safety)",
+      "run_command": "Execute shell commands",
+      "read_skill": "Read skill contents for reference in chat",
+      "create_skill": "Create or update skills",
+      "create_expert": "Create custom experts in chat",
+      "update_expert": "Modify existing custom experts",
+      "recommend_experts": "Render expert recommendation cards in chat",
+      "dispatch_member": "Dispatch a team member for independent analysis",
+      "plan_create_item": "Create plan items",
+      "plan_update_status": "Update plan item status",
+      "plan_append_summary": "Append summaries to plan items",
+      "plan_list_items": "List plan items",
+      "plan_get_item": "Get plan item details"
+    }
+  },
+  "error": {
+    "saveFailed": "Save failed, please retry"
+  }
+}

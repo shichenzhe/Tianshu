@@ -1,0 +1,24 @@
+# 全仓 LF 钉死——Windows runner 默认 autocrlf 检出 CRLF 会打爆
+# prettier/eslint(endOfLine: lf)（2026-10-28 CI windows lint 首现）
+* text=auto eol=lf
+
+# 二进制显式标记（防 text=auto 误判）
+*.png binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.db binary
+*.sqlite binary
+*.node binary
+*.wasm binary
+*.zip binary
+*.asar binary
+*.jar binary
+*.keystore binary

@@ -1,0 +1,31 @@
+{
+  "back": "返回",
+  "appName": "天枢",
+  "sessions": {
+    "title": "会话",
+    "empty": "暂无会话——点右下角 + 新建一个",
+    "demoEntry": "示例会话（占位路由验证）"
+  },
+  "connections": {
+    "title": "连接管理",
+    "placeholder": "连接管理页占位（T12 实现）"
+  },
+  "session": {
+    "title": "会话流",
+    "placeholder": "会话流页占位（T14 实现）",
+    "idLabel": "会话 ID：{{id}}"
+  },
+  "nav": {
+    "toConnections": "去连接管理"
+  },
+  "confirm": "确定",
+  "cancel": "取消",
+  "undo": "撤销",
+  "tabChats": "聊天",
+  "tabHosts": "主机",
+  "tabOrchestration": "自动化",
+  "tabMe": "我的",
+  "retry": "重试",
+  "close": "关闭",
+  "loading": "加载中…"
+}

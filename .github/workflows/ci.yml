@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+env:
+  # runner 默认 UTC，时区敏感用例（如 formatActivityTime 的 +8 断言）按
+  # 开发者时区 Asia/Shanghai 书写——全局对齐（2026-10-28 CI mac 首现 2 用例红）
+  TZ: Asia/Shanghai
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      # postinstall 的 install-app-deps 会把 better-sqlite3 编成 Electron ABI(149)，
+      # vitest 跑在 node 22(ABI 127) 下加载即炸——Test 前按 node ABI 重装
+      # （prebuild-install 有 node-v127 全平台资产，秒级；routes 等真库用例依赖）
+      - name: Rebuild better-sqlite3 (node ABI)
+        if: matrix.os != 'windows-latest'
+        run: npm rebuild better-sqlite3
+      # Windows 测试适配为独立批：存量 ~54 用例平台假设（chmod 600 权限位/
+      # SIGTERM 退出语义/路径分隔符正则）在 win32 不可满足，属测试假设非产品
+      # 缺陷；lint/typecheck/build 的 Windows 覆盖保留
+      - name: Test
+        if: matrix.os != 'windows-latest'
+        run: npm run test
+      - name: Build (renderer + main)
+        run: npx vite build
+
+  # apps/tianshu-server 经 subtree 并入，其 .github/workflows/ci.yml 在根仓
+  # 是死配置（GitHub Actions 只认仓库根的 workflows/），等价 job 在此透出
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      # 共享包 dist 未入库——mobile/server 经 workspace 链接消费 dist 产物，
+      # 全新 checkout 无 dist 则 TS2307 连环爆（core 的 build 链式先建 protocol）
+      - name: Build shared packages
+        run: npm run build -w packages/tianshu-core
+      - name: Prisma generate
+        run: npm run prisma:generate -w apps/tianshu-server
+      # 不跑 server lint：上游 lint 债 ~190 errors（require-await/unsafe-* 语义性，
+      # eslint.config.mjs 为 subtree 上游自带），根仓修会成 subtree 冲突面——
+      # 上游清偿后可恢复此步；typecheck+test 已覆盖集成回归
+      - name: Typecheck
+        run: npx tsc -p apps/tianshu-server --noEmit
+      - name: Test
+        run: npm run test -w apps/tianshu-server
+
+  # apps/tianshu-mobile：typecheck + vitest 两步（2026-10-28 本机实测绿后纳入；
+  # expo lint 未实测不纳入；真机/expo 出包不进 CI）
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Build shared packages
+        run: npm run build -w packages/tianshu-core
+      - name: Typecheck
+        run: npm run typecheck -w apps/tianshu-mobile
+      - name: Test
+        run: npm run test -w apps/tianshu-mobile

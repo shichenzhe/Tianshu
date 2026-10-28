@@ -1,0 +1,9 @@
+{
+  "approvalTitle": "审批请求",
+  "graphDoneTitle": "图运行结束",
+  "state": {
+    "succeeded": "成功",
+    "failed": "失败",
+    "aborted": "已中止"
+  }
+}

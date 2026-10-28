@@ -1,0 +1,499 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../electron/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  relationMode = "prisma"
+}
+
+model user {
+  id       Int     @id @default(autoincrement())
+  username String  @unique(map: "user_username_index")
+  password String
+  email    String? @unique(map: "idx_user_email")
+  nickname String?
+}
+
+model db_version {
+  id      Int @id @default(autoincrement())
+  version Int
+}
+
+model option {
+  id    Int     @id @default(autoincrement())
+  type  String
+  name  String
+  value String
+  note  String?
+  userId Int? // v12 多用户隔离；type="app" 恒 NULL = 应用级共享
+
+  @@unique([type, name, userId], map: "idx_option_type_name_user")
+  @@index([type], map: "option_type_index")
+}
+
+model provider {
+  id           Int      @id @default(autoincrement())
+  name         String
+  type         String
+  baseUrl      String
+  apiKey       String?
+  extraHeaders String?
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       Int? // v12 多用户隔离
+
+  @@index([userId], map: "provider_userId_index")
+}
+
+model model {
+  id            Int      @id @default(autoincrement())
+  providerId    Int
+  modelId       String
+  name          String?
+  type          String   @default("llm") // llm | embedding | tts | reranker | asr
+  enabled       Boolean  @default(true)
+  temperature   Float?
+  topP          Float?
+  maxTokens     Int?
+  contextWindow Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([providerId])
+}
+
+model assistant {
+  id           Int      @id @default(autoincrement())
+  name         String
+  icon         String?
+  systemPrompt String
+  temperature  Float?
+  topP         Float?
+  maxTokens    Int?
+  builtin      Boolean  @default(false)
+  description  String?
+  tags         String?
+  sourceSlug   String?
+  profession   String?
+  quickPrompts String?
+  categoryId   String?
+  skillNames   String?
+  expertType   String? // agent | team；NULL = 默认单专家（agent）
+  members      String? // 专家团成员 JSON（TeamMember[]，expertType=team 时有效）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       Int? // v12 多用户隔离
+
+  @@index([userId], map: "assistant_userId_index")
+}
+
+model workspace {
+  id              Int       @id @default(autoincrement())
+  name            String
+  icon            String?
+  directoryPath   String?
+  defaultModelId  Int?
+  writeApprovedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  projectId       Int?
+  userId          Int? // v12 多用户隔离
+
+  @@index([projectId], map: "workspace_projectId_index")
+  @@index([userId], map: "workspace_userId_index")
+}
+
+model session {
+  id             Int       @id @default(autoincrement())
+  workspaceId    Int
+  assistantId    Int?
+  currentModelId Int?
+  title          String    @default("新会话")
+  mode           String?
+  scenario       String?
+  pinnedAt       DateTime?
+  archivedAt     DateTime?
+  projectId      Int?
+  summary        String?
+  compactedUpToId Int?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  lastMessageAt  DateTime?
+  userId         Int? // v12 多用户隔离（冗余列，创建时随工作空间写入）
+  planItemId     Int? // 任务会话关联事项（一期统一 D1：会话持有；一任务一会话由 create 查重保证，免索引）
+  /// P1 未读角标批：已读游标（NULL=全计，不回填存量；查询期动态算未读）
+  lastReadMessageId Int?
+
+  @@index([projectId], map: "session_projectId_index")
+  @@index([userId], map: "session_userId_index")
+  @@index([workspaceId], map: "session_workspaceId_index")
+}
+
+model message {
+  id          Int      @id @default(autoincrement())
+  sessionId   Int
+  role        String
+  blocks      String
+  modelId     Int?
+  assistantId Int?
+  error       String?
+  durationMs  Int?
+  createdAt   DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt], map: "message_createdAt_index")
+}
+
+model mcpServer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  transport String
+  command   String?
+  args      String?
+  env       String?
+  url       String?
+  headers   String?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int? // v12 多用户隔离
+
+  @@index([userId], map: "mcpServer_userId_index")
+}
+
+model toolPermission {
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
+  toolName    String
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+}
+
+model skillRecord {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  slug        String?
+  version     String?
+  source      String
+  dir         String
+  description String?
+  enabled     Boolean  @default(true)
+  scenarios   String?
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model skillStat {
+  id        Int      @id @default(autoincrement())
+  name      String // 技能名
+  event     String // install | enable | disable | uninstall | batch_enable | batch_disable | batch_uninstall | create
+  createdAt DateTime @default(now())
+
+  // 实际索引由 ensureEventStatMaintenance 启动幂等补建（不走 v1 快照，
+  // 避免快照 sha256 变化触发旧库 drop 重建）
+  @@index([name, createdAt])
+}
+
+model automationTask {
+  id           Int       @id @default(autoincrement())
+  name         String
+  prompt       String
+  workspaceId  Int
+  modelId      Int
+  temperature  Float?
+  scheduleJson String
+  scheduleText String
+  startAt      DateTime?
+  endAt        DateTime?
+  missedPolicy String    @default("skip")
+  accessMode   String    @default("default")
+  enabled      Boolean   @default(true)
+  status       String    @default("active")
+  statusNote   String?
+  lastRunAt    DateTime?
+  nextRunAt    DateTime?
+  templateSlug String?
+  targetKind   String    @default("prompt") // prompt | graph
+  graphId      Int?      // targetKind=graph 时必填；引用 graphDefinition.id
+  eventJson    String?   // 事件触发配置，与 scheduleJson 可并存
+  projectId    Int?      // NULL = 全局任务（子系统 E）
+  userId       Int?      // v12 多用户隔离
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([enabled])
+  @@index([projectId], map: "automation_task_projectId_index")
+  @@index([userId], map: "automation_task_userId_index")
+}
+
+model automationRun {
+  id               Int       @id @default(autoincrement())
+  taskId           Int?
+  sessionId        Int?
+  attempt          Int       @default(1)
+  triggerType      String
+  status           String
+  durationMs       Int?
+  promptTokens     Int?
+  completionTokens Int?
+  graphId          Int?   // 图运行（试运行 taskId=null）
+  graphTrace       String? // 节点级轨迹 JSON（spec §4）
+  error            String?
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+
+  @@index([taskId])
+  @@index([graphId], map: "automationRun_graphId_index")
+  @@index([startedAt])
+}
+
+// 图运行节点级执行详情（图执行留痕去会话化 spec 2026-10-28）：Coze 式
+// 运行记录体系——节点完整输入/输出取代原「节点消息对落聊天会话」。
+// 实际建表由 ensureGraphRunNodeTable 启动幂等补建（不走 v1 快照，
+// 避免指纹变化触发旧库 drop 重建）
+model graphRunNode {
+  id               Int     @id @default(autoincrement())
+  runId            Int
+  nodeId           String
+  nodeName         String?
+  status           String // success | failed
+  input            String? // 渲染后完整输入，截 64KB
+  output           String? // 完整输出，截 64KB
+  errorJson        String? // { code, message, detail }，同 trace error
+  toolCallsJson    String? // 工具调用摘要数组，同 trace
+  promptTokens     Int?
+  completionTokens Int?
+  durationMs       Int
+  startedAt        String // ISO string，与 trace 条目同构
+  outputImage      String? // imageGen 产物相对数据根路径
+  errorOutput      String? // 循环节点死信（onItemError=continue）
+  fallbackJson     String? // 降级继续标记 { code, message }
+
+  @@unique([runId, nodeId])
+  @@index([runId])
+}
+
+model automationStat {
+  id        Int      @id @default(autoincrement())
+  event     String
+  detail    String
+  createdAt DateTime @default(now())
+
+  // 实际索引由 ensureEventStatMaintenance 启动幂等补建（保留期裁剪用）
+  @@index([createdAt])
+}
+
+// write_file 产物登记（H7a）：消息落库时提取，产物面板查表替代 blocks
+// LIKE 全表扫。实际建表由 ensureArtifactTable 启动幂等补建（不走 v1
+// 快照，避免指纹变化触发旧库 drop 重建）
+model artifact {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  workspaceId Int
+  sessionId   Int
+  relPath     String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, workspaceId, relPath])
+  @@index([userId])
+}
+
+model project {
+  id           Int      @id @default(autoincrement())
+  name         String
+  systemPrompt String?
+  templateKey  String?
+  ownerId      Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([ownerId, name], map: "idx_project_owner_name")
+}
+
+model projectMember {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+
+  @@unique([projectId, userId], map: "idx_project_member_pid_uid")
+}
+
+model projectBinding {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  itemType  String
+  itemId    Int
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, itemType, itemId], map: "idx_project_binding")
+  @@index([projectId], map: "project_binding_projectId_index")
+}
+
+model planItem {
+  id           Int      @id @default(autoincrement())
+  projectId    Int? // NULL = 本地任务（仅任务 Tab 可见）
+  title        String
+  status       String   @default("not_started") // not_started|in_progress|paused|done
+  priority     String   @default("P1") // P0|P1|P2
+  assigneeId   Int? // 预留，单成员恒当前用户
+  tags         String? // JSON string[]
+  customFields String? // JSON Record<fieldName, string|number>
+  startDate   DateTime? // 排期开始（甘特/日历视图）
+  dueDate     DateTime? // 截止日期
+  source      String   @default("manual") // manual|ai|template
+  description String? // Markdown 原文（弹窗编辑/预览）
+  aiSummary   String? // AI 进展摘要（只经工具追加）
+  sortOrder    Int      @default(0)
+  createdById  Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId], map: "plan_item_projectId_index")
+  @@index([assigneeId], map: "plan_item_assignee_index")
+}
+
+model planView {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  name       String   @default("") // 空串 = 播种默认视图（UI 显示本地化类型名）
+  type       String   @default("table") // table|kanban|list|gantt|calendar
+  groupBy    String? // status|priority|assignee（看板分组依据）
+  filterJson String   @default("{}")
+  sortJson   String   @default("[]")
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // 唯一性由 v5 部分索引（WHERE name != ''）保证，Prisma 无法表达故不在 schema 声明
+  @@index([projectId], map: "plan_view_projectId_index")
+}
+
+model planItemAttachment {
+  id        Int      @id @default(autoincrement())
+  planItemId Int
+  fileName  String
+  assetPath String
+  createdAt DateTime @default(now())
+
+  @@index([planItemId], map: "plan_item_attachment_planItemId_index")
+}
+
+model securityAuditLog {
+  id             Int      @id @default(autoincrement())
+  sequence       Int      @unique(map: "idx_audit_sequence")
+  category       String
+  eventType      String
+  decision       String
+  detail         String?
+  commandPreview String?
+  commandHash    String?
+  sessionId      Int?
+  prevHash       String?
+  hash           String
+  createdAt      DateTime @default(now())
+
+  @@index([createdAt], map: "idx_audit_createdAt")
+  @@index([category], map: "idx_audit_category")
+}
+
+model libraryItem {
+  id           Int      @id @default(autoincrement())
+  parentId     Int?
+  name         String
+  kind         String // "folder" | "file"
+  fileType     String?
+  mimeType     String?
+  size         Int?
+  originalPath String?
+  url          String? // 链接条目（kind=link）的目标地址；文件/文件夹恒 null
+  favorite     Boolean  @default(false)
+  lastViewedAt DateTime?
+  userId       Int? // v12 多用户隔离（新建时随根继承）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([userId], map: "libraryItem_userId_index")
+}
+
+// 产物收藏（本地产物「我的收藏」）：产物无 DB 实体（消息聚合+磁盘 stat 虚拟视图），
+// 键 workspaceId+relPath 与文件生命周期解耦；userId 仅记录归属（workspace 本身已隔离用户）
+model artifactFavorite {
+  id          Int      @id @default(autoincrement())
+  workspaceId Int
+  relPath     String
+  userId      Int?
+  createdAt   DateTime @default(now())
+
+  @@unique([workspaceId, relPath])
+  @@index([userId])
+}
+
+model graphDefinition {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  graphJson   String
+  version     Int      @default(1)
+  enabled     Boolean  @default(true)
+  userId      Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId], map: "graphDefinition_userId_index")
+}
+
+// 向量块（向量管线 v1）：embedding 分块落库，vector 存 JSON number[]，
+// 检索全量载入内存余弦（桌面单机万级 chunk 够用；sqlite-vec 为后续
+// 升级路径——同库加扩展，VectorStore 接口不变）
+model vectorChunk {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  collection String
+  sourceName String
+  seq        Int
+  text       String
+  vector     String
+  model      String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, collection])
+  @@index([userId, model])
+}
+
+// 监控事件表（token/工具监控）：不走 v1 快照，实际建表由
+// ensureMonitorTables 启动幂等补建（artifact 先例）
+model llmCallEvent {
+  id           Int      @id @default(autoincrement())
+  userId       Int? // v12 多用户隔离
+  scene        String // chat | graph | automation
+  modelId      Int? // chat/automation 有；graph 场景恒 null（trace 无 modelId）
+  sessionId    Int? // chat/automation 会话
+  graphId      Int? // graph 场景
+  inputTokens  Int
+  outputTokens Int
+  durationMs   Int? // 流式轮次耗时
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt]) // 聚合主查询路径
+}
+
+model toolCallEvent {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  scene      String // chat | graph | automation
+  toolName   String
+  state      String // done | denied | error
+  durationMs Int?
+  sessionId  Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, toolName]) // 工具排行分组
+}

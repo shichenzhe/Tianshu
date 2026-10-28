@@ -1,0 +1,13 @@
+export class Constants {
+  // 日志保留天数
+  static readonly LOG_KEEP_DAYS: string = "7d";
+  static readonly LOG_MAX_SIZE: string = "20m";
+  // 升级地址（由 scripts/init.mjs 写入；留空则禁用自动更新）
+  static readonly UPGRADE_URL: string = "";
+  // SkillHub 市场 API Key（env 覆盖优先；默认占位符 = 不发送，真实值由 npm run init 写入）
+  static readonly SKILLHUB_API_KEY: string =
+    process.env.SKILLHUB_API_KEY ?? "skh-your-api-key";
+  // 数据库版本（v1 为发布前全量建表脚本，已合并 v2–v14 全部变更；发布后
+  // schema 变更再 +1 并在 script/ 下建 vN 目录）
+  static readonly DATABASE_VERSION: number = 1;
+}

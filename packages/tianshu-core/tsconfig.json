@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node10",
+    "strict": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "paths": {
+      "@tianshu/protocol": ["../tianshu-protocol/dist/index.d.ts"],
+      "@langchain/langgraph/prebuilt": [
+        "../../node_modules/@langchain/langgraph/dist/prebuilt/index.d.ts"
+      ]
+    }
+  },
+  "include": ["src"]
+}

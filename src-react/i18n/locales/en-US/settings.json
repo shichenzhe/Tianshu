@@ -1,0 +1,369 @@
+{
+  "title": "Settings",
+  "nav": {
+    "general": "General",
+    "services": "Services",
+    "profile": "Personalization",
+    "memory": "Memory & Evolution",
+    "appearance": "Appearance",
+    "shortcuts": "Shortcuts",
+    "security": "Security Center"
+  },
+  "groups": {
+    "general": "General",
+    "permission": "Permissions",
+    "storage": "Storage",
+    "notification": "Notifications",
+    "webhook": "Webhook Inbound",
+    "localFace": "Local Control Face"
+  },
+  "general": {
+    "language": "Language",
+    "zhCN": "简体中文",
+    "enUS": "English",
+    "fontSize": "Font Size",
+    "fontSmall": "Small",
+    "fontDefault": "Default",
+    "fontLarge": "Large",
+    "webhookPort": "Webhook Port",
+    "webhookPortSave": "Save",
+    "webhookPortHint": "All workflow webhooks share this port; changes take effect immediately. URLs of enabled webhooks change their port — external callers must update",
+    "webhookPortInvalid": "Port must be an integer between 1 and 65535",
+    "webhookPortSaved": "Webhook port updated",
+    "webhookPortFailed": "Failed to set port: {{message}}"
+  },
+  "appearance": {
+    "title": "Appearance",
+    "preview": "Theme Preview",
+    "allSkins": "All Themes",
+    "basicType": "Basic",
+    "premiumType": "Featured",
+    "selected": "Current",
+    "colorTheme": "Color Theme"
+  },
+  "permission": {
+    "keepAwake": "Run When Locked",
+    "keepAwakeDesc": "Keep the device awake while the screen is locked, so remote control and background agent tasks keep running",
+    "autoLaunch": "Launch at Login",
+    "autoLaunchDesc": "Tianshu will start automatically after you log in to your computer",
+    "autoInstallTrustedSkills": "Auto-install Trusted Skills",
+    "autoInstallTrustedSkillsDesc": "Install automatically once security checks pass; high-risk items always require manual confirmation",
+    "autoUpdateSkills": "Auto-update Skills",
+    "autoUpdateSkillsDesc": "Automatically update installed skills to the latest version; skills you have edited in Tianshu are never updated",
+    "proxy": "Network Proxy",
+    "proxyDirect": "Direct",
+    "proxySystem": "Follow System",
+    "proxyCustom": "Custom Proxy",
+    "proxyHost": "Server Address",
+    "proxyPort": "Port"
+  },
+  "storage": {
+    "cacheDirectory": "Data Directory",
+    "cacheDirectoryDesc": "Stores app data: database, skills, library, logs and more",
+    "openDirectory": "Open Directory",
+    "diskCaption": "{{used}} used of {{total}}",
+    "cacheLegend": "App Data",
+    "otherLegend": "Other Usage",
+    "freeLegend": "Free Space",
+    "workspacePath": "Default Workspace Path",
+    "workspacePathDesc": "New tasks and workspaces are stored under this path; existing data is not affected",
+    "workspaceNotSet": "Not set",
+    "change": "Change",
+    "changeDataRoot": "Change",
+    "restoreDefaultDataRoot": "Restore Default",
+    "dataRootRestartPending": "Data directory updated. Restart to apply; data will be copied to the new location on first launch (original kept as backup)",
+    "relaunchNow": "Restart Now",
+    "relaunchFailed": "Restart failed, please restart the app manually",
+    "dataRootSetFailed": "Failed to change data directory",
+    "dataRootNested": "New directory cannot be inside the current data directory",
+    "dataRootNotAbsolute": "Data directory must be an absolute path"
+  },
+  "executionHistory": {
+    "title": "Run History Retention",
+    "desc": "Automatically clean scheduled task and workflow run records; trace data is cleaned before records to prevent unbounded growth",
+    "enabledLabel": "Auto-clean run history",
+    "successDaysLabel": "Keep successful runs (days)",
+    "failureDaysLabel": "Keep failed runs (days)",
+    "saved": "Run history retention settings saved"
+  },
+  "backupTitle": "Data Backup",
+  "backupDesc": "Pack the local database and assets (skills, library, etc.) and upload them to the selected host, for migration or disaster recovery",
+  "backupTargetHost": "Backup Target Host",
+  "backupNow": "Back Up Now",
+  "backupNote": "Note (optional)",
+  "backupProgress": "Progress",
+  "backupPhasePacking": "Packing",
+  "backupPhaseUploading": "Uploading",
+  "backupPhaseDownloading": "Downloading",
+  "backupPhaseRestoring": "Restoring",
+  "backupListEmpty": "No backups yet",
+  "backupRestore": "Restore",
+  "backupRestoreConfirmTitle": "Restore this backup?",
+  "backupRestoreConfirmBody": "A safety copy of your current data will be kept automatically (backups-local/ in the data directory). Restart the app after the restore completes to apply it.",
+  "backupDelete": "Delete",
+  "backupDeleteConfirm": "Delete this backup? This cannot be undone.",
+  "backupOnlyDirect": "Backups only support direct connections. Add or enable a direct host on the Hosts page first",
+  "backupRelaunching": "Restore complete. Restart the app to apply",
+  "backupCreatedToast": "Backup created",
+  "backupClaimTitle": "Claim with Invite Code",
+  "backupClaimDesc": "Claim a backup identity for this connection with a one-time invite code from the admin; the backup token is filled in automatically on success",
+  "backupClaimInviteCodeLabel": "Invite code",
+  "backupClaimInviteCodePlaceholder": "TS-XXXXXXXX",
+  "backupClaimDeviceNameLabel": "Device name",
+  "backupClaimDeviceNamePlaceholder": "e.g. new-imac",
+  "backupClaimAction": "Claim",
+  "backupClaimSuccess": "Claimed; the backup token has been filled in automatically",
+  "backupClaimStaleHint": "The current backup identity may be invalid; claiming again will overwrite it automatically",
+  "backupOwnerAdmin": "Admin",
+  "backupAdminTitle": "Backup Management",
+  "backupAdminDesc": "Generate invite codes for other devices to claim backup identities, and manage claimed devices",
+  "backupInvitesTitle": "Invite Codes",
+  "backupInviteCountLabel": "Count",
+  "backupInviteNoteLabel": "Note",
+  "backupInviteNotePlaceholder": "Note (optional)",
+  "backupInviteGenerate": "Generate",
+  "backupInviteGeneratedToast": "Generated {{count}} invite codes",
+  "backupInviteEmpty": "No invite codes yet",
+  "backupInviteUnused": "Unused",
+  "backupInviteUsedBy": "Used by {{device}}",
+  "backupInviteCopy": "Copy",
+  "backupInviteCopied": "Invite code copied",
+  "backupInviteCopyFailed": "Copy failed",
+  "backupInviteRevoke": "Revoke",
+  "backupClientsTitle": "Claimed Devices",
+  "backupClientEmpty": "No claimed devices yet",
+  "backupClientKick": "Kick",
+  "notification": {
+    "desktop": "Desktop Notifications",
+    "desktopDesc": "Get system alerts when tasks finish or new messages arrive",
+    "granted": "Granted",
+    "notGranted": "Not granted",
+    "authorize": "Authorize",
+    "testNotification": "Test Notification",
+    "testBody": "Desktop notifications are on. You will be alerted here when tasks finish or new messages arrive.",
+    "testSent": "Test notification sent. If it doesn't appear, check notification permissions in system settings",
+    "client": "In-app Notifications",
+    "clientDesc": "Operational messages are shown in-app first, and switch to desktop notifications once the app goes to the background",
+    "sound": "Alert Sound",
+    "soundNone": "No Sound",
+    "soundDefault": "Default Sound"
+  },
+  "error": {
+    "saveFailed": "Save failed, please try again",
+    "loadFailed": "Failed to load settings",
+    "openFailed": "Failed to open directory",
+    "openExternalFailed": "Failed to open system settings",
+    "testNotificationFailed": "Failed to send test notification, please try again"
+  },
+  "personalization": {
+    "charCount": "{{count}} / {{max}}",
+    "savedToast": "Saved",
+    "groups": {
+      "basic": "Basics",
+      "instructions": "Custom Instructions",
+      "identity": "Names & Identity",
+      "advanced": "Persona & Memory"
+    },
+    "style": {
+      "label": "Response style",
+      "options": {
+        "default": {
+          "label": "Default",
+          "desc": "No specific style"
+        },
+        "professional": {
+          "label": "Professional",
+          "desc": "Clear, accurate, trustworthy"
+        },
+        "friendly": {
+          "label": "Friendly",
+          "desc": "Warm, approachable, supportive"
+        },
+        "direct": {
+          "label": "Straightforward",
+          "desc": "Concise, straight to the point"
+        },
+        "imaginative": {
+          "label": "Imaginative",
+          "desc": "Rich metaphors and analogies"
+        },
+        "pragmatic": {
+          "label": "Pragmatic",
+          "desc": "Minimal words, maximum information"
+        },
+        "snarky": {
+          "label": "Snarky",
+          "desc": "Sharp wit, never hurtful"
+        },
+        "socratic": {
+          "label": "Socratic",
+          "desc": "Guide thinking with questions"
+        }
+      }
+    },
+    "welcomeLoading": {
+      "label": "Loading greetings",
+      "desc": "Show rotating greetings while the AI is taking longer to respond"
+    },
+    "fileChangeDetails": {
+      "label": "Show file operation details",
+      "desc": "Expand file tool steps in real time; history messages stay collapsed"
+    },
+    "customInstructions": {
+      "label": "Custom instructions",
+      "desc": "Global rules appended to every conversation",
+      "placeholder": "e.g. Lead with the conclusion; always use Python examples"
+    },
+    "userNickname": {
+      "label": "What Tianshu calls you",
+      "desc": "How the AI addresses you in conversations",
+      "placeholder": "Leave empty for the default"
+    },
+    "aiName": {
+      "label": "Tianshu's name",
+      "desc": "How the AI refers to itself; default is Tianshu",
+      "placeholder": "Tianshu"
+    },
+    "persona": {
+      "label": "Persona description",
+      "desc": "The AI's underlying system prompt: worldview and behavior",
+      "empty": "Not set — click edit to enable"
+    },
+    "memory": {
+      "label": "Long-term memory",
+      "desc": "Facts the AI should always remember, injected every turn",
+      "empty": "Nothing yet — click edit to add"
+    },
+    "edit": "Edit",
+    "editor": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "unsavedTitle": "Discard unsaved changes?",
+      "unsavedBody": "Your edits will be lost if you close now.",
+      "discard": "Discard changes",
+      "keepEditing": "Keep editing"
+    }
+  },
+  "shortcut": {
+    "searchPlaceholder": "Search shortcuts",
+    "resetAll": "Reset All to Default",
+    "resetTitle": "Reset Shortcuts",
+    "resetMessage": "Are you sure you want to restore all shortcuts to their defaults?",
+    "columnCommand": "Command",
+    "columnBinding": "Binding",
+    "columnAction": "Actions",
+    "unbound": "Not bound",
+    "listening": "Press the new key combination",
+    "setBinding": "Set",
+    "editHint": "Change the shortcut for \"{{name}}\"",
+    "noResults": "No results found",
+    "invalidBinding": "Invalid key combination. Combine it with a modifier key (Cmd/Ctrl, Alt), or use keys like Enter/Esc",
+    "conflictTitle": "Shortcut Conflict",
+    "conflictMessage": "This combination is already used by \"{{name}}\". Replace it?",
+    "conflictFixed": "This combination is reserved by the fixed shortcut \"{{name}}\" and cannot be replaced",
+    "replace": "Replace",
+    "deleteTitle": "Delete Shortcut",
+    "deleteMessage": "Are you sure you want to delete this shortcut binding?",
+    "systemWarning": "This is a system-level combination and may be intercepted by the OS",
+    "commands": {
+      "openSettings": "Open Settings",
+      "sessionSearch": "Search Conversations",
+      "sendMessage": "Send Message",
+      "newlineInInput": "New Line in Input",
+      "newConversation": "New Conversation",
+      "stopGeneration": "Stop Generating",
+      "previousTask": "Previous Task",
+      "nextTask": "Next Task",
+      "toggleSidebar": "Toggle Sidebar",
+      "toggleArtifacts": "Toggle Artifacts Panel",
+      "toggleFullscreen": "Toggle Fullscreen",
+      "showHideWindow": "Show/Hide Main Window",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "zoomReset": "Reset Zoom",
+      "atMention": "@ Mention",
+      "slashCommand": "/ Command"
+    }
+  },
+  "memory": {
+    "title": "Memory & Evolution",
+    "description": "When enabled, Tianshu extracts contextual information from your conversations to build a personalized memory about you, so it can respond in a way that better fits your needs. See the privacy policy for details.",
+    "toggle": {
+      "label": "Conversation Memory",
+      "desc": "Allow Tianshu to extract context from conversations and build personalized memory for more precise responses."
+    },
+    "model": {
+      "label": "Memory Compilation Model",
+      "desc": "Choose the model for automatic memory compilation. Leave empty to auto-select from default/enabled models.",
+      "auto": "Auto (default model first)"
+    },
+    "manage": {
+      "title": "Manage Memory",
+      "subtitle": "Memory is compiled and updated automatically every night"
+    },
+    "actions": {
+      "reset": "Reset",
+      "compileNow": "Compile Now",
+      "edit": "Edit",
+      "import": "Import"
+    },
+    "sections": {
+      "work": "Work Background",
+      "personal": "Personal Background",
+      "current": "Current Focus",
+      "recent": "Recent Activity"
+    },
+    "edit": {
+      "done": "Done",
+      "instructionPlaceholder": "Enter an instruction to adjust memory, e.g. Remember I'm in Xiamen / Delete weather-related memories",
+      "applying": "Applying…",
+      "send": "Send instruction"
+    },
+    "status": {
+      "lastCompiledAt": "Last compiled: {{time}}",
+      "neverCompiled": "Pending first compilation",
+      "errorPrefix": "Last compile failed: "
+    },
+    "resetDialog": {
+      "title": "Reset Memory",
+      "warning1": "This will erase all memories and cannot be undone.",
+      "warning2": "If Conversation Memory stays enabled, new memories will still be generated afterwards.",
+      "warning3": "To disable it completely, turn off Conversation Memory.",
+      "confirm": "Reset Memory"
+    },
+    "importDialog": {
+      "title": "Import Memories from Another AI",
+      "step1": {
+        "title": "Copy the prompt below into another AI chat",
+        "copy": "Copy",
+        "copied": "Copied"
+      },
+      "step2": {
+        "title": "Paste the result below to add it to Tianshu memory",
+        "placeholder": "Paste your memories here"
+      },
+      "confirm": "Import"
+    },
+    "empty": {
+      "title": "Once Conversation Memory is on, the AI will automatically organize your preferences and background information",
+      "pending": "Memories are generated during the nightly automatic compilation",
+      "enable": "Turn On"
+    },
+    "disabledNotice": "Conversation Memory is off; memory content will no longer update automatically",
+    "toast": {
+      "reset": "Memory has been reset",
+      "compiled": "Memory updated",
+      "imported": "Memories imported successfully",
+      "importFallback": "No section headings recognized; all content was saved under Work Background",
+      "instructionFailed": "Failed to apply the memory instruction",
+      "copyFailed": "Copy failed; please select and copy manually"
+    },
+    "error": {
+      "MEMORY_DISABLED": "Memory is disabled",
+      "MEMORY_MODEL_MISSING": "No model available; configure one in provider settings first",
+      "MEMORY_COMPILE_FAILED": "Memory compilation failed, please try again later",
+      "MEMORY_NO_MATERIAL": "No conversation content available to compile yet",
+      "MEMORY_BUSY": "Memory compilation in progress, please try again shortly"
+    }
+  }
+}

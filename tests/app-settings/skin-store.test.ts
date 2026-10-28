@@ -1,0 +1,197 @@
+// @vitest-environment jsdom
+/**
+ * 皮肤状态 store 测试（jsdom：localStorage + documentElement）：
+ * - 持久化迁移：旧 {theme:"green"}（v0 / 无 version 字段）→ {skin:"field", hue:"green"}
+ * - 未知皮肤 id：setSkin/applySkin 均回落默认 field + console.warn 一次（同 id 去重）
+ * - setSkin：皮肤完整预设——写全三元组（含皮肤自带 hue；无装饰皮肤移除 data-wallpaper）
+ * - setHue：正交微调——仅 data-theme 变，mode/wallpaper/skin 不动
+ * - applySkin：documentElement 三属性一次写入
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup } from "@testing-library/react";
+
+// localStorage stub：与 tests/app-settings/font-scale.test.ts 同款内存
+// stub（Node 26 无 --localstorage-file 时原生全局访问会向 stderr打
+// ExperimentalWarning，先行替换消除噪音；skin.store 在模块加载期即创建
+// persist store 读写 localStorage）
+vi.hoisted(() => {
+  const memory = new Map<string, string>();
+  const stub = {
+    getItem: (key: string) => memory.get(key) ?? null,
+    setItem: (key: string, value: string) => void memory.set(key, value),
+    removeItem: (key: string) => void memory.delete(key),
+    clear: () => void memory.clear(),
+  };
+  Object.defineProperty(globalThis, "localStorage", {
+    value: stub,
+    configurable: true,
+    writable: true,
+  });
+});
+
+import {
+  applySkin,
+  initSkin,
+  useSkinStore,
+} from "../../src-react/stores/skin.store";
+
+const root = () => document.documentElement;
+
+beforeEach(() => {
+  localStorage.clear();
+  delete root().dataset.mode;
+  delete root().dataset.theme;
+  delete root().dataset.wallpaper;
+  useSkinStore.setState({ skin: "light", hue: "orange" });
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe("持久化迁移", () => {
+  it("旧结构 {theme:'green'}（version 0）→ 默认皮肤 field + hue green", async () => {
+    localStorage.setItem(
+      "tianshu-theme",
+      JSON.stringify({ state: { theme: "green" }, version: 0 }),
+    );
+    await useSkinStore.persist.rehydrate();
+    const { skin, hue } = useSkinStore.getState();
+    expect(skin).toBe("field");
+    expect(hue).toBe("green");
+  });
+
+  it("无 version 字段旧数据同样走迁移", async () => {
+    localStorage.setItem(
+      "tianshu-theme",
+      JSON.stringify({ state: { theme: "red" } }),
+    );
+    await useSkinStore.persist.rehydrate();
+    const { skin, hue } = useSkinStore.getState();
+    expect(skin).toBe("field");
+    expect(hue).toBe("red");
+  });
+
+  it("同版本脏数据（未知 skin / 非法 hue）归一回落默认", async () => {
+    localStorage.setItem(
+      "tianshu-theme",
+      JSON.stringify({ state: { skin: "bogus", hue: "purple" }, version: 1 }),
+    );
+    await useSkinStore.persist.rehydrate();
+    const { skin, hue } = useSkinStore.getState();
+    expect(skin).toBe("field");
+    expect(hue).toBe("green");
+  });
+
+  it("setSkin 持久化 partialize 后的 {skin,hue}（version 1）", () => {
+    useSkinStore.getState().setSkin("dusk");
+    expect(JSON.parse(localStorage.getItem("tianshu-theme") ?? "{}")).toEqual({
+      state: { skin: "dusk", hue: "orange" },
+      version: 1,
+    });
+  });
+});
+
+describe("未知皮肤 id 回落", () => {
+  it("setSkin('bogus')：store 回落默认 field（mode light）+ warn 一次且同 id 去重", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    useSkinStore.getState().setSkin("bogus");
+    expect(useSkinStore.getState().skin).toBe("field");
+    expect(root().dataset.mode).toBe("light");
+    expect(warn).toHaveBeenCalledTimes(1);
+    useSkinStore.getState().setSkin("bogus");
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("applySkin('nope')：三属性按默认 field 回落（hue 参数原样保留）", () => {
+    applySkin("nope", "green");
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("green");
+    expect(root().dataset.wallpaper).toBe("field");
+  });
+});
+
+describe("setSkin 写全三元组", () => {
+  it("setSkin('dark')：mode dark + 自带 hue blue + 移除壁纸属性", () => {
+    root().setAttribute("data-wallpaper", "ripple"); // 预置壁纸验证清除
+    useSkinStore.getState().setSkin("dark");
+    expect(useSkinStore.getState()).toMatchObject({
+      skin: "dark",
+      hue: "blue",
+    });
+    expect(root().dataset.mode).toBe("dark");
+    expect(root().dataset.theme).toBe("blue");
+    expect(root().dataset.wallpaper).toBeUndefined();
+  });
+
+  it("setSkin('ripple')：三属性齐（light/orange/ripple）且 hue 同步皮肤自带", () => {
+    useSkinStore.getState().setSkin("ripple");
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("orange");
+    expect(root().dataset.wallpaper).toBe("ripple");
+    expect(useSkinStore.getState().hue).toBe("orange");
+  });
+});
+
+describe("setHue 正交微调", () => {
+  it("setHue('red')：仅 data-theme 变，mode/wallpaper/skin 不动", () => {
+    useSkinStore.getState().setSkin("ripple");
+    useSkinStore.getState().setHue("red");
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("red");
+    expect(root().dataset.wallpaper).toBe("ripple");
+    expect(useSkinStore.getState()).toMatchObject({
+      skin: "ripple",
+      hue: "red",
+    });
+  });
+});
+
+describe("applySkin 直接调用", () => {
+  it("documentElement 三属性一次写入（hue 与皮肤正交组合）", () => {
+    applySkin("ink", "red");
+    expect(root().dataset.mode).toBe("dark");
+    expect(root().dataset.theme).toBe("red");
+    expect(root().dataset.wallpaper).toBe("ink");
+  });
+});
+
+describe("initSkin 启动初始化", () => {
+  it("旧 v0 数据 {theme:'green'} → 默认 field + green 落 DOM", () => {
+    localStorage.setItem(
+      "tianshu-theme",
+      JSON.stringify({ state: { theme: "green" }, version: 0 }),
+    );
+    initSkin();
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("green");
+    expect(root().dataset.wallpaper).toBe("field");
+  });
+
+  it("新 v1 数据 {skin:'pine',hue:'red'} → 三属性落 DOM", () => {
+    localStorage.setItem(
+      "tianshu-theme",
+      JSON.stringify({ state: { skin: "pine", hue: "red" }, version: 1 }),
+    );
+    initSkin();
+    expect(root().dataset.mode).toBe("dark");
+    expect(root().dataset.theme).toBe("red");
+    expect(root().dataset.wallpaper).toBe("pine");
+  });
+
+  it("无存储回落默认（field + green）", () => {
+    // beforeEach 的 setState 经 persist 写回 storage，再清一次才是真"无存储"
+    localStorage.clear();
+    initSkin();
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("green");
+  });
+
+  it("localStorage 为畸形 JSON 时不抛错，回落默认（field + green）", () => {
+    localStorage.setItem("tianshu-theme", "{invalid json");
+    expect(() => initSkin()).not.toThrow();
+    expect(root().dataset.mode).toBe("light");
+    expect(root().dataset.theme).toBe("green");
+  });
+});

@@ -111,6 +111,10 @@ export default defineConfig(() => {
                   // node-pty（原生模块）：bindings 裸 __filename，同 better-sqlite3
                   // 原因，必须外部化走 Node 原生 require
                   "node-pty",
+                  // pg（切片 B PG 通道）：CJS 驱动经 require 互操作更稳，且
+                  // dependencies=external 互锁铁律——electron-builder 装运
+                  // prod 依赖，打包态 require("pg") 才可解析
+                  "pg",
                 ],
               },
             },

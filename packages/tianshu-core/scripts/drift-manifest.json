@@ -241,8 +241,8 @@
       "mirrorPath": "electron/domains/ai/orchestration/graph-executor.ts",
       "serverPath": "src/core/graph/graph-executor.ts",
       "baselineDiff": true,
-      "baselineLines": 219,
-      "note": "图执行器（GA-T4 副本，executor 4095→4314 行）：授权面 7 条+环境适配——prisma→运行时句柄、Electron 副作用→钩子、事件出口 graph.run.updated、automation-runner 断环摘取段尾部追加；逐 hunk 改造点登记见 server 文件头注释——基线必然大。PL-3 裁定（PL-T2 concern ①）：断环摘取段 collectTools 无工作空间白名单加入 library_search（mirror 无该工具，server 独有偏离，头注释改造点 9）。随行支撑件 executor-runtime.ts（GraphRunStore 类型+进程级 install/accessor）为 server 新建、无 mirror 单文件对应（类型散在 mirror graph.repo/graph-executor），不入比对。2026-10-28 去会话化同批双改（Task 3+6）：旧 session/message 双份段（createGraphSession/writeNodeMessages/writeNodeFailure）拆除、节点详情落 graphRunNode——基线 231→219（旧段 server 侧 this.prisma 前缀行本就多差 12 行，拆除后回落）；残余 2 行 = prisma→runtime 句柄（db.graphRunNode.create）授权差异"
+      "baselineLines": 258,
+      "note": "图执行器（GA-T4 副本，executor 4095→4314 行）：授权面 7 条+环境适配——prisma→运行时句柄、Electron 副作用→钩子、事件出口 graph.run.updated、automation-runner 断环摘取段尾部追加；逐 hunk 改造点登记见 server 文件头注释——基线必然大。PL-3 裁定（PL-T2 concern ①）：断环摘取段 collectTools 无工作空间白名单加入 library_search（mirror 无该工具，server 独有偏离，头注释改造点 9）。随行支撑件 executor-runtime.ts（GraphRunStore 类型+进程级 install/accessor）为 server 新建、无 mirror 单文件对应（类型散在 mirror graph.repo/graph-executor），不入比对。2026-10-28 去会话化同批双改（Task 3+6）：旧 session/message 双份段（createGraphSession/writeNodeMessages/writeNodeFailure）拆除、节点详情落 graphRunNode——基线 231→219（旧段 server 侧 this.prisma 前缀行本就多差 12 行，拆除后回落）；残余 2 行 = prisma→runtime 句柄（db.graphRunNode.create）授权差异。2026-10-29 切片 B：mirror 独有数据源引用解析（dataSourceId → 元库 dataSourceConfig，datasource-resolver.ts 桌面单份随行件不入比对）+ db-client ssl 透传（两份同改，db-client 对仍 0 差异）——executor 内 handler 装配段 +36 行基线过账"
     },
     {
       "id": "graph-inflight",

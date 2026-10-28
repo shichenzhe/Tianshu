@@ -22,6 +22,9 @@ export interface DbQueryParams {
   database: string;
   username: string;
   password: string;
+  /** TLS 开关（postgres 等连接类引擎消费；sqlite 忽略）——开启时宽松
+   * 校验（rejectUnauthorized false，内网/云 PG 自签证书场景） */
+  ssl?: boolean;
   sql: string;
   params: string[];
   /** SELECT 行数上限（输出字节联动）；批量模式忽略 */
@@ -230,6 +233,7 @@ function pgConfig(params: DbQueryParams) {
     database: params.database,
     user: params.username,
     password: params.password,
+    ...(params.ssl ? { ssl: { rejectUnauthorized: false } } : {}),
     connectionTimeoutMillis: 15_000,
     query_timeout: 120_000,
   };

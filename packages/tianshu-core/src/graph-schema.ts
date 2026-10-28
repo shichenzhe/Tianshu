@@ -408,6 +408,11 @@ export const databaseNodeSchema = z.object({
   ...nodeBase,
   kind: z.literal("database"),
   engine: z.enum(["sqlite", "postgres", "mysql", "oracle", "sqlserver"]),
+  /** 数据源引用（可选，切片 B 2026-10-29）：指向元库 dataSourceConfig 行
+   *  ——节点 JSON 只存 id，连接参数（host/port/database/username/password/
+   *  ssl，含 engine）在执行层解析并覆盖裸配置（引用优先，两者并存）；
+   *  凭据不进图定义/画布/聊天上下文 */
+  dataSourceId: z.number().int().positive().optional(),
   sqlitePath: z.string().default(""),
   host: z.string().default(""),
   port: z.number().int().min(1).max(65_535).default(5432),

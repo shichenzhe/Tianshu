@@ -93,6 +93,17 @@ describe("demo-app 工作流定义（docs/demo-app）", () => {
     );
   });
 
+  it("查账明细 limit 钳制 0..200（负值零行、超大截断）", () => {
+    const { json } = loadGraph("expense-query.json");
+    const select = json!.nodes.find(
+      (n) => n.id === "select-expenses" && n.kind === "database",
+    );
+    const sql = select && select.kind === "database" ? select.sql : "";
+    expect(sql).toContain(
+      "LIMIT MAX(0, MIN(CAST(COALESCE(NULLIF(?, ''), '5') AS INTEGER), 200))",
+    );
+  });
+
   it("查账明细终点组装 show_table 结构（columns/rows + JSON.stringify）", () => {
     const { json } = loadGraph("expense-query.json");
     const build = json!.nodes.find((n) => n.id === "build-table");

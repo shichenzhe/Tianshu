@@ -21,7 +21,7 @@
         "kind": "database",
         "engine": "sqlite",
         "sqlitePath": "demo.db",
-        "sql": "SELECT spent_at, category, amount, note FROM expense WHERE (? = '' OR strftime('%Y-%m', spent_at) = ?) ORDER BY spent_at DESC, id DESC LIMIT CAST(COALESCE(NULLIF(?, ''), '5') AS INTEGER)",
+        "sql": "SELECT spent_at, category, amount, note FROM expense WHERE (? = '' OR strftime('%Y-%m', spent_at) = ?) ORDER BY spent_at DESC, id DESC LIMIT MAX(0, MIN(CAST(COALESCE(NULLIF(?, ''), '5') AS INTEGER), 200))",
         "params": ["{{input.month}}", "{{input.month}}", "{{input.limit}}"],
         "position": { "x": 320, "y": 200 }
       },

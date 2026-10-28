@@ -49,7 +49,8 @@
   日期缺省在 SQL 内 `COALESCE(NULLIF(?,''), date('now','localtime'))` 兜底
   （模板机制只能整节点输出引用，variable/code 节点转出的单值无法按 key
   解构，SQL 内转换是节点能力现状下的最短路径）。
-- 查账明细的 `limit` 输入缺省 5，SQL 内未设上限钳制——超大值受 database
-  节点 `maxRows`（本图缺省 1000）熔断保护。
+- 查账明细的 `limit` 输入缺省 5，SQL 内钳制 0..200（`MAX(0, MIN(...))`，
+  负值出 0 行、超大值截 200——负 LIMIT 在 SQLite 语义为「不限」必须前置
+  钳住）。
 - `get_workflow_run` 附「完整输出」段（上限 4000 字，取自 graphRunNode
   节点级全量输出），超出会截断标 `…`；超大明细请用月份过滤或小 limit。

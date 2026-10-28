@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CORE_TOOL_NAMES,
+  DISPLAY_GROUP_TOOL_NAMES,
   EXPERT_GROUP_TOOL_NAMES,
   WORKFLOW_GROUP_TOOL_NAMES,
   filterToolsBySession,
@@ -12,12 +13,14 @@ import {
 
 const def = (name: string) => ({ name });
 
-/** 全谱样本：核心组 + 两组门控组 + 照旧组（mcp 前缀、plan 前缀、面板类等） */
+/** 全谱样本：核心组 + 两组门控组 + 展示组 + 照旧组（mcp 前缀、plan 前缀、
+ *  面板类等） */
 const fullSpectrum = () =>
   [
     ...CORE_TOOL_NAMES,
     ...WORKFLOW_GROUP_TOOL_NAMES,
     ...EXPERT_GROUP_TOOL_NAMES,
+    ...DISPLAY_GROUP_TOOL_NAMES,
     "mcp__srv__tool",
     "plan_create_item",
     "show_widget",
@@ -97,6 +100,36 @@ describe("filterToolsBySession（spec §20 项 B）", () => {
     );
     expect(kept).toContain("create_expert");
     expect(kept).toContain("update_expert");
+  });
+
+  it("展示组随工作流组同门：automation/coding 场景带 show_table/show_summary", () => {
+    for (const scenario of ["automation", "coding"]) {
+      const kept = names(
+        filterToolsBySession(fullSpectrum(), gate({ scenario })),
+      );
+      expect(kept).toContain("show_table");
+      expect(kept).toContain("show_summary");
+    }
+  });
+
+  it("展示组随工作流组同门：workflow-creator 启用（daily 场景）也挂载", () => {
+    const kept = names(
+      filterToolsBySession(
+        fullSpectrum(),
+        gate({ scenario: "daily", workflowCreatorEnabled: true }),
+      ),
+    );
+    expect(kept).toEqual(expect.arrayContaining([...DISPLAY_GROUP_TOOL_NAMES]));
+  });
+
+  it("展示组随工作流组同门：daily/design/未选场景均剔除", () => {
+    for (const scenario of ["daily", "design", null, undefined]) {
+      const kept = names(
+        filterToolsBySession(fullSpectrum(), gate({ scenario })),
+      );
+      expect(kept).not.toContain("show_table");
+      expect(kept).not.toContain("show_summary");
+    }
   });
 
   it("experts 场景带专家组（未绑专家也挂载，预留场景值）", () => {

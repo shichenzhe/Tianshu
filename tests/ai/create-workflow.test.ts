@@ -453,6 +453,111 @@ describe("get_workflow_run 工具", () => {
   });
 });
 
+describe("get_workflow_run 终点完整输出（demo 切片 2026-10-28）", () => {
+  const traceOf = (nodes: Array<{ id: string; preview: string }>) =>
+    JSON.stringify(
+      nodes.map((n) => ({
+        id: n.id,
+        name: n.id,
+        status: "success",
+        outputPreview: n.preview,
+      })),
+    );
+
+  const runRow = (graphTrace: string | null) => ({
+    id: 21,
+    status: "success",
+    error: null,
+    graphTrace,
+    startedAt: new Date("2026-10-28T10:00:00Z"),
+    durationMs: 800,
+  });
+
+  it("runNodes 注入时附「完整输出」段（终点 success 节点全量 output）", async () => {
+    const stubs = createStubs();
+    const create = makeCreateWorkflowTool(stubs as never);
+    await create.execute(CTX, { name: "fo-flow", graphJson: VALID_GRAPH });
+    const longJson = `[{"spent_at":"2026-10-28","category":"餐饮","amount":35,"note":"午饭"},{"spent_at":"2026-10-27","category":"交通","amount":12.5,"note":""}]`;
+    const runs = {
+      findFirst: vi.fn(async () =>
+        runRow(
+          traceOf([
+            { id: "select", preview: longJson.slice(0, 200) },
+            { id: "build", preview: `{"title":"支出明细","columns":[]` },
+          ]),
+        ),
+      ),
+    };
+    const runNodes = {
+      findMany: vi.fn(async () => [
+        { nodeId: "select", status: "success", output: longJson },
+        { nodeId: "build", status: "success", output: `{"title":"支出明细"}` },
+      ]),
+    };
+    const tool = makeGetWorkflowRunTool({ ...stubs, runs, runNodes } as never);
+    const result = await tool.execute(CTX, { id: 1 });
+    // 预览段照旧（最后一个 success 节点）
+    expect(result).toContain(`输出: {"title":"支出明细"`);
+    // 完整输出段：终点 build 节点的全量 output
+    expect(result).toContain(`完整输出: {"title":"支出明细"}`);
+    // 反查按 runId 查节点行
+    expect(runNodes.findMany).toHaveBeenCalledWith({ where: { runId: 21 } });
+  });
+
+  it("runNodes 缺席（旧装配）回退仅预览，不附完整输出段", async () => {
+    const stubs = createStubs();
+    const create = makeCreateWorkflowTool(stubs as never);
+    await create.execute(CTX, { name: "fo2-flow", graphJson: VALID_GRAPH });
+    const runs = {
+      findFirst: vi.fn(async () =>
+        runRow(traceOf([{ id: "gen", preview: "hello" }])),
+      ),
+    };
+    const tool = makeGetWorkflowRunTool({ ...stubs, runs } as never);
+    const result = await tool.execute(CTX, { id: 1 });
+    expect(result).toContain("输出: hello");
+    expect(result).not.toContain("完整输出");
+  });
+
+  it("终点节点无详情行/输出为空 → 不附加；超长全量输出截断标注", async () => {
+    const stubs = createStubs();
+    const create = makeCreateWorkflowTool(stubs as never);
+    await create.execute(CTX, { name: "fo3-flow", graphJson: VALID_GRAPH });
+    const runs = {
+      findFirst: vi.fn(async () =>
+        runRow(traceOf([{ id: "gen", preview: "abc" }])),
+      ),
+    };
+    // 行存在但 output 空 → 不附加
+    const emptyNodes = {
+      findMany: vi.fn(async () => [
+        { nodeId: "gen", status: "success", output: null },
+      ]),
+    };
+    const toolEmpty = makeGetWorkflowRunTool({
+      ...stubs,
+      runs,
+      runNodes: emptyNodes,
+    } as never);
+    expect(await toolEmpty.execute(CTX, { id: 1 })).not.toContain("完整输出");
+    // 超长（>4000）→ 截断标注
+    const huge = "x".repeat(4500);
+    const hugeNodes = {
+      findMany: vi.fn(async () => [
+        { nodeId: "gen", status: "success", output: huge },
+      ]),
+    };
+    const toolHuge = makeGetWorkflowRunTool({
+      ...stubs,
+      runs,
+      runNodes: hugeNodes,
+    } as never);
+    const result = await toolHuge.execute(CTX, { id: 1 });
+    expect(result).toContain("完整输出: ");
+    expect(result).toContain("（已截断）");
+  });
+});
+
 describe("create_workflow 工具（末节点断头自愈）", () => {
   it("末节点不连 END → 落库补 start 入口边与叶子 END 边", async () => {
     const stubs = createStubs();

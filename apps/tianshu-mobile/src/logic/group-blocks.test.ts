@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  groupBlocks,
-  summarizeThinking,
-} from "./group-blocks";
+import { groupBlocks, summarizeThinking } from "./group-blocks";
 import type { MessageBlock } from "./blocks";
 
 describe("groupBlocks 过程/结论分组", () => {
@@ -152,5 +149,102 @@ describe("show_widget 块分流（聊天面板可视化组件）", () => {
     ]);
     expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
     expect(grouped.widgets).toHaveLength(1);
+  });
+});
+
+describe("show_table 块分流（消息流数据表格卡）", () => {
+  const tableBlock = {
+    type: "tool_call",
+    toolCallId: "tc-t1",
+    toolName: "show_table",
+    args: {
+      title: "支出明细",
+      columns: [
+        { key: "amount", label: "金额" },
+        { key: "note", label: "备注" },
+      ],
+      rows: [
+        { amount: 35, note: "午饭" },
+        { amount: 12.5, note: null },
+      ],
+    },
+    state: "done",
+  } as never;
+
+  it("show_table 工具块分流到 tables（不进思考面板工具组）", () => {
+    const grouped = groupBlocks([
+      tableBlock,
+      { type: "text", text: "结论" } as never,
+    ]);
+    expect(grouped.tables).toHaveLength(1);
+    expect(grouped.tables[0].title).toBe("支出明细");
+    expect(grouped.tables[0].columns).toHaveLength(2);
+    expect(grouped.tables[0].rows[1]).toMatchObject({ amount: 12.5 });
+    expect(grouped.tools).toHaveLength(0);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进/缺失（columns/rows 非数组）退空结构，不炸分流", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-t2",
+        toolName: "show_table",
+        args: { columns: "半截", rows: null },
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.tables).toHaveLength(1);
+    expect(grouped.tables[0].columns).toEqual([]);
+    expect(grouped.tables[0].rows).toEqual([]);
+    expect(grouped.tables[0].state).toBe("running");
+  });
+});
+
+describe("show_summary 块分流（消息流摘要指标卡）", () => {
+  it("show_summary 工具块分流到 summaries（不进思考面板工具组）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-s1",
+        toolName: "show_summary",
+        args: {
+          title: "月度汇总",
+          items: [
+            { label: "总支出", value: "¥123.5", hint: "含退款" },
+            { label: "笔数", value: 12 },
+          ],
+        },
+        state: "done",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-s2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.summaries).toHaveLength(1);
+    expect(grouped.summaries[0].items[0]).toMatchObject({
+      label: "总支出",
+      hint: "含退款",
+    });
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进（items 非数组）退空结构", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-s3",
+        toolName: "show_summary",
+        args: {},
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.summaries).toHaveLength(1);
+    expect(grouped.summaries[0].items).toEqual([]);
   });
 });

@@ -1687,5 +1687,13 @@
     "defaultTitle": "摘要",
     "loading": "摘要生成中…",
     "empty": "暂无内容"
+  },
+  "confirmForm": {
+    "defaultTitle": "执行确认",
+    "confirm": "确认执行",
+    "empty": "无参数需要确认",
+    "cancelled": "已取消，未执行",
+    "doneFallback": "已按确认参数执行，结果见运行记录",
+    "error": "确认决议失败，请从消息流重新发起"
   }
 }

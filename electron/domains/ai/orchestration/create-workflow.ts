@@ -112,8 +112,9 @@ function formatIssues(
 }
 
 /** sessionId → userId（工具上下文无 userId，经会话反查；图执行无会话
- *  sessionId null 返回 null——工具回「会话不存在」正确降级） */
-async function userIdOf(
+ *  sessionId null 返回 null——工具回「会话不存在」正确降级）。confirm_form
+ *  工具同语义复用（切片 B），导出共用 */
+export async function userIdOf(
   ctx: ToolContext,
   session: SessionPrismaLike,
 ): Promise<number | null> {

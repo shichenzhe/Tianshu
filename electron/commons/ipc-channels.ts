@@ -94,6 +94,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "chat:polish",
   "chat:handoverSummary",
   "agent:approve",
+  // 确认卡决议（切片 B 2026-10-29）：confirm_form 挂起 → 渲染层确认/取消
+  "agent:confirmRespond",
   "permission:get",
   "permission:set",
   "permission:rememberTool",

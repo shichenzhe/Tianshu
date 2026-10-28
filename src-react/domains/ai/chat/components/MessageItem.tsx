@@ -37,6 +37,7 @@ import WidgetRenderer from "./WidgetRenderer";
 import ExpertRecommendCard from "./ExpertRecommendCard";
 import TableViewCard from "./TableViewCard";
 import SummaryCard from "./SummaryCard";
+import ConfirmFormCard from "./ConfirmFormCard";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
 import { MessageImage } from "./MessageImage";
 import MessageFileRef from "./MessageFileRef";
@@ -450,6 +451,14 @@ function MessageItemImpl({
         {/* 摘要指标卡（show_summary 工具块分流）：消息流正文位渲染 */}
         {grouped.summaries.map((summary) => (
           <SummaryCard key={summary.toolCallId} item={summary} />
+        ))}
+        {/* 工作流确认卡（confirm_form 工具块分流）：消息流正文位渲染 */}
+        {grouped.confirmForms.map((confirm) => (
+          <ConfirmFormCard
+            key={confirm.toolCallId}
+            item={confirm}
+            sessionId={sessionId}
+          />
         ))}
         {/* 深度思考面板（答案上方，PRD §2.2）：流式展开实时过程，落库默认折叠 */}
         {grouped.hasProcess && (

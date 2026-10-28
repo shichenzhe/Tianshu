@@ -52,15 +52,17 @@ export const EXPERT_GROUP_TOOL_NAMES: readonly string[] = [
 ];
 
 /**
- * 展示组（轻量组，按需）：show_table/show_summary——工作流查询结果的
- * 消息流渲染入口，与工作流组同门（automation/coding 场景或
- * workflow-creator 技能启用）：无工作流语境的会话没有 run_workflow
- * 查询结果可渲染，展示卡随工作流能力同进退（display-tools.ts 注册，
- * demo 切片 2026-10-28）。名字与静态注册名一一对应，同改名断回喂裁定
+ * 展示组（轻量组，按需）：show_table/show_summary/confirm_form——工作流
+ * 结果渲染与执行确认的消息流卡（display-tools/confirm-form-tool 注册，
+ * demo 切片 2026-10-28 / 切片 B 2026-10-29），与工作流组同门
+ * （automation/coding 场景或 workflow-creator 技能启用）：无工作流语境
+ * 的会话没有 run_workflow 可执行/可渲染，卡片随工作流能力同进退。
+ * 名字与静态注册名一一对应，同改名断回喂裁定
  */
 export const DISPLAY_GROUP_TOOL_NAMES: readonly string[] = [
   "show_table",
   "show_summary",
+  "confirm_form",
 ];
 
 /**

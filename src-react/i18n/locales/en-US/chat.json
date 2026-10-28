@@ -1687,5 +1687,13 @@
     "defaultTitle": "Summary",
     "loading": "Generating summary…",
     "empty": "No content"
+  },
+  "confirmForm": {
+    "defaultTitle": "Confirm Execution",
+    "confirm": "Confirm & Run",
+    "empty": "No parameters to confirm",
+    "cancelled": "Cancelled — nothing was executed",
+    "doneFallback": "Executed with confirmed parameters; see run history",
+    "error": "Failed to deliver confirmation, please retry from the chat"
   }
 }

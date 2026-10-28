@@ -94,6 +94,74 @@ describe("recommend_experts 块分流（会话内专家推荐卡）", () => {
   });
 });
 
+describe("confirm_form 块分流（工作流执行确认卡）", () => {
+  it("confirm_form 工具块分流到 confirmForms（含 output 回执透传）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c1",
+        toolName: "confirm_form",
+        args: {
+          workflowId: 3,
+          workflowName: "记账·记一笔",
+          title: "执行确认",
+          fields: [
+            { key: "amount", label: "金额", value: "35" },
+            { key: "note", label: "备注", value: "午饭", hint: "可空" },
+          ],
+        },
+        state: "running",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-c2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.confirmForms).toHaveLength(1);
+    expect(grouped.confirmForms[0]).toMatchObject({
+      workflowId: 3,
+      workflowName: "记账·记一笔",
+      state: "running",
+    });
+    expect(grouped.confirmForms[0].fields[1]).toMatchObject({
+      key: "note",
+      hint: "可空",
+    });
+    expect(grouped.confirmForms[0].output).toBeUndefined();
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("done 态带 output 回执；args 渐进（fields 非数组/workflowName 缺失）退空结构", () => {
+    const done = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c3",
+        toolName: "confirm_form",
+        args: { workflowId: 3, fields: [{ key: "a", label: "A", value: "1" }] },
+        state: "done",
+        output: "用户已取消本次工作流执行（未运行）",
+      } as never,
+    ]);
+    expect(done.confirmForms[0].output).toContain("用户已取消");
+    const partial = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c4",
+        toolName: "confirm_form",
+        args: { fields: "半截" },
+        state: "running",
+      } as never,
+    ]);
+    expect(partial.confirmForms[0].fields).toEqual([]);
+    expect(partial.confirmForms[0].workflowName).toBe("");
+    expect(partial.confirmForms[0].workflowId).toBe(0);
+  });
+});
+
 describe("summarizeThinking 折叠摘要", () => {
   it("短文本原样返回", () => {
     expect(summarizeThinking("我来梳理一下思路。")).toBe("我来梳理一下思路。");

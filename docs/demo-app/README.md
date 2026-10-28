@@ -54,3 +54,7 @@
   钳住）。
 - `get_workflow_run` 附「完整输出」段（上限 4000 字，取自 graphRunNode
   节点级全量输出），超出会截断标 `…`；超大明细请用月份过滤或小 limit。
+- code 节点（查账明细/月度汇总的组装节点）spawn 裸 `node` 解释器：dev
+  态无虞；**打包态依赖用户机器 PATH 上装有 node**，缺装报
+  `interpreter_missing`（运行记录可见引导文案）——2026-10-29 build 验证
+  备案（安装包不内嵌 node 运行时）。

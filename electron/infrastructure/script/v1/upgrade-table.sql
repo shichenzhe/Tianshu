@@ -482,3 +482,23 @@ CREATE TABLE IF NOT EXISTS vectorChunk (
 CREATE INDEX IF NOT EXISTS idx_vectorChunk_user_collection ON vectorChunk (userId, collection);
 --/ignore
 CREATE INDEX IF NOT EXISTS idx_vectorChunk_user_model ON vectorChunk (userId, model);
+
+
+--/p 新建数据源配置表（PG 首选通道）：database 节点 dataSourceId 引用，连接凭据只落元库
+--/p （不进图定义/画布/聊天上下文）；首版 engine 恒 postgres
+CREATE TABLE IF NOT EXISTS dataSourceConfig (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    engine TEXT NOT NULL DEFAULT 'postgres',
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL DEFAULT 5432,
+    database TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NULL,
+    ssl BOOLEAN NOT NULL DEFAULT 0,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL,
+    userId INTEGER NULL
+);
+--/ignore
+CREATE INDEX IF NOT EXISTS dataSourceConfig_userId_index ON dataSourceConfig (userId);

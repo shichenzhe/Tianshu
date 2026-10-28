@@ -81,7 +81,8 @@ export const ModelName = {
   graphDefinition: 'graphDefinition',
   vectorChunk: 'vectorChunk',
   llmCallEvent: 'llmCallEvent',
-  toolCallEvent: 'toolCallEvent'
+  toolCallEvent: 'toolCallEvent',
+  dataSourceConfig: 'dataSourceConfig'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -585,6 +586,24 @@ export const ToolCallEventScalarFieldEnum = {
 } as const
 
 export type ToolCallEventScalarFieldEnum = (typeof ToolCallEventScalarFieldEnum)[keyof typeof ToolCallEventScalarFieldEnum]
+
+
+export const DataSourceConfigScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  engine: 'engine',
+  host: 'host',
+  port: 'port',
+  database: 'database',
+  username: 'username',
+  password: 'password',
+  ssl: 'ssl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type DataSourceConfigScalarFieldEnum = (typeof DataSourceConfigScalarFieldEnum)[keyof typeof DataSourceConfigScalarFieldEnum]
 
 
 export const SortOrder = {

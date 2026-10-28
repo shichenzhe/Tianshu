@@ -497,3 +497,23 @@ model toolCallEvent {
   @@index([userId, createdAt])
   @@index([userId, toolName]) // 工具排行分组
 }
+
+// 数据源配置（PG 首选通道，切片 B 2026-10-29）：database 节点 dataSourceId
+// 引用此处——连接凭据只落元库，不进图定义/画布/聊天上下文；首版 engine
+// 恒 postgres（SQLite 走节点内 sqlitePath 演示通道，不建配置行）
+model dataSourceConfig {
+  id        Int      @id @default(autoincrement())
+  name      String
+  engine    String   @default("postgres")
+  host      String
+  port      Int      @default(5432)
+  database  String
+  username  String
+  password  String?
+  ssl       Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int? // 多用户隔离（provider 口径）
+
+  @@index([userId])
+}

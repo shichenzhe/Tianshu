@@ -427,7 +427,8 @@ export const ModelName = {
   graphDefinition: 'graphDefinition',
   vectorChunk: 'vectorChunk',
   llmCallEvent: 'llmCallEvent',
-  toolCallEvent: 'toolCallEvent'
+  toolCallEvent: 'toolCallEvent',
+  dataSourceConfig: 'dataSourceConfig'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -443,7 +444,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "graphRunNode" | "automationStat" | "artifact" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem" | "artifactFavorite" | "graphDefinition" | "vectorChunk" | "llmCallEvent" | "toolCallEvent"
+    modelProps: "user" | "db_version" | "option" | "provider" | "model" | "assistant" | "workspace" | "session" | "message" | "mcpServer" | "toolPermission" | "skillRecord" | "skillStat" | "automationTask" | "automationRun" | "graphRunNode" | "automationStat" | "artifact" | "project" | "projectMember" | "projectBinding" | "planItem" | "planView" | "planItemAttachment" | "securityAuditLog" | "libraryItem" | "artifactFavorite" | "graphDefinition" | "vectorChunk" | "llmCallEvent" | "toolCallEvent" | "dataSourceConfig"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2741,6 +2742,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    dataSourceConfig: {
+      payload: Prisma.$dataSourceConfigPayload<ExtArgs>
+      fields: Prisma.dataSourceConfigFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.dataSourceConfigFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.dataSourceConfigFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        findFirst: {
+          args: Prisma.dataSourceConfigFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.dataSourceConfigFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        findMany: {
+          args: Prisma.dataSourceConfigFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>[]
+        }
+        create: {
+          args: Prisma.dataSourceConfigCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        createMany: {
+          args: Prisma.dataSourceConfigCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.dataSourceConfigCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>[]
+        }
+        delete: {
+          args: Prisma.dataSourceConfigDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        update: {
+          args: Prisma.dataSourceConfigUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        deleteMany: {
+          args: Prisma.dataSourceConfigDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.dataSourceConfigUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.dataSourceConfigUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>[]
+        }
+        upsert: {
+          args: Prisma.dataSourceConfigUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$dataSourceConfigPayload>
+        }
+        aggregate: {
+          args: Prisma.DataSourceConfigAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateDataSourceConfig>
+        }
+        groupBy: {
+          args: Prisma.dataSourceConfigGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DataSourceConfigGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.dataSourceConfigCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.DataSourceConfigCountAggregateOutputType> | number
+        }
+      }
+    }
   }
 } & {
   other: {
@@ -3267,6 +3342,24 @@ export const ToolCallEventScalarFieldEnum = {
 export type ToolCallEventScalarFieldEnum = (typeof ToolCallEventScalarFieldEnum)[keyof typeof ToolCallEventScalarFieldEnum]
 
 
+export const DataSourceConfigScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  engine: 'engine',
+  host: 'host',
+  port: 'port',
+  database: 'database',
+  username: 'username',
+  password: 'password',
+  ssl: 'ssl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type DataSourceConfigScalarFieldEnum = (typeof DataSourceConfigScalarFieldEnum)[keyof typeof DataSourceConfigScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -3505,6 +3598,7 @@ export type GlobalOmitConfig = {
   vectorChunk?: Prisma.vectorChunkOmit
   llmCallEvent?: Prisma.llmCallEventOmit
   toolCallEvent?: Prisma.toolCallEventOmit
+  dataSourceConfig?: Prisma.dataSourceConfigOmit
 }
 
 /* Types for Logging */

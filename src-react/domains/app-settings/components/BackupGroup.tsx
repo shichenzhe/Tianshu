@@ -5,7 +5,9 @@
  * 申领小节（未配 backupToken、或 list 判定既有凭据已失效〔被踢除等，
  * 终审 I3〕的连接显示——成功自动回填，连接状态即时刷新）
  * + admin 管理小节（viewer.kind==='admin'：邀请码生成/列表/复制/撤销 +
- * 已申领设备列表/踢除；admin 判定来自 backup:list 的 viewer 身份）。
+ * 已申领设备列表/踢除；admin 判定来自 backup:list 的 viewer 身份）
+ * + 本地链路两按钮（备份到本地/从本地档案恢复——无服务端，不依赖连接；
+ *  档案选择在主进程系统对话框内完成，取消静默）。
  * 恢复确认文案含「自动保留保护副本」与「重启后生效」；成功后不自动
  * relaunch——重启横条 + 按钮触发 backup:relaunch（用户手动确认，防丢上
  * 下文）。连接下拉数据复用 server 域连接列表 IPC。
@@ -89,6 +91,8 @@ export default function BackupGroup() {
   const [deleteTarget, setDeleteTarget] = useState<BackupMeta | null>(null);
   const [relaunchPending, setRelaunchPending] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  // 本地档案恢复二次确认弹窗开关（选择档案在主进程对话框内完成）
+  const [localRestoreConfirm, setLocalRestoreConfirm] = useState(false);
   // 申领表单（未配 backupToken 的连接显示；成功即自动回填并刷新连接态）
   const [inviteCode, setInviteCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
@@ -311,6 +315,54 @@ export default function BackupGroup() {
     }
   };
 
+  /** 备份到本地（无服务端）：主进程弹保存对话框（取消返回 null 静默）；
+   *  不依赖连接——未配主机也可用 */
+  const createLocalBackup = async () => {
+    if (busy) return;
+    setBusy("create");
+    setProgress({ phase: "packing", current: 0, total: 0 });
+    try {
+      const result = await invoke<
+        { destPath: string; fileSize: number } | null
+      >("backup:create:local");
+      if (result) {
+        toast.success(
+          t("settings:backupLocalCreatedToast", {
+            path: result.destPath,
+            size: formatBytes(result.fileSize),
+          }),
+        );
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(null);
+      setProgress(null);
+    }
+  };
+
+  /** 本地档案恢复确认执行：选择器取消返回 null 静默；成功置重启横条 */
+  const confirmLocalRestore = async () => {
+    if (busy) return;
+    setBusy("restore");
+    setProgress({ phase: "restoring", current: 0, total: 0 });
+    try {
+      const result = await invoke<{ relaunchRequired: boolean } | null>(
+        "backup:restore:local",
+      );
+      if (result) {
+        setRelaunchPending(true);
+        toast.success(t("settings:backupRelaunching"));
+      }
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setBusy(null);
+      setProgress(null);
+      setLocalRestoreConfirm(false);
+    }
+  };
+
   /** 恢复确认执行：成功置重启横条（不自动重启——用户手动确认） */
   const confirmRestore = async () => {
     const target = restoreTarget;
@@ -417,6 +469,33 @@ export default function BackupGroup() {
           aria-label={t("settings:backupNote")}
           disabled={busy !== null}
         />
+        {/* 本地链路（无服务端）：不依赖连接——未配主机也可备份/恢复 */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            disabled={busy !== null}
+            onClick={() => void createLocalBackup()}
+          >
+            {busy === "create" && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            {t("settings:backupToLocal")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+            disabled={busy !== null}
+            onClick={() => setLocalRestoreConfirm(true)}
+          >
+            {busy === "restore" && (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            )}
+            {t("settings:backupLocalRestore")}
+          </Button>
+        </div>
         {/* 四相进度：total 未知时仅相位 + spinner，已知时百分比条 */}
         {busy && progress && (
           <div className="space-y-1">
@@ -746,6 +825,31 @@ export default function BackupGroup() {
               {t("common:cancel")}
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmRestore()}>
+              {t("settings:backupRestore")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 本地档案恢复二次确认（档案在主进程对话框内选择；保护副本/重启语义同远端） */}
+      <AlertDialog
+        open={localRestoreConfirm}
+        onOpenChange={setLocalRestoreConfirm}
+      >
+        <AlertDialogContent className="rounded-lg border-border/50 shadow-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("settings:backupLocalRestoreConfirmTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("settings:backupLocalRestoreConfirmBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy === "restore"}>
+              {t("common:cancel")}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmLocalRestore()}>
               {t("settings:backupRestore")}
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -4,7 +4,14 @@
 // better-sqlite3 真身，不真发 HTTP）；prisma-client mock 捕获 $disconnect
 // （恢复前断库裁定）。tempDir 落点断言：tianshuRoot() 直下（防 Linux
 // /tmp tmpfs 跨卷 rename EXDEV），finally 全清理不残留。
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -41,7 +48,7 @@ vi.mock("../../../electron/commons/prisma-client", () => ({
   default: { $disconnect: mocks.disconnect },
 }));
 
-import { registerBackupIpc } from "../../../electron/domains/backup/ipc";
+import { registerBackupIpc, type BackupIpcDeps } from "../../../electron/domains/backup/ipc";
 
 /** 数据根（tests/setup.ts 注入的隔离临时根） */
 const dataRoot = process.env.TIANSHU_DATA_ROOT!;
@@ -184,6 +191,10 @@ function makeDeps(conn: DirectConn | { id: string; mode: "relay" }) {
     appVersion: () => "1.0.0",
     // 申领写回替身（backup:claim 成功把 clientToken 落连接 backupToken）
     saveConnection: vi.fn(async () => {}),
+    // 本地链路路径选择器替身位（默认未装配 → 单测按需覆写走替身，
+    // 不装配时 handler 落真 dialog——与 makeClient/archive 同口径）
+    pickSavePath: undefined as BackupIpcDeps["pickSavePath"],
+    pickArchivePath: undefined as BackupIpcDeps["pickArchivePath"],
   };
   return { deps, ctx, client };
 }
@@ -266,10 +277,12 @@ describe("backup ipc", () => {
     expect(ctx.calls).toEqual(["disconnect", "safety", "restore"]);
     // restore 收到的正是 downloadArchive 落盘的同一路径
     expect(ctx.downloadArchive).toHaveBeenLastCalledWith(ctx.downloadDest);
-    // 保护副本与下载共用同一临时区（同卷 rename 前提），finally 全清理
+    // 保护副本临时区独立 mkdtemp（数据根直下同卷纪律不变），与下载临时
+    // 区 finally 各自清理（本地恢复链共用后 SafetyTempDir 不再依附下载区）
     expect(ctx.safetyTempDir.startsWith(dataRoot)).toBe(true);
-    expect(path.dirname(ctx.downloadDest)).toBe(ctx.safetyTempDir);
+    expect(path.dirname(ctx.downloadDest).startsWith(dataRoot)).toBe(true);
     expect(existsSync(ctx.safetyTempDir)).toBe(false);
+    expect(existsSync(path.dirname(ctx.downloadDest))).toBe(false);
     // 事件：downloading（含字节回调）→ restoring
     const phases = mocks.sent.map((s) => s.payload);
     expect(phases).toEqual([
@@ -527,5 +540,131 @@ describe("backup ipc", () => {
     expect(call("backup:relaunch")).resolves.toBeUndefined();
     expect(mocks.app.relaunch).toHaveBeenCalledTimes(1);
     expect(mocks.app.exit).toHaveBeenCalledWith(0);
+  });
+});
+
+describe("backup 本地链路（无服务端）", () => {
+  /** 真实 sha256 的 archive 替身（本地链路 copy 后要对拍真哈希，替身
+   *  meta 不能伪造——与远端链路替身「sha-abc 假值」的关键差异） */
+  function realArchiveStub(
+    tempDirs: string[],
+    bytes: string,
+    sha256Override?: string,
+  ) {
+    return vi.fn(async (opts: { tempDir: string }) => {
+      tempDirs.push(opts.tempDir);
+      const archivePath = path.join(opts.tempDir, `backup-test.tar.gz`);
+      writeFileSync(archivePath, bytes);
+      return {
+        archivePath,
+        meta: {
+          appVersion: "1.0.0",
+          schemaVersion: 1,
+          fileSize: Buffer.byteLength(bytes),
+          sha256: sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
+          chunkCount: 1,
+        },
+        sha256: sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
+        fileCount: 2,
+      };
+    });
+  }
+
+  it("backup:create:local：选路径 → 打包 → 复制+sha256 对拍 → 返回产物；全程不碰连接", async () => {
+    const { deps } = makeDeps(DIRECT);
+    const tempDirs: string[] = [];
+    const bytes = "LOCAL-ARCHIVE-BYTES";
+    const sha = createHash("sha256").update(bytes).digest("hex");
+    deps.archive = realArchiveStub(tempDirs, bytes);
+    // 用户选的保存路径（任意可写目录——模拟外置盘/下载目录）
+    const destDir = mkdtempSync(path.join(dataRoot, "local-dest-"));
+    const dest = path.join(destDir, "my-backup.tar.gz");
+    deps.pickSavePath = vi.fn(async () => dest);
+    registerBackupIpc(deps);
+    const result = await call("backup:create:local");
+    expect(result).toEqual({
+      destPath: dest,
+      fileSize: Buffer.byteLength(bytes),
+      sha256: sha,
+    });
+    // 目标文件内容与打包产物一致
+    expect(readFileSync(dest, "utf8")).toBe(bytes);
+    // 打包临时区在数据根直下（同卷纪律）且 finally 全清理
+    expect(tempDirs).toHaveLength(1);
+    expect(tempDirs[0].startsWith(dataRoot)).toBe(true);
+    expect(existsSync(tempDirs[0])).toBe(false);
+    // 事件只有 packing 一相（本地链路无上传）
+    expect(mocks.sent.map((s) => s.payload)).toEqual([
+      { phase: "packing", current: 0, total: 0 },
+    ]);
+    // 无服务端铁证：连接注册表零访问
+    expect(deps.getConnection).not.toHaveBeenCalled();
+  });
+
+  it("backup:create:local：sha256 对拍失败 → 删目标坏档并抛错（不留假备份）", async () => {
+    const { deps } = makeDeps(DIRECT);
+    deps.archive = realArchiveStub([], "BYTES", "lying-sha");
+    const destDir = mkdtempSync(path.join(dataRoot, "local-dest-"));
+    const dest = path.join(destDir, "bad.tar.gz");
+    deps.pickSavePath = vi.fn(async () => dest);
+    registerBackupIpc(deps);
+    await expect(call("backup:create:local")).rejects.toThrow(
+      "备份校验失败：sha256 不匹配",
+    );
+    // 坏档必须删除——留在盘上会被当真备份用
+    expect(existsSync(dest)).toBe(false);
+  });
+
+  it("backup:create:local：取消选择返回 null——不打包、不推事件", async () => {
+    const { deps } = makeDeps(DIRECT);
+    deps.pickSavePath = vi.fn(async () => null);
+    registerBackupIpc(deps);
+    await expect(call("backup:create:local")).resolves.toBeNull();
+    expect(deps.archive).not.toHaveBeenCalled();
+    expect(mocks.sent).toEqual([]);
+  });
+
+  it("backup:restore:local：选档案 → restoring 事件 → 断库 → 保护副本 → 恢复选中路径；全程不碰连接", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const archiveDir = mkdtempSync(path.join(dataRoot, "local-archive-"));
+    const archiveFile = path.join(archiveDir, "backup.tar.gz");
+    writeFileSync(archiveFile, "BYTES");
+    deps.pickArchivePath = vi.fn(async () => archiveFile);
+    registerBackupIpc(deps);
+    const result = await call("backup:restore:local");
+    expect(result).toEqual({ relaunchRequired: true });
+    // 恢复链路顺序与远端一致：断 Prisma → 保护副本 → 切换恢复
+    expect(ctx.calls).toEqual(["disconnect", "safety", "restore"]);
+    // restore 收到的正是用户选中的本地档案路径
+    expect(deps.restore).toHaveBeenCalledWith(archiveFile);
+    // 事件只有 restoring 一相（本地链路无下载）
+    expect(mocks.sent.map((s) => s.payload)).toEqual([
+      { phase: "restoring", current: 0, total: 0 },
+    ]);
+    // 无服务端铁证：连接注册表零访问
+    expect(deps.getConnection).not.toHaveBeenCalled();
+  });
+
+  it("backup:restore:local：取消选择返回 null——断库/保护副本/恢复零调用", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    deps.pickArchivePath = vi.fn(async () => null);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).resolves.toBeNull();
+    expect(ctx.calls).toEqual([]);
+    expect(mocks.sent).toEqual([]);
+  });
+
+  it("backup:restore:local：档案不存在 → 断库前拦截报错（零损伤）", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    deps.pickArchivePath = vi.fn(
+      async () => path.join(dataRoot, "ghost.tar.gz"),
+    );
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).rejects.toThrow(
+      /备份档案不存在/,
+    );
+    expect(ctx.calls).toEqual([]);
+    expect(deps.safety).not.toHaveBeenCalled();
+    expect(deps.restore).not.toHaveBeenCalled();
   });
 });

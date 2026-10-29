@@ -391,12 +391,15 @@ export const IPC_INVOKE_ALLOWLIST = [
   // 备份域（spec 2026-10-27 §4）：四 invoke（入参含连接 id，仅 direct 开放）
   // + 恢复后用户手动重启薄封装；backup:progress 事件在 EVENT 白名单。
   // 多用户扩展（spec 2026-10-28）：claim 邀请码申领（成功自动写回连接
-  // backupToken）+ invites/clients 管理面五通道（admin 判定在 server 端）
+  // backupToken）+ invites/clients 管理面五通道（admin 判定在 server 端）。
+  // 本地链路：无服务端导出/恢复（不碰连接注册表，选择器取消返回 null）
   "backup:list",
   "backup:create",
   "backup:restore",
   "backup:delete",
   "backup:relaunch",
+  "backup:create:local",
+  "backup:restore:local",
   "backup:claim",
   "backup:invites:create",
   "backup:invites:list",

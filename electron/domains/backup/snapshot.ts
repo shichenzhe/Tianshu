@@ -52,8 +52,8 @@ function existsSyncSafe(target: string): boolean {
   }
 }
 
-/** 流式 sha256（hex）——大档不整读进内存 */
-async function hashFile(file: string): Promise<string> {
+/** 流式 sha256（hex）——大档不整读进内存（本地导出对拍复用，导出用） */
+export async function hashFile(file: string): Promise<string> {
   const hash = createHash("sha256");
   const rs = createReadStream(file);
   try {

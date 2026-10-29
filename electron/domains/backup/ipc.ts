@@ -3,30 +3,36 @@
  * 通道（list/create/restore/delete）+ backup:relaunch（恢复后用户手动重启
  * 的薄封装）+ backup:progress 事件（packing/uploading/downloading/restoring
  * 四相字节进度）+ claim 申领通道与 invites/clients 管理面五通道（admin
- * 判定在 server 端）。依赖工厂注入（测试替身）；连接信息经注入的
- * getConnection 取 direct 连接的 baseUrl+token（backupToken 优先——备份
- * 身份独立凭据，缺省回落 token；claim 例外恒走大门 token见
- * gatewayClientFor；管理面与数据面同链 backupToken 优先——二层部署
- * TIANSHU_BACKUP_TOKEN 下 admin 手填该值后面板可见即须可操作；
- * relay 不开放——spec §1 裁定）。
+ * 判定在 server 端）+ 本地链路两通道（create:local/restore:local——无服
+ * 务端导出与恢复，不碰连接注册表，选择器取消返回 null）。依赖工厂注入
+ * （测试替身）；连接信息经注入的 getConnection 取 direct 连接的
+ * baseUrl+token（backupToken 优先——备份身份独立凭据，缺省回落 token；
+ * claim 例外恒走大门 token见 gatewayClientFor；管理面与数据面同链
+ * backupToken 优先——二层部署 TIANSHU_BACKUP_TOKEN 下 admin 手填该值后面
+ * 板可见即须可操作；relay 不开放——spec §1 裁定，本地链路无此约束）。
  * tempDir 一律取 tianshuRoot() 直下 mkdtemp（防 Linux /tmp tmpfs 跨卷
  * rename EXDEV——保护副本与 restoreArchive 的 staging 都依赖同卷
- * rename）；恢复前先 sha256 对拍下载产物（spec §3.3 完整性闸门）再断
- * Prisma 连接（Windows rename 打开句柄必败）。
+ * rename；本地导出经 copyFileSync 跨卷安全落任意目标盘）；恢复前先
+ * sha256 对拍下载产物（spec §3.3 完整性闸门；本地档案无远端 meta，解包
+ * 校验兜底）再断 Prisma 连接（Windows rename 打开句柄必败）。
  * backups-local 保护副本本批不做上限清理（后续批复用保留策略口径）。
  * 构造即注册全部 handler（Application 装配一次），face 侧严禁二次构造
  * （server/ipc 同款口径）。
  */
-import { app, ipcMain, type BrowserWindow } from "electron";
+import { app, dialog, ipcMain, type BrowserWindow } from "electron";
 import os from "node:os";
 import path from "node:path";
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import prisma from "../../commons/prisma-client";
 import { tianshuRoot } from "../../commons/paths";
 import type { BackupListResult, BackupMeta } from "@tianshu/protocol";
 import { publishFaceEvent } from "../server-face/face-events";
 import { BackupClient } from "./backup-client";
-import { createBackupArchive, type BackupArchiveResult } from "./snapshot";
+import {
+  createBackupArchive,
+  hashFile,
+  type BackupArchiveResult,
+} from "./snapshot";
 import { createLocalSafetyCopy, restoreArchive } from "./restore";
 
 /** progress 事件载荷——收编协议包 BackupProgressPayload（face 面
@@ -70,6 +76,10 @@ export interface BackupIpcDeps {
   appVersion?(): string;
   /** 恢复前断库（默认 prisma.$disconnect；注入化便于测试与顺序断言） */
   disconnectDatabase?(): Promise<void> | void;
+  /** 本地导出保存路径选择（默认 showSaveDialog 系统覆盖确认；取消 null） */
+  pickSavePath?(): Promise<string | null>;
+  /** 本地恢复档案选择（默认 showOpenDialog；取消 null） */
+  pickArchivePath?(): Promise<string | null>;
 }
 
 export type BackupEmit = (payload: BackupProgressPayload) => void;
@@ -184,6 +194,92 @@ export async function createBackupNow(
   }
 }
 
+/** 默认保存路径选择（showSaveDialog：默认名 tianshu-backup-<本地时间
+ *  戳>.tar.gz，系统级覆盖确认；取消返回 null） */
+async function defaultPickSavePath(): Promise<string | null> {
+  const now = new Date();
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  const stamp =
+    `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
+    `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const result = await dialog.showSaveDialog({
+    defaultPath: `tianshu-backup-${stamp}.tar.gz`,
+  });
+  return result.canceled || !result.filePath ? null : result.filePath;
+}
+
+/** 默认恢复档案选择（showOpenDialog：tar.gz 过滤；取消返回 null） */
+async function defaultPickArchivePath(): Promise<string | null> {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: [
+      { name: "备份档案 (tar.gz)", extensions: ["gz", "tar.gz"] },
+    ],
+  });
+  return result.canceled || result.filePaths.length === 0
+    ? null
+    : result.filePaths[0];
+}
+
+/**
+ * 本地导出完整链（无服务端）：数据根临时区打包 → copyFileSync 到用户
+ * 目标（跨卷安全——目标常为外置盘/网络盘）→ 落盘字节 sha256 对拍
+ * （spec §3.3 完整性闸门同口径；不符删目标坏档不留假备份）。进度仅
+ * packing 一相（无上传相）。
+ */
+export async function createBackupLocal(
+  destPath: string,
+  deps: BackupIpcDeps,
+  emit: BackupEmit,
+): Promise<{ destPath: string; fileSize: number; sha256: string }> {
+  const tempDir = mkdtempSync(path.join(tianshuRoot(), ".backup-local-"));
+  try {
+    emit({ phase: "packing", current: 0, total: 0 });
+    const archiveFn = deps.archive ?? createBackupArchive;
+    const archive = await archiveFn({
+      tempDir,
+      appVersion: (deps.appVersion ?? app.getVersion)(),
+    });
+    copyFileSync(archive.archivePath, destPath);
+    const sha256 = await hashFile(destPath);
+    if (sha256 !== archive.meta.sha256) {
+      rmSync(destPath, { force: true });
+      throw new Error("备份校验失败：sha256 不匹配");
+    }
+    return { destPath, fileSize: archive.meta.fileSize, sha256 };
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 恢复执行链（远端下载后与本地档案共用）：restoring 事件 → 断 Prisma →
+ * 保护副本 → 原子切换 → relaunchRequired。安全副本临时区独立 mkdtemp
+ * （数据根直下同卷 rename 纪律），与调用方各自的下载/导出临时区互不
+ * 纠缠，finally 各自清理。
+ */
+async function runRestoreChain(
+  archivePath: string,
+  deps: BackupIpcDeps,
+  emit: BackupEmit,
+): Promise<{ relaunchRequired: true }> {
+  emit({ phase: "restoring", current: 0, total: 0 });
+  const safetyTempDir = mkdtempSync(path.join(tianshuRoot(), ".backup-safety-"));
+  try {
+    // 先断 Prisma 再动文件（Windows rename 打开句柄必败；恢复后由
+    // relaunch 重建连接，macOS/Linux POSIX 句柄语义本就宽松）
+    const disconnect =
+      deps.disconnectDatabase ?? (() => prisma.$disconnect());
+    await disconnect();
+    // 保护副本（旧数据快照 → 数据根 backups-local/，分组外不被切换波及）
+    await (deps.safety ?? createLocalSafetyCopy)(safetyTempDir);
+    await (deps.restore ?? restoreArchive)(archivePath);
+    return { relaunchRequired: true };
+  } finally {
+    rmSync(safetyTempDir, { recursive: true, force: true });
+  }
+}
+
 export function registerBackupIpc(deps: BackupIpcDeps): void {
   const emit: BackupEmit = (payload: BackupProgressPayload): void => {
     for (const win of deps.windows()) {
@@ -220,6 +316,14 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
   ipcMain.handle("backup:create", async (_e, connId: string, note?: string) =>
     createBackupNow(connId, note, deps, emit),
   );
+
+  // —— 本地链路（无服务端）：不碰连接注册表，选择器取消返回 null ——
+
+  ipcMain.handle("backup:create:local", async () => {
+    const destPath = await (deps.pickSavePath ?? defaultPickSavePath)();
+    if (!destPath) return null;
+    return createBackupLocal(destPath, deps, emit);
+  });
 
   // —— 多用户扩展（spec 2026-10-28 §2）：claim 申领 + 管理面五通道 ——
 
@@ -292,19 +396,22 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
         if (sha256 !== expected) {
           throw new Error("备份校验失败：sha256 不匹配");
         }
-        emit({ phase: "restoring", current: 0, total: 0 });
-        // 先断 Prisma 再动文件（Windows rename 打开句柄必败；恢复后由
-        // relaunch 重建连接，macOS/Linux POSIX 句柄语义本就宽松）
-        const disconnect =
-          deps.disconnectDatabase ?? (() => prisma.$disconnect());
-        await disconnect();
-        // 保护副本（旧数据快照 → 数据根 backups-local/，分组外不被切换波及）
-        await (deps.safety ?? createLocalSafetyCopy)(tempDir);
-        await (deps.restore ?? restoreArchive)(dest);
-        return { relaunchRequired: true };
+        // sha256 闸门后共用恢复执行链（断库/保护副本/切换——与本地档案恢复同源）
+        return await runRestoreChain(dest, deps, emit);
       } finally {
         rmSync(tempDir, { recursive: true, force: true });
       }
     },
   );
+
+  // 本地档案恢复（无服务端）：档案存在性在断库前拦截；sha256 无远端 meta
+  // 可对拍，gzip/tar 解包校验兜底（坏包零损伤——restore.ts 头注释语义）
+  ipcMain.handle("backup:restore:local", async () => {
+    const picked = await (deps.pickArchivePath ?? defaultPickArchivePath)();
+    if (!picked) return null;
+    if (!existsSync(picked) || !statSync(picked).isFile()) {
+      throw new Error(`备份档案不存在：${picked}`);
+    }
+    return runRestoreChain(picked, deps, emit);
+  });
 }

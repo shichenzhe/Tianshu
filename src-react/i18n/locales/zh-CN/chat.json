@@ -830,7 +830,8 @@
       "workspaceMissing": "所选工作空间不存在",
       "failed": "试运行失败：{{message}}",
       "cancelRun": "中断运行",
-      "cancelSent": "已发出中断请求，状态稍后自动刷新"
+      "cancelSent": "已发出中断请求，状态稍后自动刷新",
+      "selectValue": "请选择值"
     },
     "runs": {
       "title": "运行历史",
@@ -1318,7 +1319,19 @@
       "emailRetriesHint": "SMTP 闪断重试（0-5 次、间隔 0.5s）",
       "intentTimeoutHint": "分类模型调用超时（默认 60 秒，上限 24 小时）",
       "rowsLimitLabel": "行数上限",
-      "excelMaxRowsHint": "防失控熔断（1-10 万，默认 1000）；超出节点失败，可分片或调大"
+      "excelMaxRowsHint": "防失控熔断（1-10 万，默认 1000）；超出节点失败，可分片或调大",
+      "varTypeLabel": "变量类型",
+      "varTypeHint": "按类型填参：number 数值、enum 下拉值域、boolean 开关、date 日期；默认值留空表示无",
+      "varEnumValues": "候选值（逗号分隔，enum 必填）",
+      "varDefault": "默认值（可空）",
+      "varRequired": "必填",
+      "varType": {
+        "string": "文本",
+        "number": "数值",
+        "boolean": "布尔",
+        "enum": "枚举",
+        "date": "日期"
+      }
     },
     "templates": {
       "dailyBriefTitle": "分支日报",

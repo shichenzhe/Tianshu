@@ -47,5 +47,7 @@
     "7": "Sun"
   },
   "prevYear": "Previous year",
-  "nextYear": "Next year"
+  "nextYear": "Next year",
+  "enabled": "On",
+  "disabled": "Off"
 }

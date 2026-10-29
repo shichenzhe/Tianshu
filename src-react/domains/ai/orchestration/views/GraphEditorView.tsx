@@ -13,6 +13,7 @@
  * 「运行历史」（分页 + 行展开节点轨迹）两弹窗——均仅已保存图可用。
  */
 import "@xyflow/react/dist/style.css";
+import { parseInputSchema } from "../api/graph.schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -135,6 +136,7 @@ import {
   newSubflowNode,
   nextNodeId,
   parseOrKeep,
+  patchInputSchema,
   patchStartVariables,
   readTemplatePrefill,
   removeNode as removeNodeFromGraph,
@@ -564,9 +566,9 @@ export default function GraphEditorView() {
     };
   }, [mode, graph, jsonRaw]);
 
-  const testVariables = useMemo(() => {
+  const testFields = useMemo(() => {
     const parsed = parseOrKeep(currentJson).parsed;
-    return parsed ? Object.keys(parsed.inputSchema) : [];
+    return parsed ? parseInputSchema(parsed.inputSchema) : [];
   }, [currentJson]);
 
   // 保存钮不看校验问题（有问题时点保存 → toast + 展开清单提示），仅
@@ -632,6 +634,10 @@ export default function GraphEditorView() {
       // start 变量分流：节点 variables 与 inputSchema 同一次提交同步写
       //（StartNodeFields 的回写口；名称等其余字段照常走宽松补丁）
       const target = current.nodes.find((node) => node.id === nodeId);
+      if (target?.kind === "start" && patch.inputSchema !== undefined) {
+        // 变量类型编辑（切片 D）：inputSchema 整体回写并同步节点键序
+        return patchInputSchema(current, patch.inputSchema);
+      }
       if (target?.kind === "start" && patch.variables !== undefined) {
         return patchStartVariables(current, patch.variables);
       }
@@ -1297,7 +1303,7 @@ export default function GraphEditorView() {
           <GraphTestRunDialog
             graphId={graphId}
             draftJson={currentJson}
-            variables={testVariables}
+            fields={testFields}
             open={testOpen}
             onOpenChange={setTestOpen}
           />

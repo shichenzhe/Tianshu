@@ -384,7 +384,12 @@ function NodeBranch({
           onChange={(e) => onPatch({ name: e.target.value })}
         />
       </Field>
-      {nodeFieldsOf(node, onPatch, Object.keys(graph.inputSchema))}
+      {nodeFieldsOf(
+        node,
+        onPatch,
+        Object.keys(graph.inputSchema),
+        graph.inputSchema,
+      )}
     </section>
   );
 }

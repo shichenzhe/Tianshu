@@ -1,10 +1,7 @@
 // 移植自 mirror tests/ai/skill-prompt.test.ts（5526304，5 用例）——T5 移植
 // skill-prompt.ts 时测试落下了，本批补齐。mirror 末例用 vitest
 // toMatchInlineSnapshot，jest+ts-jest 下改为等值模板串断言（内容零改动）。
-import {
-  buildSystemPrompt,
-  type SkillSummary,
-} from 'src/core/skill-prompt';
+import { buildSystemPrompt, type SkillSummary } from 'src/core/skill-prompt';
 
 /** 最小 SkillSummary 构造（本函数只消费 name/description 两字段） */
 const skill = (name: string, description: string): SkillSummary => ({

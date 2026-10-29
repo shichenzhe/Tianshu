@@ -572,5 +572,29 @@
     "emptyTip": "新增一个 PostgreSQL 连接，工作流 database 节点即可经 dataSourceId 引用（凭据不进图定义）",
     "deleteConfirmTitle": "删除数据源",
     "deleteConfirmDesc": "引用此数据源的工作流节点将无法运行"
+  },
+  "app": {
+    "sectionTitle": "应用",
+    "sectionTip": "一组工作流组成一个应用；会话绑定后其工作流工具面收窄到该应用",
+    "add": "新建应用",
+    "addTitle": "新建应用",
+    "editTitle": "编辑应用",
+    "formTip": "勾选该应用包含的工作流；会话绑定应用后仅见/仅可运行这些工作流",
+    "name": "名称",
+    "description": "描述",
+    "workflows": "包含的工作流",
+    "noWorkflows": "暂无工作流可勾选（先在工作流页创建）",
+    "selectedCount": "已选 {{count}} 个工作流",
+    "workflowCount": "{{count}} 个工作流",
+    "empty": "暂无应用",
+    "emptyTip": "新建一个应用，把记账等工作流聚合成整体，再在会话 ⋯ 菜单绑定",
+    "deleteConfirmTitle": "删除应用",
+    "deleteConfirmDesc": "引用它的会话将自动解绑（工作流本身保留）",
+    "bindTitle": "绑定应用",
+    "bindTip": "选择该会话进入的应用语境（可随时更换或解绑）",
+    "bindMenu": "绑定应用",
+    "bindMenuBound": "更换/解绑应用",
+    "unbind": "不绑定（普通会话）",
+    "bindScopeNote": "绑定后本会话的 run/list/create_workflow 仅作用于该应用的工作流"
   }
 }

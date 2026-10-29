@@ -572,5 +572,29 @@
     "emptyTip": "Add a PostgreSQL connection for database nodes to reference via dataSourceId (credentials stay out of graph definitions)",
     "deleteConfirmTitle": "Delete Data Source",
     "deleteConfirmDesc": "Workflow nodes referencing this data source will fail to run"
+  },
+  "app": {
+    "sectionTitle": "Apps",
+    "sectionTip": "An app groups workflows; bound sessions narrow their workflow tools to the app",
+    "add": "New App",
+    "addTitle": "New App",
+    "editTitle": "Edit App",
+    "formTip": "Pick the workflows this app contains; bound sessions only see and run these",
+    "name": "Name",
+    "description": "Description",
+    "workflows": "Included workflows",
+    "noWorkflows": "No workflows to pick yet (create some first)",
+    "selectedCount": "{{count}} selected",
+    "workflowCount": "{{count}} workflows",
+    "empty": "No apps",
+    "emptyTip": "Create an app to group workflows, then bind it from a session ⋯ menu",
+    "deleteConfirmTitle": "Delete App",
+    "deleteConfirmDesc": "Bound sessions will be unbound automatically (workflows are kept)",
+    "bindTitle": "Bind App",
+    "bindTip": "Choose the app context for this session (change or unbind anytime)",
+    "bindMenu": "Bind App",
+    "bindMenuBound": "Change / Unbind App",
+    "unbind": "Not bound (normal session)",
+    "bindScopeNote": "When bound, run/list/create_workflow in this session act only on the app workflows"
   }
 }

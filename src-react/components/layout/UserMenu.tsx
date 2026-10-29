@@ -20,6 +20,7 @@ import {
   Palette,
   Bot,
   Database,
+  LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -198,6 +199,14 @@ export default function UserMenu() {
           >
             <Database size={14} className="mr-2" />
             {t("layout:userMenu.dataSources")}
+          </DropdownMenuItem>
+          {/* 应用管理（聚合期核心，切片 C）：工作流聚合与会话绑定入口 */}
+          <DropdownMenuItem
+            onClick={() => navigate("/module/ai/apps")}
+            className="cursor-pointer"
+          >
+            <LayoutGrid size={14} className="mr-2" />
+            {t("layout:userMenu.apps")}
           </DropdownMenuItem>
           {/* 记忆与进化：直达设置面板记忆页 */}
           <DropdownMenuItem

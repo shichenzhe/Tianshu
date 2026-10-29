@@ -3,6 +3,7 @@ import type { SessionLastMessage, SessionReadResult } from "@tianshu/protocol";
  * 会话与消息 API
  */
 
+import { invoke } from "@/lib/ipc";
 import { routeInvoke } from "@/domains/ai/data-source/host-route";
 import * as remote from "@/domains/ai/data-source/remote-session";
 import ServerApi from "@/domains/ai/server/api/server.api";

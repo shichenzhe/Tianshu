@@ -105,11 +105,11 @@ describe("SecurityService", () => {
     expect(saved.domainAllow).toEqual(["evil.com"]);
     expect(db.rows.get("domainAllow")).toBe('["evil.com"]');
   });
-  it("getConfig defaults 含 builtinTools 17 项（SP6）", async () => {
+  it("getConfig defaults 含 builtinTools 14 项（SP6；2026-10-29 plan 坍缩 17→14）", async () => {
     const svc = new SecurityService({ db: makeDb() as never });
     await svc.init();
     const state = svc.getConfig();
-    expect(state.defaults.builtinTools).toHaveLength(17);
+    expect(state.defaults.builtinTools).toHaveLength(14);
   });
   it("setConfig disabledTools 归一化落库（未知名剔除）（SP6）", async () => {
     const db = makeDb();

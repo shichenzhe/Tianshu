@@ -402,9 +402,9 @@ function emitFileEvent(
  * read 类工具本就不审批，此处只列 kind=write 的业务工具
  */
 const AUTO_EXEMPT_WRITE_TOOLS = new Set([
-  "plan_create_item",
-  "plan_update_status",
-  "plan_append_summary",
+  // plan 组坍缩二件（2026-10-29 改名批次；老名历史调用经别名归一
+  // 落到新名后同享免审）
+  "todo_write",
   "create_skill",
   "create_expert",
   "update_expert",

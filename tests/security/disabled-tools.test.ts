@@ -31,9 +31,9 @@ import type { SecurityConfig } from "../../src-react/domains/security/model/type
 const BUILTIN_NAMES = BUILTIN_TOOLS.map((t) => t.name);
 
 describe("BUILTIN_TOOLS 注册表（spec §3.1）", () => {
-  it("17 个内置工具、五组齐全、名字唯一", () => {
-    expect(BUILTIN_NAMES).toHaveLength(17);
-    expect(new Set(BUILTIN_NAMES).size).toBe(17);
+  it("14 个内置工具、五组齐全、名字唯一（2026-10-29 plan 坍缩 17→14）", () => {
+    expect(BUILTIN_NAMES).toHaveLength(14);
+    expect(new Set(BUILTIN_NAMES).size).toBe(14);
     for (const group of [
       "file",
       "command",

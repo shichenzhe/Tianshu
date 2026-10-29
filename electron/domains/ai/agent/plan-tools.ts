@@ -1,11 +1,15 @@
 /**
- * plan-item 内置工具组（项目模块子系统 F）：当前项目计划清单的
- * 创建任务 / 流转状态 / 追加 AI 进展摘要三工具。
+ * plan-item 内置工具组（项目模块子系统 F；2026-10-29 工具名精简批次
+ * 五件坍缩二件——todo_write 批量写 + todo_read 二合一读）。
  * 纯 Node 实现（禁止 import electron），可被 vitest 直接测试；
  * prisma 经 deps 结构注入（生产 ChatService 装配真 client，测试传内存 stub，
- * create-skill 先例）。三工具均 kind:"write" → 走统一两级审批门禁；
+ * create-skill 先例）。todo_write kind:"write" → 走统一两级审批门禁；
  * execute 错误一律转「错误: ...」字符串回喂模型，不抛出。
- * 三工具共享 ctx.projectId 属地校验（非项目会话无计划上下文，直接拒绝）。
+ * 两工具共享 ctx.projectId 属地校验（非项目会话无计划上下文，直接拒绝）。
+ * 坍缩语义裁定：不做 TodoWrite 式 omission-delete 全量覆写——计划清单
+ * 人机共享（source 区分 ai/manual），漏项即删会误删人类任务；进展行
+ * （原 plan_append_summary）保持只增不改。批量内逐项错误隔离（第 N 项
+ * 前缀），单项失败不阻断其余项。
  */
 import { format } from "date-fns";
 import { z } from "zod";
@@ -130,37 +134,44 @@ async function nextSortOrder(
   return (last?.sortOrder ?? 0) + 1;
 }
 
-const createItemSchema = z.object({
-  title: z.string().describe("任务标题"),
-  priority: z.enum(PLAN_PRIORITIES).optional().describe("优先级，缺省 P1"),
-  dueDate: z.string().optional().describe("截止日期，格式 yyyy-MM-dd"),
-  tags: z.array(z.string()).optional().describe("标签列表"),
+/** todo_write 单项形状（无 id=新建；有 id=更新） */
+const todoItemSchema = z.object({
+  id: z.number().optional().describe("既有任务 id（#<id> 引用）；缺省=新建"),
+  title: z.string().optional().describe("任务标题（新建必填）"),
+  status: z
+    .enum(PLAN_STATUSES)
+    .optional()
+    .describe("目标状态：not_started/in_progress/paused/done"),
+  priority: z
+    .enum(PLAN_PRIORITIES)
+    .optional()
+    .describe("优先级（新建可选，缺省 P1）"),
+  dueDate: z.string().optional().describe("截止日期 yyyy-MM-dd（仅新建）"),
+  tags: z.array(z.string()).optional().describe("标签列表（仅新建）"),
+  progress: z
+    .string()
+    .optional()
+    .describe("追加一行带日期进展（只增不改；推进任务后记录）"),
 });
 
-const updateStatusSchema = z.object({
-  id: z.number().describe("任务 id（#<id> 引用）"),
-  status: z.enum(PLAN_STATUSES).describe("目标状态"),
+const todoWriteSchema = z.object({
+  items: z
+    .array(todoItemSchema)
+    .min(1)
+    .describe(
+      "批量操作：无 id=新建（title 必填）；有 id=更新（status/progress 任选或同提）",
+    ),
 });
 
-const appendSummarySchema = z.object({
-  id: z.number().describe("任务 id（#<id> 引用）"),
-  text: z.string().describe("一行进展描述"),
+const todoReadSchema = z.object({
+  id: z.number().optional().describe("任务 id（#<id> 引用）；缺省=全量清单"),
 });
 
-const listItemsSchema = z.object({});
-
-const getItemSchema = z.object({
-  id: z.number().describe("任务 id（#<id> 引用）"),
-});
-
-/** plan_list_items：项目内全量任务 → 行摘要（跨项目行不可见，只增数据不加幻觉） */
+/** todo_read 清单态：项目内全量任务 → 行摘要（跨项目行不可见） */
 async function listItems(
   deps: PlanToolsDeps,
   ctx: ToolContext,
 ): Promise<string> {
-  if (ctx.projectId == null) {
-    return fail("当前会话未关联项目");
-  }
   const rows = await deps.prisma.planItem.findMany({
     where: { projectId: ctx.projectId },
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
@@ -181,15 +192,12 @@ async function listItems(
   return `当前项目计划清单（共 ${rows.length} 项）：\n${lines.join("\n")}`;
 }
 
-/** plan_get_item：属地校验 → 完整详情（含描述/全文进展——AI 推进的内容依据） */
+/** todo_read 详情态：属地校验 → 完整详情（含描述/全文进展——AI 推进的内容依据） */
 async function getItem(
   deps: PlanToolsDeps,
   ctx: ToolContext,
   id: number,
 ): Promise<string> {
-  if (ctx.projectId == null) {
-    return fail("当前会话未关联项目");
-  }
   const row = await findOwnedItem(deps, ctx, id);
   if (!row) {
     return fail("任务不存在或不属于当前项目");
@@ -210,178 +218,181 @@ async function getItem(
   return parts.join("\n");
 }
 
-/** plan_create_item：ctx.projectId/标题/日期校验 → source=ai 建行（未指派） */
-async function createItem(
+/** 新建项核心（校验由调用方先行；返回成功文案行） */
+async function createOne(
   deps: PlanToolsDeps,
   ctx: ToolContext,
-  args: z.infer<typeof createItemSchema>,
+  item: { title: string; priority?: string; dueDate?: string; tags?: string[] },
+  ownerId: number,
 ): Promise<string> {
-  const projectId = ctx.projectId;
-  if (projectId == null) {
-    return fail("当前会话未关联项目");
-  }
-  const title = args.title.trim();
-  if (!title) {
-    return fail("标题不能为空");
-  }
   const dueDate =
-    args.dueDate === undefined ? undefined : parseDueDate(args.dueDate);
-  if (dueDate === null) {
-    return fail("无效的截止日期格式（应为 yyyy-MM-dd）");
-  }
-  const project = await deps.prisma.project.findUnique({
-    where: { id: projectId },
-    select: { ownerId: true },
-  });
-  if (!project) {
-    return fail("项目不存在");
-  }
+    item.dueDate === undefined ? undefined : parseDueDate(item.dueDate);
   const row = await deps.prisma.planItem.create({
     data: {
-      projectId,
-      title,
+      projectId: ctx.projectId as number,
+      title: item.title,
       description: null,
       status: "not_started",
-      priority: args.priority ?? "P1",
+      priority: item.priority ?? "P1",
       // 设计裁决：AI 建的任务默认未指派（assigneeId null），人可后续指派
       assigneeId: null,
       startDate: null,
       dueDate: dueDate ?? null,
       source: "ai",
-      tags: args.tags !== undefined ? JSON.stringify(args.tags) : undefined,
+      tags: item.tags !== undefined ? JSON.stringify(item.tags) : undefined,
       customFields: null,
-      sortOrder: await nextSortOrder(deps, projectId, "not_started"),
-      createdById: project.ownerId,
+      sortOrder: await nextSortOrder(
+        deps,
+        ctx.projectId as number,
+        "not_started",
+      ),
+      createdById: ownerId,
     },
   });
-  return `已创建任务 #${row.id}《${title}》`;
+  return `已创建任务 #${row.id}《${item.title}》`;
 }
 
-/** plan_update_status：属地校验 → 状态流转（变更时落目标列尾列序） */
-async function updateStatus(
+/** 更新项核心：状态流转（变更时落目标列尾列序）→ 成功文案行 */
+async function transitionOne(
   deps: PlanToolsDeps,
   ctx: ToolContext,
-  args: z.infer<typeof updateStatusSchema>,
+  row: PlanItemDbRow,
+  status: PlanStatus,
 ): Promise<string> {
-  const projectId = ctx.projectId;
-  if (projectId == null) {
-    return fail("当前会话未关联项目");
+  const projectId = ctx.projectId as number;
+  const data: { status: string; sortOrder?: number } = { status };
+  if (row.status !== status) {
+    data.sortOrder = await nextSortOrder(deps, projectId, status);
   }
-  const row = await findOwnedItem(deps, ctx, args.id);
-  if (!row) {
-    return fail("任务不存在或不属于当前项目");
-  }
-  const data: { status: string; sortOrder?: number } = { status: args.status };
-  if (row.status !== args.status) {
-    data.sortOrder = await nextSortOrder(deps, projectId, args.status);
-  }
-  await deps.prisma.planItem.update({ where: { id: args.id }, data });
-  return `任务 #${args.id} 已流转为：${STATUS_LABELS[args.status]}`;
+  await deps.prisma.planItem.update({ where: { id: row.id }, data });
+  return `任务 #${row.id} 已流转为：${STATUS_LABELS[status]}`;
 }
 
-/** plan_append_summary：属地校验 → 旧摘要追加「[yyyy-MM-dd] text」行回写 */
-async function appendSummary(
+/** 更新项核心：旧摘要追加「[yyyy-MM-dd] text」行回写 → 成功文案行 */
+async function appendProgressOne(
   deps: PlanToolsDeps,
-  ctx: ToolContext,
-  args: z.infer<typeof appendSummarySchema>,
+  row: PlanItemDbRow,
+  text: string,
 ): Promise<string> {
-  if (ctx.projectId == null) {
-    return fail("当前会话未关联项目");
-  }
-  const text = args.text.trim();
-  if (!text) {
-    return fail("进展描述不能为空");
-  }
-  const row = await findOwnedItem(deps, ctx, args.id);
-  if (!row) {
-    return fail("任务不存在或不属于当前项目");
-  }
   // 格式与 repo 工具通道共用 entity 纯函数（单点生效）
   const { line, next } = appendAiSummaryLine(row.aiSummary, text, new Date());
   await deps.prisma.planItem.update({
-    where: { id: args.id },
+    where: { id: row.id },
     data: { aiSummary: next },
   });
-  return `已记录进展 #${args.id}：${line}`;
+  return `已记录进展 #${row.id}：${line}`;
+}
+
+/**
+ * todo_write 单项应用：错误行带「第 N 项」前缀（批量内逐项隔离），
+ * 单项失败不阻断其余项
+ */
+async function applyItem(
+  deps: PlanToolsDeps,
+  ctx: ToolContext,
+  item: z.infer<typeof todoItemSchema>,
+  index: number,
+  ownerId: number,
+): Promise<string> {
+  if (item.id === undefined) {
+    // 新建：title/dueDate 前置校验（不触库）
+    if (!item.title || !item.title.trim()) {
+      return fail(`第 ${index} 项标题不能为空`);
+    }
+    if (item.dueDate !== undefined && parseDueDate(item.dueDate) === null) {
+      return fail(`第 ${index} 项无效的截止日期格式（应为 yyyy-MM-dd）`);
+    }
+    return createOne(
+      deps,
+      ctx,
+      {
+        title: item.title.trim(),
+        priority: item.priority,
+        dueDate: item.dueDate,
+        tags: item.tags,
+      },
+      ownerId,
+    );
+  }
+  // 更新：title 显式拒绝（防静默忽略）
+  if (item.title !== undefined) {
+    return fail(`第 ${index} 项暂不支持修改标题`);
+  }
+  if (item.status === undefined && item.progress === undefined) {
+    return fail(`第 ${index} 项更新项须含 status 或 progress`);
+  }
+  if (item.progress !== undefined && !item.progress.trim()) {
+    return fail(`第 ${index} 项进展描述不能为空`);
+  }
+  const row = await findOwnedItem(deps, ctx, item.id);
+  if (!row) {
+    return fail(`第 ${index} 项任务不存在或不属于当前项目`);
+  }
+  const lines: string[] = [];
+  if (item.status !== undefined) {
+    lines.push(await transitionOne(deps, ctx, row, item.status));
+  }
+  if (item.progress !== undefined) {
+    lines.push(await appendProgressOne(deps, row, item.progress.trim()));
+  }
+  return lines.join("\n");
 }
 
 export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
-  // 逐工具显式 ToolDefinition<z.infer<...>> 注解（execute args 得到类型；
-  // 方法签名保持到 ToolDefinition<unknown> 的可赋值性，file-tools 先例）
   // 心智模型锚点（防呆，压缩保留）：计划清单是结构化数据（非文件系统），
-  // 掐掉模型在文件系统里找任务文件的错误路径——挂在建/查两个入口工具上
+  // 掐掉模型在文件系统里找任务文件的错误路径——挂在写/读两个工具上
   const GROUNDING_NOTE = "清单不在文件系统";
-  const createItemTool: ToolDefinition<z.infer<typeof createItemSchema>> = {
-    name: "plan_create_item",
-    description: `在当前项目计划清单中创建任务。${GROUNDING_NOTE}`,
-    parameters: createItemSchema,
+  const todoWriteTool: ToolDefinition<z.infer<typeof todoWriteSchema>> = {
+    name: "todo_write",
+    description: `批量维护当前项目计划清单：一次提交多项（无 id=新建任务；有 id=流转状态/追加进展）。${GROUNDING_NOTE}`,
+    parameters: todoWriteSchema,
     kind: "write",
     execute: async (ctx, args) => {
       try {
-        return await createItem(deps, ctx, args);
-      } catch (e) {
-        return fail(toMessage(e));
-      }
-    },
-  };
-  const updateStatusTool: ToolDefinition<z.infer<typeof updateStatusSchema>> = {
-    name: "plan_update_status",
-    description: "流转计划任务状态（待开始/进行中/已暂停/已完成）",
-    parameters: updateStatusSchema,
-    kind: "write",
-    execute: async (ctx, args) => {
-      try {
-        return await updateStatus(deps, ctx, args);
-      } catch (e) {
-        return fail(toMessage(e));
-      }
-    },
-  };
-  const appendSummaryTool: ToolDefinition<z.infer<typeof appendSummarySchema>> =
-    {
-      name: "plan_append_summary",
-      description: "为计划任务追加带日期的进展摘要（只增不改）；推进任务后调用",
-      parameters: appendSummarySchema,
-      kind: "write",
-      execute: async (ctx, args) => {
-        try {
-          return await appendSummary(deps, ctx, args);
-        } catch (e) {
-          return fail(toMessage(e));
+        if (ctx.projectId == null) {
+          return fail("当前会话未关联项目");
         }
-      },
-    };
-  const listItemsTool: ToolDefinition<z.infer<typeof listItemsSchema>> = {
-    name: "plan_list_items",
-    description: `查看当前项目全量计划清单（#id/标题/状态/最近进展）；${GROUNDING_NOTE}`,
-    parameters: listItemsSchema,
-    kind: "read",
-    execute: async (ctx) => {
-      try {
-        return await listItems(deps, ctx);
+        // 含新建项时一次性前置项目校验（批级错误，不带「第 N 项」前缀）
+        let ownerId: number | null = null;
+        if (args.items.some((item) => item.id === undefined)) {
+          const project = await deps.prisma.project.findUnique({
+            where: { id: ctx.projectId },
+            select: { ownerId: true },
+          });
+          if (!project) {
+            return fail("项目不存在");
+          }
+          ownerId = project.ownerId;
+        }
+        const lines: string[] = [];
+        for (const [index, item] of args.items.entries()) {
+          lines.push(
+            await applyItem(deps, ctx, item, index + 1, ownerId as number),
+          );
+        }
+        return lines.join("\n");
       } catch (e) {
         return fail(toMessage(e));
       }
     },
   };
-  const getItemTool: ToolDefinition<z.infer<typeof getItemSchema>> = {
-    name: "plan_get_item",
-    description: "按 id 查看计划任务完整详情（含描述与全部进展）",
-    parameters: getItemSchema,
+  const todoReadTool: ToolDefinition<z.infer<typeof todoReadSchema>> = {
+    name: "todo_read",
+    description: `查看当前项目计划清单：无参=全量（#id/标题/状态/最近进展）；带 id=单任务完整详情。${GROUNDING_NOTE}`,
+    parameters: todoReadSchema,
     kind: "read",
     execute: async (ctx, args) => {
       try {
-        return await getItem(deps, ctx, args.id);
+        if (ctx.projectId == null) {
+          return fail("当前会话未关联项目");
+        }
+        return args.id === undefined
+          ? await listItems(deps, ctx)
+          : await getItem(deps, ctx, args.id);
       } catch (e) {
         return fail(toMessage(e));
       }
     },
   };
-  return [
-    createItemTool,
-    updateStatusTool,
-    appendSummaryTool,
-    listItemsTool,
-    getItemTool,
-  ];
+  return [todoWriteTool, todoReadTool];
 }

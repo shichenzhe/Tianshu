@@ -5,9 +5,9 @@
  */
 import type { SkillInfo } from "./skill-loader";
 
-/** 技能段模板首行（spec §2 逐字） */
+/** 技能段模板首行（spec §2 模板 + path 子文件读取提示） */
 const SKILL_SECTION_HEADER =
-  "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：";
+  "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引；指引中引用的技能包内文件（如 references/jira.md）以 path 参数读取）：";
 
 /**
  * 组装最终 system prompt：base 存在 → base + 空行 + 技能段；

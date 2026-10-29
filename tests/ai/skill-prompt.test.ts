@@ -25,7 +25,7 @@ describe("buildSystemPrompt", () => {
 
   it("base undefined + skills → 仅技能段（无前缀空行）", () => {
     expect(buildSystemPrompt(undefined, [skill("greeting", "问候")])).toBe(
-      "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：\n- greeting: 问候",
+      "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引；指引中引用的技能包内文件（如 references/jira.md）以 path 参数读取）：\n- greeting: 问候",
     );
   });
 
@@ -37,7 +37,7 @@ describe("buildSystemPrompt", () => {
       ]),
     ).toBe(
       "你是助手\n\n" +
-        "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：\n" +
+        "你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引；指引中引用的技能包内文件（如 references/jira.md）以 path 参数读取）：\n" +
         "- greeting: 问候\n" +
         "- web-search: 联网搜索",
     );
@@ -49,7 +49,7 @@ describe("buildSystemPrompt", () => {
     ).toMatchInlineSnapshot(`
       "BASE
 
-      你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：
+      你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引；指引中引用的技能包内文件（如 references/jira.md）以 path 参数读取）：
       - a: 描述 A
       - b: 描述 B"
     `);

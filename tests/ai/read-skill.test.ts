@@ -1,7 +1,13 @@
 /**
  * read_skill 内置工具单测：临时目录造 SKILL.md（参照 skill-loader.test.ts 模式）
  */
-import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  writeFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -40,7 +46,7 @@ describe("read_skill 元信息", () => {
     const tool = makeReadSkillTool(skills);
     expect(tool.name).toBe("read_skill");
     expect(tool.description).toBe(
-      "读取指定技能的完整使用指引（SKILL.md 正文）",
+      "读取技能使用指引：传技能名读 SKILL.md 正文；可传 path 读技能包内文件（如 references/jira.md）",
     );
     expect(tool.kind).toBe("read");
   });
@@ -151,6 +157,122 @@ describe("read_skill execute", () => {
     await expect(
       tool.execute({ workspacePath: root, sessionId: 1 }, { name: "ghost" }),
     ).resolves.toBe("错误: 技能文件读取失败");
+  });
+});
+
+describe("read_skill path 子文件读取（技能包内 references 等）", () => {
+  let refDir: string;
+
+  beforeEach(() => {
+    refDir = path.join(userDir, "greeting", "references");
+    mkdirSync(refDir, { recursive: true });
+    writeFileSync(path.join(refDir, "jira.md"), "# jira 命令详解\n");
+  });
+
+  it("传 path 返回包内子文件内容", async () => {
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "references/jira.md" },
+      ),
+    ).resolves.toBe("# jira 命令详解\n");
+  });
+
+  it("path 穿越出技能目录返回越界错误", async () => {
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "../outside.md" },
+      ),
+    ).resolves.toBe("错误: 路径超出技能目录");
+  });
+
+  it("path 为绝对路径时拒绝", async () => {
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: path.join(root, "outside.md") },
+      ),
+    ).resolves.toBe("错误: 路径超出技能目录");
+  });
+
+  it("path 指向不存在文件返回读取失败", async () => {
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "references/no-such.md" },
+      ),
+    ).resolves.toBe("错误: 技能文件读取失败");
+  });
+
+  it("path 指向目录返回读取失败", async () => {
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "references" },
+      ),
+    ).resolves.toBe("错误: 技能文件读取失败");
+  });
+
+  it("包内 symlink 指向包外被 realpath 二次校验拒绝", async () => {
+    writeFileSync(path.join(root, "secret.md"), "机密");
+    symlinkSync(path.join(root, "secret.md"), path.join(refDir, "link.md"));
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "references/link.md" },
+      ),
+    ).resolves.toBe("错误: 路径超出技能目录");
+  });
+
+  it("子文件超过 256KB 按字节截断并追加尾部标记", async () => {
+    writeFileSync(path.join(refDir, "big.md"), "a".repeat(300 * 1024));
+    const tool = makeReadSkillTool(skills);
+    const out = await tool.execute(
+      { workspacePath: root, sessionId: 1 },
+      { name: "greeting", path: "references/big.md" },
+    );
+    expect(out).toBe("a".repeat(256 * 1024) + "\n…（已截断）");
+  });
+
+  it("子文件含 NUL 二进制内容返回不支持读取", async () => {
+    writeFileSync(
+      path.join(refDir, "bin.md"),
+      Buffer.from([0x61, 0x00, 0x62]),
+    );
+    const tool = makeReadSkillTool(skills);
+    await expect(
+      tool.execute(
+        { workspacePath: root, sessionId: 1 },
+        { name: "greeting", path: "references/bin.md" },
+      ),
+    ).resolves.toBe("错误: 文件含二进制内容（NUL），不支持读取");
+  });
+
+  it("子文件成功读取触发 onRead；越界与读败不触发", async () => {
+    let fired = 0;
+    const tool = makeReadSkillTool(skills, () => {
+      fired++;
+    });
+    await tool.execute(
+      { workspacePath: root, sessionId: 1 },
+      { name: "greeting", path: "references/jira.md" },
+    );
+    await tool.execute(
+      { workspacePath: root, sessionId: 1 },
+      { name: "greeting", path: "../outside.md" },
+    );
+    await tool.execute(
+      { workspacePath: root, sessionId: 1 },
+      { name: "greeting", path: "references/no-such.md" },
+    );
+    expect(fired).toBe(1);
   });
 });
 

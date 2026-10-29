@@ -48,6 +48,7 @@ const apiMock = vi.hoisted(() => ({
   automationSave: vi.fn(),
   automationDelete: vi.fn(),
   automationRunNow: vi.fn(),
+  automationRunNodes: vi.fn(),
 }));
 
 vi.mock("../transport/graph-api", async (importOriginal) => {
@@ -58,7 +59,11 @@ vi.mock("../transport/graph-api", async (importOriginal) => {
 });
 
 import { toTaskSaveParams } from "../transport/graph-api";
-import type { GraphRecord, TaskRecord } from "@tianshu/protocol";
+import type {
+  AutomationRunNodeRecord,
+  GraphRecord,
+  TaskRecord,
+} from "@tianshu/protocol";
 import { describeGraphError, useOrchestrationStore } from "./orchestration.store";
 
 const ISO = "2026-10-17T01:00:00.000Z";
@@ -133,6 +138,42 @@ function failOf(message: string) {
   return { ok: false as const, code: "4000", message };
 }
 
+/** 节点详情行工厂（执行详情批） */
+function nodeRow(
+  id: number,
+  runId: number,
+  overrides: Partial<AutomationRunNodeRecord> = {},
+): AutomationRunNodeRecord {
+  return {
+    id,
+    runId,
+    nodeId: `n${id}`,
+    nodeName: `节点${id}`,
+    status: "success",
+    input: `输入${id}`,
+    output: `输出${id}`,
+    errorJson: null,
+    toolCallsJson: null,
+    promptTokens: 10,
+    completionTokens: 20,
+    durationMs: 1200,
+    startedAt: ISO,
+    outputImage: null,
+    errorOutput: null,
+    fallbackJson: null,
+    ...overrides,
+  };
+}
+
+/** 挂起 promise：防迟到用例手工控制响应次序 */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 /** 微任务冲刷：事件回调内 void fire-and-forget 的重拉 */
 function flush(): Promise<void> {
   return new Promise((r) => setTimeout(r, 0));
@@ -149,6 +190,8 @@ function resetStore(): void {
     tasksPage: 1,
     tasksLoading: false,
     runs: {},
+    runNodes: {},
+    runNodesLoading: {},
   });
 }
 
@@ -343,9 +386,92 @@ describe("orchestration store（mock graph-api 层）", () => {
     expect(useOrchestrationStore.getState().runs[1].state).toBe("succeeded");
   });
 
+  it("loadRunNodes：ok 归档 + loading 复位；无连接静默空不置 loading", async () => {
+    apiMock.automationRunNodes.mockResolvedValueOnce({
+      ok: true,
+      data: [nodeRow(1, 7), nodeRow(2, 7, { status: "failed" })],
+    });
+    await useOrchestrationStore.getState().loadRunNodes(7);
+    const s = useOrchestrationStore.getState();
+    expect(s.runNodes[7]).toHaveLength(2);
+    expect(s.runNodes[7]?.[1]?.status).toBe("failed");
+    expect(s.runNodesLoading[7]).toBe(false);
+
+    connMock.activeTransport.mockReturnValue(null);
+    await useOrchestrationStore.getState().loadRunNodes(8);
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(1);
+    expect(useOrchestrationStore.getState().runNodes[8]).toEqual([]);
+    expect(useOrchestrationStore.getState().runNodesLoading[8]).toBe(false);
+  });
+
+  it("loadRunNodes：wire 失败 loading 复位、旧值保守不动", async () => {
+    useOrchestrationStore.setState({ runNodes: { 7: [nodeRow(1, 7)] } });
+    apiMock.automationRunNodes.mockResolvedValueOnce(failOf("BOOM"));
+    await useOrchestrationStore.getState().loadRunNodes(7);
+    expect(useOrchestrationStore.getState().runNodes[7]).toHaveLength(1);
+    expect(useOrchestrationStore.getState().runNodesLoading[7]).toBe(false);
+  });
+
+  it("loadRunNodes 防迟到：同 runId 迟到旧响应丢弃（末值生效）", async () => {
+    const slow = deferred<{ ok: true; data: AutomationRunNodeRecord[] }>();
+    apiMock.automationRunNodes
+      .mockReturnValueOnce(slow.promise)
+      .mockResolvedValueOnce({ ok: true, data: [nodeRow(2, 7)] });
+
+    const first = useOrchestrationStore.getState().loadRunNodes(7);
+    const second = useOrchestrationStore.getState().loadRunNodes(7);
+    await second;
+    expect(useOrchestrationStore.getState().runNodes[7]?.map((n) => n.id)).toEqual([2]);
+    slow.resolve({ ok: true, data: [nodeRow(1, 7)] });
+    await first;
+    // 迟到的首响应不得覆写末值
+    expect(useOrchestrationStore.getState().runNodes[7]?.map((n) => n.id)).toEqual([2]);
+  });
+
+  it("loadRunNodes 按 runId 拆分：两 run 并发互不干扰（防跨资源误判过期）", async () => {
+    const slowRun1 = deferred<{ ok: true; data: AutomationRunNodeRecord[] }>();
+    apiMock.automationRunNodes
+      .mockReturnValueOnce(slowRun1.promise)
+      .mockResolvedValueOnce({ ok: true, data: [nodeRow(9, 2)] });
+
+    const p1 = useOrchestrationStore.getState().loadRunNodes(1);
+    const p2 = useOrchestrationStore.getState().loadRunNodes(2);
+    await p2;
+    slowRun1.resolve({ ok: true, data: [nodeRow(8, 1)] });
+    await p1;
+    // run2 的快响应不曾取消 run1 的慢响应（全局 seq 会误杀）
+    expect(useOrchestrationStore.getState().runNodes[1]?.map((n) => n.id)).toEqual([8]);
+    expect(useOrchestrationStore.getState().runNodes[2]?.map((n) => n.id)).toEqual([9]);
+  });
+
+  it("graph.run.updated：浏览中 run（已拉节点）触发节点重拉；未浏览不拉", async () => {
+    apiMock.automationRunNodes.mockResolvedValue({
+      ok: true,
+      data: [nodeRow(1, 7)],
+    });
+    await useOrchestrationStore.getState().loadRunNodes(7);
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(1);
+
+    connMock.emit({
+      type: "graph.run.updated",
+      payload: { runId: 7, graphId: 1, state: "running", progress: { nodeId: "n1", nodeStatus: "running" } },
+    });
+    await flush();
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(2);
+
+    // 未浏览的 run 不触发拉取
+    connMock.emit({
+      type: "graph.run.updated",
+      payload: { runId: 99, graphId: 1, state: "succeeded" },
+    });
+    await flush();
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(2);
+  });
+
   it("server.connected：runs 清空 + graphs/tasks 双拉", async () => {
     useOrchestrationStore.setState({
       runs: { 1: { runId: 7, state: "running" } },
+      runNodes: { 7: [nodeRow(1, 7)] },
     });
     apiMock.graphQuery.mockResolvedValue(pageOf([]));
     apiMock.automationList.mockResolvedValue(pageOf([]));
@@ -357,6 +483,8 @@ describe("orchestration store（mock graph-api 层）", () => {
     await flush();
 
     expect(useOrchestrationStore.getState().runs).toEqual({});
+    // 节点详情随投影复位（断流期间终局已失，宁清不卡）
+    expect(useOrchestrationStore.getState().runNodes).toEqual({});
     expect(apiMock.graphQuery).toHaveBeenCalledTimes(1);
     expect(apiMock.automationList).toHaveBeenCalledTimes(1);
   });

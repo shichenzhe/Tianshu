@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type {
+  AutomationRunNodeRecord,
   AutomationRunRecord,
   AutomationRunStatus,
   GraphRecord,
@@ -16,6 +17,7 @@ import {
   automationDelete,
   automationList,
   automationRunNow,
+  automationRunNodes,
   automationRunPage,
   automationSave,
   graphDelete,
@@ -97,6 +99,10 @@ interface OrchestrationState {
   historyFilter: AutomationRunStatus | null;
   /** 任务口径预筛（null = 全量；任务行「历史」入口带入） */
   historyTaskId: number | null;
+  /** 节点详情（执行详情批 automation/runNodes）：按 runId 键控 */
+  runNodes: Record<number, AutomationRunNodeRecord[]>;
+  /** 按资源拆分的 loading（详情页单 run 浏览态） */
+  runNodesLoading: Record<number, boolean>;
   /** 首页覆写（进页/下拉刷新/事件重拉共用） */
   loadGraphs(): Promise<void>;
   loadMoreGraphs(): Promise<void>;
@@ -107,6 +113,8 @@ interface OrchestrationState {
   /** 切状态筛选/任务预筛：置参即重拉首页 */
   setHistoryFilter(status: AutomationRunStatus | null): void;
   setHistoryTaskId(taskId: number | null): void;
+  /** 节点详情拉取（执行详情批）：详情页进入/事件驱动重拉共用 */
+  loadRunNodes(runId: number): Promise<void>;
   /** 202 受理 → 乐观置 running（事件流接管后续状态） */
   runGraph(graphId: number): Promise<ActionOutcome>;
   /** 中止受理即成功——aborted 态交由事件回传，勿本地合成 */
@@ -155,6 +163,8 @@ let eventsBound = false;
 let graphSeq = 0;
 let taskSeq = 0;
 let historySeq = 0;
+/** 节点详情时序令牌按 runId 拆分（防迟到铁律：跨资源互判过期即误杀） */
+const runNodesSeq = new Map<number, number>();
 
 /** 跨页 append 去重合并（同 id 后写覆盖，sessions.store 同款） */
 function mergeById<T extends { id: number }>(prev: T[], next: T[]): T[] {
@@ -247,6 +257,33 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     }));
   }
 
+  async function fetchRunNodes(runId: number): Promise<void> {
+    // 无活动连接静默空集（进页未连接/拆除后）：不发请求不置 loading
+    if (activeTransport() === null) {
+      set((s) => ({
+        runNodes: { ...s.runNodes, [runId]: [] },
+        runNodesLoading: { ...s.runNodesLoading, [runId]: false },
+      }));
+      return;
+    }
+    const token = (runNodesSeq.get(runId) ?? 0) + 1;
+    runNodesSeq.set(runId, token);
+    set((s) => ({ runNodesLoading: { ...s.runNodesLoading, [runId]: true } }));
+    const r = await automationRunNodes(runId);
+    if (token !== runNodesSeq.get(runId)) return;
+    if (!r.ok) {
+      // 业务错/网络错：保守不动旧集（fetchGraphs 同款）
+      set((s) => ({
+        runNodesLoading: { ...s.runNodesLoading, [runId]: false },
+      }));
+      return;
+    }
+    set((s) => ({
+      runNodes: { ...s.runNodes, [runId]: r.data },
+      runNodesLoading: { ...s.runNodesLoading, [runId]: false },
+    }));
+  }
+
   function dropTask(id: number): void {
     set((s) => ({
       tasks: s.tasks.filter((x) => x.id !== id),
@@ -270,6 +307,8 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     historyLoading: false,
     historyFilter: null,
     historyTaskId: null,
+    runNodes: {},
+    runNodesLoading: {},
 
     loadGraphs: () => fetchGraphs(1, false),
 
@@ -302,6 +341,8 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       set({ historyTaskId: taskId });
       void fetchHistory(1, false);
     },
+
+    loadRunNodes: (runId) => fetchRunNodes(runId),
 
     loadMoreTasks: () => {
       const { tasks, tasksTotal, tasksLoading, tasksPage } = get();
@@ -397,6 +438,10 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
               },
             },
           }));
+          // 节点详情浏览中（详情页已拉过该 run）：流式推进即重拉节点行
+          if (get().runNodes[runId] !== undefined) {
+            void get().loadRunNodes(runId);
+          }
           return;
         }
         if (e.type === "automation.changed") {
@@ -407,7 +452,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
           return;
         }
         if (e.type === "server.connected") {
-          set({ runs: {} });
+          set({ runs: {}, runNodes: {}, runNodesLoading: {} });
           // 能力门控（Fix Round 1 + CRUD 批）：graph/automation 任一能力才
           // 拉对应列表——桌面被控端报 automation 不报 graph（graph/query
           // 必败不发），无头端报 graph 时 graph+tasks 双拉（tasks 对其恒可达）

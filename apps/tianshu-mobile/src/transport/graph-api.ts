@@ -14,6 +14,7 @@
 import {
   ENDPOINTS,
   type AccessMode,
+  type AutomationRunNodeRecord,
   type AutomationRunPage,
   type AutomationRunRecord,
   type AutomationRunStatus,
@@ -242,4 +243,36 @@ export async function automationRunNow(
 ): Promise<ApiResult<{ accepted: boolean }>> {
   const r = await wireRequest("POST", ENDPOINTS.automation.runNow, { taskId });
   return r.ok ? { ok: true, data: { accepted: true } } : r;
+}
+
+/** 运行节点详情行判别（执行详情批）：AutomationRunNodeRecord 必填门禁 */
+export function toRunNodeRow(row: unknown): AutomationRunNodeRecord | null {
+  if (typeof row !== "object" || row === null) return null;
+  const r = row as Record<string, unknown>;
+  if (
+    typeof r.id !== "number" ||
+    typeof r.runId !== "number" ||
+    typeof r.nodeId !== "string" ||
+    typeof r.status !== "string" ||
+    typeof r.durationMs !== "number" ||
+    typeof r.startedAt !== "string"
+  ) {
+    return null;
+  }
+  return r as unknown as AutomationRunNodeRecord;
+}
+
+/** 运行节点详情（执行详情批）：图 run 专有——归属不符/prompt run/老 run
+ * 无节点行一律空集（服务端不暴露存在性）；行透传（全文输入/输出） */
+export async function automationRunNodes(
+  runId: number,
+): Promise<ApiResult<AutomationRunNodeRecord[]>> {
+  const r = await wireRequest("POST", ENDPOINTS.automation.runNodes, { runId });
+  if (!r.ok) return r;
+  const rows = Array.isArray(r.data)
+    ? r.data
+        .map(toRunNodeRow)
+        .filter((row): row is AutomationRunNodeRecord => row !== null)
+    : [];
+  return { ok: true, data: rows };
 }

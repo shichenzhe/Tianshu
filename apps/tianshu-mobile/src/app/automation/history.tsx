@@ -1,26 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo } from "react";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { FlatList, Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import type {
-  AutomationRunRecord,
-  AutomationRunStatus,
-} from "@tianshu/protocol";
+import type { AutomationRunStatus } from "@tianshu/protocol";
 
-import { DetailSheet } from "@/components/DetailSheet";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
-import { formatRelative } from "@/logic/time";
+import { durationLabel, formatRelative } from "@/logic/time";
+import { runStatusColor } from "@/logic/run-node";
 import { useOrchestrationStore } from "@/store/orchestration.store";
 import { useThemeColors } from "@/store/theme";
-
-/** 运行状态 → 展示色（红=失败/绿=成功/主题=运行中/灰=跳过） */
-const STATUS_COLOR: Record<AutomationRunStatus, string> = {
-  running: "__primary__",
-  success: "#34C759",
-  failed: "#FF3B30",
-  skipped: "#8E8E93",
-};
 
 const FILTERS: Array<{ value: AutomationRunStatus | null; key: string }> = [
   { value: null, key: "filterAll" },
@@ -30,17 +19,11 @@ const FILTERS: Array<{ value: AutomationRunStatus | null; key: string }> = [
   { value: "skipped", key: "statusSkipped" },
 ];
 
-/** 耗时格式化：<60s 秒一位小数、否则分钟整数；运行中/无值空串 */
-function durationLabel(ms: number | undefined): string {
-  if (ms == null) return "";
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.round(ms / 60_000)}m`;
-}
-
 /**
  * 运行历史页（CRUD 批）：automation/runPage 分页列表。状态筛选/任务预筛
  * （?taskId=，任务长按「运行历史」入口带入）服务端下推；automation.changed
- * 收尾事件自动重拉（orchestration.store）；失败行点开错误详情 DetailSheet。
+ * 收尾事件自动重拉（orchestration.store）；行点击进执行详情页
+ * /automation/history/[id]（执行详情批，全状态可进）。
  */
 export default function AutomationHistoryScreen() {
   const { t } = useTranslation(["orchestration", "common"]);
@@ -60,7 +43,6 @@ export default function AutomationHistoryScreen() {
   const loadMoreHistory = useOrchestrationStore((s) => s.loadMoreHistory);
   const setHistoryFilter = useOrchestrationStore((s) => s.setHistoryFilter);
   const setHistoryTaskId = useOrchestrationStore((s) => s.setHistoryTaskId);
-  const [detail, setDetail] = useState<AutomationRunRecord | null>(null);
 
   // 进页：路由预筛落 store（重拉一次）+ 首屏拉取
   useEffect(() => {
@@ -71,7 +53,8 @@ export default function AutomationHistoryScreen() {
   const rows = useMemo(() => runs, [runs]);
 
   function statusColor(status: AutomationRunStatus): string {
-    return status === "running" ? colors.primary : STATUS_COLOR[status];
+    const color = runStatusColor(status);
+    return color === "__primary__" ? colors.primary : color;
   }
 
   return (
@@ -139,17 +122,15 @@ export default function AutomationHistoryScreen() {
         }
         renderItem={({ item, index }) => (
           <Pressable
-            disabled={!item.error}
-            onPress={() => setDetail(item)}
+            accessibilityRole="button"
+            onPress={() => router.push(`/automation/history/${item.id}`)}
             className={`bg-card px-4 py-3 dark:bg-[#1C1C1E] ${
               index === rows.length - 1
                 ? ""
                 : "border-b border-sep dark:border-[#545458A6]"
             }`}
             style={({ pressed }) =>
-              pressed && item.error
-                ? { backgroundColor: colors.subtle }
-                : undefined
+              pressed ? { backgroundColor: colors.subtle } : undefined
             }
           >
             <View className="flex-row items-center gap-2">
@@ -196,21 +177,6 @@ export default function AutomationHistoryScreen() {
           </Pressable>
         )}
       />
-
-      <DetailSheet
-        visible={detail !== null}
-        title={detail?.taskName ?? ""}
-        onClose={() => setDetail(null)}
-      >
-        <Text className="px-1 pb-2 text-xs text-label2 dark:text-[#EBEBF599]">
-          {detail
-            ? `${t(`orchestration:trigger_${detail.triggerType}`)} · ${relativeTimeLabel(formatRelative(detail.startedAt), t)}`
-            : ""}
-        </Text>
-        <Text className="rounded-lg bg-field px-3 py-2.5 text-sm text-black dark:bg-[#2C2C2E] dark:text-white">
-          {detail?.error ?? ""}
-        </Text>
-      </DetailSheet>
     </SafeAreaView>
   );
 }

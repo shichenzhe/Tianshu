@@ -113,5 +113,22 @@
   "trigger_manual": "手动",
   "trigger_event": "事件",
   "trigger_subflow": "子流程",
-  "trigger_webhook": "Webhook"
+  "trigger_webhook": "Webhook",
+  "runDetail": "运行详情",
+  "runNotFound": "运行记录不存在或已刷新，请返回列表重试",
+  "attemptN": "第 {{n}} 次尝试",
+  "triggerLabel": "触发方式",
+  "startedAt": "开始时间",
+  "finishedAt": "结束时间",
+  "durationLabel": "耗时",
+  "tokensLabel": "Tokens",
+  "runError": "错误信息",
+  "nodeSection": "节点执行",
+  "nodeInput": "输入",
+  "nodeOutput": "输出",
+  "nodeError": "错误",
+  "toolCalls": "工具调用",
+  "errorOutputLabel": "失败项",
+  "fallbackLabel": "降级继续",
+  "noNodes": "无节点级详情（早期运行未留档节点数据）"
 }

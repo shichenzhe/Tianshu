@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 
-import { formatRelative } from "./time";
+import { formatAbsolute, formatRelative } from "./time";
+
+describe("formatAbsolute（执行详情批：run 级开始/结束时间）", () => {
+  it("同年 MM-DD HH:mm、跨年含年份（本地时区无关构造）", () => {
+    const sameYear = new Date(2026, 9, 29, 16, 5);
+    expect(formatAbsolute(sameYear.toISOString(), new Date(2026, 9, 30))).toBe(
+      "10-29 16:05",
+    );
+    const crossYear = new Date(2025, 11, 31, 20, 0);
+    expect(formatAbsolute(crossYear.toISOString(), new Date(2026, 0, 2))).toBe(
+      "2025-12-31 20:00",
+    );
+  });
+
+  it("畸形 iso 防御 → 空串（不抛错）", () => {
+    expect(formatAbsolute("not-a-date", new Date())).toBe("");
+  });
+});
 
 describe("formatRelative", () => {
   it("60 秒内 → 刚刚", () => {

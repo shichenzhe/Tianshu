@@ -70,3 +70,24 @@ export function formatRelative(iso: string, now: Date = new Date()): RelativeTim
   }
   return { key: "date", text: absText };
 }
+
+/** 绝对时间（执行详情批 run 级开始/结束）：同年 MM-DD HH:mm、跨年
+ * YYYY-MM-DD HH:mm（本地时区）；畸形 iso 空串防御（formatRelative 同款） */
+export function formatAbsolute(iso: string, now: Date = new Date()): string {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "";
+  const hm = `${pad2(then.getHours())}:${pad2(then.getMinutes())}`;
+  const sameYear = now.getFullYear() === then.getFullYear();
+  const date = sameYear
+    ? `${pad2(then.getMonth() + 1)}-${pad2(then.getDate())}`
+    : `${then.getFullYear()}-${pad2(then.getMonth() + 1)}-${pad2(then.getDate())}`;
+  return `${date} ${hm}`;
+}
+
+/** 耗时格式化（运行历史行/执行详情共用）：<60s 秒一位小数、否则分钟
+ * 整数；运行中/无值空串 */
+export function durationLabel(ms: number | undefined): string {
+  if (ms == null) return "";
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.round(ms / 60_000)}m`;
+}

@@ -113,5 +113,22 @@
   "trigger_manual": "Manual",
   "trigger_event": "Event",
   "trigger_subflow": "Subflow",
-  "trigger_webhook": "Webhook"
+  "trigger_webhook": "Webhook",
+  "runDetail": "Run Detail",
+  "runNotFound": "Run not found or refreshed, please go back and retry",
+  "attemptN": "Attempt {{n}}",
+  "triggerLabel": "Trigger",
+  "startedAt": "Started",
+  "finishedAt": "Finished",
+  "durationLabel": "Duration",
+  "tokensLabel": "Tokens",
+  "runError": "Error",
+  "nodeSection": "Node Execution",
+  "nodeInput": "Input",
+  "nodeOutput": "Output",
+  "nodeError": "Error",
+  "toolCalls": "Tool Calls",
+  "errorOutputLabel": "Failed Items",
+  "fallbackLabel": "Fallback",
+  "noNodes": "No node details (nodes not recorded for early runs)"
 }

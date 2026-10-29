@@ -46,3 +46,4 @@ export * from "./plan-date";
 // 零依赖纯数据——聚合进 barrel 安全：不拖 Node 侧依赖进 renderer；桌面
 // src-react 原位 re-export，被控面 marketList/marketDetail 端点消费）
 export * from "./expert-market";
+export * from "./tool-alias";

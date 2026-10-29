@@ -15,8 +15,15 @@
  *   ToolDefinitionLike + 泛型 TAgent 约束（server 仓 ToolDefinitionLike
  *   先例）——宿主包装层可收窄回域内真身类型。
  */
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import {
+  createReactAgent,
+  ToolNode,
+} from "@langchain/langgraph/prebuilt";
 import { GraphRecursionError } from "@langchain/langgraph";
+import type { LangGraphRunnableConfig } from "@langchain/langgraph";
+import type { Command } from "@langchain/langgraph";
+import type { ToolCall } from "@langchain/core/messages/tool";
+import type { ToolMessage } from "@langchain/core/messages";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import type {
@@ -32,9 +39,35 @@ import { estimateReserveTokens, truncateHistory } from "./history-truncate";
 import { trimHistoryToolOutputs } from "./tool-output-trim";
 import { classifyError } from "./error-classify";
 import { consumeAgentStream } from "./agent-chunk-emitter";
+import { canonicalToolName } from "./tool-alias";
 
 /** 步数上限保险丝（spec 决策 #3：宽上限，上下文截断为自然限界） */
 export const DEFAULT_MAX_STEPS = 50;
+
+/**
+ * 别名 ToolNode（2026-10-29 工具名精简批次）：模型模仿历史 blocks 发出
+ * 老名 tool_call（编辑重发场景）时在 runTool 入口归一为新名分发。绑定面
+ * 不受影响——createReactAgent 收 ToolNode 形参时取 node.tools 绑定模型
+ * （react_agent_executor.js 非 Array 分支），新名 schema 单列可见、老名
+ * 不双列。老名无映射时 canonicalToolName 原样透传（mcp__ 等）。
+ */
+class AliasToolNode extends ToolNode {
+  protected override async runTool(
+    call: ToolCall,
+    config: LangGraphRunnableConfig,
+    state: unknown,
+  ): Promise<ToolMessage | Command> {
+    const canonical = canonicalToolName(call.name);
+    // 新名工具存在才归一分发；不存在按原名原样（过渡期老名注册项/
+    // 测试替身兜底，终态生产面 def 恒新名不达此分支）
+    const hasCanonical = this.tools.some((tool) => tool.name === canonical);
+    return super.runTool(
+      hasCanonical ? { ...call, name: canonical } : call,
+      config,
+      state,
+    );
+  }
+}
 
 /**
  * 最小结构工具定义（server 仓 ToolDefinitionLike 先例）：runChatStream 对
@@ -267,7 +300,9 @@ export async function runChatStream<
 
   const agentExecutor = createReactAgent({
     llm: options.model,
-    tools,
+    // ToolNode 形参：绑定面（node.tools=新名集）与执行面（runTool 归一）
+    // 分离——老名分发经 AliasToolNode 兑现，见类注释
+    tools: new AliasToolNode(tools),
     // langgraph prebuilt 系统提示注入参数名为 prompt（安装版 d.ts 核对：
     // string | SystemMessage | fn | Runnable；string 即前置 SystemMessage）
     prompt: options.system,

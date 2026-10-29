@@ -45,6 +45,7 @@
  *   totalUsage，丢弃会让监控 DB 缺 token 统计（终审 T9a）
  */
 import type { StreamEvent } from "@langchain/core/tracers/log_stream";
+import { canonicalToolName } from "./tool-alias";
 
 /** Task 9 消费的回调协议（签名即契约，勿改） */
 export interface EmitterCallbacks {
@@ -336,11 +337,16 @@ export async function consumeAgentStream(
         // 模型 id 映射并跳过重复发射；序列化 ToolCall 形态按 id 直配兜底
         const unwrapped = unwrapTracedInput(ev.data?.input);
         const serialized = serializedToolCallId(unwrapped);
+        // 名字比较经别名归一（2026-10-29 改名批次）：pending 存模型发射名，
+        // on_tool_start 事件带执行名——新老名混布（历史回喂影响发老名、
+        // 过渡期 def 存老名）须双侧归一成别名等价比较，单侧归一会让
+        // 同名对失配误判陌生调用二次发射（同 tool_call 落双块）
         const matched = serialized
           ? pending.findIndex((item) => item.id === serialized)
           : pending.findIndex(
               (item) =>
-                item.name === name && item.argsJson === stableJson(unwrapped),
+                canonicalToolName(item.name) === canonicalToolName(name) &&
+                item.argsJson === stableJson(unwrapped),
             );
         if (matched >= 0) {
           runIdToCallId.set(runId, pending[matched].id);

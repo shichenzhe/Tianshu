@@ -11,6 +11,7 @@ import { makeRunCommandTool } from "./command-tool";
 import { makeWebTools } from "./web-tools";
 import { makeBrowserTools } from "./browser-tools";
 import { guestControlResolver } from "../browser/guest-registry-ipc";
+import { canonicalToolName } from "@tianshu/core";
 
 const definitions: ToolDefinition[] = [
   ...FILE_TOOLS,
@@ -21,7 +22,10 @@ const definitions: ToolDefinition[] = [
 
 export const registry = {
   getDefinitions: () => definitions,
-  find: (name: string) => definitions.find((tool) => tool.name === name),
+  // 老名归一（2026-10-29 改名批次）：历史回喂/编辑重发的老名 tool_call
+  // 经 canonicalToolName 路由到新名工具，DB blocks 不迁移
+  find: (name: string) =>
+    definitions.find((tool) => tool.name === canonicalToolName(name)),
 };
 
 export function registerTools(defs: ToolDefinition[]): void {
@@ -40,11 +44,16 @@ export function unregisterTools(prefix: string): number {
   return before - definitions.length;
 }
 
-/** 注入层过滤（SP6 裁定 1）：禁用=对模型不存在；只作用于内置工具名 */
+/** 注入层过滤（SP6 裁定 1）：禁用=对模型不存在；只作用于内置工具名。
+ *  双侧经 canonicalToolName 归一成别名等价比较——toolPermission DB 存老名
+ *  （read_file 等），改名后禁用语义跨改名延续；过渡期老名 def 同样命中
+ *  （终态生产面 def 恒新名） */
 export function filterDisabledTools<T extends { name: string }>(
   defs: T[],
   disabled: Iterable<string>,
 ): T[] {
-  const disabledSet = new Set(disabled);
-  return defs.filter((def) => !disabledSet.has(def.name));
+  const disabledSet = new Set([...disabled].map(canonicalToolName));
+  return defs.filter(
+    (def) => !disabledSet.has(canonicalToolName(def.name)),
+  );
 }

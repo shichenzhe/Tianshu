@@ -242,10 +242,7 @@ describe("read_skill path 子文件读取（技能包内 references 等）", () 
   });
 
   it("子文件含 NUL 二进制内容返回不支持读取", async () => {
-    writeFileSync(
-      path.join(refDir, "bin.md"),
-      Buffer.from([0x61, 0x00, 0x62]),
-    );
+    writeFileSync(path.join(refDir, "bin.md"), Buffer.from([0x61, 0x00, 0x62]));
     const tool = makeReadSkillTool(skills);
     await expect(
       tool.execute(

@@ -51,6 +51,36 @@ function resolveWithinSkillDir(dir: string, rel: string): string | null {
   return abs;
 }
 
+/** 读 SKILL.md 正文（同步实现）：精确匹配表内 name，查不到不触任何磁盘读取 */
+function readSkillBody(
+  skills: SkillInfo[],
+  name: string,
+  subPath: string | undefined,
+  ctx: ToolContext,
+  onRead?: (ctx: ToolContext, skill: SkillInfo) => string | void,
+): string {
+  const skill = skills.find((s) => s.name === name);
+  if (!skill) return "错误: 技能不存在";
+  // path 缺省读正文；给定则以技能目录为锚解析，越界即拒绝（不触读）
+  const target = subPath
+    ? resolveWithinSkillDir(skill.dir, subPath)
+    : skill.bodyPath;
+  if (!target) return "错误: 路径超出技能目录";
+  let buf: Buffer;
+  try {
+    buf = readFileSync(target);
+  } catch {
+    return "错误: 技能文件读取失败";
+  }
+  if (buf.includes(0)) return "错误: 文件含二进制内容（NUL），不支持读取";
+  const body =
+    buf.byteLength > BODY_LIMIT
+      ? `${buf.subarray(0, BODY_LIMIT).toString("utf8")}${TRUNCATED_SUFFIX}`
+      : buf.toString("utf8");
+  const note = onRead?.(ctx, skill);
+  return note ? `${body}\n\n${note}` : body;
+}
+
 export function makeReadSkillTool(
   skills: SkillInfo[],
   onRead?: (ctx: ToolContext, skill: SkillInfo) => string | void,
@@ -69,28 +99,7 @@ export function makeReadSkillTool(
         ),
     }),
     kind: "read",
-    execute: async (ctx, args) => {
-      // 精确匹配表内 name：查不到直接返回，不触任何磁盘读取
-      const skill = skills.find((s) => s.name === args.name);
-      if (!skill) return "错误: 技能不存在";
-      // path 缺省读正文；给定则以技能目录为锚解析，越界即拒绝（不触读）
-      const target = args.path
-        ? resolveWithinSkillDir(skill.dir, args.path)
-        : skill.bodyPath;
-      if (!target) return "错误: 路径超出技能目录";
-      let buf: Buffer;
-      try {
-        buf = readFileSync(target);
-      } catch {
-        return "错误: 技能文件读取失败";
-      }
-      if (buf.includes(0)) return "错误: 文件含二进制内容（NUL），不支持读取";
-      const body =
-        buf.byteLength > BODY_LIMIT
-          ? `${buf.subarray(0, BODY_LIMIT).toString("utf8")}${TRUNCATED_SUFFIX}`
-          : buf.toString("utf8");
-      const note = onRead?.(ctx, skill);
-      return note ? `${body}\n\n${note}` : body;
-    },
+    execute: (ctx, args) =>
+      Promise.resolve(readSkillBody(skills, args.name, args.path, ctx, onRead)),
   };
 }

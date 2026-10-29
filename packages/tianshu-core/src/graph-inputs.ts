@@ -89,6 +89,12 @@ export function normalizeGraphInputs(
 ):
   | { ok: true; inputs: Record<string, GraphInputValue> }
   | { ok: false; issues: GraphInputIssue[] } {
+  // 空声明直通（旧图语义：inputSchema 未声明但模板仍引用 input.x——
+  // 无声明即无从校验，原样透传不设障；有声明才严格收口）。非数组入参
+  // 防御性同直通
+  if (!Array.isArray(fields) || fields.length === 0) {
+    return { ok: true, inputs: raw as Record<string, GraphInputValue> };
+  }
   const inputs: Record<string, GraphInputValue> = {};
   const issues: GraphInputIssue[] = [];
   for (const field of fields) {

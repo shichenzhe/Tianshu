@@ -164,7 +164,7 @@ export class GraphApi {
    * 为编辑器当前草稿——有则试改后的图而非库内版本 */
   static async runTest(
     id: number,
-    inputs: Record<string, string>,
+    inputs: Record<string, unknown>,
     workspaceId: number,
     draftJson?: string,
   ): Promise<void> {

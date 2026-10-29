@@ -17,6 +17,9 @@ import {
   graphNodeSchema,
   normalizeGraph,
   validateGraph,
+  normalizeGraphInputs,
+  parseInputSchema,
+  type GraphInputValue,
 } from "../../../../src-react/domains/ai/orchestration/api/graph.schema";
 import { GRAPH_CHANGED_EVENT } from "../../../../src-react/domains/ai/orchestration/api/orchestration.api";
 import {
@@ -247,7 +250,7 @@ export default class GraphRepository {
         _,
         userId,
         id: number,
-        inputs: Record<string, string>,
+        inputs: Record<string, unknown>,
         workspaceId: number,
         draftJson?: string,
       ) => this.runTest(id, inputs, workspaceId, userId, draftJson),
@@ -842,10 +845,12 @@ export default class GraphRepository {
    * （任务运行经 assertTaskRefsOwned，此处试运行自行校验）；互斥
    * GRAPH_ALREADY_RUNNING；触发即返回，执行 fire-and-forget。draftJson
    * 为编辑器当前草稿（有则覆盖库内版本执行——试的是改后的图，运行
-   * 记录仍归属原图；合法性由 executor parseGraphJson 兜底落库可见） */
+   * 记录仍归属原图；合法性由 executor parseGraphJson 兜底落库可见）。
+   * 输入归一（切片 D）：按目标图（含草稿覆盖）inputSchema 做 required
+   * 校验与 default 填充——缺参在此结构化报错，不再等模板渲染期才炸 */
   async runTest(
     id: number,
-    inputs: Record<string, string>,
+    rawInputs: Record<string, unknown>,
     workspaceId: number,
     userId: number,
     draftJson?: string,
@@ -869,7 +874,33 @@ export default class GraphRepository {
       typeof draftJson === "string" && draftJson.trim() !== ""
         ? { ...graph, graphJson: draftJson }
         : graph;
+    const inputs = this.normalizeInputsFor(target, rawInputs);
     this.launchTestRun(target, inputs, workspace);
+  }
+
+  /** 目标图 inputSchema → 入口归一（required 校验 + default 填充 + 类型
+   *  归一；schema 不可解析时按无声明直通——旧图无 schema 场景不设障） */
+  private normalizeInputsFor(
+    graph: GraphRow,
+    rawInputs: Record<string, unknown>,
+  ): Record<string, GraphInputValue> {
+    let schema: unknown = {};
+    try {
+      schema = (JSON.parse(graph.graphJson) as { inputSchema?: unknown })
+        .inputSchema;
+    } catch {
+      return {};
+    }
+    const result = normalizeGraphInputs(
+      parseInputSchema(schema as Record<string, unknown>),
+      rawInputs,
+    );
+    if (!result.ok) {
+      throw new Error(
+        `输入参数无效：\n${result.issues.map((issue) => `- ${issue.message}`).join("\n")}`,
+      );
+    }
+    return result.inputs;
   }
 
   /** 互斥占位后发射（check→set 间无 await，防并发双跑）：executor 吞
@@ -879,7 +910,7 @@ export default class GraphRepository {
    * 异步触发共用此发射口（工具侧仅前置互斥，互斥 set 在此收口） */
   launchTestRun(
     graph: GraphRow,
-    inputs: Record<string, string>,
+    inputs: Record<string, GraphInputValue>,
     workspace: { id: number; directoryPath: string | null },
   ): void {
     const abort = new AbortController();

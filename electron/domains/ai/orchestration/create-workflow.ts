@@ -13,6 +13,9 @@ import { z } from "zod";
 import {
   normalizeGraph,
   validateGraph,
+  normalizeGraphInputs,
+  parseInputSchema,
+  type GraphInputValue,
 } from "../../../../src-react/domains/ai/orchestration/api/graph.schema";
 import type { ToolContext, ToolDefinition } from "../agent/file-tools";
 import { graphTestInflight } from "./graph-inflight";
@@ -311,7 +314,7 @@ export function makeListWorkflowsTool(deps: {
  * fire-and-forget；测试注 stub 免拉 executor 重依赖） */
 export type LaunchTestRunFn = (params: {
   graph: WorkflowGraphRow;
-  inputs: Record<string, string>;
+  inputs: Record<string, GraphInputValue>;
   workspace: { id: number; directoryPath: string | null };
 }) => void;
 
@@ -446,10 +449,39 @@ export function makeUpdateWorkflowTool(deps: {
 const runWorkflowSchema = z.object({
   id: z.number().int().positive().describe("要运行的工作流 id"),
   inputs: z
-    .record(z.string(), z.string())
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
     .optional()
-    .describe("输入变量（图 inputSchema 声明的键；可省略）"),
+    .describe(
+      "输入变量（键与类型以 list_workflows 返回的输入说明为准；number 直传、boolean 为 true/false、enum 须在值域内）",
+    ),
 });
+
+/** 图 graphJson → 入口归一（切片 D，run_workflow 用）：required 校验 +
+ * default 填充 + 类型归一；schema 不可解析按无声明直通（旧图不设障） */
+function normalizeInputsForGraph(
+  graphJson: string,
+  raw: Record<string, unknown>,
+):
+  | { ok: true; inputs: Record<string, GraphInputValue> }
+  | { ok: false; error: string } {
+  let schema: unknown = {};
+  try {
+    schema = (JSON.parse(graphJson) as { inputSchema?: unknown }).inputSchema;
+  } catch {
+    return { ok: true, inputs: raw as Record<string, GraphInputValue> };
+  }
+  const result = normalizeGraphInputs(
+    parseInputSchema(schema as Record<string, unknown>),
+    raw,
+  );
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: `错误: 输入参数无效：\n${result.issues.map((issue) => `- ${issue.message}`).join("\n")}`,
+    };
+  }
+  return { ok: true, inputs: result.inputs };
+}
 
 /** run_workflow：异步触发（触发即返回；结果落运行历史，AI 可用
  * get_workflow_run 查询——长图勿高频轮询，建议隔轮再查） */
@@ -501,9 +533,19 @@ export function makeRunWorkflowTool(deps: {
       if (graphTestInflight.has(args.id)) {
         return "错误: 该工作流正在运行中（同一图同时至多一个试运行），请稍后用 get_workflow_run 查询";
       }
+      // 入口归一（切片 D）：按图 inputSchema 做 required 校验 + default
+      // 填充 + 类型归一——缺参/类型不符在此结构化回喂（模型可自纠重试），
+      // 不再等模板渲染期才炸「模板变量未定义」
+      const normalized = normalizeInputsForGraph(
+        row.graphJson,
+        args.inputs ?? {},
+      );
+      if (!normalized.ok) {
+        return normalized.error;
+      }
       deps.launch({
         graph: row,
-        inputs: args.inputs ?? {},
+        inputs: normalized.inputs,
         workspace: { id: ws.id, directoryPath: ws.directoryPath },
       });
       return "已启动试运行（异步执行中）。结果可在「工作流」页运行历史查看，或稍后调用 get_workflow_run 查询最近一次运行结果";

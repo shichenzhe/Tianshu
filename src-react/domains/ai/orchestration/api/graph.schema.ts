@@ -10,4 +10,5 @@
  * require，会炸 ReferenceError。
  */
 export * from "@tianshu/core/graph-schema";
+export * from "@tianshu/core/graph-inputs";
 export type { GraphIssue } from "@tianshu/protocol";

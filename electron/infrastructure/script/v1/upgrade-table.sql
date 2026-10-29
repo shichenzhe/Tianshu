@@ -141,8 +141,8 @@ CREATE TABLE IF NOT EXISTS session (
     planItemId INTEGER NULL,
     scenario TEXT NULL,
     userId INTEGER NULL,
-    lastReadMessageId INTEGER NULL -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
-    appId INTEGER NULL,
+    lastReadMessageId INTEGER NULL, -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
+    appId INTEGER NULL -- 应用绑定（切片 C）：null=普通会话，绑定后工作流工具面收窄到 appDefinition.graphIds
 );
 
 --/p v12 多用户隔离：会话归属用户（冗余列，创建时随工作空间写入）

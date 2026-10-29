@@ -9,8 +9,10 @@
  */
 
 /** 引用式前缀行（与 referencePrefix 的 fileRef 分支同字面） */
+/** 引用式前缀行（与 referencePrefix 的 fileRef 分支同字面；双名兼容
+ *  2026-10-29 改名批次——历史消息存 read_file 版本文案，新生成 read） */
 const FILE_REF_LINE =
-  /^\[引用文件 (.+?)\]（请用 read 工具读取该文件后处理）$/;
+  /^\[引用文件 (.+?)\]（请用 (?:read_file|read) 工具读取该文件后处理）$/;
 
 /** 内容注入式前缀头（段首行；余行为注入全文） */
 const FILE_REF_HEADER = /^\[引用文件 (.+?)\]$/;

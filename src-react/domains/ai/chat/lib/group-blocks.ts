@@ -12,7 +12,15 @@ export const WIDGET_TOOL_NAME = "show_widget";
 
 /** recommend_expert 工具名（会话内专家推荐卡；与后端
  *  electron/domains/ai/agent/recommend-expert-tool.ts 同名约定） */
+/** recommend_expert 工具名（会话内专家推荐卡；与后端
+ *  electron/domains/ai/agent/recommend-expert-tool.ts 同名约定）。
+ *  2026-10-29 改名批次老名 recommend_experts 保留兼容——历史 blocks
+ *  不迁移，老块按集合双名分流 */
 export const RECOMMEND_TOOL_NAME = "recommend_expert";
+export const RECOMMEND_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "recommend_expert",
+  "recommend_experts",
+]);
 
 /** 面板内工具条目（平铺 ToolCallCard props，与流式 ToolStreamState 同构） */
 export interface ToolPanelItem {
@@ -87,7 +95,9 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
           break;
         }
         // recommend_expert 同样分流消息流（正文位推荐卡渲染）
-        if (block.toolName === RECOMMEND_TOOL_NAME) {
+        // recommend_expert 同样分流消息流（正文位推荐卡渲染；双名集合
+        // 兼容历史老名块）
+        if (RECOMMEND_TOOL_NAMES.has(block.toolName)) {
           const args = (block.args ?? {}) as {
             candidates?: string[];
             reason?: string;

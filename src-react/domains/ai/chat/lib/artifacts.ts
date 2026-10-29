@@ -5,6 +5,7 @@
  * - 流式期间合并 streams 的 tools（running→writing / done→written）
  * - 同 path 跨组去重（取源消息最新者），按 messageId 降序（流式 -1 置顶）
  */
+import { canonicalToolName } from "@tianshu/core";
 import { parseBlocks, type MessageBlock } from "../model/blocks";
 import type { MessageRecord } from "../../api/session.api";
 import type { ToolStreamMap } from "../store/chat.store";
@@ -37,7 +38,9 @@ function streamEntryToFiles(entry: {
   args?: unknown;
   state: string;
 }): { path: string; status: "written" | "writing" } | null {
-  if (entry.toolName !== "write") return null;
+  // canonical 归一：流式 entry 的 toolName 可能是新名 write 或模型模仿
+  // 历史发的老名 write_file（2026-10-29 改名批次，历史 blocks 不迁移）
+  if (canonicalToolName(entry.toolName) !== "write") return null;
   const path = (entry.args as { path?: unknown } | undefined)?.path;
   if (typeof path !== "string" || !path.trim()) return null;
   if (entry.state === "done") return { path, status: "written" };
@@ -53,7 +56,12 @@ function collectWriteFiles(
   if (message.role === "system") return [];
   const files: SessionFile[] = [];
   for (const block of blocks) {
-    if (block.type !== "tool_call" || block.toolName !== "write") continue;
+    // canonical 同上：历史块老名 write_file 与新名 write 同收录
+    if (
+      block.type !== "tool_call" ||
+      canonicalToolName(block.toolName) !== "write"
+    )
+      continue;
     const parsed = streamEntryToFiles(block);
     if (!parsed || block.state !== "done") continue;
     files.push({

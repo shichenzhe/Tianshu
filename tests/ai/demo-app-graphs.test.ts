@@ -13,6 +13,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { validateGraph } from "../../src-react/domains/ai/orchestration/api/graph.schema";
+import {
+  normalizeGraphInputs,
+  parseInputSchema,
+} from "../../packages/tianshu-core/src/graph-inputs";
 
 const DEMO_DIR = fileURLToPath(new URL("../../docs/demo-app", import.meta.url));
 
@@ -102,6 +106,48 @@ describe("demo-app 工作流定义（docs/demo-app）", () => {
     expect(select && select.kind === "database" && select.sql).not.toContain(
       "{{",
     );
+  });
+
+  it("typed inputSchema（切片 D5）：amount number 必填、category enum 六值缺省其他、spent_at date 缺省今天", () => {
+    const { bundle, json } = loadGraph("expense-add.json");
+    const schema = json!.inputSchema;
+    expect(schema.amount).toMatchObject({ type: "number", required: true });
+    expect(schema.category).toMatchObject({
+      type: "enum",
+      default: "其他",
+    });
+    expect(
+      schema.category &&
+        typeof schema.category === "object" &&
+        schema.category.enumValues,
+    ).toEqual(["餐饮", "交通", "购物", "娱乐", "医疗", "其他"]);
+    expect(schema.spent_at).toMatchObject({ type: "date", default: "today" });
+    expect(schema.note).toMatchObject({ type: "string", required: false });
+    // number 全链结构位：amount 参数恰为单一 input 引用（DIRECT_INPUT_REF
+    // 原生直通），SQL 不再依赖 CAST
+    const insert = json!.nodes.find(
+      (n) => n.id === "insert-expense" && n.kind === "database",
+    );
+    expect(insert && insert.kind === "database" && insert.sql).not.toContain(
+      "CAST",
+    );
+    expect(insert && insert.kind === "database" ? insert.params[0] : "").toBe(
+      "{{input.amount}}",
+    );
+    // 入口归一端到端（number 保型 + default 填充 + date today）
+    const normalized = normalizeGraphInputs(
+      parseInputSchema(schema as Record<string, unknown>),
+      { amount: 35.5 },
+    );
+    expect(normalized).toEqual({
+      ok: true,
+      inputs: {
+        amount: 35.5,
+        category: "其他",
+        note: "",
+        spent_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      },
+    });
   });
 
   it("查账明细 limit 钳制 0..200（负值零行、超大截断）", () => {

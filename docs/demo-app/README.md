@@ -34,8 +34,12 @@
 前提：会话场景选 automation 或 coding（或安装 workflow-creator 技能）、
 已绑定工作空间、模型已配置。示例话术：
 
-- 「记一笔：午饭 35 元，类别餐饮」→ AI 组装 inputs 调
-  `run_workflow`（写操作需批准）→ `get_workflow_run` 确认 `affectedRows=1`。
+- 「记一笔：午饭 35 元」→ AI 组装 inputs 调 `run_workflow`（写操作需批准）
+  → `get_workflow_run` 确认 `affectedRows=1`。typed 面（切片 D）：问 AI
+  「有哪些工作流」可见「输入: amount:number(必填)，category:enum[...]
+  …」类型摘要；漏传 amount 会收到结构化「缺少必填输入」回喂而非模板期
+  报错；画布试运行弹窗按类型出控件（数值框/下拉/日期）；confirm_form
+  确认卡同样类型控件（enum 只能下拉选，错别字无从发生）。
 - 「看看最近 5 笔支出」→ 查账明细工作流 → AI 拿终点完整输出（show_table
   结构）→ 调 `show_table` → 消息流出现原生表格卡。
 - 「这个月花了多少」→ 月度汇总工作流 → 终点 payload 含 summary/
@@ -50,10 +54,13 @@
 
 - 四个工作流的 `sqlitePath` 一律为 `demo.db`（工作空间相对路径），换工作
   空间即换库，互不影响。
-- inputs 值类型现状只有 string：金额在 SQL 内 `CAST(? AS REAL)` 转数值、
-  日期缺省在 SQL 内 `COALESCE(NULLIF(?,''), date('now','localtime'))` 兜底
-  （模板机制只能整节点输出引用，variable/code 节点转出的单值无法按 key
-  解构，SQL 内转换是节点能力现状下的最短路径）。
+- typed 输入（切片 D）：inputSchema 支持对象形态（type/required/default/
+  enumValues/description，旧字符串简写继续合法）。记一笔四键——amount
+  number 必填（参数原生直通驱动，SQL 已去 CAST）、category enum 六值
+  （缺省其他）、note string 可空（default "" 经 SQL NULLIF 存 NULL）、
+  spent_at date（default "today" 在入口归一为当天 yyyy-MM-dd——
+  normalizeGraphInputs 是 required 校验+default 填充的唯一归一位置，
+  试运行与 run_workflow 同口）。
 - 组装去 code 化（切片 C）：查账明细/月度汇总的行集组装走 **merge 模板
   直嵌 + jsonParse 提标量** 路线——merge 模板把 database 节点输出的行集
   JSON 原样嵌进 show_table/show_summary 结构（行集键即列 key，无需改名），

@@ -142,6 +142,41 @@ export interface AutomationRunPage {
   items: AutomationRunRecord[];
 }
 
+/**
+ * 运行节点详情契约（automation/runNodes 端点载荷，移动端执行详情批）：
+ * mirror 桌面 GraphRunNodeRow（orchestration.api.ts）同构 wire 面——
+ * graphRunNode 表逐字段原样透传（input/output 全文库里已截 64KB），
+ * server 仓 repository 出参 .toISOString() 起步即 ISO string。
+ * 老图 run 无节点行（runNodes 前落库）——消费端按空数组回落 run 级展示。
+ * @@unique([runId, nodeId]) 环图重入 upsert 覆盖，末轮为准。
+ */
+export interface AutomationRunNodeRecord {
+  id: number;
+  runId: number;
+  nodeId: string;
+  nodeName: string | null;
+  /** "success" | "failed"（graphRunNode.status） */
+  status: string;
+  /** 渲染后完整输入（截 64KB） */
+  input: string | null;
+  /** 完整输出（截 64KB；failed 行为失败全貌文本） */
+  output: string | null;
+  /** 失败结构化 JSON 序列：{ code, message, detail }，同 trace error */
+  errorJson: string | null;
+  /** 工具调用摘要数组 JSON 序列：[{ name, ok, durationMs }]，同 trace */
+  toolCallsJson: string | null;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  durationMs: number;
+  startedAt: string;
+  /** imageGen 产物相对数据根路径（移动端无文件通道，暂不消费） */
+  outputImage: string | null;
+  /** 循环节点死信（onItemError=continue 的失败项清单） */
+  errorOutput: string | null;
+  /** 降级继续标记 JSON 序列：{ code, message } */
+  fallbackJson: string | null;
+}
+
 /** run 状态投影便捷别名（单源自 server-event GraphRunUpdatedPayload 的
  * state——勿在别处双写枚举值；aborted=failed+user_aborted 展示精化，
  * queued 保留给控制层队列语义，见该处注释。M2c 改名 State→Status：与

@@ -6,7 +6,10 @@
  * userId 伴生写死 1（COMPANION_USER_ID）。
  */
 import { Injectable } from '@nestjs/common';
-import type { AutomationRunPage } from '@tianshu/protocol';
+import type {
+  AutomationRunNodeRecord,
+  AutomationRunPage,
+} from '@tianshu/protocol';
 import { QueryResult } from 'src/commons/query/query-result';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
@@ -100,5 +103,11 @@ export class AutomationService {
       dto.status,
       COMPANION_USER_ID,
     );
+  }
+
+  /** 运行节点详情（移动端执行详情批）：repo listRunNodes 薄层——图 run
+   * 节点级执行详情（全文输入/输出/工具调用摘要），prompt run 恒空集 */
+  async runNodes(runId: number): Promise<AutomationRunNodeRecord[]> {
+    return await this.repository.listRunNodes(runId, COMPANION_USER_ID);
   }
 }

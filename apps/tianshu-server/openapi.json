@@ -3322,6 +3322,58 @@
         ]
       }
     },
+    "/automation/runNodes": {
+      "post": {
+        "operationId": "AutomationController_runNodes",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AutomationRunNodeDto"
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "运行节点级执行详情（图 run，空集语义不暴露存在性）",
+        "tags": [
+          "自动化"
+        ]
+      }
+    },
     "/permission/listRemembered": {
       "post": {
         "operationId": "PermissionController_listRemembered",
@@ -4976,6 +5028,408 @@
           }
         },
         "summary": "删除备份",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/claim": {
+      "post": {
+        "operationId": "BackupController_claim",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "clientId": {
+                          "type": "string"
+                        },
+                        "clientToken": {
+                          "type": "string",
+                          "description": "后续调用凭据（不再回显）"
+                        }
+                      },
+                      "required": [
+                        "clientId",
+                        "clientToken"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "邀请码申领设备身份（clientToken 仅此一次回显）",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/invites/create": {
+      "post": {
+        "operationId": "BackupController_createInvites",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "TS-AB2XYZ9H"
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "usedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "usedBy": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "invites"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "批量生成邀请码（admin）",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/invites/list": {
+      "post": {
+        "operationId": "BackupController_listInvites",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "invites": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "code": {
+                                "type": "string",
+                                "example": "TS-AB2XYZ9H"
+                              },
+                              "note": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "usedAt": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "usedBy": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "code",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "invites"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "邀请码列表（admin，含核销状态）",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/invites/{code}/delete": {
+      "post": {
+        "operationId": "BackupController_deleteInvite",
+        "parameters": [
+          {
+            "name": "code",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "撤销邀请码（admin，不拒删已用码）",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/clients/list": {
+      "post": {
+        "operationId": "BackupController_listClients",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "clients": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "clientId": {
+                                "type": "string"
+                              },
+                              "createdAt": {
+                                "type": "string"
+                              },
+                              "invitedNote": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "clientId",
+                              "createdAt"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "clients"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "已申领设备列表（admin，不回显 token）",
+        "tags": [
+          "备份"
+        ]
+      }
+    },
+    "/backup/clients/{clientId}/delete": {
+      "post": {
+        "operationId": "BackupController_deleteClient",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "踢除设备（admin，该设备名可重新申领）",
         "tags": [
           "备份"
         ]
@@ -6737,6 +7191,107 @@
           "items"
         ]
       },
+      "AutomationRunNodeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "节点行标识"
+          },
+          "runId": {
+            "type": "number",
+            "description": "所属运行标识"
+          },
+          "nodeId": {
+            "type": "string",
+            "description": "节点 id（环图重入末轮为准）"
+          },
+          "nodeName": {
+            "type": "string",
+            "description": "节点名",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "description": "节点状态",
+            "enum": [
+              "success",
+              "failed"
+            ]
+          },
+          "input": {
+            "type": "string",
+            "description": "渲染后完整输入（截 64KB）",
+            "nullable": true
+          },
+          "output": {
+            "type": "string",
+            "description": "完整输出（截 64KB；failed 行为失败全貌文本）",
+            "nullable": true
+          },
+          "errorJson": {
+            "type": "string",
+            "description": "失败结构化 JSON 序列：{ code, message, detail }",
+            "nullable": true
+          },
+          "toolCallsJson": {
+            "type": "string",
+            "description": "工具调用摘要数组 JSON 序列：[{ name, ok, durationMs }]",
+            "nullable": true
+          },
+          "promptTokens": {
+            "type": "number",
+            "description": "提示词 tokens",
+            "nullable": true
+          },
+          "completionTokens": {
+            "type": "number",
+            "description": "补全 tokens",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "耗时（ms）"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "开始时间（ISO）"
+          },
+          "outputImage": {
+            "type": "string",
+            "description": "imageGen 产物相对数据根路径（移动端无文件通道暂不消费）",
+            "nullable": true
+          },
+          "errorOutput": {
+            "type": "string",
+            "description": "循环节点死信（onItemError=continue）",
+            "nullable": true
+          },
+          "fallbackJson": {
+            "type": "string",
+            "description": "降级继续标记 JSON 序列：{ code, message }",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "runId",
+          "nodeId",
+          "nodeName",
+          "status",
+          "input",
+          "output",
+          "errorJson",
+          "toolCallsJson",
+          "promptTokens",
+          "completionTokens",
+          "durationMs",
+          "startedAt",
+          "outputImage",
+          "errorOutput",
+          "fallbackJson"
+        ]
+      },
       "AutomationQueryDto": {
         "type": "object",
         "properties": {
@@ -7115,6 +7670,18 @@
         },
         "required": [
           "page"
+        ]
+      },
+      "RunIdDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "number",
+            "description": "运行标识"
+          }
+        },
+        "required": [
+          "runId"
         ]
       },
       "PermissionRememberedWireDto": {
@@ -7561,6 +8128,36 @@
         "required": [
           "seq"
         ]
+      },
+      "ClaimDto": {
+        "type": "object",
+        "properties": {
+          "inviteCode": {
+            "type": "string",
+            "description": "邀请码（TS- 前缀 8 位防混淆字符集）"
+          },
+          "deviceName": {
+            "type": "string",
+            "description": "设备名（1-64 位字母数字下划线连字符）"
+          }
+        },
+        "required": [
+          "inviteCode",
+          "deviceName"
+        ]
+      },
+      "CreateInvitesDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "number",
+            "description": "生成数量（1-50）"
+          },
+          "note": {
+            "type": "string",
+            "description": "备注"
+          }
+        }
       }
     }
   }

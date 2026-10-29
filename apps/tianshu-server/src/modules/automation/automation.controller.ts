@@ -1,12 +1,16 @@
 import { Controller, Post, Body, HttpStatus, HttpCode } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ApiExtraModels } from '@nestjs/swagger';
-import type { AutomationRunPage } from '@tianshu/protocol';
+import { ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
+import type {
+  AutomationRunNodeRecord,
+  AutomationRunPage,
+} from '@tianshu/protocol';
 import { TaskRecordDto } from './dto/task-record.dto';
 import {
   AutomationRunPageResultDto,
   AutomationRunRecordDto,
 } from './dto/automation-run-record.dto';
+import { AutomationRunNodeDto } from './dto/automation-run-node.dto';
 import {
   ApiWrappedAccepted,
   ApiWrappedOk,
@@ -21,15 +25,21 @@ import { AutomationQueryDto } from './dto/automation-query.dto';
 import { AutomationSaveDto } from './dto/automation-save.dto';
 import { AutomationDeleteDto } from './dto/automation-delete.dto';
 import { TaskIdDto } from './dto/task-id.dto';
+import { RunIdDto } from './dto/run-id.dto';
 import { AutomationRunQueryDto } from './dto/automation-run-query.dto';
 
 /**
- * 自动化任务控制器（spec §4.1 四端点 + CRUD 批 runPage 五端点）。
- * `@Public` 豁免 JWT 守卫；静态 token 守卫（TIANSHU_TOKEN）仍生效。
+ * 自动化任务控制器（spec §4.1 四端点 + CRUD 批 runPage + 执行详情批
+ * runNodes）。`@Public` 豁免 JWT 守卫；静态 token 守卫（TIANSHU_TOKEN）仍生效。
  */
 @ApiTags('自动化')
 @Public()
-@ApiExtraModels(TaskRecordDto, AutomationRunRecordDto, AutomationRunPageResultDto)
+@ApiExtraModels(
+  TaskRecordDto,
+  AutomationRunRecordDto,
+  AutomationRunPageResultDto,
+  AutomationRunNodeDto,
+)
 @Controller('automation')
 export class AutomationController {
   constructor(private readonly automationService: AutomationService) {}
@@ -92,5 +102,20 @@ export class AutomationController {
     @Body() dto: AutomationRunQueryDto,
   ): Promise<AutomationRunPage> {
     return await this.automationService.runPage(dto);
+  }
+
+  /**
+   * 运行节点级执行详情（移动端执行详情批）：图 run 专有——归属两段校验
+   * 不符/prompt run/老 run 无节点行一律空集；行透传（input/output 全文）
+   */
+  @Post('runNodes')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '运行节点级执行详情（图 run，空集语义不暴露存在性）' })
+  @ApiWrappedOk({
+    type: 'array',
+    items: { $ref: getSchemaPath(AutomationRunNodeDto) },
+  })
+  async runNodes(@Body() dto: RunIdDto): Promise<AutomationRunNodeRecord[]> {
+    return await this.automationService.runNodes(dto.runId);
   }
 }

@@ -436,6 +436,10 @@ export const ENDPOINTS = {
     // 移动端 CRUD+运行历史批：分页运行历史（page/taskId?/status? 下推
     // 筛选；载荷 AutomationRunRecord 剔 graphTrace 精简面）
     runPage: "automation/runPage",
+    // 移动端执行详情批：runId 查节点级执行详情（载荷
+    // AutomationRunNodeRecord[]，graphRunNode 表透传；图 run 专有，
+    // prompt run 恒空数组）
+    runNodes: "automation/runNodes",
   },
   tool: {
     respond: "tool/respond",

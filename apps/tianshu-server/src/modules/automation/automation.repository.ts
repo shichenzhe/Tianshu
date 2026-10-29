@@ -32,6 +32,7 @@ import {
 import { PrismaService } from 'src/commons/database/prisma.service';
 import type {
   AutomationChangedPayload,
+  AutomationRunNodeRecord,
   AutomationRunPage,
   AutomationRunRecord,
 } from '@tianshu/protocol';
@@ -612,6 +613,36 @@ export class AutomationRepository {
       total,
       items: await hydrateRunNames(this.prisma, rows),
     };
+  }
+
+  /** 运行节点详情（移动端执行详情批，mirror orchestration:runNodes 同
+   * 语义移植）：graphRunNode 无用户列，归属两段校验——先查 run 的
+   * graphId（prompt 型 run graphId null 直拒空集），再查图 userId（历史
+   * graph 行 userId 可空，null 视为可查，对齐 executor 归属口径）；
+   * 不符/不存在/老 run 无节点行一律空集（列表语义不暴露存在性）；
+   * 行原样透传（input/output 全文库内已截 64KB） */
+  async listRunNodes(
+    runId: number,
+    userId: number,
+  ): Promise<AutomationRunNodeRecord[]> {
+    const run = await this.prisma.automationRun.findFirst({
+      where: { id: runId, graphId: { not: null } },
+      select: { graphId: true },
+    });
+    if (!run?.graphId) {
+      return [];
+    }
+    const graph = await this.prisma.graphDefinition.findUnique({
+      where: { id: run.graphId },
+      select: { userId: true },
+    });
+    if (!graph || (graph.userId !== null && graph.userId !== userId)) {
+      return [];
+    }
+    return this.prisma.graphRunNode.findMany({
+      where: { runId },
+      orderBy: { id: 'asc' },
+    });
   }
 }
 

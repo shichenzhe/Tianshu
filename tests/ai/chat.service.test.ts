@@ -1838,6 +1838,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
           isProjectSession: boolean;
           team: { members: Array<{ id: string }> } | null;
           toolGate: ToolGroupGate;
+          systemWithSummary?: string;
         }>;
       }
     ).assembleContext(1);
@@ -2095,6 +2096,85 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     expect(names).not.toContain("create_workflow");
     // 同场景其余五件套不受连带（用户禁用是逐工具语义）
     expect(names).toContain("run_workflow");
+  });
+
+  // ---------- 工作流挂载元说明（未挂载时 system 注入解锁路径指引） ----------
+
+  /** 技能集内造 workflow-creator（dir/bodyPath 指真内置目录，1988 用例同款） */
+  const creatorSkill = () => ({
+    name: "workflow-creator",
+    description: "指导创建工作流",
+    dir: fileURLToPath(
+      new URL(
+        "../../electron/resources/builtin-skills/workflow-creator/",
+        import.meta.url,
+      ),
+    ),
+    bodyPath: fileURLToPath(
+      new URL(
+        "../../electron/resources/builtin-skills/workflow-creator/SKILL.md",
+        import.meta.url,
+      ),
+    ),
+    source: "user" as const,
+  });
+
+  it("挂载元说明：daily 场景未挂载且 workflow-creator 可读 → system 注入挂载路径指引", async () => {
+    skillScanStub.skills = [creatorSkill()];
+    const ctx = await assemble(
+      makeSvc(
+        { scenario: "daily" },
+        { skillRepo: skillRepoWith({ source: "builtin", enabled: true }) },
+      ).service,
+    );
+    expect(ctx.systemWithSummary).toContain("【工作流工具挂载】");
+    expect(ctx.systemWithSummary).toContain("workflow-creator");
+  });
+
+  it("挂载元说明：automation 场景已挂载 → 不注入（指引只在未挂载时出现）", async () => {
+    skillScanStub.skills = [creatorSkill()];
+    const ctx = await assemble(
+      makeSvc(
+        { scenario: "automation" },
+        { skillRepo: skillRepoWith({ source: "builtin", enabled: true }) },
+      ).service,
+    );
+    expect(ctx.systemWithSummary ?? "").not.toContain("【工作流工具挂载】");
+  });
+
+  it("挂载元说明：ask 模式 → 不注入（零工具语境指引无意义）", async () => {
+    skillScanStub.skills = [creatorSkill()];
+    const ctx = await assemble(
+      makeSvc({ mode: "ask", scenario: "daily" }).service,
+    );
+    expect(ctx.systemWithSummary ?? "").not.toContain("【工作流工具挂载】");
+  });
+
+  it("挂载元说明：workflow-creator 不在可读技能集（禁用态）→ 不注入（指引指向 read_skill 死路）", async () => {
+    skillScanStub.skills = [];
+    const ctx = await assemble(
+      makeSvc(
+        { scenario: "daily" },
+        {
+          skillRepo: skillRepoWith(null, ["workflow-creator"]),
+        },
+      ).service,
+    );
+    expect(ctx.systemWithSummary ?? "").not.toContain("【工作流工具挂载】");
+  });
+
+  it("挂载元说明：read_skill 被安全中心禁用 → 不注入（目录段 G1 门控同款联动）", async () => {
+    skillScanStub.skills = [creatorSkill()];
+    const ctx = await assemble(
+      makeSvc(
+        { scenario: "daily" },
+        {
+          skillRepo: skillRepoWith({ source: "builtin", enabled: true }),
+          runtimeFilter: () => ["read_skill"],
+        },
+      ).service,
+    );
+    expect(ctx.systemWithSummary ?? "").not.toContain("【工作流工具挂载】");
   });
 });
 

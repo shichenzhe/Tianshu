@@ -74,6 +74,7 @@ import {
 } from "../agent/tool-registry";
 import {
   filterToolsBySession,
+  isWorkflowGroupAllowed,
   WORKFLOW_CREATOR_SKILL_NAME,
   type ToolGroupGate,
 } from "../agent/tool-groups";
@@ -203,6 +204,18 @@ const PLAN_MODE_INSTRUCTION =
  */
 const WORKFLOW_INTENT_NOTE =
   "（系统注：已为本会话挂载工作流工具（create_workflow 等）。工具面自下一轮对话起生效——若本轮不可调用，请提示用户继续发送一条消息。）";
+
+/**
+ * 工作流挂载元说明（未挂载会话注入 system，场景段之后）：模型面对
+ * 「工具面板没有 create_workflow」曾无从知晓解锁路径（场景切换/读
+ * workflow-creator 下一轮挂载），只能"猜生效时机"并以写文件绕行兜底
+ * ——本段把挂载规则显式告知。注入条件四合一（缺一不注入）：agent
+ * 模式（ask/plan 零工具语境无意义）、工作流组未挂载、workflow-creator
+ * 在可读技能集（不在则 read_skill 指向死路）、read_skill 未被安全
+ * 中心禁用（G1 联动：目录段同款门控）
+ */
+const WORKFLOW_MOUNT_NOTE =
+  "【工作流工具挂载】create_workflow 等工作流工具当前未挂载。需要创建或管理工作流时：先调用 read_skill 读取 workflow-creator 技能——读取后自下一轮对话起自动挂载工作流工具（届时请提示用户再发送一条消息）；或请用户将场景切换为 automation/coding。工作流定义应经 create_workflow 落库，不要以写文件方式绕行保存。";
 
 /**
  * 数据安全装配（SP4）：ChatService 构造注入，闭包实时读安全中心配置
@@ -2059,10 +2072,20 @@ export default class ChatService {
         : personalized;
     // 场景提示段注入（新建任务 spec §4.2）：session.scenario 非空且已知时
     // 追加到 system 末尾；未知值/null 原样返回 base
-    const baseSystem = buildScenarioSystem(
+    const scenarioSystem = buildScenarioSystem(
       session.scenario as string | null | undefined,
       withCatalog,
     );
+    // 工作流挂载元说明（条件见 WORKFLOW_MOUNT_NOTE 注释）：未挂载会话
+    // 在场景段之后追加，模型由此知道解锁路径而非"猜生效时机"
+    const workflowNoteOn =
+      mode === "agent" &&
+      !isWorkflowGroupAllowed(toolGate) &&
+      sessionSkills.some((s) => s.name === WORKFLOW_CREATOR_SKILL_NAME) &&
+      !(this.runtimeFilter?.() ?? []).includes("read_skill");
+    const baseSystem = workflowNoteOn
+      ? `${scenarioSystem ? `${scenarioSystem}\n\n` : ""}${WORKFLOW_MOUNT_NOTE}`
+      : scenarioSystem;
     const systemWithSummary =
       compacted && session.summary
         ? `${baseSystem ? `${baseSystem}\n\n` : ""}【此前对话摘要】\n${session.summary}`

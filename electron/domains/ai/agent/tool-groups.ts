@@ -84,6 +84,17 @@ export interface ToolGroupGate {
 }
 
 /**
+ * 工作流组是否挂载：场景命中（automation/coding）或 workflowCreatorEnabled
+ * 三信号取或——filterToolsBySession 同口径判定，导出供 chat.service 挂载
+ * 元说明注入条件复用（口径漂移即元说明误报/漏报）
+ */
+export function isWorkflowGroupAllowed(gate: ToolGroupGate): boolean {
+  return (
+    WORKFLOW_SCENARIOS.has(gate.scenario ?? "") || gate.workflowCreatorEnabled
+  );
+}
+
+/**
  * 场景门控（collectToolDefinitions 收口处、filterDisabledTools 之内层）：
  * 门控组按 gate 放行/剔除，其余工具一律放行并保持原相对次序
  */
@@ -91,8 +102,7 @@ export function filterToolsBySession<T extends { name: string }>(
   defs: T[],
   gate: ToolGroupGate,
 ): T[] {
-  const workflowAllowed =
-    WORKFLOW_SCENARIOS.has(gate.scenario ?? "") || gate.workflowCreatorEnabled;
+  const workflowAllowed = isWorkflowGroupAllowed(gate);
   const expertAllowed =
     EXPERT_SCENARIOS.has(gate.scenario ?? "") || gate.assistantBound;
   const workflowGroup = new Set(WORKFLOW_GROUP_TOOL_NAMES);

@@ -6,7 +6,7 @@
  * eventJson/templateSlug/projectId/temperature/interval weekdays 原样
  * 回传，防全量 save 丢配置）。
  */
-import type { TaskRecord } from "@tianshu/protocol";
+import type { AccessMode, MissedPolicy, TaskRecord } from "@tianshu/protocol";
 
 export type ScheduleKind =
   "once" | "daily" | "weekly" | "biweekly" | "monthly" | "yearly" | "interval";
@@ -226,6 +226,20 @@ export function parseScheduleConfig(raw: unknown): ScheduleValues | null {
   }
 }
 
+/** 执行体独立校验（名称/提示词/模型/选图）：unparsed 调度形态分支复用
+ *  （调度区只读透传原 scheduleJson，不参与校验）；validationKey 前段同源 */
+export function validationKeyForTarget(target: TargetValues): string | null {
+  if (!target.name.trim()) return "orchestration:needName";
+  if (target.targetKind === "graph" && target.graphId === null) {
+    return "orchestration:needGraph";
+  }
+  if (target.targetKind === "prompt") {
+    if (!target.prompt.trim()) return "orchestration:needPrompt";
+    if (target.modelId === null) return "orchestration:needModel";
+  }
+  return null;
+}
+
 /** 全量校验：名称/执行体（prompt 提示词+模型；graph 选图）/调度七 kind。
  *  返回 i18n key 或 null（调用方 t() 渲染）。allowPastOnce：编辑模式的
  *  once 已过时间是合法存量（保存后自然 expired），跳过过去校验 */
@@ -235,14 +249,8 @@ export function validationKey(
   now = new Date(),
   allowPastOnce = false,
 ): string | null {
-  if (!target.name.trim()) return "orchestration:needName";
-  if (target.targetKind === "graph" && target.graphId === null) {
-    return "orchestration:needGraph";
-  }
-  if (target.targetKind === "prompt") {
-    if (!target.prompt.trim()) return "orchestration:needPrompt";
-    if (target.modelId === null) return "orchestration:needModel";
-  }
+  const targetKey = validationKeyForTarget(target);
+  if (targetKey !== null) return targetKey;
   const { kind } = values;
   if (kind === "weekly" && values.weekdays.length === 0) {
     return "orchestration:needWeekday";
@@ -349,21 +357,31 @@ export interface AutomationEditPayload {
   accessMode?: "default" | "full";
 }
 
-/** 编辑提交载荷组装（透传纪律）：表单新值 + UI 不暴露字段原样回传 +
- *  enabled 原值（编辑不重置用户开关——face save 组合语义「显式携带且
- *  不同才写」下恒定传原值即不碰开关） */
+/** 编辑表单面字段（new.tsx 表单 state 直传——UI 可编辑即必须随保存提交，
+ *  2026-10-29 编辑保存不生效修复：此前误归「透传纪律」用任务原值，改动静默丢失） */
+export interface AutomationEditFormFields {
+  workspaceId: number;
+  missedPolicy: MissedPolicy;
+  accessMode: AccessMode;
+}
+
+/** 编辑提交载荷组装：表单新值（target + form + 调度）+ UI 不暴露字段
+ *  （eventJson/templateSlug/projectId/temperature）原样回传 + enabled 原值
+ *  （编辑不重置用户开关——face save 组合语义「显式携带且不同才写」下
+ *  恒定传原值即不碰开关） */
 export function buildEditPayload(
   task: TaskRecord,
   target: TargetValues,
   values: ScheduleValues | null,
   t: Translate,
+  form: AutomationEditFormFields,
 ): AutomationEditPayload {
   return {
     id: task.id,
     enabled: task.enabled,
     name: target.name.trim(),
     prompt: target.targetKind === "graph" ? "" : target.prompt,
-    workspaceId: task.workspaceId,
+    workspaceId: form.workspaceId,
     modelId: target.targetKind === "graph" ? 0 : (target.modelId ?? 0),
     temperature: task.temperature,
     targetKind: target.targetKind,
@@ -379,8 +397,8 @@ export function buildEditPayload(
         : buildSchedule(values),
     scheduleText:
       values === null ? task.scheduleText : buildScheduleText(values, t),
-    missedPolicy: task.missedPolicy,
-    accessMode: task.accessMode,
+    missedPolicy: form.missedPolicy,
+    accessMode: form.accessMode,
     startAt: task.startAt,
     endAt: task.endAt,
   };

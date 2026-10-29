@@ -31,6 +31,7 @@ import {
   defaultScheduleValues,
   parseScheduleConfig,
   validationKey,
+  validationKeyForTarget,
   type IntervalUnit,
   type ScheduleKind,
   type ScheduleValues,
@@ -547,8 +548,16 @@ export default function NewAutomationScreen() {
     modelId,
     prompt,
   };
+  // 校验单源（canSubmit/提交共用同口径——2026-10-29 修复：此前提交分支漏传
+  // allowPastOnce，编辑存量 once 已过任务按钮亮可点、点击被静默拦截）；
+  // unparsed 调度只透传原值不参与校验（否则默认 values 恒 needSchedule、
+  // 保存按钮永不解锁）
+  function currentErrorKey(): string | null {
+    if (unparsed) return validationKeyForTarget(target);
+    return validationKey(target, values, undefined, editing !== null);
+  }
   // 编辑模式 once 已过时间是合法存量（保存后自然 expired），不做过去校验
-  const errorKey = validationKey(target, values, undefined, editing !== null);
+  const errorKey = currentErrorKey();
   const canSubmit =
     !submitting &&
     (editing !== null || workspaceId !== null) &&
@@ -577,7 +586,7 @@ export default function NewAutomationScreen() {
 
   async function handleSubmit() {
     if (submitting) return;
-    const submitErrorKey = validationKey(target, values);
+    const submitErrorKey = currentErrorKey();
     if (submitErrorKey || (editing === null && workspaceId === null)) {
       if (submitErrorKey) setFormError(t(submitErrorKey));
       return;
@@ -592,7 +601,13 @@ export default function NewAutomationScreen() {
       const result =
         editing !== null
           ? await automationSave(
-              buildEditPayload(editing, target, unparsed ? null : values, t),
+              // 表单面字段（workspace/错过策略/访问模式）随保存提交——
+              // 2026-10-29 修复：此前误传任务原值，编辑这三项静默不生效
+              buildEditPayload(editing, target, unparsed ? null : values, t, {
+                workspaceId: workspaceId ?? editing.workspaceId,
+                missedPolicy: missed,
+                accessMode: access,
+              }),
             )
           : await automationSave({
               name: name.trim(),

@@ -10,6 +10,7 @@ import {
   defaultScheduleValues,
   parseScheduleConfig,
   validationKey,
+  validationKeyForTarget,
 } from "./automation-schedule";
 
 const T = (key: string, opts?: Record<string, unknown>) =>
@@ -203,6 +204,7 @@ describe("buildEditPayload 透传纪律", () => {
       },
       values({ kind: "daily", hm: "09:00" }),
       T,
+      { workspaceId: 3, missedPolicy: "skip", accessMode: "default" },
     );
     expect(payload).toMatchObject({
       id: 7,
@@ -211,9 +213,6 @@ describe("buildEditPayload 透传纪律", () => {
       templateSlug: undefined,
       projectId: 11,
       temperature: 0.3,
-      missedPolicy: "skip",
-      accessMode: "default",
-      workspaceId: 3,
     });
     expect(payload.schedule).toEqual({
       mode: "periodic",
@@ -222,14 +221,58 @@ describe("buildEditPayload 透传纪律", () => {
     });
   });
 
+  it("表单面字段以表单值提交（workspace/错过策略/访问模式改动生效）", () => {
+    const payload = buildEditPayload(
+      task,
+      { ...TARGET, name: "n" },
+      values({ kind: "daily", hm: "09:00" }),
+      T,
+      { workspaceId: 8, missedPolicy: "catchUpOnce", accessMode: "full" },
+    );
+    expect(payload.workspaceId).toBe(8);
+    expect(payload.missedPolicy).toBe("catchUpOnce");
+    expect(payload.accessMode).toBe("full");
+  });
+
   it("未知调度形态：schedule 原样透传（null values 分支）", () => {
     const payload = buildEditPayload(
       { ...task, scheduleJson: '{"mode":"strange"}' },
       { ...TARGET, name: "n" },
       null,
       T,
+      { workspaceId: 3, missedPolicy: "skip", accessMode: "default" },
     );
     expect(payload.schedule).toEqual({ mode: "strange" });
     expect(payload.scheduleText).toBe("每 10 分钟");
+  });
+});
+
+describe("validationKeyForTarget 执行体独立校验", () => {
+  it("空名/缺图/缺提示词/缺模型逐项报 key；齐全为 null", () => {
+    expect(validationKeyForTarget({ ...TARGET, name: " " })).toBe(
+      "orchestration:needName",
+    );
+    expect(validationKeyForTarget({ ...TARGET, graphId: null })).toBe(
+      "orchestration:needGraph",
+    );
+    expect(
+      validationKeyForTarget({
+        name: "n",
+        targetKind: "prompt",
+        graphId: null,
+        modelId: null,
+        prompt: "hi",
+      }),
+    ).toBe("orchestration:needModel");
+    expect(
+      validationKeyForTarget({
+        name: "n",
+        targetKind: "prompt",
+        graphId: null,
+        modelId: 3,
+        prompt: " ",
+      }),
+    ).toBe("orchestration:needPrompt");
+    expect(validationKeyForTarget(TARGET)).toBeNull();
   });
 });

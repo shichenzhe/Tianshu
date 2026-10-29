@@ -5,6 +5,7 @@
  * vitest 可直接测试——同 workspace-files.ts 约定。
  */
 import path from "node:path";
+import { canonicalToolName } from "@tianshu/core";
 
 /** 聚合输入的消息行最小形状（repo 拉取时 join session 裁剪传入） */
 export interface ArtifactMessageRow {
@@ -70,7 +71,9 @@ export function extractPaths(row: { role: string; blocks: string }): string[] {
     const p = block?.args?.path;
     if (
       block?.type === "tool_call" &&
-      block.toolName === "write" &&
+      // canonical 归一（2026-10-29 改名批次）：历史 blocks 存老名 write_file，
+      // 新块亦可能记模型模仿历史发的老名——两侧归一后判定
+      canonicalToolName(block.toolName) === "write" &&
       block.state === "done" &&
       typeof p === "string" &&
       p.trim()

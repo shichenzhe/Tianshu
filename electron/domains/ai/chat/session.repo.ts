@@ -1013,7 +1013,7 @@ export class SessionRepository {
     return true;
   }
 
-  /** 含 write 的消息（LIKE 粗筛，精确过滤在聚合纯函数），补所属工作空间 id */
+  /** 含 write 工具调用的消息（LIKE 粗筛，精确过滤在聚合纯函数），补所属工作空间 id */
   private async findArtifactMessages(
     sessions: Array<{ id: number; workspaceId: number }>,
   ): Promise<ArtifactMessageRow[]> {
@@ -1021,7 +1021,10 @@ export class SessionRepository {
     const rows = await prisma.message.findMany({
       where: {
         sessionId: { in: sessions.map((s) => s.id) },
-        blocks: { contains: "write" },
+        // 前缀模式同时命中新老两代（2026-10-29 改名前 write_file / 改名后
+        // write；blocks 为 JSON.stringify 无空格产物，精确判定在
+        // artifact-aggregate 的 canonical 归一比较）
+        blocks: { contains: '"toolName":"write' },
       },
       select: {
         id: true,

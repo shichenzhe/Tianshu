@@ -46,7 +46,7 @@ export function unregisterTools(prefix: string): number {
 
 /** 注入层过滤（SP6 裁定 1）：禁用=对模型不存在；只作用于内置工具名。
  *  双侧经 canonicalToolName 归一成别名等价比较——toolPermission DB 存老名
- *  （read 等），改名后禁用语义跨改名延续；过渡期老名 def 同样命中
+ *  （read_file 等老名），改名后禁用语义跨改名延续；过渡期老名 def 同样命中
  *  （终态生产面 def 恒新名） */
 export function filterDisabledTools<T extends { name: string }>(
   defs: T[],

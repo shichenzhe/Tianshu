@@ -19,6 +19,7 @@ import {
 } from "../../../../src-react/domains/ai/orchestration/api/graph.schema";
 import type { ToolContext, ToolDefinition } from "../agent/file-tools";
 import { graphTestInflight } from "./graph-inflight";
+import { WORKFLOW_NODE_COOKBOOK } from "./graph-cookbook";
 
 /** 图仓储子集（测试注入内存 stub） */
 export interface WorkflowGraphRow {
@@ -373,8 +374,7 @@ export function makeCreateWorkflowTool(deps: {
 }): ToolDefinition<z.infer<typeof createWorkflowSchema>> {
   return {
     name: "create_workflow",
-    description:
-      "创建并保存新工作流（校验失败返回问题清单；应用会话内创建会自动加入该应用）；写操作需批准",
+    description: `创建并保存新工作流（校验失败按节点/字段返回可自纠问题清单；应用会话内创建会自动加入该应用）；写操作需批准。\n${WORKFLOW_NODE_COOKBOOK}`,
     parameters: createWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {
@@ -580,7 +580,7 @@ export function makeUpdateWorkflowTool(deps: {
 }): ToolDefinition<z.infer<typeof updateWorkflowSchema>> {
   return {
     name: "update_workflow",
-    description: "修改工作流（须带 get_workflow 的 version）；写操作需批准",
+    description: `修改工作流（须带 get_workflow 的 version；校验失败按节点/字段返回可自纠问题清单）；写操作需批准。\n${WORKFLOW_NODE_COOKBOOK}`,
     parameters: updateWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {

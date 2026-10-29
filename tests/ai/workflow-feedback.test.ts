@@ -12,6 +12,7 @@ vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
 import {
   formatGraphIssues,
   makeCreateWorkflowTool,
+  makeUpdateWorkflowTool,
 } from "../../electron/domains/ai/orchestration/create-workflow";
 
 const CTX = { workspacePath: "/ws", sessionId: 42 };
@@ -101,6 +102,23 @@ describe("formatGraphIssues（回喂形状）", () => {
     expect(text).toContain("另有 4 项问题");
     // 折叠后仍在限内（12 行 + 图级 1 行 + 折叠 1 行 = 14 行）
     expect(text.split("\n").length).toBeLessThanOrEqual(14);
+  });
+});
+
+describe("节点 cookbook 静态注入（切片 E2）", () => {
+  it("create/update 描述含全 kind 速查、范式与照猫画虎引导", () => {
+    const create = makeCreateWorkflowTool(stubs as never);
+    const update = makeUpdateWorkflowTool(stubs as never);
+    for (const description of [create.description, update.description]) {
+      expect(description).toContain("【节点速查】");
+      expect(description).toContain("database（SQL+params 参数化");
+      expect(description).toContain("merge（多上游模板聚合");
+      expect(description).toContain("【常用范式】");
+      expect(description).toContain("勿用 code 节点");
+      expect(description).toContain("confirm_form");
+      expect(description).toContain("【照猫画虎】");
+      expect(description).toContain("get_workflow");
+    }
   });
 });
 

@@ -81,7 +81,7 @@ const makeReadTool = (
   execute: ToolDefinition<{ path: string }>["execute"] = async () =>
     "     1| hello",
 ): ToolDefinition<{ path: string }> => ({
-  name: "read_file",
+  name: "read",
   description: "测试读工具",
   parameters: z.object({ path: z.string() }),
   kind: "read",
@@ -93,9 +93,9 @@ const makeWriteTool = (
     path: string;
     content: string;
   }>["execute"] = async () => "已写入 a.txt（2 字节）",
-  // name 可覆写：权限放宽（spec §4.4）后 write_file 免审，审批挂起用例
-  // 改走仍在兜底审批面的 delete_file（delete=ask 裁定）
-  name = "write_file",
+  // name 可覆写：权限放宽（spec §4.4）后 write 免审，审批挂起用例
+  // 改走仍在兜底审批面的 rm（delete=ask 裁定）
+  name = "write",
 ): ToolDefinition<{ path: string; content: string }> => ({
   name,
   description: "测试写工具",
@@ -148,7 +148,7 @@ describe("runChatStream agent loop", () => {
           {
             kind: "tool",
             toolCallId: "t1",
-            toolName: "read_file",
+            toolName: "read",
             input: { path: "a.txt" },
           },
         ],
@@ -173,7 +173,7 @@ describe("runChatStream agent loop", () => {
     expect(calls.length).toBe(2);
     expect(fedToolResult(calls)).toEqual({
       toolCallId: "t1",
-      toolName: "read_file",
+      toolName: "read",
       value: "     1| hello",
     });
 
@@ -182,7 +182,7 @@ describe("runChatStream agent loop", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "a.txt" },
         state: "done",
         output: "     1| hello",
@@ -201,14 +201,14 @@ describe("runChatStream agent loop", () => {
 
   it("审批拒绝：挂起后 respond false → denied 终态块 + 拒绝文案回喂 + 循环继续", async () => {
     const approvals = new ApprovalCoordinator();
-    const writeTool = makeWriteTool(undefined, "delete_file");
+    const writeTool = makeWriteTool(undefined, "rm");
     const { model, calls } = agentModel([
       {
         steps: [
           {
             kind: "tool",
             toolCallId: "t1",
-            toolName: "delete_file",
+            toolName: "rm",
             input: { path: "a.txt", content: "hi" },
           },
         ],
@@ -229,15 +229,15 @@ describe("runChatStream agent loop", () => {
       onChunk: (chunk) => chunks.push(chunk),
     });
 
-    // delete_file 未授权（兜底审批面剩余项，delete=ask 裁定）：execute 挂起等待审批
+    // rm 未授权（兜底审批面剩余项，delete=ask 裁定）：execute 挂起等待审批
     await vi.waitFor(() => expect(approvals.pendingCount).toBe(1));
     const approvalChunk = chunks.find(
       (chunk) => chunk.type === "approval-request",
     );
     expect(approvalChunk).toMatchObject({
       toolCallId: "t1",
-      toolName: "delete_file",
-      argSummary: "delete_file → a.txt",
+      toolName: "rm",
+      argSummary: "rm → a.txt",
     });
 
     await approvals.respond("t1", false);
@@ -253,7 +253,7 @@ describe("runChatStream agent loop", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "delete_file",
+        toolName: "rm",
         args: { path: "a.txt", content: "hi" },
         state: "denied",
         output: "用户拒绝了此操作",
@@ -272,7 +272,7 @@ describe("runChatStream agent loop", () => {
         {
           kind: "tool" as const,
           toolCallId: `t${index}`,
-          toolName: "read_file",
+          toolName: "read",
           input: { path: `f${index}.txt` },
         },
       ],
@@ -311,7 +311,7 @@ describe("runChatStream agent loop", () => {
           {
             kind: "tool",
             toolCallId: "t1",
-            toolName: "read_file",
+            toolName: "read",
             input: { path: "a.txt" },
           },
         ],
@@ -345,7 +345,7 @@ describe("runChatStream agent loop", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "a.txt" },
         state: "error",
         output: "已中断",
@@ -373,7 +373,7 @@ describe("blocksToModelMessages（历史回喂）", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "a.txt" },
         state: "done",
         output: "内容",
@@ -389,7 +389,7 @@ describe("blocksToModelMessages（历史回喂）", () => {
     ).toEqual([
       {
         id: "t1",
-        name: "read_file",
+        name: "read",
         args: { path: "a.txt" },
         type: "tool_call",
       },
@@ -397,7 +397,7 @@ describe("blocksToModelMessages（历史回喂）", () => {
     expect(messages[1] instanceof ToolMessage).toBe(true);
     expect(messages[1]).toMatchObject({
       tool_call_id: "t1",
-      name: "read_file",
+      name: "read",
       content: "内容",
     });
     expect(messages[2]?.getType?.()).toBe("ai");
@@ -409,7 +409,7 @@ describe("blocksToModelMessages（历史回喂）", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "write_file",
+        toolName: "write",
         args: { path: "a.txt", content: "x" },
         state: "denied",
         output: "用户拒绝了此操作",
@@ -417,7 +417,7 @@ describe("blocksToModelMessages（历史回喂）", () => {
       {
         type: "tool_call",
         toolCallId: "t2",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "b.txt" },
         state: "error",
       },
@@ -426,12 +426,12 @@ describe("blocksToModelMessages（历史回喂）", () => {
     expect(messages).toHaveLength(4);
     expect(messages[1]).toMatchObject({
       tool_call_id: "t1",
-      name: "write_file",
+      name: "write",
       content: "用户拒绝了此操作",
     });
     expect(messages[3]).toMatchObject({
       tool_call_id: "t2",
-      name: "read_file",
+      name: "read",
       content: "",
     });
   });
@@ -456,7 +456,7 @@ describe("agent:approve 审批接线", () => {
 
     // handleUser 形态：末参 token（无效 token 整体拒绝）
     const token = generateUserToken({ id: 1, username: "t" });
-    const pending = approvals.request("t9", "write_file → a.txt");
+    const pending = approvals.request("t9", "write → a.txt");
     expect(await approveHandler({}, "t9", true, token)).toBe(true);
     await expect(pending).resolves.toBe(true);
     expect(await approveHandler({}, "ghost", true, token)).toBe(false);

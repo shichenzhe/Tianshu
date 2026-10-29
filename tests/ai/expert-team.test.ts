@@ -56,7 +56,7 @@ describe("buildTeamLeadSystem", () => {
     expect(text).toContain("context"); // 阶段传递
     expect(text).toContain("并行"); // 同阶段并行调度指引
     expect(text).toContain("同一次回复"); // 并行调用时机
-    expect(text).toContain("dispatch_member");
+    expect(text).toContain("dispatch");
   });
   it("空成员返回 null；withDispatch=false 时无铁律与工具说明", () => {
     expect(buildTeamLeadSystem({ leadPrompt: "x", members: [] })).toBeNull();
@@ -65,7 +65,7 @@ describe("buildTeamLeadSystem", () => {
       members,
       withDispatch: false,
     });
-    expect(noDispatch).not.toContain("dispatch_member");
+    expect(noDispatch).not.toContain("dispatch");
     expect(noDispatch).toContain("macro-analyst"); // 成员清单仍在（展示语义）
   });
 });

@@ -93,19 +93,19 @@ describe("summarizeLastMessage（P1 未读角标批 §1.3）", () => {
         {
           type: "tool_call",
           toolCallId: "tc-1",
-          toolName: "write_file",
+          toolName: "write",
           state: "done",
         },
         {
           type: "tool_call",
           toolCallId: "tc-2",
-          toolName: "read_file",
+          toolName: "read",
           state: "done",
         },
       ]),
     );
     expect(summary.kind).toBe("tool");
-    expect(summary.text).toBe("write_file");
+    expect(summary.text).toBe("write");
   });
 
   it("混合优先级：text > image > tool > empty（非块顺序优先）", () => {
@@ -121,7 +121,7 @@ describe("summarizeLastMessage（P1 未读角标批 §1.3）", () => {
         {
           type: "tool_call",
           toolCallId: "tc-1",
-          toolName: "write_file",
+          toolName: "write",
           state: "done",
         },
         { type: "image", imagePath: "a.png", mime: "image/png" },

@@ -58,7 +58,7 @@ describe("mergeExpertSkills", () => {
 describe("buildExpertCatalogPrompt", () => {
   it("含目录条目与工具使用规则", () => {
     const text = buildExpertCatalogPrompt(MARKET_EXPERTS);
-    expect(text).toContain("recommend_experts");
+    expect(text).toContain("recommend_expert");
     expect(text).toContain("code-review-expert");
     expect(text).toContain("最多一次");
   });

@@ -2,7 +2,7 @@
  * 工作空间文件读/写（产物面板预览 + 文件窗口保存写回）：纯 Node 实现
  * （禁止 import electron），vitest 可直接测试。路径 resolve 取 fullAccess
  * 语义——绝对路径直接用，相对以 workspacePath 为基，不做越界拒绝
- * （读操作，路径源自会话内 write_file 记录；full access 模式可写工作
+ * （读操作，路径源自会话内 write 记录；full access 模式可写工作
  * 空间外绝对路径，须放行；写回同语义——文件窗 tab 路径亦源自产物记录）。
  * 图片按扩展名先行识别（真实 PNG/JPEG 等普遍含 NUL 字节），
  * NUL 检查仅用于文本候选文件。

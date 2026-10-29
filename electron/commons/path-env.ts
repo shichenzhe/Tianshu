@@ -1,7 +1,7 @@
 /**
  * GUI 进程 PATH 补齐：macOS/Linux 打包应用由 launchd（或桌面启动器）拉起，
  * PATH 仅有系统默认目录，不加载 ~/.zprofile 等用户 shell 配置——Homebrew/
- * nvm 安装的命令对 run_command / 代码节点全部不可见（spawn ENOENT）。
+ * nvm 安装的命令对 bash / 代码节点全部不可见（spawn ENOENT）。
  * 以登录交互 shell 取回用户 PATH 前置合并；任何失败保留原值（fail-safe）
  */
 import { execFileSync } from "node:child_process";

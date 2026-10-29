@@ -31,7 +31,7 @@ const fixture = {
   ],
   tools: [
     {
-      toolName: "write_file",
+      toolName: "write",
       total: 8,
       done: 4,
       denied: 2,
@@ -62,7 +62,7 @@ function renderView() {
 describe("MonitorView", () => {
   it("渲染 KPI 与工具/模型榜单行", async () => {
     renderView();
-    expect(await screen.findByText("write_file")).toBeTruthy();
+    expect(await screen.findByText("write")).toBeTruthy();
     expect(await screen.findByText("主力模型")).toBeTruthy();
     // 数字经 formatCount：12345 → 1.2w（zh 缺省 locale 由 Intl 决定，
     // 断言放宽为文本包含 "9"（llmCalls KPI）即可

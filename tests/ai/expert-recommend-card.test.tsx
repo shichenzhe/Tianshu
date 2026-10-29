@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * ExpertRecommendCard（recommend_experts 工具块渲染的会话内专家推荐卡）：
+ * ExpertRecommendCard（recommend_expert 工具块渲染的会话内专家推荐卡）：
  * 候选从 MARKET_EXPERTS 反查渲染名称与推荐理由，未知 slug 渲染原文
  * 占位（宁退不崩）；已添加判定经 ["assistants"] 缓存（ipc invoke mock）。
  * 「添加并启用」交互流：assistant:create 载荷（市场模板字段）→

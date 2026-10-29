@@ -5,7 +5,7 @@
  *   （在 extraBuiltin 数据根判定之前；数据根内其余路径保护不变）
  * - resolveSafePath：extraAllowed 白名单放行 workspace 外授权路径
  *   （realpath 归一比对），未授权仍抛 PATH_OUTSIDE_WORKSPACE
- * - runToolCall 链路：授权路径 read_file 直读（无审批）、write_file
+ * - runToolCall 链路：授权路径 read 直读（无审批）、write
  *   直执行免审（权限放宽 2026-10-24 spec §4.4——审批面只剩文件门 block）
  * 传递依赖：electron（file-tools 顶层 shell / Log 与 ipc-user 链）与
  * prisma-client 经 vi.mock 替换（file-write.test / chat.service.test 同款）。
@@ -441,12 +441,12 @@ describe("runToolCall 链路（授权双层放行落地）", () => {
     };
   }
 
-  it("read_file 授权路径直读（无审批），gate 收到 workspace 外绝对路径", async () => {
+  it("read 授权路径直读（无审批），gate 收到 workspace 外绝对路径", async () => {
     await gp.grantFilePath(5, grantedFile, 1);
     const decideFileAccess = vi.fn((): FileAccessDecision => "default");
     const agent = makeAgent({ decideFileAccess });
     const out = await runToolCall(
-      makeFileTool("read_file"),
+      makeFileTool("read"),
       agent,
       "t1",
       { path: grantedFile },
@@ -457,7 +457,7 @@ describe("runToolCall 链路（授权双层放行落地）", () => {
     expect(out).toContain("hello");
   });
 
-  it("write_file 授权路径：直执行免审（权限放宽 spec §4.4），写盘成功", async () => {
+  it("write 授权路径：直执行免审（权限放宽 spec §4.4），写盘成功", async () => {
     await gp.grantFilePath(5, grantedFile, 1);
     const approvals: string[] = [];
     const agent = makeAgent({
@@ -467,7 +467,7 @@ describe("runToolCall 链路（授权双层放行落地）", () => {
       },
     });
     const out = await runToolCall(
-      makeFileTool("write_file"),
+      makeFileTool("write"),
       agent,
       "t2",
       { path: grantedFile, content: "改写" },
@@ -479,7 +479,7 @@ describe("runToolCall 链路（授权双层放行落地）", () => {
     expect(fs.readFileSync(grantedFile, "utf8")).toBe("改写");
   });
 
-  it("read_file 未授权路径：越界拒绝回喂（不触审批）", async () => {
+  it("read 未授权路径：越界拒绝回喂（不触审批）", async () => {
     await gp.grantFilePath(5, grantedFile, 1);
     const approvals: string[] = [];
     const agent = makeAgent({
@@ -489,7 +489,7 @@ describe("runToolCall 链路（授权双层放行落地）", () => {
       },
     });
     const out = await runToolCall(
-      makeFileTool("read_file"),
+      makeFileTool("read"),
       agent,
       "t3",
       { path: path.join(libDir, "2.md") },

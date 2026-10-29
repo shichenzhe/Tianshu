@@ -4,9 +4,9 @@
  * containment 双检 + realpath 复检（口径同 agent 侧 resolveSafePath），
  * 越界抛 PATH_OUTSIDE_WORKSPACE——渲染层攻陷不得借此写任意本地路径。
  * 广播服务两条写路径：用户手动保存
- * （本 handler）与 AI write_file 工具（ChatService ctx 注入
+ * （本 handler）与 AI write 工具（ChatService ctx 注入
  * broadcastFileChangedFor 产出的闭包，spec §6.4）。
- * AI 直改库文件联动（T14 修复轮 Important 1）：write_file 裸 fs.writeFile
+ * AI 直改库文件联动（T14 修复轮 Important 1）：write 裸 fs.writeFile
  * 不经 library:writeFileContent——notifyLibraryFileWritten 补 updatedAt
  * bump + fileWindow:libraryChanged 全窗广播（文件窗 library tab 基线/
  * 重载感知；workspace:fileChanged 反解不了库路径，另立库维度事件）。
@@ -53,7 +53,7 @@ export function broadcastFileChanged(workspaceId: number, path: string): void {
 }
 
 /**
- * AI write_file 写盘广播闭包（ChatService ctx.onFileWritten 注入）：
+ * AI write 写盘广播闭包（ChatService ctx.onFileWritten 注入）：
  * absPath 反解 relPath，分隔符统一 "/"（渲染层 dedupe key 口径，
  * win32 的 path.relative 产出 "\"）
  */

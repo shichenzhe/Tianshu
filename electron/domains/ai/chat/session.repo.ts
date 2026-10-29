@@ -198,7 +198,7 @@ export class SessionRepository {
       this.openWorkspaceDirectory(workspaceId, userId),
     );
     // 双通道差异：workspace:readFile（产物面板预览）fullAccess 语义——绝对路径
-    // 直接用，服务会话内 write_file 记录的任意路径；既有 file:readWorkspaceFile
+    // 直接用，服务会话内 write 记录的任意路径；既有 file:readWorkspaceFile
     // （chat.service.ts，AI 工具读取）走 resolveSafePath 沙箱校验。两通道有意
     // 不同，后续可将读取上限/NUL 逻辑整合进 file-tools.ts。
     handleUser(
@@ -1013,7 +1013,7 @@ export class SessionRepository {
     return true;
   }
 
-  /** 含 write_file 的消息（LIKE 粗筛，精确过滤在聚合纯函数），补所属工作空间 id */
+  /** 含 write 的消息（LIKE 粗筛，精确过滤在聚合纯函数），补所属工作空间 id */
   private async findArtifactMessages(
     sessions: Array<{ id: number; workspaceId: number }>,
   ): Promise<ArtifactMessageRow[]> {
@@ -1021,7 +1021,7 @@ export class SessionRepository {
     const rows = await prisma.message.findMany({
       where: {
         sessionId: { in: sessions.map((s) => s.id) },
-        blocks: { contains: "write_file" },
+        blocks: { contains: "write" },
       },
       select: {
         id: true,
@@ -1303,7 +1303,7 @@ export class SessionRepository {
       where: { id: p.sessionId },
       data: { lastMessageAt: new Date(), updatedAt: new Date() },
     });
-    // H7a：write_file 产物登记（fire-and-forget，不阻塞消息链路）——
+    // H7a：write 产物登记（fire-and-forget，不阻塞消息链路）——
     // 产物面板查表替代 blocks LIKE 全表扫；失败仅记日志
     void this.recordArtifacts(message).catch((e) =>
       Log.warn("产物登记失败", e instanceof Error ? e.message : e),
@@ -1311,7 +1311,7 @@ export class SessionRepository {
     return message;
   }
 
-  /** 消息落库时提取 write_file 路径登记产物表（唯一键 upsert，重写刷新时间） */
+  /** 消息落库时提取 write 路径登记产物表（唯一键 upsert，重写刷新时间） */
   private async recordArtifacts(message: MessageRow): Promise<void> {
     const relPaths = extractPaths(message);
     if (relPaths.length === 0) {

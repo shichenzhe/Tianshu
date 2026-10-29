@@ -532,7 +532,7 @@ describe("executeTask 权限接线(agent 回调随任务 accessMode 分流)", ()
     const fullAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
     expect(fullAgent.fullAccess()).toBe(true);
     await expect(fullAgent.requestApproval("t", "s")).resolves.toBe(true);
-    await expect(fullAgent.isToolAllowed("write_file")).resolves.toBe(true);
+    await expect(fullAgent.isToolAllowed("write")).resolves.toBe(true);
 
     vi.mocked(runChatStream).mockClear();
     await executeTask({ ...taskRow, accessMode: "default" } as never, {
@@ -543,7 +543,7 @@ describe("executeTask 权限接线(agent 回调随任务 accessMode 分流)", ()
     const defaultAgent = vi.mocked(runChatStream).mock.calls[0]![0]!.agent!;
     expect(defaultAgent.fullAccess()).toBe(false);
     await expect(defaultAgent.requestApproval("t", "s")).resolves.toBe(false);
-    await expect(defaultAgent.isToolAllowed("write_file")).resolves.toBe(false);
+    await expect(defaultAgent.isToolAllowed("write")).resolves.toBe(false);
   });
 });
 

@@ -900,7 +900,7 @@ describe("approve / provider / image 三新端点", () => {
       toolCallId: "tc-hit",
       approved: true,
       remember: true,
-      toolName: "write_file",
+      toolName: "write",
     });
     expect(res.body).toMatchObject({
       code: "2000",
@@ -915,7 +915,7 @@ describe("approve / provider / image 三新端点", () => {
       toolCallId: "tc-hit",
       approved: false,
       remember: true,
-      toolName: "write_file",
+      toolName: "write",
     });
     expect(res.body).toMatchObject({
       code: "2000",

@@ -24,7 +24,7 @@ const __dirname = path.dirname(__filename);
 // │ │ └── preload.mjs
 // │
 // 打包态 GUI 启动（launchd）不加载 shell 配置，PATH 缺 Homebrew/nvm 等目录，
-// run_command/代码节点执行外部命令会全数 ENOENT——须在任何子进程调用前补齐
+// bash/代码节点执行外部命令会全数 ENOENT——须在任何子进程调用前补齐
 if (app.isPackaged) {
   fixPathForGuiProcess();
 }

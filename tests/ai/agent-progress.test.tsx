@@ -35,7 +35,7 @@ describe("AgentProgress 状态三态", () => {
   });
 
   it("工具轮：第 N 步 · 工具名（无扫光元素）", () => {
-    render(<AgentProgress stepCount={2} activeTool="read_file" />);
+    render(<AgentProgress stepCount={2} activeTool="read" />);
     expect(screen.queryByTestId("agent-shimmer")).toBeNull();
   });
 

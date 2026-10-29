@@ -72,7 +72,7 @@ export async function collectTools(
     : registered.filter(
         (def) =>
           def.name.startsWith("mcp__") ||
-          def.name === "run_command" ||
+          def.name === "bash" ||
           def.name === "create_skill",
       );
   return filterDisabledTools(
@@ -366,7 +366,7 @@ async function streamAndRecord(
     agent: {
       sessionId: ctx.sessionId,
       workspacePath: ctx.workspacePath,
-      // create_automation_task 落库依据（任务行自带：链式创建场景）
+      // create_schedule 落库依据（任务行自带：链式创建场景）
       userId: task.userId ?? undefined,
       workspaceId: task.workspaceId,
       modelId: task.modelId,

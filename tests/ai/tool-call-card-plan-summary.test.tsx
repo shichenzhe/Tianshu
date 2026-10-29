@@ -86,7 +86,7 @@ describe("ToolCallCard plan_* 富化摘要（批 11 D15）", () => {
 
   it("非 plan 工具：路径摘要段不受影响", () => {
     const details = renderCard({
-      toolName: "write_file",
+      toolName: "write",
       args: { path: "src/a.ts" },
     });
     const summary = details.querySelector("summary")?.textContent ?? "";

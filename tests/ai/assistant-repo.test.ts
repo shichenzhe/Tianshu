@@ -258,7 +258,7 @@ describe("expertType/members（专家团列）", () => {
     expect(prisma.assistant.create).not.toHaveBeenCalled();
   });
 
-  it("members 载荷校验：id 超 64 字符拒绝（对齐 dispatch_member 参数上限）", async () => {
+  it("members 载荷校验：id 超 64 字符拒绝（对齐 dispatch 参数上限）", async () => {
     await expect(
       repo.create(
         {

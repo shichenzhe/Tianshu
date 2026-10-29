@@ -53,7 +53,7 @@ describe("createLangChainAgentRunner", () => {
     engine.emit({
       type: "tool-update",
       toolCallId: "t1",
-      toolName: "write_file",
+      toolName: "write",
       state: "running",
     });
     engine.emit({ type: "finish" });

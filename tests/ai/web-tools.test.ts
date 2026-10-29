@@ -59,7 +59,7 @@ function withRedirects(f: WebFetcher): WebFetcher {
   return (url, opts) => fetchWithRedirects(f, url, opts);
 }
 
-describe("web_fetch", () => {
+describe("fetch", () => {
   it("提取文本：剥 script/style 与标签、压缩空白、附 url 与标题", async () => {
     const tools = makeWebTools(fakeFetcher());
     const out = await tools[0].execute(ctx(), { url: "https://example.com/a" });
@@ -184,7 +184,7 @@ describe("web_fetch", () => {
   });
 });
 
-describe("open_browser", () => {
+describe("browse", () => {
   it("emitPanel 推送并返回成功文案", async () => {
     const emitPanel = vi.fn();
     const tools = makeWebTools(fakeFetcher());
@@ -202,7 +202,7 @@ describe("open_browser", () => {
     const fetcher = fakeFetcher();
     const tools = makeWebTools(fetcher);
     const out = await tools[1].execute(ctx(), { url: "https://example.com" });
-    expect(out).toMatch(/无交互面板|不支持 open_browser/);
+    expect(out).toMatch(/无交互面板|不支持 browse/);
     expect(fetcher.calls).toHaveLength(0);
   });
 

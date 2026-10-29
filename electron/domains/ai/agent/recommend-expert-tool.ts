@@ -1,5 +1,5 @@
 /**
- * recommend_experts 内置工具（WorkBuddy suggest_plugin_install 移植）：
+ * recommend_expert 内置工具（WorkBuddy suggest_plugin_install 移植）：
  * 会话未绑定专家时模型依据 system 目录段主动推荐候选，渲染层在消息流
  * 呈现专家推荐卡（ExpertRecommendCard）。无副作用（渲染层消费 args）
  * → kind:"read" 免审批，execute 仅返回确认文本回喂模型。纯 Node 实现
@@ -10,7 +10,7 @@ import { MARKET_EXPERTS } from "../../../../src-react/domains/ai/experts/data/ma
 import type { ToolDefinition } from "./file-tools";
 
 /** 与前端渲染层（group-blocks.ts，Task 5）双份定义约定（widget 先例） */
-export const RECOMMEND_TOOL_NAME = "recommend_experts";
+export const RECOMMEND_TOOL_NAME = "recommend_expert";
 
 const argsSchema = z.object({
   candidates: z

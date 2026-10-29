@@ -1,10 +1,10 @@
 /**
- * agent 网页工具（web_fetch/open_browser，spec 2026-10-13-ai-web-tools）：
+ * agent 网页工具（fetch/browse，spec 2026-10-13-ai-web-tools）：
  * 纯 Node 可测（fetch 注入照 makeRunCommandTool 工厂先例，零 electron
  * 依赖）。网络层走主进程 global fetch——已由 proxy-dispatcher 的全局
  * dispatcher（含 NetworkGate 域策略/审计）覆盖；SSRF 复用 security 域
  * 公共清单，且重定向手动逐跳 follow（fetch redirect:"manual"），每跳重过
- * assertUrl，封死公网 302 跳内网 metadata 的绕过。open_browser 经
+ * assertUrl，封死公网 302 跳内网 metadata 的绕过。browse 经
  * ctx.emitPanel 推面板联动事件（装配见 chat.service）。
  */
 import { z } from "zod";
@@ -99,7 +99,7 @@ function makeWebFetchTool(
   fetcher: WebFetcher,
 ): ToolDefinition<{ url: string }> {
   return {
-    name: "web_fetch",
+    name: "fetch",
     description: "抓取网页并提取纯文本正文（超 32KB 截断）",
     parameters: z.object({ url: z.string().describe("要读取的网页地址") }),
     kind: "read",
@@ -144,12 +144,12 @@ function makeWebFetchTool(
   };
 }
 
-/** open_browser 不实际发请求（fetcher 仅 web_fetch 消费），零参数工厂 */
+/** browse 不实际发请求（fetcher 仅 fetch 消费），零参数工厂 */
 function makeOpenBrowserTool(): ToolDefinition<{ url: string }> {
   return {
-    name: "open_browser",
+    name: "browse",
     description:
-      "打开网页展示于右侧面板浏览器（不返回内容）；取内容用 web_fetch",
+      "打开网页展示于右侧面板浏览器（不返回内容）；取内容用 fetch",
     parameters: z.object({ url: z.string().describe("要展示的网页地址") }),
     kind: "read",
     execute: async (ctx, { url }) => {
@@ -157,7 +157,7 @@ function makeOpenBrowserTool(): ToolDefinition<{ url: string }> {
       if (bad) return fail(bad);
       if (!ctx.emitPanel)
         return fail(
-          "当前环境无交互面板，无法展示页面（自动化/编排流不支持 open_browser）",
+          "当前环境无交互面板，无法展示页面（自动化/编排流不支持 browse）",
         );
       ctx.emitPanel("detailPanel:openBrowser", { url });
       return `已在右侧浏览器面板打开 ${url}`;

@@ -136,9 +136,9 @@ describe("disabledTools（SP6 配置清洗）", () => {
     const parsed = parseSecurityConfig([
       {
         name: "disabledTools",
-        value: '["run_command","nope","mcp__x__y","run_command"]',
+        value: '["bash","nope","mcp__x__y","bash"]',
       },
     ]);
-    expect(parsed.disabledTools).toEqual(["run_command"]);
+    expect(parsed.disabledTools).toEqual(["bash"]);
   });
 });

@@ -42,12 +42,12 @@ function makeCtx(over: Partial<Ctx> = {}): Ctx & { events: SecurityEvent[] } {
 }
 const okBackup: BackupFileResult = { ok: true, size: 1 };
 
-describe("delete_file 工具", () => {
+describe("rm 工具", () => {
   it("默认（deleteProtection 缺省）→ trashItem 移入回收站 + 审计", async () => {
     const ctx = makeCtx();
     const f = path.join(WS, "t1.txt");
     fs.writeFileSync(f, "x");
-    const out = await makeFileTool("delete_file").execute(ctx, {
+    const out = await makeFileTool("rm").execute(ctx, {
       path: "t1.txt",
     });
     expect(out).toContain("回收站");
@@ -68,7 +68,7 @@ describe("delete_file 工具", () => {
     fs.mkdirSync(path.join(WS, "d"));
     fs.writeFileSync(path.join(WS, "d", "1.txt"), "a");
     fs.writeFileSync(path.join(WS, "d", "2.txt"), "b");
-    const out = await makeFileTool("delete_file").execute(ctx, { path: "d" });
+    const out = await makeFileTool("rm").execute(ctx, { path: "d" });
     expect(out).toContain("已永久删除");
     expect(fs.existsSync(path.join(WS, "d"))).toBe(false);
     expect(backups).toHaveLength(2);
@@ -81,11 +81,11 @@ describe("delete_file 工具", () => {
   });
   it("不存在 → 报错文案；空路径报错", async () => {
     const ctx = makeCtx();
-    const out = await makeFileTool("delete_file").execute(ctx, {
+    const out = await makeFileTool("rm").execute(ctx, {
       path: "nope",
     });
     expect(out).toContain("错误");
-    const out2 = await makeFileTool("delete_file").execute(ctx, { path: " " });
+    const out2 = await makeFileTool("rm").execute(ctx, { path: " " });
     expect(out2).toContain("错误");
   });
   it("备份失败不阻塞删除（fail-open）+ backup-skipped 审计", async () => {
@@ -94,7 +94,7 @@ describe("delete_file 工具", () => {
       onBackupFile: async () => ({ ok: false, reason: "boom" }),
     });
     fs.writeFileSync(path.join(WS, "t2.txt"), "x");
-    const out = await makeFileTool("delete_file").execute(ctx, {
+    const out = await makeFileTool("rm").execute(ctx, {
       path: "t2.txt",
     });
     expect(out).toContain("已永久删除");
@@ -107,7 +107,7 @@ describe("delete_file 工具", () => {
     vi.mocked(shell.trashItem).mockRejectedValueOnce(new Error("E1"));
     const ctx = makeCtx();
     fs.writeFileSync(path.join(WS, "t3.txt"), "x");
-    const out = await makeFileTool("delete_file").execute(ctx, {
+    const out = await makeFileTool("rm").execute(ctx, {
       path: "t3.txt",
     });
     expect(out).toContain("回收站失败");
@@ -117,7 +117,7 @@ describe("delete_file 工具", () => {
   });
 });
 
-describe("write_file 覆盖前备份", () => {
+describe("write 覆盖前备份", () => {
   it("已存在文件覆盖前 onBackupFile 被调 + backup-created 审计；新文件不备份", async () => {
     const backups: string[] = [];
     const ctx = makeCtx({
@@ -127,7 +127,7 @@ describe("write_file 覆盖前备份", () => {
       },
     });
     fs.writeFileSync(path.join(WS, "w1.txt"), "old");
-    await makeFileTool("write_file").execute(ctx, {
+    await makeFileTool("write").execute(ctx, {
       path: "w1.txt",
       content: "new",
     });
@@ -135,7 +135,7 @@ describe("write_file 覆盖前备份", () => {
     expect(ctx.events.map((e) => e.eventType)).toContain(
       "data-safety.backup-created",
     );
-    await makeFileTool("write_file").execute(ctx, {
+    await makeFileTool("write").execute(ctx, {
       path: "w2.txt",
       content: "fresh",
     });
@@ -146,7 +146,7 @@ describe("write_file 覆盖前备份", () => {
       onBackupFile: async () => ({ ok: false, reason: "boom" }),
     });
     fs.writeFileSync(path.join(WS, "w3.txt"), "old");
-    const out = await makeFileTool("write_file").execute(ctx, {
+    const out = await makeFileTool("write").execute(ctx, {
       path: "w3.txt",
       content: "new",
     });

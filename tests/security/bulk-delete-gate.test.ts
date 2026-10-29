@@ -63,7 +63,7 @@ describe("批量删除预估门", () => {
       bulkDeleteThreshold: 50,
     });
     const out = await runToolCall(
-      makeFileTool("delete_file"),
+      makeFileTool("rm"),
       agent,
       "b1",
       { path: "." },
@@ -85,7 +85,7 @@ describe("批量删除预估门", () => {
       bulkDeleteThreshold: 50,
     });
     const out = await runToolCall(
-      makeFileTool("delete_file"),
+      makeFileTool("rm"),
       agent,
       "b2",
       { path: "." },
@@ -107,7 +107,7 @@ describe("批量删除预估门", () => {
       bulkDeleteThreshold: 50,
     });
     const out = await runToolCall(
-      makeFileTool("delete_file"),
+      makeFileTool("rm"),
       agent,
       "b3",
       { path: "small" },
@@ -116,7 +116,7 @@ describe("批量删除预估门", () => {
     expect(agent.approvals).toHaveLength(0);
     expect(out).toContain("回收站");
   });
-  it("delete_file 黑名单路径 → SP3 文件门 block 生效（强制审批；default 档验证面）", async () => {
+  it("rm 黑名单路径 → SP3 文件门 block 生效（强制审批；default 档验证面）", async () => {
     const secret = path.join(WS, "secret");
     fs.mkdirSync(secret);
     fs.writeFileSync(path.join(secret, "k.pem"), "x");
@@ -126,7 +126,7 @@ describe("批量删除预估门", () => {
       decideFileAccess: () => "block",
     });
     await runToolCall(
-      makeFileTool("delete_file"),
+      makeFileTool("rm"),
       agent,
       "b4",
       { path: "secret" },
@@ -137,10 +137,10 @@ describe("批量删除预估门", () => {
       agent.events.some((e) => e.eventType === "file-safety.needs-approval"),
     ).toBe(true);
   });
-  it("其他工具不受影响（read_file default 直执行）", async () => {
+  it("其他工具不受影响（read default 直执行）", async () => {
     const agent = makeAgent({ decideFileAccess: () => "default" });
     const out = await runToolCall(
-      makeFileTool("read_file"),
+      makeFileTool("read"),
       agent,
       "b5",
       { path: "f0.txt" },
@@ -167,7 +167,7 @@ describe("批量删除预估门", () => {
       bulkDeleteThreshold: ESTIMATE_COUNT_LIMIT,
     });
     const out = await runToolCall(
-      makeFileTool("delete_file"),
+      makeFileTool("rm"),
       agent,
       "b6",
       { path: "huge" },

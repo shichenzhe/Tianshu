@@ -218,7 +218,7 @@ describe("dispatchNewTask", () => {
     });
     await dispatchNewTask({ navigate });
     // 引用式（引用式批 2026-10-21）：工作空间引用不再读全文（无
-    // readWorkspaceFile 调用），AI 处理时 read_file 自读
+    // readWorkspaceFile 调用），AI 处理时 read 自读
     expect(
       invokeMock.mock.calls.some((c) => c[0] === "file:readWorkspaceFile"),
     ).toBe(false);
@@ -232,7 +232,7 @@ describe("dispatchNewTask", () => {
     // 注入格式与 ChatView 渲染层（ChatPane/ProjectChatBar）逐字节同口径
     const content = (sendCall![1] as { content: string }).content;
     expect(content).toContain(
-      "[引用文件 docs/a.md]（请用 read_file 工具读取该文件后处理）",
+      "[引用文件 docs/a.md]（请用 read 工具读取该文件后处理）",
     );
     expect(content).toContain("[引用文件 /tmp/b.md]\nB");
     expect(content).toContain("[引用技能 s1]\nC");

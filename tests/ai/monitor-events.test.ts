@@ -58,7 +58,7 @@ describe("recordLlmCall/recordToolCall", () => {
     await recordToolCall(p, {
       userId: 7,
       scene: "graph",
-      toolName: "write_file",
+      toolName: "write",
       state: "done",
       durationMs: 300,
       sessionId: 2,
@@ -67,7 +67,7 @@ describe("recordLlmCall/recordToolCall", () => {
       {
         userId: 7,
         scene: "graph",
-        toolName: "write_file",
+        toolName: "write",
         state: "done",
         durationMs: 300,
         sessionId: 2,
@@ -142,8 +142,8 @@ describe("buildGraphMonitorEvents", () => {
           name: "n2",
           durationMs: 300,
           toolCalls: [
-            { name: "write_file", ok: true, durationMs: 120 },
-            { name: "run_command", ok: false, durationMs: 60 },
+            { name: "write", ok: true, durationMs: 120 },
+            { name: "bash", ok: false, durationMs: 60 },
           ],
         },
         { name: "n3", durationMs: 10 },
@@ -165,7 +165,7 @@ describe("buildGraphMonitorEvents", () => {
       {
         userId: 7,
         scene: "graph",
-        toolName: "write_file",
+        toolName: "write",
         state: "done",
         durationMs: 120,
         sessionId: 4,
@@ -173,7 +173,7 @@ describe("buildGraphMonitorEvents", () => {
       {
         userId: 7,
         scene: "graph",
-        toolName: "run_command",
+        toolName: "bash",
         state: "error",
         durationMs: 60,
         sessionId: 4,

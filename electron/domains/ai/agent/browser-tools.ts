@@ -96,7 +96,7 @@ function assertUrl(url: string): string | null {
   return null;
 }
 
-const NO_TAB = "当前会话没有可操控的浏览器页——先调用 open_browser 打开页面";
+const NO_TAB = "当前会话没有可操控的浏览器页——先调用 browse 打开页面";
 
 export function makeBrowserTools(
   resolve: GuestControlResolver,

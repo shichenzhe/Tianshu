@@ -138,7 +138,7 @@ describe("isDangerousCommand 拦截矩阵", () => {
   });
 });
 
-describe("run_command execute", () => {
+describe("bash execute", () => {
   // 注：箭头体必须加大括号——mockClear 返回 mock 本身，会被 Vitest 误认为
   // hook 清理函数而在 afterEach 以零参调用（回调签名即崩）
   beforeEach(() => {
@@ -255,11 +255,11 @@ describe("run_command execute", () => {
     expect(lastCall()[1].cwd).toBeUndefined();
   });
 
-  it("危险命令拦截优先于执行（exec 不被调用）；删文件类附 delete_file 指引", async () => {
+  it("危险命令拦截优先于执行（exec 不被调用）；删文件类附 rm 指引", async () => {
     fakeExec({ stdout: "should-not-run" });
     const out = await tool.execute(fullCtx(), { command: "rm -rf /" });
     expect(out).toBe(
-      "错误: 该命令被安全策略拦截（高风险破坏性操作）；删除文件请改用 delete_file 工具",
+      "错误: 该命令被安全策略拦截（高风险破坏性操作）；删除文件请改用 rm 工具",
     );
     expect(mockExec).not.toHaveBeenCalled();
   });

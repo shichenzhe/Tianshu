@@ -1036,7 +1036,7 @@ export default class ChatService {
   }
 
   /**
-   * 面板联动装配（web 工具 open_browser）：组装后字段注入而非
+   * 面板联动装配（web 工具 browse）：组装后字段注入而非
    * resolveAgentOptions 传参——assembleContext 与用量拆解（chat:usage，
    * 无 sender 也不执行工具）共用，sender 仅会话流可得；agent 每请求新建
    * 对象，就地补字段不外溢。sender 销毁安全（与 emit 同守卫）；sessionId
@@ -1515,7 +1515,7 @@ export default class ChatService {
     },
     sessionId: number,
     /** 会话当前模型 id（assembleContext 已解出，NO_MODEL 已挡）：
-     *  create_automation_task 任务执行模型依据 */
+     *  create_schedule 任务执行模型依据 */
     modelId: number,
   ): Promise<AgentStreamOptions> {
     const workspace = session.workspaceId
@@ -1533,7 +1533,7 @@ export default class ChatService {
     return {
       sessionId,
       userId: session.userId ?? undefined,
-      // create_automation_task 落库依据（防模型幻觉填参）
+      // create_schedule 落库依据（防模型幻觉填参）
       workspaceId: workspaceId ?? undefined,
       modelId,
       workspacePath: workspaceDir ?? undefined,
@@ -1567,7 +1567,7 @@ export default class ChatService {
       onBackupFile: this.dataSafety
         ? (absPath, sid) => this.dataSafety!.backupFile(absPath, sid)
         : undefined,
-      // 文件窗口联动（spec §5.2/§6.4）：AI write_file 写盘后——库路径
+      // 文件窗口联动（spec §5.2/§6.4）：AI write 写盘后——库路径
       // （libraryDir() 下）bump 条目 updatedAt + 广播 libraryChanged
       // （T14 修复轮：library tab 基线/重载感知，挂载恒定不随空间绑定，
       // 库路径不回落空间维度——反解出跨界 relPath 无 tab 可匹配）；其余
@@ -1593,7 +1593,7 @@ export default class ChatService {
         // 决议词汇对齐审计侧：内部 denied 记 rejected（AuditDecision 与 UI i18n 词汇）
         const audited = decision === "approved" ? "approved" : "rejected";
         const category =
-          toolName === "run_command" ? "command-safety" : "file-safety";
+          toolName === "bash" ? "command-safety" : "file-safety";
         this.auditSink?.({
           eventType: `${category}.${audited}`,
           decision: audited,
@@ -1612,11 +1612,11 @@ export default class ChatService {
    * plan_* 为项目专属工具，仅项目会话注入（全局会话无计划上下文）；
    * create_skill 落盘到用户技能目录、不依赖工作空间，未绑定目录也放行（P-D）；
    * create/update_expert 落库不依赖工作空间（专家 2.0），未绑定目录也放行
-   * recommend_experts 纯渲染消费 args、无工作空间依赖（专家 2.0），同样放行
-   * dispatch_member 为专家团会话专属（二期 T3）：team 助手注入主理人调度
+   * recommend_expert 纯渲染消费 args、无工作空间依赖（专家 2.0），同样放行
+   * dispatch 为专家团会话专属（二期 T3）：team 助手注入主理人调度
    * 工具（成员子 agent 非流式单轮补全），非 team/成员空不构造；ask 模式
    * 调用方本就传空工具集，无需特判
-   * 文件四件依赖工作空间路径，仅绑定目录后注入；run_command 例外——
+   * 文件四件依赖工作空间路径，仅绑定目录后注入；bash 例外——
    * 未绑定目录也注入（默认态锚点落家目录、钳制语义不变，见 command-tool
    * resolveCwd；默认权限仍逐条审批）
    * 工具分组场景门控（spec §20 项 B，WorkBuddy 窄常驻+按需挂载）：工作流
@@ -1639,13 +1639,13 @@ export default class ChatService {
       : registered.filter(
           (def) =>
             def.name.startsWith("mcp__") ||
-            def.name === "run_command" ||
+            def.name === "bash" ||
             def.name === "create_skill" ||
             // 工作流五件（除 run_workflow）用户级 DB 实体不依赖工作空间
             // （WORKFLOW_NO_WORKSPACE_TOOLS 注释）——未绑目录会话经场景/
             // 意图开门后照常挂载，挂载元说明承诺由此兑现
             WORKFLOW_NO_WORKSPACE_TOOLS.has(def.name) ||
-            // create_automation_task 落库走默认空间兜底（未绑定会话同权，
+            // create_schedule 落库走默认空间兜底（未绑定会话同权，
             // 2026-10-29 裁定）——不属工作流门控组，独立能力未绑即可见
             def.name === AUTOMATION_TOOL_NAME ||
             def.name === WIDGET_TOOL_NAME ||
@@ -1656,7 +1656,7 @@ export default class ChatService {
     const injected = isProjectSession
       ? workspaceScoped
       : workspaceScoped.filter((def) => !def.name.startsWith("plan_"));
-    // dispatch_member 禁用即跳过构造（二期 T3，与 system 侧 withDispatch 同
+    // dispatch 禁用即跳过构造（二期 T3，与 system 侧 withDispatch 同
     // 口径）——工具每请求构造：deps 持当次成员/中止信号/modelText 闭包
     const dispatchMember =
       team &&
@@ -1689,7 +1689,7 @@ export default class ChatService {
   }
 
   /**
-   * 成员单轮补全装配（专家团二期 T3）：dispatch_member 的 modelText 生产
+   * 成员单轮补全装配（专家团二期 T3）：dispatch 的 modelText 生产
    * 实现，handover-summary defaultModelText 同构（createChatModel +
    * LangChain invoke 非流式补全、超时熔断）；120s——成员单轮任务重于交接
    * 摘要（30s），子 agent 独立分析可深推理。deps 透传的会话中止信号与
@@ -1796,7 +1796,7 @@ export default class ChatService {
   ): Promise<void> {
     const startedAt = Date.now();
     const ctx = await this.assembleContext(sessionId, userId, overrides);
-    // 面板联动（web 工具 open_browser）：会话 sender 绑定进 agent 闭包
+    // 面板联动（web 工具 browse）：会话 sender 绑定进 agent 闭包
     this.bindEmitPanel(ctx.agent, sessionId, sender);
     try {
       // AR-T1 接缝消费：编排层经 agentRunner（AgentRunner 契约——chunks
@@ -1831,7 +1831,7 @@ export default class ChatService {
                 ctx.agent,
                 ctx.allSkills,
                 ctx.isProjectSession,
-                // 二期 T3：team 会话注入 dispatch_member；abort.signal 随
+                // 二期 T3：team 会话注入 dispatch；abort.signal 随
                 // 当次流透传（成员子 agent 与主对话同生共死）
                 ctx.team ? { ...ctx.team, abortSignal: abort.signal } : null,
                 ctx.toolGate,
@@ -2033,11 +2033,11 @@ export default class ChatService {
     // 组装（成员清单+协作铁律）。members 为 prisma 原始 JSON 字符串列，
     // 需自行 parseTeamMembers（toRecord 恒数组的语义不适用于原始行）；
     // 以 expertType==="team" 判别而非 members 非空（agent 行也有该列）。
-    // dispatch_member 被安全中心禁用或 ask 模式（零工具——铁律段指示的
+    // dispatch 被安全中心禁用或 ask 模式（零工具——铁律段指示的
     // 调度在 ask 下无从发生，与技能清单同缺席语义）时不组装铁律段与
     // 工具说明——system 与工具集同缺席（T3 collectToolDefinitions 同
     // 口径），对齐目录段 G1 门控的 runtimeFilter 读法（缺席不滤）；
-    // plan 模式工具集仍在 → dispatch_member 同注入，铁律保留；空成员
+    // plan 模式工具集仍在 → dispatch 同注入，铁律保留；空成员
     // teamLeadSystem 为 null 回退裸 prompt
     const teamMembers =
       assistantRow?.expertType === "team"
@@ -2071,7 +2071,7 @@ export default class ChatService {
     );
     // 专家目录推荐指令段（专家 2.0 spec §6）：未绑专家且 agent 模式注入
     // （个性化段之后、场景段之前）；已绑专家/ask/plan 零成本不注入；
-    // 终审 G1 门控：recommend_experts 被安全中心禁用时同步不注入——目录段
+    // 终审 G1 门控：recommend_expert 被安全中心禁用时同步不注入——目录段
     // 指示模型调用该工具，而注入层 filterDisabledTools 已对模型隐藏它
     // （collectToolDefinitions 同一 runtimeFilter 来源、闭包实时读配置，
     // 缺席（测试）不滤，与 SP6 注入层同语义）；personalized 为空时目录段
@@ -2125,7 +2125,7 @@ export default class ChatService {
        *  收口与 getUsageBreakdown/probeSendCost 估算同一来源（口径一致） */
       toolGate,
       /** 专家团调度注入面（二期 T3）：team 助手且成员非空时
-       *  dispatch_member 的 deps（成员集 + memberModelText 装配）；
+       *  dispatch 的 deps（成员集 + memberModelText 装配）；
        *  abortSignal 由 streamAndPersist 调用点随当次流补入 */
       team:
         teamMembers.length > 0
@@ -2439,7 +2439,7 @@ export default class ChatService {
     // remembered 审计（SP1 终审归档补齐项，SP2 接入）
     this.auditSink?.({
       eventType: `${
-        toolName === "run_command" ? "command-safety" : "file-safety"
+        toolName === "bash" ? "command-safety" : "file-safety"
       }.remembered`,
       decision: "info",
       detail: { tool: toolName, workspaceId },

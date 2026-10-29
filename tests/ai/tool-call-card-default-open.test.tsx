@@ -11,7 +11,7 @@ import ToolCallCard from "../../src-react/domains/ai/chat/components/ToolCallCar
 function renderCard(defaultOpen?: boolean) {
   const { container } = render(
     <ToolCallCard
-      toolName="write_file"
+      toolName="write"
       args={{ path: "src/a.ts" }}
       state="running"
       defaultOpen={defaultOpen}

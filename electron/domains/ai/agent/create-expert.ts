@@ -31,7 +31,7 @@ export const TEAM_MEMBER_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
  *  导入 schema 共用（DRY 单源） */
 export const TEAM_MEMBERS_MAX = 13;
 
-/** 成员 id 长度上限：对齐 dispatch_member 工具参数 member 的 max(64)——
+/** 成员 id 长度上限：对齐 dispatch 工具参数 member 的 max(64)——
  *  超长 id 可落库却无法被调度，写面拒绝（读面不重校验，既有数据可读） */
 export const TEAM_MEMBER_ID_MAX = 64;
 

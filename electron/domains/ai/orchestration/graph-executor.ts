@@ -220,7 +220,7 @@ export interface NodeContext {
   /** 子工作流节点加载子图按 userId 隔离 */
   userId: number;
   /** 代码节点授权：试运行（用户显式触发）或任务完全访问——default
-   * 任务的代码节点拒执行（对齐 run_command 的 write 审批语义） */
+   * 任务的代码节点拒执行（对齐 bash 的 write 审批语义） */
   codeAuthorized: boolean;
   disabledTools?: () => string[];
   /** 子工作流调用链（图 id），循环引用在此拦截 */
@@ -477,7 +477,7 @@ function buildNodeContext(
     // 历史 graph 行 userId 可空：0 永不匹配子图查询 → subflow_missing 兜底
     userId: params.graph.userId ?? 0,
     // 试运行（用户显式触发）或任务完全访问——default 任务的代码节点
-    // 拒执行（对齐 run_command 的 write 审批语义）；webhook 等外部触发
+    // 拒执行（对齐 bash 的 write 审批语义）；webhook 等外部触发
     // 显式传 false 对齐 default 无人值守语义（params.codeAuthorized 覆盖）
     codeAuthorized:
       params.codeAuthorized ??
@@ -908,7 +908,7 @@ export function classifyCodeFailure(outcome: {
 
 /** 代码节点 handler：模板替换（复用 renderNodePrompt，{{input.x}}/
  * {{nodes.*.output}} 零学习成本）→ 解释器过 commandGate（无人值守 ask 即拒，
- * 与 run_command 同语义）→ 临时文件 spawn（避开 -c 注入面）→ stdout 即
+ * 与 bash 同语义）→ 临时文件 spawn（避开 -c 注入面）→ stdout 即
  * 节点 output（branch 模式末行作路由标签）；stdin 注入完整 {inputs,
  * nodes} JSON 供脚本自行解析 */
 function makeCodeNodeHandler(node: CodeNode, ctx: NodeContext): NodeHandler {
@@ -1249,7 +1249,7 @@ async function runCodeScript(
     );
   }
   // 权限模式门（评审 I-1）：代码节点等价 write 类操作——default 任务的
-  // default 决策不放行（对齐 run_command 无人值守审批拒绝语义），仅
+  // default 决策不放行（对齐 bash 无人值守审批拒绝语义），仅
   // 命令门显式 allow 名单或已授权上下文（试运行/full 任务）可执行
   if (decision !== "allow" && !ctx.codeAuthorized) {
     throw new GraphNodeFailure(
@@ -2810,7 +2810,7 @@ function resolveWorkspaceFile(
 
 /** 文件写入节点 handler：content 模板替换后写回工作空间（append 追加带
  * 换行 / overwrite 覆盖），目录自动创建；写操作走 codeAuthorized 门禁
- * （default 任务拒写，对齐 run_command 语义） */
+ * （default 任务拒写，对齐 bash 语义） */
 function makeFileWriteNodeHandler(
   node: FileWriteNode,
   ctx: NodeContext,

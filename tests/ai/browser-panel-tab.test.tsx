@@ -7,7 +7,7 @@
  * 依赖已初始化（zh-CN），据真实文案断言工具栏元素。另含面板
  * 联动复用路径回归——store 负载 url 被联动桥（use-detail-panel-bridge）
  * 外部改写时，本地 browserTab 须吸收新值（BrowserWebview 以 url prop 变化
- * 派发 loadURL）。W5 冒烟实锤：不吸收则 open_browser 复用既有浏览器 tab
+ * 派发 loadURL）。W5 冒烟实锤：不吸收则 browse 复用既有浏览器 tab
  * 只改 store 不导航。mock BrowserWebview（隔离其派发内部，由 tests/browser
  * 覆盖）只断言 url 传导；DetailPanel 侧以 store 重取 tab 重渲染模拟。
  */
@@ -110,7 +110,7 @@ describe("BrowserPanelTab 工具栏常驻（WorkBuddy 实态纠正回归）", ()
   });
 });
 
-describe("BrowserPanelTab url 吸收（open_browser 复用回归）", () => {
+describe("BrowserPanelTab url 吸收（browse 复用回归）", () => {
   it("挂载取初值；联动桥外部改写 store url → webview 收到新 url", () => {
     const tab = seedBrowserTab("https://example.com/a");
     const { rerender } = render(

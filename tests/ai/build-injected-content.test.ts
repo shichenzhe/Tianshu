@@ -32,13 +32,13 @@ describe("buildInjectedContent", () => {
     );
   });
 
-  it("引用式（fileRef）：仅路径行 + read_file 指示，不拼内容、无尾随空行", () => {
+  it("引用式（fileRef）：仅路径行 + read 指示，不拼内容、无尾随空行", () => {
     expect(
       buildInjectedContent("正文", [
         { path: "src/main.ts", content: "", kind: "fileRef" },
       ]),
     ).toBe(
-      "[引用文件 src/main.ts]（请用 read_file 工具读取该文件后处理）\n\n正文",
+      "[引用文件 src/main.ts]（请用 read 工具读取该文件后处理）\n\n正文",
     );
     // content 忽略（即便误传）——引用式块恒为单行
     expect(
@@ -47,7 +47,7 @@ describe("buildInjectedContent", () => {
         { path: "b.ts", content: "B" },
       ]),
     ).toBe(
-      "[引用文件 a.ts]（请用 read_file 工具读取该文件后处理）\n\n" +
+      "[引用文件 a.ts]（请用 read 工具读取该文件后处理）\n\n" +
         "[引用文件 b.ts]\nB\n\n正文",
     );
   });

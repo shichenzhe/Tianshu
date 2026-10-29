@@ -1,6 +1,6 @@
 /**
  * P3 T4 集成测试：两级审批判定（default 询问 / full 直执行 / mcp__ 恒审批）、
- * 模式组装（ask 零工具 / plan 计划指令段）、run_command 注册、status accessMode。
+ * 模式组装（ask 零工具 / plan 计划指令段）、bash 注册、status accessMode。
  * send 级用例经 MockLanguageModelV3 捕获 doStream 实际收到的 tools 与 system，
  * 经假 sender 捕获流式 chunk；权限与审批经 service 内部 store/coordinator 直达
  * （IPC 接线已由 agent-loop.test / permission-mode.test 覆盖）。
@@ -282,7 +282,7 @@ afterEach(() => {
 });
 
 describe("两级审批判定（send 级集成）", () => {
-  it("完全访问下 write_file 跳过审批直执行：无 awaiting-approval chunk，fullAccess 注入放开路径边界", async () => {
+  it("完全访问下 write 跳过审批直执行：无 awaiting-approval chunk，fullAccess 注入放开路径边界", async () => {
     const ws = mkdtempSync(path.join(os.tmpdir(), "p3-full-"));
     // 以工作空间外路径验证 ctx.fullAccess 真正注入（default 态会拒绝越界写）
     const escaped = path.join(path.dirname(ws), "p3-full-write-proof.txt");
@@ -292,7 +292,7 @@ describe("两级审批判定（send 级集成）", () => {
           {
             kind: "tool",
             toolCallId: "t1",
-            toolName: "write_file",
+            toolName: "write",
             input: { path: "../p3-full-write-proof.txt", content: "hi" },
           },
         ],
@@ -325,7 +325,7 @@ describe("两级审批判定（send 级集成）", () => {
     }
   });
 
-  it("默认权限下 write_file 直执行（回归锚）：无审批 chunk，工作空间内直接落盘", async () => {
+  it("默认权限下 write 直执行（回归锚）：无审批 chunk，工作空间内直接落盘", async () => {
     const ws = mkdtempSync(path.join(os.tmpdir(), "p3-default-"));
     const { model } = scriptedModel([
       {
@@ -333,7 +333,7 @@ describe("两级审批判定（send 级集成）", () => {
           {
             kind: "tool",
             toolCallId: "t1",
-            toolName: "write_file",
+            toolName: "write",
             input: { path: "a.txt", content: "hi" },
           },
         ],
@@ -504,21 +504,21 @@ describe("模式组装（send 级）", () => {
     );
     // 指令段以空行拼接于 buildSystemPrompt 结果之后
     expect(system).toContain("\n\n当前处于计划模式");
-    expect(calls[0]?.toolNames).toContain("write_file");
-    expect(calls[0]?.toolNames).toContain("run_command");
+    expect(calls[0]?.toolNames).toContain("write");
+    expect(calls[0]?.toolNames).toContain("bash");
   });
 });
 
-describe("run_command 注册（registry 接线）", () => {
-  it("registry 预注册 run_command：kind=write，execute 危险命令返回拦截串", async () => {
-    const def = registry.find("run_command");
+describe("bash 注册（registry 接线）", () => {
+  it("registry 预注册 bash：kind=write，execute 危险命令返回拦截串", async () => {
+    const def = registry.find("bash");
     if (!def) {
-      throw new Error("run_command 未注册进 registry 初始集");
+      throw new Error("bash 未注册进 registry 初始集");
     }
     expect(def.kind).toBe("write");
     const ctx: ToolContext = { workspacePath: "/tmp/ws", sessionId: 1 };
     await expect(def.execute(ctx, { command: "rm -rf /" })).resolves.toBe(
-      "错误: 该命令被安全策略拦截（高风险破坏性操作）；删除文件请改用 delete_file 工具",
+      "错误: 该命令被安全策略拦截（高风险破坏性操作）；删除文件请改用 rm 工具",
     );
   });
 });

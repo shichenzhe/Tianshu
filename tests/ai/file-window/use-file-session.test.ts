@@ -3,8 +3,8 @@
  * 惰建会话（spec §6.2/§6.3，T26 重构）：prepareFirstSend（ChatPane
  * sessionResolver 数据源）——首条 session:create（title=文件名）+ 首条
  * 注入前缀计算（真实 i18n 插值 {{path}}）/ library 引用式前缀（挂绑定
- * 空间：storagePath+read_file 指示不读全文，T30 spec §17；无绑定降级
- * 全文 100k 截断且不带 read_file 死指令）/ 图片 tab absPath→images
+ * 空间：storagePath+read 指示不读全文，T30 spec §17；无绑定降级
+ * 全文 100k 截断且不带 read 死指令）/ 图片 tab absPath→images
  * 附件；本 hook 不发 chat:send（发送动作移交 ChatPane 直发）。既有会话
  * （seed/二次发送）无前缀；library 授权注册（grantFilePath 幂等）先于
  * 返回。reinject 仍直发（dispatchChatSend），贴最新路径提示重读（无绑定
@@ -199,7 +199,7 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
     updatedAt: "2026-10-14T00:00:00.000Z",
   };
 
-  it("无绑定空间降级：全文前缀（无 read_file 死指令）+ grant 注册；次条不重复注入（grant 幂等）", async () => {
+  it("无绑定空间降级：全文前缀（无 read 死指令）+ grant 注册；次条不重复注入（grant 幂等）", async () => {
     invokeMock.mockImplementation((ch: string) => {
       if (ch === "library:tree") return [LIB_ITEM];
       if (ch === "workspace:list")
@@ -235,12 +235,12 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
       absPath: "/root/library/3.md",
     });
     // 无绑定空间降级（T30 spec §17 项 2）：全文前缀（injectPrefixLibrary
-    // 插值 name/path/content——绝对路径入前缀），不带 read_file 指示——
+    // 插值 name/path/content——绝对路径入前缀），不带 read 指示——
     // 挂未绑定空间文件四件不注入，指示是死指令
     expect(resolved.contentPrefix).toContain("note.md");
     expect(resolved.contentPrefix).toContain("/root/library/3.md");
     expect(resolved.contentPrefix).toContain("# 全文内容");
-    expect(resolved.contentPrefix).not.toContain("read_file");
+    expect(resolved.contentPrefix).not.toContain("read");
     expect(resolved.contentPrefix).not.toContain("总结");
     // 本 hook 不发 chat:send
     expect(invokeMock.mock.calls.some((c) => c[0] === "chat:send")).toBe(false);
@@ -357,7 +357,7 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
     const sendCalls = invokeMock.mock.calls.filter((c) => c[0] === "chat:send");
     expect(sendCalls.at(-1)?.[1].sessionId).toBe(91);
     expect(sendCalls.at(-1)?.[1].content).toContain("/root/library/3.md");
-    expect(sendCalls.at(-1)?.[1].content).toContain("read_file");
+    expect(sendCalls.at(-1)?.[1].content).toContain("read");
     // 引用式全链（首条 + 重注）：全程不读全文
     expect(
       invokeMock.mock.calls.some((c) => c[0] === "file:readExternalFile"),
@@ -367,7 +367,7 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
     ).toHaveLength(2);
   });
 
-  it("reinject 无绑定降级（T30）：文本条目重注全文（无 read_file 死指令）+ grant 先于发送", async () => {
+  it("reinject 无绑定降级（T30）：文本条目重注全文（无 read 死指令）+ grant 先于发送", async () => {
     invokeMock.mockImplementation((ch: string) => {
       if (ch === "library:tree") return [LIB_ITEM];
       if (ch === "workspace:list") return [{ id: 11, directoryPath: null }];
@@ -385,11 +385,11 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
     await act(() => result.current.reinject());
     const sendCalls = invokeMock.mock.calls.filter((c) => c[0] === "chat:send");
     expect(sendCalls.at(-1)?.[1].sessionId).toBe(94);
-    // 挂未绑定空间 read_file 不可用：降级重注最新全文（同首条降级模板）
+    // 挂未绑定空间 read 不可用：降级重注最新全文（同首条降级模板）
     expect(sendCalls.at(-1)?.[1].content).toContain("note.md");
     expect(sendCalls.at(-1)?.[1].content).toContain("/root/library/3.md");
     expect(sendCalls.at(-1)?.[1].content).toContain("# 最新全文");
-    expect(sendCalls.at(-1)?.[1].content).not.toContain("read_file");
+    expect(sendCalls.at(-1)?.[1].content).not.toContain("read");
     // 授权重注先于发送（会话已删善后链保持：grant 抛 SESSION_NOT_FOUND
     // 即在发送前善后，见「library 死 seed」用例）
     const channels = invokeMock.mock.calls.map((c) => c[0]);
@@ -398,7 +398,7 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
     );
   });
 
-  it("修复轮 2 + T30：绑定目录空间优先挂载 + 引用式前缀（storagePath+read_file 指示、不读全文）", async () => {
+  it("修复轮 2 + T30：绑定目录空间优先挂载 + 引用式前缀（storagePath+read 指示、不读全文）", async () => {
     invokeMock.mockImplementation((ch: string) => {
       if (ch === "library:tree") return [LIB_ITEM];
       if (ch === "workspace:list")
@@ -424,11 +424,11 @@ describe("library 会话（引用式注入 + 无绑定降级全文，T30 spec §
       (c) => c[0] === "session:create",
     );
     expect(createCall?.[1]).toMatchObject({ workspaceId: 12 });
-    // 引用式（T30 spec §17 项 1）：条目名 + 绝对 storagePath + read_file
+    // 引用式（T30 spec §17 项 1）：条目名 + 绝对 storagePath + read
     // 指示；不含正文、不读全文（file:readExternalFile 未被调）
     expect(resolved.contentPrefix).toContain("note.md");
     expect(resolved.contentPrefix).toContain("/root/library/3.md");
-    expect(resolved.contentPrefix).toContain("read_file");
+    expect(resolved.contentPrefix).toContain("read");
     expect(resolved.contentPrefix).not.toContain("# 全文内容");
     expect(
       invokeMock.mock.calls.some((c) => c[0] === "file:readExternalFile"),
@@ -594,7 +594,7 @@ describe("seed 会话已删（T18 文件→会话映射清理）", () => {
 });
 
 describe("T30 i18n 双侧三键对称（引用式首条/无绑定降级全文/重注提示）", () => {
-  /** 三键：引用式首条前缀（新键）/ 降级全文前缀（沿用键，去 read_file
+  /** 三键：引用式首条前缀（新键）/ 降级全文前缀（沿用键，去 read
    *  死指令）/ 重注路径提示（绑定空间引用式共用） */
   const REF_KEYS = [
     "injectPrefixLibraryRef",
@@ -612,7 +612,7 @@ describe("T30 i18n 双侧三键对称（引用式首条/无绑定降级全文/�
   const varsOf = (tpl: string): string[] =>
     [...tpl.matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]).sort();
 
-  it("zh-CN 与 en-US：三键齐备且插值变量集一致；降级键无 read_file、引用式键带", () => {
+  it("zh-CN 与 en-US：三键齐备且插值变量集一致；降级键无 read、引用式键带", () => {
     for (const key of REF_KEYS) {
       expect(chatTexts("zh-CN")[key]).toBeTruthy();
       expect(chatTexts("en-US")[key]).toBeTruthy();
@@ -620,11 +620,11 @@ describe("T30 i18n 双侧三键对称（引用式首条/无绑定降级全文/�
         varsOf(chatTexts("en-US")[key]),
       );
     }
-    // 引用式键带 read_file 指示（挂绑定空间才渲染该前缀）
-    expect(chatTexts("zh-CN").injectPrefixLibraryRef).toContain("read_file");
-    expect(chatTexts("en-US").injectPrefixLibraryRef).toContain("read_file");
-    // 降级全文键不带 read_file——挂未绑定空间文件四件不注入，指示是死指令
-    expect(chatTexts("zh-CN").injectPrefixLibrary).not.toContain("read_file");
-    expect(chatTexts("en-US").injectPrefixLibrary).not.toContain("read_file");
+    // 引用式键带 read 指示（挂绑定空间才渲染该前缀）
+    expect(chatTexts("zh-CN").injectPrefixLibraryRef).toContain("read");
+    expect(chatTexts("en-US").injectPrefixLibraryRef).toContain("read");
+    // 降级全文键不带 read——挂未绑定空间文件四件不注入，指示是死指令
+    expect(chatTexts("zh-CN").injectPrefixLibrary).not.toContain("read");
+    expect(chatTexts("en-US").injectPrefixLibrary).not.toContain("read");
   });
 });

@@ -64,7 +64,7 @@ describe("resolveSafePath 逃逸矩阵", () => {
   });
   it("symlink 目录写入逃逸拒绝", async () => {
     symlinkSync(os.tmpdir(), path.join(ws, "escdir"));
-    const out = await tool("write_file").execute(ctx(), {
+    const out = await tool("write").execute(ctx(), {
       path: "escdir/evil.txt",
       content: "x",
     });
@@ -73,31 +73,31 @@ describe("resolveSafePath 逃逸矩阵", () => {
   });
 });
 
-describe("read_file", () => {
+describe("read", () => {
   it("带行号输出", async () => {
-    const out = await tool("read_file").execute(ctx(), { path: "a.txt" });
+    const out = await tool("read").execute(ctx(), { path: "a.txt" });
     expect(out).toContain("   1| line1");
     expect(out).toContain(" 100| line100");
   });
   it("不存在 → 错误字符串", async () => {
-    const out = await tool("read_file").execute(ctx(), { path: "nope.txt" });
+    const out = await tool("read").execute(ctx(), { path: "nope.txt" });
     expect(out).toMatch(/^错误: /);
   });
   it("二进制（NUL）拒绝", async () => {
     writeFileSync(path.join(ws, "bin.dat"), "a\0b");
-    const out = await tool("read_file").execute(ctx(), { path: "bin.dat" });
+    const out = await tool("read").execute(ctx(), { path: "bin.dat" });
     expect(out).toMatch(/^错误: /);
   });
   it("超 512KB 拒绝", async () => {
     writeFileSync(path.join(ws, "big.txt"), "x".repeat(512 * 1024 + 1));
-    const out = await tool("read_file").execute(ctx(), { path: "big.txt" });
+    const out = await tool("read").execute(ctx(), { path: "big.txt" });
     expect(out).toMatch(/^错误: /);
   });
 });
 
-describe("write_file", () => {
+describe("write", () => {
   it("写入并自动建父目录", async () => {
-    const out = await tool("write_file").execute(ctx(), {
+    const out = await tool("write").execute(ctx(), {
       path: "d1/d2/n.txt",
       content: "hi",
     });
@@ -105,11 +105,11 @@ describe("write_file", () => {
     expect(readFileSync(path.join(ws, "d1", "d2", "n.txt"), "utf8")).toBe("hi");
   });
   it("覆盖已有文件", async () => {
-    await tool("write_file").execute(ctx(), { path: "a.txt", content: "new" });
+    await tool("write").execute(ctx(), { path: "a.txt", content: "new" });
     expect(readFileSync(path.join(ws, "a.txt"), "utf8")).toBe("new");
   });
   it("超 1MB 拒绝", async () => {
-    const out = await tool("write_file").execute(ctx(), {
+    const out = await tool("write").execute(ctx(), {
       path: "big.txt",
       content: "x".repeat(1024 * 1024 + 1),
     });
@@ -117,7 +117,7 @@ describe("write_file", () => {
   });
   it("写盘成功后回调 onFileWritten（文件窗口广播钩子）；写失败不回调", async () => {
     const onFileWritten = vi.fn();
-    const out = await tool("write_file").execute(
+    const out = await tool("write").execute(
       { ...ctx(), onFileWritten },
       {
         path: "hook/n.txt",
@@ -128,7 +128,7 @@ describe("write_file", () => {
     expect(onFileWritten).toHaveBeenCalledWith(path.join(ws, "hook", "n.txt"));
     // 越界拒绝路径：未写盘不回调
     onFileWritten.mockClear();
-    await tool("write_file").execute(
+    await tool("write").execute(
       { ...ctx(), onFileWritten },
       {
         path: "../escape.txt",
@@ -139,10 +139,10 @@ describe("write_file", () => {
   });
 });
 
-describe("list_dir", () => {
+describe("ls", () => {
   it("一层列表，目录在前，忽略隐藏与点开头", async () => {
     writeFileSync(path.join(ws, ".hidden"), "x");
-    const out = await tool("list_dir").execute(ctx(), { path: "" });
+    const out = await tool("ls").execute(ctx(), { path: "" });
     expect(out).toContain("sub/");
     expect(out).toContain("a.txt");
     expect(out.indexOf("sub/")).toBeLessThan(out.indexOf("a.txt"));
@@ -150,16 +150,16 @@ describe("list_dir", () => {
   });
 });
 
-describe("search_files", () => {
+describe("grep", () => {
   it("content 模式带路径行号", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "const",
       output_mode: "content",
     });
     expect(out).toContain("sub/b.ts:1:");
   });
   it("files_with_matches 只列文件", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "const",
       output_mode: "files_with_matches",
     });
@@ -167,7 +167,7 @@ describe("search_files", () => {
   });
   it("glob 过滤", async () => {
     writeFileSync(path.join(ws, "c.md"), "const z = 3;");
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "const",
       glob: "*.ts",
       output_mode: "files_with_matches",
@@ -176,21 +176,21 @@ describe("search_files", () => {
     expect(out).not.toContain("c.md");
   });
   it("排除 node_modules", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "line",
       output_mode: "files_with_matches",
     });
     expect(out).not.toContain("node_modules");
   });
   it("非法正则 → 错误字符串", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "([",
       output_mode: "files_with_matches",
     });
     expect(out).toMatch(/^错误: /);
   });
   it("嵌套量词（(a+)* 形态）拒绝", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "(a+)*b",
       output_mode: "files_with_matches",
     });
@@ -199,7 +199,7 @@ describe("search_files", () => {
   it("有界量词组不受误伤（(\\w{2})+、(\\d+)、(a|b)*）放行", async () => {
     writeFileSync(path.join(ws, "quant.txt"), "ab\n");
     for (const pattern of ["(\\w{2})+", "(\\d+)", "(a|b)*"]) {
-      const out = await tool("search_files").execute(ctx(), {
+      const out = await tool("grep").execute(ctx(), {
         pattern,
         output_mode: "content",
       });
@@ -207,7 +207,7 @@ describe("search_files", () => {
     }
   });
   it("超长正则拒绝（>200 字符）", async () => {
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "a".repeat(201),
       output_mode: "files_with_matches",
     });
@@ -215,7 +215,7 @@ describe("search_files", () => {
   });
   it("超长行截断后仍可匹配前缀", async () => {
     writeFileSync(path.join(ws, "long.txt"), "x".repeat(3000) + "target");
-    const out = await tool("search_files").execute(ctx(), {
+    const out = await tool("grep").execute(ctx(), {
       pattern: "^x+$",
       output_mode: "content",
     });
@@ -234,7 +234,7 @@ describe("fullAccess 完全访问边界", () => {
       expect(resolveSafePath(ws, path.join(outside, "secret.txt"), true)).toBe(
         path.join(outside, "secret.txt"),
       );
-      const out = await tool("read_file").execute(fullCtx(), {
+      const out = await tool("read").execute(fullCtx(), {
         path: path.join(outside, "secret.txt"),
       });
       expect(out).toContain("topsecret");
@@ -246,7 +246,7 @@ describe("fullAccess 完全访问边界", () => {
   it("full 态写入工作空间外路径成功", async () => {
     const outside = mkdtempSync(path.join(os.tmpdir(), "outside-"));
     try {
-      const out = await tool("write_file").execute(fullCtx(), {
+      const out = await tool("write").execute(fullCtx(), {
         path: path.join(outside, "deep", "new.txt"),
         content: "free",
       });
@@ -264,11 +264,11 @@ describe("fullAccess 完全访问边界", () => {
     try {
       const outsideFile = path.join(outside, "secret.txt");
       writeFileSync(outsideFile, "topsecret");
-      const read = await tool("read_file").execute(ctx(), {
+      const read = await tool("read").execute(ctx(), {
         path: outsideFile,
       });
       expect(read).toBe("错误: 路径超出工作空间范围");
-      const write = await tool("write_file").execute(ctx(), {
+      const write = await tool("write").execute(ctx(), {
         path: outsideFile,
         content: "x",
       });
@@ -279,7 +279,7 @@ describe("fullAccess 完全访问边界", () => {
   });
 
   it("full 态相对路径仍基于工作空间", async () => {
-    const out = await tool("read_file").execute(fullCtx(), { path: "a.txt" });
+    const out = await tool("read").execute(fullCtx(), { path: "a.txt" });
     expect(out).toContain("   1| line1");
     expect(out).toContain("  100| line100");
   });

@@ -20,7 +20,7 @@ const agent = {
 } as never;
 
 const zodTool: ToolDefinition = {
-  name: "read_file",
+  name: "read",
   description: "d",
   kind: "read",
   parameters: z.object({ path: z.string() }),
@@ -58,7 +58,7 @@ describe("toLangChainTools", () => {
       onToolCall: (c) => calls.push(c),
     });
     await t.invoke({ path: "b" });
-    expect(calls).toEqual([{ name: "read_file", ok: false }]);
+    expect(calls).toEqual([{ name: "read", ok: false }]);
   });
   it("同毫秒并发同名调用 toolCallId 唯一（防审批键/轨迹串线）", async () => {
     const frozen = vi.spyOn(Date, "now").mockReturnValue(1791029000000);

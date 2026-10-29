@@ -1,5 +1,5 @@
 /**
- * 全局产物聚合单测（资料库「本地产物」视图）：write_file(state=done)
+ * 全局产物聚合单测（资料库「本地产物」视图）：write(state=done)
  * 提取、状态过滤、同文件跨会话去重取最新、相对/绝对路径 resolve、
  * 无目录工作空间跳过、排序（写入时间降序）、畸形 blocks 容错。
  */
@@ -36,7 +36,7 @@ function writeCall(path: string, state = "done"): string {
     {
       type: "tool_call",
       toolCallId: "t1",
-      toolName: "write_file",
+      toolName: "write",
       args: { path },
       state,
     },
@@ -44,7 +44,7 @@ function writeCall(path: string, state = "done"): string {
 }
 
 describe("aggregateArtifacts", () => {
-  it("提取 write_file(state=done) 的产物，带工作空间/会话来源", () => {
+  it("提取 write(state=done) 的产物，带工作空间/会话来源", () => {
     const out = aggregateArtifacts(
       [row({ id: 1, blocks: writeCall("report.md") })],
       WS,
@@ -62,33 +62,33 @@ describe("aggregateArtifacts", () => {
     });
   });
 
-  it("非 write_file 与未完成状态（running/denied/error）不收录", () => {
+  it("非 write 与未完成状态（running/denied/error）不收录", () => {
     const blocks = JSON.stringify([
       {
         type: "tool_call",
         toolCallId: "a",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "x.md" },
         state: "done",
       },
       {
         type: "tool_call",
         toolCallId: "b",
-        toolName: "write_file",
+        toolName: "write",
         args: { path: "running.md" },
         state: "running",
       },
       {
         type: "tool_call",
         toolCallId: "c",
-        toolName: "write_file",
+        toolName: "write",
         args: { path: "denied.md" },
         state: "denied",
       },
       {
         type: "tool_call",
         toolCallId: "d",
-        toolName: "write_file",
+        toolName: "write",
         args: { path: "error.md" },
         state: "error",
       },
@@ -102,14 +102,14 @@ describe("aggregateArtifacts", () => {
       {
         type: "tool_call",
         toolCallId: "a",
-        toolName: "write_file",
+        toolName: "write",
         args: {},
         state: "done",
       },
       {
         type: "tool_call",
         toolCallId: "b",
-        toolName: "write_file",
+        toolName: "write",
         args: { path: "  " },
         state: "done",
       },

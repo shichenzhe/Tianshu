@@ -338,11 +338,11 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
   it("toolPermission 工作空间+工具唯一索引生效", () => {
     const db = createDb();
     db.exec(
-      "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write_file')",
+      "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write')",
     );
     expect(() =>
       db.exec(
-        "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write_file')",
+        "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write')",
       ),
     ).toThrow();
   });

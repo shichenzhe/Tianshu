@@ -12,7 +12,7 @@ import {
 } from "@/domains/ai/chat/lib/file-ref-lines";
 
 const REF = (path: string) =>
-  `[引用文件 ${path}]（请用 read_file 工具读取该文件后处理）`;
+  `[引用文件 ${path}]（请用 read 工具读取该文件后处理）`;
 const INJECTED = (path: string, content: string) =>
   `[引用文件 ${path}]\n${content}`;
 

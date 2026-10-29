@@ -370,7 +370,7 @@ describe("runChatStream", () => {
   });
 
   it("旧轮超限工具输出回喂瘦身：模型收到截断标注，入参 history 原文不动", async () => {
-    // spec §18 项 1：旧轮 read_file 输出 8000 字符超 6000 阈值 → 头 3000 +
+    // spec §18 项 1：旧轮 read 输出 8000 字符超 6000 阈值 → 头 3000 +
     // 截断标注 + 尾 1000；最近 2 个工具轮（含超限的末轮）整条豁免
     const longOutput = "H".repeat(3000) + "M".repeat(4000) + "T".repeat(1000);
     const recentLongOutput = "R".repeat(8000);
@@ -382,7 +382,7 @@ describe("runChatStream", () => {
           {
             type: "tool_call",
             toolCallId: "old-1",
-            toolName: "read_file",
+            toolName: "read",
             args: {},
             state: "done",
             output: longOutput,
@@ -400,7 +400,7 @@ describe("runChatStream", () => {
           {
             type: "tool_call",
             toolCallId: "mid-1",
-            toolName: "read_file",
+            toolName: "read",
             args: {},
             state: "done",
             output: "ok-1",
@@ -418,7 +418,7 @@ describe("runChatStream", () => {
           {
             type: "tool_call",
             toolCallId: "new-1",
-            toolName: "read_file",
+            toolName: "read",
             args: {},
             state: "done",
             output: recentLongOutput,
@@ -1201,7 +1201,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     // 测试环境不实例化）；仅挂载 alpha 但 beta 也注入（预设外可按需用）
     expect(names).toEqual([
       "read_skill",
-      "run_command",
+      "bash",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1250,7 +1250,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     const names = await toolNames(service);
     expect(names).toEqual([
       "read_skill",
-      "run_command",
+      "bash",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1280,7 +1280,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     expect(ctx.skills.map((skill) => skill.name)).toEqual(["技能1", "技能2"]);
     expect(await toolNames(service)).toEqual([
       "read_skill",
-      "run_command",
+      "bash",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1321,7 +1321,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
         projectId: null,
       }),
       getEffectiveModelId: vi.fn().mockResolvedValue(1),
-      // 绑定目录：文件四件 + run_command 实际进入注入集（过滤断言才有意义）
+      // 绑定目录：文件四件 + bash 实际进入注入集（过滤断言才有意义）
       getWorkspace: vi
         .fn()
         .mockResolvedValue({ id: 1, name: "空间", directoryPath: "/tmp/ws" }),
@@ -1335,11 +1335,11 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
         undefined,
         runtimeFilter,
       );
-    expect(await toolNames(mkSvc(() => ["run_command"]))).not.toContain(
-      "run_command",
+    expect(await toolNames(mkSvc(() => ["bash"]))).not.toContain(
+      "bash",
     );
     // 缺席（测试不注入）：不滤（回归锚点）
-    expect(await toolNames(mkSvc())).toContain("run_command");
+    expect(await toolNames(mkSvc())).toContain("bash");
   });
 });
 
@@ -1510,7 +1510,7 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     const system = ctx.systemWithSummary ?? "";
     // 无助手 prompt/无技能/个性化默认 → 目录段即 system 全文（非空拼接种模式）
     expect(system.startsWith("【专家目录】")).toBe(true);
-    expect(system).toContain("recommend_experts");
+    expect(system).toContain("recommend_expert");
     expect(system).toContain("code-review-expert");
   });
 
@@ -1555,19 +1555,19 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(planCtx.systemWithSummary ?? "").not.toContain("【专家目录】");
   });
 
-  it("禁用 recommend_experts：不注入目录段（system 不指示调用被禁工具）", async () => {
+  it("禁用 recommend_expert：不注入目录段（system 不指示调用被禁工具）", async () => {
     const { service } = makeSvc(
       { assistantId: null },
-      { runtimeFilter: () => ["recommend_experts"] },
+      { runtimeFilter: () => ["recommend_expert"] },
     );
     const ctx = await assemble(service);
     // 未绑专家 agent 会话本应注入目录段；工具被安全中心禁用后整段不注入
     //（注入层 filterDisabledTools 同一 runtimeFilter 来源），无 base 时
     // system 回落 undefined
     expect(ctx.systemWithSummary).toBeUndefined();
-    // 其他工具禁用不影响目录段（门控只对 recommend_experts 生效）
+    // 其他工具禁用不影响目录段（门控只对 recommend_expert 生效）
     const other = await assemble(
-      makeSvc({ assistantId: null }, { runtimeFilter: () => ["run_command"] })
+      makeSvc({ assistantId: null }, { runtimeFilter: () => ["bash"] })
         .service,
     );
     expect(other.systemWithSummary ?? "").toContain("【专家目录】");
@@ -1637,7 +1637,7 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(system).toContain("macro-analyst｜顾大局（宏观分析师）");
     expect(system).toContain("risk-officer｜严守仓（风控官）");
     expect(system).toContain("严禁");
-    expect(system).toContain("dispatch_member");
+    expect(system).toContain("dispatch");
     // 非 team：expertType null / "agent"（即使带 members 列）均为裸 prompt
     //（以 expertType==="team" 判别——T1 信息项：toRecord 恒数组不可依赖）
     assembleReads.assistant.findUnique.mockResolvedValue({
@@ -1655,19 +1655,19 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(agent.systemWithSummary).toBe("你是交易团主理人。");
   });
 
-  it("禁用 dispatch_member：铁律段与工具说明不组装（对照禁用 run_command 时铁律段仍在）", async () => {
+  it("禁用 dispatch：铁律段与工具说明不组装（对照禁用 bash 时铁律段仍在）", async () => {
     assembleReads.assistant.findUnique.mockResolvedValue(teamAssistantRow());
     const disabled = await assemble(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["dispatch_member"] })
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["dispatch"] })
         .service,
     );
     const system = disabled.systemWithSummary ?? "";
     expect(system).not.toContain("【协作铁律】");
-    expect(system).not.toContain("dispatch_member");
+    expect(system).not.toContain("dispatch");
     expect(system).toContain("macro-analyst"); // 成员清单仍在（展示语义）
-    // 其他工具禁用不影响铁律段（门控只对 dispatch_member 生效）
+    // 其他工具禁用不影响铁律段（门控只对 dispatch 生效）
     const other = await assemble(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["run_command"] })
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] })
         .service,
     );
     expect(other.systemWithSummary ?? "").toContain("【协作铁律】");
@@ -1711,44 +1711,44 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     const system = ctx.systemWithSummary ?? "";
     expect(system).toContain("macro-analyst｜顾大局（宏观分析师）");
     expect(system).not.toContain("严禁"); // 铁律缺席
-    expect(system).not.toContain("dispatch_member");
+    expect(system).not.toContain("dispatch");
     // ask 零工具本就空集（调用方在 collectToolDefinitions 前短路）
     expect(
       await toolNames(makeSvc({ assistantId: 1, mode: "ask" }).service),
     ).toEqual([]);
   });
 
-  it("专家团会话（T3）：工具集注入 dispatch_member；非 team 会话不含", async () => {
+  it("专家团会话（T3）：工具集注入 dispatch；非 team 会话不含", async () => {
     assembleReads.assistant.findUnique.mockResolvedValue(teamAssistantRow());
     const team = await toolNames(makeSvc({ assistantId: 1 }).service);
-    expect(team).toContain("dispatch_member");
+    expect(team).toContain("dispatch");
     // 非 team：expertType "agent"（带 members 列）与未绑专家均不含
     assembleReads.assistant.findUnique.mockResolvedValue({
       ...teamAssistantRow(),
       expertType: "agent",
     });
     expect(await toolNames(makeSvc({ assistantId: 1 }).service)).not.toContain(
-      "dispatch_member",
+      "dispatch",
     );
     assembleReads.assistant.findUnique.mockResolvedValue(null);
     expect(
       await toolNames(makeSvc({ assistantId: null }).service),
-    ).not.toContain("dispatch_member");
+    ).not.toContain("dispatch");
   });
 
-  it("禁用 dispatch_member：工具集缺席（SP6 禁用=对模型不存在，与铁律段同口径）", async () => {
+  it("禁用 dispatch：工具集缺席（SP6 禁用=对模型不存在，与铁律段同口径）", async () => {
     assembleReads.assistant.findUnique.mockResolvedValue(teamAssistantRow());
     const disabled = await toolNames(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["dispatch_member"] })
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["dispatch"] })
         .service,
     );
-    expect(disabled).not.toContain("dispatch_member");
-    // 其他工具禁用不影响注入（门控只对 dispatch_member 生效）
+    expect(disabled).not.toContain("dispatch");
+    // 其他工具禁用不影响注入（门控只对 dispatch 生效）
     const other = await toolNames(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["run_command"] })
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] })
         .service,
     );
-    expect(other).toContain("dispatch_member");
+    expect(other).toContain("dispatch");
   });
 });
 
@@ -1894,7 +1894,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
       ...WORKFLOW_SIX.map(gatedTool),
       gatedTool("create_expert"),
       gatedTool("update_expert"),
-      gatedTool("create_automation_task"),
+      gatedTool("create_schedule"),
     ]);
   });
   afterAll(() => {
@@ -1902,7 +1902,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
       ...WORKFLOW_SIX,
       "create_expert",
       "update_expert",
-      "create_automation_task",
+      "create_schedule",
     ]) {
       unregisterTools(name);
     }
@@ -1935,18 +1935,18 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     // create_skill 由 SkillRepository 构造注册，测试环境缺席属正常）
     expect(names).toEqual(
       expect.arrayContaining([
-        "read_file",
-        "write_file",
-        "list_dir",
-        "search_files",
-        "delete_file",
+        "read",
+        "write",
+        "ls",
+        "grep",
+        "rm",
         "browser_snapshot",
         "browser_navigate",
         "browser_click",
         "browser_type",
-        "open_browser",
-        "web_fetch",
-        "run_command",
+        "browse",
+        "fetch",
+        "bash",
         "read_skill",
       ]),
     );
@@ -2213,14 +2213,14 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     expect(names).not.toContain("run_workflow");
   });
 
-  it("未绑定目录：create_automation_task 经白名单挂载（独立于工作流门控——落库走默认空间兜底）", async () => {
+  it("未绑定目录：create_schedule 经白名单挂载（独立于工作流门控——落库走默认空间兜底）", async () => {
     const names = await toolNames(
       makeSvc(
         { scenario: "daily", workspaceId: null },
         { skillRepo: skillRepoWith(null) },
       ).service,
     );
-    expect(names).toContain("create_automation_task");
+    expect(names).toContain("create_schedule");
   });
 });
 
@@ -2336,13 +2336,13 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       {
         id: 7,
         workspaceId: 5,
-        toolName: "run_command",
+        toolName: "bash",
         createdAt: new Date("2026-09-01T08:00:00Z"),
       },
       {
         id: 8,
         workspaceId: 6,
-        toolName: "write_file",
+        toolName: "write",
         createdAt: new Date("2026-09-02T08:00:00Z"),
       },
     ];
@@ -2369,13 +2369,13 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       {
         id: 7,
         workspaceName: "我的空间",
-        toolName: "run_command",
+        toolName: "bash",
         createdAt: "2026-09-01T08:00:00.000Z",
       },
       {
         id: 8,
         workspaceName: "#6",
-        toolName: "write_file",
+        toolName: "write",
         createdAt: "2026-09-02T08:00:00.000Z",
       },
     ]);
@@ -2386,7 +2386,7 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       {
         id: 7,
         workspaceId: 5,
-        toolName: "run_command",
+        toolName: "bash",
         createdAt: new Date(),
       },
     ];
@@ -2403,7 +2403,7 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       {
         eventType: "permission.remembered-revoked",
         decision: "info",
-        detail: { tool: "run_command", workspace: "我的空间" },
+        detail: { tool: "bash", workspace: "我的空间" },
       },
     ]);
     // 不存在 id：no-op 成功，不重复删也不审计
@@ -2419,13 +2419,13 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       {
         id: 7,
         workspaceId: 5,
-        toolName: "run_command",
+        toolName: "bash",
         createdAt: new Date(),
       },
       {
         id: 8,
         workspaceId: 6,
-        toolName: "write_file",
+        toolName: "write",
         createdAt: new Date(),
       },
     ];

@@ -3,7 +3,7 @@
  * FILE_EXISTS/备份回调 fail-open。FileWriteIpc（handler）：归属校验、
  * 路径围栏（终审 I1：绝对路径/../ 越界与 symlink 外指拒绝）、备份注入、
  * 写后全窗广播 workspace:fileChanged；broadcastFileChangedFor：AI
- * write_file 写盘路径的广播闭包（absPath 反解 relPath，分隔符统一 "/"）。
+ * write 写盘路径的广播闭包（absPath 反解 relPath，分隔符统一 "/"）。
  * 事件消费侧（文件窗 tab 重载/脏冲突）由 T12 联动测试覆盖。
  * notifyLibraryFileWritten（T14 修复轮 Important 1）：AI 直改库路径 →
  * bump 条目 updatedAt/size + fileWindow:libraryChanged 广播；非库路径

@@ -137,7 +137,7 @@ async function post(url: string, body: unknown): Promise<Response> {
 }
 
 beforeAll(() => {
-  setWebhookDisabledTools(() => ["run_command"]);
+  setWebhookDisabledTools(() => ["bash"]);
 });
 
 afterEach(async () => {
@@ -159,7 +159,7 @@ describe("webhook 触发安全装配", () => {
     expect(response.status).toBe(200);
     const call = lastRunGraphCall();
     expect(call.triggerType).toBe("webhook");
-    expect((call.disabledTools as () => string[])()).toEqual(["run_command"]);
+    expect((call.disabledTools as () => string[])()).toEqual(["bash"]);
     // 外部触发（token 泄漏即可达）对齐 default 任务：无代码/写节点全权
     expect(call.codeAuthorized).toBe(false);
     await unregisterWebhook(5, 1);

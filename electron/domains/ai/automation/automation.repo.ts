@@ -207,7 +207,7 @@ export default class AutomationRepository {
    * 缺省不滤（测试）；runNow 手动触发与调度执行走同一过滤 */
   constructor(private disabledTools: () => string[] = () => []) {
     this.registerHandlers();
-    // create_automation_task 静态注册进聚合 registry（SkillRepository 构造
+    // create_schedule 静态注册进聚合 registry（SkillRepository 构造
     // 注册 create_skill 先例）；落库复用本类 createTask（归属校验 +
     // userId 隔离同一链路）。先注销再注册保证幂等（测试同文件多次 new）
     unregisterTools(AUTOMATION_TOOL_NAME);
@@ -380,7 +380,7 @@ export default class AutomationRepository {
     return Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
-  /** 创建任务（public：IPC automation:create 与 create_automation_task 工具共用） */
+  /** 创建任务（public：IPC automation:create 与 create_schedule 工具共用） */
   async createTask(p: TaskCreateParams, userId: number): Promise<TaskRecord> {
     await this.assertTaskRefsOwned(
       p.workspaceId,

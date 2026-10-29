@@ -160,7 +160,7 @@ describe("searchMessageBlockHits 消息级位置级命中", () => {
 
   it("文件引用前缀段剔除：前缀内命中不产出、正文命中偏移按原始块坐标", () => {
     const refPrefix =
-      "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）";
+      "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）";
     const hits = searchMessageBlockHits(
       [{ blockIdx: 0, text: `${refPrefix}\n\n正文 命中词 结尾` }],
       "命中词",

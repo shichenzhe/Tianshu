@@ -1,5 +1,5 @@
 /**
- * create_automation_task 内置工具：AI 在对话中创建定时自动化任务，落库后
+ * create_schedule 内置工具：AI 在对话中创建定时自动化任务，落库后
  * 与「自动化」页手动创建的任务同权（同一 createTask 链路，含归属校验与
  * userId 隔离）。kind:"write" → 走统一审批（runToolCall 挂起，批准后才
  * execute，与 create_expert 同口径——创建的是未来无人值守自动执行的实体）。
@@ -20,7 +20,7 @@ import {
 import type { TaskCreateParams } from "../../../../src-react/domains/ai/automation/api/automation.api";
 import type { ToolContext, ToolDefinition } from "./file-tools";
 
-export const AUTOMATION_TOOL_NAME = "create_automation_task";
+export const AUTOMATION_TOOL_NAME = "create_schedule";
 
 const argsSchema = z
   .object({

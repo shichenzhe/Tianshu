@@ -431,7 +431,7 @@ function wireDeps(
       {
         id: 3,
         workspaceName: "默认工作空间",
-        toolName: "write_file",
+        toolName: "write",
         createdAt: "2026-10-26T00:00:00.000Z",
       },
     ]),
@@ -1880,7 +1880,7 @@ describe("permission 五端点（A10 审批记忆批）", () => {
         {
           id: 3,
           workspaceName: "默认工作空间",
-          toolName: "write_file",
+          toolName: "write",
           createdAt: "2026-10-26T00:00:00.000Z",
         },
       ],

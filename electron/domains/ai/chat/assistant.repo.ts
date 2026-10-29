@@ -177,7 +177,7 @@ export class AssistantRepository {
   constructor(deps?: { listInstalledNames?: () => Promise<string[]> }) {
     this.listInstalledNames = deps?.listInstalledNames;
     this.registerIpcHandlers();
-    // create/update_expert + recommend_experts 工具注册进聚合 registry
+    // create/update_expert + recommend_expert 工具注册进聚合 registry
     // （skill.repo 同款先例）；注册所经模块惰性加载（见文件头注释）
     void this.registerExpertTools();
   }
@@ -203,7 +203,7 @@ export class AssistantRepository {
           prisma: prisma.assistant,
           listInstalledSkillNames,
         }),
-        // recommend_experts：未绑专家会话的专家推荐卡（渲染层消费 args、
+        // recommend_expert：未绑专家会话的专家推荐卡（渲染层消费 args、
         // 无落库副作用 → read 免审批，无 deps 纯函数，show_widget 先例）
         makeRecommendExpertTool(),
       ]);

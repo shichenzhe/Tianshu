@@ -1,6 +1,6 @@
 /**
  * 全局产物聚合（资料库「本地产物」视图）：跨会话扫描 message.blocks 中
- * write_file tool_call(state=done) 的产物记录，同文件（resolve 后绝对
+ * write tool_call(state=done) 的产物记录，同文件（resolve 后绝对
  * 路径相同）跨会话去重取最新写入。纯 Node 实现（禁止 import electron），
  * vitest 可直接测试——同 workspace-files.ts 约定。
  */
@@ -28,7 +28,7 @@ export interface ArtifactWorkspaceRow {
 export interface AggregatedArtifact {
   /** resolve 后绝对路径（去重 key） */
   path: string;
-  /** write_file 原始 path（前端 workspace:readFile/revealFile 消费） */
+  /** write 原始 path（前端 workspace:readFile/revealFile 消费） */
   relPath: string;
   name: string;
   workspaceId: number;
@@ -52,7 +52,7 @@ function toMs(value: Date | string): number {
 }
 
 /**
- * 单条消息 → 产物路径列表（write_file + state=done + 非空字符串 path）；
+ * 单条消息 → 产物路径列表（write + state=done + 非空字符串 path）；
  * system 消息、畸形 JSON/块一律跳过不抛。参数取 role/blocks 子集
  * （ArtifactMessageRow 为超集，落库登记点可直接传 MessageRow）
  */
@@ -70,7 +70,7 @@ export function extractPaths(row: { role: string; blocks: string }): string[] {
     const p = block?.args?.path;
     if (
       block?.type === "tool_call" &&
-      block.toolName === "write_file" &&
+      block.toolName === "write" &&
       block.state === "done" &&
       typeof p === "string" &&
       p.trim()

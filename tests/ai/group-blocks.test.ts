@@ -12,7 +12,7 @@ describe("groupBlocks 过程/结论分组", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "/tmp/a.md" },
         state: "done",
       },
@@ -21,7 +21,7 @@ describe("groupBlocks 过程/结论分组", () => {
       {
         type: "tool_call",
         toolCallId: "t2",
-        toolName: "run_command",
+        toolName: "bash",
         args: { command: "ls" },
         state: "error",
         output: "boom",
@@ -33,8 +33,8 @@ describe("groupBlocks 过程/结论分组", () => {
     const grouped = groupBlocks(blocks);
     expect(grouped.thinkingText).toBe("先想第一步\n\n再想第二步");
     expect(grouped.tools.map((tool) => tool.toolName)).toEqual([
-      "read_file",
-      "run_command",
+      "read",
+      "bash",
     ]);
     expect(grouped.tools[1]).toMatchObject({ state: "error", output: "boom" });
     expect(grouped.texts.map((b) => b.text)).toEqual(["最终答案", "补充说明"]);
@@ -69,20 +69,20 @@ describe("groupBlocks 过程/结论分组", () => {
   });
 });
 
-describe("recommend_experts 块分流（会话内专家推荐卡）", () => {
-  it("recommend_experts 工具块分流 recommends（不进思考面板工具组）", () => {
+describe("recommend_expert 块分流（会话内专家推荐卡）", () => {
+  it("recommend_expert 工具块分流 recommends（不进思考面板工具组）", () => {
     const grouped = groupBlocks([
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "recommend_experts",
+        toolName: "recommend_expert",
         args: { candidates: ["translator"], reason: "翻译任务" },
         state: "done",
       },
       {
         type: "tool_call",
         toolCallId: "t2",
-        toolName: "read_file",
+        toolName: "read",
         args: { path: "/x" },
         state: "done",
       },
@@ -93,7 +93,7 @@ describe("recommend_experts 块分流（会话内专家推荐卡）", () => {
       slugs: ["translator"],
       state: "done",
     });
-    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read"]);
   });
 });
 
@@ -145,12 +145,12 @@ describe("show_widget 块分流（聊天面板可视化组件）", () => {
       {
         type: "tool_call",
         toolCallId: "tc-2",
-        toolName: "read_file",
+        toolName: "read",
         args: {},
         state: "done",
       } as never,
     ]);
-    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read"]);
     expect(grouped.widgets).toHaveLength(1);
   });
 });

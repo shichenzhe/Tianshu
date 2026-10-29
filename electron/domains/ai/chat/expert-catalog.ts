@@ -55,7 +55,7 @@ export function mergeExpertSkills(
 
 /**
  * 专家目录推荐指令段（未绑专家的 agent 会话注入）：目录条目 +
- * recommend_experts 工具使用规则（文案给模型看，不进前端 i18n）。
+ * recommend_expert 工具使用规则（文案给模型看，不进前端 i18n）。
  */
 export function buildExpertCatalogPrompt(items: ExpertMarketItem[]): string {
   const lines = items.map(

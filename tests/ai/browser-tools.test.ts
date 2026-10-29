@@ -24,7 +24,7 @@ describe("browser_snapshot", () => {
   it("无绑定返回引导文案；有绑定返回快照结构", async () => {
     const tools = makeBrowserTools(() => null);
     const out = await tools[0].execute(ctx, {});
-    expect(out).toMatch(/open_browser/);
+    expect(out).toMatch(/browse/);
     const { exec, control } = fakeControl();
     const tools2 = makeBrowserTools(() => control);
     const out2 = await tools2[0].execute(ctx, {});

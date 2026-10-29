@@ -51,21 +51,21 @@ function isTeamMember(value: unknown): value is TeamMember {
 
 /**
  * 【协作铁律】段（二期 spec）：四条主理人行为红线。第 2 条承载受控并行
- * 指引（含 dispatch_member 字样）——withDispatch=false 时本段整体缺席，
+ * 指引（含 dispatch 字样）——withDispatch=false 时本段整体缺席，
  * 故不会与缺席的工具段矛盾，成员清单仍在（展示语义）
  */
 const TEAM_LEAD_RULES_HINT = [
   "【协作铁律】",
   "1. 严禁主理人代写成员产出：必须真实调度成员取得分析，不得虚构、替代或改写成员观点。",
-  "2. 分阶段推进，上一阶段成员产出原文完整传入下一阶段调度的 context；同一阶段内无数据依赖的成员，应在同一次回复中并行调用 dispatch_member（为每位成员写独立的任务简报），全部回传后再进入下一阶段。",
+  "2. 分阶段推进，上一阶段成员产出原文完整传入下一阶段调度的 context；同一阶段内无数据依赖的成员，应在同一次回复中并行调用 dispatch（为每位成员写独立的任务简报），全部回传后再进入下一阶段。",
   "3. 成员只对主理人回传结论：主理人统筹汇总后再形成面向用户的回答。",
   "4. 面向用户的输出使用用户的语言。",
 ].join("\n");
 
-/** 【工具说明】段：dispatch_member 参数一句话语义 */
+/** 【工具说明】段：dispatch 参数一句话语义 */
 const TEAM_LEAD_TOOL_HINT = [
   "【工具说明】",
-  "dispatch_member(member, task, context?)：调度一名团队成员独立分析并回传结论——member 为成员 id，task 为本轮任务，context 为可选的前序阶段产出原文。",
+  "dispatch(member, task, context?)：调度一名团队成员独立分析并回传结论——member 为成员 id，task 为本轮任务，context 为可选的前序阶段产出原文。",
 ].join("\n");
 
 /** 【团队成员】段：每行「- id｜花名（职业头衔）」+ 调度传 id 说明 */
@@ -81,7 +81,7 @@ function buildMemberListSection(members: TeamMember[]): string {
  * 主理人 system 组装（专家团二期：绑定专家团会话的 base）：四段以空行
  * 拼接——主理人 prompt 原文 →【团队成员】清单 →【协作铁律】→【工具
  * 说明】；空 leadPrompt 跳过首段（不产生开头空行），空 members 返回
- * null（调用方回退裸 prompt）。withDispatch=false（dispatch_member 被
+ * null（调用方回退裸 prompt）。withDispatch=false（dispatch 被
  * 安全中心禁用）时铁律段与工具说明不组装——system 与工具集同缺席，
  * 对齐第一期目录段门控模式；成员清单保留（展示语义）。
  */

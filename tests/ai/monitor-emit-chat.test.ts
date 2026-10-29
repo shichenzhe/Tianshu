@@ -44,7 +44,7 @@ function makeDef(
   over: Partial<ToolDefinition> = {},
 ): ToolDefinition {
   return {
-    name: "read_file",
+    name: "read",
     description: "monitor emit stub",
     parameters: {},
     kind: "read",
@@ -64,7 +64,7 @@ describe("runToolCall toolStats 回调", () => {
       undefined,
     );
     expect(events).toEqual([
-      { toolName: "read_file", state: "done", durationMs: expect.any(Number) },
+      { toolName: "read", state: "done", durationMs: expect.any(Number) },
     ]);
   });
 
@@ -78,7 +78,7 @@ describe("runToolCall toolStats 回调", () => {
       undefined,
     );
     expect(events).toEqual([
-      { toolName: "read_file", state: "error", durationMs: expect.any(Number) },
+      { toolName: "read", state: "error", durationMs: expect.any(Number) },
     ]);
   });
 
@@ -95,7 +95,7 @@ describe("runToolCall toolStats 回调", () => {
       {},
       undefined,
     );
-    expect(events).toEqual([{ toolName: "read_file", state: "denied" }]);
+    expect(events).toEqual([{ toolName: "read", state: "denied" }]);
   });
 
   it("agent 未传 toolStats → 不抛错（缺席静默，spec §4 吞错原则）", async () => {

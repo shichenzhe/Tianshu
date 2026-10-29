@@ -3,7 +3,7 @@ import { detectPseudoToolCallText } from "../../src-react/domains/ai/chat/lib/ps
 
 /** 本地推理服务把 Qwen 工具语法泄进正文的真实样本（issue 复现，DB message #68） */
 const REAL_SAMPLE =
-  "我来读取工作空间内空内容如下：\n\n```markdown\n\n<tool_call>\n<| 1.\n\n<tool_call>\n<function call 好的，让我查看 readme.md 文件内容为空\n\n<tool_call>\n<tool_call>\n<readme 我来读取工作空间内联华子目录结构如下：\n\n<tool_call>\n<read_file(path:thinking 我来帮你读取工作空间内联华！";
+  "我来读取工作空间内空内容如下：\n\n```markdown\n\n<tool_call>\n<| 1.\n\n<tool_call>\n<function call 好的，让我查看 readme.md 文件内容为空\n\n<tool_call>\n<tool_call>\n<readme 我来读取工作空间内联华子目录结构如下：\n\n<tool_call>\n<read(path:thinking 我来帮你读取工作空间内联华！";
 
 describe("detectPseudoToolCallText 伪工具调用碎片检测", () => {
   it("真实复现样本命中", () => {

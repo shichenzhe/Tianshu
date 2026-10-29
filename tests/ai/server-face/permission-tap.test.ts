@@ -64,7 +64,7 @@ describe("permission-tap（A10 审批记忆批）", () => {
       {
         id: 3,
         workspaceName: "默认工作空间",
-        toolName: "write_file",
+        toolName: "write",
         createdAt: NOW,
       },
       { id: 1, workspaceName: "#9", toolName: "bash", createdAt: NOW },

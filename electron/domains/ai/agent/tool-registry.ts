@@ -1,7 +1,7 @@
 /**
  * 工具注册表：P2 MCP 工具聚合进同一注册表（spec 决策 #10）。
- * 初始集 = 内置文件四件 + run_command 终端工具（P3 spec §3）+ web 工具
- * （web_fetch/open_browser，spec 2026-10-13-ai-web-tools）+ browser_use
+ * 初始集 = 内置文件四件 + bash 终端工具（P3 spec §3）+ web 工具
+ * （fetch/browse，spec 2026-10-13-ai-web-tools）+ browser_use
  * 工具组（操控会话绑定的右栏浏览器 tab，guest 注册表解析操控目标）；
  * mcp__ 动态注册
  */
@@ -46,7 +46,7 @@ export function unregisterTools(prefix: string): number {
 
 /** 注入层过滤（SP6 裁定 1）：禁用=对模型不存在；只作用于内置工具名。
  *  双侧经 canonicalToolName 归一成别名等价比较——toolPermission DB 存老名
- *  （read_file 等），改名后禁用语义跨改名延续；过渡期老名 def 同样命中
+ *  （read 等），改名后禁用语义跨改名延续；过渡期老名 def 同样命中
  *  （终态生产面 def 恒新名） */
 export function filterDisabledTools<T extends { name: string }>(
   defs: T[],

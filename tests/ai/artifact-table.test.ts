@@ -1,5 +1,5 @@
 /**
- * H7a 性能回归：产物结构化表——write_file 产物落 artifact 表（消息落库时
+ * H7a 性能回归：产物结构化表——write 产物落 artifact 表（消息落库时
  * 提取登记），产物面板查表替代 blocks LIKE 全表扫（消息上千后每次打开
  * 面板都是 O(全表) 同步扫描，见性能审查报告 H7）；历史数据首查回填一次
  */
@@ -94,13 +94,13 @@ vi.mock("../../electron/commons/prisma-client", () => {
           db.messages.push(row);
           return row;
         },
-        // 旧 LIKE 路径（回填消费）：含 write_file 的消息
+        // 旧 LIKE 路径（回填消费）：含 write 的消息
         findMany: db.messageFindMany.mockImplementation(
           async (args?: { where?: { sessionId?: { in: number[] } } }) => {
             const ids = args?.where?.sessionId?.in;
             return db.messages.filter(
               (m) =>
-                m.blocks.includes("write_file") &&
+                m.blocks.includes("write") &&
                 (ids === undefined || ids.includes(m.sessionId)),
             );
           },
@@ -158,7 +158,7 @@ const writeToolBlocks = (relPath: string) =>
     {
       type: "tool_call",
       toolCallId: "tc1",
-      toolName: "write_file",
+      toolName: "write",
       args: { path: relPath },
       state: "done",
     },
@@ -174,7 +174,7 @@ beforeEach(() => {
 });
 
 describe("appendMessage 产物登记（H7a）", () => {
-  it("assistant 消息落库后登记 write_file 产物（去重键 userId+workspace+relPath）", async () => {
+  it("assistant 消息落库后登记 write 产物（去重键 userId+workspace+relPath）", async () => {
     const repo = new SessionRepository();
     await repo.appendMessage({
       sessionId: 1,

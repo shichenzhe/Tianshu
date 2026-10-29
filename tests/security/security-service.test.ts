@@ -116,11 +116,11 @@ describe("SecurityService", () => {
     const svc = new SecurityService({ db: db as never });
     await svc.init();
     const saved = await svc.setConfig("disabledTools", [
-      "run_command",
+      "bash",
       "nope",
       "mcp__a__b",
     ]);
-    expect(saved.disabledTools).toEqual(["run_command"]);
-    expect(db.rows.get("disabledTools")).toBe('["run_command"]');
+    expect(saved.disabledTools).toEqual(["bash"]);
+    expect(db.rows.get("disabledTools")).toBe('["bash"]');
   });
 });

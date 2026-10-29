@@ -1,5 +1,5 @@
 /**
- * recommend_experts 工具单测（专家 2.0 Task 4）：纯 Node 工具，vitest 直测
+ * recommend_expert 工具单测（专家 2.0 Task 4）：纯 Node 工具，vitest 直测
  * （widget-tool/create-expert 先例）；ctx 不会被触达（无副作用渲染工具）。
  */
 import { describe, expect, it } from "vitest";
@@ -51,7 +51,7 @@ describe("makeRecommendExpertTool", () => {
   });
 
   it("工具名与前端约定的常量一致", () => {
-    expect(RECOMMEND_TOOL_NAME).toBe("recommend_experts");
+    expect(RECOMMEND_TOOL_NAME).toBe("recommend_expert");
     expect(makeRecommendExpertTool().name).toBe(RECOMMEND_TOOL_NAME);
   });
 });

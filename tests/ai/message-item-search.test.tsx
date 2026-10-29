@@ -90,7 +90,7 @@ describe("MessageItem 搜索态接线（位置级命中）", () => {
   it("user 气泡：命中换算余文坐标，文件引用前缀不高亮", () => {
     useSessionSearchStore.setState({ open: true, query: "命中词" });
     const refPrefix =
-      "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）";
+      "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）";
     const message = {
       ...assistantMessage([]),
       role: "user",

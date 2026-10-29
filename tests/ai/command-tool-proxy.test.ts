@@ -1,5 +1,5 @@
 /**
- * run_command 子进程 proxy env 注入单测（SP5 Task 4）：
+ * bash 子进程 proxy env 注入单测（SP5 Task 4）：
  * 门装且代理启动时子进程 env 含 HTTPS_PROXY；门未装零注入（缺省继承）。
  * 真实子进程 node -e 回显 env（命令本身零网络行为）。
  * network-gate 传递依赖 Log（→ electron，终审 S2），经 vi.mock 替换。
@@ -31,7 +31,7 @@ const policy = (over: Partial<NetworkPolicyState>): NetworkPolicyState => ({
 const echoProxyEnv =
   "node -e \"console.log(process.env.HTTPS_PROXY || 'none')\"";
 
-describe("run_command 子进程 proxy env 注入（SP5）", () => {
+describe("bash 子进程 proxy env 注入（SP5）", () => {
   it("门装且代理启动时 env 含 HTTPS_PROXY（子进程 echo 验证）", async () => {
     const gate = installNetworkGate({
       policyProvider: () => policy({ exemptDomains: ["localhost"] }),

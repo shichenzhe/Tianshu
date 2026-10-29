@@ -334,7 +334,7 @@ export const intentNodeSchema = z.object({
 
 /** 文件写入节点（kind:fileWrite）：content 模板替换后写回工作空间内
  * 文件（append 追加带换行 / overwrite 覆盖），目录自动创建；写操作走
- * codeAuthorized 门禁（default 任务拒写，对齐 run_command 语义） */
+ * codeAuthorized 门禁（default 任务拒写，对齐 bash 语义） */
 export const fileWriteNodeSchema = z.object({
   ...nodeBase,
   kind: z.literal("fileWrite"),

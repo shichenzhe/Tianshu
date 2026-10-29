@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * @文件 token 注入分派测试（引用式批 2026-10-21 起）：
- * - agent/plan + 工作空间相对路径 → 引用式（不读通道，AI 自读 read_file）
- * - ask 会话（无工具集）+ 绝对路径（read_file 读不到）→ 内容注入链：
+ * - agent/plan + 工作空间相对路径 → 引用式（不读通道，AI 自读 read）
+ * - ask 会话（无工具集）+ 绝对路径（read 读不到）→ 内容注入链：
  *   readWorkspaceFile 返回 PATH_OUTSIDE_WORKSPACE → 回退 readExternalFile
  *   （授权门：pickAndRead 选中即登记）读取注入，无 toast、onSend 收到内容
  * - 回退也失败（未授权路径）→ 维持既有语义：toast.warning 后仍发送

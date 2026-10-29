@@ -23,7 +23,7 @@ type ToolStateValue = Extract<
 const approval = (toolCallId: string, argSummary: string): ChatStreamChunk => ({
   type: "approval-request",
   toolCallId,
-  toolName: "write_file",
+  toolName: "write",
   argSummary,
 });
 
@@ -33,7 +33,7 @@ const toolUpdate = (
 ): ChatStreamChunk => ({
   type: "tool-update",
   toolCallId,
-  toolName: "write_file",
+  toolName: "write",
   state,
 });
 
@@ -46,10 +46,10 @@ describe("pendingApprovals 队列派生", () => {
     expect(pendingApprovals(state)).toEqual([
       {
         toolCallId: "w1",
-        toolName: "write_file",
+        toolName: "write",
         argSummary: "写入 a.txt（重发）",
       },
-      { toolCallId: "w2", toolName: "write_file", argSummary: "写入 b.txt" },
+      { toolCallId: "w2", toolName: "write", argSummary: "写入 b.txt" },
     ]);
   });
 
@@ -103,8 +103,8 @@ describe("pendingApprovals 队列派生", () => {
 describe("unrespondedApprovals 本端已应答过滤", () => {
   it("滤除已应答 toolCallId，队列下一项即刻顶上", () => {
     const pending = [
-      { toolCallId: "w1", toolName: "write_file", argSummary: "a" },
-      { toolCallId: "w2", toolName: "write_file", argSummary: "b" },
+      { toolCallId: "w1", toolName: "write", argSummary: "a" },
+      { toolCallId: "w2", toolName: "write", argSummary: "b" },
     ];
     expect(unrespondedApprovals(pending, new Set(["w1"]))).toEqual([
       pending[1],

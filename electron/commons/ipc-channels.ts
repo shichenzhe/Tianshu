@@ -438,14 +438,14 @@ export const IPC_EVENT_ALLOWLIST = [
   // 图试运行/运行中的节点状态实时推送（GraphEditorView 画布高亮监听；
   // preload 拒听非白名单事件，缺此通道高亮会静默失效）
   "orchestration:node-status",
-  // AI 面板联动（web 工具 open_browser）：主进程 → 渲染层开右栏浏览器 tab
+  // AI 面板联动（web 工具 browse）：主进程 → 渲染层开右栏浏览器 tab
   "detailPanel:openBrowser",
   // 文件独立窗口：resources 投递 / 关闭询问 / AI 写盘联动
   "fileWindow:deliver",
   "fileWindow:close-request",
   // 跨窗导航（T22）：openRoute handler → 主窗渲染层路由跳转
   "fileWindow:navigate",
-  // 库维度文件变更（T14 修复轮：AI write_file 直改库文件全窗广播；
+  // 库维度文件变更（T14 修复轮：AI write 直改库文件全窗广播；
   // workspace:fileChanged 反解不了库 storagePath，另立事件）
   "fileWindow:libraryChanged",
   "workspace:fileChanged",

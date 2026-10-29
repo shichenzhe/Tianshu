@@ -1,5 +1,5 @@
 /**
- * 产物面板文件派生测试:write_file 收录/引用前缀解析/去重/流式合并
+ * 产物面板文件派生测试:write 收录/引用前缀解析/去重/流式合并
  */
 import { describe, expect, it } from "vitest";
 
@@ -33,7 +33,7 @@ function writeCall(
   return {
     type: "tool_call",
     toolCallId: `call-${path}-${state}`,
-    toolName: "write_file",
+    toolName: "write",
     args: { path, content: "x" },
     state,
   };
@@ -48,7 +48,7 @@ function streamTools(
       entries.map((e, i) => [
         `t${i}`,
         {
-          toolName: e.toolName ?? "write_file",
+          toolName: e.toolName ?? "write",
           args: e.path === undefined ? undefined : { path: e.path },
           state: e.state,
         },
@@ -62,7 +62,7 @@ describe("deriveSessionFiles", () => {
     expect(deriveSessionFiles([])).toEqual([]);
   });
 
-  it("write_file done 收录为产物文件", () => {
+  it("write done 收录为产物文件", () => {
     const files = deriveSessionFiles([
       msg(1, "assistant", [writeCall("src/a.ts")]),
     ]);
@@ -71,7 +71,7 @@ describe("deriveSessionFiles", () => {
     ]);
   });
 
-  it("write_file denied/error 不收录（未写成功）", () => {
+  it("write denied/error 不收录（未写成功）", () => {
     const files = deriveSessionFiles([
       msg(1, "assistant", [
         writeCall("a.ts", "denied"),
@@ -81,13 +81,13 @@ describe("deriveSessionFiles", () => {
     expect(files).toEqual([]);
   });
 
-  it("非 write_file 工具忽略", () => {
+  it("非 write 工具忽略", () => {
     const files = deriveSessionFiles([
       msg(1, "assistant", [
         {
           type: "tool_call",
           toolCallId: "c1",
-          toolName: "read_file",
+          toolName: "read",
           args: { path: "a.ts" },
           state: "done",
         },
@@ -177,7 +177,7 @@ describe("deriveSessionFiles", () => {
         { state: "denied", path: "a.ts" },
         { state: "error", path: "b.ts" },
         { state: "running" },
-        { state: "running", path: "", toolName: "write_file" },
+        { state: "running", path: "", toolName: "write" },
       ]),
     );
     expect(files).toEqual([]);

@@ -49,24 +49,24 @@ describe("BUILTIN_TOOLS 注册表（spec §3.1）", () => {
 describe("pickDisabledTools（白名单清洗）", () => {
   it("只收已知名，去重保注册表序", () => {
     expect(
-      pickDisabledTools(["run_command", "nope", "delete_file", "run_command"]),
-    ).toEqual(["run_command", "delete_file"]);
+      pickDisabledTools(["bash", "nope", "rm", "bash"]),
+    ).toEqual(["bash", "rm"]);
   });
   it("非数组/含 mcp__ 前缀一律回落空或剔除", () => {
     expect(pickDisabledTools(undefined)).toEqual([]);
-    expect(pickDisabledTools("run_command")).toEqual([]);
+    expect(pickDisabledTools("bash")).toEqual([]);
     expect(pickDisabledTools(["mcp__x__y"])).toEqual([]);
   });
 });
 
 describe("filterDisabledTools（注入过滤）", () => {
   const defs = [
-    { name: "read_file" },
+    { name: "read" },
     { name: "read_skill" },
     { name: "mcp__srv__tool" },
   ];
   it("禁用名剔除；mcp__ 不在白名单天然不受影响", () => {
-    expect(filterDisabledTools(defs, ["read_file"])).toEqual([
+    expect(filterDisabledTools(defs, ["read"])).toEqual([
       { name: "read_skill" },
       { name: "mcp__srv__tool" },
     ]);
@@ -80,11 +80,11 @@ describe("filterDisabledTools（注入过滤）", () => {
 // automation 同构一行（filterDisabledTools 包尾），由 Task 6 手工验收清单
 // 端到端覆盖（SP6 裁定 2）
 describe("automation collectTools 注入过滤（SP6 裁定 2）", () => {
-  it("禁用 run_command 后工具集不含之；缺省参数行为不变", async () => {
-    const tools = await collectTools("/tmp/ws", [], () => ["run_command"]);
-    expect(tools.some((t) => t.name === "run_command")).toBe(false);
+  it("禁用 bash 后工具集不含之；缺省参数行为不变", async () => {
+    const tools = await collectTools("/tmp/ws", [], () => ["bash"]);
+    expect(tools.some((t) => t.name === "bash")).toBe(false);
     const untouched = await collectTools("/tmp/ws", []);
-    expect(untouched.some((t) => t.name === "run_command")).toBe(true);
+    expect(untouched.some((t) => t.name === "bash")).toBe(true);
   });
 });
 

@@ -10,7 +10,7 @@ import type { SecurityEvent } from "../../src-react/domains/security/model/types
 
 const CTX = { workspacePath: "/tmp/ws", sessionId: 1 };
 
-describe("run_command 安全事件", () => {
+describe("bash 安全事件", () => {
   it("危险命令命中 → blocked 事件 + commandPreview/commandHash", async () => {
     const events: SecurityEvent[] = [];
     const tool = makeRunCommandTool();

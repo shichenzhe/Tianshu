@@ -4,7 +4,7 @@
  * 运行时内置清单——userData 自我保护）；fail-open 三层 → "default"。
  * grantedOf（文件窗口 spec §6.4）：会话级授权清单同步判定——命中优先于
  * extraBuiltin（数据根）拦截返回 "default"（read 放行；write 审批仍由
- * write_file kind:"write" 的审批横幅走，授权不绕过）。
+ * write kind:"write" 的审批横幅走，授权不绕过）。
  */
 import type { SecurityConfig } from "../../../src-react/domains/security/model/types";
 import { defaultFileBlocklist } from "./defaults";

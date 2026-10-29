@@ -79,7 +79,7 @@ describe("planToolDigest 四工具解析（批 11 D15）", () => {
 
   it("非四工具（plan_get_item/文件工具/未知）→ null", () => {
     expect(planToolDigest("plan_get_item", { id: 1 })).toBeNull();
-    expect(planToolDigest("write_file", { path: "a.ts" })).toBeNull();
+    expect(planToolDigest("write", { path: "a.ts" })).toBeNull();
     expect(planToolDigest("whatever", {})).toBeNull();
   });
 });

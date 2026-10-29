@@ -9,24 +9,24 @@
  */
 
 /**
- * 核心组（恒注入）：file 5 + browser 4 + open_browser + run_command +
- * web_fetch + create_skill + read_skill——任何 agent 会话的常驻最小面。
+ * 核心组（恒注入）：file 5 + browser 4 + browse + bash +
+ * fetch + create_skill + read_skill——任何 agent 会话的常驻最小面。
  * 仅作文档/测试对照：门控实现是「两组门控组之外一律放行」的黑名单式，
  * mcp 前缀与技能挂载工具等照旧注入，新增工具不会因不在核心组被误剔
  */
 export const CORE_TOOL_NAMES: readonly string[] = [
-  "read_file",
-  "write_file",
-  "list_dir",
-  "search_files",
-  "delete_file",
+  "read",
+  "write",
+  "ls",
+  "grep",
+  "rm",
   "browser_snapshot",
   "browser_navigate",
   "browser_click",
   "browser_type",
-  "open_browser",
-  "run_command",
-  "web_fetch",
+  "browse",
+  "bash",
+  "fetch",
   "create_skill",
   "read_skill",
 ];

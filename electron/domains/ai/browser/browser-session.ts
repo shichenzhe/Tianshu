@@ -14,7 +14,7 @@ import { isSsrfHost } from "../../security/ssrf-hosts";
 /** 浏览器 webview 专用持久 partition（登录态跨重启，spec §3.3） */
 export const BROWSER_WEBVIEW_PARTITION = "persist:browser-webview";
 
-/** SSRF 封锁清单收敛在 security/ssrf-hosts（与 web_fetch 共用防漂移）；保留 re-export 兼容既有 import */
+/** SSRF 封锁清单收敛在 security/ssrf-hosts（与 fetch 共用防漂移）；保留 re-export 兼容既有 import */
 export { isSsrfHost };
 
 /** mainFrame/subFrame 剥 XFO 与 CSP frame-ancestors；其余资源原样放行 */

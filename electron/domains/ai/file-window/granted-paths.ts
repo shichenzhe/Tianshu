@@ -4,7 +4,7 @@
  * 使 AI 工具可直改数据根内文件。
  * 双层放行之一：file-gate（makeFileDecider 第 3 参 grantedOf）读放行
  * "default"、file-tools resolveSafePath（extraAllowed）越界放行；write 审批
- * 横幅仍由 write_file kind:"write" 走，授权不绕过。
+ * 横幅仍由 write kind:"write" 走，授权不绕过。
  * 多用户隔离（T28）：查询/落盘均带 userId 维度（option 唯一键
  * type+name+userId，每用户一行 findFirst({type,name,userId})），内存缓存
  * 按 userId 分桶——两用户授权互不可见。会话 userId 为 null（v12 前旧行）

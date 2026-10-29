@@ -1,5 +1,5 @@
 // SP2 Task 4 集成测试：runToolCall 命令判定门（block/ask/allow/default）
-// + run_command source 标注与子进程黑名单挂载前置。vi.mock 由 vitest 提升，
+// + bash source 标注与子进程黑名单挂载前置。vi.mock 由 vitest 提升，
 // 与下方 import 顺序无关（照 tests/ai/chat.service.test.ts 先例）
 import { mkdirSync } from "node:fs";
 import { beforeAll, describe, expect, it, vi } from "vitest";
@@ -63,8 +63,8 @@ const CMD = { command: "echo hi" };
 // 权限放宽批（2026-10-24）用例的工具 def：命令/写/删三件真身 +
 // AUTO_EXEMPT 免审面验证的最小 write stub（name 由用例覆写）
 const runCommandDef = makeRunCommandTool();
-const writeFileDef = makeFileTool("write_file");
-const deleteFileDef = makeFileTool("delete_file");
+const writeFileDef = makeFileTool("write");
+const deleteFileDef = makeFileTool("rm");
 const writeDefBase: ToolDefinition = {
   name: "stub_write",
   description: "stub",
@@ -139,7 +139,7 @@ describe("runToolCall 命令判定门", () => {
   });
 });
 
-describe("run_command 危险命令 source 标注", () => {
+describe("bash 危险命令 source 标注", () => {
   it("危险命令拦截事件 detail.source=dangerous", async () => {
     const events: SecurityEvent[] = [];
     const tool = makeRunCommandTool();
@@ -172,7 +172,7 @@ describe("run_command 危险命令 source 标注", () => {
 
 // ===== 权限放宽（2026-10-24 spec §3/§4.4/§4.5）=====
 // default 档审批面从「一切 write 询问」收窄为「高危询问」：普通命令/
-// write_file 工作空间内/DB 写直执行；危险分级 HIGH/CRITICAL 两档均审批
+// write 工作空间内/DB 写直执行；危险分级 HIGH/CRITICAL 两档均审批
 // （full 亦不豁免，对齐 WorkBuddy bypass）
 describe("runToolCall 权限放宽", () => {
   it("default 档普通命令直执行（不再兜底审批）", async () => {
@@ -232,7 +232,7 @@ describe("runToolCall 权限放宽", () => {
     expect(agent.requestApproval).not.toHaveBeenCalled();
   });
 
-  it("write_file default 档直执行并上报 auto-allowed", async () => {
+  it("write default 档直执行并上报 auto-allowed", async () => {
     const agent = makeAgent({ decideCommand: () => "default" });
     const events: SecurityEvent[] = [];
     agent.onSecurityEvent = (e) => events.push(e);
@@ -246,7 +246,7 @@ describe("runToolCall 权限放宽", () => {
     );
   });
 
-  it("write_file 敏感路径（fileGate block）仍审批", async () => {
+  it("write 敏感路径（fileGate block）仍审批", async () => {
     const agent = makeAgent({
       decideCommand: () => "default",
       decideFileAccess: () => "block",
@@ -259,7 +259,7 @@ describe("runToolCall 权限放宽", () => {
     expect(agent.requestApproval).toHaveBeenCalled();
   });
 
-  it("delete_file default 档仍审批（delete=ask 裁定）", async () => {
+  it("rm default 档仍审批（delete=ask 裁定）", async () => {
     const agent = makeAgent({ decideCommand: () => "default" });
     agent.requestApproval.mockResolvedValue(false);
     await runToolCall(deleteFileDef, agent, "c8", { path: "a.txt" });
@@ -278,8 +278,8 @@ describe("runToolCall 权限放宽", () => {
 
 describe("网络域免审（2026-10-24 裁定重落：任何档位直执行）", () => {
   it.each([
-    "web_fetch",
-    "open_browser",
+    "fetch",
+    "browse",
     "browser_snapshot",
     "browser_navigate",
     "browser_click",

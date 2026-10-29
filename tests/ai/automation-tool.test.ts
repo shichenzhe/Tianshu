@@ -1,5 +1,5 @@
 /**
- * create_automation_task 工具单测：deps 注入 createTask mock（create-expert
+ * create_schedule 工具单测：deps 注入 createTask mock（create-expert
  * 先例）；workspaceId/modelId 从 ctx 透传（防模型幻觉填参）——缺席返回
  * 引导文案不落库；缺省值与表单口径对齐（missedPolicy=skip、
  * accessMode=default、targetKind=prompt）

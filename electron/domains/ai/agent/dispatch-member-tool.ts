@@ -1,5 +1,5 @@
 /**
- * dispatch_member 内置工具（专家团二期 T3）：主理人按 id 调度一名团队
+ * dispatch 内置工具（专家团二期 T3）：主理人按 id 调度一名团队
  * 成员独立分析——成员 systemPrompt 为 system、task/context 拼 user prompt，
  * 经 deps.modelText 非流式单轮补全（生产装配 chat.service 的
  * memberModelText，测试注入 stub），产出原文回喂主理人（不落库不外显）。
@@ -15,7 +15,7 @@ import type { ToolDefinition } from "./file-tools";
 
 /** 工具名（专家团二期）：主理人 system 门控（buildTeamLeadSystem
  *  withDispatch）与安全中心登记（BUILTIN_TOOLS/disabledTools）共用标识 */
-export const DISPATCH_MEMBER_TOOL_NAME = "dispatch_member";
+export const DISPATCH_MEMBER_TOOL_NAME = "dispatch";
 
 /** 成员单轮补全注入面（生产 memberModelText / 测试 stub 同构） */
 export interface DispatchMemberModelTextArgs {

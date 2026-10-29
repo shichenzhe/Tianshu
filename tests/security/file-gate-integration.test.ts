@@ -59,12 +59,12 @@ function makeAgent(
 }
 
 describe("runToolCall 文件判定门", () => {
-  it("read_file 黑名单路径 + fullAccess（bypass）：直执行不弹审批——2026-10-23 三档递进；needs-approval 审计事件仍发", async () => {
+  it("read 黑名单路径 + fullAccess（bypass）：直执行不弹审批——2026-10-23 三档递进；needs-approval 审计事件仍发", async () => {
     const agent = makeAgent({
       fullAccess: () => true,
       decideFileAccess: () => "block",
     });
-    const out = await runToolCall(makeFileTool("read_file"), agent, "f1", {
+    const out = await runToolCall(makeFileTool("read"), agent, "f1", {
       path: "secret/k.pem",
     });
     expect(agent.approvals).toHaveLength(0);
@@ -82,7 +82,7 @@ describe("runToolCall 文件判定门", () => {
       unattended: true,
       decideFileAccess: () => "block",
     });
-    const out = await runToolCall(makeFileTool("read_file"), agent, "f2", {
+    const out = await runToolCall(makeFileTool("read"), agent, "f2", {
       path: "secret/k.pem",
     });
     expect(out).toContain("无人值守");
@@ -94,9 +94,9 @@ describe("runToolCall 文件判定门", () => {
     expect(agent.events[0].detail).toMatchObject({ reason: "unattended" });
   });
 
-  it("write_file 白名单路径跳过审批 + allow-listed 事件", async () => {
+  it("write 白名单路径跳过审批 + allow-listed 事件", async () => {
     const agent = makeAgent({ decideFileAccess: () => "allow" });
-    const out = await runToolCall(makeFileTool("write_file"), agent, "f3", {
+    const out = await runToolCall(makeFileTool("write"), agent, "f3", {
       path: "out.txt",
       content: "hi",
     });
@@ -107,32 +107,32 @@ describe("runToolCall 文件判定门", () => {
     ).toBe(true);
   });
 
-  it("default：write_file 未记忆→直执行（权限放宽，原审批）；read→直执行免审", async () => {
+  it("default：write 未记忆→直执行（权限放宽，原审批）；read→直执行免审", async () => {
     const w = makeAgent({ decideFileAccess: () => "default" });
-    const wout = await runToolCall(makeFileTool("write_file"), w, "f4", {
+    const wout = await runToolCall(makeFileTool("write"), w, "f4", {
       path: "out2.txt",
       content: "x",
     });
     expect(w.approvals).toHaveLength(0);
     expect(wout).toContain("已写入");
     const r = makeAgent({ decideFileAccess: () => "default" });
-    const rout = await runToolCall(makeFileTool("read_file"), r, "f5", {
+    const rout = await runToolCall(makeFileTool("read"), r, "f5", {
       path: "normal.txt",
     });
     expect(r.approvals).toHaveLength(0);
     expect(rout).toContain("hello");
   });
 
-  it("list_dir 无 path 参数不判定（直执行）", async () => {
+  it("ls 无 path 参数不判定（直执行）", async () => {
     const agent = makeAgent({ decideFileAccess: () => "block" });
-    const out = await runToolCall(makeFileTool("list_dir"), agent, "f6", {});
+    const out = await runToolCall(makeFileTool("ls"), agent, "f6", {});
     expect(agent.approvals).toHaveLength(0);
     expect(out).not.toContain("错误");
   });
 
-  it("search_files 不在文件门内（无判定不回归）", async () => {
+  it("grep 不在文件门内（无判定不回归）", async () => {
     const agent = makeAgent({ decideFileAccess: () => "block" });
-    await runToolCall(makeFileTool("search_files"), agent, "f7", {
+    await runToolCall(makeFileTool("grep"), agent, "f7", {
       pattern: "hello",
     });
     expect(agent.approvals).toHaveLength(0);
@@ -140,13 +140,13 @@ describe("runToolCall 文件判定门", () => {
   });
 });
 
-// ===== write_file 直执行（权限放宽 2026-10-24 spec §4.4/§4.7）=====
+// ===== write 直执行（权限放宽 2026-10-24 spec §4.4/§4.7）=====
 // default 档工作空间内写入免审（审批面只剩文件门 block），直执行决策
 // 补 file-safety.auto-allowed 留痕（对齐 WorkBuddy audit.autoApproved 族）
-describe("write_file 直执行（权限放宽）", () => {
+describe("write 直执行（权限放宽）", () => {
   it("default 档直执行不弹审批 + auto-allowed 事件", async () => {
     const agent = makeAgent({ decideFileAccess: () => "default" });
-    const out = await runToolCall(makeFileTool("write_file"), agent, "f8", {
+    const out = await runToolCall(makeFileTool("write"), agent, "f8", {
       path: "auto.txt",
       content: "x",
     });

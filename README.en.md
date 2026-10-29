@@ -24,8 +24,8 @@
 
 ### 🛠 Agent Capabilities
 
-- **File tools**: once a session is bound to a workspace directory, the AI gets `read_file` / `write_file` / `list_dir` / `search_files`, all sandboxed to that directory
-- **Terminal tool**: `run_command` runs shell commands with a 60s timeout and truncated output; destructive commands (`rm -rf /`, fork bombs, …) are hard-blocked regardless of permission level
+- **File tools**: once a session is bound to a workspace directory, the AI gets `read` / `write` / `ls` / `grep`, all sandboxed to that directory
+- **Terminal tool**: `bash` runs shell commands with a 60s timeout and truncated output; destructive commands (`rm -rf /`, fork bombs, …) are hard-blocked regardless of permission level
 - **Two-tier permissions**: under Default, file writes and commands require per-action approval; Full Access requires an explicit risk confirmation and lives only in session memory — a restart resets it
 - **Three session modes**: Agent (full capability) / Ask (pure Q&A) / Plan (produce a complete plan first, act only after confirmation)
 

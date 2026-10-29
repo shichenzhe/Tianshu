@@ -1,6 +1,6 @@
 /**
  * @tianshu/protocol artifact-contract：移动端本地产物面板契约（AR 批
- * 2026-10-27）。artifact 表只在桌面端（write_file 结构化登记 +
+ * 2026-10-27）。artifact 表只在桌面端（write 结构化登记 +
  * artifactFavorite 收藏）——三端点为桌面被控面专属（同 A6 monitor/A5
  * library 先例，无头端不实现不报）；移动端以 artifact/list 首 404
  * 隐藏视图（端点缺失自隐藏，其他错误显可重试态）。
@@ -11,7 +11,7 @@
 
 /** 本地产物列表行（桌面 ArtifactListItem 同形减 path） */
 export interface ArtifactWireItem {
-  /** write_file 原始相对路径（收藏键一半 + artifact/read 入参） */
+  /** write 原始相对路径（收藏键一半 + artifact/read 入参） */
   relPath: string;
   name: string;
   /** 扩展名分类（classifyFileType 口径，与资料库一致） */

@@ -205,10 +205,10 @@ describe("ToolSet 组装（send 级集成）", () => {
     expect(names.filter((name) => name.startsWith("mcp__"))).toEqual([
       "mcp__srv__echo",
     ]);
-    expect(names).not.toContain("read_file");
-    expect(names).not.toContain("write_file");
-    expect(names).not.toContain("list_dir");
-    expect(names).not.toContain("search_files");
+    expect(names).not.toContain("read");
+    expect(names).not.toContain("write");
+    expect(names).not.toContain("ls");
+    expect(names).not.toContain("grep");
   });
 
   it("采样/限额参数随构造下发（T3-3 R1）：modelRow 的 topP/maxTokens 到达 createChatModel 第三参", async () => {
@@ -248,19 +248,19 @@ describe("ToolSet 组装（send 级集成）", () => {
 
     const names = capturedToolNames[0] ?? [];
     // registry 顺序：read_skill 在前，其后为文件五件（read/write/list/search/delete）+
-    // run_command（P3 注册）+ web 工具（web_fetch/open_browser，W3 注册）+
+    // bash（P3 注册）+ web 工具（fetch/browse，W3 注册）+
     // browser_use 四件（snapshot/navigate/click/type，操控绑定 tab），
     // mcp__ 注册序殿后
     expect(names.filter((name) => !name.startsWith("mcp__"))).toEqual([
       "read_skill",
-      "read_file",
-      "write_file",
-      "list_dir",
-      "search_files",
-      "delete_file",
-      "run_command",
-      "web_fetch",
-      "open_browser",
+      "read",
+      "write",
+      "ls",
+      "grep",
+      "rm",
+      "bash",
+      "fetch",
+      "browse",
       "browser_snapshot",
       "browser_navigate",
       "browser_click",

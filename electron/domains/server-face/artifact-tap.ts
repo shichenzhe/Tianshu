@@ -2,7 +2,7 @@
  * 桌面被控面本地产物实现（AR 批，spec 2026-10-27）：artifact/list|
  * toggleFavorite|read 的 face 侧真身——list/toggle 复用 SessionRepository
  * 既有方法（artifact-aggregate 聚合与收藏表同源）；read 复用
- * readWorkspaceFileById（fullAccess 语义——write_file 记录的任意路径，
+ * readWorkspaceFileById（fullAccess 语义——write 记录的任意路径，
  * 与桌面 workspace:readFile 同链路），text/image 转协议联合、webview 类
  * （html/pdf/音视频）拒 ARTIFACT_PREVIEW_UNSUPPORTED（移动端提示桌面端
  * 预览，A5 尾富媒体同款语义）。

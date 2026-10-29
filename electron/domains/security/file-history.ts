@@ -1,5 +1,5 @@
 /**
- * 文件历史备份服务（SP4 spec §4）：write_file 覆盖前 / delete_file 永久
+ * 文件历史备份服务（SP4 spec §4）：write 覆盖前 / rm 永久
  * 删除前的内容寻址快照。目录：rootDir/<sessionId>/{manifest.json, <sha256-32>}。
  * 快照与 manifest 均临时名 + rename 原子落盘；manifest 损坏丢弃重建。
  * 配额 LRU 跨会话全局淘汰（总量按条目 size 求和，共享快照保守高估）。

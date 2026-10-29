@@ -65,18 +65,18 @@ const config: SecurityConfig = {
 
 /** 与 electron/domains/security/defaults.ts 的 BUILTIN_TOOLS 同构（17 项名单序） */
 const BUILTIN_TOOLS_FIXTURE: BuiltinToolMeta[] = [
-  { name: "read_file", group: "file", kind: "read" },
-  { name: "list_dir", group: "file", kind: "read" },
-  { name: "search_files", group: "file", kind: "read" },
-  { name: "write_file", group: "file", kind: "write" },
-  { name: "delete_file", group: "file", kind: "write" },
-  { name: "run_command", group: "command", kind: "write" },
+  { name: "read", group: "file", kind: "read" },
+  { name: "ls", group: "file", kind: "read" },
+  { name: "grep", group: "file", kind: "read" },
+  { name: "write", group: "file", kind: "write" },
+  { name: "rm", group: "file", kind: "write" },
+  { name: "bash", group: "command", kind: "write" },
   { name: "read_skill", group: "skill", kind: "read" },
   { name: "create_skill", group: "skill", kind: "write" },
   { name: "create_expert", group: "expert", kind: "write" },
   { name: "update_expert", group: "expert", kind: "write" },
-  { name: "recommend_experts", group: "expert", kind: "read" },
-  { name: "dispatch_member", group: "expert", kind: "read" },
+  { name: "recommend_expert", group: "expert", kind: "read" },
+  { name: "dispatch", group: "expert", kind: "read" },
   { name: "plan_create_item", group: "plan", kind: "write" },
   { name: "plan_update_status", group: "plan", kind: "write" },
   { name: "plan_append_summary", group: "plan", kind: "write" },
@@ -152,7 +152,7 @@ describe("SystemGrantCard（SP6 系统授权卡）", () => {
   const REMEMBERED_ROW = {
     id: 7,
     workspaceName: "空间A",
-    toolName: "run_command",
+    toolName: "bash",
     createdAt: "2026-09-01T08:00:00Z",
   };
 
@@ -172,7 +172,7 @@ describe("SystemGrantCard（SP6 系统授权卡）", () => {
     expect(screen.getByText("security:systemGrant.fullTitle")).toBeTruthy();
     expect(screen.getByText("security:systemGrant.fullBadge")).toBeTruthy();
     expect(screen.getByText("空间A")).toBeTruthy();
-    expect(screen.getByText("run_command").className).toContain("font-mono");
+    expect(screen.getByText("bash").className).toContain("font-mono");
     expect(
       screen.getByText("security:systemGrant.rememberedTitle"),
     ).toBeTruthy();
@@ -286,16 +286,16 @@ describe("RuntimeDetailView（SP6 运行时工具二级页）", () => {
     expect(screen.getByText("security:runtimeDetail.groupPlan")).toBeTruthy();
     expect(screen.getAllByRole("switch")).toHaveLength(17);
     expect(
-      screen.getByText("security:runtimeDetail.tools.read_file"),
+      screen.getByText("security:runtimeDetail.tools.read"),
     ).toBeTruthy();
     expect(
-      screen.getByText("security:runtimeDetail.tools.run_command"),
+      screen.getByText("security:runtimeDetail.tools.bash"),
     ).toBeTruthy();
     expect(
-      screen.getByText("security:runtimeDetail.tools.recommend_experts"),
+      screen.getByText("security:runtimeDetail.tools.recommend_expert"),
     ).toBeTruthy();
     expect(
-      screen.getByText("security:runtimeDetail.tools.dispatch_member"),
+      screen.getByText("security:runtimeDetail.tools.dispatch"),
     ).toBeTruthy();
     // kind badge 每工具一枚：17 工具中 8 读 9 写
     expect(screen.getAllByText("security:runtimeDetail.kindRead")).toHaveLength(
@@ -307,7 +307,7 @@ describe("RuntimeDetailView（SP6 运行时工具二级页）", () => {
   });
 
   it("开关状态 = !disabledTools.includes(name)（禁用工具未选中）", () => {
-    renderView(["write_file", "run_command"]);
+    renderView(["write", "bash"]);
     expect(
       screen
         .getAllByRole("switch")
@@ -334,16 +334,16 @@ describe("RuntimeDetailView（SP6 运行时工具二级页）", () => {
   });
 
   it("toggle 写 disabledTools：移除被开启项/追加被关闭项，保持名单序", () => {
-    const onToggle = renderView(["run_command"]);
+    const onToggle = renderView(["bash"]);
     const switches = screen.getAllByRole("switch");
-    // 开启 run_command → 禁用清单清空
+    // 开启 bash → 禁用清单清空
     fireEvent.click(switches[5]);
     expect(onToggle).toHaveBeenCalledWith("disabledTools", []);
-    // 禁用 read_file → 追加后保持名单序（read_file 在 run_command 前）
+    // 禁用 read → 追加后保持名单序（read 在 bash 前）
     fireEvent.click(switches[0]);
     expect(onToggle).toHaveBeenLastCalledWith("disabledTools", [
-      "read_file",
-      "run_command",
+      "read",
+      "bash",
     ]);
   });
 });

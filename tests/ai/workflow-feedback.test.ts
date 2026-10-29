@@ -105,6 +105,75 @@ describe("formatGraphIssues（回喂形状）", () => {
   });
 });
 
+describe("描述完整性软检查（切片 E3：成功回执追加提示，不阻断）", () => {
+  it("create 未写 description 且输入变量缺 description → 双提示；写全则无提示", async () => {
+    const created: unknown[] = [];
+    const tool = makeCreateWorkflowTool({
+      graphDefinition: {
+        create: vi.fn(async ({ data }: { data: { name: string } }) => {
+          const row = { id: 5, name: data.name };
+          created.push(row);
+          return row;
+        }),
+      },
+      session: { findUnique: vi.fn(async () => ({ userId: 7, appId: null })) },
+    } as never);
+    const bare = await tool.execute(CTX, {
+      name: "hint-flow",
+      graphJson: {
+        version: 1,
+        inputSchema: { amount: { type: "number" } },
+        nodes: [
+          startNode,
+          {
+            id: "db",
+            name: "查询",
+            kind: "database",
+            engine: "sqlite",
+            sqlitePath: "demo.db",
+            sql: "SELECT 1",
+          },
+        ],
+        edges: [
+          { from: "start", to: "db" },
+          { from: "db", to: "END" },
+        ],
+      },
+    });
+    expect(bare).toContain("成功");
+    expect(bare).toContain("未写 description");
+    expect(bare).toContain("输入变量 [amount] 未写 description");
+    const full = await tool.execute(CTX, {
+      name: "hint-flow-2",
+      description: "用途说明",
+      graphJson: {
+        version: 1,
+        inputSchema: {
+          amount: { type: "number", description: "金额" },
+        },
+        nodes: [
+          startNode,
+          {
+            id: "db",
+            name: "查询",
+            kind: "database",
+            engine: "sqlite",
+            sqlitePath: "demo.db",
+            sql: "SELECT 1",
+          },
+        ],
+        edges: [
+          { from: "start", to: "db" },
+          { from: "db", to: "END" },
+        ],
+      },
+    });
+    expect(full).toContain("成功");
+    expect(full).not.toContain("提示：");
+    expect(created).toHaveLength(2);
+  });
+});
+
 describe("节点 cookbook 静态注入（切片 E2）", () => {
   it("create/update 描述含全 kind 速查、范式与照猫画虎引导", () => {
     const create = makeCreateWorkflowTool(stubs as never);

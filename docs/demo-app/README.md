@@ -50,6 +50,19 @@
   会话 ⋯ 菜单绑定 → 该会话内 AI 的 list/run/create_workflow 只见/只建
   该应用的工作流；新建图自动入应用集合。
 
+## 对话式创建验收（切片 E）
+
+在记账应用绑定的会话里（automation/coding 场景）直接说：
+
+> 帮我加一个工作流：删除指定 id 的支出
+
+预期一轮对话内完成：LLM 按 cookbook 范式生成 graphJson（database DELETE
+参数化）→ create_workflow 校验过 → 回执含「已加入应用「记账」」与（若
+未写 description/字段描述）补写提示 → 说「删掉 id=3 那笔」→ confirm_form
+卡确认（id 数值框）→ 执行成功、运行历史可见。故意说「加个工作流查点什
+么但不给节点」一类模糊指令，可观察 E1 的字段级回喂（LLM 应在一轮内自
+纠重试而非放弃）。
+
 ## 约定与注意
 
 - 四个工作流的 `sqlitePath` 一律为 `demo.db`（工作空间相对路径），换工作

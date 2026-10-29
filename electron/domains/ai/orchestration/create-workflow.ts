@@ -416,7 +416,11 @@ export function makeCreateWorkflowTool(deps: {
           appNote = `；已加入应用「${scope.name}」`;
         }
         deps.notify?.();
-        return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑${appNote}`;
+        const hints = descriptionHints({
+          description: args.description,
+          inputSchema: result.value.inputSchema,
+        });
+        return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑${appNote}${hints.length ? `\n${hints.join("\n")}` : ""}`;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         if (message.includes("UNIQUE")) {
@@ -589,12 +593,26 @@ export function makeUpdateWorkflowTool(deps: {
         return "错误: 会话不存在，无法确定当前用户";
       }
       let serialized: string | undefined;
+      let hints: string[] = [];
       if (args.graphJson !== undefined) {
         const result = validateGraph(args.graphJson);
         if (!result.ok) {
           return `校验未通过（问题按「节点/字段/原因/期望」逐条列出），请修正 graphJson 后重试：\n${formatIssues(result.issues)}`;
         }
         serialized = JSON.stringify(normalizeGraph(result.value));
+        hints = descriptionHints({
+          description: args.description,
+          inputSchema: result.value.inputSchema,
+        });
+        // description 提示降噪（切片 E3）：本次未传且库中已有描述则不提
+        if (args.description === undefined) {
+          const existing = await deps.graphDefinition.findFirst({
+            where: { id: args.id, userId },
+          });
+          if (existing?.description) {
+            hints = hints.filter((hint) => !hint.startsWith("提示：未写"));
+          }
+        }
       }
       const res = await deps.graphDefinition.updateMany({
         where: { id: args.id, userId, version: args.version },
@@ -616,7 +634,7 @@ export function makeUpdateWorkflowTool(deps: {
           : "错误: 工作流不存在（可先用 list_workflows 核对 id）";
       }
       deps.notify?.();
-      return `成功: 工作流 id=${args.id} 已更新（新 version=${args.version + 1}）`;
+      return `成功: 工作流 id=${args.id} 已更新（新 version=${args.version + 1}）${hints.length ? `\n${hints.join("\n")}` : ""}`;
     },
   };
 }
@@ -630,6 +648,30 @@ const runWorkflowSchema = z.object({
       "输入变量（键与类型以 list_workflows 返回的输入说明为准；number 直传、boolean 为 true/false、enum 须在值域内）",
     ),
 });
+
+/** 描述完整性软检查（切片 E3）：成功回执追加提示引导补写（不阻断）
+ *  ——list_workflows 的类型摘要行+描述是 LLM 选工作流的全部依据 */
+function descriptionHints(params: {
+  description?: string | null;
+  /** 已校验通过的图（取归一后的 inputSchema） */
+  inputSchema: Record<string, unknown>;
+}): string[] {
+  const hints: string[] = [];
+  if (!params.description || params.description.trim() === "") {
+    hints.push(
+      "提示：未写 description——list_workflows 按名称+描述路由选图，建议 update_workflow 补一句用途说明",
+    );
+  }
+  const missing = parseInputSchema(params.inputSchema)
+    .filter((field) => !field.description)
+    .map((field) => field.key);
+  if (missing.length > 0) {
+    hints.push(
+      `提示：输入变量 [${missing.join("、")}] 未写 description，建议补写（类型摘要行含描述更利填参）`,
+    );
+  }
+  return hints;
+}
 
 /** 图 graphJson → 入口归一（切片 D，run_workflow 用）：required 校验 +
  * default 填充 + 类型归一；schema 不可解析按无声明直通（旧图不设障） */

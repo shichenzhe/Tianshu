@@ -38,8 +38,13 @@
   `run_workflow`（写操作需批准）→ `get_workflow_run` 确认 `affectedRows=1`。
 - 「看看最近 5 笔支出」→ 查账明细工作流 → AI 拿终点完整输出（show_table
   结构）→ 调 `show_table` → 消息流出现原生表格卡。
-- 「这个月花了多少」→ 月度汇总工作流 → AI 调 `show_summary` → 消息流出现
-  摘要卡（总额/笔数/Top 分类）。
+- 「这个月花了多少」→ 月度汇总工作流 → 终点 payload 含 summary/
+  byCategory/trend 三段 → AI 调 `show_summary` 出摘要卡；追问「画个趋势」
+  → AI 用 trend 段调 `show_chart`（line 折线）；「分类对比画柱状图」→
+  byCategory 段调 `show_chart`（bar）。
+- 应用语境（切片 C）：把四个工作流在「应用管理」页建成「记账」应用 →
+  会话 ⋯ 菜单绑定 → 该会话内 AI 的 list/run/create_workflow 只见/只建
+  该应用的工作流；新建图自动入应用集合。
 
 ## 约定与注意
 
@@ -49,12 +54,19 @@
   日期缺省在 SQL 内 `COALESCE(NULLIF(?,''), date('now','localtime'))` 兜底
   （模板机制只能整节点输出引用，variable/code 节点转出的单值无法按 key
   解构，SQL 内转换是节点能力现状下的最短路径）。
+- 组装去 code 化（切片 C）：查账明细/月度汇总的行集组装走 **merge 模板
+  直嵌 + jsonParse 提标量** 路线——merge 模板把 database 节点输出的行集
+  JSON 原样嵌进 show_table/show_summary 结构（行集键即列 key，无需改名），
+  月度汇总的总额/笔数/均值经三个 jsonParse 节点（path `0.total` 等）提为
+  标量后入模板。两图零 code 节点，**打包态不依赖系统 node 解释器**（code
+  节点 spawn 裸 node，见下条备案）。唯一行为差异备案：查账明细 note 为
+  NULL 时现渲染 `—`（旧 code 版转空串）。
 - 查账明细的 `limit` 输入缺省 5，SQL 内钳制 0..200（`MAX(0, MIN(...))`，
   负值出 0 行、超大值截 200——负 LIMIT 在 SQLite 语义为「不限」必须前置
   钳住）。
 - `get_workflow_run` 附「完整输出」段（上限 4000 字，取自 graphRunNode
   节点级全量输出），超出会截断标 `…`；超大明细请用月份过滤或小 limit。
-- code 节点（查账明细/月度汇总的组装节点）spawn 裸 `node` 解释器：dev
-  态无虞；**打包态依赖用户机器 PATH 上装有 node**，缺装报
-  `interpreter_missing`（运行记录可见引导文案）——2026-10-29 build 验证
-  备案（安装包不内嵌 node 运行时）。
+- code 节点 spawn 裸 `node` 解释器：demo 四图自切片 C 起零 code 节点，
+  不再受此约束；自建图若用 code 节点，dev 态无虞、**打包态依赖用户机器
+  PATH 上装有 node**，缺装报 `interpreter_missing`（运行记录可见引导
+  文案）——2026-10-29 build 验证备案（安装包不内嵌 node 运行时）。

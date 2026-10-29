@@ -1,6 +1,6 @@
 {
   "name": "记账·查账明细",
-  "description": "查询支出明细并组装为 show_table 表格结构（终点输出可直接透传 show_table 工具）。inputs：month 月份 yyyy-MM（空串=不限月份）、limit 最近 N 笔（空串=5）。SQL 内参数化过滤 + CAST/LIMIT；code 节点把 database 节点的行集 JSON 组装成 {title, columns, rows}。",
+  "description": "查询支出明细并组装为 show_table 表格结构（终点输出可直接透传 show_table 工具）。inputs：month 月份 yyyy-MM（空串=不限月份）、limit 最近 N 笔（空串=5，钳 0..200）。merge 模板直嵌 database 行集 JSON 组装（零 code 节点——打包态不依赖系统 node 解释器）。",
   "graphJson": {
     "version": 1,
     "inputSchema": {
@@ -28,9 +28,8 @@
       {
         "id": "build-table",
         "name": "组装表格结构",
-        "kind": "code",
-        "language": "nodejs",
-        "script": "const rows = {{nodes.select-expenses.output}};\nconst payload = {\n  title: \"支出明细\",\n  columns: [\n    { key: \"spent_at\", label: \"日期\" },\n    { key: \"category\", label: \"类别\" },\n    { key: \"amount\", label: \"金额\" },\n    { key: \"note\", label: \"备注\" },\n  ],\n  rows: rows.map((r) => ({\n    spent_at: r.spent_at,\n    category: r.category,\n    amount: r.amount,\n    note: r.note === null ? \"\" : r.note,\n  })),\n};\nconsole.log(JSON.stringify(payload));",
+        "kind": "merge",
+        "template": "{\"title\":\"支出明细\",\"columns\":[{\"key\":\"spent_at\",\"label\":\"日期\"},{\"key\":\"category\",\"label\":\"类别\"},{\"key\":\"amount\",\"label\":\"金额\"},{\"key\":\"note\",\"label\":\"备注\"}],\"rows\":{{nodes.select-expenses.output}}}",
         "position": { "x": 560, "y": 200 }
       }
     ],

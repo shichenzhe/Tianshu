@@ -52,9 +52,9 @@ export const EXPERT_GROUP_TOOL_NAMES: readonly string[] = [
 ];
 
 /**
- * 展示组（轻量组，按需）：show_table/show_summary/confirm_form——工作流
- * 结果渲染与执行确认的消息流卡（display-tools/confirm-form-tool 注册，
- * demo 切片 2026-10-28 / 切片 B 2026-10-29），与工作流组同门
+ * 展示组（轻量组，按需）：show_table/show_summary/show_chart/
+ * confirm_form——工作流结果渲染与执行确认的消息流卡
+ * （display-tools/confirm-form-tool 注册，切片 A/B/C），与工作流组同门
  * （automation/coding 场景或 workflow-creator 技能启用）：无工作流语境
  * 的会话没有 run_workflow 可执行/可渲染，卡片随工作流能力同进退。
  * 名字与静态注册名一一对应，同改名断回喂裁定
@@ -62,6 +62,7 @@ export const EXPERT_GROUP_TOOL_NAMES: readonly string[] = [
 export const DISPLAY_GROUP_TOOL_NAMES: readonly string[] = [
   "show_table",
   "show_summary",
+  "show_chart",
   "confirm_form",
 ];
 

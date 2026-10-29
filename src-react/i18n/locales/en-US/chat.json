@@ -1695,5 +1695,10 @@
     "cancelled": "Cancelled — nothing was executed",
     "doneFallback": "Executed with confirmed parameters; see run history",
     "error": "Failed to deliver confirmation, please retry from the chat"
+  },
+  "showChart": {
+    "defaultTitle": "Chart",
+    "loading": "Generating chart…",
+    "empty": "No data"
   }
 }

@@ -8,8 +8,10 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  makeShowChartTool,
   makeShowSummaryTool,
   makeShowTableTool,
+  SHOW_CHART_TOOL_NAME,
   SHOW_SUMMARY_TOOL_NAME,
   SHOW_TABLE_TOOL_NAME,
 } from "../../electron/domains/ai/agent/display-tools";
@@ -126,5 +128,75 @@ describe("show_summary 工具", () => {
     expect(result).toContain("已渲染摘要");
     expect(result).toContain("月度汇总");
     expect(result).toContain("2 项指标");
+  });
+});
+
+describe("show_chart 工具", () => {
+  const tool = makeShowChartTool();
+
+  it("命名与 kind：show_chart / read（免审批）", () => {
+    expect(tool.name).toBe(SHOW_CHART_TOOL_NAME);
+    expect(tool.kind).toBe("read");
+  });
+
+  it("参数 schema：line/bar 两型、labels 与系列等长校验通过", () => {
+    expect(
+      tool.parameters.safeParse({
+        chartType: "line",
+        labels: ["5月", "6月"],
+        series: [{ name: "支出", values: [120, 88] }],
+      }).success,
+    ).toBe(true);
+    expect(
+      tool.parameters.safeParse({
+        title: "趋势",
+        chartType: "bar",
+        labels: ["餐饮", "交通"],
+        series: [
+          { name: "本月", values: [300, 120] },
+          { name: "上月", values: [280, 90] },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("参数 schema：系列数超 3/labels 空/values 长度不齐/chartType 越界均拒绝", () => {
+    const base = { chartType: "line", labels: ["a", "b"] };
+    expect(
+      tool.parameters.safeParse({
+        ...base,
+        series: [1, 2, 3, 4].map((i) => ({ name: `s${i}`, values: [1, 2] })),
+      }).success,
+    ).toBe(false);
+    expect(
+      tool.parameters.safeParse({ ...base, labels: [], series: [] }).success,
+    ).toBe(false);
+    // values 与 labels 不齐：superRefine 拒绝
+    expect(
+      tool.parameters.safeParse({
+        ...base,
+        series: [{ name: "s", values: [1] }],
+      }).success,
+    ).toBe(false);
+    expect(
+      tool.parameters.safeParse({
+        chartType: "pie",
+        labels: ["a"],
+        series: [{ name: "s", values: [1] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("execute 返回确认文本（型别名+标题+规模），不抛出", async () => {
+    const ctx = { workspacePath: "/ws", sessionId: 1 };
+    const result = await tool.execute(ctx, {
+      title: "近 6 个月支出",
+      chartType: "bar",
+      labels: ["5月", "6月"],
+      series: [{ name: "支出", values: [120, 88] }],
+    });
+    expect(result).toContain("已渲染柱状图");
+    expect(result).toContain("近 6 个月支出");
+    expect(result).toContain("2 个刻度");
   });
 });

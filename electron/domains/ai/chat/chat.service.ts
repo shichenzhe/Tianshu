@@ -82,7 +82,11 @@ import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { makePlanTools } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
-import { makeShowSummaryTool, makeShowTableTool } from "../agent/display-tools";
+import {
+  makeShowChartTool,
+  makeShowSummaryTool,
+  makeShowTableTool,
+} from "../agent/display-tools";
 import { makeConfirmFormTool } from "../agent/confirm-form-tool";
 import { confirmForms } from "../agent/confirm-registry";
 import {
@@ -154,7 +158,11 @@ registerTools([makeWidgetTool()]);
 // 2026-10-28）。门控进展示组（tool-groups，与工作流组同门），未开工作流
 // 语境的会话不注入；未绑定目录的会话被 collectToolDefinitions 的无工作
 // 空间过滤剔除（无 run_workflow 即无查询结果可渲染）
-registerTools([makeShowTableTool(), makeShowSummaryTool()]);
+registerTools([
+  makeShowTableTool(),
+  makeShowSummaryTool(),
+  makeShowChartTool(),
+]);
 // confirm_form：写类工作流执行前的人确认卡（切片 B 2026-10-29）——确认
 // 后经 registry 直调 run_workflow 执行体（免双重审批，卡即人工门）；同门
 // 展示组；delegates 同 plan tools 模块级装配口径

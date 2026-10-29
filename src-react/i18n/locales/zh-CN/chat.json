@@ -1695,5 +1695,10 @@
     "cancelled": "已取消，未执行",
     "doneFallback": "已按确认参数执行，结果见运行记录",
     "error": "确认决议失败，请从消息流重新发起"
+  },
+  "showChart": {
+    "defaultTitle": "图表",
+    "loading": "图表生成中…",
+    "empty": "暂无数据"
   }
 }

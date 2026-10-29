@@ -165,6 +165,64 @@ describe("confirm_form 块分流（工作流执行确认卡）", () => {
   });
 });
 
+describe("show_chart 块分流（消息流图表卡）", () => {
+  it("show_chart 工具块分流到 charts（line 型原样保留系列与标签）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch1",
+        toolName: "show_chart",
+        args: {
+          title: "近 6 个月支出",
+          chartType: "line",
+          labels: ["5月", "6月", "7月"],
+          series: [{ name: "支出", values: [120, 88, 200] }],
+        },
+        state: "done",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.charts).toHaveLength(1);
+    expect(grouped.charts[0].chartType).toBe("line");
+    expect(grouped.charts[0].labels).toEqual(["5月", "6月", "7月"]);
+    expect(grouped.charts[0].series[0].values).toEqual([120, 88, 200]);
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进（chartType 缺省 line、labels/series 非数组退空）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch3",
+        toolName: "show_chart",
+        args: { chartType: "bar" },
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.charts[0].chartType).toBe("bar");
+    expect(grouped.charts[0].labels).toEqual([]);
+    expect(grouped.charts[0].series).toEqual([]);
+    const bad = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch4",
+        toolName: "show_chart",
+        args: { chartType: "pie", labels: "半截" },
+        state: "running",
+      } as never,
+    ]);
+    expect(bad.charts[0].chartType).toBe("line");
+    expect(bad.charts[0].labels).toEqual([]);
+  });
+});
+
 describe("summarizeThinking 折叠摘要", () => {
   it("短文本原样返回", () => {
     expect(summarizeThinking("我来梳理一下思路。")).toBe("我来梳理一下思路。");

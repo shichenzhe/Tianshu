@@ -10,11 +10,12 @@
 import { z } from "zod";
 import type { ToolDefinition } from "./file-tools";
 import {
+  SHOW_CHART_TOOL_NAME,
   SHOW_SUMMARY_TOOL_NAME,
   SHOW_TABLE_TOOL_NAME,
 } from "../../../../src-react/domains/ai/chat/lib/group-blocks";
 
-export { SHOW_SUMMARY_TOOL_NAME, SHOW_TABLE_TOOL_NAME };
+export { SHOW_CHART_TOOL_NAME, SHOW_SUMMARY_TOOL_NAME, SHOW_TABLE_TOOL_NAME };
 
 /** 表格行单元格值：仅标量（对象/数组拒收——渲染层不猜嵌套结构） */
 const cellValueSchema = z.union([
@@ -61,6 +62,38 @@ const showSummaryArgsSchema = z.object({
 
 export type ShowSummaryToolArgs = z.infer<typeof showSummaryArgsSchema>;
 
+const chartSeriesSchema = z.object({
+  /** 系列名（图例/直接标注） */
+  name: z.string().min(1).max(60),
+  /** 与 labels 等长的数值序列（有限数） */
+  values: z.array(z.number().finite()).max(200),
+});
+
+const showChartArgsSchema = z
+  .object({
+    /** 卡片标题（渲染头展示，缺省用渲染层默认标题） */
+    title: z.string().max(120).optional(),
+    /** line=趋势（随时间变化）；bar=量级对比 */
+    chartType: z.enum(["line", "bar"]),
+    /** 横轴刻度标签（月份/类别名） */
+    labels: z.array(z.string().min(1).max(40)).min(1).max(200),
+    /** 数据系列（1-3；颜色按固定次序分配不循环） */
+    series: z.array(chartSeriesSchema).min(1).max(3),
+  })
+  .superRefine((args, ctx) => {
+    for (const [index, series] of args.series.entries()) {
+      if (series.values.length !== args.labels.length) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["series", index, "values"],
+          message: `第 ${index + 1} 个系列的数值数量须与 labels 一致（${args.labels.length}）`,
+        });
+      }
+    }
+  });
+
+export type ShowChartToolArgs = z.infer<typeof showChartArgsSchema>;
+
 export function makeShowTableTool(): ToolDefinition<ShowTableToolArgs> {
   return {
     name: SHOW_TABLE_TOOL_NAME,
@@ -70,6 +103,18 @@ export function makeShowTableTool(): ToolDefinition<ShowTableToolArgs> {
     kind: "read",
     execute: async (_ctx, args) =>
       `已渲染表格${args.title ? `「${args.title}」` : ""}（${args.columns.length} 列 × ${args.rows.length} 行，用户可在消息流中查看）。`,
+  };
+}
+
+export function makeShowChartTool(): ToolDefinition<ShowChartToolArgs> {
+  return {
+    name: SHOW_CHART_TOOL_NAME,
+    description:
+      "在消息流渲染图表卡（手绘 SVG，无外部库）。line 表趋势（月度走势等随序变化）、bar 表量级对比（分类金额等）；工作流聚合出的趋势/对比数据用本工具呈现，labels 为横轴标签、每个系列 values 与 labels 等长",
+    parameters: showChartArgsSchema,
+    kind: "read",
+    execute: async (_ctx, args) =>
+      `已渲染${args.chartType === "line" ? "折线" : "柱状"}图${args.title ? `「${args.title}」` : ""}（${args.series.length} 个系列 × ${args.labels.length} 个刻度，用户可在消息流中查看）。`,
   };
 }
 

@@ -194,8 +194,10 @@ async function listItems(
   deps: PlanToolsDeps,
   ctx: ToolContext,
 ): Promise<string> {
+  // execute 已做 projectId 判空（ts-jest 严格检查不跨函数窄化，显式收窄）
+  const projectId = ctx.projectId as number;
   const rows = await deps.prisma.planItem.findMany({
-    where: { projectId: ctx.projectId },
+    where: { projectId },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   if (rows.length === 0) {

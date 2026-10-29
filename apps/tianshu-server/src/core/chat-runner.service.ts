@@ -65,7 +65,7 @@ import {
 import { loadSkills, type SkillInfo } from './tools/skill-loader';
 import { makeReadSkillTool } from './tools/read-skill';
 import { makeCreateSkillTool } from './tools/create-skill';
-import { makePlanTools } from './tools/plan-tools';
+import { makePlanTools, PLAN_TOOL_NAMES } from './tools/plan-tools';
 import { makeWebTools } from './tools/web-tools';
 import { makeRunCommandTool } from './tools/command-tool';
 import { FILE_TOOLS } from './tools/file-tools';

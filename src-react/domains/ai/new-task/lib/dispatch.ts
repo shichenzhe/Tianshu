@@ -1,6 +1,6 @@
 /**
  * 新建任务发送编排（spec §3.2）：读 store 草稿 → 敏感词/工作空间前置校验 →
- * 逐 pending 引用组注入块（file 工作空间引用式——仅路径+read_file 指示 /
+ * 逐 pending 引用组注入块（file 工作空间引用式——仅路径+read 指示 /
  * localFile 本地文件读内容 / skill 技能读内容，注入格式与 ChatView 发送层
  * 同口径 buildInjectedContent）→ create(scenario)
  * → [专家/模式/模型草稿落库（PlusMenu 对齐）：setAssistant / setMode /
@@ -47,7 +47,7 @@ async function readPendingRef(ref: PendingRef): Promise<PendingFile> {
     };
   }
   // 引用式（引用式批 2026-10-21）：工作空间引用不读全文——新会话默认
-  // agent 模式，AI 处理时 read_file 自读（面板只显示路径行），对齐主聊天
+  // agent 模式，AI 处理时 read 自读（面板只显示路径行），对齐主聊天
   // ChatInput 引用式口径；原「读失败即中断发送」的预检随之取消（文件
   // 失效由 AI 工具读取时报错反馈，与主聊天一致）
   return { path: ref.ref, content: "", kind: "fileRef" };

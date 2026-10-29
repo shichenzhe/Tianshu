@@ -286,7 +286,7 @@ export function formatActivityTime(iso: string, locale: string): string {
 }
 
 /** 资料库主区视图路由（spec §5）：「最近」快捷入口 or 文件夹层（null=根）；
- *  artifacts=本地产物（跨会话 write_file 聚合，自带列表+预览） */
+ *  artifacts=本地产物（跨会话 write 聚合，自带列表+预览） */
 export type LibraryViewRoute =
   | { type: "recent" }
   | { type: "folder"; id: number | null }

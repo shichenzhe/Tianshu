@@ -64,7 +64,7 @@ export default function BrowserPanelTab({
     [sessionId, tab.id, tab.url, syncTab],
   );
 
-  // 面板联动（open_browser 复用 tab）吸收路径：store 负载 url 被联动桥
+  // 面板联动（browse 复用 tab）吸收路径：store 负载 url 被联动桥
   // 外部改写时同步进本地 browserTab——BrowserWebview 以 url prop 变化派发
   // loadURL，本地态不吸收则复用路径不导航（挂载路径 initial state 已覆盖，
   // W5 冒烟实锤）。同值 no-op：did-navigate 回写（onSync→store→props 回流）

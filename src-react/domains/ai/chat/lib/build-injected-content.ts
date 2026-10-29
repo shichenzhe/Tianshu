@@ -6,7 +6,7 @@
 import type { PendingFile } from "./pending-file";
 
 /** 引用前缀：技能/待办专属语义（模型可分辨引用来源），文件与本地文件统一 [引用文件]；
- *  引用式（fileRef）只有路径行 + read_file 指示——AI 处理时自读，面板不显示文件内容 */
+ *  引用式（fileRef）只有路径行 + read 指示——AI 处理时自读，面板不显示文件内容 */
 function referencePrefix(file: PendingFile): string {
   if (file.kind === "skill") {
     return `[引用技能 ${file.path}]`;
@@ -15,7 +15,7 @@ function referencePrefix(file: PendingFile): string {
     return `[引用待办 ${file.path}]`;
   }
   if (file.kind === "fileRef") {
-    return `[引用文件 ${file.path}]（请用 read_file 工具读取该文件后处理）`;
+    return `[引用文件 ${file.path}]（请用 read 工具读取该文件后处理）`;
   }
   return `[引用文件 ${file.path}]`;
 }

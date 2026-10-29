@@ -197,7 +197,7 @@ export default function LibrarySidebarTree({
             <Clock className="h-4 w-4 shrink-0" />
             <span className="truncate">{t("chat:library.recentEntry")}</span>
           </button>
-          {/* 本地产物：跨会话 write_file 聚合（自带列表+预览，无文件夹语义） */}
+          {/* 本地产物：跨会话 write 聚合（自带列表+预览，无文件夹语义） */}
           <button
             type="button"
             onClick={() => onSelectView({ type: "artifacts" })}

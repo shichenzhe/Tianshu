@@ -43,7 +43,7 @@ import EditBar from "./EditBar";
 
 interface MessageItemProps {
   message: MessageRecord;
-  /** 所属会话 id：推荐卡（recommend_experts）添加专家后绑定回当前会话；
+  /** 所属会话 id：推荐卡（recommend_expert）添加专家后绑定回当前会话；
    *  缺省只添加不绑定（组件渲染不依赖该值） */
   sessionId?: number;
   /** 流式中的实时气泡：面板显示「思考中」并默认展开 */
@@ -433,7 +433,7 @@ function MessageItemImpl({
             state={widget.state}
           />
         ))}
-        {/* 专家推荐卡（recommend_experts 工具块分流）：消息流正文位渲染 */}
+        {/* 专家推荐卡（recommend_expert 工具块分流）：消息流正文位渲染 */}
         {grouped.recommends.map((rec) => (
           <ExpertRecommendCard
             key={rec.toolCallId}

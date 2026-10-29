@@ -10,9 +10,9 @@ import type { MessageBlock, TextBlock, UsageBlock } from "../model/blocks";
  *  electron/domains/ai/agent/widget-tool.ts 同名约定——工具块按名分流） */
 export const WIDGET_TOOL_NAME = "show_widget";
 
-/** recommend_experts 工具名（会话内专家推荐卡；与后端
+/** recommend_expert 工具名（会话内专家推荐卡；与后端
  *  electron/domains/ai/agent/recommend-expert-tool.ts 同名约定） */
-export const RECOMMEND_TOOL_NAME = "recommend_experts";
+export const RECOMMEND_TOOL_NAME = "recommend_expert";
 
 /** 面板内工具条目（平铺 ToolCallCard props，与流式 ToolStreamState 同构） */
 export interface ToolPanelItem {
@@ -33,7 +33,7 @@ export interface WidgetPanelItem {
   state: string;
 }
 
-/** 推荐卡条目（recommend_experts 工具块分流；args 为
+/** 推荐卡条目（recommend_expert 工具块分流；args 为
  *  { candidates, reason }，渲染层经 ExpertRecommendCard 呈现） */
 export interface RecommendPanelItem {
   toolCallId: string;
@@ -48,7 +48,7 @@ export interface GroupedBlocks {
   tools: ToolPanelItem[];
   /** show_widget 工具块（消息流内沙箱渲染，不进思考面板） */
   widgets: WidgetPanelItem[];
-  /** recommend_experts 工具块（消息流内推荐卡，不进思考面板） */
+  /** recommend_expert 工具块（消息流内推荐卡，不进思考面板） */
   recommends: RecommendPanelItem[];
   texts: TextBlock[];
   usage?: UsageBlock;
@@ -86,7 +86,7 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
           });
           break;
         }
-        // recommend_experts 同样分流消息流（正文位推荐卡渲染）
+        // recommend_expert 同样分流消息流（正文位推荐卡渲染）
         if (block.toolName === RECOMMEND_TOOL_NAME) {
           const args = (block.args ?? {}) as {
             candidates?: string[];

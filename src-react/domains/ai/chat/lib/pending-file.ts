@@ -7,7 +7,7 @@ export interface PendingFile {
   path: string;
   content: string;
   /** 引用来源:工作空间文件(默认)、本地文件、已安装技能或项目待办;
-   *  fileRef = 工作空间引用式(仅路径 + read_file 指示,不读全文——
+   *  fileRef = 工作空间引用式(仅路径 + read 指示,不读全文——
    *  content 忽略,agent/plan 会话 AI 自读,ask 无工具集不走此 kind) */
   kind?: "file" | "localFile" | "skill" | "todo" | "fileRef";
   /** 图片附件标记:path 即图片绝对路径,content 为空——发送层分流为

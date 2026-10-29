@@ -16,11 +16,11 @@ export interface WorkspaceFileContent {
   mtime: number;
 }
 
-/** 本地产物列表条目（跨会话 write_file 记录聚合；类型被 session.repo 反向 import） */
+/** 本地产物列表条目（跨会话 write 记录聚合；类型被 session.repo 反向 import） */
 export interface ArtifactListItem {
   /** resolve 后绝对路径 */
   path: string;
-  /** write_file 原始 path（readFile/revealFile 消费） */
+  /** write 原始 path（readFile/revealFile 消费） */
   relPath: string;
   name: string;
   /** 扩展名分类（classifyFileType 口径，与资料库一致） */

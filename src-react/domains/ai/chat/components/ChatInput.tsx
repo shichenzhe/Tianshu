@@ -67,7 +67,7 @@ const REMOTE_IMAGE_LIMIT_BYTES = 3 * 1024 * 1024;
 
 /** 绝对路径判据（渲染层无 node:path）：POSIX 根、Windows 盘符或 UNC——
  *  ＋菜单「添加文件」等来源的工作空间外引用以绝对路径入 token，这类
- *  引用 read_file 读不到（工作空间守卫），须走内容注入链 */
+ *  引用 read 读不到（工作空间守卫），须走内容注入链 */
 function isAbsoluteLikePath(p: string): boolean {
   return p.startsWith("/") || p.startsWith("\\\\") || /^[a-zA-Z]:[\\/]/.test(p);
 }
@@ -517,7 +517,7 @@ export default function ChatInput({
       const failures: string[] = [];
       for (const filePath of new Set(fileTokens)) {
         // 引用式（引用式批 2026-10-21）：agent/plan 会话的工作空间相对路径
-        // 引用不读全文——只注路径 + read_file 指示，AI 处理时自读（面板只
+        // 引用不读全文——只注路径 + read 指示，AI 处理时自读（面板只
         // 显示路径行，对齐文件窗 library 首条注入语义）；ask 会话无工具集
         // （无头端/本地 ask → []），与绝对路径引用一并走下方内容注入链
         if (currentMode !== "ask" && !isAbsoluteLikePath(filePath)) {

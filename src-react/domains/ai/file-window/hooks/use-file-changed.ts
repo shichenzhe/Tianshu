@@ -6,7 +6,7 @@
  *   容常驻）；脏 tab 置 externalChanged 由 header 复用 T8 冲突条接手
  *   （重载磁盘版本/保留我的修改），不 invalidate——重取数据不得覆盖未
  *   保存草稿。
- * - fileWindow:libraryChanged（T14 修复轮）：AI write_file 直改库文件
+ * - fileWindow:libraryChanged（T14 修复轮）：AI write 直改库文件
  *   （主进程 bump updatedAt 后广播）→ 同 itemId library tab 同一分流：
  *   非脏 invalidate 条目/内容两键重读（基线随新 updatedAt 吸收）；脏置
  *   externalChanged（保存时 updatedAt 基线兜底冲突）。

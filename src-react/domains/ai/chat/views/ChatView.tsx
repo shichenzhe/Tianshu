@@ -123,7 +123,7 @@ export default function ChatView() {
   // 转办弹框开关（批 12）：仅项目会话顶行入口可打开
   const [handoverOpen, setHandoverOpen] = useState(false);
 
-  // 面板联动桥（web 工具 open_browser）：右栏浏览器 tab 自动开/复用
+  // 面板联动桥（web 工具 browse）：右栏浏览器 tab 自动开/复用
   useDetailPanelBridge(selectedSession?.id ?? null);
 
   // 页面顶行（TopBar 中段，原页内 header 迁入）：项目会话面包屑在前 +

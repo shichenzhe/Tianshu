@@ -46,7 +46,7 @@ interface ToolCallCardProps {
   defaultOpen?: boolean;
 }
 
-/** 取卡片头摘要：优先 args.path；无 path 的工具（如 run_command）取 args.command 前 60 字符 */
+/** 取卡片头摘要：优先 args.path；无 path 的工具（如 bash）取 args.command 前 60 字符 */
 export function extractPath(args: unknown): string | null {
   if (typeof args !== "object" || args === null) {
     return null;

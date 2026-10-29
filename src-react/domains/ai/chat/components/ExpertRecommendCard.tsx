@@ -1,5 +1,5 @@
 /**
- * 会话内专家推荐卡（recommend_experts 工具块渲染，WorkBuddy
+ * 会话内专家推荐卡（recommend_expert 工具块渲染，WorkBuddy
  * suggest_plugin_install 卡片移植）：候选胶囊卡 +「添加并启用」——
  * 市场模板建专家 + 绑定当前会话。已添加（sourceSlug 命中）收敛为已添加态。
  */

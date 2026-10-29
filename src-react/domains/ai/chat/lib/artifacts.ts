@@ -1,6 +1,6 @@
 /**
  * 产物面板文件派生（纯函数）：
- * - 产物文件 = write_file tool_call(state=done) 的 args.path
+ * - 产物文件 = write tool_call(state=done) 的 args.path
  * - 工作空间文件 = user 消息 text 块的 [引用文件 x] 行首前缀（注入格式固定）
  * - 流式期间合并 streams 的 tools（running→writing / done→written）
  * - 同 path 跨组去重（取源消息最新者），按 messageId 降序（流式 -1 置顶）
@@ -37,7 +37,7 @@ function streamEntryToFiles(entry: {
   args?: unknown;
   state: string;
 }): { path: string; status: "written" | "writing" } | null {
-  if (entry.toolName !== "write_file") return null;
+  if (entry.toolName !== "write") return null;
   const path = (entry.args as { path?: unknown } | undefined)?.path;
   if (typeof path !== "string" || !path.trim()) return null;
   if (entry.state === "done") return { path, status: "written" };
@@ -45,7 +45,7 @@ function streamEntryToFiles(entry: {
   return { path, status: "writing" };
 }
 
-/** 单条消息中 write_file(state=done) 块 → 产物文件条目 */
+/** 单条消息中 write(state=done) 块 → 产物文件条目 */
 function collectWriteFiles(
   message: MessageRecord,
   blocks: MessageBlock[],
@@ -53,7 +53,7 @@ function collectWriteFiles(
   if (message.role === "system") return [];
   const files: SessionFile[] = [];
   for (const block of blocks) {
-    if (block.type !== "tool_call" || block.toolName !== "write_file") continue;
+    if (block.type !== "tool_call" || block.toolName !== "write") continue;
     const parsed = streamEntryToFiles(block);
     if (!parsed || block.state !== "done") continue;
     files.push({
@@ -101,7 +101,7 @@ function scanMessageFiles(
   }
 }
 
-/** 流式工具合并：write_file running/done → 置顶条目（messageId=-1） */
+/** 流式工具合并：write running/done → 置顶条目（messageId=-1） */
 function mergeStreamTools(
   tools: ToolStreamMap,
   byPath: Map<string, SessionFile>,

@@ -6,9 +6,9 @@
  *   落地与注入前缀计算，发送动作移交 ChatPane）：ensureSession
  *   （session:create + title=文件名）+ library 授权先行（grantFilePath
  *   幂等，spec §6.4）+ workspace 相对路径前缀（引用式：agent 用
- *   read_file 按需读，spec §6.3）/ library 引用式前缀（挂绑定空间：
- *   storagePath+read_file 指示不读全文，T30 spec §17；无绑定降级全文
- *   100k 截断且不带 read_file 死指令——文件四件不注入）/ 图片 tab
+ *   read 按需读，spec §6.3）/ library 引用式前缀（挂绑定空间：
+ *   storagePath+read 指示不读全文，T30 spec §17；无绑定降级全文
+ *   100k 截断且不带 read 死指令——文件四件不注入）/ 图片 tab
  *   absPath→images 附件。
  * - library（T14）：session:create 无默认空间落点（session.repo 缺
  *   workspaceId 即抛 WORKSPACE_NOT_FOUND）——渲染侧自取挂载空间：绑定
@@ -73,7 +73,7 @@ interface EnsuredSession {
   id: number;
   created: boolean;
   /** 挂载空间是否带绑定目录（T30 spec §17 引用式注入判定，仅 library
-   *  新建路径有值）：挂绑定空间文件四件才注入（read_file/write_file 可
+   *  新建路径有值）：挂绑定空间文件四件才注入（read/write 可
    *  用）——与 FileChatPanel noBoundWorkspace 判定同源（绑定优先挂载下
    *  两语义等价），取自 ensureSession 自身的 workspace:list（与面板
    *  查询同数据源，不重复 IPC） */
@@ -127,7 +127,7 @@ export function useFileSession(tabId: string) {
 
   /** library 无绑定空间降级全文前缀（T30 spec §17 项 2，首条与 reinject
    *  共用）：读全文 + 100k 截断 + 截断后缀；读取失败（超限/二进制）前缀
-   *  不带正文，发送不中断。文案不带 read_file 指示——降级会话挂未绑定
+   *  不带正文，发送不中断。文案不带 read 指示——降级会话挂未绑定
    *  空间、文件四件不注入，指示是死指令 */
   const libraryFallbackPrefix = useCallback(
     async (name: string, storagePath: string): Promise<string> => {
@@ -177,7 +177,7 @@ export function useFileSession(tabId: string) {
           // library 会话挂载空间：session:create 无默认落点（缺 workspaceId
           // 即 WORKSPACE_NOT_FOUND），渲染侧自取——绑定空间优先（修复轮 2
           // 观察①：文件四件仅绑定目录的空间注入，挂绑定空间 grant 才有
-          // read_file/write_file 消费者）；全未绑定时保底挂 list 首个（无
+          // read/write 消费者）；全未绑定时保底挂 list 首个（无
           // 空间时 list 自动补建「默认工作空间」，createdAt asc 首即默认）
           // ——纯文本对话可用，AI 面板渲染降级提示条
           const item = await libraryItemOf(resource.itemId);
@@ -188,7 +188,7 @@ export function useFileSession(tabId: string) {
           if (!target) throw new Error("WORKSPACE_NOT_FOUND");
           workspaceId = target.id;
           title = item.name;
-          // T30：挂绑定空间即文件四件注入（read_file 可用）——引用式注入
+          // T30：挂绑定空间即文件四件注入（read 可用）——引用式注入
           // 判定随挂载结果带回（绑定优先下 ⟺ list 存在绑定空间）
           mountedOnBound = !!target.directoryPath?.trim();
         } else {
@@ -258,9 +258,9 @@ export function useFileSession(tabId: string) {
       }
       if (!created) return { session: stubOf(id, item.name) };
       // 文本条目（T30 spec §17）：挂绑定空间 → 引用式——不读全文，贴条
-      // 目名 + 绝对 storagePath + read_file 指示（模型按需读取；首条上下
+      // 目名 + 绝对 storagePath + read 指示（模型按需读取；首条上下
       // 文从 ~2.5万-6万 token 降至几十）；无绑定空间降级 → 全文注入
-      // （100k 截断，无 read_file 死指令）
+      // （100k 截断，无 read 死指令）
       if (mountedOnBound) {
         return {
           session: stubOf(id, item.name),
@@ -313,9 +313,9 @@ export function useFileSession(tabId: string) {
       const item = await libraryItemOf(resource.itemId);
       if (!item?.storagePath) return;
       await grantOrDrop(tab.sessionId, item.storagePath);
-      // 引用式（T30 spec §17）：有绑定空间（read_file 可用）贴 storagePath
+      // 引用式（T30 spec §17）：有绑定空间（read 可用）贴 storagePath
       // 提示重读；无绑定降级——文本条目重注最新全文（同首条降级模板，无
-      // read_file 死指令），图片条目维持路径提示（读取本就不可行）。判定
+      // read 死指令），图片条目维持路径提示（读取本就不可行）。判定
       // 与 FileChatPanel noBoundWorkspace 同源（workspace:list，面板
       // ["fw-workspaces"] 查询同数据源）
       const workspaces = await WorkspaceApi.list();

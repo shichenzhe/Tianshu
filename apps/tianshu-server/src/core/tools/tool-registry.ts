@@ -6,8 +6,10 @@
  * + library_search（PL-2，spec §2.2：资料库语义检索，本地执行不依赖
  * 控制端；PL-3 裁定后无工作空间 graph/automation 会话亦常驻注入）；
  * plan_*（项目会话）与 create_skill（技能目录）由 ChatRunnerService 按
- * 会话装配 registerTools 注册先例。widget/mcp__ 与 dispatch 等渲染层/
- * 编排专属工具不注册。
+ * 会话装配 registerTools 注册先例；工作流六件 + 展示三件（F1/F2，
+ * 2026-10-29）由 GraphModule 启动工厂注册（deps 闭包 GraphService.run）——
+ * graph LLM 节点 tools:true 经 registry 获得（mirror 同构）。widget/
+ * mcp__ 与 dispatch 等渲染层/编排专属工具不注册。
  */
 import type { ToolDefinition } from './tool-definition';
 import { FILE_TOOLS } from './file-tools';

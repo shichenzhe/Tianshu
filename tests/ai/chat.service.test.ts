@@ -988,7 +988,7 @@ describe("ChatService.assembleContext（项目会话 base 注入）", () => {
     // base（项目指令+预设专家+会话助手+声明）之后按 P2 组装规则追加技能清单段
     expect(ctx.systemWithSummary).toBe(
       "项目指令\n\n专家A\n\n专家B\n\n助手指令\n\n【项目预设能力】\n技能：技能1\n连接器：连接器1\n以上为本项目预设能力，对话中请优先使用；用户要求使用预设外的技能或连接器时，可按需直接调用。" +
-        "\n\n你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引）：" +
+        "\n\n你可以使用以下技能（调用 read_skill 工具并传入技能名可获取完整使用指引；指引中引用的技能包内文件（如 references/jira.md）以 path 参数读取）：" +
         "\n- 技能1: 挂载技能",
     );
   });

@@ -75,6 +75,40 @@ describe("ConfirmFormCard", () => {
     expect(respondMock).toHaveBeenCalledWith(42, { action: "cancel" });
   });
 
+  it("typed 控件（切片 D4）：enum 出下拉项、number 数值框，确认值 typed 上送", async () => {
+    const { container } = render(
+      <ConfirmFormCard
+        sessionId={42}
+        item={item({
+          fields: [
+            {
+              key: "category",
+              label: "类别",
+              value: "餐饮",
+              type: "enum",
+              enumValues: ["餐饮", "交通", "其他"],
+            },
+            { key: "amount", label: "金额", value: "35", type: "number" },
+            { key: "ok", label: "标记", value: "false", type: "boolean" },
+          ],
+        })}
+      />,
+    );
+    // enum 控件以触发器呈现当前值（候选项在关闭态不渲染——portal）
+    // number 数值框
+    const amount = screen.getByLabelText(/金额/) as HTMLInputElement;
+    expect(amount.type).toBe("number");
+    fireEvent.change(amount, { target: { value: "45" } });
+    fireEvent.click(screen.getByText("chat:confirmForm.confirm"));
+    await vi.waitFor(() =>
+      expect(respondMock).toHaveBeenCalledWith(42, {
+        action: "confirm",
+        values: { category: "餐饮", amount: 45, ok: false },
+      }),
+    );
+    expect(container.querySelector("select, [role=combobox]")).not.toBeNull();
+  });
+
   it("done 态只读展示回执；取消回执走取消文案", () => {
     render(
       <ConfirmFormCard

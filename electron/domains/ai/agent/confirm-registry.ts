@@ -19,7 +19,11 @@ export interface ConfirmFormPayload {
 
 /** 决议：confirm 携带编辑后的字段值（key → string）；cancel 即弃 */
 export type ConfirmFormDecision =
-  { action: "confirm"; values: Record<string, string> } | { action: "cancel" };
+  | {
+      action: "confirm";
+      values: Record<string, string | number | boolean>;
+    }
+  | { action: "cancel" };
 
 /** 缺省挂起上限：10 分钟无应答自动取消（对齐 ApprovalCoordinator） */
 export const CONFIRM_FORM_TIMEOUT_MS = 10 * 60 * 1000;

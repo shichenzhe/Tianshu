@@ -29,13 +29,20 @@ const confirmFormArgsSchema = z.object({
   workflowName: z.string().max(120).optional(),
   /** 卡片标题（缺省用渲染层默认标题） */
   title: z.string().max(120).optional(),
-  /** 参数表单：key=工作流 inputSchema 键，value=预填值（用户可改） */
+  /** 参数表单：key=工作流 inputSchema 键，value=预填值（用户可改）；
+   *  type/enumValues 照抄 list_workflows 的「输入」说明——卡片按类型出
+   *  控件（number 数值框/enum 下拉/date 日期/boolean 开关），enum 手输
+   *  错别字从根上消掉（切片 D4） */
   fields: z
     .array(
       z.object({
         key: z.string().min(1).max(64),
         label: z.string().min(1).max(60),
         value: z.string().max(2000),
+        type: z
+          .enum(["string", "number", "boolean", "enum", "date"])
+          .optional(),
+        enumValues: z.array(z.string().min(1)).max(30).optional(),
         hint: z.string().max(120).optional(),
       }),
     )
@@ -46,10 +53,14 @@ const confirmFormArgsSchema = z.object({
 export type ConfirmFormToolArgs = z.infer<typeof confirmFormArgsSchema>;
 
 /** run_workflow 执行体注入（默认经 registry 直调；测试注 stub 隔离
- *  tool-registry 的 electron 依赖链） */
+ *  tool-registry 的 electron 依赖链）。inputs 值 typed（切片 D4：卡片
+ *  number/boolean 控件产原生值，run_workflow 入口归一再收口） */
 export type RunWorkflowExecutor = (
   ctx: ToolContext,
-  args: { id: number; inputs?: Record<string, string> },
+  args: {
+    id: number;
+    inputs?: Record<string, string | number | boolean>;
+  },
 ) => Promise<string>;
 
 export function makeConfirmFormTool(deps: {
@@ -74,7 +85,7 @@ export function makeConfirmFormTool(deps: {
   return {
     name: "confirm_form",
     description:
-      "执行写类工作流前先出确认卡：用户核对并可编辑参数，确认后以最终参数立即执行该工作流（不再弹审批）；取消则不执行。调用 run_workflow 前优先用本工具取得用户确认",
+      "执行写类工作流前先出确认卡：用户核对并可编辑参数，确认后以最终参数立即执行该工作流（不再弹审批）；取消则不执行。fields 的 type/enumValues 照抄 list_workflows 该工作流「输入」说明（有类型即带，卡片按类型出控件）",
     parameters: confirmFormArgsSchema,
     kind: "read",
     execute: async (ctx, args) => {

@@ -118,6 +118,34 @@ describe("confirm_form 工具", () => {
     expect(confirmForms.pendingCount).toBe(0);
   });
 
+  it("参数 schema（切片 D4）：fields 带 type/enumValues 通过，type 越界拒绝", () => {
+    const tool = makeConfirmFormTool({
+      ...(stubs as never),
+      runWorkflow: vi.fn(),
+    });
+    expect(
+      tool.parameters.safeParse({
+        workflowId: 3,
+        fields: [
+          {
+            key: "category",
+            label: "类别",
+            value: "餐饮",
+            type: "enum",
+            enumValues: ["餐饮", "交通"],
+          },
+          { key: "amount", label: "金额", value: "35", type: "number" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      tool.parameters.safeParse({
+        workflowId: 3,
+        fields: [{ key: "a", label: "A", value: "1", type: "float" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("参数 schema：fields 必填 1-12 项、workflowId 正整数", () => {
     const tool = makeConfirmFormTool({
       ...(stubs as never),

@@ -211,7 +211,10 @@ export default class ChatApi {
   static async confirmFormRespond(
     sessionId: number,
     decision:
-      | { action: "confirm"; values: Record<string, string> }
+      | {
+          action: "confirm";
+          values: Record<string, string | number | boolean>;
+        }
       | {
           action: "cancel";
         },

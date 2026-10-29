@@ -1707,7 +1707,8 @@
     "empty": "No parameters to confirm",
     "cancelled": "Cancelled — nothing was executed",
     "doneFallback": "Executed with confirmed parameters; see run history",
-    "error": "Failed to deliver confirmation, please retry from the chat"
+    "error": "Failed to deliver confirmation, please retry from the chat",
+    "selectValue": "Select a value"
   },
   "showChart": {
     "defaultTitle": "Chart",

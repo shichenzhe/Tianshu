@@ -103,11 +103,13 @@ export interface ChartPanelItem {
 }
 
 /** 确认卡表单字段（confirm_form args.fields；与 confirm-form-tool schema
- *  同形） */
+ *  同形——type/enumValues 供卡片按类型出控件，切片 D4） */
 export interface ConfirmFormField {
   key: string;
   label: string;
   value: string;
+  type?: "string" | "number" | "boolean" | "enum" | "date";
+  enumValues?: string[];
   hint?: string;
 }
 

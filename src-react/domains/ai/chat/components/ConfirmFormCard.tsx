@@ -1,8 +1,11 @@
 /**
- * 工作流确认卡（confirm_form 工具块渲染，切片 B 2026-10-29）：执行态
- * 可编辑表单 + 确认/取消（确认以编辑后参数触发执行，经 agent:confirmRespond
- * 决议主进程挂起的工具 execute）；落定态展示回执（output），失败/被拒
- * 展示原因。sessionId 缺省（历史重放等场景）只读展示不可操作。
+ * 工作流确认卡（confirm_form 工具块渲染，切片 B P1 / 切片 D4 类型控件）：
+ * 执行态可编辑表单 + 确认/取消（确认以编辑后参数触发执行，经
+ * agent:confirmRespond 决议主进程挂起的工具 execute）；落定态展示回执
+ * （output），失败/被拒展示原因。sessionId 缺省（历史重放等场景）只读
+ * 展示不可操作。字段带 type/enumValues（照抄 list_workflows 输入说明）
+ * 时按类型出控件：number 数值框 / enum 下拉 / boolean 开关 / date 日期
+ * ——enum 手输错别字从根上消掉；确认值 typed 上送（入口归一兜底）。
  */
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -11,8 +14,19 @@ import { CheckCircle2, ClipboardCheck, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import ChatApi from "../../api/chat.api";
-import type { ConfirmFormPanelItem } from "../lib/group-blocks";
+import type {
+  ConfirmFormField,
+  ConfirmFormPanelItem,
+} from "../lib/group-blocks";
 
 function ConfirmFormCardBody({
   item,
@@ -22,8 +36,15 @@ function ConfirmFormCardBody({
   sessionId?: number;
 }) {
   const { t } = useTranslation(["chat", "common"]);
-  const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(item.fields.map((field) => [field.key, field.value])),
+  const [values, setValues] = useState<
+    Record<string, string | number | boolean>
+  >(() =>
+    Object.fromEntries(
+      item.fields.map((field) => [
+        field.key,
+        field.type === "boolean" ? field.value === "true" : field.value,
+      ]),
+    ),
   );
   const [submitting, setSubmitting] = useState(false);
   const [settled, setSettled] = useState<
@@ -35,7 +56,7 @@ function ConfirmFormCardBody({
 
   const respond = async (
     decision:
-      | { action: "confirm"; values: Record<string, string> }
+      | { action: "confirm"; values: Record<string, string | number | boolean> }
       | { action: "cancel" },
     outcome: "confirmed" | "cancelled" | "failed",
   ) => {
@@ -64,6 +85,77 @@ function ConfirmFormCardBody({
     settled === "cancelled" ||
     (done && (item.output ?? "").includes("用户已取消"));
   const failed = settled === "failed" || item.state === "error";
+
+  /** 单字段控件（按类型分流；无 type 按 string 文本框——渐进期兜底） */
+  const fieldControl = (field: ConfirmFormField) => {
+    const value = values[field.key] ?? "";
+    const setValue = (next: string | number | boolean) =>
+      setValues((prev) => ({ ...prev, [field.key]: next }));
+    if (field.type === "enum" && field.enumValues?.length) {
+      return (
+        <Select
+          value={String(value)}
+          onValueChange={setValue}
+          disabled={!interactive}
+        >
+          <SelectTrigger
+            id={`cf-${item.toolCallId}-${field.key}`}
+            className="h-8 w-full text-sm"
+            disabled={!interactive}
+          >
+            <SelectValue placeholder={t("chat:confirmForm.selectValue")} />
+          </SelectTrigger>
+          <SelectContent className="rounded-lg border border-border/50 shadow-lg">
+            {field.enumValues.map((option) => (
+              <SelectItem key={option} value={option}>
+                {option}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      );
+    }
+    if (field.type === "boolean") {
+      const checked = value === true || value === "true";
+      return (
+        <div className="flex items-center gap-2 py-1">
+          <Switch
+            id={`cf-${item.toolCallId}-${field.key}`}
+            checked={checked}
+            disabled={!interactive}
+            onCheckedChange={setValue}
+          />
+          <span className="text-xs text-muted-foreground">
+            {checked ? t("common:enabled") : t("common:disabled")}
+          </span>
+        </div>
+      );
+    }
+    const inputType =
+      field.type === "number"
+        ? "number"
+        : field.type === "date"
+          ? "date"
+          : "text";
+    return (
+      <Input
+        id={`cf-${item.toolCallId}-${field.key}`}
+        type={inputType}
+        value={String(value)}
+        disabled={!interactive}
+        onChange={(e) =>
+          setValue(
+            field.type === "number"
+              ? e.target.value === ""
+                ? ""
+                : Number(e.target.value)
+              : e.target.value,
+          )
+        }
+        className="h-8 text-sm"
+      />
+    );
+  };
 
   return (
     <div
@@ -102,18 +194,7 @@ function ConfirmFormCardBody({
                   </span>
                 ) : null}
               </Label>
-              <Input
-                id={`cf-${item.toolCallId}-${field.key}`}
-                value={values[field.key] ?? ""}
-                disabled={!interactive}
-                onChange={(e) =>
-                  setValues((prev) => ({
-                    ...prev,
-                    [field.key]: e.target.value,
-                  }))
-                }
-                className="h-8 text-sm"
-              />
+              {fieldControl(field)}
             </div>
           ))
         )}

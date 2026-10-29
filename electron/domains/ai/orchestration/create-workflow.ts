@@ -48,6 +48,9 @@ export interface WorkflowGraphPrismaLike {
       name: string;
       description: string | null;
       nodeCount?: number;
+      /** typed 输入摘要（切片 D4）：list_workflows 需读 inputSchema 供
+       *  LLM 填参——prisma findMany 本就返回全标量列，接口面补声明 */
+      graphJson?: string;
     }>
   >;
   /** get/update/run 共用：按 id + userId 取图（含 version/graphJson） */
@@ -176,6 +179,45 @@ function formatIssues(
     .join("\n");
 }
 
+/** 字段 → LLM 可读摘要（切片 D4）：amount:number(必填) /
+ *  category:enum[餐饮|交通](可选，默认:餐饮) / spent_at:date(必填，默认:当天) */
+function formatInputField(field: {
+  key: string;
+  type: string;
+  required: boolean;
+  default?: string | number | boolean;
+  enumValues?: string[];
+}): string {
+  const head =
+    field.type === "enum" && field.enumValues?.length
+      ? `${field.key}:enum[${field.enumValues.join("|")}]`
+      : `${field.key}:${field.type}`;
+  const qualifiers = [field.required ? "必填" : "可选"];
+  if (field.default !== undefined) {
+    qualifiers.push(
+      `默认:${field.default === "today" ? "当天" : String(field.default)}`,
+    );
+  }
+  return `${head}(${qualifiers.join("，")})`;
+}
+
+/** 图行 graphJson → typed 输入摘要行（无声明/解析失败返回 null） */
+export function inputSummaryOf(graphJson: string | undefined): string | null {
+  if (typeof graphJson !== "string" || graphJson === "") {
+    return null;
+  }
+  try {
+    const schema = (JSON.parse(graphJson) as { inputSchema?: unknown })
+      .inputSchema;
+    const fields = parseInputSchema(schema as Record<string, unknown>);
+    return fields.length > 0
+      ? fields.map((field) => formatInputField(field)).join("，")
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** sessionId → userId（工具上下文无 userId，经会话反查；图执行无会话
  *  sessionId null 返回 null——工具回「会话不存在」正确降级）。confirm_form
  *  工具同语义复用（切片 B），导出共用 */
@@ -293,11 +335,13 @@ export function makeListWorkflowsTool(deps: {
           ? `当前会话已绑定应用「${scope.name}」，其中暂无工作流`
           : "暂无已保存的工作流";
       }
+      // typed 输入摘要（切片 D4）：每行附输入说明——LLM 填参的类型面
+      //（静态工具描述无法按会话拼数据，list 即每请求可见的类型描述位）
       const listing = visible
-        .map(
-          (row) =>
-            `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ""}`,
-        )
+        .map((row) => {
+          const summary = inputSummaryOf(row.graphJson);
+          return `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ""}${summary ? ` · 输入: ${summary}` : ""}`;
+        })
         .join("\n");
       if (scope && !scope.dangling) {
         return `当前会话已绑定应用「${scope.name}」，仅列出该应用的工作流：\n${listing}`;
@@ -496,7 +540,7 @@ export function makeRunWorkflowTool(deps: {
   return {
     name: "run_workflow",
     description:
-      "异步试运行工作流（真实执行，触发即返；应用会话内仅可运行该应用的工作流）；写操作需批准",
+      "异步试运行工作流（真实执行，触发即返；应用会话内仅可运行该应用的工作流）；inputs 键与类型以 list_workflows 各工作流的「输入」说明为准（number 直传数值、enum 限值域、date 为 yyyy-MM-dd）；写操作需批准",
     parameters: runWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {

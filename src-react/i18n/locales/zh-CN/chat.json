@@ -1707,7 +1707,8 @@
     "empty": "无参数需要确认",
     "cancelled": "已取消，未执行",
     "doneFallback": "已按确认参数执行，结果见运行记录",
-    "error": "确认决议失败，请从消息流重新发起"
+    "error": "确认决议失败，请从消息流重新发起",
+    "selectValue": "请选择值"
   },
   "showChart": {
     "defaultTitle": "图表",

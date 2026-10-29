@@ -1894,10 +1894,16 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
       ...WORKFLOW_SIX.map(gatedTool),
       gatedTool("create_expert"),
       gatedTool("update_expert"),
+      gatedTool("create_automation_task"),
     ]);
   });
   afterAll(() => {
-    for (const name of [...WORKFLOW_SIX, "create_expert", "update_expert"]) {
+    for (const name of [
+      ...WORKFLOW_SIX,
+      "create_expert",
+      "update_expert",
+      "create_automation_task",
+    ]) {
       unregisterTools(name);
     }
   });
@@ -2205,6 +2211,16 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     );
     expect(names).not.toContain("create_workflow");
     expect(names).not.toContain("run_workflow");
+  });
+
+  it("未绑定目录：create_automation_task 经白名单挂载（独立于工作流门控——落库走默认空间兜底）", async () => {
+    const names = await toolNames(
+      makeSvc(
+        { scenario: "daily", workspaceId: null },
+        { skillRepo: skillRepoWith(null) },
+      ).service,
+    );
+    expect(names).toContain("create_automation_task");
   });
 });
 

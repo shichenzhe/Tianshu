@@ -198,6 +198,11 @@ function toTemplateRecord(
 }
 
 export default class AutomationRepository {
+  /** 未绑定会话建定时任务的落库归属（2026-10-29 用户裁定：普通会话也要
+   *  能建）：用户级「默认空间」——directoryPath 恒空（执行器
+   *  workspacePath 降级 undefined 已就绪），删后下次 ensure 自愈重建 */
+  private static readonly DEFAULT_WORKSPACE_NAME = "默认空间";
+
   /** 工具禁用清单闭包（SP6 裁定 2）：Application 注入（实时读安全配置），
    * 缺省不滤（测试）；runNow 手动触发与调度执行走同一过滤 */
   constructor(private disabledTools: () => string[] = () => []) {
@@ -218,8 +223,24 @@ export default class AutomationRepository {
         // 对话创建任务无前端调用方 invalidate，落库即广播失效
         // （IPC automation:create 仍响应即回不推，调用方自失效）
         notify: (taskId) => emitAutomationChanged(taskId),
+        // 未绑定会话兜底（automation-tool defaultWorkspaceId 契约）
+        defaultWorkspaceId: (userId) => this.ensureDefaultWorkspace(userId),
       }),
     ]);
+  }
+
+  /** 查/建用户默认空间（并发双建无碍——下次仍取第一个匹配） */
+  private async ensureDefaultWorkspace(userId: number): Promise<number> {
+    const existing = await prisma.workspace.findFirst({
+      where: { userId, name: AutomationRepository.DEFAULT_WORKSPACE_NAME },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    const row = await prisma.workspace.create({
+      data: { name: AutomationRepository.DEFAULT_WORKSPACE_NAME, userId },
+      select: { id: true },
+    });
+    return row.id;
   }
 
   private registerHandlers(): void {

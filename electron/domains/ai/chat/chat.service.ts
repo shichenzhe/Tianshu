@@ -82,6 +82,7 @@ import {
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
+import { AUTOMATION_TOOL_NAME } from "../agent/automation-tool";
 import { makePlanTools } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
 import {
@@ -1644,6 +1645,9 @@ export default class ChatService {
             // （WORKFLOW_NO_WORKSPACE_TOOLS 注释）——未绑目录会话经场景/
             // 意图开门后照常挂载，挂载元说明承诺由此兑现
             WORKFLOW_NO_WORKSPACE_TOOLS.has(def.name) ||
+            // create_automation_task 落库走默认空间兜底（未绑定会话同权，
+            // 2026-10-29 裁定）——不属工作流门控组，独立能力未绑即可见
+            def.name === AUTOMATION_TOOL_NAME ||
             def.name === WIDGET_TOOL_NAME ||
             def.name === CREATE_EXPERT_TOOL_NAME ||
             def.name === UPDATE_EXPERT_TOOL_NAME ||

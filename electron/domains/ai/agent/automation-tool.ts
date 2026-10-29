@@ -137,6 +137,10 @@ export interface AutomationCreateDeps {
    *  对话创建无前端调用方 invalidate，全局 staleTime 30s 内列表页
    *  不见新任务；纯 Node 禁 electron 故经注入） */
   notify?: (taskId: number) => void;
+  /** 未绑定会话的落库兜底（2026-10-29 用户裁定：普通会话也要能建定时
+   *  任务）：返回用户默认空间 id（无则建）；缺席（旧装配形态）维持
+   *  「请先绑定工作空间目录」引导文案 */
+  defaultWorkspaceId?: (userId: number) => Promise<number>;
 }
 
 export function makeAutomationTool(
@@ -151,14 +155,18 @@ export function makeAutomationTool(
     execute: async (ctx: ToolContext, args) => {
       const check = validateAutomationTaskArgs(args);
       if (!check.ok) return fail(check.reason);
-      const { userId, workspaceId, modelId } = ctx;
+      const { userId, modelId } = ctx;
       if (userId === undefined) {
         return fail("会话缺少用户归属，无法落库");
       }
+      let workspaceId = ctx.workspaceId;
       if (workspaceId === undefined) {
-        return fail(
-          "当前会话未绑定工作空间，无法创建定时任务；请先在会话中绑定工作空间目录",
-        );
+        if (!deps.defaultWorkspaceId) {
+          return fail(
+            "当前会话未绑定工作空间，无法创建定时任务；请先在会话中绑定工作空间目录",
+          );
+        }
+        workspaceId = await deps.defaultWorkspaceId(userId);
       }
       const graphId = check.data.graphId;
       const isGraph = graphId !== undefined;

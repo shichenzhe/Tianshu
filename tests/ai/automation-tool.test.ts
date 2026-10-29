@@ -176,6 +176,52 @@ describe("makeAutomationTool", () => {
   });
 });
 
+describe("makeAutomationTool（未绑定会话的默认空间兜底）", () => {
+  const createTask = vi.fn().mockResolvedValue({ id: 55 });
+  const defaultWorkspaceId = vi.fn().mockResolvedValue(99);
+  const tool = makeAutomationTool({
+    createTask,
+    // graphId 直连归属校验放行（既有 graph describe 同款 {id: 1}）
+    graphFirst: vi.fn().mockResolvedValue({ id: 1 }),
+    defaultWorkspaceId,
+  });
+  beforeEach(() => vi.clearAllMocks());
+
+  it("workspaceId 缺席 + 兜底注入：以默认空间落库", async () => {
+    const out = await tool.execute(ctx({ workspaceId: undefined }), {
+      ...baseArgs,
+    } as never);
+    expect(out).toContain("已创建");
+    expect(defaultWorkspaceId).toHaveBeenCalledWith(7);
+    const [params] = createTask.mock.calls[0];
+    expect(params.workspaceId).toBe(99);
+  });
+
+  it("workspaceId 在场：透传不兜底（defaultWorkspaceId 不被调用）", async () => {
+    const out = await tool.execute(ctx(), { ...baseArgs } as never);
+    expect(out).toContain("已创建");
+    expect(defaultWorkspaceId).not.toHaveBeenCalled();
+    const [params] = createTask.mock.calls[0];
+    expect(params.workspaceId).toBe(3);
+  });
+
+  it("graphId 直连型同样走兜底（无会话模型也能建）", async () => {
+    const out = await tool.execute(
+      ctx({ workspaceId: undefined, modelId: undefined }),
+      {
+        name: "每日跑图",
+        graphId: 1,
+        schedule: { mode: "periodic", kind: "daily", time: "09:00" },
+        scheduleText: "每天 09:00",
+      } as never,
+    );
+    expect(out).toContain("已创建");
+    const [params] = createTask.mock.calls[0];
+    expect(params.workspaceId).toBe(99);
+    expect(params.targetKind).toBe("graph");
+  });
+});
+
 describe("makeAutomationTool（graphId 直连工作流）", () => {
   const createTask = vi.fn().mockResolvedValue({ id: 43 });
   const graphFirst = vi.fn().mockResolvedValue({ id: 1, userId: 7 });

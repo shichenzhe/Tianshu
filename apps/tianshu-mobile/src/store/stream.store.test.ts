@@ -532,7 +532,7 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "tool-update",
       toolCallId: "t1",
-      toolName: "run_command",
+      toolName: "bash",
       args: { cmd: "echo hi" },
       state: "running",
     });
@@ -714,20 +714,20 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "t1",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "echo hi",
     });
     expect(notifyMock.notifyLocal).toHaveBeenCalledTimes(1);
     expect(notifyMock.notifyLocal).toHaveBeenCalledWith({
       title: "notify:approvalTitle",
-      body: "run_command",
+      body: "bash",
     });
 
     // 同 id 重发仅刷新摘要（enqueueApproval 语义）——不再打扰
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "t1",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "echo hi（重发）",
     });
     expect(notifyMock.notifyLocal).toHaveBeenCalledTimes(1);
@@ -742,7 +742,7 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "a",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "x",
     });
 
@@ -750,7 +750,7 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "b",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "x",
     });
 
@@ -769,7 +769,7 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "t1",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "echo hi",
     });
     expect(notifyMock.notifyLocal).not.toHaveBeenCalled();
@@ -780,7 +780,7 @@ describe("stream store", () => {
     useStreamStore.getState().applyChunk(7, {
       type: "approval-request",
       toolCallId: "t2",
-      toolName: "run_command",
+      toolName: "bash",
       argSummary: "echo hi",
     });
     expect(notifyMock.notifyLocal).toHaveBeenCalledTimes(1);

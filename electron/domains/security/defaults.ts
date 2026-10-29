@@ -200,11 +200,10 @@ export const BUILTIN_TOOLS: ReadonlyArray<{
   { name: "update_expert", group: "expert", kind: "write" },
   { name: "recommend_expert", group: "expert", kind: "read" },
   { name: "dispatch", group: "expert", kind: "read" },
-  { name: "plan_create_item", group: "plan", kind: "write" },
-  { name: "plan_update_status", group: "plan", kind: "write" },
-  { name: "plan_append_summary", group: "plan", kind: "write" },
-  { name: "plan_list_items", group: "plan", kind: "read" },
-  { name: "plan_get_item", group: "plan", kind: "read" },
+  // plan 组（2026-10-29 坍缩二件）：安全目录新名；老名禁用记录经
+  // filterDisabledTools 双侧 canonical 归一同命中（toolPermission DB 不迁移）
+  { name: "todo_write", group: "plan", kind: "write" },
+  { name: "todo_read", group: "plan", kind: "read" },
 ];
 
 /** disabledTools 白名单（BUILTIN_TOOLS 名单序） */

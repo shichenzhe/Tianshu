@@ -1,4 +1,4 @@
-// 本地产物 store（AR 批）：跨会话 write_file 记录聚合列表 + 收藏切换 +
+// 本地产物 store（AR 批）：跨会话 write 记录聚合列表 + 收藏切换 +
 // 文本/图片预览。桌面被控面专属三端点（artifact 表只在桌面端）——无头端
 // 连接下 artifact/list 回 HTTP 404（无业务体），经 wire status 透出判
 // isEndpointMissing → unsupported 置位（视图层隐藏本地产物入口；网络

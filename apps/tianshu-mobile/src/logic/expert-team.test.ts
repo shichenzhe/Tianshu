@@ -84,7 +84,7 @@ describe("validateTeamRows（校验纯函数，对齐桌面 create-expert 口径
     expect(TEAM_MEMBER_ID_RE.test("a_b")).toBe(false);
   });
 
-  it("id 长度边界：64 通过，65 → idTooLong（对齐 dispatch_member 上限）", () => {
+  it("id 长度边界：64 通过，65 → idTooLong（对齐 dispatch 上限）", () => {
     const id64 = `${"a".repeat(63)}9`;
     expect(id64.length).toBe(TEAM_MEMBER_ID_MAX);
     expect(validateTeamRows([memberRow({ id: id64 })]).ok).toBe(true);

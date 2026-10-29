@@ -28,8 +28,8 @@ describe("lastMessageSummary（P1 未读角标批）", () => {
       "chat:lastMsgImage",
     );
     expect(
-      lastMessageSummary({ ...base, kind: "tool", text: "run_command" }, t),
-    ).toBe('chat:lastMsgTool:{"name":"run_command"}');
+      lastMessageSummary({ ...base, kind: "tool", text: "bash" }, t),
+    ).toBe('chat:lastMsgTool:{"name":"bash"}');
     expect(lastMessageSummary({ ...base, kind: "empty" }, t)).toBe(
       "chat:lastMsgEmpty",
     );

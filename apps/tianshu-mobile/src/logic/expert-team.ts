@@ -1,7 +1,7 @@
 // 专家团成员编辑纯逻辑（移动端编辑面批）：行管理 reducer、提交前校验、
 // buildPayload 团队字段三态——口径对齐桌面 electron/domains/ai/agent/
 // create-expert.ts（TEAM_MEMBER_ID_RE/TEAM_MEMBERS_MAX/kebab 正则/团内唯一/
-// name·profession 1-30/systemPrompt 1-20000）+ id ≤64（对齐 dispatch_member
+// name·profession 1-30/systemPrompt 1-20000）+ id ≤64（对齐 dispatch
 // 参数上限；服务端 repo 仍为权威，前端报错仅提前拦截）。RN 无关，vitest
 // 直测；桌面 AssistantDialog 差量语义（team→agent 显式 members:null 清列）
 // 同形落地 applyTeamFields。
@@ -27,7 +27,7 @@ export const TEAM_MEMBER_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 /** 专家团成员数上限（1-13 名，对齐 TEAM_MEMBERS_MAX） */
 export const TEAM_MEMBERS_MAX = 13;
 
-/** 成员 id 长度上限：对齐 dispatch_member 参数 member max 64（超长 id
+/** 成员 id 长度上限：对齐 dispatch 参数 member max 64（超长 id
  *  可落库却无法调度——读面不回溯校验，写面提前拦截） */
 export const TEAM_MEMBER_ID_MAX = 64;
 

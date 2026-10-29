@@ -40,7 +40,7 @@ const stats: MonitorStats = {
   ],
   tools: [
     {
-      toolName: "read_file",
+      toolName: "read",
       total: 7,
       done: 6,
       denied: 1,

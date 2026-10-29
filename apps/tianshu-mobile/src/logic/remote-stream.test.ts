@@ -24,13 +24,13 @@ describe("applyRemoteChunk 纯归并", () => {
       {
         type: "tool-update",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         state: "running",
       },
       {
         type: "tool-update",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         state: "done",
         output: "ok",
       },
@@ -70,13 +70,13 @@ describe("applyRemoteChunk 纯归并", () => {
     state = applyRemoteChunk(state, {
       type: "approval-request",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       argSummary: "写入 a.txt",
     });
     expect(state.toolOrder).toEqual(["w1"]);
     expect(state.tools.w1).toMatchObject({
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       state: "awaiting-approval",
       argSummary: "写入 a.txt",
     });
@@ -84,7 +84,7 @@ describe("applyRemoteChunk 纯归并", () => {
     state = applyRemoteChunk(state, {
       type: "tool-update",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       state: "done",
       output: "ok",
     });
@@ -101,7 +101,7 @@ describe("approvals 审批队列（T15 ApprovalBanner 数据源）", () => {
     state = applyRemoteChunk(state, {
       type: "approval-request",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       argSummary: "写入 a.txt",
     });
     state = applyRemoteChunk(state, {
@@ -113,11 +113,11 @@ describe("approvals 审批队列（T15 ApprovalBanner 数据源）", () => {
     state = applyRemoteChunk(state, {
       type: "approval-request",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       argSummary: "写入 a.txt（重试）",
     });
     expect(state.approvals).toEqual([
-      { toolCallId: "w1", toolName: "write_file", argSummary: "写入 a.txt（重试）" },
+      { toolCallId: "w1", toolName: "write", argSummary: "写入 a.txt（重试）" },
       { toolCallId: "w2", toolName: "shell", argSummary: "rm -rf /tmp/x" },
     ]);
   });
@@ -125,7 +125,7 @@ describe("approvals 审批队列（T15 ApprovalBanner 数据源）", () => {
   it("tool-update 离开 awaiting-approval 即出队（running=已应答；denied=超时/拒绝）；无关 id 不动队列", () => {
     let state = startRemoteStream();
     for (const [id, tool] of [
-      ["w1", "write_file"],
+      ["w1", "write"],
       ["w2", "shell"],
     ] as const) {
       state = applyRemoteChunk(state, {
@@ -139,7 +139,7 @@ describe("approvals 审批队列（T15 ApprovalBanner 数据源）", () => {
     state = applyRemoteChunk(state, {
       type: "tool-update",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       state: "running",
     });
     expect(state.approvals.map((a) => a.toolCallId)).toEqual(["w2"]);
@@ -158,13 +158,13 @@ describe("approvals 审批队列（T15 ApprovalBanner 数据源）", () => {
     state = applyRemoteChunk(state, {
       type: "approval-request",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       argSummary: "s",
     });
     state = applyRemoteChunk(state, {
       type: "tool-update",
       toolCallId: "w1",
-      toolName: "write_file",
+      toolName: "write",
       state: "awaiting-approval",
     });
     expect(state.approvals).toHaveLength(1);
@@ -212,7 +212,7 @@ describe("liveBlocks 流式块组装", () => {
       {
         type: "tool-update",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         state: "done",
         output: "ok",
       },
@@ -230,7 +230,7 @@ describe("liveBlocks 流式块组装", () => {
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: {},
         state: "done",
         output: "ok",
@@ -246,14 +246,14 @@ describe("liveBlocks 流式块组装", () => {
     state = applyRemoteChunk(state, {
       type: "tool-update",
       toolCallId: "t1",
-      toolName: "read_file",
+      toolName: "read",
       state: "running",
     });
     expect(liveBlocks(state)).toEqual([
       {
         type: "tool_call",
         toolCallId: "t1",
-        toolName: "read_file",
+        toolName: "read",
         args: {},
         state: "running",
       },

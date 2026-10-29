@@ -205,11 +205,11 @@ const PLAN_MODE_INSTRUCTION =
  * 同 send 内无法动态挂载，尾注指引模型告知用户下一轮即可用
  */
 const WORKFLOW_INTENT_NOTE =
-  "（系统注：已为本会话挂载工作流工具（create_workflow 等）。工具面自下一轮对话起生效——若本轮不可调用，请提示用户继续发送一条消息。）";
+  "（系统注：已为本会话挂载工作流工具（workflow_write 等）。工具面自下一轮对话起生效——若本轮不可调用，请提示用户继续发送一条消息。）";
 
 /**
  * 工作流挂载元说明（未挂载会话注入 system，场景段之后）：模型面对
- * 「工具面板没有 create_workflow」曾无从知晓解锁路径（读 workflow-creator
+ * 「工具面板没有 workflow_write」曾无从知晓解锁路径（读 workflow-creator
  * 下一轮挂载/新建 coding 会话），只能"猜生效时机"并以写文件绕行兜底
  * ——本段把挂载规则显式告知。措辞注意（2026-10-29 现场回访校准）：
  * 场景是会话创建时锁定（无中途切换入口）、automation 为后端预留值
@@ -221,7 +221,7 @@ const WORKFLOW_INTENT_NOTE =
  * read_skill 未被安全中心禁用（G1 联动：目录段同款门控）
  */
 const WORKFLOW_MOUNT_NOTE =
-  "【工作流工具挂载】create_workflow 等工作流工具当前未挂载。需要创建或管理工作流时，请立即调用 read_skill 读取 workflow-creator 技能——读取后自用户的下一条消息起本会话自动挂载（届时请提示用户继续发送）；若用户接受另起会话，新建 coding 场景会话也会直接挂载。工作流定义应经 create_workflow 落库，不要以写文件方式绕行保存。";
+  "【工作流工具挂载】workflow_write 等工作流工具当前未挂载。需要创建或管理工作流时，请立即调用 read_skill 读取 workflow-creator 技能——读取后自用户的下一条消息起本会话自动挂载（届时请提示用户继续发送）；若用户接受另起会话，新建 coding 场景会话也会直接挂载。工作流定义应经 workflow_write 落库，不要以写文件方式绕行保存。";
 
 /**
  * 数据安全装配（SP4）：ChatService 构造注入，闭包实时读安全中心配置

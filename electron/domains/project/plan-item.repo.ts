@@ -283,7 +283,7 @@ export default class PlanItemRepository {
     });
   }
 
-  /** AI 追加进展（工具专用通道；只增不改，格式与 plan_append_summary 工具
+  /** AI 追加进展（工具专用通道；只增不改，格式与 todo_write 工具
       共用 entity 纯函数 appendAiSummaryLine） */
   async appendAiSummary(id: number, text: string): Promise<string | null> {
     const row = await prisma.planItem.findUnique({ where: { id } });

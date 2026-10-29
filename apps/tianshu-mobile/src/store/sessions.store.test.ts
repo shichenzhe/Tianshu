@@ -316,7 +316,7 @@ describe("sessions store", () => {
       id: 20,
       role: "assistant",
       kind: "tool",
-      text: "run_command",
+      text: "bash",
       createdAt: "2026-10-17T09:00:00.000Z",
     };
     connMock.emit({

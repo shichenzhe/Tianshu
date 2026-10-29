@@ -19,9 +19,9 @@ function msg(role: string, ...blocks: MessageBlock[]): SearchableMessage {
   return { role, blocks };
 }
 
-/** 引用式前缀（单行带 read_file 指示——file-refs 注入正体） */
+/** 引用式前缀（单行带 read 指示——file-refs 注入正体） */
 const FILE_REF_LINE =
-  "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）";
+  "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）";
 
 describe("countKeywordHits", () => {
   it("空关键字恒 0", () => {

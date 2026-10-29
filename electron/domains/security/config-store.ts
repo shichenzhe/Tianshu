@@ -11,6 +11,7 @@ import type {
 import { parseBoolOption } from "../app-settings/option-store";
 import { ESTIMATE_COUNT_LIMIT } from "./backup-policy";
 import { normalizeDomain } from "./domain-policy";
+import { canonicalToolName } from "@tianshu/core";
 import { BUILTIN_TOOL_NAMES, SECURITY_DEFAULTS } from "./defaults";
 
 export const SECURITY_OPTION_TYPE = "security";
@@ -110,7 +111,11 @@ export function pickDisabledTools(v: unknown): string[] {
   if (!Array.isArray(v)) return [];
   const seen = new Set<string>();
   for (const name of pickStringArray(v)) {
-    if (BUILTIN_TOOL_NAMES.includes(name)) seen.add(name);
+    // canonical 归一（2026-10-29 改名批次）：DB 存老名（plan_create_item
+    // 等）先归一成新名再对白名单——老名直接清洗会被剔导致禁用语义丢失
+    //（filterDisabledTools 的双侧归一接不住被丢弃的条目）
+    const canonical = canonicalToolName(name);
+    if (BUILTIN_TOOL_NAMES.includes(canonical)) seen.add(canonical);
   }
   return [...seen];
 }

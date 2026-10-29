@@ -24,13 +24,13 @@ function makeLive(tools: Record<string, unknown>, order: string[]) {
 }
 
 describe("deriveSessionFiles", () => {
-  it("write_file done → 产物文件 written", () => {
+  it("write done → 产物文件 written", () => {
     const history = [
       msg(1, "assistant", [
         {
           type: "tool_call",
           toolCallId: "t1",
-          toolName: "write_file",
+          toolName: "write",
           args: { path: "/w/out/a.md" },
           state: "done",
         },
@@ -46,20 +46,20 @@ describe("deriveSessionFiles", () => {
     ]);
   });
 
-  it("write_file denied/error 与 args 缺失不收录", () => {
+  it("write denied/error 与 args 缺失不收录", () => {
     const history = [
       msg(1, "assistant", [
         {
           type: "tool_call",
           toolCallId: "t1",
-          toolName: "write_file",
+          toolName: "write",
           args: { path: "/w/a.md" },
           state: "denied",
         },
         {
           type: "tool_call",
           toolCallId: "t2",
-          toolName: "write_file",
+          toolName: "write",
           args: {},
           state: "done",
         },
@@ -88,7 +88,7 @@ describe("deriveSessionFiles", () => {
         {
           type: "tool_call",
           toolCallId: "t1",
-          toolName: "write_file",
+          toolName: "write",
           args: { path: "/w/a.md" },
           state: "done",
         },
@@ -96,7 +96,7 @@ describe("deriveSessionFiles", () => {
     ];
     const live = makeLive(
       {
-        t2: { toolCallId: "t2", toolName: "write_file", args: { path: "/w/c.md" }, state: "running" },
+        t2: { toolCallId: "t2", toolName: "write", args: { path: "/w/c.md" }, state: "running" },
       },
       ["t2"],
     );
@@ -116,7 +116,7 @@ describe("deriveSessionFiles", () => {
         {
           type: "tool_call",
           toolCallId: "t1",
-          toolName: "write_file",
+          toolName: "write",
           args: { path: "/w/a.md" },
           state: "done",
         },
@@ -125,7 +125,7 @@ describe("deriveSessionFiles", () => {
         {
           type: "tool_call",
           toolCallId: "t2",
-          toolName: "write_file",
+          toolName: "write",
           args: { path: "/w/a.md" },
           state: "done",
         },

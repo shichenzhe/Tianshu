@@ -54,7 +54,7 @@ export interface PlanItemRecord {
   description: string;
 
   /**
-   * AI 进展摘要（空串 = 无，只经 plan_append_summary 工具写入；人路径不可编辑）
+   * AI 进展摘要（空串 = 无，只经 todo_write 工具写入；人路径不可编辑）
    */
   aiSummary: string;
 
@@ -315,7 +315,7 @@ export interface PlanFieldDef {
 export const PLAN_ITEM_NOT_FOUND = "PLAN_ITEM_NOT_FOUND";
 
 /**
- * AI 进展摘要追加一行（纯函数，repo 工具通道与 plan_append_summary 工具
+ * AI 进展摘要追加一行（纯函数，repo 工具通道与 todo_write 工具
  * 共用——格式单点生效）：已有摘要尾接「[yyyy-MM-dd] text」，空摘要首行
  * 无前导换行。返回新行与追加后全文（工具返回文案用 line，回写载荷用 next）
  */

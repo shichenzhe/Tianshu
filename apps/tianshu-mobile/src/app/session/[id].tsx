@@ -571,7 +571,7 @@ export default function SessionScreen() {
     setSearchActivePos((pos) => nextHitPosition(pos, searchHits.length, -1));
   }, [searchHits.length]);
 
-  // 会话文件派生（MR-T6）：write_file 产物 + 引用文件；live 合并 writing 态
+  // 会话文件派生（MR-T6）：write 产物 + 引用文件；live 合并 writing 态
   const sessionFiles = useMemo(
     () => deriveSessionFiles(entry?.history ?? [], entry?.live ?? null),
     [entry?.history, entry?.live],
@@ -988,7 +988,7 @@ export default function SessionScreen() {
                 return accepted2;
               }
               // LT-T4 引用注入（引用式批）：agent/plan 会话工作空间文件
-              // 引用式——不拉内容，只注路径 + read_file 指示（服务端 agent
+              // 引用式——不拉内容，只注路径 + read 指示（服务端 agent
               // 自读，省双程流量，面板只显示路径行）；ask 会话无工具集
               // （无头端 chat-runner ask → []），回退内容注入（files/read
               // 拉全文——读失败该引用跳过并提示，对齐桌面「读失败不阻断

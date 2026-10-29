@@ -39,7 +39,7 @@ const argsSchema = z
       .positive()
       .optional()
       .describe(
-        "直连工作流 id（与 prompt 二选一，缺省为 prompt 型）；须为已存在图（list_workflows 查询）",
+        "直连工作流 id（与 prompt 二选一，缺省为 prompt 型）；须为已存在图（workflow_read 查询）",
       ),
     schedule: scheduleSchema.describe(
       "触发计划七形态：once{runAt}/daily{time}/weekly{weekdays,time}/biweekly{anchorDate,weekday,time}/monthly{dayOfMonth,time}/yearly{month,day,time}/interval{value,unit}（星期 ISO 1=一…7=日；时间 HH:mm）",
@@ -179,7 +179,7 @@ export function makeAutomationTool(
           where: { id: graphId, userId },
         });
         if (!graph) {
-          return fail("工作流不存在（可先用 list_workflows 核对 id）");
+          return fail("工作流不存在（可先用 workflow_read 核对 id）");
         }
       }
       const record = await deps.createTask(

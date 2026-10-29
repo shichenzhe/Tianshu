@@ -40,11 +40,11 @@ describe("notifyLocal（后台才发 + 平台守卫 + 静默失败）", () => {
     expect(notifMock.scheduleNotificationAsync).not.toHaveBeenCalled();
 
     appStateMock.currentState = "background";
-    notifyLocal({ title: "审批请求", body: "run_command" });
+    notifyLocal({ title: "审批请求", body: "bash" });
     // 动态 import + ensureChannel 异步链：宏任务一轮清空全部微任务
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(notifMock.scheduleNotificationAsync).toHaveBeenCalledWith({
-      content: { title: "审批请求", body: "run_command" },
+      content: { title: "审批请求", body: "bash" },
       trigger: null,
     });
   });

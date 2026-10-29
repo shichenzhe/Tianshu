@@ -37,13 +37,13 @@ describe("buildInjectedContent（LT-T4，对齐桌面注入语义）", () => {
     ).toBe("[引用文件 a.ts]\nA\n\n[引用技能 pdf-extract]\n技能体\n\n跑");
   });
 
-  it("工作空间引用式 kind fileRef：只注路径 + read_file 指示，不注内容", () => {
+  it("工作空间引用式 kind fileRef：只注路径 + read 指示，不注内容", () => {
     expect(
       buildInjectedContent("看下", [
         { path: "src/main.ts", content: "", kind: "fileRef" },
       ]),
     ).toBe(
-      "[引用文件 src/main.ts]（请用 read_file 工具读取该文件后处理）\n\n看下",
+      "[引用文件 src/main.ts]（请用 read 工具读取该文件后处理）\n\n看下",
     );
     // content 忽略（引用式不注内容——即便误传）
     expect(
@@ -52,7 +52,7 @@ describe("buildInjectedContent（LT-T4，对齐桌面注入语义）", () => {
         { path: "s", content: "技能体", kind: "skill" },
       ]),
     ).toBe(
-      "[引用文件 a.ts]（请用 read_file 工具读取该文件后处理）\n\n" +
+      "[引用文件 a.ts]（请用 read 工具读取该文件后处理）\n\n" +
         "[引用技能 s]\n技能体\n\n看下",
     );
   });
@@ -62,8 +62,8 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
   it("头部连续引用式段全部拆出，余文原样保留", () => {
     expect(
       splitFileRefPrefix(
-        "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）\n\n" +
-          "[引用文件 docs/b.md]（请用 read_file 工具读取该文件后处理）\n\n正文",
+        "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）\n\n" +
+          "[引用文件 docs/b.md]（请用 read 工具读取该文件后处理）\n\n正文",
       ),
     ).toEqual({
       refs: [
@@ -81,7 +81,7 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
 
   it("正文中段的同款行不拆（首个不匹配段即止，防误伤）", () => {
     const text =
-      "请看：\n\n[引用文件 a.ts]（请用 read_file 工具读取该文件后处理）";
+      "请看：\n\n[引用文件 a.ts]（请用 read 工具读取该文件后处理）";
     expect(splitFileRefPrefix(text)).toEqual({ refs: [], rest: text });
     const mid = "开头\n\n[引用文件 a.ts]\nAAA";
     expect(splitFileRefPrefix(mid)).toEqual({ refs: [], rest: mid });
@@ -119,7 +119,7 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
   it("引用式与内容注入式混排：逐段拆出保序（file kind）", () => {
     expect(
       splitFileRefPrefix(
-        "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）\n\n" +
+        "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）\n\n" +
           "[引用文件 /tmp/b.md]\nBBB\n\n正文",
       ),
     ).toEqual({
@@ -134,7 +134,7 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
   it("技能与文件混排逐段拆出保序（file/skill kind 分明）", () => {
     expect(
       splitFileRefPrefix(
-        "[引用文件 src/a.ts]（请用 read_file 工具读取该文件后处理）\n\n" +
+        "[引用文件 src/a.ts]（请用 read 工具读取该文件后处理）\n\n" +
           "[引用技能 s]\n技能体\n\n" +
           "[引用文件 /tmp/b.md]\nBBB\n\n正文",
       ),
@@ -179,7 +179,7 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
   });
 
   it("仅引用无正文：余文为空串（含尾随分隔空行产物）", () => {
-    const ref = "[引用文件 a.ts]（请用 read_file 工具读取该文件后处理）";
+    const ref = "[引用文件 a.ts]（请用 read 工具读取该文件后处理）";
     expect(splitFileRefPrefix(ref)).toEqual({
       refs: [{ path: "a.ts", kind: "file" }],
       rest: "",
@@ -197,7 +197,7 @@ describe("splitFileRefPrefix（渲染层拆分，与注入互为正逆——对�
   it("路径含空格/方括号可完整提取", () => {
     expect(
       splitFileRefPrefix(
-        "[引用文件 my file [v2].ts]（请用 read_file 工具读取该文件后处理）\n\n正文",
+        "[引用文件 my file [v2].ts]（请用 read 工具读取该文件后处理）\n\n正文",
       ),
     ).toEqual({
       refs: [{ path: "my file [v2].ts", kind: "file" }],

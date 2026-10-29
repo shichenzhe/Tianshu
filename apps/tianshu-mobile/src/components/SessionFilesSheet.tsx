@@ -54,7 +54,7 @@ function FileRow({
 
 /**
  * 会话文件 sheet（MR-T6，桌面 DetailPanel 产物 tab 的移动端形态）：
- * 产物文件（write_file done/writing）+ 工作空间文件（引用）两组列表；
+ * 产物文件（write done/writing）+ 工作空间文件（引用）两组列表；
  * 点行上抛 onOpenFile 由宿主页开 FilePreviewModal。
  */
 export function SessionFilesSheet({

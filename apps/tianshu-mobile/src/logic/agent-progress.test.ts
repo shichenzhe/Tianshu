@@ -42,14 +42,14 @@ describe("deriveAgentProgress", () => {
     const live = makeLive({
       toolOrder: ["t1", "t2"],
       tools: {
-        t1: { toolCallId: "t1", toolName: "read_file", state: "done" },
-        t2: { toolCallId: "t2", toolName: "write_file", state: "running" },
+        t1: { toolCallId: "t1", toolName: "read", state: "done" },
+        t2: { toolCallId: "t2", toolName: "write", state: "running" },
       },
     });
     expect(deriveAgentProgress(live)).toEqual({
       preparing: false,
       stepCount: 2,
-      activeTool: "write_file",
+      activeTool: "write",
     });
   });
 
@@ -57,14 +57,14 @@ describe("deriveAgentProgress", () => {
     const live = makeLive({
       toolOrder: ["t1", "t2"],
       tools: {
-        t1: { toolCallId: "t1", toolName: "read_file", state: "running" },
-        t2: { toolCallId: "t2", toolName: "write_file", state: "done" },
+        t1: { toolCallId: "t1", toolName: "read", state: "running" },
+        t2: { toolCallId: "t2", toolName: "write", state: "done" },
       },
     });
     expect(deriveAgentProgress(live)).toEqual({
       preparing: false,
       stepCount: 1,
-      activeTool: "read_file",
+      activeTool: "read",
     });
   });
 
@@ -72,7 +72,7 @@ describe("deriveAgentProgress", () => {
     const live = makeLive({
       thinking: "…",
       toolOrder: ["t1"],
-      tools: { t1: { toolCallId: "t1", toolName: "read_file", state: "done" } },
+      tools: { t1: { toolCallId: "t1", toolName: "read", state: "done" } },
     });
     expect(deriveAgentProgress(live)).toEqual({
       preparing: false,

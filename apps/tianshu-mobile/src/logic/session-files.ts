@@ -1,7 +1,7 @@
 /**
  * 会话产物文件派生（MR-T6）——桌面
  * src-react/domains/ai/chat/lib/artifacts.ts 移植（spec §3.6）：
- * - 产物文件 = write_file tool_call(state=done) 的 args.path
+ * - 产物文件 = write 工具（改名前 write_file）tool_call(state=done) 的 args.path
  * - 工作空间文件 = user 消息 text 块的 [引用文件 x] 行首前缀
  * - 流式合并 live.tools（running→writing / done→written，messageId=-1 置顶）
  * - 同 path 跨组去重（取源消息最新者），按 messageId 降序
@@ -45,7 +45,10 @@ function entryToFiles(entry: {
   args?: unknown;
   state: string;
 }): { path: string; status: "written" | "writing" } | null {
-  if (entry.toolName !== "write_file") return null;
+  // 双名兼容：远端新块 write / 历史块 write_file（2026-10-29 改名批次）
+  if (entry.toolName !== "write" && entry.toolName !== "write_file") {
+    return null;
+  }
   const path = (entry.args as { path?: unknown } | undefined)?.path;
   if (typeof path !== "string" || !path.trim()) return null;
   if (entry.state === "done") return { path, status: "written" };
@@ -53,7 +56,7 @@ function entryToFiles(entry: {
   return { path, status: "writing" };
 }
 
-/** 单条消息：write_file(done) 产物 + user [引用文件] 行 */
+/** 单条消息：write(done) 产物 + user [引用文件] 行 */
 function scanMessage(
   message: HistoryMessage,
   byPath: Map<string, SessionFile>,
@@ -84,7 +87,7 @@ function scanMessage(
   }
 }
 
-/** 流式工具合并：write_file running/done → 置顶条目（messageId=-1） */
+/** 流式工具合并：write running/done → 置顶条目（messageId=-1） */
 function mergeLiveTools(
   live: RemoteStreamState,
   byPath: Map<string, SessionFile>,

@@ -184,8 +184,9 @@ describe("create_workflow 工具", () => {
       },
     });
     expect(result).toContain("校验未通过");
-    expect(result).toContain("uniqueEntry");
-    expect(result).toContain("danglingEdge");
+    // E1：图级错误码译中文一句话（不再回喂裸码）
+    expect(result).toContain("入口不唯一");
+    expect(result).toContain("不存在的节点");
     expect(stubs.graphs).toHaveLength(0);
   });
 

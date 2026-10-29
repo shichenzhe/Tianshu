@@ -877,15 +877,100 @@ function toGraphIssue(i: ZodIssueLike, json: unknown): GraphIssue {
 const RESERVED_NODE_IDS = new Set(["inputs", "nodes", "route"]);
 
 /** 跨节点结构校验（spec §3 保存期校验清单） */
+/** union 分支的窄化重校验器（E1 字段级回喂前提）：zod union 失败只报
+ *  节点级 Invalid input（无字段定位），按「最少错误的分支」重校验展开 */
+interface BranchLike {
+  safeParse(value: unknown): {
+    success: boolean;
+    error?: { issues: ZodIssueLike[] };
+  };
+}
+
+/** nodes.<i> 的裸 Invalid input → 字段级 issue（每节点至多展开 4 条） */
+function expandNodeUnionIssues(
+  issues: ZodIssueLike[],
+  json: unknown,
+): ZodIssueLike[] {
+  const nodes = (json as { nodes?: unknown[] } | null)?.nodes;
+  if (!Array.isArray(nodes)) {
+    return issues;
+  }
+  const branches = (graphNodeSchema as unknown as { options: BranchLike[] })
+    .options;
+  const out: ZodIssueLike[] = [];
+  for (const issue of issues) {
+    const idx = issue.path[0] === "nodes" ? Number(issue.path[1]) : Number.NaN;
+    const bare =
+      issue.code !== "custom" &&
+      /^Invalid input/.test(issue.message) &&
+      issue.path.length === 2 &&
+      Number.isInteger(idx) &&
+      idx >= 0 &&
+      idx < nodes.length;
+    if (!bare) {
+      out.push(issue);
+      continue;
+    }
+    let best: ZodIssueLike[] | null = null;
+    let branchPassed = false;
+    // kind 判别直选（E1）：raw.kind 为字符串时，喂 {kind} 探针挑出唯一
+    // 不报 kind 错的分支重校验——最少错误启发式会误选字段最少的宽容
+    // 分支（如 delay）；kind 缺失/探针不唯一时回退启发式（缺省 llm 补默
+    // 认的旧图即走回退）
+    const raw = nodes[idx];
+    const kind = (raw as { kind?: unknown } | null)?.kind;
+    if (typeof kind === "string" && kind !== "") {
+      for (const branch of branches) {
+        const probe = branch.safeParse({ kind });
+        const kindRejected = (probe.error?.issues ?? []).some(
+          (i) => String(i.path[0] ?? "") === "kind",
+        );
+        if (kindRejected) {
+          continue;
+        }
+        const full = branch.safeParse(raw);
+        if (full.success) {
+          branchPassed = true;
+          break;
+        }
+        best = full.error?.issues ?? null;
+        break;
+      }
+    }
+    if (!best && !branchPassed) {
+      for (const branch of branches) {
+        const result = branch.safeParse(raw);
+        if (result.success) {
+          branchPassed = true;
+          break;
+        }
+        const errs = result.error?.issues ?? [];
+        if (!best || errs.length < best.length) {
+          best = errs;
+        }
+      }
+    }
+    if (branchPassed || !best) {
+      out.push(issue);
+      continue;
+    }
+    for (const err of best.slice(0, 4)) {
+      out.push({ ...err, path: ["nodes", idx, ...err.path] });
+    }
+  }
+  return out;
+}
+
 export function validateGraph(
   json: unknown,
 ): { ok: true; value: GraphJson } | { ok: false; issues: GraphIssue[] } {
   const parsed = graphJsonSchema.safeParse(json);
   if (!parsed.success) {
-    return {
-      ok: false,
-      issues: parsed.error.issues.map((issue) => toGraphIssue(issue, json)),
-    };
+    const issues = expandNodeUnionIssues(
+      parsed.error.issues as ZodIssueLike[],
+      json,
+    ).map((issue) => toGraphIssue(issue, json));
+    return { ok: false, issues };
   }
   const { nodes, edges } = parsed.data;
   const ids = new Set(nodes.map((n) => n.id));

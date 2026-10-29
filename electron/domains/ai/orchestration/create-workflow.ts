@@ -167,16 +167,147 @@ const listWorkflowsSchema = z.object({}).describe("无参数");
 function formatIssues(
   issues: Array<{ code: string; params?: Record<string, string | number> }>,
 ): string {
-  return issues
-    .map((issue) => {
-      const detail = issue.params
-        ? ` ${Object.entries(issue.params)
-            .map(([key, value]) => `${key}=${value}`)
-            .join(" ")}`
-        : "";
-      return `- ${issue.code}${detail}`;
-    })
-    .join("\n");
+  return formatGraphIssues(issues);
+}
+
+/** 回喂行数上限（LLM 上下文友好；超出折叠计数） */
+const FEEDBACK_ISSUE_LIMIT = 12;
+
+/** 图级（非 schema）错误码 → 中文一句话（含期望形态） */
+const GRAPH_ISSUE_HINTS: Record<string, string> = {
+  duplicateNodeId: "节点 id 重复——每个节点 id 必须唯一（kebab-case）",
+  reservedNodeId: "节点 id 占用了保留字（inputs/nodes/route）——换一个 id",
+  uniqueEntry:
+    "入口不唯一——全图必须恰有一个无入边的节点（start→首业务节点），请检查连线",
+  danglingEdge:
+    "边引用了不存在的节点 id——边的 from/to 须指向图中节点（终点可为 END）",
+  conditionNotBranchable:
+    "条件边挂在非分支节点上——只有 condition/intent/分支模式 llm/code 可挂条件边",
+  conditionValueOutOfRange:
+    "条件边的 label 不在源节点分支选项内——须为分支名或兜底名之一",
+  branchOptionsRequired: "分支模式节点必须携带非空 branchOptions",
+  iterateItemsRequired: "循环节点（array 模式）必须提供 itemsSource 表达式",
+  iterateCountRequired: "循环节点（count 模式）必须提供 countSource",
+  iterateBreakRequired: "循环节点（while 模式）必须提供 breakCondition",
+  duplicateStartNode: "start 节点至多一个",
+  startIncomingEdge: "start 节点不得有入边",
+};
+
+/** 常见误填字段的期望形态（按 path 末段匹配；inputSchema 前缀特判） */
+const FIELD_EXPECTATIONS: Record<string, string> = {
+  modelId: "正整数（模型表 id）",
+  prompt: "非空字符串（支持 {{input.x}}/{{nodes.<id>.output}} 占位）",
+  script: "非空脚本文本",
+  language: "nodejs / python / bash 三者之一",
+  engine: "sqlite / postgres / mysql / oracle / sqlserver 之一",
+  sqlitePath: "SQLite 文件相对工作空间的路径（如 demo.db）",
+  sql: "单条 SQL 文本（值用 ? 占位、经 params 参数化，勿内插）",
+  params: '字符串数组，如 ["{{input.amount}}","{{input.category}}"]',
+  variables: '字符串数组（变量名清单，如 ["amount","category"]）',
+  url: "完整 URL（支持 {{}} 占位）",
+  graphId: "子工作流的真实 id（正整数，可用 list_workflows 查）",
+  inputs: "键值数组 [{key, value}]，value 支持 {{}} 占位",
+  timeoutMs: "毫秒数（整数，按各节点上限）",
+  maxRows: "正整数（行数上限）",
+  retries: "0-5 的整数",
+  position: "{x: 数值, y: 数值}（画布坐标，可省略）",
+};
+
+/** inputSchema 路径 → 期望形态（D 批双形态） */
+const INPUT_SCHEMA_EXPECTATION =
+  '简写 "string" 或对象 {type: "string"|"number"|"boolean"|"enum"|"date", required?, default?, enumValues?（enum 必填非空不重复）, description?}';
+
+/** zod 英文消息 → 中文 + 期望（模式表；未命中原样透传——自定义
+ *  superRefine 消息本就是中文） */
+function translateZodMessage(message: string): string {
+  if (/^Required$/.test(message)) {
+    return "缺少必填字段";
+  }
+  // 兼容 zod 各版消息形态：value. / value(s).
+  const enumMatch =
+    /^Invalid enum value(?:\(s\))?\.\s*Expected (.+?)(?:,|$|\.)/.exec(message);
+  if (enumMatch) {
+    return `取值必须是 ${enumMatch[1]} 之一`;
+  }
+  const literalMatch = /^Invalid literal value,\s*expected (.+)$/.exec(message);
+  if (literalMatch) {
+    return `取值必须是 ${literalMatch[1]}`;
+  }
+  if (/String must contain at least 1 character/.test(message)) {
+    return "不能为空串";
+  }
+  // zod v4 缺字段/类型不符形态（union 展开后到达此处）
+  const missingMatch =
+    /^Invalid input: expected (.+?), received undefined$/.exec(message);
+  if (missingMatch) {
+    return `缺少必填字段（应为 ${missingMatch[1]}）`;
+  }
+  const typeMatch = /^Invalid input: expected (.+?), received (.+)$/.exec(
+    message,
+  );
+  if (typeMatch) {
+    return `类型应为 ${typeMatch[1]}（收到 ${typeMatch[2]}）`;
+  }
+  if (/^Expected (.+?), received (.+)$/.test(message)) {
+    return message.replace(
+      /^Expected (.+?), received (.+)$/,
+      "类型应为 $1（收到 $2）",
+    );
+  }
+  if (message === "Invalid input") {
+    // union 塌缩的裸消息（如 inputSchema 联合）——形态提示在期望行
+    return "取值或形态不符";
+  }
+  if (/Number must be/.test(message) || /^Invalid input/.test(message)) {
+    return `数值/格式不符：${message}`;
+  }
+  return message;
+}
+
+/** path 的字段尾段（inputSchema.amount.type → inputSchema 期望特判） */
+function expectationOf(path: string): string | null {
+  if (path.startsWith("inputSchema")) {
+    return INPUT_SCHEMA_EXPECTATION;
+  }
+  const tail = path.split(".").pop() ?? path;
+  return FIELD_EXPECTATIONS[tail] ?? null;
+}
+
+/**
+ * 校验问题 → 字段级可自纠回喂（切片 E1）：哪个节点哪个字段什么问题、
+ * 期望什么形态；zod 英文译中文、图级错误码带一句话期望；超限折叠。
+ * 供 create/update_workflow 共用，导出直测
+ */
+export function formatGraphIssues(
+  issues: Array<{ code: string; params?: Record<string, string | number> }>,
+): string {
+  const total = issues.length;
+  const lines: string[] = [];
+  for (const issue of issues.slice(0, FEEDBACK_ISSUE_LIMIT)) {
+    if (issue.code !== "schema") {
+      lines.push(`- ${GRAPH_ISSUE_HINTS[issue.code] ?? issue.code}`);
+      continue;
+    }
+    const params = issue.params ?? {};
+    const path = typeof params.path === "string" ? params.path : "";
+    const nodeId = typeof params.nodeId === "string" ? params.nodeId : null;
+    const message =
+      typeof params.message === "string" ? params.message : String(issue.code);
+    const where = nodeId
+      ? `节点「${nodeId}」${path.replace(/^nodes\.[^.]+\./, "")}`
+      : `图级 ${path || "(根)"}`;
+    const translated = translateZodMessage(message);
+    const expectation = expectationOf(path);
+    lines.push(
+      `- ${where}：${translated}${expectation ? `。期望：${expectation}` : ""}`,
+    );
+  }
+  if (total > FEEDBACK_ISSUE_LIMIT) {
+    lines.push(
+      `- …另有 ${total - FEEDBACK_ISSUE_LIMIT} 项问题（同类修正即可）`,
+    );
+  }
+  return lines.join("\n");
 }
 
 /** 字段 → LLM 可读摘要（切片 D4）：amount:number(必填) /
@@ -254,7 +385,7 @@ export function makeCreateWorkflowTool(deps: {
       const result = validateGraph(args.graphJson);
       if (!result.ok) {
         // 校验失败是渐进披露位：节点规范指引（原在描述里）挪到此处
-        return `校验未通过，请修正 graphJson 后重试（节点规范可 read_skill 读取 workflow-creator 技能）：\n${formatIssues(result.issues)}`;
+        return `校验未通过（问题按「节点/字段/原因/期望」逐条列出），请修正 graphJson 后重试：\n${formatIssues(result.issues)}`;
       }
       try {
         const row = await deps.graphDefinition.create({
@@ -461,7 +592,7 @@ export function makeUpdateWorkflowTool(deps: {
       if (args.graphJson !== undefined) {
         const result = validateGraph(args.graphJson);
         if (!result.ok) {
-          return `校验未通过，请修正 graphJson 后重试（节点规范可 read_skill 读取 workflow-creator 技能）：\n${formatIssues(result.issues)}`;
+          return `校验未通过（问题按「节点/字段/原因/期望」逐条列出），请修正 graphJson 后重试：\n${formatIssues(result.issues)}`;
         }
         serialized = JSON.stringify(normalizeGraph(result.value));
       }

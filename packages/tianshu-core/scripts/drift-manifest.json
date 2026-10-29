@@ -31,7 +31,7 @@
       "mirrorPath": "electron/domains/ai/agent/plan-tools.ts",
       "serverPath": "src/core/tools/plan-tools.ts",
       "baselineDiff": true,
-      "baselineLines": 16,
+      "baselineLines": 19,
       "note": "plan_ 落库工具（prisma 两仓 client 不同——import 行已归一剔除）"
     },
     {
@@ -55,7 +55,7 @@
       "mirrorPath": "electron/domains/ai/agent/tool-gate.ts",
       "serverPath": "src/core/tools/tool-gate.ts",
       "baselineDiff": true,
-      "baselineLines": 193,
+      "baselineLines": 189,
       "note": "工具门禁主表；server 摘取改造版（安全中心出口不同）；权限放宽批（2026-10-24）server 已同构危险分级/write 兜底收窄/网络域免审/write_file 直执行留痕（§4.7，Task 5 review 补齐），残余分叉=allowDangerousTools 前置门+autoDenyApprovals（T7）取代 mirror unattended 三段强拒+BRIDGE_TOOL_NAMES+denyWithChunk 重构（基线 169→197 复核过账）"
     },
     {
@@ -159,7 +159,7 @@
       "mirrorPath": "electron/domains/security/defaults.ts",
       "serverPath": "src/core/security/file-blocklist.ts",
       "baselineDiff": true,
-      "baselineLines": 159,
+      "baselineLines": 156,
       "note": "内置敏感路径清单；server 仅摘 defaults.ts 的 BUILTIN_FILE_BLOCKLIST_ALL/defaultFileBlocklist（恶意域清单与 SECURITY_DEFAULTS 其余项未移植）——子集摘取，基线必然大"
     },
     {

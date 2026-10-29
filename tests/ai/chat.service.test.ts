@@ -2176,6 +2176,36 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     );
     expect(ctx.systemWithSummary ?? "").not.toContain("【工作流工具挂载】");
   });
+
+  // ---------- 未绑定目录会话的工作流五件豁免（工作空间门与场景门独立） ----------
+
+  it("未绑定目录 + 意图开门：五件注入（用户级 DB 实体不依赖工作空间），run_workflow 仍缺席（试运行需工作空间语境）", async () => {
+    skillScanStub.skills = [creatorSkill()];
+    const names = await toolNames(
+      makeSvc(
+        { scenario: "daily", workspaceId: null },
+        { skillRepo: skillRepoWith({ source: "market", enabled: true }) },
+      ).service,
+    );
+    expect(names).toContain("create_workflow");
+    expect(names).toContain("list_workflows");
+    expect(names).toContain("get_workflow");
+    expect(names).toContain("update_workflow");
+    expect(names).toContain("get_workflow_run");
+    expect(names).not.toContain("run_workflow");
+  });
+
+  it("未绑定目录 + 未开门：五件照旧缺席（工作空间豁免不绕过场景门控）", async () => {
+    skillScanStub.skills = [];
+    const names = await toolNames(
+      makeSvc(
+        { scenario: "daily", workspaceId: null },
+        { skillRepo: skillRepoWith({ source: "builtin", enabled: true }) },
+      ).service,
+    );
+    expect(names).not.toContain("create_workflow");
+    expect(names).not.toContain("run_workflow");
+  });
 });
 
 /**

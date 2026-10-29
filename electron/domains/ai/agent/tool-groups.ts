@@ -52,6 +52,18 @@ export const EXPERT_GROUP_TOOL_NAMES: readonly string[] = [
 ];
 
 /**
+ * 工作流六件套中无工作空间依赖的五件（create/list/get/update/
+ * get_workflow_run——用户级 DB 实体，只按 userId 落库查询，与
+ * create_skill「不依赖工作空间常驻」同语义）：未绑定目录会话经
+ * 场景/意图开门后照常挂载（挂载元说明的承诺由此兑现）；run_workflow
+ * 除外——试运行需工作空间语境（fileRead/fileWrite 等节点落地），
+ * 绑定目录后可用
+ */
+export const WORKFLOW_NO_WORKSPACE_TOOLS: ReadonlySet<string> = new Set(
+  WORKFLOW_GROUP_TOOL_NAMES.filter((n) => n !== "run_workflow"),
+);
+
+/**
  * 工作流组挂载的技能名：用户侧安装（source!=="builtin"——内置技能启动
  * 自愈安装且 enabled 默认 true，内置态不开门，spec §20 项 B 注）且启用
  * （skillRecord.enabled）即视为挂载信号；三列清单由 skillRepo.listGateStatus

@@ -76,6 +76,7 @@ import {
   filterToolsBySession,
   isWorkflowGroupAllowed,
   WORKFLOW_CREATOR_SKILL_NAME,
+  WORKFLOW_NO_WORKSPACE_TOOLS,
   type ToolGroupGate,
 } from "../agent/tool-groups";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
@@ -1635,6 +1636,10 @@ export default class ChatService {
             def.name.startsWith("mcp__") ||
             def.name === "run_command" ||
             def.name === "create_skill" ||
+            // 工作流五件（除 run_workflow）用户级 DB 实体不依赖工作空间
+            // （WORKFLOW_NO_WORKSPACE_TOOLS 注释）——未绑目录会话经场景/
+            // 意图开门后照常挂载，挂载元说明承诺由此兑现
+            WORKFLOW_NO_WORKSPACE_TOOLS.has(def.name) ||
             def.name === WIDGET_TOOL_NAME ||
             def.name === CREATE_EXPERT_TOOL_NAME ||
             def.name === UPDATE_EXPERT_TOOL_NAME ||

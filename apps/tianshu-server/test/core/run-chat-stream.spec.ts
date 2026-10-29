@@ -1,5 +1,5 @@
 // 移植自 mirror tests/ai/agent-loop.test.ts（runChatStream agent 循环 4 用例
-// + 本仓新增 run_command 门控用例）。mirror 侧 electron mock/prisma stub 在
+// + 本仓新增 bash 门控用例）。mirror 侧 electron mock/prisma stub 在
 // 本仓不存在（纯注入无副作用依赖），direct import 即可。
 import { z } from 'zod';
 import { ToolMessage, type BaseMessage } from '@langchain/core/messages';
@@ -42,7 +42,7 @@ const makeReadTool = (
   execute: ToolDefinition<{ path: string }>['execute'] = () =>
     Promise.resolve('     1| hello'),
 ): ToolDefinition<{ path: string }> => ({
-  name: 'read_file',
+  name: 'read',
   description: '测试读工具',
   parameters: z.object({ path: z.string() }),
   kind: 'read',
@@ -54,9 +54,9 @@ const makeWriteTool = (
     path: string;
     content: string;
   }>['execute'] = () => Promise.resolve('已写入 a.txt（2 字节）'),
-  // name 可覆写：权限放宽（spec §4.4）后 write_file 免审，审批挂起用例
-  // 改走仍在兜底审批面的 delete_file（delete=ask 裁定）
-  name = 'write_file',
+  // name 可覆写：权限放宽（spec §4.4）后 write 免审，审批挂起用例
+  // 改走仍在兜底审批面的 rm（delete=ask 裁定）
+  name = 'write',
 ): ToolDefinition<{ path: string; content: string }> => ({
   name,
   description: '测试写工具',
@@ -107,7 +107,7 @@ describe('runChatStream agent loop', () => {
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'read_file',
+            toolName: 'read',
             input: { path: 'a.txt' },
           },
         ],
@@ -132,7 +132,7 @@ describe('runChatStream agent loop', () => {
     expect(calls.length).toBe(2);
     expect(fedToolResult(calls)).toEqual({
       toolCallId: 't1',
-      toolName: 'read_file',
+      toolName: 'read',
       value: '     1| hello',
     });
 
@@ -141,7 +141,7 @@ describe('runChatStream agent loop', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'read_file',
+        toolName: 'read',
         args: { path: 'a.txt' },
         state: 'done',
         output: '     1| hello',
@@ -194,14 +194,14 @@ describe('runChatStream agent loop', () => {
     const writeExecute = jest.fn(() =>
       Promise.resolve('已写入 a.txt（2 字节）'),
     );
-    const writeTool = makeWriteTool(writeExecute, 'delete_file');
+    const writeTool = makeWriteTool(writeExecute, 'rm');
     const { model, calls } = agentModel([
       {
         steps: [
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'delete_file',
+            toolName: 'rm',
             input: { path: 'a.txt', content: 'hi' },
           },
         ],
@@ -222,15 +222,15 @@ describe('runChatStream agent loop', () => {
       onChunk: (chunk) => chunks.push(chunk),
     });
 
-    // delete_file 未授权（兜底审批面剩余项）：execute 挂起等待审批
+    // rm 未授权（兜底审批面剩余项）：execute 挂起等待审批
     await waitFor(() => expect(approvals.pendingCount).toBe(1));
     const approvalChunk = chunks.find(
       (chunk) => chunk.type === 'approval-request',
     );
     expect(approvalChunk).toMatchObject({
       toolCallId: 't1',
-      toolName: 'delete_file',
-      argSummary: 'delete_file → a.txt',
+      toolName: 'rm',
+      argSummary: 'rm → a.txt',
     });
 
     approvals.respond('t1', false);
@@ -246,7 +246,7 @@ describe('runChatStream agent loop', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'delete_file',
+        toolName: 'rm',
         args: { path: 'a.txt', content: 'hi' },
         state: 'denied',
         output: '用户拒绝了此操作',
@@ -265,7 +265,7 @@ describe('runChatStream agent loop', () => {
         {
           kind: 'tool' as const,
           toolCallId: `t${index}`,
-          toolName: 'read_file',
+          toolName: 'read',
           input: { path: `f${index}.txt` },
         },
       ],
@@ -304,7 +304,7 @@ describe('runChatStream agent loop', () => {
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'read_file',
+            toolName: 'read',
             input: { path: 'a.txt' },
           },
         ],
@@ -337,7 +337,7 @@ describe('runChatStream agent loop', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'read_file',
+        toolName: 'read',
         args: { path: 'a.txt' },
         state: 'error',
         output: '已中断',
@@ -345,11 +345,11 @@ describe('runChatStream agent loop', () => {
     ]);
   });
 
-  it('allowDangerousTools=false（默认）：run_command 直接拒绝（denied 终态，不执行不审批）', async () => {
+  it('allowDangerousTools=false（默认）：bash 直接拒绝（denied 终态，不执行不审批）', async () => {
     const approvals = new ApprovalCoordinator();
     const commandExecute = jest.fn(() => Promise.resolve('退出码 0'));
     const commandTool: ToolDefinition<{ command: string }> = {
-      name: 'run_command',
+      name: 'bash',
       description: '测试命令工具',
       parameters: z.object({ command: z.string() }),
       kind: 'write',
@@ -361,7 +361,7 @@ describe('runChatStream agent loop', () => {
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'run_command',
+            toolName: 'bash',
             input: { command: 'echo hi' },
           },
         ],
@@ -378,7 +378,7 @@ describe('runChatStream agent loop', () => {
       history: userHistory,
       params: {},
       toolDefinitions: [commandTool],
-      agent: makeAgent(approvals, true, ['run_command']),
+      agent: makeAgent(approvals, true, ['bash']),
       onChunk: (chunk) => chunks.push(chunk),
     });
 
@@ -390,7 +390,7 @@ describe('runChatStream agent loop', () => {
         chunk.type === 'tool-update' &&
         (chunk as { state: string }).state === 'denied',
     );
-    expect(denied).toMatchObject({ toolCallId: 't1', toolName: 'run_command' });
+    expect(denied).toMatchObject({ toolCallId: 't1', toolName: 'bash' });
 
     // 拒绝文案回喂，循环继续至终文本；块为 denied 终态
     expect(fedToolResult(calls)).toMatchObject({
@@ -401,7 +401,7 @@ describe('runChatStream agent loop', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'run_command',
+        toolName: 'bash',
         args: { command: 'echo hi' },
         state: 'denied',
         output: expect.stringContaining('allowDangerousTools'),

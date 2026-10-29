@@ -1,7 +1,7 @@
 /**
  * 内置文件工具（自 mirror electron/domains/ai/agent/file-tools.ts 移植）：
  * 路径全部限定工作空间内，错误一律转字符串回喂，纯 Node 可被 jest 直接测试。
- * 无头端偏离一处：delete_file 的回收站分支——mirror 依赖 electron
+ * 无头端偏离一处：rm 的回收站分支——mirror 依赖 electron
  * shell.trashItem，服务端改为移入数据根 trash/ 目录（rename 落盘，跨设备
  * EXDEV 回退 copy+rm），语义（默认保护、可恢复）与 mirror 对齐。
  */
@@ -135,14 +135,14 @@ export function resolveSafePath(
   return resolved;
 }
 
-// ---------- read_file ----------
+// ---------- read ----------
 
 const readFileSchema = z.object({
   path: z.string().describe('工作空间内的相对路径'),
 });
 
 const readFileTool: ToolDefinition<z.infer<typeof readFileSchema>> = {
-  name: 'read_file',
+  name: 'read',
   description: '读取工作空间内文本文件（带行号，相对路径）',
   parameters: readFileSchema,
   kind: 'read',
@@ -168,7 +168,7 @@ const readFileTool: ToolDefinition<z.infer<typeof readFileSchema>> = {
   },
 };
 
-// ---------- write_file ----------
+// ---------- write ----------
 
 const writeFileSchema = z.object({
   path: z.string().describe('相对路径'),
@@ -176,7 +176,7 @@ const writeFileSchema = z.object({
 });
 
 const writeFileTool: ToolDefinition<z.infer<typeof writeFileSchema>> = {
-  name: 'write_file',
+  name: 'write',
   description: '覆盖写入工作空间内文件（自动建父目录）；写操作需批准',
   parameters: writeFileSchema,
   kind: 'write',
@@ -211,14 +211,14 @@ const writeFileTool: ToolDefinition<z.infer<typeof writeFileSchema>> = {
   },
 };
 
-// ---------- list_dir ----------
+// ---------- ls ----------
 
 const listDirSchema = z.object({
   path: z.string().optional().describe('相对路径，空为根目录'),
 });
 
 const listDirTool: ToolDefinition<z.infer<typeof listDirSchema>> = {
-  name: 'list_dir',
+  name: 'ls',
   description: '列出目录一层内容（不递归、忽略隐藏项）',
   parameters: listDirSchema,
   kind: 'read',
@@ -254,7 +254,7 @@ const listDirTool: ToolDefinition<z.infer<typeof listDirSchema>> = {
   },
 };
 
-// ---------- search_files ----------
+// ---------- grep ----------
 
 const searchFilesSchema = z.object({
   pattern: z.string().describe('正则表达式'),
@@ -292,7 +292,7 @@ const COLLECT_DEFAULT_LIMITS: CollectLimits = {
   maxFiles: 20000,
   maxDepth: 12,
 };
-/** 单次 search_files 读取总字节预算（与单文件 2MB 上限互补） */
+/** 单次 grep 读取总字节预算（与单文件 2MB 上限互补） */
 const SEARCH_TOTAL_BYTES_BUDGET = 64 * 1024 * 1024;
 
 /**
@@ -366,7 +366,7 @@ function compileRegex(pattern: string): RegExp {
 }
 
 const searchFilesTool: ToolDefinition<z.infer<typeof searchFilesSchema>> = {
-  name: 'search_files',
+  name: 'grep',
   description: '搜索工作空间文件内容（正则；glob 可过滤文件名）',
   parameters: searchFilesSchema,
   kind: 'read',
@@ -435,7 +435,7 @@ const searchFilesTool: ToolDefinition<z.infer<typeof searchFilesSchema>> = {
   },
 };
 
-// ---------- delete_file ----------
+// ---------- rm ----------
 
 const deleteFileSchema = z.object({
   path: z.string().describe('要删除的文件或目录（相对路径，目录递归删）'),
@@ -538,7 +538,7 @@ async function permanentDelete(
 }
 
 const deleteFileTool: ToolDefinition<z.infer<typeof deleteFileSchema>> = {
-  name: 'delete_file',
+  name: 'rm',
   description: '删除文件或目录（递归），默认移入回收目录；写操作需批准',
   parameters: deleteFileSchema,
   kind: 'write',
@@ -573,7 +573,7 @@ export const FILE_TOOLS: ToolDefinition[] = [
 /** 按名取内置文件工具 */
 export function makeFileTool(
   name:
-    'read_file' | 'write_file' | 'list_dir' | 'search_files' | 'delete_file',
+    'read' | 'write' | 'ls' | 'grep' | 'rm',
 ): ToolDefinition<never> {
   const tool = FILE_TOOLS.find((t) => t.name === name);
   if (!tool) throw new Error(`未知文件工具: ${name}`);

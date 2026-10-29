@@ -1,8 +1,8 @@
 // 权限放宽批（2026-10-24 spec §4.4/§4.5）tool-gate 级用例——mirror
 // tests/security/command-gate-integration.test.ts 的「权限放宽」两段同构
-// 移植（server 侧 run_command 用替身 def，不落 shell；危险工具前置门/
+// 移植（server 侧 bash 用替身 def，不落 shell；危险工具前置门/
 // autoDenyApprovals 语义为 server 特有对照面）。审批面收窄为「高危询问」：
-// 普通命令/write_file 工作空间内/DB 写/网络域直执行；危险分级
+// 普通命令/write 工作空间内/DB 写/网络域直执行；危险分级
 // HIGH/CRITICAL 两档均审批（full 亦不豁免，对齐 WorkBuddy bypass）。
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,7 +18,7 @@ import type { ToolDefinition } from 'src/core/tools/tool-definition';
 import type { SecurityEvent } from 'src/core/tools/security-events';
 import type { ChatStreamChunk } from '@tianshu/protocol';
 
-/** write_file 直执行用例的临时工作空间（真实落盘断言） */
+/** write 直执行用例的临时工作空间（真实落盘断言） */
 let workspace = '';
 
 beforeAll(() => {
@@ -51,10 +51,10 @@ function makeAgent(
   };
 }
 
-/** run_command 替身：name/kind 是门禁判定输入，execute 不落 shell——
+/** bash 替身：name/kind 是门禁判定输入，execute 不落 shell——
  *  用例只验判定序与审批触发 */
 const runCommandDef: ToolDefinition = {
-  name: 'run_command',
+  name: 'bash',
   description: 'stub',
   parameters: {},
   kind: 'write',
@@ -202,13 +202,13 @@ describe('runToolCall 权限放宽：危险命令分级', () => {
 });
 
 describe('runToolCall 权限放宽：write 兜底收窄', () => {
-  it('write_file default 档直执行（工作空间内免审），文件真实落盘', async () => {
+  it('write default 档直执行（工作空间内免审），文件真实落盘', async () => {
     const agent = makeAgent({
       decideCommand: () => 'default',
       workspacePath: workspace,
     });
     const out = await runToolCall(
-      makeFileTool('write_file'),
+      makeFileTool('write'),
       agent,
       'c6',
       {
@@ -227,10 +227,10 @@ describe('runToolCall 权限放宽：write 兜底收窄', () => {
     expect(autoAllowed?.detail).toMatchObject({ reason: 'workspace-write' });
   });
 
-  it('delete_file default 档仍审批（delete=ask 裁定，兜底审批面剩余项）', async () => {
+  it('rm default 档仍审批（delete=ask 裁定，兜底审批面剩余项）', async () => {
     const agent = makeAgent({ decideCommand: () => 'default' });
     await runToolCall(
-      { ...writeDefBase, name: 'delete_file' },
+      { ...writeDefBase, name: 'rm' },
       agent,
       'c8',
       {
@@ -241,13 +241,13 @@ describe('runToolCall 权限放宽：write 兜底收窄', () => {
     expect(agent.approvals).toHaveLength(1);
   });
 
-  it('full 档其余 write（delete_file）直执行（询问面全豁免，mirror 3c 同构）', async () => {
+  it('full 档其余 write（rm）直执行（询问面全豁免，mirror 3c 同构）', async () => {
     const agent = makeAgent({
       fullAccess: () => true,
       decideCommand: () => 'default',
     });
     await runToolCall(
-      { ...writeDefBase, name: 'delete_file' },
+      { ...writeDefBase, name: 'rm' },
       agent,
       'c10',
       {
@@ -259,9 +259,9 @@ describe('runToolCall 权限放宽：write 兜底收窄', () => {
   });
 
   it.each([
-    'plan_create_item',
-    'plan_update_status',
-    'plan_append_summary',
+    'todo_write',
+    'todo_write',
+    'todo_write',
     'create_skill',
   ])('DB 写工具 %s 直执行', async (name) => {
     const agent = makeAgent({ decideCommand: () => 'default' });
@@ -279,8 +279,8 @@ describe('runToolCall 权限放宽：write 兜底收窄', () => {
 
 describe('网络域免审（2026-10-24 裁定重落：任何档位直执行）', () => {
   it.each([
-    'web_fetch',
-    'open_browser',
+    'fetch',
+    'browse',
     'browser_snapshot',
     'browser_navigate',
     'browser_click',

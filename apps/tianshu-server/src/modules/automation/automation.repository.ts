@@ -450,7 +450,7 @@ export class AutomationRepository {
     return Promise.all(rows.map((row) => this.hydrate(row)));
   }
 
-  /** 创建任务（mirror public 同位：IPC 与 create_automation_task 工具共用；
+  /** 创建任务（mirror public 同位：IPC 与 create_schedule 工具共用；
    * server 侧供 service/controller 消费） */
   async createTask(p: TaskCreateParams, userId: number): Promise<TaskRecord> {
     await this.assertTaskRefsOwned(

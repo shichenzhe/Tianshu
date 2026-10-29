@@ -22,7 +22,7 @@ export interface ExpertTeamMember {
 const TEAM_MEMBER_ID_RE = /^[a-z0-9][a-z0-9-]*$/;
 const TEAM_MEMBERS_MAX = 13;
 /** 成员 id 长度上限：对齐 mirror create-expert.ts TEAM_MEMBER_ID_MAX 与
- *  dispatch_member 工具参数 member 的 max(64)（超长 id 可落库却无法调度） */
+ *  dispatch 工具参数 member 的 max(64)（超长 id 可落库却无法调度） */
 const TEAM_MEMBER_ID_MAX = 64;
 
 const teamMemberSchema = z.object({

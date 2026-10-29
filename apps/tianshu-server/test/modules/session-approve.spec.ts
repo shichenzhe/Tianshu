@@ -87,7 +87,7 @@ describe('POST /session/approve (e2e)', () => {
       toolCallId: 'tc-x',
       approved: true,
       remember: true,
-      toolName: 'write_file',
+      toolName: 'write',
     }).expect(200);
     const body = res.body as WrappedBody<{
       responded: boolean;
@@ -100,7 +100,7 @@ describe('POST /session/approve (e2e)', () => {
       'tc-x',
       true,
       true,
-      'write_file',
+      'write',
     );
   });
 
@@ -110,7 +110,7 @@ describe('POST /session/approve (e2e)', () => {
       toolCallId: 'tc-x',
       approved: false,
       remember: true,
-      toolName: 'write_file',
+      toolName: 'write',
     }).expect(200);
     const body = res.body as WrappedBody<{ remembered: boolean }>;
     expect(body.code).toBe('2000');
@@ -123,7 +123,7 @@ describe('POST /session/approve (e2e)', () => {
       toolCallId: 'tc-x',
       approved: true,
       remember: true,
-      toolName: 'write_file',
+      toolName: 'write',
     }).expect(200);
     const body = res.body as WrappedBody<null>;
     expect(body.success).toBe(false);

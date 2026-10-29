@@ -1,5 +1,5 @@
 /**
- * run_command 终端工具（自 mirror electron/domains/ai/agent/command-tool.ts
+ * bash 终端工具（自 mirror electron/domains/ai/agent/command-tool.ts
  * 移植）：在工作空间内执行 shell 命令。
  * - 危险命令硬拦截（与权限模式无关常开）
  * - 默认态 cwd 限定工作空间内（越界回退工作空间根）；完全访问态不限定
@@ -86,7 +86,7 @@ function commandSha256(command: string): string {
   return createHash('sha256').update(command).digest('hex');
 }
 
-// ---------- run_command 工具 ----------
+// ---------- bash 工具 ----------
 
 const runCommandSchema = z.object({
   command: z.string().describe('要执行的 shell 命令'),
@@ -174,7 +174,7 @@ function mergeOutput(stdout: string, stderr: string): string {
 }
 
 const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
-  name: 'run_command',
+  name: 'bash',
   description: '执行工作空间内 shell 命令，返回退出码与输出；高危命令需批准',
   parameters: runCommandSchema,
   kind: 'write',
@@ -189,9 +189,9 @@ const runCommandTool: ToolDefinition<z.infer<typeof runCommandSchema>> = {
         sessionId: ctx.sessionId,
       });
       // 拦截文案按命令形态分流指引（T35 渐进披露）：删文件类指向
-      // delete_file（原在 delete_file 描述里的「优先于 rm」教学挪此）
+      // rm（原在 rm 描述里的「优先于 rm」教学挪此）
       const deleteHint = /\b(?:rm|rd|rmdir|del|erase)\b/i.test(args.command)
-        ? '；删除文件请改用 delete_file 工具'
+        ? '；删除文件请改用 rm 工具'
         : '';
       return `错误: 该命令被安全策略拦截（高风险破坏性操作）${deleteHint}`;
     }

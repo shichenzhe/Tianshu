@@ -1,6 +1,6 @@
 /**
  * SSRF 封锁清单（自 mirror electron/domains/security/ssrf-hosts.ts 逐字移植）：
- * agent web_fetch 消费；云 metadata 端点对齐 WorkBuddy。
+ * agent fetch 消费；云 metadata 端点对齐 WorkBuddy。
  */
 const HOSTS = new Set([
   '169.254.169.254',

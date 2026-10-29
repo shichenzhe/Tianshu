@@ -2,8 +2,8 @@
 // browser_type——发 tool.request 的）豁免 server 本机 write 门禁——default
 // accessMode（autoDenyApprovals=true、无完全访问、无工具记忆）下不经
 // APPROVAL_AUTO_DENIED_OUTPUT 本机拒绝，直接发出 tool.request 挂起等控制端
-// respond；对照非桥非免审 write（delete_file——权限放宽 spec §4.4 后
-// write_file 已免审直执行，兜底审批面剩余项）照旧本机自动拒绝（豁免面
+// respond；对照非桥非免审 write（rm——权限放宽 spec §4.4 后
+// write 已免审直执行，兜底审批面剩余项）照旧本机自动拒绝（豁免面
 // 精确到桥工具+免审集，非全部 write）。
 import type { ToolRequestPayload } from '@tianshu/protocol';
 import {
@@ -105,9 +105,9 @@ describe('桥 write 工具豁免本机 write 门禁（TB-T2/R3）', () => {
     await expect(pending).resolves.toBe('错误: denied by user');
   });
 
-  it('豁免面精确：delete_file（非桥非免审）default 模式照旧本机自动拒绝，不发 tool.request', async () => {
-    const deleteFile = FILE_TOOLS.find((def) => def.name === 'delete_file');
-    if (!deleteFile) throw new Error('delete_file 未注册');
+  it('豁免面精确：rm（非桥非免审）default 模式照旧本机自动拒绝，不发 tool.request', async () => {
+    const deleteFile = FILE_TOOLS.find((def) => def.name === 'rm');
+    if (!deleteFile) throw new Error('rm 未注册');
     const chunks: ChatStreamChunk[] = [];
     const output = await runToolCall(
       deleteFile,

@@ -59,7 +59,7 @@ describe('ChatRunnerService run', () => {
       'tc-mem',
       true,
       true,
-      'write_file',
+      'write',
     );
     expect(r).toEqual({ hit: true, remembered: true });
     // 记忆行已落（workspaceId 取会话行——先落防竞速；seedSession 返回
@@ -72,7 +72,7 @@ describe('ChatRunnerService run', () => {
       where: {
         workspaceId_toolName: {
           workspaceId: sessionRow!.workspaceId,
-          toolName: 'write_file',
+          toolName: 'write',
         },
       },
     });
@@ -81,8 +81,8 @@ describe('ChatRunnerService run', () => {
     await expect(pending).resolves.toBe(true);
     // isToolAllowed 查表：记忆工具免审、未记忆仍审批
     const ctx = await internals.assembleContext(session.id, 1);
-    await expect(ctx.agent.isToolAllowed('write_file')).resolves.toBe(true);
-    await expect(ctx.agent.isToolAllowed('run_command')).resolves.toBe(false);
+    await expect(ctx.agent.isToolAllowed('write')).resolves.toBe(true);
+    await expect(ctx.agent.isToolAllowed('bash')).resolves.toBe(false);
   });
 
   it('纯文本轮：chunks 顺序 text-delta…finish 收尾，双消息落库（usage 块收尾）', async () => {
@@ -171,7 +171,7 @@ describe('ChatRunnerService run', () => {
     expect(escape).toBe('FILES_IMAGE_PATH_INVALID');
   });
 
-  it('run_command：allowDangerousTools=false 时整体拒绝（denied 终态块，命令不执行）', async () => {
+  it('bash：allowDangerousTools=false 时整体拒绝（denied 终态块，命令不执行）', async () => {
     const { session } = await seedSession(db, dirs);
     const { runner, model } = makeRunner(db, dirs, [
       {
@@ -179,7 +179,7 @@ describe('ChatRunnerService run', () => {
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'run_command',
+            toolName: 'bash',
             input: { command: 'echo hi' },
           },
         ],
@@ -218,7 +218,7 @@ describe('ChatRunnerService run', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'run_command',
+        toolName: 'bash',
         args: { command: 'echo hi' },
         state: 'denied',
         output: expect.stringContaining('allowDangerousTools'),
@@ -275,7 +275,7 @@ describe('ChatRunnerService run', () => {
     expect(systemTextOf()).toContain('user-skill');
   });
 
-  it('write_file 默认模式直执行（权限放宽 spec §4.4）：工作空间内免审，文件落盘且循环继续', async () => {
+  it('write 默认模式直执行（权限放宽 spec §4.4）：工作空间内免审，文件落盘且循环继续', async () => {
     const { session } = await seedSession(db, dirs);
     const { runner, model } = makeRunner(db, dirs, [
       {
@@ -283,7 +283,7 @@ describe('ChatRunnerService run', () => {
           {
             kind: 'tool',
             toolCallId: 't1',
-            toolName: 'write_file',
+            toolName: 'write',
             input: { path: 'a.txt', content: 'hi' },
           },
         ],
@@ -319,7 +319,7 @@ describe('ChatRunnerService run', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'write_file',
+        toolName: 'write',
         args: { path: 'a.txt', content: 'hi' },
         state: 'done',
         output: expect.stringContaining('已写入'),
@@ -329,7 +329,7 @@ describe('ChatRunnerService run', () => {
     expect(chunks[chunks.length - 1]).toEqual({ type: 'finish' });
   });
 
-  it('write_file auto-approve 模式：静默放行，文件落盘', async () => {
+  it('write auto-approve 模式：静默放行，文件落盘', async () => {
     const { session } = await seedSession(db, dirs);
     const { runner } = makeRunner(
       db,
@@ -340,7 +340,7 @@ describe('ChatRunnerService run', () => {
             {
               kind: 'tool',
               toolCallId: 'w1',
-              toolName: 'write_file',
+              toolName: 'write',
               input: { path: 'b.txt', content: '落盘内容' },
             },
           ],

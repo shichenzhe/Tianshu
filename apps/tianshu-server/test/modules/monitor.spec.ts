@@ -73,7 +73,7 @@ describe('monitor/stats 端点（MO 批）', () => {
         {
           scene: 'chat',
           userId: 1,
-          toolName: 'write_file',
+          toolName: 'write',
           state: 'done',
           durationMs: 120,
           createdAt: now,
@@ -81,7 +81,7 @@ describe('monitor/stats 端点（MO 批）', () => {
         {
           scene: 'chat',
           userId: 1,
-          toolName: 'write_file',
+          toolName: 'write',
           state: 'error',
           durationMs: 30,
           createdAt: now,
@@ -89,7 +89,7 @@ describe('monitor/stats 端点（MO 批）', () => {
         {
           scene: 'chat',
           userId: 1,
-          toolName: 'run_command',
+          toolName: 'bash',
           state: 'denied',
           createdAt: now,
         },
@@ -101,7 +101,7 @@ describe('monitor/stats 端点（MO 批）', () => {
     // 结构锚点（全量口径断言归 computeMonitorStats 单测——mirror 侧
     // monitor-stats.test 直测 core；此处钉端点链路通与关键面在场）
     expect(JSON.stringify(data)).toContain('测试模型');
-    expect(JSON.stringify(data)).toContain('write_file');
+    expect(JSON.stringify(data)).toContain('write');
   });
 
   it('scene 过滤：graph 只聚合 graph 行', async () => {

@@ -85,7 +85,7 @@ export type ChatAccessMode = 'default' | 'auto-approve' | 'manual';
 export class TianshuChatConfig {
   // 是否允许危险工具
   allowDangerousTools: boolean;
-  // 删除保护：true（缺省）= delete_file 移入回收目录；false = 永久删除
+  // 删除保护：true（缺省）= rm 移入回收目录；false = 永久删除
   // （T6 复审 M3：自硬编码挪 config，mirror dataSafety 闭包的 config 面等价）
   deleteProtection: boolean;
   // 工具审批模式：default（缺省）= 需审批操作（写/门禁 ask）自动拒绝，文案

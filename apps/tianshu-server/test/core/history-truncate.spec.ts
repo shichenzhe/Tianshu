@@ -15,7 +15,7 @@ const toolCallMsg = (output: string) => ({
     {
       type: 'tool_call',
       toolCallId: 'call-1',
-      toolName: 'read_file',
+      toolName: 'read',
       args: { path: 'src/a.ts' },
       state: 'done',
       output,

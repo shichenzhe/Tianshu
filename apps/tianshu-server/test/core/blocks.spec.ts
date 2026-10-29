@@ -190,7 +190,7 @@ describe('blocksToModelMessages image 块转换（LangChain 形态）', () => {
       {
         type: 'tool_call',
         toolCallId: 't1',
-        toolName: 'read_file',
+        toolName: 'read',
         args: { path: 'a.txt' },
         state: 'done',
         output: '内容',
@@ -204,7 +204,7 @@ describe('blocksToModelMessages image 块转换（LangChain 形态）', () => {
     ).toEqual([
       {
         id: 't1',
-        name: 'read_file',
+        name: 'read',
         args: { path: 'a.txt' },
         type: 'tool_call',
       },
@@ -212,7 +212,7 @@ describe('blocksToModelMessages image 块转换（LangChain 形态）', () => {
     expect(messages[1]).toBeInstanceOf(ToolMessage);
     expect(messages[1]).toMatchObject({
       tool_call_id: 't1',
-      name: 'read_file',
+      name: 'read',
       content: '内容',
     });
   });

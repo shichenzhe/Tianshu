@@ -3,8 +3,8 @@
  * 纯 Node 可测（fetch 注入可替换）。SSRF 复用封锁清单，重定向手动逐跳
  * follow（fetch redirect:"manual"），每跳重过 assertUrl，封死公网 302 跳
  * 内网 metadata 的绕过。
- * 无头端裁剪：open_browser（渲染层面板联动，emitPanel 依赖）不注册——
- * 本模块只保留 web_fetch；镜像 proxy-dispatcher 全局 dispatcher 未移植，
+ * 无头端裁剪：browse（渲染层面板联动，emitPanel 依赖）不注册——
+ * 本模块只保留 fetch；镜像 proxy-dispatcher 全局 dispatcher 未移植，
  * 直接走 Node 原生 global fetch（服务端出网按部署环境网络策略）。
  */
 import { z } from 'zod';
@@ -94,7 +94,7 @@ function makeWebFetchTool(
   fetcher: WebFetcher,
 ): ToolDefinition<{ url: string }> {
   return {
-    name: 'web_fetch',
+    name: 'fetch',
     description: '抓取网页并提取纯文本正文（超 32KB 截断）',
     parameters: z.object({ url: z.string().describe('要读取的网页地址') }),
     kind: 'read',
@@ -184,7 +184,7 @@ const rawFetch: WebFetcher = async (url, opts) => {
 const defaultFetcher: WebFetcher = (url, opts) =>
   fetchWithRedirects(rawFetch, url, opts);
 
-/** 无头端工具集：仅 web_fetch（open_browser 不注册） */
+/** 无头端工具集：仅 fetch（browse 不注册） */
 export function makeWebTools(
   fetcher: WebFetcher = defaultFetcher,
 ): ToolDefinition[] {

@@ -2,7 +2,7 @@
  * 命令判定门模块单例（自 mirror electron/domains/security/command-gate.ts
  * 移植）：服务端装配时 install（闭包读安全配置）；未安装/异常一律
  * "default"（fail-open，回到既有审批链，不阻断执行）。allowDangerousTools
- * 的整体禁用（run_command 全拒）在 tool-gate 收口，不经本门。
+ * 的整体禁用（bash 全拒）在 tool-gate 收口，不经本门。
  */
 import {
   decideCommand,

@@ -53,7 +53,7 @@ describe('PermissionController (e2e)', () => {
       data: [
         {
           workspaceId: wsA.id,
-          toolName: 'write_file',
+          toolName: 'write',
           createdAt: new Date('2026-10-20T08:00:00.000Z'),
         },
         {
@@ -83,7 +83,7 @@ describe('PermissionController (e2e)', () => {
       {
         id: expect.any(Number),
         workspaceName: '空间A',
-        toolName: 'write_file',
+        toolName: 'write',
         createdAt: '2026-10-20T08:00:00.000Z',
       },
     ]);

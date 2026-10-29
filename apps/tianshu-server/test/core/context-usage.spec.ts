@@ -32,7 +32,7 @@ describe('上下文用量拆解', () => {
     const result = computeUsageBreakdown({
       systemWithSummary: wholeSystem,
       skills,
-      toolDefinitions: [def('read_file'), def('mcp__github__issue')],
+      toolDefinitions: [def('read'), def('mcp__github__issue')],
       history: [msg('a'), msg('b')],
       contextWindow: 131072,
       params: {},
@@ -58,7 +58,7 @@ describe('上下文用量拆解', () => {
     const result = computeUsageBreakdown({
       systemWithSummary: '人设',
       skills: [],
-      toolDefinitions: [def('read_file')],
+      toolDefinitions: [def('read')],
       history: [msg('a')],
       contextWindow: 8192,
       params: {},

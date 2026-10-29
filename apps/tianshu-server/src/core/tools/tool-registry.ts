@@ -1,6 +1,6 @@
 /**
  * 工具注册表（自 mirror electron/domains/ai/agent/tool-registry.ts 移植）：
- * 初始集 = 内置文件五件 + run_command + web_fetch（无头集）+ browser 四件
+ * 初始集 = 内置文件五件 + bash + fetch（无头集）+ browser 四件
  * 桥版（TB-T1，spec §2.3：桥工具默认注册，无静态 capability 变化——运行
  * 时可用性由「有无活跃控制端连接」决定，离线即拒「桌面控制端不在线」）
  * + library_search（PL-2，spec §2.2：资料库语义检索，本地执行不依赖

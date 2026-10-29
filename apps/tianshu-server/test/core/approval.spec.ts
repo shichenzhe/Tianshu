@@ -6,7 +6,7 @@ import { ApprovalCoordinator } from 'src/core/tools/approval';
 describe('ApprovalCoordinator（保留审批链）', () => {
   it('request 挂起 → respond(true/false) 决议，未知 id 返回 false', async () => {
     const coordinator = new ApprovalCoordinator();
-    const pending = coordinator.request('t1', 'write_file → a.txt');
+    const pending = coordinator.request('t1', 'write → a.txt');
     expect(coordinator.pendingCount).toBe(1);
 
     // 未知 id 不决议也不误伤在挂条目
@@ -16,7 +16,7 @@ describe('ApprovalCoordinator（保留审批链）', () => {
     expect(await pending).toBe(true);
     expect(coordinator.pendingCount).toBe(0);
 
-    const denied = coordinator.request('t2', 'run_command → rm -rf');
+    const denied = coordinator.request('t2', 'bash → rm -rf');
     expect(coordinator.respond('t2', false)).toBe(true);
     expect(await denied).toBe(false);
   });

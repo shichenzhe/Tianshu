@@ -3,7 +3,7 @@
  * countFilesForEstimate 摘取，模块级纯函数）：walk 计数，达
  * ESTIMATE_COUNT_LIMIT 即停。根为文件计 1，不存在计 0。
  * 完整备份服务（FileHistoryService：快照/manifest/配额 LRU）未随本批
- * 移植——onBackupFile 回调契约保留，装配缺席时 write_file 覆盖前不备份
+ * 移植——onBackupFile 回调契约保留，装配缺席时 write 覆盖前不备份
  * （fail-open 与 mirror 一致）。
  */
 import fsp from 'node:fs/promises';

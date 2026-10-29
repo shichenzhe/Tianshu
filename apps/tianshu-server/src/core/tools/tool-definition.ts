@@ -25,13 +25,13 @@ export interface ToolContext {
   grantedPaths?: string[];
   /** 会话归属项目 id：plan_* 工具属地依据，非项目会话 null */
   projectId?: number | null;
-  /** 安全事件上报：工具按需消费（如 run_command 拦截/cwd 回退） */
+  /** 安全事件上报：工具按需消费（如 bash 拦截/cwd 回退） */
   onSecurityEvent?: SecurityEventSink;
   /** 删除保护：true=移入服务端回收目录；装配注入，缺省 true 与默认配置一致 */
   deleteProtection?: boolean;
-  /** 回收目录根（deleteProtection=true 时 delete_file 移入；缺省 ~/.tianshu-server/trash） */
+  /** 回收目录根（deleteProtection=true 时 rm 移入；缺省 ~/.tianshu-server/trash） */
   trashRoot?: string;
-  /** 备份回调（write_file 覆盖前 / delete_file 永久删除前）；缺省不备份 */
+  /** 备份回调（write 覆盖前 / rm 永久删除前）；缺省不备份 */
   onBackupFile?: (
     absPath: string,
     sessionId: number | null,

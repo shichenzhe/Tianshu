@@ -172,7 +172,7 @@ const getItemSchema = z.object({
   id: z.number().describe('任务 id（#<id> 引用）'),
 });
 
-/** plan_list_items：项目内全量任务 → 行摘要（跨项目行不可见，只增数据不加幻觉） */
+/** todo_read：项目内全量任务 → 行摘要（跨项目行不可见，只增数据不加幻觉） */
 async function listItems(
   deps: PlanToolsDeps,
   ctx: ToolContext,
@@ -200,7 +200,7 @@ async function listItems(
   return `当前项目计划清单（共 ${rows.length} 项）：\n${lines.join('\n')}`;
 }
 
-/** plan_get_item：属地校验 → 完整详情（含描述/全文进展——AI 推进的内容依据） */
+/** todo_read：属地校验 → 完整详情（含描述/全文进展——AI 推进的内容依据） */
 async function getItem(
   deps: PlanToolsDeps,
   ctx: ToolContext,
@@ -229,7 +229,7 @@ async function getItem(
   return parts.join('\n');
 }
 
-/** plan_create_item：ctx.projectId/标题/日期校验 → source=ai 建行（未指派） */
+/** todo_write：ctx.projectId/标题/日期校验 → source=ai 建行（未指派） */
 async function createItem(
   deps: PlanToolsDeps,
   ctx: ToolContext,
@@ -276,7 +276,7 @@ async function createItem(
   return `已创建任务 #${row.id}《${title}》`;
 }
 
-/** plan_update_status：属地校验 → 状态流转（变更时落目标列尾列序） */
+/** todo_write：属地校验 → 状态流转（变更时落目标列尾列序） */
 async function updateStatus(
   deps: PlanToolsDeps,
   ctx: ToolContext,
@@ -298,7 +298,7 @@ async function updateStatus(
   return `任务 #${args.id} 已流转为：${STATUS_LABELS[args.status]}`;
 }
 
-/** plan_append_summary：属地校验 → 旧摘要追加「[yyyy-MM-dd] text」行回写 */
+/** todo_write：属地校验 → 旧摘要追加「[yyyy-MM-dd] text」行回写 */
 async function appendSummary(
   deps: PlanToolsDeps,
   ctx: ToolContext,
@@ -329,7 +329,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
   // 掐掉模型在文件系统里找任务文件的错误路径——挂在建/查两个入口工具上
   const GROUNDING_NOTE = '清单不在文件系统';
   const createItemTool: ToolDefinition<z.infer<typeof createItemSchema>> = {
-    name: 'plan_create_item',
+    name: 'todo_write',
     description: `在当前项目计划清单中创建任务。${GROUNDING_NOTE}`,
     parameters: createItemSchema,
     kind: 'write',
@@ -342,7 +342,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
     },
   };
   const updateStatusTool: ToolDefinition<z.infer<typeof updateStatusSchema>> = {
-    name: 'plan_update_status',
+    name: 'todo_write',
     description: '流转计划任务状态（待开始/进行中/已暂停/已完成）',
     parameters: updateStatusSchema,
     kind: 'write',
@@ -356,7 +356,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
   };
   const appendSummaryTool: ToolDefinition<z.infer<typeof appendSummarySchema>> =
     {
-      name: 'plan_append_summary',
+      name: 'todo_write',
       description: '为计划任务追加带日期的进展摘要（只增不改）；推进任务后调用',
       parameters: appendSummarySchema,
       kind: 'write',
@@ -369,7 +369,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
       },
     };
   const listItemsTool: ToolDefinition<z.infer<typeof listItemsSchema>> = {
-    name: 'plan_list_items',
+    name: 'todo_read',
     description: `查看当前项目全量计划清单（#id/标题/状态/最近进展）；${GROUNDING_NOTE}`,
     parameters: listItemsSchema,
     kind: 'read',
@@ -382,7 +382,7 @@ export function makePlanTools(deps: PlanToolsDeps): ToolDefinition[] {
     },
   };
   const getItemTool: ToolDefinition<z.infer<typeof getItemSchema>> = {
-    name: 'plan_get_item',
+    name: 'todo_read',
     description: '按 id 查看计划任务完整详情（含描述与全部进展）',
     parameters: getItemSchema,
     kind: 'read',

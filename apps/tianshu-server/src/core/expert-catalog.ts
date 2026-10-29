@@ -16,8 +16,8 @@
  */
 import type { SkillSummary } from './skill-prompt';
 
-/** recommend_experts 工具名（与 mirror 双份定义约定的服务端唯一来源） */
-const RECOMMEND_TOOL_NAME = 'recommend_experts';
+/** recommend_expert 工具名（与 mirror 双份定义约定的服务端唯一来源） */
+const RECOMMEND_TOOL_NAME = 'recommend_expert';
 
 /** 专家目录条目最小形状（buildExpertCatalogPrompt 消费的四展示字段） */
 export interface ExpertCatalogItem {
@@ -75,7 +75,7 @@ export function mergeExpertSkills(
 
 /**
  * 专家目录推荐指令段（未绑专家的 agent 会话注入）：目录条目 +
- * recommend_experts 工具使用规则（文案给模型看，不进前端 i18n）。
+ * recommend_expert 工具使用规则（文案给模型看，不进前端 i18n）。
  */
 export function buildExpertCatalogPrompt(items: ExpertCatalogItem[]): string {
   const lines = items.map(

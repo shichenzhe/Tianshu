@@ -13,7 +13,7 @@
  *   超窗兜底仍由 truncateHistory 硬截；压缩态**读取**（compactedUpToId/
  *   summary 过滤 + system 摘要段注入）保留，桌面端写入的压缩态可正确消费
  * - 标题自动生成 / 图片附件（多模态输入落盘与回喂）/
- *   专家目录与专家团（recommend_experts/dispatch_member）/ 项目上下文
+ *   专家目录与专家团（recommend_expert/dispatch）/ 项目上下文
  *   prompt（project-prompt）/ 监控埋点（recordLlmCall/recordToolCall）不移植
  * - 个性化 prompt 注入 PL-1 起移植：读侧 src/core/personalization.ts（option
  *   现查+异常回退默认），system 组装经 buildPersonalizedSystem 包裹
@@ -132,7 +132,7 @@ function imageBlocksOf(images: string[]): MessageBlock[] {
 export interface ChatRunnerConfig {
   dataRoot: string;
   allowDangerousTools: boolean;
-  /** 删除保护（T6 复审 M3）：true=delete_file 移入回收目录；缺省 true */
+  /** 删除保护（T6 复审 M3）：true=rm 移入回收目录；缺省 true */
   deleteProtection: boolean;
   /** 工具审批模式：default=自动拒绝；auto-approve=静默放行；manual=挂起
    *  等远程应答（session/approve 决议，超时自动 deny） */
@@ -340,7 +340,7 @@ export class ChatRunnerService {
     return path.join(this.config().dataRoot, 'skills');
   }
 
-  /** 服务端回收目录（delete_file 保护分支落点） */
+  /** 服务端回收目录（rm 保护分支落点） */
   private trashRoot(): string {
     return path.join(this.config().dataRoot, 'trash');
   }
@@ -1119,8 +1119,8 @@ export class ChatRunnerService {
   /**
    * 注入工具集（mirror collectToolDefinitions 无头版）：read_skill 常驻
    * （未绑定目录也注入）；create_skill 落盘用户技能目录不依赖工作空间，
-   * 同样常驻；plan_* 项目专属（仅项目会话注入）；文件五件与 web_fetch
-   * 依赖工作空间路径，仅绑定目录后注入；run_command 例外——未绑定目录
+   * 同样常驻；plan_* 项目专属（仅项目会话注入）；文件五件与 fetch
+   * 依赖工作空间路径，仅绑定目录后注入；bash 例外——未绑定目录
    * 也注入（cwd 锚点落家目录；allowDangerousTools=false 时在门层整体拒绝）；
    * browser 四件桥版（TB-T2/R3 缺口 1，spec §2.3）常驻注入——执行体发
    * tool.request 转控制端桌面执行，不依赖本机工作空间；library_search
@@ -1139,7 +1139,7 @@ export class ChatRunnerService {
     const workspaceScoped = ctx.agent.workspacePath
       ? baseTools
       : baseTools.filter(
-          (def) => def.name === 'run_command' || def.name === 'create_skill',
+          (def) => def.name === 'bash' || def.name === 'create_skill',
         );
     const injected = ctx.isProjectSession
       ? workspaceScoped

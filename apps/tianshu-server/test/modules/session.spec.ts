@@ -621,7 +621,7 @@ describe('SessionController (e2e)', () => {
           sessionId: session.id,
           role: 'assistant',
           blocks:
-            '[{"type":"tool_call","toolCallId":"t1","toolName":"read_file","input":{}}]',
+            '[{"type":"tool_call","toolCallId":"t1","toolName":"read","input":{}}]',
         },
       });
       return { ws, session, a1, a2 };
@@ -647,7 +647,7 @@ describe('SessionController (e2e)', () => {
         id: a2.id,
         role: 'assistant',
         kind: 'tool',
-        text: 'read_file',
+        text: 'read',
         createdAt: a2.createdAt.toISOString(),
       });
     });
@@ -817,7 +817,7 @@ describe('SessionController (e2e)', () => {
         expect(updated?.payload.lastMessage).toMatchObject({
           id: a2.id,
           kind: 'tool',
-          text: 'read_file',
+          text: 'read',
         });
       } finally {
         off();

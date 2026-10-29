@@ -10,7 +10,7 @@
 //    tick 对在途任务不并发双跑；stop abort 全部在途
 // 4. runNow 手动触发不消耗调度字段（nextRunAt/lastRunAt/status/enabled 不动）
 // 5. 无人值守高危拒绝路径：allowDangerousTools=false（config 联动）时
-//    run_command 被 tool-gate 门拒绝——denied tool_call 块落 assistant
+//    bash 被 tool-gate 门拒绝——denied tool_call 块落 assistant
 //    消息（accessMode=full 亦受 config 门，spec §6）
 // 6. 启动恢复失败 catch 收敛：recoverInterruptedRuns 拒绝 → 记 error 不
 //    unhandledRejection（终审 F2）
@@ -392,7 +392,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     ]);
   }, 15000);
 
-  it('无人值守高危拒绝：allowDangerousTools=false 时 run_command 被拒（denied 块落 assistant 消息，任务继续至终文本）', async () => {
+  it('无人值守高危拒绝：allowDangerousTools=false 时 bash 被拒（denied 块落 assistant 消息，任务继续至终文本）', async () => {
     useModel(
       scriptedChatModel([
         {
@@ -400,7 +400,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
             {
               kind: 'tool',
               toolCallId: 'cmd1',
-              toolName: 'run_command',
+              toolName: 'bash',
               input: { command: 'echo hi' },
             },
           ],
@@ -426,7 +426,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     });
     expect(run.status).toBe('success');
 
-    // assistant 消息：run_command denied 终态 + 拒绝原因（config 门文案）+
+    // assistant 消息：bash denied 终态 + 拒绝原因（config 门文案）+
     // 模型收到拒绝反馈后的终文本（循环继续不中断）
     const [assistant] = await db.prisma.messageRecord.findMany({
       where: { sessionId: run.sessionId ?? 0, role: 'assistant' },
@@ -441,7 +441,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     const denied = blocks.find((b) => b.type === 'tool_call');
     expect(denied).toMatchObject({
       toolCallId: 'cmd1',
-      toolName: 'run_command',
+      toolName: 'bash',
       state: 'denied',
     });
     expect(denied?.output).toContain('allowDangerousTools');

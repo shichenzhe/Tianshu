@@ -728,7 +728,7 @@ describe('session/send + abort + SSE (e2e)', () => {
     });
 
     it('M3：deleteProtection=true 移入回收目录（默认），=false 永久删除（回收目录空）', async () => {
-      // 保护默认开：delete_file 落 trash/<sessionId>/
+      // 保护默认开：rm 落 trash/<sessionId>/
       const protectDirs = makeDirs('tianshu-m3-protect-');
       const protect = await seedSession(db, protectDirs);
       const victim = path.join(protectDirs.workspace, 'a.txt');
@@ -742,7 +742,7 @@ describe('session/send + abort + SSE (e2e)', () => {
               {
                 kind: 'tool',
                 toolCallId: 'd1',
-                toolName: 'delete_file',
+                toolName: 'rm',
                 input: { path: 'a.txt' },
               },
             ],
@@ -772,7 +772,7 @@ describe('session/send + abort + SSE (e2e)', () => {
               {
                 kind: 'tool',
                 toolCallId: 'd2',
-                toolName: 'delete_file',
+                toolName: 'rm',
                 input: { path: 'b.txt' },
               },
             ],

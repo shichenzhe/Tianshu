@@ -32,7 +32,7 @@
  *    config 值面：allowDangerousTools/deleteProtection/trashRoot，spec §6
  *    与 config tianshu.chat 联动）；agent.unattended:true →
  *    autoDenyApprovals:true（GA-T4 授权面 8 等价适配）+ agent.allowDangerousTools
- *    （false 时 run_command 经 tool-gate 门整体拒绝，denied chunk 记录拒绝
+ *    （false 时 bash 经 tool-gate 门整体拒绝，denied chunk 记录拒绝
  *    原因——full 任务同样受 config 门，GA-T4 偏差 4 同源）；bulkDeleteThreshold/
  *    onBackupFile 不移植（无 FileHistoryService，tool-gate 缺省阈值 50）
  * 9. commons/Log → Nest Logger；session/message → sessionRecord/messageRecord
@@ -126,7 +126,7 @@ export function extractUsage(
 }
 
 /** 数据安全与危险工具装配（改造点 8：mirror ChatDataSafety 闭包的 server
- * config 值面）：缺省走安全侧——allowDangerousTools false（run_command
+ * config 值面）：缺省走安全侧——allowDangerousTools false（bash
  * 拒绝）、deleteProtection true；scheduler/runNow 自 config.yml
  * tianshu.chat 段装配透传 */
 export interface AutomationSafetyOptions {
@@ -402,7 +402,7 @@ async function streamAndRecord(
     agent: {
       sessionId: ctx.sessionId,
       workspacePath: ctx.workspacePath,
-      // create_automation_task 落库依据（任务行自带：链式创建场景）
+      // create_schedule 落库依据（任务行自带：链式创建场景）
       userId: task.userId ?? undefined,
       workspaceId: task.workspaceId,
       modelId: task.modelId,
@@ -424,7 +424,7 @@ async function streamAndRecord(
       decideFileAccess: fileGate,
       // 改造点 8：SP4 数据安全 → server config 值面；unattended 强拒语义
       // 折进 autoDenyApprovals（无应答方不挂起）与 allowDangerousTools
-      // （config 门，spec §6 联动——false 时 run_command 整体拒绝）
+      // （config 门，spec §6 联动——false 时 bash 整体拒绝）
       allowDangerousTools: opts.safety?.allowDangerousTools ?? false,
       deleteProtection: opts.safety?.deleteProtection ?? true,
       trashRoot: opts.safety?.trashRoot,

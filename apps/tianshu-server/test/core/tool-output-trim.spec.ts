@@ -16,7 +16,7 @@ const toolCall = (
 ): ToolCallBlock => ({
   type: 'tool_call',
   toolCallId: id,
-  toolName: 'read_file',
+  toolName: 'read',
   args: { path: 'src/a.ts' },
   state: 'done',
   output,

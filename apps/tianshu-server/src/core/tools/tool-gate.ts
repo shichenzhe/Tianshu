@@ -4,7 +4,7 @@
  * langchain-tool-adapter 共用，绝不直调 def.execute。
  * 无头端偏离（spec §12 偏离 2）：mirror 的 unattended 强拒语义扩展为
  * allowDangerousTools 配置门（config.yml tianshu.chat.allowDangerousTools，
- * 缺省 false）——false 时 run_command 整体直接拒绝、批量删除预估达阈值
+ * 缺省 false）——false 时 bash 整体直接拒绝、批量删除预估达阈值
  * 直接拒绝（denied 终态 + 拒绝 chunk 回喂，不挂起审批）；true 时回到
  * mirror 原判定链。
  * T7 审批裁定：一期协议无 approve 端点、无应答方——agent.autoDenyApprovals
@@ -48,12 +48,12 @@ export interface AgentStreamOptions {
   /** 会话当前模型 id：透传工具 ctx；未选模型为 undefined */
   modelId?: number;
   /** 绑定目录的规范化绝对路径（无尾部分隔符）；未绑定目录时为 undefined——
-   *  文件五件与 web_fetch 依赖它（不注入），read_skill/create_skill/
-   *  run_command 不依赖（常驻） */
+   *  文件五件与 fetch 依赖它（不注入），read_skill/create_skill/
+   *  bash 不依赖（常驻） */
   workspacePath?: string;
   /** 会话归属项目 id：plan_* 工具组的属地依据，非项目会话为 null */
   projectId?: number | null;
-  /** 危险工具开关（spec §12 偏离 2）：false（缺省）时 run_command 与
+  /** 危险工具开关（spec §12 偏离 2）：false（缺省）时 bash 与
    *  批量删除直接拒绝；true 时走 mirror 原判定链 */
   allowDangerousTools?: boolean;
   /** 完全访问实时判定：每次 write 工具判定与执行前查询，撤回立即生效 */
@@ -66,7 +66,7 @@ export interface AgentStreamOptions {
   /** 无应答方裁定（T7）：true 时需审批操作不挂起，直接以
    *  APPROVAL_AUTO_DENIED_OUTPUT 拒绝（denied chunk 回喂，循环继续） */
   autoDenyApprovals?: boolean;
-  /** 安全事件上报：透传给工具 ctx（run_command 拦截/cwd 回退） */
+  /** 安全事件上报：透传给工具 ctx（bash 拦截/cwd 回退） */
   onSecurityEvent?: SecurityEventSink;
   /** 审批决议审计：approved/denied 由 runToolCall 决议分支回调 */
   onApprovalResolved?: (
@@ -81,13 +81,13 @@ export interface AgentStreamOptions {
     absPath: string,
     workspacePath: string,
   ) => FileAccessDecision;
-  /** 批量删除阈值：delete_file 目录预估 ≥ 阈值强制审批；缺省 50 */
+  /** 批量删除阈值：rm 目录预估 ≥ 阈值强制审批；缺省 50 */
   bulkDeleteThreshold?: number;
-  /** 删除保护：透传 delete_file（true=移入回收目录）；缺省 true */
+  /** 删除保护：透传 rm（true=移入回收目录）；缺省 true */
   deleteProtection?: boolean;
   /** 回收目录根（服务端 trash 实现消费）；缺省 ~/.tianshu-server/trash */
   trashRoot?: string;
-  /** 备份回调：write_file 覆盖前 / delete_file 永久删除前；缺省不备份 */
+  /** 备份回调：write 覆盖前 / rm 永久删除前；缺省不备份 */
   onBackupFile?: (
     absPath: string,
     sessionId: number | null,
@@ -104,14 +104,14 @@ export interface AgentStreamOptions {
   }) => void;
 }
 
-/** 审批横幅直显的参数摘要：run_command 取命令前 60 字符，
+/** 审批横幅直显的参数摘要：bash 取命令前 60 字符，
  *  其余优先路径，否则 JSON 截断 */
 function summarizeArgs(toolName: string, input: unknown): string {
   const record = (
     typeof input === 'object' && input !== null ? input : {}
   ) as Record<string, unknown>;
   if (
-    toolName === 'run_command' &&
+    toolName === 'bash' &&
     typeof record.command === 'string' &&
     record.command
   ) {
@@ -246,9 +246,9 @@ async function awaitApproval(
 export const COMMAND_BLOCKED_OUTPUT =
   '错误: 该命令被命令安全策略禁止（程序黑名单）';
 
-/** allowDangerousTools=false 时 run_command 整体拒绝文案（本仓新增门） */
+/** allowDangerousTools=false 时 bash 整体拒绝文案（本仓新增门） */
 export const COMMAND_DISABLED_OUTPUT =
-  '错误: 服务端未开启 allowDangerousTools（tianshu.chat.allowDangerousTools），run_command 已禁用';
+  '错误: 服务端未开启 allowDangerousTools（tianshu.chat.allowDangerousTools），bash 已禁用';
 
 /** allowDangerousTools=false 时批量删除拒绝文案（本仓新增门） */
 export const BULK_DELETE_DISABLED_OUTPUT =
@@ -258,13 +258,13 @@ export const BULK_DELETE_DISABLED_OUTPUT =
 export const APPROVAL_AUTO_DENIED_OUTPUT =
   '错误: 无头端默认拒绝需审批的操作（config.yml tianshu.chat.accessMode 设为 auto-approve 可放行）';
 
-/** run_command 判定门：非 run_command 或无命令返回 null */
+/** bash 判定门：非 bash 或无命令返回 null */
 function resolveCommandGate(
   agent: AgentStreamOptions,
   toolName: string,
   input: unknown,
 ): CommandDecision | null {
-  if (toolName !== 'run_command') return null;
+  if (toolName !== 'bash') return null;
   const command = (input as { command?: unknown } | null)?.command;
   if (typeof command !== 'string' || command === '') return null;
   return (agent.decideCommand ?? commandGate)(command);
@@ -289,22 +289,22 @@ function emitCommandEvent(
 }
 
 const FILE_GATE_TOOLS = new Set([
-  'read_file',
-  'write_file',
-  'list_dir',
-  'delete_file',
+  'read',
+  'write',
+  'ls',
+  'rm',
 ]);
 
 /** 批量删除阈值缺省：与 mirror 安全中心默认配置一致 */
 export const BULK_DELETE_THRESHOLD_DEFAULT = 50;
 
-/** 批量删除预估：delete_file 且目录预估 ≥ 阈值 → 估值；不涉及返回 null */
+/** 批量删除预估：rm 且目录预估 ≥ 阈值 → 估值；不涉及返回 null */
 async function resolveBulkDelete(
   agent: AgentStreamOptions,
   toolName: string,
   input: unknown,
 ): Promise<number | null> {
-  if (toolName !== 'delete_file' || !agent.workspacePath) return null;
+  if (toolName !== 'rm' || !agent.workspacePath) return null;
   const rel = (input as { path?: unknown } | null)?.path;
   if (typeof rel !== 'string' || rel === '') return null;
   try {
@@ -392,9 +392,9 @@ function denyWithChunk(
  * read 类工具本就不审批，此处只列 kind=write 的业务工具
  */
 const AUTO_EXEMPT_WRITE_TOOLS = new Set([
-  'plan_create_item',
-  'plan_update_status',
-  'plan_append_summary',
+  'todo_write',
+  'todo_write',
+  'todo_write',
   'create_skill',
   'create_expert',
   'update_expert',
@@ -406,8 +406,8 @@ const AUTO_EXEMPT_WRITE_TOOLS = new Set([
  * enabled server——「已启用的连接器」语义天然成立）
  */
 const NETWORK_TOOL_NAMES = new Set([
-  'web_fetch',
-  'open_browser',
+  'fetch',
+  'browse',
   'browser_snapshot',
   'browser_navigate',
   'browser_click',
@@ -423,9 +423,9 @@ function isNetworkTool(toolName: string): boolean {
   );
 }
 
-/** run_command 危险分级判定（spec §4.1/§4.5）：非 run_command/无命令返回 null */
+/** bash 危险分级判定（spec §4.1/§4.5）：非 bash/无命令返回 null */
 function resolveCommandRisk(toolName: string, input: unknown): CommandRisk {
-  if (toolName !== 'run_command') return null;
+  if (toolName !== 'bash') return null;
   const command = (input as { command?: unknown } | null)?.command;
   if (typeof command !== 'string' || command === '') return null;
   return assessCommandRisk(command);
@@ -433,7 +433,7 @@ function resolveCommandRisk(toolName: string, input: unknown): CommandRisk {
 
 /**
  * 工具调用全流程（包装注册表工具的 execute，供单测导出）：
- * 危险工具门（本仓）：allowDangerousTools=false 时 run_command 直接拒绝；
+ * 危险工具门（本仓）：allowDangerousTools=false 时 bash 直接拒绝；
  * 命令判定门：block 拒 / ask 审批（full 豁免）/ allow 跳审批 /
  * default 回落既有链路；
  * 危险分级线（权限放宽 spec §4.5）：HIGH/CRITICAL 危险命令两档均审批
@@ -441,12 +441,12 @@ function resolveCommandRisk(toolName: string, input: unknown): CommandRisk {
  * needsApproval 分支自动拒（T7 无头裁定，不单独前置强拒避免双路径）；
  * 文件判定门：文件四件先经 gate——block 审批（full 豁免）/ allow 跳审批
  * / default 回落既有链路（与命令门互斥）；
- * 批量删除预估门：delete_file 目录预估 ≥ 阈值 → 强制审批（full 豁免——
+ * 批量删除预估门：rm 目录预估 ≥ 阈值 → 强制审批（full 豁免——
  * 照 mirror 2026-10-23 三档递进裁定推翻旧不豁免裁定；allowDangerousTools
  * =false 时直接拒绝）；
  * write 审批判定——完全访问直执行（含 MCP）；已记忆直执行；
  * 权限放宽（2026-10-24 spec §4.4，mirror 同构）：default 档审批面收窄为
- * 「高危询问」——普通命令（run_command 兜底移除）/write_file 工作空间内
+ * 「高危询问」——普通命令（bash 兜底移除）/write 工作空间内
  * /DB 写（AUTO_EXEMPT_WRITE_TOOLS）/网络域（isNetworkTool）直执行，其余
  * write 未记忆挂起审批；
  * 拒绝以文案回喂（循环继续）；autoDenyApprovals 不挂起直接拒；中止竞速
@@ -462,8 +462,8 @@ export async function runToolCall(
   finalStates?: Map<string, ToolCallBlock['state']>,
 ): Promise<string> {
   // 危险工具门（spec §12 偏离 2）：先于一切判定——allowDangerousTools
-  // 缺省 false（安全侧），run_command 整体不可用
-  if (def.name === 'run_command' && !agent.allowDangerousTools) {
+  // 缺省 false（安全侧），bash 整体不可用
+  if (def.name === 'bash' && !agent.allowDangerousTools) {
     emitCommandEvent(agent, input, 'command-safety.rejected', 'rejected', {
       reason: 'dangerous-tools-disabled',
     });
@@ -552,10 +552,10 @@ export async function runToolCall(
       { estimated: bulkEstimate },
     );
   }
-  // write_file 直执行时的决策留痕（spec §4.7；full 档全放行不发——语义噪音）
+  // write 直执行时的决策留痕（spec §4.7；full 档全放行不发——语义噪音）
   const writeAutoAllowed =
     !agent.fullAccess() &&
-    def.name === 'write_file' &&
+    def.name === 'write' &&
     fileGateDecision !== 'block' &&
     gate === null;
   if (writeAutoAllowed) {
@@ -564,8 +564,8 @@ export async function runToolCall(
     });
   }
 
-  // write 兜底收窄（权限放宽 spec §4.4）：普通命令/write_file/DB 写/网络
-  // 域免审，只剩其余 write（delete_file 等）的记忆或审批；fullAccess 提至
+  // write 兜底收窄（权限放宽 spec §4.4）：普通命令/write/DB 写/网络
+  // 域免审，只剩其余 write（rm 等）的记忆或审批；fullAccess 提至
   // 外层与 mirror 3c 同构（bulk/ask/block 询问面 full 全豁免）
   const writeFallbackNeedsApproval =
     gate !== 'allow' &&
@@ -579,11 +579,11 @@ export async function runToolCall(
     !isNetworkTool(def.name) &&
     // DB 写低风险免审（spec §4.4）
     !AUTO_EXEMPT_WRITE_TOOLS.has(def.name) &&
-    // write_file 工作空间内免审（spec §4.4）：审批面只剩文件门 block
-    def.name !== 'write_file' &&
-    // run_command 兜底审批移除（spec §4.4）：危险面已由分级表前置捕获，
+    // write 工作空间内免审（spec §4.4）：审批面只剩文件门 block
+    def.name !== 'write' &&
+    // bash 兜底审批移除（spec §4.4）：危险面已由分级表前置捕获，
     // gate 为 allow/default 直执行——审批面只剩 ask 源
-    def.name !== 'run_command' &&
+    def.name !== 'bash' &&
     !(await agent.isToolAllowed(def.name));
   const needsApproval =
     // 危险分级（spec §4.5）：先于 fullAccess 短路——full 也审

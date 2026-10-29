@@ -1881,10 +1881,10 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     execute: async () => "ok",
   });
   const WORKFLOW_SIX = [
-    "create_workflow",
-    "list_workflows",
-    "get_workflow",
-    "update_workflow",
+    "workflow_write",
+    "workflow_read",
+    "workflow_read",
+    "workflow_write",
     "run_workflow",
     "get_workflow_run",
   ];
@@ -1961,7 +1961,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     expect(
       (await assemble(userSide.service)).toolGate.workflowCreatorEnabled,
     ).toBe(true);
-    expect(await toolNames(userSide.service)).toContain("create_workflow");
+    expect(await toolNames(userSide.service)).toContain("workflow_write");
     // 内置且 enabled（启动自愈安装的默认态）：不开门（F1 裁定——否则
     // 门控失效，daily/design 会话恒注入工作流组）
     const builtin = makeSvc(
@@ -1971,7 +1971,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     expect(
       (await assemble(builtin.service)).toolGate.workflowCreatorEnabled,
     ).toBe(false);
-    expect(await toolNames(builtin.service)).not.toContain("create_workflow");
+    expect(await toolNames(builtin.service)).not.toContain("workflow_write");
     // 用户侧安装但被禁用：同样不开门
     const disabled = makeSvc(
       { scenario: "daily" },
@@ -1989,7 +1989,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
         { skillRepo: skillRepoWith({ source: "builtin", enabled: true }) },
       ).service,
     );
-    expect(names).toContain("create_workflow");
+    expect(names).toContain("workflow_write");
   });
 
   it("会话内 read_skill 读 workflow-creator：自此开门（使用即意图信号，builtin 态照开——恢复被自愈纠 source 熄灭的技能信号）", async () => {
@@ -2034,7 +2034,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     expect((await assemble(service)).toolGate.workflowCreatorEnabled).toBe(
       true,
     );
-    expect(await toolNames(service)).toContain("create_workflow");
+    expect(await toolNames(service)).toContain("workflow_write");
   });
 
   it("读非 workflow-creator 技能不触发开门（意图信号按技能名精确）", async () => {
@@ -2096,10 +2096,10 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
     const names = await toolNames(
       makeSvc(
         { scenario: "coding" },
-        { runtimeFilter: () => ["create_workflow"] },
+        { runtimeFilter: () => ["workflow_write"] },
       ).service,
     );
-    expect(names).not.toContain("create_workflow");
+    expect(names).not.toContain("workflow_write");
     // 同场景其余五件套不受连带（用户禁用是逐工具语义）
     expect(names).toContain("run_workflow");
   });
@@ -2193,10 +2193,10 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
         { skillRepo: skillRepoWith({ source: "market", enabled: true }) },
       ).service,
     );
-    expect(names).toContain("create_workflow");
-    expect(names).toContain("list_workflows");
-    expect(names).toContain("get_workflow");
-    expect(names).toContain("update_workflow");
+    expect(names).toContain("workflow_write");
+    expect(names).toContain("workflow_read");
+    expect(names).toContain("workflow_read");
+    expect(names).toContain("workflow_write");
     expect(names).toContain("get_workflow_run");
     expect(names).not.toContain("run_workflow");
   });
@@ -2209,7 +2209,7 @@ describe("ChatService.collectToolDefinitions（工具分组场景门控）", () 
         { skillRepo: skillRepoWith({ source: "builtin", enabled: true }) },
       ).service,
     );
-    expect(names).not.toContain("create_workflow");
+    expect(names).not.toContain("workflow_write");
     expect(names).not.toContain("run_workflow");
   });
 

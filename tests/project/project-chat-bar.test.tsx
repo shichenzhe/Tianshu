@@ -429,7 +429,7 @@ describe("ProjectChatBar 快速发起条", () => {
             order: ["tc1"],
             map: {
               tc1: {
-                toolName: "plan_update_status",
+                toolName: "todo_write",
                 state: "awaiting-approval",
                 argSummary: "更新任务 #3 状态为进行中",
               },

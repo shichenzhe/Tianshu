@@ -83,7 +83,7 @@ import { loadSkills, type SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { AUTOMATION_TOOL_NAME } from "../agent/automation-tool";
-import { makePlanTools } from "../agent/plan-tools";
+import { makePlanTools, PLAN_TOOL_NAMES } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
 import {
   DISPATCH_MEMBER_TOOL_NAME,
@@ -1655,7 +1655,9 @@ export default class ChatService {
         );
     const injected = isProjectSession
       ? workspaceScoped
-      : workspaceScoped.filter((def) => !def.name.startsWith("plan_"));
+      : // plan 组项目专属：非项目会话剔除（显式名集——2026-10-29 改名
+        // 批次 todo_* 坍缩后原 plan_ 前缀过滤失效）
+        workspaceScoped.filter((def) => !PLAN_TOOL_NAMES.includes(def.name));
     // dispatch 禁用即跳过构造（二期 T3，与 system 侧 withDispatch 同
     // 口径）——工具每请求构造：deps 持当次成员/中止信号/modelText 闭包
     const dispatchMember =

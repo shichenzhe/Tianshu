@@ -266,7 +266,7 @@ describe("runToolCall 权限放宽", () => {
     expect(agent.requestApproval).toHaveBeenCalled();
   });
 
-  it.each(["plan_create_item", "create_skill", "create_expert"])(
+  it.each(["todo_write", "create_skill", "create_expert"])(
     "DB 写工具 %s 直执行",
     async (name) => {
       const agent = makeAgent({ decideCommand: () => "default" });

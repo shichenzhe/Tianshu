@@ -289,7 +289,7 @@ describe("makeAutomationTool（graphId 直连工作流）", () => {
     graphFirst.mockResolvedValueOnce(null);
     const out = await tool.execute(ctx(), graphArgs as never);
     expect(out).toContain("错误");
-    expect(out).toContain("list_workflows");
+    expect(out).toContain("workflow_read");
     expect(createTask).not.toHaveBeenCalled();
   });
 });

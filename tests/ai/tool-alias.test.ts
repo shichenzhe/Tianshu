@@ -131,17 +131,13 @@ describe("filterDisabledTools（禁用名单老名归一）", () => {
 });
 
 describe("registry.find（老名查找归一）", () => {
-  it("find(\"read_file\") 命中新名 read 注册项，find(\"read\") 同项", () => {
-    const def = {
-      name: "read",
-      description: "测试",
-      parameters: {},
-      kind: "read",
-      execute: async () => "y",
-    } as Parameters<typeof registerTools>[0][number];
-    registerTools([def]);
-    expect(registry.find("read_file")).toBe(def);
-    expect(registry.find("read")).toBe(def);
+  it("find(\"read_file\") 归一命中内置新名 read 工具", () => {
+    // registry 初始集已含改名后的内置 read（file-tools），老名经归一
+    // 命中同名工具（toBe 具体实例在初始集先行注册时不成立，按名断言）
+    expect(registry.find("read_file")?.name).toBe("read");
+    expect(registry.find("read")?.name).toBe("read");
+    expect(registry.find("bash")?.name).toBe("bash");
+    expect(registry.find("run_command")?.name).toBe("bash");
   });
 });
 

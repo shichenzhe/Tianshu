@@ -47,7 +47,8 @@ vi.mock(
     createChatModel: vi.fn(() => modelMock),
   }),
 );
-// tools 节点走 prebuilt react agent（本组用例无 tools 节点，mock 防真实依赖）
+// tools 节点走 prebuilt react agent（本组用例无 tools 节点，mock 防真实依赖）。
+// ToolNode 同模块导出须一并 mock（run-chat-stream 的 AliasToolNode 引用）
 vi.mock("@langchain/langgraph/prebuilt", () => ({
   createReactAgent: vi.fn(() => ({
     invoke: async () => ({
@@ -55,6 +56,9 @@ vi.mock("@langchain/langgraph/prebuilt", () => ({
       usage_metadata: { input_tokens: 3, output_tokens: 5 },
     }),
   })),
+  ToolNode: class MockToolNode {
+    tools: unknown[] = [];
+  },
 }));
 
 import prisma from "../../electron/commons/prisma-client";

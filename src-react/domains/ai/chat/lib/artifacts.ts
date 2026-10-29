@@ -5,7 +5,7 @@
  * - 流式期间合并 streams 的 tools（running→writing / done→written）
  * - 同 path 跨组去重（取源消息最新者），按 messageId 降序（流式 -1 置顶）
  */
-import { canonicalToolName } from "@tianshu/core";
+import { canonicalToolName } from "@tianshu/core/tool-alias";
 import { parseBlocks, type MessageBlock } from "../model/blocks";
 import type { MessageRecord } from "../../api/session.api";
 import type { ToolStreamMap } from "../store/chat.store";

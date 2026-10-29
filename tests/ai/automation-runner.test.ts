@@ -348,7 +348,7 @@ describe("executeTask 成功路径", () => {
       execute: async () => "",
     } as never;
     const planStub = {
-      name: "plan_list_items",
+      name: "todo_read",
       description: "项目计划",
       parameters: z.object({}),
       kind: "read",

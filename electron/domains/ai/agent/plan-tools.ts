@@ -83,6 +83,10 @@ export interface PlanToolsDeps {
   prisma: { planItem: PlanItemPrismaLike; project: ProjectPrismaLike };
 }
 
+/** plan 工具组名集（chat.service 非项目会话剔除判定用；2026-10-29
+ *  改名批次由 plan_ 前缀过滤改为显式名集——前缀随坍缩失效） */
+export const PLAN_TOOL_NAMES: readonly string[] = ["todo_write", "todo_read"];
+
 /** 状态枚举 → 中文标签（成功文案用） */
 const STATUS_LABELS: Record<PlanStatus, string> = {
   not_started: "待开始",

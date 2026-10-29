@@ -548,9 +548,9 @@ describe("plan 工具组暴露门槛（项目会话专属，子系统 F）", () 
 
     await service.send({ sessionId: 1, content: "hi" }, 1, captureSender([]));
 
-    expect(calls[0]?.toolNames).toContain("plan_create_item");
-    expect(calls[0]?.toolNames).toContain("plan_update_status");
-    expect(calls[0]?.toolNames).toContain("plan_append_summary");
+    expect(calls[0]?.toolNames).toContain("todo_write");
+    expect(calls[0]?.toolNames).toContain("todo_write");
+    expect(calls[0]?.toolNames).toContain("todo_write");
   });
 
   it("全局会话（projectId null）：tools 数组无 plan_ 前缀工具", async () => {

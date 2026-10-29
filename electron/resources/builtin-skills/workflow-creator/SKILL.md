@@ -1,21 +1,21 @@
 ---
 name: workflow-creator
-description: 指导创建工作流：当用户想创建、生成一个工作流（workflow/自动化编排图）时，先读本技能获取节点规范与连线规则，再用 create_workflow 落库
+description: 指导创建工作流：当用户想创建、生成一个工作流（workflow/自动化编排图）时，先读本技能获取节点规范与连线规则，再用 workflow_write 落库
 ---
 
 # 工作流创作指南
 
-当用户希望你创建一个工作流时，按本指南澄清需求、设计节点清单，生成 graphJson 并调用 create_workflow 保存。
+当用户希望你创建一个工作流时，按本指南澄清需求、设计节点清单，生成 graphJson 并调用 workflow_write 保存。
 
 ## 流程总览
 
 1. 阅读本指南，掌握节点与连线规则
 2. 向用户澄清需求（数据从哪来、怎么处理、结果到哪去；信息足够时跳过）
 3. 设计节点清单与连线，生成 graphJson
-4. 调用 create_workflow（写操作，用户批准后落库）；可再调 run_workflow 同步试运行验证
+4. 调用 workflow_write（写操作，用户批准后落库）；可再调 run_workflow 同步试运行验证
 5. 告知用户到左侧「工作流」页面查看与完善
 
-**修改已有工作流**：先 get_workflow 拿当前 version 与定义 → 改 graphJson → update_workflow（携 version 乐观锁；冲突则重取再试）。
+**修改已有工作流**：先 workflow_read 拿当前 version 与定义 → 改 graphJson → workflow_write（携 version 乐观锁；冲突则重取再试）。
 
 ## graphJson 结构
 
@@ -60,7 +60,7 @@ description: 指导创建工作流：当用户想创建、生成一个工作流�
 - `intent`：语义分支（模型分类）。modelId + querySource + intents: [{ name, description }]，fallback 可选
 
 **循环与组合**
-- `iterate`：循环执行子工作流。loopMode: array（itemsSource 拆项）/ count（countSource 次数）/ while（breakCondition 终止）；graphId 引用子图（**必须用 list_workflows 查真实 id**）；itemVariable/carryVariable/maxItems/onItemError
+- `iterate`：循环执行子工作流。loopMode: array（itemsSource 拆项）/ count（countSource 次数）/ while（breakCondition 终止）；graphId 引用子图（**必须用 workflow_read 查真实 id**）；itemVariable/carryVariable/maxItems/onItemError
 - `subflow`：调用子工作流。graphId + inputs: [{ key, value }]
 - `delay`：等待 seconds 秒
 - `merge`：多上游输出按 template 模板拼合
@@ -94,9 +94,9 @@ description: 指导创建工作流：当用户想创建、生成一个工作流�
 
 ## 定时执行工作流
 
-需要按计划自动运行工作流时，用 `create_automation_task` 直连（**不要**用 prompt 让 AI 到点再调 run_workflow——每轮多耗一次模型会话且绕路）：
+需要按计划自动运行工作流时，用 `create_schedule` 直连（**不要**用 prompt 让 AI 到点再调 run_workflow——每轮多耗一次模型会话且绕路）：
 
-- 参数带 `graphId`（与 prompt 二选一；真实 id 用 list_workflows 查询）+ `schedule`/`scheduleText`，示例 `{ "name": "每日更新", "graphId": 3, "schedule": { "mode": "periodic", "kind": "daily", "time": "09:00" }, "scheduleText": "每天 09:00" }`
+- 参数带 `graphId`（与 prompt 二选一；真实 id 用 workflow_read 查询）+ `schedule`/`scheduleText`，示例 `{ "name": "每日更新", "graphId": 3, "schedule": { "mode": "periodic", "kind": "daily", "time": "09:00" }, "scheduleText": "每天 09:00" }`
 - 任务默认受限模式：图含代码/文件写入节点时会在任务详情开启「允许完全访问」或在设置-安全中心命令名单放行**解释器**（bash/python3/node）后方可执行（放行脚本内命令如 git 无效——脚本以解释器整段执行）
 - 修改已有任务到「自动化」页操作（对话工具仅支持创建）
 
@@ -109,11 +109,11 @@ description: 指导创建工作流：当用户想创建、生成一个工作流�
 `code(取输入) → condition/intent(分流) → 各分支 llm 处理 → END`
 
 **逐项循环**（对列表每条记录执行子流程）：
-父图 `iterate(itemsSource: {{nodes.取数.output}}, graphId: 子图id)`；子图先单独建好并保存（也可以在本次对话里先创建子图再创建父图，用 list_workflows 确认 id）。
+父图 `iterate(itemsSource: {{nodes.取数.output}}, graphId: 子图id)`；子图先单独建好并保存（也可以在本次对话里先创建子图再创建父图，用 workflow_read 确认 id）。
 
 ## 注意事项
 
-- 校验失败时 create_workflow/update_workflow 会返回结构化问题（错误码 + 节点定位），修正后直接重试
+- 校验失败时 workflow_write/workflow_write 会返回结构化问题（错误码 + 节点定位），修正后直接重试
 - 模型类节点（llm/imageGen/intent）的 modelId 无法凭空生成——问用户，或从对话上下文确认
-- iterate/subflow 的 graphId 必须是已存在图的 id（list_workflows 查询）
+- iterate/subflow 的 graphId 必须是已存在图的 id（workflow_read 查询）
 - 图保存后默认启用状态待用户在工作流页确认；建议创建后引导用户先试运行

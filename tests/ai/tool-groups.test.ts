@@ -12,18 +12,18 @@ import {
 
 const def = (name: string) => ({ name });
 
-/** 全谱样本：核心组 + 两组门控组 + 照旧组（mcp 前缀、plan 前缀、面板类等） */
+/** 全谱样本：核心组 + 两组门控组 + 照旧组（mcp 前缀、todo 前缀、面板类等） */
 const fullSpectrum = () =>
   [
     ...CORE_TOOL_NAMES,
     ...WORKFLOW_GROUP_TOOL_NAMES,
     ...EXPERT_GROUP_TOOL_NAMES,
     "mcp__srv__tool",
-    "plan_create_item",
+    "todo_write",
     "show_widget",
-    "recommend_experts",
-    "dispatch_member",
-    "create_automation_task",
+    "recommend_expert",
+    "dispatch",
+    "create_schedule",
   ].map(def);
 
 const names = (defs: Array<{ name: string }>) => defs.map((d) => d.name);
@@ -44,7 +44,7 @@ describe("filterToolsBySession（spec §20 项 B）", () => {
     }
   });
 
-  it("automation 场景带工作流组 6 件套", () => {
+  it("automation 场景带工作流组 4 件套", () => {
     const kept = names(
       filterToolsBySession(fullSpectrum(), gate({ scenario: "automation" })),
     );
@@ -57,7 +57,7 @@ describe("filterToolsBySession（spec §20 项 B）", () => {
     const kept = names(
       filterToolsBySession(fullSpectrum(), gate({ scenario: "coding" })),
     );
-    expect(kept).toContain("create_workflow");
+    expect(kept).toContain("workflow_write");
     expect(kept).toContain("get_workflow_run");
   });
 
@@ -75,7 +75,7 @@ describe("filterToolsBySession（spec §20 项 B）", () => {
       const kept = names(
         filterToolsBySession(fullSpectrum(), gate({ scenario })),
       );
-      expect(kept).not.toContain("create_workflow");
+      expect(kept).not.toContain("workflow_write");
     }
   });
 
@@ -115,15 +115,15 @@ describe("filterToolsBySession（spec §20 项 B）", () => {
     expect(kept).not.toContain("update_expert");
   });
 
-  it("其余工具不受门控：mcp__/plan_*/面板类照旧放行（黑名单式，新工具不误剔）", () => {
+  it("其余工具不受门控：mcp__/todo_*/面板类照旧放行（黑名单式，新工具不误剔）", () => {
     const kept = names(filterToolsBySession(fullSpectrum(), gate()));
     for (const passthrough of [
       "mcp__srv__tool",
-      "plan_create_item",
+      "todo_write",
       "show_widget",
-      "recommend_experts",
-      "dispatch_member",
-      "create_automation_task",
+      "recommend_expert",
+      "dispatch",
+      "create_schedule",
     ]) {
       expect(kept).toContain(passthrough);
     }

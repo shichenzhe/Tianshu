@@ -26,12 +26,10 @@ import {
 } from "./workflow-bundle";
 import { registerTools } from "../agent/tool-registry";
 import {
-  makeCreateWorkflowTool,
   makeGetWorkflowRunTool,
-  makeGetWorkflowTool,
-  makeListWorkflowsTool,
   makeRunWorkflowTool,
-  makeUpdateWorkflowTool,
+  makeWorkflowReadTool,
+  makeWorkflowWriteTool,
   type SessionPrismaLike,
   type WorkspacePrismaLike,
   type WorkflowGraphPrismaLike,
@@ -165,30 +163,22 @@ export default class GraphRepository {
    * Application 注入实时读安全配置，缺省不滤（测试）；试运行与调度/
    * 手动/事件触发同一过滤口径 */
   constructor(private disabledTools: () => string[] = () => []) {
-    // create_workflow/list_workflows 静态注册进 P1 聚合点（先例
-    // skill.repo 的 create_skill），chat.service 从 registry 透传零侵入
+    // workflow_write/read 静态注册进 P1 聚合点（先例 skill.repo 的
+    // create_skill；2026-10-29 六件坍缩四件），chat.service 从 registry
+    // 透传零侵入
     const graphDelegate =
       prisma.graphDefinition as unknown as WorkflowGraphPrismaLike;
     const sessionDelegate = prisma.session as unknown as SessionPrismaLike;
     registerTools([
-      makeCreateWorkflowTool({
+      makeWorkflowWriteTool({
         graphDefinition: graphDelegate,
         session: sessionDelegate,
         // 对话建图无前端调用方 invalidate，落库即广播列表失效
         notify: () => notifyGraphsChanged(),
       }),
-      makeListWorkflowsTool({
+      makeWorkflowReadTool({
         graphDefinition: graphDelegate,
         session: sessionDelegate,
-      }),
-      makeGetWorkflowTool({
-        graphDefinition: graphDelegate,
-        session: sessionDelegate,
-      }),
-      makeUpdateWorkflowTool({
-        graphDefinition: graphDelegate,
-        session: sessionDelegate,
-        notify: () => notifyGraphsChanged(),
       }),
       makeRunWorkflowTool({
         graphDefinition: graphDelegate,

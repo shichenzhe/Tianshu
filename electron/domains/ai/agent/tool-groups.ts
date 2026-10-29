@@ -33,14 +33,15 @@ export const CORE_TOOL_NAMES: readonly string[] = [
 
 /**
  * 工作流组（按需）：automation/coding 场景或 workflow-creator 技能已安装
- * 且启用时挂载。名字与 graph.repo 静态注册名一一对应——工具名不可改
- * （历史 blocks 存 toolName，改名断回喂/编辑重发，spec §20 项 C 裁定）
+ * 且启用时挂载。名字与 graph.repo 静态注册名一一对应——2026-10-29 工具
+ * 名精简批次六件坍缩四件（create+update→workflow_write、list+get→
+ * workflow_read、run 双件保留），反转 2026-10-14 spec §20 项 C「不可改」
+ * 裁定：老名断回喂之忧由 @tianshu/core tool-alias 别名层兜底（历史
+ * blocks 老 tool_call 经归一由新名工具执行，DB 不迁移）
  */
 export const WORKFLOW_GROUP_TOOL_NAMES: readonly string[] = [
-  "create_workflow",
-  "list_workflows",
-  "get_workflow",
-  "update_workflow",
+  "workflow_write",
+  "workflow_read",
   "run_workflow",
   "get_workflow_run",
 ];
@@ -52,7 +53,7 @@ export const EXPERT_GROUP_TOOL_NAMES: readonly string[] = [
 ];
 
 /**
- * 工作流六件套中无工作空间依赖的五件（create/list/get/update/
+ * 工作流组中无工作空间依赖的三件（workflow_write/workflow_read/
  * get_workflow_run——用户级 DB 实体，只按 userId 落库查询，与
  * create_skill「不依赖工作空间常驻」同语义）：未绑定目录会话经
  * 场景/意图开门后照常挂载（挂载元说明的承诺由此兑现）；run_workflow

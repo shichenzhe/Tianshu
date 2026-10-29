@@ -1,13 +1,15 @@
 // electron/domains/ai/orchestration/create-workflow.ts
 /**
- * create_workflow / list_workflows 内置工具（AI 聊天建工作流）：模型按
- * workflow-creator 技能规范生成 graphJson，经 create_workflow 落库（kind
- * write → 统一审批）；校验复用前后端共享的 validateGraph——结构化问题
- * （带节点定位）回传给模型自纠重试。list_workflows 供 iterate/subflow
- * 引用已有图时查真实 graphId。纯 Node（禁 import electron），prisma 注入
- * 可测；userId 经 ctx.sessionId 反查 session（工具上下文无 userId）。
- * create/update 落库成功经注入的 notify 广播 graphs-changed（渲染层
- * 列表缓存失效——工具写库绕过 IPC CRUD 的调用方 invalidate 链路）。
+ * workflow_write / workflow_read 内置工具（AI 聊天建工作流；2026-10-29
+ * 工具名精简批次六件坍缩四件：create+update 二模式合一为 workflow_write，
+ * list+get 二合一为 workflow_read；run_workflow/get_workflow_run 保留）。
+ * 模型按 workflow-creator 技能规范生成 graphJson，经 workflow_write 落库
+ * （kind write → 统一审批）；校验复用前后端共享的 validateGraph——结构化
+ * 问题（带节点定位）回传给模型自纠重试。workflow_read 清单态供
+ * iterate/subflow 引用已有图时查真实 graphId。纯 Node（禁 import
+ * electron），prisma 注入可测；userId 经 ctx.sessionId 反查 session
+ * （工具上下文无 userId）。落库成功经注入的 notify 广播 graphs-changed
+ * （渲染层列表缓存失效——工具写库绕过 IPC CRUD 的调用方 invalidate 链路）。
  */
 import { z } from "zod";
 import {
@@ -76,24 +78,49 @@ export interface SessionPrismaLike {
   }): Promise<{ userId: number } | null>;
 }
 
-const createWorkflowSchema = z.object({
+/** workflow_write：无 id=新建（name+graphJson 必填）；id+version=修改
+ *  （name/description/graphJson 字段级差量，与原 create/update 参数
+ *  超集兼容——老名调用经 tool-alias 别名层路由后参数透明） */
+const workflowWriteSchema = z.object({
+  id: z.number().int().positive().optional().describe("目标工作流 id（修改时必填）"),
+  version: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("当前版本号（修改时必填；先 workflow_read 获取，不符会冲突）"),
   name: z
     .string()
     .min(1)
     .max(100)
-    .describe("工作流名称（用户可读，同名会冲突）"),
+    .optional()
+    .describe("工作流名称（新建必填；修改可改名，用户可读，同名会冲突）"),
   description: z
     .string()
     .max(500)
     .optional()
-    .describe("一句话用途说明（可省略）"),
+    .describe("一句话用途说明（可省略不改）"),
   graphJson: z
     .object({})
     .passthrough()
-    .describe("图定义对象（节点与连线规范见 workflow-creator 技能）"),
+    .optional()
+    .describe("图定义对象（新建必填；修改可省略，节点与连线规范见 workflow-creator 技能）"),
 });
 
-const listWorkflowsSchema = z.object({}).describe("无参数");
+/** workflow_read：无参=清单；id/name 二选一=单图完整定义 */
+const workflowReadSchema = z.object({
+  id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("工作流 id（与 name 二选一；缺省两者=列清单）"),
+  name: z
+    .string()
+    .min(1)
+    .optional()
+    .describe("工作流名称（与 id 二选一，重名时用 id）"),
+});
 
 /** 结构化校验问题 → 供模型修正的文本（错误码 + 定位） */
 function formatIssues(
@@ -122,186 +149,66 @@ async function userIdOf(
   return row?.userId ?? null;
 }
 
-export function makeCreateWorkflowTool(deps: {
+export function makeWorkflowWriteTool(deps: {
   graphDefinition: WorkflowGraphPrismaLike;
   session: SessionPrismaLike;
   /** 写库成功后通知（repo 注 notifyGraphsChanged 广播渲染层失效——
    *  全局 staleTime 30s 失效驱动，工具写库无此广播则列表页 30s 内
    *  不见新图；纯 Node 禁 electron 故经注入） */
   notify?: () => void;
-}): ToolDefinition<z.infer<typeof createWorkflowSchema>> {
+}): ToolDefinition<z.infer<typeof workflowWriteSchema>> {
   return {
-    name: "create_workflow",
-    description: "创建并保存新工作流（校验失败返回问题清单）；写操作需批准",
-    parameters: createWorkflowSchema,
+    name: "workflow_write",
+    description:
+      "新建或修改工作流（无 id=新建，name+graphJson 必填；id+version=修改，先 workflow_read 取 version）；写操作需批准",
+    parameters: workflowWriteSchema,
     kind: "write",
     execute: async (ctx, args) => {
       const userId = await userIdOf(ctx, deps.session);
       if (userId === null) {
         return "错误: 会话不存在，无法确定当前用户";
       }
-      const result = validateGraph(args.graphJson);
-      if (!result.ok) {
-        // 校验失败是渐进披露位：节点规范指引（原在描述里）挪到此处
-        return `校验未通过，请修正 graphJson 后重试（节点规范可 read_skill 读取 workflow-creator 技能）：\n${formatIssues(result.issues)}`;
-      }
-      try {
-        const row = await deps.graphDefinition.create({
-          data: {
-            name: args.name,
-            description: args.description ?? null,
-            // 模型按技能生成 graphJson 常省略"无执行语义"的 start 节点、
-            // 末节点漏连 END，落库前归一补齐（画布「开始/END」不断头）
-            graphJson: JSON.stringify(normalizeGraph(result.value)),
-            userId,
-          },
-        });
-        deps.notify?.();
-        return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑`;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (message.includes("UNIQUE")) {
-          return `错误: 工作流「${args.name}」已存在，请换个名称`;
+      // ---- 新建分支（无 id；与原 create_workflow 参数兼容）----
+      if (args.id === undefined) {
+        if (args.name === undefined || args.graphJson === undefined) {
+          return "错误: 新建须提供 name 与 graphJson（修改已有图请带 id+version）";
         }
-        return `错误: 创建失败 ${message}`;
-      }
-    },
-  };
-}
-
-export function makeListWorkflowsTool(deps: {
-  graphDefinition: WorkflowGraphPrismaLike;
-  session: SessionPrismaLike;
-}): ToolDefinition<Record<string, never>> {
-  return {
-    name: "list_workflows",
-    description: "列出已保存工作流（id/名称/说明）；子图引用须用真实 id",
-    parameters: listWorkflowsSchema,
-    kind: "read",
-    execute: async (ctx) => {
-      const userId = await userIdOf(ctx, deps.session);
-      if (userId === null) {
-        return "错误: 会话不存在，无法确定当前用户";
-      }
-      const rows = await deps.graphDefinition.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      });
-      if (rows.length === 0) {
-        return "暂无已保存的工作流";
-      }
-      return rows
-        .map(
-          (row) =>
-            `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ""}`,
-        )
-        .join("\n");
-    },
-  };
-}
-
-/** 试运行发射器注入（run_workflow 用；repo 的 launchTestRun 包装，
- * fire-and-forget；测试注 stub 免拉 executor 重依赖） */
-export type LaunchTestRunFn = (params: {
-  graph: WorkflowGraphRow;
-  inputs: Record<string, string>;
-  workspace: { id: number; directoryPath: string | null };
-}) => void;
-
-const getWorkflowSchema = z.object({
-  id: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe("工作流 id（与 name 二选一）"),
-  name: z
-    .string()
-    .min(1)
-    .optional()
-    .describe("工作流名称（与 id 二选一，重名时用 id）"),
-});
-
-export function makeGetWorkflowTool(deps: {
-  graphDefinition: WorkflowGraphPrismaLike;
-  session: SessionPrismaLike;
-}): ToolDefinition<z.infer<typeof getWorkflowSchema>> {
-  return {
-    name: "get_workflow",
-    description: "读取工作流完整定义；修改前必先调用取 version（乐观锁）",
-    parameters: getWorkflowSchema,
-    kind: "read",
-    execute: async (ctx, args) => {
-      const userId = await userIdOf(ctx, deps.session);
-      if (userId === null) {
-        return "错误: 会话不存在，无法确定当前用户";
-      }
-      let row: WorkflowGraphRow | null;
-      if (args.id !== undefined) {
-        row = await deps.graphDefinition.findFirst({
-          where: { id: args.id, userId },
-        });
-      } else if (args.name !== undefined) {
-        const rows = await deps.graphDefinition.findMany({ where: { userId } });
-        row =
-          (rows.find((item) => item.name === args.name) as
-            WorkflowGraphRow | undefined) ?? null;
-        // findMany 轻量行无 version/graphJson，再按 id 取全量
-        if (row) {
-          row = await deps.graphDefinition.findFirst({
-            where: { id: row.id, userId },
+        const result = validateGraph(args.graphJson);
+        if (!result.ok) {
+          // 校验失败是渐进披露位：节点规范指引（原在描述里）挪到此处
+          return `校验未通过，请修正 graphJson 后重试（节点规范可 read_skill 读取 workflow-creator 技能）：\n${formatIssues(result.issues)}`;
+        }
+        try {
+          const row = await deps.graphDefinition.create({
+            data: {
+              name: args.name,
+              description: args.description ?? null,
+              // 模型按技能生成 graphJson 常省略"无执行语义"的 start 节点、
+              // 末节点漏连 END，落库前归一补齐（画布「开始/END」不断头）
+              graphJson: JSON.stringify(normalizeGraph(result.value)),
+              userId,
+            },
           });
+          deps.notify?.();
+          return `成功: 工作流「${row.name}」已创建（id=${row.id}），可在左侧「工作流」页面查看与编辑`;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          if (message.includes("UNIQUE")) {
+            return `错误: 工作流「${args.name}」已存在，请换个名称`;
+          }
+          return `错误: 创建失败 ${message}`;
         }
-      } else {
-        return "错误: id 与 name 至少提供一个";
       }
-      if (!row) {
-        return "错误: 工作流不存在（可先用 list_workflows 核对 id）";
+      // ---- 修改分支（带 id；与原 update_workflow 参数兼容）----
+      if (args.version === undefined) {
+        return "错误: 更新须提供 version（先 workflow_read 获取当前版本）";
       }
-      return [
-        `id=${row.id} version=${row.version}`,
-        `name=${row.name}`,
-        row.description ? `description=${row.description}` : "",
-        "graphJson:",
-        row.graphJson,
-      ]
-        .filter(Boolean)
-        .join("\n");
-    },
-  };
-}
-
-const updateWorkflowSchema = z.object({
-  id: z.number().int().positive().describe("目标工作流 id"),
-  version: z
-    .number()
-    .int()
-    .positive()
-    .describe("当前版本号（先 get_workflow 获取；不符会冲突）"),
-  name: z.string().min(1).max(100).optional().describe("新名称（可省略不改）"),
-  description: z.string().max(500).optional().describe("新说明（可省略不改）"),
-  graphJson: z
-    .object({})
-    .passthrough()
-    .optional()
-    .describe("新图定义（可省略；校验失败返回问题清单）"),
-});
-
-export function makeUpdateWorkflowTool(deps: {
-  graphDefinition: WorkflowGraphPrismaLike;
-  session: SessionPrismaLike;
-  /** 写库成功后通知（语义同 create_workflow 的 notify） */
-  notify?: () => void;
-}): ToolDefinition<z.infer<typeof updateWorkflowSchema>> {
-  return {
-    name: "update_workflow",
-    description: "修改工作流（须带 get_workflow 的 version）；写操作需批准",
-    parameters: updateWorkflowSchema,
-    kind: "write",
-    execute: async (ctx, args) => {
-      const userId = await userIdOf(ctx, deps.session);
-      if (userId === null) {
-        return "错误: 会话不存在，无法确定当前用户";
+      if (
+        args.name === undefined &&
+        args.description === undefined &&
+        args.graphJson === undefined
+      ) {
+        return "错误: 更新至少提供一个待改字段（name/description/graphJson）";
       }
       let serialized: string | undefined;
       if (args.graphJson !== undefined) {
@@ -327,14 +234,90 @@ export function makeUpdateWorkflowTool(deps: {
           where: { id: args.id, userId },
         });
         return exists
-          ? `错误: 版本冲突（当前 version=${exists.version}），请重新 get_workflow 后再更新`
-          : "错误: 工作流不存在（可先用 list_workflows 核对 id）";
+          ? `错误: 版本冲突（当前 version=${exists.version}），请重新 workflow_read 获取后再更新`
+          : "错误: 工作流不存在（可先用 workflow_read 查询核对 id）";
       }
       deps.notify?.();
       return `成功: 工作流 id=${args.id} 已更新（新 version=${args.version + 1}）`;
     },
   };
 }
+
+/** workflow_read：无参=已保存清单（id/名称/说明，供子图引用查真实
+ *  graphId）；id/name 二选一=单图完整定义（修改前必取 version——乐观锁） */
+export function makeWorkflowReadTool(deps: {
+  graphDefinition: WorkflowGraphPrismaLike;
+  session: SessionPrismaLike;
+}): ToolDefinition<z.infer<typeof workflowReadSchema>> {
+  return {
+    name: "workflow_read",
+    description:
+      "读取工作流：无参=已保存清单（id/名称/说明）；带 id 或 name=完整定义（修改前必先调用取 version）",
+    parameters: workflowReadSchema,
+    kind: "read",
+    execute: async (ctx, args) => {
+      const userId = await userIdOf(ctx, deps.session);
+      if (userId === null) {
+        return "错误: 会话不存在，无法确定当前用户";
+      }
+      // ---- 清单分支（无参；与原 list_workflows 兼容）----
+      if (args.id === undefined && args.name === undefined) {
+        const rows = await deps.graphDefinition.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        });
+        if (rows.length === 0) {
+          return "暂无已保存的工作流";
+        }
+        return rows
+          .map(
+            (row) =>
+              `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ""}`,
+          )
+          .join("\n");
+      }
+      // ---- 详情分支（与原 get_workflow 兼容）----
+      let row: WorkflowGraphRow | null;
+      if (args.id !== undefined) {
+        row = await deps.graphDefinition.findFirst({
+          where: { id: args.id, userId },
+        });
+      } else {
+        const rows = await deps.graphDefinition.findMany({ where: { userId } });
+        row =
+          (rows.find((item) => item.name === args.name) as
+            | WorkflowGraphRow
+            | undefined) ?? null;
+        // findMany 轻量行无 version/graphJson，再按 id 取全量
+        if (row) {
+          row = await deps.graphDefinition.findFirst({
+            where: { id: row.id, userId },
+          });
+        }
+      }
+      if (!row) {
+        return "错误: 工作流不存在（可先用 workflow_read 无参列清单核对 id）";
+      }
+      return [
+        `id=${row.id} version=${row.version}`,
+        `name=${row.name}`,
+        row.description ? `description=${row.description}` : "",
+        "graphJson:",
+        row.graphJson,
+      ]
+        .filter(Boolean)
+        .join("\n");
+    },
+  };
+}
+
+/** 试运行发射器注入（run_workflow 用；repo 的 launchTestRun 包装，
+ * fire-and-forget；测试注 stub 免拉 executor 重依赖） */
+export type LaunchTestRunFn = (params: {
+  graph: WorkflowGraphRow;
+  inputs: Record<string, string>;
+  workspace: { id: number; directoryPath: string | null };
+}) => void;
 
 const runWorkflowSchema = z.object({
   id: z.number().int().positive().describe("要运行的工作流 id"),
@@ -369,7 +352,7 @@ export function makeRunWorkflowTool(deps: {
         where: { id: args.id, userId },
       });
       if (!row) {
-        return "错误: 工作流不存在（可先用 list_workflows 核对 id）";
+        return "错误: 工作流不存在（可先用 workflow_read 无参列清单核对 id）";
       }
       const ws = await deps.workspace.findFirst({
         where: { directoryPath: ctx.workspacePath, userId },
@@ -431,7 +414,7 @@ export function makeGetWorkflowRunTool(deps: {
         where: { id: args.id, userId },
       });
       if (!graph) {
-        return "错误: 工作流不存在（可先用 list_workflows 核对 id）";
+        return "错误: 工作流不存在（可先用 workflow_read 无参列清单核对 id）";
       }
       const run = await deps.runs.findFirst({
         where: { graphId: args.id },

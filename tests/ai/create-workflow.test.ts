@@ -1,9 +1,11 @@
 // tests/ai/create-workflow.test.ts
 /**
- * create_workflow / list_workflows 工具单测：graphJson 校验链（复用
- * validateGraph，结构化错误回传供模型自纠）+ session 反查 userId 落库 +
- * 重名冲突；list 返回 name/id 摘要。纯 Node 内存 stub prisma（先例
- * create-skill.test.ts）。
+ * workflow_write / workflow_read 工具单测（2026-10-29 工具名精简批次
+ * 六件坍缩四件：create+update→workflow_write 二模式合一，list+get→
+ * workflow_read 二合一；run_workflow/get_workflow_run 保留不变）：
+ * graphJson 校验链（复用 validateGraph，结构化错误回传供模型自纠）+
+ * session 反查 userId 落库 + 重名冲突 + 乐观锁版本冲突。纯 Node 内存
+ * stub prisma（先例 create-skill.test.ts）。
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -11,12 +13,10 @@ vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 import {
-  makeCreateWorkflowTool,
   makeGetWorkflowRunTool,
-  makeGetWorkflowTool,
-  makeListWorkflowsTool,
   makeRunWorkflowTool,
-  makeUpdateWorkflowTool,
+  makeWorkflowReadTool,
+  makeWorkflowWriteTool,
 } from "../../electron/domains/ai/orchestration/create-workflow";
 import { graphTestInflight } from "../../electron/domains/ai/orchestration/graph-inflight";
 
@@ -118,12 +118,12 @@ function createStubs() {
 const CTX = {
   workspacePath: "/ws",
   sessionId: 42,
-} as Parameters<ReturnType<typeof makeCreateWorkflowTool>["execute"]>[0];
+} as Parameters<ReturnType<typeof makeWorkflowWriteTool>["execute"]>[0];
 
-describe("create_workflow 工具", () => {
+describe("workflow_write 新建模式（无 id）", () => {
   it("合法图 → 落库（userId 经 session 反查）+ 成功回执含新图 id", async () => {
     const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
+    const tool = makeWorkflowWriteTool(stubs as never);
     const result = await tool.execute(CTX, {
       name: "demo-flow",
       description: "示例",
@@ -142,7 +142,7 @@ describe("create_workflow 工具", () => {
 
   it("无 start 的图（技能生成省略）→ 落库自动补 start 节点与入口边", async () => {
     const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
+    const tool = makeWorkflowWriteTool(stubs as never);
     await tool.execute(CTX, { name: "no-start-flow", graphJson: VALID_GRAPH });
     const saved = JSON.parse(stubs.graphs[0].graphJson);
     expect(saved.nodes.some((n: { kind: string }) => n.kind === "start")).toBe(
@@ -153,7 +153,7 @@ describe("create_workflow 工具", () => {
 
   it("非法图 → 回传结构化校验问题（供模型修正重试），不落库", async () => {
     const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
+    const tool = makeWorkflowWriteTool(stubs as never);
     // 双入口 + 悬空边 + 空 prompt：多类问题一次暴露
     const result = await tool.execute(CTX, {
       name: "bad-flow",
@@ -189,9 +189,21 @@ describe("create_workflow 工具", () => {
     expect(stubs.graphs).toHaveLength(0);
   });
 
+  it("新建缺 graphJson / 缺 name → 模式错误文案（不落库）", async () => {
+    const stubs = createStubs();
+    const tool = makeWorkflowWriteTool(stubs as never);
+    expect(await tool.execute(CTX, { name: "x" })).toContain(
+      "新建须提供 name 与 graphJson",
+    );
+    expect(await tool.execute(CTX, { graphJson: VALID_GRAPH })).toContain(
+      "新建须提供 name 与 graphJson",
+    );
+    expect(stubs.graphs).toHaveLength(0);
+  });
+
   it("session 不存在 → 明确错误（不落库）", async () => {
     const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
+    const tool = makeWorkflowWriteTool(stubs as never);
     const result = await tool.execute(
       { ...CTX, sessionId: 999 },
       { name: "x", graphJson: VALID_GRAPH },
@@ -202,7 +214,7 @@ describe("create_workflow 工具", () => {
 
   it("重名 → 冲突提示引导换名", async () => {
     const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
+    const tool = makeWorkflowWriteTool(stubs as never);
     await tool.execute(CTX, {
       name: "dup",
       graphJson: VALID_GRAPH,
@@ -218,7 +230,7 @@ describe("create_workflow 工具", () => {
   it("创建成功 → notify 恰一次（渲染层列表失效）；失败路径不 notify", async () => {
     const stubs = createStubs();
     const notify = vi.fn();
-    const tool = makeCreateWorkflowTool({ ...stubs, notify } as never);
+    const tool = makeWorkflowWriteTool({ ...stubs, notify } as never);
     await tool.execute(CTX, { name: "n-flow", graphJson: VALID_GRAPH });
     expect(notify).toHaveBeenCalledTimes(1);
     // 校验失败（不落库）与重名冲突（不落库）都不通知
@@ -229,57 +241,29 @@ describe("create_workflow 工具", () => {
     await tool.execute(CTX, { name: "n-flow", graphJson: VALID_GRAPH });
     expect(notify).toHaveBeenCalledTimes(1);
   });
-});
 
-describe("list_workflows 工具", () => {
-  it("返回用户已有图清单（id/name——iterate/subflow 引用 graphId 用）", async () => {
+  it("末节点不连 END → 落库补 start 入口边与叶子 END 边", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "flow-a", graphJson: VALID_GRAPH });
-    await create.execute(CTX, { name: "flow-b", graphJson: VALID_GRAPH });
-    const list = makeListWorkflowsTool(stubs as never);
-    const result = await list.execute(CTX, {});
-    expect(result).toContain("flow-a");
-    expect(result).toContain("flow-b");
-    // 每行带 id 供 graphId 引用
-    expect(result).toMatch(/id[:= ]1/);
-  });
-
-  it("无图 → 空清单提示", async () => {
-    const stubs = createStubs();
-    const list = makeListWorkflowsTool(stubs as never);
-    const result = await list.execute(CTX, {});
-    expect(result).toContain("暂无");
+    const tool = makeWorkflowWriteTool(stubs as never);
+    await tool.execute(CTX, {
+      name: "dangling-tail-flow",
+      graphJson: {
+        ...VALID_GRAPH,
+        edges: [], // 零边图：gen 冒充入口过校验（bug 同根因），且是断头叶子
+      },
+    });
+    const saved = JSON.parse(stubs.graphs[0].graphJson);
+    expect(saved.edges).toContainEqual({ from: "start", to: "gen" });
+    expect(saved.edges).toContainEqual({ from: "gen", to: "END" });
   });
 });
 
-describe("get_workflow 工具", () => {
-  it("按 id 返回 version + graphJson；name 定位同效", async () => {
-    const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "g-flow", graphJson: VALID_GRAPH });
-    const get = makeGetWorkflowTool(stubs as never);
-    const byId = await get.execute(CTX, { id: 1 });
-    expect(byId).toContain("version=1");
-    expect(byId).toContain('"gen"');
-    const byName = await get.execute(CTX, { name: "g-flow" });
-    expect(byName).toContain("graphJson");
-  });
-
-  it("不存在 / 缺参 → 明确错误", async () => {
-    const stubs = createStubs();
-    const get = makeGetWorkflowTool(stubs as never);
-    expect(await get.execute(CTX, { id: 99 })).toContain("不存在");
-    expect(await get.execute(CTX, {})).toContain("至少提供一个");
-  });
-});
-
-describe("update_workflow 工具", () => {
+describe("workflow_write 更新模式（带 id）", () => {
   it("携正确 version → 更新成功且 version+1", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
+    const create = makeWorkflowWriteTool(stubs as never);
     await create.execute(CTX, { name: "u-flow", graphJson: VALID_GRAPH });
-    const update = makeUpdateWorkflowTool(stubs as never);
+    const update = makeWorkflowWriteTool(stubs as never);
     const result = await update.execute(CTX, {
       id: 1,
       version: 1,
@@ -312,9 +296,9 @@ describe("update_workflow 工具", () => {
 
   it("版本冲突 → 回传当前 version 引导重取；非法图回传校验问题", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
+    const create = makeWorkflowWriteTool(stubs as never);
     await create.execute(CTX, { name: "c-flow", graphJson: VALID_GRAPH });
-    const update = makeUpdateWorkflowTool(stubs as never);
+    const update = makeWorkflowWriteTool(stubs as never);
     const conflict = await update.execute(CTX, {
       id: 1,
       version: 5,
@@ -330,12 +314,25 @@ describe("update_workflow 工具", () => {
     expect(invalid).toContain("校验未通过");
   });
 
+  it("更新缺 version / 无可改字段 → 模式错误文案", async () => {
+    const stubs = createStubs();
+    const create = makeWorkflowWriteTool(stubs as never);
+    await create.execute(CTX, { name: "m-flow", graphJson: VALID_GRAPH });
+    const update = makeWorkflowWriteTool(stubs as never);
+    expect(await update.execute(CTX, { id: 1, name: "x" })).toContain(
+      "更新须提供 version",
+    );
+    expect(await update.execute(CTX, { id: 1, version: 1 })).toContain(
+      "至少提供一个待改字段",
+    );
+  });
+
   it("更新成功 → notify 恰一次；版本冲突不 notify", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
+    const create = makeWorkflowWriteTool(stubs as never);
     await create.execute(CTX, { name: "un-flow", graphJson: VALID_GRAPH });
     const notify = vi.fn();
-    const update = makeUpdateWorkflowTool({ ...stubs, notify } as never);
+    const update = makeWorkflowWriteTool({ ...stubs, notify } as never);
     const ok = await update.execute(CTX, {
       id: 1,
       version: 1,
@@ -353,11 +350,51 @@ describe("update_workflow 工具", () => {
   });
 });
 
+describe("workflow_read（无参=清单；id/name=详情）", () => {
+  it("清单态：返回用户已有图清单（id/name——iterate/subflow 引用 graphId 用）", async () => {
+    const stubs = createStubs();
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "flow-a", graphJson: VALID_GRAPH });
+    await write.execute(CTX, { name: "flow-b", graphJson: VALID_GRAPH });
+    const read = makeWorkflowReadTool(stubs as never);
+    const result = await read.execute(CTX, {});
+    expect(result).toContain("flow-a");
+    expect(result).toContain("flow-b");
+    // 每行带 id 供 graphId 引用
+    expect(result).toMatch(/id[:= ]1/);
+  });
+
+  it("清单态：无图 → 空清单提示", async () => {
+    const stubs = createStubs();
+    const read = makeWorkflowReadTool(stubs as never);
+    const result = await read.execute(CTX, {});
+    expect(result).toContain("暂无");
+  });
+
+  it("详情态：按 id 返回 version + graphJson；name 定位同效", async () => {
+    const stubs = createStubs();
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "g-flow", graphJson: VALID_GRAPH });
+    const read = makeWorkflowReadTool(stubs as never);
+    const byId = await read.execute(CTX, { id: 1 });
+    expect(byId).toContain("version=1");
+    expect(byId).toContain('"gen"');
+    const byName = await read.execute(CTX, { name: "g-flow" });
+    expect(byName).toContain("graphJson");
+  });
+
+  it("详情态：不存在 → 明确错误", async () => {
+    const stubs = createStubs();
+    const read = makeWorkflowReadTool(stubs as never);
+    expect(await read.execute(CTX, { id: 99 })).toContain("不存在");
+  });
+});
+
 describe("run_workflow 工具（异步触发）", () => {
   it("触发即返回「已启动」，launch 恰好一次且不等待结果", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "r-flow", graphJson: VALID_GRAPH });
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "r-flow", graphJson: VALID_GRAPH });
     const launch = vi.fn();
     const run = makeRunWorkflowTool({ ...stubs, launch } as never);
     const result = await run.execute(CTX, { id: 1, inputs: { topic: "x" } });
@@ -371,8 +408,8 @@ describe("run_workflow 工具（异步触发）", () => {
 
   it("在途互斥 GRAPH_ALREADY_RUNNING 前置拦截", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "m-flow", graphJson: VALID_GRAPH });
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "m-flow", graphJson: VALID_GRAPH });
     graphTestInflight.set(1, new AbortController());
     try {
       const launch = vi.fn();
@@ -387,8 +424,8 @@ describe("run_workflow 工具（异步触发）", () => {
 
   it("图不存在 / 无 workspacePath / workspace 记录缺失 → 明确错误", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "w-flow", graphJson: VALID_GRAPH });
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "w-flow", graphJson: VALID_GRAPH });
     const launch = vi.fn();
     const run = makeRunWorkflowTool({ ...stubs, launch } as never);
     expect(await run.execute(CTX, { id: 99 })).toContain("不存在");
@@ -405,8 +442,8 @@ describe("run_workflow 工具（异步触发）", () => {
 describe("get_workflow_run 工具", () => {
   it("查最近一条 run：状态/耗时/终点输出预览", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "gr-flow", graphJson: VALID_GRAPH });
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "gr-flow", graphJson: VALID_GRAPH });
     const runs = {
       findFirst: vi.fn(async () => ({
         id: 9,
@@ -431,8 +468,8 @@ describe("get_workflow_run 工具", () => {
 
   it("失败 run 带 error；无记录明示", async () => {
     const stubs = createStubs();
-    const create = makeCreateWorkflowTool(stubs as never);
-    await create.execute(CTX, { name: "gf-flow", graphJson: VALID_GRAPH });
+    const write = makeWorkflowWriteTool(stubs as never);
+    await write.execute(CTX, { name: "gf-flow", graphJson: VALID_GRAPH });
     const runs = {
       findFirst: vi.fn(async () => ({
         id: 10,
@@ -450,22 +487,5 @@ describe("get_workflow_run 工具", () => {
     expect(failed).toContain("耗时: -");
     runs.findFirst.mockResolvedValue(null);
     expect(await tool.execute(CTX, { id: 1 })).toContain("暂无运行记录");
-  });
-});
-
-describe("create_workflow 工具（末节点断头自愈）", () => {
-  it("末节点不连 END → 落库补 start 入口边与叶子 END 边", async () => {
-    const stubs = createStubs();
-    const tool = makeCreateWorkflowTool(stubs as never);
-    await tool.execute(CTX, {
-      name: "dangling-tail-flow",
-      graphJson: {
-        ...VALID_GRAPH,
-        edges: [], // 零边图：gen 冒充入口过校验（bug 同根因），且是断头叶子
-      },
-    });
-    const saved = JSON.parse(stubs.graphs[0].graphJson);
-    expect(saved.edges).toContainEqual({ from: "start", to: "gen" });
-    expect(saved.edges).toContainEqual({ from: "gen", to: "END" });
   });
 });

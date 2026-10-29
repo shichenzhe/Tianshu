@@ -22,12 +22,14 @@
 import { app, dialog, ipcMain, type BrowserWindow } from "electron";
 import os from "node:os";
 import path from "node:path";
-import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { copyFile } from "node:fs/promises";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import prisma from "../../commons/prisma-client";
 import { tianshuRoot } from "../../commons/paths";
 import type { BackupListResult, BackupMeta } from "@tianshu/protocol";
 import { publishFaceEvent } from "../server-face/face-events";
 import { BackupClient } from "./backup-client";
+import { verifyTarGzIntegrity } from "./ustar-tar";
 import {
   createBackupArchive,
   hashFile,
@@ -240,10 +242,15 @@ export async function createBackupLocal(
       tempDir,
       appVersion: (deps.appVersion ?? app.getVersion)(),
     });
-    copyFileSync(archive.archivePath, destPath);
+    // 异步 copy（GB 级档案 + 慢速目标盘不冻结主进程事件环）
+    await copyFile(archive.archivePath, destPath);
     const sha256 = await hashFile(destPath);
     if (sha256 !== archive.meta.sha256) {
-      rmSync(destPath, { force: true });
+      try {
+        rmSync(destPath, { force: true });
+      } catch {
+        // 删坏档失败（AV 锁定等）不掩盖原始校验错——残留文件下次覆盖
+      }
       throw new Error("备份校验失败：sha256 不匹配");
     }
     return { destPath, fileSize: archive.meta.fileSize, sha256 };
@@ -404,14 +411,20 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
     },
   );
 
-  // 本地档案恢复（无服务端）：档案存在性在断库前拦截；sha256 无远端 meta
-  // 可对拍，gzip/tar 解包校验兜底（坏包零损伤——restore.ts 头注释语义）
+  // 本地档案恢复（无服务端）：存在性与档案预检都在断库前拦截——预检 =
+  // verifyTarGzIntegrity（gzip CRC 全量 + ustar 魔数，替代远端 sha256 闸门）
   ipcMain.handle("backup:restore:local", async () => {
     const picked = await (deps.pickArchivePath ?? defaultPickArchivePath)();
     if (!picked) return null;
-    if (!existsSync(picked) || !statSync(picked).isFile()) {
-      throw new Error(`备份档案不存在：${picked}`);
+    // TOCTOU/坏路径统一收敛为「不存在」（不抛裸 ENOENT）
+    let isRegularFile = false;
+    try {
+      isRegularFile = statSync(picked).isFile();
+    } catch {
+      isRegularFile = false;
     }
+    if (!isRegularFile) throw new Error(`备份档案不存在：${picked}`);
+    await verifyTarGzIntegrity(picked);
     return runRestoreChain(picked, deps, emit);
   });
 }

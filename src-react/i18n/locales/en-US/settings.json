@@ -107,7 +107,7 @@
   "backupLocalRestore": "Restore from local archive…",
   "backupLocalCreatedToast": "Backed up to {{path}} ({{size}})",
   "backupLocalRestoreConfirmTitle": "Restore from local archive?",
-  "backupLocalRestoreConfirmBody": "This will overwrite the current database and assets (skills, library, etc.) with the selected local backup archive. A safety copy of the current data is kept automatically, and the app must be restarted to apply the restore.",
+  "backupLocalRestoreConfirmBody": "After confirming, you will pick a local backup archive whose contents overwrite the current database and assets (skills, library, etc.). A safety copy of the current data is kept automatically, and the app must be restarted to apply the restore.",
   "backupRelaunching": "Restore complete. Restart the app to apply",
   "backupCreatedToast": "Backup created",
   "backupClaimTitle": "Claim with Invite Code",

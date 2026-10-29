@@ -22,6 +22,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { createGzip, createGunzip, type Gzip } from "node:zlib";
 
 export interface TarEntry {
@@ -489,5 +490,53 @@ export async function unpackTarGz(
     // 早停（零块后尚余填充块）时显式关流，防 src fd 悬挂
     src.destroy();
     gun.destroy();
+  }
+}
+
+/** 首 header 魔数末端偏移（parseHeader 同口径：257..263） */
+const USTAR_MAGIC_END = 263;
+
+/**
+ * 本地档案预检（本地恢复链无远端 meta 可 sha256 对拍的替代闸门）：
+ * 流式 gunzip 全量过一遍——gzip 截断/CRC 损坏在 zlib 收尾抛错，首
+ * header ustar 魔数嗅探（与 parseHeader 同接受面）拦非本格式档案。
+ * 全程零落盘；放在断库/保护副本之前，坏档不付 GB 级快照成本。
+ */
+export async function verifyTarGzIntegrity(
+  archivePath: string,
+): Promise<void> {
+  // 首 header 经对象属性承载（TS 对闭包捕获 let 的外层收窄会误判 never，
+  // 属性访问不收窄——行为无差）
+  const state: { head: Buffer | null } = { head: null };
+  try {
+    await pipeline(
+      createReadStream(archivePath),
+      createGunzip(),
+      async (source: Readable) => {
+        for await (const chunk of source) {
+          const head = state.head;
+          // 魔数已验过即排干余量（读到底才触发 gzip CRC 收尾校验）
+          if (head !== null && head.length >= USTAR_MAGIC_END) continue;
+          const buffered = head
+            ? Buffer.concat([head, chunk])
+            : Buffer.from(chunk);
+          state.head = buffered;
+          if (buffered.length >= USTAR_MAGIC_END) {
+            const magic = buffered.toString("binary", 257, USTAR_MAGIC_END);
+            if (magic !== "ustar\0" && magic !== "ustar ") {
+              throw new Error("非 ustar tar.gz 档案（魔数不符）");
+            }
+          }
+        }
+      },
+    );
+  } catch (err) {
+    throw new Error(
+      `备份档案校验失败：${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  // 解压总量不足一个 header（空档/碎档）——按魔数缺失报错
+  if (state.head === null || state.head.length < USTAR_MAGIC_END) {
+    throw new Error("备份档案校验失败：非 ustar tar.gz 档案（内容不足）");
   }
 }

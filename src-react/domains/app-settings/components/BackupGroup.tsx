@@ -85,7 +85,10 @@ export default function BackupGroup() {
   /** 查看者身份（backup:list 回传；admin 才渲染管理小节与 owner 徽标） */
   const [viewer, setViewer] = useState<BackupViewer | null>(null);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"create" | "restore" | null>(null);
+  /** 在途操作（四值互斥；「远端/本地 × 备份/恢复」spinner 各归其位） */
+  const [busy, setBusy] = useState<
+    "create" | "create:local" | "restore" | "restore:local" | null
+  >(null);
   const [progress, setProgress] = useState<BackupProgressPayload | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<BackupMeta | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BackupMeta | null>(null);
@@ -319,7 +322,7 @@ export default function BackupGroup() {
    *  不依赖连接——未配主机也可用 */
   const createLocalBackup = async () => {
     if (busy) return;
-    setBusy("create");
+    setBusy("create:local");
     setProgress({ phase: "packing", current: 0, total: 0 });
     try {
       const result = await invoke<
@@ -344,7 +347,7 @@ export default function BackupGroup() {
   /** 本地档案恢复确认执行：选择器取消返回 null 静默；成功置重启横条 */
   const confirmLocalRestore = async () => {
     if (busy) return;
-    setBusy("restore");
+    setBusy("restore:local");
     setProgress({ phase: "restoring", current: 0, total: 0 });
     try {
       const result = await invoke<{ relaunchRequired: boolean } | null>(
@@ -478,7 +481,7 @@ export default function BackupGroup() {
             disabled={busy !== null}
             onClick={() => void createLocalBackup()}
           >
-            {busy === "create" && (
+            {busy === "create:local" && (
               <Loader2 className="h-4 w-4 animate-spin" />
             )}
             {t("settings:backupToLocal")}
@@ -490,7 +493,7 @@ export default function BackupGroup() {
             disabled={busy !== null}
             onClick={() => setLocalRestoreConfirm(true)}
           >
-            {busy === "restore" && (
+            {busy === "restore:local" && (
               <Loader2 className="h-4 w-4 animate-spin" />
             )}
             {t("settings:backupLocalRestore")}
@@ -821,7 +824,7 @@ export default function BackupGroup() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === "restore"}>
+            <AlertDialogCancel disabled={busy !== null}>
               {t("common:cancel")}
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmRestore()}>
@@ -846,7 +849,7 @@ export default function BackupGroup() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy === "restore"}>
+            <AlertDialogCancel disabled={busy !== null}>
               {t("common:cancel")}
             </AlertDialogCancel>
             <AlertDialogAction onClick={() => void confirmLocalRestore()}>

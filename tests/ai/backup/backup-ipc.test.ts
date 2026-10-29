@@ -12,6 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
+import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -624,11 +625,18 @@ describe("backup 本地链路（无服务端）", () => {
     expect(mocks.sent).toEqual([]);
   });
 
+  /** 真 ustar tar.gz 最小档案（魔数在 257；预检只嗅魔数不校验和） */
+  function ustarTarGz(): Buffer {
+    const block = Buffer.alloc(512);
+    block.write("ustar\0", 257, "ascii");
+    return gzipSync(block);
+  }
+
   it("backup:restore:local：选档案 → restoring 事件 → 断库 → 保护副本 → 恢复选中路径；全程不碰连接", async () => {
     const { deps, ctx } = makeDeps(DIRECT);
     const archiveDir = mkdtempSync(path.join(dataRoot, "local-archive-"));
     const archiveFile = path.join(archiveDir, "backup.tar.gz");
-    writeFileSync(archiveFile, "BYTES");
+    writeFileSync(archiveFile, ustarTarGz());
     deps.pickArchivePath = vi.fn(async () => archiveFile);
     registerBackupIpc(deps);
     const result = await call("backup:restore:local");
@@ -666,5 +674,45 @@ describe("backup 本地链路（无服务端）", () => {
     expect(ctx.calls).toEqual([]);
     expect(deps.safety).not.toHaveBeenCalled();
     expect(deps.restore).not.toHaveBeenCalled();
+  });
+
+  it("backup:restore:local：选中目录（非普通文件）→ 同按不存在拦截", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const dir = mkdtempSync(path.join(dataRoot, "local-picked-dir-"));
+    deps.pickArchivePath = vi.fn(async () => dir);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).rejects.toThrow(
+      /备份档案不存在/,
+    );
+    expect(ctx.calls).toEqual([]);
+  });
+
+  it("backup:restore:local：坏 gzip（非档案字节）→ 预检在断库前拦截，不做 GB 级保护副本", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const archiveDir = mkdtempSync(path.join(dataRoot, "local-archive-"));
+    const archiveFile = path.join(archiveDir, "not-gzip.tar.gz");
+    writeFileSync(archiveFile, "PLAIN-BYTES-NOT-GZIP");
+    deps.pickArchivePath = vi.fn(async () => archiveFile);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).rejects.toThrow(
+      /备份档案校验失败/,
+    );
+    // 预检先行：断库/保护副本/恢复零调用（否则坏档也要付全套快照成本）
+    expect(ctx.calls).toEqual([]);
+    expect(deps.safety).not.toHaveBeenCalled();
+    expect(deps.restore).not.toHaveBeenCalled();
+  });
+
+  it("backup:restore:local：gzip 合法但非 ustar（魔数不符）→ 预检拦截", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const archiveDir = mkdtempSync(path.join(dataRoot, "local-archive-"));
+    const archiveFile = path.join(archiveDir, "wrong-format.tar.gz");
+    writeFileSync(archiveFile, gzipSync(Buffer.alloc(512, 1)));
+    deps.pickArchivePath = vi.fn(async () => archiveFile);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).rejects.toThrow(
+      /备份档案校验失败.*ustar/,
+    );
+    expect(ctx.calls).toEqual([]);
   });
 });

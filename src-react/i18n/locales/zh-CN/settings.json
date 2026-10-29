@@ -107,7 +107,7 @@
   "backupLocalRestore": "从本地档案恢复…",
   "backupLocalCreatedToast": "已备份到 {{path}}（{{size}}）",
   "backupLocalRestoreConfirmTitle": "从本地档案恢复？",
-  "backupLocalRestoreConfirmBody": "将用所选本地备份档案覆盖当前数据库与技能、资料库等资产，恢复前会自动保留当前数据的保护副本，完成后需重启应用生效。",
+  "backupLocalRestoreConfirmBody": "确认后将选择本地备份档案，其内容会覆盖当前数据库与技能、资料库等资产；恢复前将自动保留当前数据的保护副本，完成后需重启应用生效。",
   "backupRelaunching": "恢复完成，重启应用后生效",
   "backupCreatedToast": "备份已完成",
   "backupClaimTitle": "邀请码申领",

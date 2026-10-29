@@ -17,7 +17,11 @@ export class GraphTemplateError extends Error {
 }
 
 export interface PromptRenderContext {
-  inputs: Record<string, string>;
+  /** 输入值（切片 D typed 输入）：模板替换语义保持——number/boolean 经
+   *  String() 归一插入（35 → "35"、true → "true"），值形态由入口
+   *  normalizeGraphInputs 收口；database 参数的原生类型直通在执行层做，
+   *  不经模板 */
+  inputs: Record<string, string | number | boolean>;
   nodes: Record<string, { output: string; errorOutput?: string }>;
   now: Date;
 }
@@ -34,7 +38,7 @@ export function renderNodePrompt(
     if (token.startsWith("input.")) {
       const key = token.slice("input.".length);
       if (!(key in ctx.inputs)) throw new GraphTemplateError(token);
-      return ctx.inputs[key];
+      return String(ctx.inputs[key]);
     }
     const nodeId = token.slice("nodes.".length).split(".")[0];
     const field = token.endsWith(".errorOutput")

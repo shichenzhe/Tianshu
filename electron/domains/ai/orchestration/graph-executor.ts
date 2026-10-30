@@ -3715,6 +3715,7 @@ export function makeHybridSearchNodeHandler(
         const ftsPromise = node.mode === "hybrid"
           ? searchFts({ userId: ctx.userId, collection, queryTokens, limit: poolSize })
           : Promise.resolve([] as FusedHit[]);
+        void ftsPromise.catch(() => {}); // 先败护栏：占位 handler 防 unhandled rejection；错误仍经下方 await 抛出驱动节点失败
         const [queryVector] = await embedPromise; // 任一 reject 即节点失败
         ftsHits = await ftsPromise;
         vecHits = (await searchChunks({

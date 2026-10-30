@@ -232,6 +232,44 @@ describe("hybridSearch 节点 handler（三模式）", () => {
     expect(done.output).toContain("【s1｜相关度");
   });
 
+  it("hybrid 模式 FTS 单路先败：节点显式失败且无 unhandled rejection", async () => {
+    // embed 路正常解析；FTS 路（searchFts 的 findMany）先拒却——护栏
+    // 缺失时该拒却在 await embedPromise 期间无 handler，即
+    // unhandled rejection 现场；节点仍须以 FTS 真实错误显式失败。
+    // embed 路注入真实宏任务间隙（setTimeout），复现慢 HTTP 下 FTS
+    // 先败的检查点窗口（纯微任务级 mock 不会触发 Node 的检测）
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      const body = JSON.parse(String(init.body)) as { input: string[] };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: body.input.map((_text, index) => ({
+            index,
+            embedding: [1, 0],
+          })),
+        }),
+      };
+    });
+    vi.mocked(prisma.vectorChunk.findMany).mockRejectedValue(
+      new Error("SQLITE_BUSY: database is locked"),
+    );
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      await expect(runHybrid()).rejects.toMatchObject({
+        message: expect.stringContaining("SQLITE_BUSY"),
+      });
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    // 走完检查点再断言零事件（护栏缺失时事件在 embed 间隙即抛出）
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(unhandled).toEqual([]);
+  });
+
   it("semantic 模式：纯向量路（不走 FTS）、相似度文案、rank 从 1 编", async () => {
     // 同款确定性 embed [1,0]；semantic 只发向量路——findMany 仅一次
     // （searchChunks），FTS 面（searchFts 的第二次 findMany）不触达

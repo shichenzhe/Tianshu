@@ -21,6 +21,7 @@
     "test": "vitest run",
     "test:e2e:server": "node tests/ai/server/e2e-smoke.ts",
     "test:e2e:graph": "node tests/ai/server/e2e-graph-smoke.ts",
+    "test:e2e:graphPg": "node tests/ai/server/e2e-graph-search-pg.ts",
     "test:e2e:bridge": "node tests/ai/server/e2e-bridge-smoke.ts",
     "test:e2e:ui": "vitest run --config vitest.e2e.config.ts",
     "test:e2e:relayE2E": "vitest run --config vitest.relay-e2e.config.ts",

@@ -778,7 +778,7 @@ Expected: mirror vitest 全绿、typecheck 零错误、server jest 全绿（含�
 
 - [ ] **Step 4: 终验清单（跨段终验三项对照）**
 
-按跨段协议双端终验纪律自查：① 错误码存在性——`hybrid_model_missing`/`fts_unavailable` 双份 executor 一致；② 载荷字段接线——`hits` 在 NodeOutput→toNodeUpdate→NodeResult 链路双份齐全；③ 状态联合同形——server/mirror 的 handler 输出 update 形态一致。
+按跨段协议双端终验纪律自查：① 错误码存在性——`hybrid_model_missing` 双份 executor 一致（`fts_unavailable` 已随 FTS5 pivot 语义性移除，双份同等缺席）；② 载荷字段接线——`hits` 在 NodeOutput→toNodeUpdate→NodeResult 链路双份齐全；③ 状态联合同形——server/mirror 的 handler 输出 update 形态一致。
 
 - [ ] **Step 5: 最终 Commit**
 

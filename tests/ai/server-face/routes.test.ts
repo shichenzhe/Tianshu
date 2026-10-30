@@ -483,7 +483,10 @@ function wireDeps(
   // 记忆进化批 memory 面替身（聚合/写面语义在 memory-tap.test 直测，
   // 路由层只验信封/参数校验/未装配）
   const backup = {
-    list: vi.fn(async () => []),
+    list: vi.fn(async () => ({
+      backups: [],
+      viewer: { kind: "admin" as const },
+    })),
     create: vi.fn(async () => ({ accepted: true })),
     delete: vi.fn(async () => {}),
   };

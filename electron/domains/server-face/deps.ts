@@ -69,7 +69,7 @@ import type {
 import type {
   AutomationRunPage,
   AutomationRunRecord,
-  BackupMeta,
+  BackupListResult,
   GraphRecord,
   MemoryServiceResult,
   MemoryState,
@@ -658,7 +658,8 @@ export interface ServerFaceGraphsReadonly {
 /** 备份面批 backup 面（backup-tap 注入；桌面被控面专属三端点——遥控
  *  桌面备份客户端；create 202 受理，进度/终态经 backup.progress 事件） */
 export interface ServerFaceBackup {
-  list(): Promise<BackupMeta[]>;
+  /** 列表 + viewer 身份（admin 全量/client 名下——移动端据此渲染 owner 徽标） */
+  list(): Promise<BackupListResult>;
   /** 202 受理：后台打包+上传（进度经事件流；终态 done 帧收敛） */
   create(note: string | undefined): Promise<{ accepted: true }>;
   delete(backupId: string): Promise<void>;

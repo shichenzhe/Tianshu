@@ -14,5 +14,6 @@
   "unnamedBackup": "未命名备份",
   "statusUploading": "上传中",
   "deleteTitle": "删除备份",
-  "deleteConfirm": "删除 {{time}} 的备份？不可恢复。"
+  "deleteConfirm": "删除 {{time}} 的备份？不可恢复。",
+  "ownerAdmin": "管理员"
 }

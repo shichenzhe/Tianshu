@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import type { BackupMeta, BackupProgressPayload } from "@tianshu/protocol";
+import type {
+  BackupMeta,
+  BackupProgressPayload,
+  BackupViewer,
+} from "@tianshu/protocol";
 
 import { activeTransport, subscribeTransportEvents } from "./connections.store";
 import {
@@ -15,6 +19,8 @@ import {
  */
 interface BackupStoreState {
   backups: BackupMeta[];
+  /** 查看者身份（admin 全量/client 名下——admin 才渲染行内 owner 徽标） */
+  viewer: BackupViewer | null;
   loading: boolean;
   /** 触发受理后 true，终态帧复位 */
   creating: boolean;
@@ -34,6 +40,7 @@ let eventsBound = false;
 
 export const useBackupStore = create<BackupStoreState>((set, get) => ({
   backups: [],
+  viewer: null,
   loading: false,
   creating: false,
   progress: null,
@@ -41,14 +48,18 @@ export const useBackupStore = create<BackupStoreState>((set, get) => ({
 
   load: async () => {
     if (activeTransport() === null) {
-      set({ backups: [], loading: false });
+      set({ backups: [], viewer: null, loading: false });
       return;
     }
     const token = ++backupSeq;
     set({ loading: true });
     const r = await backupList();
     if (token !== backupSeq) return;
-    set({ backups: r.ok ? r.data : [], loading: false });
+    set(
+      r.ok
+        ? { backups: r.data.backups, viewer: r.data.viewer, loading: false }
+        : { backups: [], viewer: null, loading: false },
+    );
   },
 
   trigger: async (note) => {

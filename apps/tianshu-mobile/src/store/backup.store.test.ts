@@ -32,6 +32,7 @@ describe("backup.store 状态机", () => {
     // 清数组会断开 emit 通道
     useBackupStore.setState({
       backups: [],
+      viewer: null,
       loading: false,
       creating: false,
       progress: null,
@@ -39,6 +40,31 @@ describe("backup.store 状态机", () => {
     });
     useBackupStore.getState().bindEvents();
     listMock.mockResolvedValue({ ok: true, data: [] });
+  });
+
+  it("load 存列表与 viewer 身份；未激活连接清空复位", async () => {
+    listMock.mockResolvedValue({
+      ok: true,
+      data: {
+        backups: [
+          {
+            id: "b-1",
+            createdAt: "2026-10-27T00:00:00.000Z",
+            fileSize: 1,
+            sha256: "x",
+            chunkCount: 1,
+            appVersion: "1",
+            schemaVersion: 1,
+            status: "ready",
+            owner: "__admin__",
+          },
+        ],
+        viewer: { kind: "admin" },
+      },
+    });
+    await useBackupStore.getState().load();
+    expect(useBackupStore.getState().backups).toHaveLength(1);
+    expect(useBackupStore.getState().viewer).toEqual({ kind: "admin" });
   });
 
   it("trigger 受理置进行态；失败置 lastError 不置进行态", async () => {
@@ -66,18 +92,21 @@ describe("backup.store 状态机", () => {
 
     listMock.mockResolvedValue({
       ok: true,
-      data: [
-        {
-          id: "b-1",
-          createdAt: "2026-10-27T00:00:00.000Z",
-          fileSize: 1,
-          sha256: "x",
-          chunkCount: 1,
-          appVersion: "1",
-          schemaVersion: 1,
-          status: "ready",
-        },
-      ],
+      data: {
+        backups: [
+          {
+            id: "b-1",
+            createdAt: "2026-10-27T00:00:00.000Z",
+            fileSize: 1,
+            sha256: "x",
+            chunkCount: 1,
+            appVersion: "1",
+            schemaVersion: 1,
+            status: "ready",
+          },
+        ],
+        viewer: { kind: "client", clientId: "d1" },
+      },
     });
     emit("backup.progress", {
       phase: "uploading",

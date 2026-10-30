@@ -31,7 +31,12 @@
   原生依赖须另行裁定依赖铁律）。
 - **融合**：RRF（Reciprocal Rank Fusion，`score = Σ 1/(k + rank)`，k=60）为业界
   事实标准——只看排名不看分值，天然免疫余弦（0~1）与 BM25（无界）的量纲差异，
-  无需调参。加权归一化（Dify 可调权重做法）量纲敏感需校准，本期不做。
+  无需调参（k=60 为论文值，与 ES `rank_constant` 默认一致，不做成参数）。加权
+  归一化（Dify 可调权重做法）量纲敏感需校准，本期不做。
+- **分数阈值（业界标配项的裁剪）**：ES `min_score` / Dify Score 阈值 / Azure
+  threshold 均为标配，但 RRF 分数无量纲、阈值无意义（Dify 对 RRF 模式同样置
+  N/A）；semantic 模式余弦与 Phase 2 rerank 的 relevance_score 均为 0~1 可阈值
+  化——v1 不加参数，rerank 期评估 minScore（业界「rerank + 阈值」标准组合）。
 - **rerank 端点形态**：Cohere Rerank 定形、Jina/vLLM/SGLang（BGE-reranker、
   Qwen3-Reranker）/SiliconFlow/DashScope 全兼容：
   `POST /rerank {model, query, documents[], top_n}` →
@@ -110,7 +115,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
    全量回填（万级亚秒级；桌面与 server 是各自独立 local.db，无跨端竞态）。
    **进程内单飞**（in-flight Promise 去重）：automation 可并发跑图，两张图并发
    首查时复用同一次回填，防「count 对比 → 全清 → 重插」窗口内重复执行导致
-   行数翻倍。
+   行数翻倍。回填末尾执行一次 `INSERT INTO vectorChunkFts(vectorChunkFts)
+   VALUES('optimize')` 合并索引段（大量删插后 FTS5 分段，optimize 廉价正解）。
+   停用词不额外处理：FTS5 无内建停用词，BM25 的 IDF 天然压低高频词权重（业界
+   SQLite FTS 实践同）。
 
 查询（参数化绑定，MATCH 串来自分词输出）：
 
@@ -142,7 +150,9 @@ BM25 路不过滤 model（全文与 embedding 模型无关）；向量路保持�
 ```
 
 空命中输出空串不炸图；FTS5 不可用（自编译 SQLite 未启用）时 keyword/hybrid 报
-`VectorStoreError("fts_unavailable")` 人话错误，semantic 路不受影响。
+`VectorStoreError("fts_unavailable")` 人话错误，semantic 路不受影响。hybrid
+双路任一失败（如 embedding API 挂）即节点整体失败，**不做单路静默降级**（对齐
+rerank 的显式失败哲学，防掩盖配置错误）。
 
 **hits 旁路（为 Phase 2 rerank 预埋，Phase 1 实现）**：节点 state update 除
 output 文本外挂 `hits` 结构化数组（即 §2 的 FusedHit 形态，含 score 与 rank）。
@@ -164,7 +174,9 @@ output 文本外挂 `hits` 结构化数组（即 §2 的 FusedHit 形态，含 s
 - 改动面：`vector-store.ts` + `graph-executor.ts` mirror↔server 双改；core 重建
   dist（server 侧 `npm run sync:core`）；drift 容差核算（vector-store/
   graph-executor 为 drift 活跃对，基线 217 行）
-- 纯函数（tokenize/joinFts*/rrfFuse）：mirror vitest 直测（零 DB 依赖）
+- 纯函数（tokenize/joinFts*/rrfFuse）：mirror vitest 直测（零 DB 依赖）；
+  tokenize 用例覆盖中英混合、专有名词、长句、空串等代表性样本（检索质量评测集
+  v1 裁剪，样本具体化兜住分词回归）
 - FTS 真表交互（建表/回填/BM25 查询）：mirror 侧 vitest 真库不可行（better-sqlite3
   Electron ABI 已知约束）→ server 侧 jest（node ABI 可载）覆盖同代码副本 +
   `test:e2e:graph` 冒烟补端到端
@@ -233,7 +245,9 @@ timeoutMs
   监控事件（监控覆盖聊天链路），hybridSearch 的 embedding 调用对齐现状；图无
   导入/导出/复制功能（graph.repo.ts 查证），节点 kind 无跨版本分发面，老版本
   兼容场景不存在。
-- **开放**：graph-templates.ts 是否补 RAG 模板（不扩本期范围，实施后视情况）。
+- **开放**：graph-templates.ts 是否补 RAG 模板（不扩本期范围，实施后视情况）；
+  手动重建 FTS 索引入口（Dify 有「重建索引」按钮，我们 count 对比自动兜底已
+  够，UX 糖 v1 不做）；rerank 期评估 minScore 阈值参数。
 
 ## 影响面清单
 

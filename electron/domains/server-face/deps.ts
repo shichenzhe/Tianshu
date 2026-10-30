@@ -643,6 +643,12 @@ export interface ServerFaceAutomation {
     status: AutomationRunRecord["status"] | undefined,
     userId: number,
   ): Promise<AutomationRunPage>;
+  /** 运行节点详情（执行详情批）：桥桌面 GraphRepository.listRunNodes
+   *  单源（归属两段校验同款）；graphRepo 缺席的最小部署返回空集 */
+  runNodes(
+    runId: number,
+    userId: number,
+  ): Promise<AutomationRunNodeRecord[]>;
 }
 
 /** graph 只读面（automation 创建/编辑选图用；QueryResult 同形壳） */

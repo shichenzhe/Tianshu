@@ -130,5 +130,7 @@
   "toolCalls": "工具调用",
   "errorOutputLabel": "失败项",
   "fallbackLabel": "降级继续",
-  "noNodes": "无节点级详情（早期运行未留档节点数据）"
+  "noNodes": "无节点级详情（早期运行未留档节点数据）",
+  "nodeLoadFailed": "节点详情加载失败（网络异常或连接已断开）",
+  "nodeRetry": "点击重试"
 }

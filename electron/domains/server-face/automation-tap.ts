@@ -7,6 +7,7 @@
 // 内存替身可直测（providers-tap 先例）。
 import type { TaskCreateParams } from "../../../src-react/domains/ai/automation/api/automation.api";
 import type {
+  AutomationRunNodeRecord,
   AutomationRunPage,
   AutomationRunRecord,
   GraphRecord,
@@ -86,6 +87,8 @@ interface AutomationRepositoryLike {
 
 export function createAutomationFace(deps: {
   automationRepo: AutomationRepositoryLike;
+  /** 节点详情单源（执行详情批）；缺席的最小部署 runNodes 返回空集 */
+  graphRepo?: { listRunNodes(runId: number, userId: number): Promise<AutomationRunNodeRecord[]> };
 }): ServerFaceAutomation {
   const repo = deps.automationRepo;
   return {
@@ -116,6 +119,12 @@ export function createAutomationFace(deps: {
       repo
         .listRuns(page, taskId, status, userId)
         .then((result) => toRunWire(result)),
+    // 归属两段校验内聚桌面 repo（orchestration:runNodes 同源逻辑）；
+    // 空集语义与无头端一致（不符/prompt run/老 run 无节点行）
+    runNodes: (runId, userId) =>
+      deps.graphRepo
+        ? deps.graphRepo.listRunNodes(runId, userId)
+        : Promise.resolve([]),
   };
 }
 

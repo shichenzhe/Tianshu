@@ -53,8 +53,7 @@ export default function AutomationHistoryScreen() {
   const rows = useMemo(() => runs, [runs]);
 
   function statusColor(status: AutomationRunStatus): string {
-    const color = runStatusColor(status);
-    return color === "__primary__" ? colors.primary : color;
+    return runStatusColor(status, colors.primary);
   }
 
   return (

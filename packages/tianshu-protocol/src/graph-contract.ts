@@ -146,7 +146,9 @@ export interface AutomationRunPage {
  * 运行节点详情契约（automation/runNodes 端点载荷，移动端执行详情批）：
  * mirror 桌面 GraphRunNodeRow（orchestration.api.ts）同构 wire 面——
  * graphRunNode 表逐字段原样透传（input/output 全文库里已截 64KB），
- * server 仓 repository 出参 .toISOString() 起步即 ISO string。
+ * server 仓 repository 出参即 ISO string——graphRunNode.startedAt 为
+ * String 列直传（非 Date 序列化；列改 DateTime 会静默破坏移动端
+ * toRunNodeRow 的 typeof 门禁，勿「顺手修」）。
  * 老图 run 无节点行（runNodes 前落库）——消费端按空数组回落 run 级展示。
  * @@unique([runId, nodeId]) 环图重入 upsert 覆盖，末轮为准。
  */

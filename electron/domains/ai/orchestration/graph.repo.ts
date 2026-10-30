@@ -241,30 +241,12 @@ export default class GraphRepository {
       (_, userId, graphId: number, page: number) =>
         this.listGraphRuns(graphId, page, userId),
     );
-    // 节点详情行（去会话化 2026-10-28，spec §4 三层下钻第三层）：graphRunNode
-    // 无用户列，归属两段校验——先查 run 的 graphId（prompt 型 run graphId
-    // null 直拒），再查图 userId（历史 graph 行 userId 可空，null 视为可查，
-    // 对齐 executor 归属口径）；老 run 无节点行返回空集，前端回落预览
-    handleUser("orchestration:runNodes", async (_, userId, runId: number) => {
-      const run = await prisma.automationRun.findFirst({
-        where: { id: runId, graphId: { not: null } },
-        select: { graphId: true },
-      });
-      if (!run?.graphId) {
-        return [];
-      }
-      const graph = await prisma.graphDefinition.findUnique({
-        where: { id: run.graphId },
-        select: { userId: true },
-      });
-      if (!graph || (graph.userId !== null && graph.userId !== userId)) {
-        return [];
-      }
-      return prisma.graphRunNode.findMany({
-        where: { runId },
-        orderBy: { id: "asc" },
-      });
-    });
+    // 节点详情行（去会话化 2026-10-28，spec §4 三层下钻第三层）：
+    // 归属两段校验与 id asc 排序内聚 listRunNodes（执行详情批起
+    // server-face automation/runNodes 桥同源消费）
+    handleUser("orchestration:runNodes", (_, userId, runId: number) =>
+      this.listRunNodes(runId, userId),
+    );
     // 提示词 AI 润色（编辑器轻量能力，不走图执行链路）
     handleUser(
       "orchestration:polishPrompt",
@@ -815,6 +797,35 @@ export default class GraphRepository {
       total,
       items: rows.map((r) => toGraphRunRecord(r, graph?.name ?? "-")),
     };
+  }
+
+  /** 运行节点详情行（去会话化 2026-10-28，spec §4 三层下钻第三层；
+   *  执行详情批起 server-face automation/runNodes 同源消费）：graphRunNode
+   *  无用户列，归属两段校验——先查 run 的 graphId（prompt 型 run graphId
+   *  null 直拒），再查图 userId（历史 graph 行 userId 可空，null 视为可查，
+   *  对齐 executor 归属口径）；老 run 无节点行返回空集，前端回落预览 */
+  async listRunNodes(
+    runId: number,
+    userId: number,
+  ): Promise<GraphRunNodeRow[]> {
+    const run = await prisma.automationRun.findFirst({
+      where: { id: runId, graphId: { not: null } },
+      select: { graphId: true },
+    });
+    if (!run?.graphId) {
+      return [];
+    }
+    const graph = await prisma.graphDefinition.findUnique({
+      where: { id: run.graphId },
+      select: { userId: true },
+    });
+    if (!graph || (graph.userId !== null && graph.userId !== userId)) {
+      return [];
+    }
+    return prisma.graphRunNode.findMany({
+      where: { runId },
+      orderBy: { id: "asc" },
+    });
   }
 
   /** 试运行（spec §5 手动触发）：无任务上下文，workspace 行须自查归属

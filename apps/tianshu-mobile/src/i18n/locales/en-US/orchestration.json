@@ -130,5 +130,7 @@
   "toolCalls": "Tool Calls",
   "errorOutputLabel": "Failed Items",
   "fallbackLabel": "Fallback",
-  "noNodes": "No node details (nodes not recorded for early runs)"
+  "noNodes": "No node details (nodes not recorded for early runs)",
+  "nodeLoadFailed": "Failed to load node details (network error or disconnected)",
+  "nodeRetry": "Tap to retry"
 }

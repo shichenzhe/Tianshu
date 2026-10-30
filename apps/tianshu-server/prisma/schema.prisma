@@ -315,8 +315,9 @@ model AutomationRun {
 // 图运行节点级执行详情（图执行留痕去会话化 spec 2026-10-28）：Coze 式
 // 运行记录体系——节点完整输入/输出取代原「节点消息对落聊天会话」。
 // 逐字段复制自 mirror prisma/schema.prisma 的 graphRunNode（@@map 保留
-// mirror 物理表名；本仓建表走 db push，GA-T3 摘表先例——server 不透出
-// 节点详情查询面（spec §5），仅供删 run 级联与运行排查）
+// mirror 物理表名；本仓建表走 db push，GA-T3 摘表先例——执行详情批
+// 2026-10-30 起经 automation/runNodes 透出移动端查询面，此前仅删 run
+// 级联与运行排查消费）
 model GraphRunNode {
   id               Int     @id @default(autoincrement())
   runId            Int

@@ -386,7 +386,7 @@ describe("orchestration store（mock graph-api 层）", () => {
     expect(useOrchestrationStore.getState().runs[1].state).toBe("succeeded");
   });
 
-  it("loadRunNodes：ok 归档 + loading 复位；无连接静默空不置 loading", async () => {
+  it("loadRunNodes：ok 归档 + loading 复位；无连接静默不写键（失败态由页面呈现）", async () => {
     apiMock.automationRunNodes.mockResolvedValueOnce({
       ok: true,
       data: [nodeRow(1, 7), nodeRow(2, 7, { status: "failed" })],
@@ -400,8 +400,22 @@ describe("orchestration store（mock graph-api 层）", () => {
     connMock.activeTransport.mockReturnValue(null);
     await useOrchestrationStore.getState().loadRunNodes(8);
     expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(1);
-    expect(useOrchestrationStore.getState().runNodes[8]).toEqual([]);
-    expect(useOrchestrationStore.getState().runNodesLoading[8]).toBe(false);
+    // 无连接不伪造空数组（「无节点级详情」是数据断言，真因是没连接）
+    expect(useOrchestrationStore.getState().runNodes[8]).toBeUndefined();
+    expect(useOrchestrationStore.getState().runNodesLoading[8]).toBeUndefined();
+  });
+
+  it("clearRunNodes：离开详情页清理指定 run 的节点载荷与 loading", async () => {
+    apiMock.automationRunNodes.mockResolvedValueOnce({
+      ok: true,
+      data: [nodeRow(1, 7)],
+    });
+    await useOrchestrationStore.getState().loadRunNodes(7);
+    expect(useOrchestrationStore.getState().runNodes[7]).toHaveLength(1);
+
+    useOrchestrationStore.getState().clearRunNodes(7);
+    expect(useOrchestrationStore.getState().runNodes[7]).toBeUndefined();
+    expect(useOrchestrationStore.getState().runNodesLoading[7]).toBeUndefined();
   });
 
   it("loadRunNodes：wire 失败 loading 复位、旧值保守不动", async () => {
@@ -444,7 +458,7 @@ describe("orchestration store（mock graph-api 层）", () => {
     expect(useOrchestrationStore.getState().runNodes[2]?.map((n) => n.id)).toEqual([9]);
   });
 
-  it("graph.run.updated：浏览中 run（已拉节点）触发节点重拉；未浏览不拉", async () => {
+  it("graph.run.updated：浏览中 run（已拉节点）终态/节点完成事件重拉；纯 running 进度不拉；未浏览不拉", async () => {
     apiMock.automationRunNodes.mockResolvedValue({
       ok: true,
       data: [nodeRow(1, 7)],
@@ -452,12 +466,29 @@ describe("orchestration store（mock graph-api 层）", () => {
     await useOrchestrationStore.getState().loadRunNodes(7);
     expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(1);
 
+    // 节点起跑事件：节点行只在完成时落库，重拉无新数据——跳过
     connMock.emit({
       type: "graph.run.updated",
       payload: { runId: 7, graphId: 1, state: "running", progress: { nodeId: "n1", nodeStatus: "running" } },
     });
     await flush();
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(1);
+
+    // 节点完成事件（run 仍 running）：重拉
+    connMock.emit({
+      type: "graph.run.updated",
+      payload: { runId: 7, graphId: 1, state: "running", progress: { nodeId: "n1", nodeStatus: "success" } },
+    });
+    await flush();
     expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(2);
+
+    // run 终态事件：重拉
+    connMock.emit({
+      type: "graph.run.updated",
+      payload: { runId: 7, graphId: 1, state: "succeeded", output: "done" },
+    });
+    await flush();
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(3);
 
     // 未浏览的 run 不触发拉取
     connMock.emit({
@@ -465,7 +496,7 @@ describe("orchestration store（mock graph-api 层）", () => {
       payload: { runId: 99, graphId: 1, state: "succeeded" },
     });
     await flush();
-    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(2);
+    expect(apiMock.automationRunNodes).toHaveBeenCalledTimes(3);
   });
 
   it("server.connected：runs 清空 + graphs/tasks 双拉", async () => {
@@ -483,8 +514,9 @@ describe("orchestration store（mock graph-api 层）", () => {
     await flush();
 
     expect(useOrchestrationStore.getState().runs).toEqual({});
-    // 节点详情随投影复位（断流期间终局已失，宁清不卡）
-    expect(useOrchestrationStore.getState().runNodes).toEqual({});
+    // 节点详情不清（执行详情批裁定）：浏览中重连不得空白已开的时间线，
+    // 驻留内存由详情页卸载 clearRunNodes 负责
+    expect(useOrchestrationStore.getState().runNodes).toEqual({ 7: [nodeRow(1, 7)] });
     expect(apiMock.graphQuery).toHaveBeenCalledTimes(1);
     expect(apiMock.automationList).toHaveBeenCalledTimes(1);
   });

@@ -436,6 +436,8 @@ export function attachServerFace(deps: {
       ? {
           automation: createAutomationFace({
             automationRepo: deps.automationRepo,
+            // 执行详情批：节点详情单源；graphRepo 缺席的最小部署空集兜底
+            ...(deps.graphRepo ? { graphRepo: deps.graphRepo } : {}),
           }),
         }
       : {}),

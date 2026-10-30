@@ -5,17 +5,27 @@ import {
   parseNodeFallback,
   parseNodeToolCalls,
   runStatusColor,
+  runStatusKey,
 } from "./run-node";
 
 // 执行详情批：graphRunNode 行内 JSON 序列（errorJson/toolCallsJson/fallbackJson）
 // 的 parse 纯函数——服务端逐字段原样透传，畸形/老格式序列防御性回落。
 
-describe("runStatusColor（运行状态展示色，running 占位由渲染层换主题色）", () => {
+describe("runStatusColor（运行状态展示色，主题色注入——无 sentinel 泄漏）", () => {
+  it("running 注入主题色；其余三态固定色", () => {
+    expect(runStatusColor("running", "#0A84FF")).toBe("#0A84FF");
+    expect(runStatusColor("success", "#0A84FF")).toBe("#34C759");
+    expect(runStatusColor("failed", "#0A84FF")).toBe("#FF3B30");
+    expect(runStatusColor("skipped", "#0A84FF")).toBe("#8E8E93");
+  });
+});
+
+describe("runStatusKey（状态 → orchestration i18n 键名，Record 全枚举）", () => {
   it("四态映射", () => {
-    expect(runStatusColor("running")).toBe("__primary__");
-    expect(runStatusColor("success")).toBe("#34C759");
-    expect(runStatusColor("failed")).toBe("#FF3B30");
-    expect(runStatusColor("skipped")).toBe("#8E8E93");
+    expect(runStatusKey("running")).toBe("statusRunning");
+    expect(runStatusKey("success")).toBe("statusSuccess");
+    expect(runStatusKey("failed")).toBe("statusFailed");
+    expect(runStatusKey("skipped")).toBe("statusSkipped");
   });
 });
 
@@ -64,9 +74,9 @@ describe("parseNodeToolCalls", () => {
 });
 
 describe("parseNodeFallback", () => {
-  it("降级标记 {code,message}", () => {
+  it("降级标记 {message}（code 无消费面不透出）", () => {
     expect(parseNodeFallback('{"code":"fallback_model","message":"降级"}')).toEqual(
-      { code: "fallback_model", message: "降级" },
+      { message: "降级" },
     );
   });
 

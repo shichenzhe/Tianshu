@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
@@ -9,12 +9,13 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Platform } from "react-native";
 import type {
   AutomationRunNodeRecord,
   AutomationRunStatus,
+  GraphRunStatus,
 } from "@tianshu/protocol";
 
+import { CODE_BG, CODE_FG, MONO } from "@/components/CodeBlock";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
 import {
   durationLabel,
@@ -26,11 +27,17 @@ import {
   parseNodeFallback,
   parseNodeToolCalls,
   runStatusColor,
+  runStatusKey,
 } from "@/logic/run-node";
 import { useOrchestrationStore } from "@/store/orchestration.store";
 import { useThemeColors } from "@/store/theme";
 
-/** mono 深底文本块（GraphCard DetailSheet 同款语义色系） */
+/** mono 块展示截断（GraphCard DETAIL_MAX 同款语义：库里全文 64KB，
+ *  单 Text 全量布局会阻塞 UI 线程数百 ms；截断 + 内滚 + 高度上限） */
+const NODE_TEXT_MAX = 2000;
+const MONO_MAX_HEIGHT = 420;
+
+/** mono 深底文本块（CodeBlock 同款 palette/字体；错误浅红同语义色系） */
 function MonoBlock({
   value,
   tone,
@@ -38,17 +45,23 @@ function MonoBlock({
   value: string;
   tone?: "error";
 }) {
+  const body =
+    value.length > NODE_TEXT_MAX
+      ? `${value.slice(0, NODE_TEXT_MAX)}…`
+      : value;
   return (
-    <Text
-      className="rounded-lg px-3 py-2 text-xs leading-4"
-      style={{
-        fontFamily: Platform.select({ ios: "Menlo", android: "monospace" }),
-        backgroundColor: "#1e293b",
-        color: tone === "error" ? "#fca5a5" : "#e2e8f0",
-      }}
-    >
-      {value}
-    </Text>
+    <ScrollView style={{ maxHeight: MONO_MAX_HEIGHT }}>
+      <Text
+        className="rounded-lg px-3 py-2 text-xs leading-4"
+        style={{
+          fontFamily: MONO,
+          backgroundColor: CODE_BG,
+          color: tone === "error" ? "#fca5a5" : CODE_FG,
+        }}
+      >
+        {body}
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -153,12 +166,23 @@ function NodeDetail({ node }: { node: AutomationRunNodeRecord }) {
   );
 }
 
+/** 投影状态 → run 展示状态（graph.run.updated 的 state 是遥控投影枚举，
+ *  run 行是库内四值；aborted 展示归 failed——桌面 run 枚举无 aborted） */
+function projectedStatus(state: GraphRunStatus): AutomationRunStatus {
+  if (state === "succeeded") return "success";
+  if (state === "running" || state === "queued") return "running";
+  return "failed";
+}
+
 /**
  * 运行详情页（执行详情批）：run 级信息面板 + 图运行节点时间线
  * （automation/runNodes 透传全文输入/输出/工具调用/失败全貌；桌面
  * GraphRunTraceView 同构信息面）。running 态经 graph.run.updated 事件
- * 自动重拉节点（orchestration.store）；prompt 任务 run 无节点段
- * （桌面跳会话的移动端等价物——去会话化后 sessionId 恒 null）。
+ * 自动重拉节点（orchestration.store，纯起跑进度跳过）；prompt 任务 run
+ * 无节点段（桌面跳会话的移动端等价物——去会话化后 sessionId 恒 null）。
+ * 数据源韧性：run 行优先取列表实时值，事件重拉把行挤出列表/翻页时回落
+ * 进页快照（旧 DetailSheet 快照语义等价物）；浏览中图运行叠加 runs
+ * 投影实时状态（图试运行收尾无 automation.changed，列表行不会刷新）。
  */
 export default function AutomationRunDetailScreen() {
   const { t } = useTranslation(["orchestration", "common"]);
@@ -167,25 +191,45 @@ export default function AutomationRunDetailScreen() {
   const runId = Number(params.id);
 
   const runs = useOrchestrationStore((s) => s.historyRuns);
+  const liveRuns = useOrchestrationStore((s) => s.runs);
   const nodesMap = useOrchestrationStore((s) => s.runNodes);
   const loadingMap = useOrchestrationStore((s) => s.runNodesLoading);
   const loadRunNodes = useOrchestrationStore((s) => s.loadRunNodes);
+  const clearRunNodes = useOrchestrationStore((s) => s.clearRunNodes);
 
   const run = useMemo(
     () => runs.find((r) => r.id === runId),
     [runs, runId],
   );
-  const nodes = runId != null && !Number.isNaN(runId) ? nodesMap[runId] : undefined;
-  const nodesLoading = runId != null && !Number.isNaN(runId) ? loadingMap[runId] : false;
+  // 快照兜底：列表重拉（筛选/翻页挤出）不空白正在阅读的详情页
+  const runRef = useRef(run);
+  if (run != null) runRef.current = run;
+  const shownRun = run ?? runRef.current;
+
+  const nodes = nodesMap[runId];
+  const nodesLoading = loadingMap[runId] ?? false;
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // 进页拉节点（图 run 才有节点段；重进/事件重拉共用同一 fetch）
-  const isGraphRun = run?.graphId != null;
+  // 进页拉节点（图 run 才有节点段；重进/事件重拉共用同一 fetch）；
+  // 卸载清理：节点全文载荷不驻留内存 + 事件重拉 guard 复位「正在浏览」
+  const isGraphRun = shownRun?.graphId != null;
   useEffect(() => {
     if (isGraphRun) void loadRunNodes(runId);
-  }, [isGraphRun, runId, loadRunNodes]);
+    return () => {
+      if (isGraphRun) clearRunNodes(runId);
+    };
+  }, [isGraphRun, runId, loadRunNodes, clearRunNodes]);
 
-  if (run == null) {
+  // 浏览中图运行的实时状态叠加（投影 runId 匹配才生效——防同图新一轮
+  // 运行的投影串台到旧 run 详情）
+  const projection =
+    shownRun?.graphId != null ? liveRuns[shownRun.graphId] : undefined;
+  const status: AutomationRunStatus =
+    projection != null && projection.runId === runId
+      ? projectedStatus(projection.state)
+      : (shownRun?.status ?? "running");
+
+  if (shownRun == null) {
     return (
       <SafeAreaView className="flex-1 bg-grouped dark:bg-black" edges={["bottom"]}>
         <Stack.Screen options={{ title: t("orchestration:runDetail") }} />
@@ -198,19 +242,7 @@ export default function AutomationRunDetailScreen() {
     );
   }
 
-  function statusColor(status: AutomationRunStatus): string {
-    const color = runStatusColor(status);
-    return color === "__primary__" ? colors.primary : color;
-  }
-
-  const statusKey =
-    run.status === "success"
-      ? "statusSuccess"
-      : run.status === "failed"
-        ? "statusFailed"
-        : run.status === "skipped"
-          ? "statusSkipped"
-          : "statusRunning";
+  const statusClr = runStatusColor(status, colors.primary);
 
   return (
     <SafeAreaView className="flex-1 bg-grouped dark:bg-black" edges={["bottom"]}>
@@ -221,58 +253,56 @@ export default function AutomationRunDetailScreen() {
           <View className="flex-row items-center gap-2">
             <View
               className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: statusColor(run.status) }}
+              style={{ backgroundColor: statusClr }}
             />
-            <Text
-              className="text-xs font-medium"
-              style={{ color: statusColor(run.status) }}
-            >
-              {t(`orchestration:${statusKey}`)}
+            <Text className="text-xs font-medium" style={{ color: statusClr }}>
+              {t(`orchestration:${runStatusKey(status)}`)}
             </Text>
-            {run.attempt > 1 && (
+            {shownRun.attempt > 1 && (
               <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
-                {t("orchestration:attemptN", { n: run.attempt })}
+                {t("orchestration:attemptN", { n: shownRun.attempt })}
               </Text>
             )}
           </View>
           <Text className="text-[15px] font-medium text-black dark:text-white">
-            {run.taskName}
+            {shownRun.taskName}
           </Text>
           <View className="gap-1 pt-1">
             <MetaRow
               label={t("orchestration:triggerLabel")}
-              value={t(`orchestration:trigger_${run.triggerType}`)}
+              value={t(`orchestration:trigger_${shownRun.triggerType}`)}
             />
             <MetaRow
               label={t("orchestration:startedAt")}
-              value={`${formatAbsolute(run.startedAt)} · ${relativeTimeLabel(formatRelative(run.startedAt), t)}`}
+              value={`${formatAbsolute(shownRun.startedAt)} · ${relativeTimeLabel(formatRelative(shownRun.startedAt), t)}`}
             />
-            {run.finishedAt != null && (
+            {shownRun.finishedAt != null && (
               <MetaRow
                 label={t("orchestration:finishedAt")}
-                value={formatAbsolute(run.finishedAt)}
+                value={formatAbsolute(shownRun.finishedAt)}
               />
             )}
-            {run.durationMs != null && (
+            {shownRun.durationMs != null && (
               <MetaRow
                 label={t("orchestration:durationLabel")}
-                value={durationLabel(run.durationMs)}
+                value={durationLabel(shownRun.durationMs)}
               />
             )}
-            {(run.promptTokens != null || run.completionTokens != null) && (
+            {(shownRun.promptTokens != null ||
+              shownRun.completionTokens != null) && (
               <MetaRow
                 label={t("orchestration:tokensLabel")}
                 value={t("orchestration:tokensShort", {
-                  prompt: run.promptTokens ?? 0,
-                  completion: run.completionTokens ?? 0,
+                  prompt: shownRun.promptTokens ?? 0,
+                  completion: shownRun.completionTokens ?? 0,
                 })}
               />
             )}
           </View>
-          {run.error != null && (
+          {shownRun.error != null && (
             <>
               <SectionLabel label={t("orchestration:runError")} />
-              <MonoBlock value={run.error} tone="error" />
+              <MonoBlock value={shownRun.error} tone="error" />
             </>
           )}
         </View>
@@ -290,6 +320,24 @@ export default function AutomationRunDetailScreen() {
               <Text className="py-2 text-xs text-label3 dark:text-[#EBEBF54D]">
                 {t("orchestration:noNodes")}
               </Text>
+            )}
+            {nodes == null && !nodesLoading && (
+              // 失败/无连接：显式失败态 + 重试（此前静默空白且无出口）
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void loadRunNodes(runId)}
+                className="items-center py-3"
+              >
+                <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
+                  {t("orchestration:nodeLoadFailed")}
+                </Text>
+                <Text
+                  className="pt-1 text-xs font-medium"
+                  style={{ color: colors.primary }}
+                >
+                  {t("orchestration:nodeRetry")}
+                </Text>
+              </Pressable>
             )}
             {nodes?.map((node) => {
               const open = expanded[node.nodeId] === true;

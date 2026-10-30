@@ -142,6 +142,45 @@ describe("automation-tap：runPage 剔 graphTrace + query 分页壳", () => {
   });
 });
 
+describe("automation-tap：runNodes 节点详情透传（执行详情批）", () => {
+  it("透传 graphRepo.listRunNodes（桌面 GraphRepository 单源），runId/userId 直传", async () => {
+    const nodeRow = {
+      id: 1,
+      runId: 9,
+      nodeId: "llm-1",
+      nodeName: "生成",
+      status: "success",
+      input: "in",
+      output: "out",
+      errorJson: null,
+      toolCallsJson: null,
+      promptTokens: 1,
+      completionTokens: 2,
+      durationMs: 100,
+      startedAt: "2026-10-29T08:00:00.000Z",
+      outputImage: null,
+      errorOutput: null,
+      fallbackJson: null,
+    };
+    const graphRepo = {
+      listRunNodes: vi.fn(async () => [nodeRow]),
+    };
+    const face = createAutomationFace({
+      automationRepo: makeRepo(),
+      graphRepo,
+    });
+    const nodes = await face.runNodes(9, UID);
+    expect(graphRepo.listRunNodes).toHaveBeenCalledWith(9, UID);
+    expect(nodes).toEqual([nodeRow]);
+  });
+
+  it("graphRepo 缺席（最小部署无图面）：空集不抛错（与 server 空集语义一致）", async () => {
+    const face = createAutomationFace({ automationRepo: makeRepo() });
+    const nodes = await face.runNodes(9, UID);
+    expect(nodes).toEqual([]);
+  });
+});
+
 describe("graphs-tap：只读分页壳", () => {
   it("query：keyword 过滤 + 分页切片（选图面）", async () => {
     const graphRepo = {

@@ -7,8 +7,12 @@
  */
 import type { AutomationRunStatus } from "@tianshu/protocol";
 
-/** 运行状态 → 展示色（红=失败/绿=成功/主题=运行中/灰=跳过） */
-export function runStatusColor(status: AutomationRunStatus): string {
+/** 运行状态 → 展示色（红=失败/绿=成功/主题=运行中/灰=跳过；主题色
+ * 由调用方注入——历史列表与详情页共用，无 sentinel 泄漏） */
+export function runStatusColor(
+  status: AutomationRunStatus,
+  primary: string,
+): string {
   switch (status) {
     case "success":
       return "#34C759";
@@ -17,9 +21,22 @@ export function runStatusColor(status: AutomationRunStatus): string {
     case "skipped":
       return "#8E8E93";
     default:
-      return "__primary__";
+      return primary;
   }
 }
+
+/** 运行状态 → orchestration i18n 键名（Record 全枚举：新增状态漏配
+ * 即编译错，不静默归入运行中） */
+export function runStatusKey(status: AutomationRunStatus): string {
+  return STATUS_KEY[status];
+}
+
+const STATUS_KEY: Record<AutomationRunStatus, string> = {
+  running: "statusRunning",
+  success: "statusSuccess",
+  failed: "statusFailed",
+  skipped: "statusSkipped",
+};
 
 /** 节点失败结构（trace error 同构：code/toolName/message/detail 全可选） */
 export interface RunNodeError {
@@ -36,9 +53,8 @@ export interface RunNodeToolCall {
   durationMs?: number;
 }
 
-/** 降级继续标记 */
+/** 降级继续标记（code 无消费面，只透出 message） */
 export interface RunNodeFallback {
-  code?: string;
   message?: string;
 }
 
@@ -55,16 +71,19 @@ function parseJsonObject(json: string | null): Record<string, unknown> | null {
   }
 }
 
+function pickString(obj: Record<string, unknown>, key: string): string | undefined {
+  return typeof obj[key] === "string" ? (obj[key] as string) : undefined;
+}
+
 export function parseNodeError(json: string | null): RunNodeError | null {
   const obj = parseJsonObject(json);
-  return obj === null
-    ? null
-    : {
-        ...(typeof obj.code === "string" ? { code: obj.code } : {}),
-        ...(typeof obj.toolName === "string" ? { toolName: obj.toolName } : {}),
-        ...(typeof obj.message === "string" ? { message: obj.message } : {}),
-        ...(typeof obj.detail === "string" ? { detail: obj.detail } : {}),
-      };
+  if (obj === null) return null;
+  return {
+    code: pickString(obj, "code"),
+    toolName: pickString(obj, "toolName"),
+    message: pickString(obj, "message"),
+    detail: pickString(obj, "detail"),
+  };
 }
 
 export function parseNodeToolCalls(json: string | null): RunNodeToolCall[] {
@@ -92,10 +111,6 @@ export function parseNodeToolCalls(json: string | null): RunNodeToolCall[] {
 
 export function parseNodeFallback(json: string | null): RunNodeFallback | null {
   const obj = parseJsonObject(json);
-  return obj === null
-    ? null
-    : {
-        ...(typeof obj.code === "string" ? { code: obj.code } : {}),
-        ...(typeof obj.message === "string" ? { message: obj.message } : {}),
-      };
+  if (obj === null) return null;
+  return { message: pickString(obj, "message") };
 }

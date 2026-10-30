@@ -115,6 +115,8 @@ interface OrchestrationState {
   setHistoryTaskId(taskId: number | null): void;
   /** 节点详情拉取（执行详情批）：详情页进入/事件驱动重拉共用 */
   loadRunNodes(runId: number): Promise<void>;
+  /** 离开详情页清理该 run 的节点载荷与 loading（防驻留+guard 复位） */
+  clearRunNodes(runId: number): void;
   /** 202 受理 → 乐观置 running（事件流接管后续状态） */
   runGraph(graphId: number): Promise<ActionOutcome>;
   /** 中止受理即成功——aborted 态交由事件回传，勿本地合成 */
@@ -258,12 +260,9 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
   }
 
   async function fetchRunNodes(runId: number): Promise<void> {
-    // 无活动连接静默空集（进页未连接/拆除后）：不发请求不置 loading
+    // 无连接静默（不写键不置 loading——「无节点级详情」是数据断言，
+    // 真因没连接时由页面呈现失败态+重试，不伪造空数组）
     if (activeTransport() === null) {
-      set((s) => ({
-        runNodes: { ...s.runNodes, [runId]: [] },
-        runNodesLoading: { ...s.runNodesLoading, [runId]: false },
-      }));
       return;
     }
     const token = (runNodesSeq.get(runId) ?? 0) + 1;
@@ -272,7 +271,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     const r = await automationRunNodes(runId);
     if (token !== runNodesSeq.get(runId)) return;
     if (!r.ok) {
-      // 业务错/网络错：保守不动旧集（fetchGraphs 同款）
+      // 业务错/网络错：保守不动旧集（fetchGraphs 同款）；页面失败态可重试
       set((s) => ({
         runNodesLoading: { ...s.runNodesLoading, [runId]: false },
       }));
@@ -343,6 +342,17 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     },
 
     loadRunNodes: (runId) => fetchRunNodes(runId),
+
+    /** 离开详情页清理（卸载调用）：节点全文载荷不驻留内存，事件重拉
+     *  guard 恢复「正在浏览」语义（否则后台对已离开的 run 持续全量拉取） */
+    clearRunNodes: (runId) => {
+      runNodesSeq.delete(runId);
+      set((s) => {
+        const { [runId]: _nodes, ...restNodes } = s.runNodes;
+        const { [runId]: _loading, ...restLoading } = s.runNodesLoading;
+        return { runNodes: restNodes, runNodesLoading: restLoading };
+      });
+    },
 
     loadMoreTasks: () => {
       const { tasks, tasksTotal, tasksLoading, tasksPage } = get();
@@ -420,7 +430,7 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
       eventsBound = true;
       subscribeTransportEvents((e: ServerEvent) => {
         if (e.type === "graph.run.updated") {
-          const { graphId, runId, state, output, error } = e.payload;
+          const { graphId, runId, state, output, error, progress } = e.payload;
           const prev = get().runs[graphId];
           notifyGraphDone(
             prev?.state,
@@ -438,8 +448,14 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
               },
             },
           }));
-          // 节点详情浏览中（详情页已拉过该 run）：流式推进即重拉节点行
-          if (get().runNodes[runId] !== undefined) {
+          // 节点详情浏览中（详情页已拉过该 run）：流式推进即重拉节点行。
+          // 纯「节点起跑」进度跳过——graphRunNode 行只在节点完成时落库，
+          // 重拉必为旧表（executor 每节点起跑/完成双发事件，跳过省一半
+          // 全量 POST，载荷为节点全文最重）
+          if (
+            get().runNodes[runId] !== undefined &&
+            !(state === "running" && progress?.nodeStatus === "running")
+          ) {
             void get().loadRunNodes(runId);
           }
           return;
@@ -452,7 +468,9 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
           return;
         }
         if (e.type === "server.connected") {
-          set({ runs: {}, runNodes: {}, runNodesLoading: {} });
+          // 只清 runs 投影（断流终局已失宁清不卡）；节点详情不清——
+          // 浏览中重连不得空白已开的时间线（驻留由详情页卸载清理负责）
+          set({ runs: {} });
           // 能力门控（Fix Round 1 + CRUD 批）：graph/automation 任一能力才
           // 拉对应列表——桌面被控端报 automation 不报 graph（graph/query
           // 必败不发），无头端报 graph 时 graph+tasks 双拉（tasks 对其恒可达）

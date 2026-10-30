@@ -294,6 +294,21 @@ async function handleAutomationRunPage(body: unknown): Promise<RouteResult> {
   );
 }
 
+/** 运行节点详情（执行详情批）：桥桌面 GraphRepository.listRunNodes
+ *  单源；空集语义同无头端（不符/prompt run/老 run 无节点行） */
+async function handleAutomationRunNodes(body: unknown): Promise<RouteResult> {
+  const face = faceDeps().automation;
+  if (!face) return bizError("5000", "自动化面未装配");
+  const b = (body ?? {}) as { runId?: unknown };
+  if (typeof b.runId !== "number") return bizError("5000", "runId 必填");
+  return withUserId((userId) =>
+    face
+      .runNodes(b.runId as number, userId)
+      .then(ok)
+      .catch(bizErrorFrom),
+  );
+}
+
 async function handleGraphQueryReadonly(body: unknown): Promise<RouteResult> {
   const face = faceDeps().graphsReadonly;
   if (!face) return bizError("5000", "图面未装配");
@@ -2469,12 +2484,14 @@ const ROUTES: Record<string, RouteHandler> = {
   [`POST ${ENDPOINTS.mcp.delete}`]: handleMcpDelete,
   [`POST ${ENDPOINTS.mcp.reconnect}`]: handleMcpReconnect,
   [`POST ${ENDPOINTS.mcp.detail}`]: handleMcpDetail,
-  // 移动端 CRUD 批：automation 五端点 + graph/query 只读（ENDPOINTS 直引）
+  // 移动端 CRUD 批：automation 五端点 + graph/query 只读（ENDPOINTS 直引）；
+  // 执行详情批：automation/runNodes 节点详情（桥桌面 GraphRepository 单源）
   [`POST ${ENDPOINTS.automation.query}`]: handleAutomationQuery,
   [`POST ${ENDPOINTS.automation.save}`]: handleAutomationSave,
   [`POST ${ENDPOINTS.automation.delete}`]: handleAutomationDelete,
   [`POST ${ENDPOINTS.automation.runNow}`]: handleAutomationRunNow,
   [`POST ${ENDPOINTS.automation.runPage}`]: handleAutomationRunPage,
+  [`POST ${ENDPOINTS.automation.runNodes}`]: handleAutomationRunNodes,
   [`POST ${ENDPOINTS.graph.query}`]: handleGraphQueryReadonly,
   // 记忆进化批：memory 五端点（ENDPOINTS 直引；桌面被控面专属）
   [`POST ${ENDPOINTS.memory.get}`]: handleMemoryGet,

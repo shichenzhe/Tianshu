@@ -222,6 +222,9 @@ timeoutMs
 - **假设**（已向用户呈现并认可）：双轨保留 vectorSearch；rerank 排期下期但旁路
   本期埋；不加权融合参数。
 - **假设**：`Intl.Segmenter` 双端可用（node 已实测，Electron 内建 ICU 零风险）。
+  移动端 Hermes 支持未实测——`tokenize` 采用**惰性初始化** Segmenter 单例
+  （首调创建），移动端 bundle 加载 core barrel 时不执行任何 Intl 构造，
+  非检索链路零风险；移动端若未来接入检索，届时实测再放行。
   ~~better-sqlite3 预编译含 FTS5~~ 已随 FTS5 路线否决作废（2026-10-30 pivot，
   见综述段）。
 - **对齐现状（非本期范围，防误判为遗漏）**：图执行链路不写 llmCallEvent 等

@@ -144,13 +144,13 @@ function ChoiceChip({
       accessibilityState={{ selected }}
       onPress={onPress}
       className="items-center rounded-lg border border-sep px-3 py-2 dark:border-[#545458A6]"
-      style={({ pressed }) => ({
-        backgroundColor: selected
-          ? colors.primary
-          : pressed
-            ? colors.subtle
-            : "transparent",
-      })}
+      // 选中底色必须对象式 style：nativewind v4 与 className 共存时函数式
+      // style 的 backgroundColor 被静默丢弃（web 复现实测选中 chip 透明底
+      // +text-white 白字隐形即此因）；按压态反馈随之舍弃，与 SegmentedControl
+      // 选中态同款写法
+      style={{
+        backgroundColor: selected ? colors.primary : "transparent",
+      }}
     >
       <Text
         className={`text-xs ${selected ? "font-medium text-white" : "text-black dark:text-white"}`}
@@ -751,7 +751,12 @@ export default function NewAutomationScreen() {
           <SectionCard title={t("orchestration:selectGraph")}>
             <Pressable
               accessibilityRole="button"
-              onPress={() => setGraphPickerOpen(true)}
+              // 开面板即重拉：协议无 graph 变更事件（会话里新建的工作流
+              // 不会推送），挂载只在缓存为空时拉——不重拉则下拉恒为旧表
+              onPress={() => {
+                setGraphPickerOpen(true);
+                void loadGraphs();
+              }}
               className="flex-row items-center gap-3 rounded-xl border border-sep bg-field px-3 py-3 dark:border-[#545458A6] dark:bg-[#2C2C2E]"
             >
               <View className="min-w-0 flex-1">

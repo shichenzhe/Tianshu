@@ -69,6 +69,10 @@ interface PlusMenuProps {
   /** 资料库选中文件回传 ChatInput 挂引用 pill（storagePath 含空格不入
       @token 流；内容发送时再读） */
   onPickLibraryFiles: (files: PickedLibraryFile[]) => void;
+  /** 当前已引用技能名列表（技能子菜单勾选态依据，宿主按输入流计算） */
+  referencedSkills: string[];
+  /** 技能引用切换回传（宿主接线 ⚡token 增删；启停收口管理页） */
+  onToggleSkill: (name: string) => void;
   onOpenMcp: () => void;
 }
 
@@ -87,6 +91,8 @@ export default function PlusMenu({
   localTask,
   onPickPaths,
   onPickLibraryFiles,
+  referencedSkills,
+  onToggleSkill,
   onOpenMcp,
 }: PlusMenuProps) {
   const { t } = useTranslation(["chat"]);
@@ -231,7 +237,11 @@ export default function PlusMenu({
             sessionId={sessionId}
             currentAssistantId={currentAssistantId}
           />
-          <SkillSubMenu onImport={handleImportSkill} />
+          <SkillSubMenu
+            onImport={handleImportSkill}
+            referencedSkills={referencedSkills}
+            onToggleSkill={onToggleSkill}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onOpenMcp}>
             <Plug />

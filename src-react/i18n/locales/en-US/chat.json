@@ -143,6 +143,7 @@
     "searchExperts": "Search experts",
     "searchSkills": "Search skills",
     "skillEmpty": "No skills yet — add one below",
+    "skillNoneEnabled": "No enabled skills yet — enable them in the manager",
     "skillNoMatch": "No matching skills",
     "expertNoMatch": "No matching experts",
     "summonExperts": "Get more experts",

@@ -80,6 +80,7 @@ import {
   parseInlineTokens,
   renderTokenSegments,
   stripCommandTokens,
+  toggleSkillToken,
 } from "../lib/inline-tokens";
 import type { PendingFile } from "../lib/pending-file";
 import { isImagePath } from "../lib/image-file";
@@ -333,6 +334,11 @@ export default function ChatInput({
     staleTime: 60_000,
   });
   const enabledSkills = (skillsQuery.data ?? []).filter((r) => r.enabled);
+  // 已引用技能名（＋菜单技能子菜单勾选态依据；输入流 ⚡token 解析去重）
+  const referencedSkills = useMemo(
+    () => [...new Set(parseInlineTokens(content).skillTokens)],
+    [content],
+  );
 
   // 当前专家名（徽章展示；与专家子菜单共享缓存）
   const assistantsQuery = useQuery({
@@ -448,7 +454,8 @@ export default function ChatInput({
     });
   }, [content]);
 
-  /** 标签行点击移除 = 禁用技能（与＋菜单技能浮层同口径） */
+  /** 标签行点击移除 = 禁用技能（＋菜单技能子菜单已改引用语义，
+      此处与 ChatInput 底部标签同为桌面端快捷停用入口） */
   const handleDisableSkill = async (name: string) => {
     try {
       await SkillApi.setEnabled(name, false);
@@ -457,6 +464,15 @@ export default function ChatInput({
       toast.error(mapIpcError(e));
     }
   };
+
+  /** ＋菜单技能引用切换：输入流 ⚡token 增删（纯前端文本操作，
+      全文发送时经 skill:readSkill 读取注入；启停收口管理页与标签行） */
+  const handleToggleSkill = useCallback(
+    (name: string) => {
+      setContent((prev) => toggleSkillToken(prev, name));
+    },
+    [],
+  );
 
   /** 在光标处插入 token 文本(替换正在输入的触发片段),光标落在 token 后空格 */
   const insertAtCaret = useCallback(
@@ -1367,6 +1383,8 @@ export default function ChatInput({
               })();
             }}
             onOpenMcp={onOpenMcp}
+            referencedSkills={referencedSkills}
+            onToggleSkill={handleToggleSkill}
           />
           <PermissionCapsule
             sessionId={sessionId}

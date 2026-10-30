@@ -72,6 +72,8 @@ const BASE_PROPS = {
   currentMode: "agent" as const,
   onPickPaths: () => undefined,
   onPickLibraryFiles: () => undefined,
+  referencedSkills: [] as string[],
+  onToggleSkill: () => undefined,
   onOpenMcp: () => undefined,
 };
 

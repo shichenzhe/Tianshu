@@ -1,10 +1,12 @@
 // tests/ai/graph-hybrid.test.ts
 /**
  * 混合检索：searchFts 内存 BM25（FTS5 否决后 pivot，LangChain
- * BM25Retriever 形态）。mock 面以本任务为限（vectorChunk.findMany），
- * handler 级端到端用例 Task 5 扩。
+ * BM25Retriever 形态）+ hybridSearch 节点 handler 三模式端到端
+ * （keyword/semantic/hybrid——直调导出的 handler 工厂，runId=null
+ * 即席不落库；embed 走 fetch 打桩 + prisma model/provider mock，先例
+ * graph-vector.test.ts）。
  */
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeAll, afterEach } from "vitest";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
@@ -14,13 +16,46 @@ vi.mock("electron", () => ({
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     vectorChunk: { findMany: vi.fn() },
+    // embedTexts → loadModelRuntime（model/provider 两跳）——hybrid/
+    // semantic 模式查询向量化用
+    model: {
+      findUnique: vi.fn(async () => ({ id: 1, providerId: 2, modelId: "emb" })),
+    },
+    provider: {
+      findUnique: vi.fn(async () => ({
+        id: 2,
+        type: "openai-compatible",
+        baseUrl: "http://localhost:9",
+        apiKey: "k",
+        extraHeaders: null,
+      })),
+    },
   },
+}));
+vi.mock("../../electron/commons/Log", () => ({
+  default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
+}));
+vi.mock("../../electron/domains/ai/agent/skill-loader", () => ({
+  loadSkills: vi.fn(() => []),
+}));
+vi.mock("../../electron/domains/security/command-gate", () => ({
+  commandGate: vi.fn(() => "allow" as const),
 }));
 
 import prisma from "../../electron/commons/prisma-client";
 import { searchFts } from "../../electron/domains/ai/orchestration/vector-store";
+import {
+  makeHybridSearchNodeHandler,
+  type NodeContext,
+} from "../../electron/domains/ai/orchestration/graph-executor";
+import type { HybridSearchNode } from "@tianshu/core";
 
+const fetchMock = vi.fn();
+beforeAll(() => {
+  vi.stubGlobal("fetch", fetchMock);
+});
 afterEach(() => {
+  fetchMock.mockReset();
   vi.mocked(prisma.vectorChunk.findMany).mockReset();
 });
 
@@ -69,5 +104,184 @@ describe("vector-store searchFts（内存 BM25）", () => {
     expect(hits.map((h) => h.chunkId)).toEqual([1, 2]); // 多词命中 > 少词命中，零命中剔除
     expect(hits[0]).toMatchObject({ sourceName: "s1", rank: 1 });
     expect(hits.every((h) => h.score > 0)).toBe(true);
+  });
+});
+
+describe("hybridSearch 节点 handler（三模式）", () => {
+  const baseNode: HybridSearchNode = {
+    id: "hs1",
+    kind: "hybridSearch",
+    name: "混合检索",
+    searchQuery: "容错 设计",
+    collection: "c",
+    mode: "hybrid",
+    topK: 3,
+    modelId: 1,
+  };
+
+  /** handler 级即席 ctx：runId=null 节点详情不落库（writeNodeRecord
+   * 短路）；hybrid 路径不触 agent/deps，空对象占位 */
+  const makeCtx = (): NodeContext => ({
+    runId: null,
+    abort: new AbortController().signal,
+    workspace: { id: 9, directoryPath: null },
+    userId: 1,
+    codeAuthorized: false,
+    subflowStack: [],
+    skills: [],
+    agent: {} as NodeContext["agent"],
+    now: new Date(),
+    trace: [],
+    modelCache: new Map(),
+    deps: {} as NodeContext["deps"],
+  });
+
+  /** 直调 handler 工厂（导出供测试）取节点状态更新本体——hits 旁路
+   * 只落 state，图执行入口不透出；查询词元须对齐 tokenize 宗旨
+   * （"容错 设计" 实分 容/错/设计，mock 行文须含词元才有 BM25 分） */
+  const runHybrid = async (overrides: Partial<HybridSearchNode> = {}) => {
+    const handler = makeHybridSearchNodeHandler(
+      { ...baseNode, ...overrides },
+      makeCtx(),
+    );
+    const update = await handler({ inputs: {}, nodes: {} });
+    return update.nodes!.hs1;
+  };
+
+  it("keyword 模式：不调 embedding、输出相关度文案、挂 hits", async () => {
+    // 行文含查询词元（容/错/设计）才有 BM25 分——裸"原文片段"零词元
+    // 重叠会被零命中剔除，故以"容错设计的原文片段"为行文
+    vi.mocked(prisma.vectorChunk.findMany).mockResolvedValue([
+      {
+        id: 1,
+        collection: "c",
+        sourceName: "s1",
+        text: "容错设计的原文片段",
+      },
+    ] as never);
+    const done = await runHybrid({ mode: "keyword", modelId: undefined });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(done.output).toContain("【s1｜相关度");
+    expect(done.hits?.[0]).toMatchObject({
+      chunkId: 1,
+      sourceName: "s1",
+    });
+  });
+
+  it("semantic 模式缺 modelId 报 hybrid_model_missing", async () => {
+    await expect(
+      runHybrid({ mode: "semantic", modelId: undefined }),
+    ).rejects.toMatchObject({ code: "hybrid_model_missing" });
+  });
+
+  it("hybrid 模式：两路并行 RRF 融合（同 chunk 累加居首）", async () => {
+    // embedding fetch 打桩为确定性向量 [1,0]（先例）；findMany mock 行
+    // 同时携带 vector（余弦路 JSON.parse）与 text（BM25 路评分）——
+    // 向量路命中 chunk 1（同向余弦 1），BM25 路命中 chunk 1 与 chunk 2
+    // （chunk 3 零命中剔除），融合后同源 chunkId 1 双贡献居首
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { input: string[] };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: body.input.map((_text, index) => ({
+            index,
+            embedding: [1, 0],
+          })),
+        }),
+      };
+    });
+    vi.mocked(prisma.vectorChunk.findMany).mockResolvedValue([
+      {
+        id: 1,
+        userId: 1,
+        collection: "c",
+        sourceName: "s1",
+        text: "分布式系统的容错设计与故障恢复",
+        vector: JSON.stringify([1, 0]),
+        model: "1",
+        seq: 0,
+        createdAt: new Date(),
+      },
+      {
+        id: 2,
+        userId: 1,
+        collection: "c",
+        sourceName: "s2",
+        text: "容错相关的其它讨论",
+        vector: JSON.stringify([0, 1]),
+        model: "1",
+        seq: 0,
+        createdAt: new Date(),
+      },
+      {
+        id: 3,
+        userId: 1,
+        collection: "c",
+        sourceName: "s3",
+        text: "前端组件的状态管理最佳实践",
+        vector: JSON.stringify([0, 1]),
+        model: "1",
+        seq: 0,
+        createdAt: new Date(),
+      },
+    ] as never);
+    const done = await runHybrid();
+    expect(done.hits?.[0].chunkId).toBe(1);
+    expect(done.output).toContain("【s1｜相关度");
+  });
+
+  it("semantic 模式：纯向量路（不走 FTS）、相似度文案、rank 从 1 编", async () => {
+    // 同款确定性 embed [1,0]；semantic 只发向量路——findMany 仅一次
+    // （searchChunks），FTS 面（searchFts 的第二次 findMany）不触达
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { input: string[] };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: body.input.map((_text, index) => ({
+            index,
+            embedding: [1, 0],
+          })),
+        }),
+      };
+    });
+    vi.mocked(prisma.vectorChunk.findMany).mockResolvedValue([
+      {
+        id: 1,
+        userId: 1,
+        collection: "c",
+        sourceName: "s1",
+        text: "分布式系统的容错设计与故障恢复",
+        vector: JSON.stringify([1, 0]),
+        model: "1",
+        seq: 0,
+        createdAt: new Date(),
+      },
+      {
+        id: 2,
+        userId: 1,
+        collection: "c",
+        sourceName: "s2",
+        text: "容错相关的其它讨论",
+        vector: JSON.stringify([0, 1]),
+        model: "1",
+        seq: 0,
+        createdAt: new Date(),
+      },
+    ] as never);
+    const done = await runHybrid({ mode: "semantic" });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // 查询向量化一次
+    expect(prisma.vectorChunk.findMany).toHaveBeenCalledTimes(1); // 仅余弦路查库
+    expect(done.output).toContain("【s1｜相似度");
+    expect(done.hits?.[0]).toMatchObject({ chunkId: 1, rank: 1 });
+  });
+
+  it("空查询词元：keyword 短路输出空串不炸图", async () => {
+    const done = await runHybrid({ mode: "keyword", searchQuery: "！！" });
+    expect(done.output).toBe("");
+    expect(done.hits).toEqual([]);
   });
 });

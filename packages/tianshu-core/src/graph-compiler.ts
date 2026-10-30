@@ -9,6 +9,7 @@
  * - 未写入的 LastValue 通道读取得 undefined（不抛错），route 缺省或未映射均走 __fallback__ */
 import { END, START, StateGraph, Annotation } from "@langchain/langgraph";
 import type { GraphJson } from "./graph-schema";
+import type { FusedHit } from "./retrieval";
 
 export const GRAPH_RECURSION_LIMIT = 25;
 
@@ -18,6 +19,8 @@ export interface NodeResult {
    * {{nodes.<id>.errorOutput}} 引用落侧文件 */
   errorOutput?: string;
   usage?: { promptTokens: number; completionTokens: number };
+  /** 检索类节点结构化候选（GA 系 rerank 消费）；模板取值不受影响 */
+  hits?: FusedHit[];
 }
 
 export interface GraphRunState {

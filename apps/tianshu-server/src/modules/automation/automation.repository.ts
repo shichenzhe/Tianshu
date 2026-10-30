@@ -616,11 +616,13 @@ export class AutomationRepository {
   }
 
   /** 运行节点详情（移动端执行详情批，mirror orchestration:runNodes 同
-   * 语义移植）：graphRunNode 无用户列，归属两段校验——先查 run 的
-   * graphId（prompt 型 run graphId null 直拒空集），再查图 userId（历史
-   * graph 行 userId 可空，null 视为可查，对齐 executor 归属口径）；
-   * 不符/不存在/老 run 无节点行一律空集（列表语义不暴露存在性）；
-   * 行原样透传（input/output 全文库内已截 64KB） */
+   * 语义移植 + 终审收紧）：graphRunNode 无用户列，归属两段校验——先查
+   *  run 的 graphId（prompt 型 run graphId null 直拒空集），再查图
+   *  userId **精确匹配**（终审裁定：graph/query 与 buildRunWhere 均精确
+   *  过滤，null-userId 图实体不可见则节点详情不得倒置可读；原「null
+   *  视为可查」系桌面历史行宽容的误移植，executor subflow 亦为精确
+   *  匹配）；不符/不存在/老 run 无节点行一律空集（列表语义不暴露存在
+   *  性）；行原样透传（input/output 全文库内已截 64KB） */
   async listRunNodes(
     runId: number,
     userId: number,
@@ -636,7 +638,7 @@ export class AutomationRepository {
       where: { id: run.graphId },
       select: { userId: true },
     });
-    if (!graph || (graph.userId !== null && graph.userId !== userId)) {
+    if (!graph || graph.userId !== userId) {
       return [];
     }
     return this.prisma.graphRunNode.findMany({

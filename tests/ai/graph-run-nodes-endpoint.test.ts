@@ -3,8 +3,9 @@
  * orchestration:runNodes 通道（去会话化 2026-10-28，Task 5）：按 runId 查
  * graphRunNode 节点详情行。图归属两段校验——automationRun 与
  * graphDefinition 无 Prisma relation（schema 现场核实），先查 run.graphId
- * （prompt 型 run graphId null 直拒），再查图 userId；历史 graph 行
- * userId 可空，null 视为可查（对齐 executor 归属口径）。mock 三件套先例
+ * （prompt 型 run graphId null 直拒），再查图 userId 精确匹配（终审收紧：
+ * null-userId 图在列表面均不可见，详情不得倒置可读；原 null 宽容系
+ * 误移植——executor subflow 亦精确匹配）。mock 三件套先例
  * graph-repo.test.ts；ipc-user 以 pass-through 替身直连 ipcMain.handle
  * （真实 handleUser 剥 JWT token 属通用包装，本测聚焦 handler 行为）。
  */
@@ -150,7 +151,7 @@ describe("orchestration:runNodes", () => {
     expect(prisma.graphRunNode.findMany).not.toHaveBeenCalled();
   });
 
-  it("他人图 → 空数组；历史 graph 行 userId 可空（null 视为可查）", async () => {
+  it("他人图/null-userId 图 → 空数组（终审收紧：与列表面精确过滤一致，null 不再视为可查）", async () => {
     vi.mocked(prisma.automationRun.findFirst).mockResolvedValue({
       graphId: 5,
     } as never);
@@ -163,7 +164,7 @@ describe("orchestration:runNodes", () => {
 
     const handler = await runNodesHandler();
     expect(await handler(null, 7, 9)).toEqual([]);
-    const rows = (await handler(null, 7, 9)) as unknown[];
-    expect(rows).toHaveLength(1);
+    // null-userId：实体在图列表/runPage 均不可见，节点详情不得倒置可读
+    expect(await handler(null, 7, 9)).toEqual([]);
   });
 });

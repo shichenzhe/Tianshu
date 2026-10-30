@@ -344,9 +344,10 @@ export const useOrchestrationStore = create<OrchestrationState>((set, get) => {
     loadRunNodes: (runId) => fetchRunNodes(runId),
 
     /** 离开详情页清理（卸载调用）：节点全文载荷不驻留内存，事件重拉
-     *  guard 恢复「正在浏览」语义（否则后台对已离开的 run 持续全量拉取） */
+     *  guard 恢复「正在浏览」语义（否则后台对已离开的 run 持续全量拉取）。
+     *  防迟到序号不清（终审）：清了则重进后 counter 从 1 重来，卸载前
+     *  在途响应同号窜过守卫覆写新数据——序号须全 session 单调 */
     clearRunNodes: (runId) => {
-      runNodesSeq.delete(runId);
       set((s) => {
         const { [runId]: _nodes, ...restNodes } = s.runNodes;
         const { [runId]: _loading, ...restLoading } = s.runNodesLoading;

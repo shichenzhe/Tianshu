@@ -802,8 +802,10 @@ export default class GraphRepository {
   /** 运行节点详情行（去会话化 2026-10-28，spec §4 三层下钻第三层；
    *  执行详情批起 server-face automation/runNodes 同源消费）：graphRunNode
    *  无用户列，归属两段校验——先查 run 的 graphId（prompt 型 run graphId
-   *  null 直拒），再查图 userId（历史 graph 行 userId 可空，null 视为可查，
-   *  对齐 executor 归属口径）；老 run 无节点行返回空集，前端回落预览 */
+   *  null 直拒），再查图 userId 精确匹配（终审收紧：null-userId 图在
+   *  图列表/runPage 均不可见，节点详情不得倒置可读；原 null 宽容系
+   *  误移植——executor subflow 归属亦为精确匹配）；老 run 无节点行
+   *  返回空集，前端回落预览 */
   async listRunNodes(
     runId: number,
     userId: number,
@@ -819,7 +821,7 @@ export default class GraphRepository {
       where: { id: run.graphId },
       select: { userId: true },
     });
-    if (!graph || (graph.userId !== null && graph.userId !== userId)) {
+    if (!graph || graph.userId !== userId) {
       return [];
     }
     return prisma.graphRunNode.findMany({

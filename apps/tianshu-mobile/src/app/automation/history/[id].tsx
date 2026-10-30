@@ -223,13 +223,18 @@ export default function AutomationRunDetailScreen() {
   }, [isGraphRun, runId, loadRunNodes, clearRunNodes]);
 
   // 浏览中图运行的实时状态叠加（投影 runId 匹配才生效——防同图新一轮
-  // 运行的投影串台到旧 run 详情）
-  const projection =
-    shownRun?.graphId != null ? liveRuns[shownRun.graphId] : undefined;
-  const status: AutomationRunStatus =
-    projection != null && projection.runId === runId
-      ? projectedStatus(projection.state)
-      : (shownRun?.status ?? "running");
+  // 运行的投影串台到旧 run 详情）；error 同步叠加（图试运行收尾无
+  // automation.changed，快照行 error 恒空——终审：失败场景错误文本正是
+  // 用户来看的，投影 entry 已带 error 不得浪费）
+  const projection = shownRun?.graphId != null ? liveRuns[shownRun.graphId] : undefined;
+  const projectionMatched =
+    projection != null && projection.runId === runId;
+  const status: AutomationRunStatus = projectionMatched
+    ? projectedStatus(projection.state)
+    : (shownRun?.status ?? "running");
+  const shownError = projectionMatched
+    ? (projection.error ?? shownRun?.error)
+    : shownRun?.error;
 
   if (shownRun == null) {
     return (
@@ -301,10 +306,10 @@ export default function AutomationRunDetailScreen() {
               />
             )}
           </View>
-          {shownRun.error != null && (
+          {shownError != null && (
             <>
               <SectionLabel label={t("orchestration:runError")} />
-              <MonoBlock value={shownRun.error} tone="error" />
+              <MonoBlock value={shownError} tone="error" />
             </>
           )}
         </View>

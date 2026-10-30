@@ -418,6 +418,23 @@ describe("orchestration store（mock graph-api 层）", () => {
     expect(useOrchestrationStore.getState().runNodesLoading[7]).toBeUndefined();
   });
 
+  it("clearRunNodes 不清防迟到序号：卸载→重进后，卸载前在途旧响应不得覆写（终审）", async () => {
+    const stale = deferred<{ ok: true; data: AutomationRunNodeRecord[] }>();
+    apiMock.automationRunNodes
+      .mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce({ ok: true, data: [nodeRow(2, 7)] });
+
+    const first = useOrchestrationStore.getState().loadRunNodes(7);
+    useOrchestrationStore.getState().clearRunNodes(7); // 卸载清理
+    const second = useOrchestrationStore.getState().loadRunNodes(7); // 立即重进
+    await second;
+    expect(useOrchestrationStore.getState().runNodes[7]?.map((n) => n.id)).toEqual([2]);
+    // 卸载前的慢响应后到——序号被 clear 重置的话它会撞号覆写新数据
+    stale.resolve({ ok: true, data: [nodeRow(1, 7)] });
+    await first;
+    expect(useOrchestrationStore.getState().runNodes[7]?.map((n) => n.id)).toEqual([2]);
+  });
+
   it("loadRunNodes：wire 失败 loading 复位、旧值保守不动", async () => {
     useOrchestrationStore.setState({ runNodes: { 7: [nodeRow(1, 7)] } });
     apiMock.automationRunNodes.mockResolvedValueOnce(failOf("BOOM"));

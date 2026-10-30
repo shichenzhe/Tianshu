@@ -14,6 +14,7 @@ describe('automation/runNodes 运行节点详情（移动端执行详情批）',
   let service: AutomationService;
   let graphRunId: number;
   let otherGraphRunId: number;
+  let nullUserGraphRunId: number;
   let promptRunId: number;
   let bareGraphRunId: number;
 
@@ -43,6 +44,11 @@ describe('automation/runNodes 运行节点详情（移动端执行详情批）',
     });
     const otherGraph = await db.prisma.graphDefinition.create({
       data: { name: '他人图', graphJson: '{}', userId: 2 },
+    });
+    // 历史 null-userId 图（终审裁定收紧：列表面均精确过滤不可见，节点
+    // 详情不得倒置可读）
+    const nullUserGraph = await db.prisma.graphDefinition.create({
+      data: { name: '无主图', graphJson: '{}', userId: null },
     });
     const mkRun = (
       data: Omit<Prisma.AutomationRunUncheckedCreateInput, 'startedAt' | 'triggerType'>,
@@ -92,6 +98,23 @@ describe('automation/runNodes 运行节点详情（移动端执行详情批）',
       graphId: otherGraph.id,
       status: 'success',
     });
+    // null-userId 图 run：与列表面口径一致（精确匹配），空集——
+    // 落节点行以区分「归属拒绝」与「老 run 无行」两种空
+    nullUserGraphRunId = await mkRun({
+      taskId: null,
+      graphId: nullUserGraph.id,
+      status: 'success',
+    });
+    await db.prisma.graphRunNode.create({
+      data: {
+        runId: nullUserGraphRunId,
+        nodeId: 'n-1',
+        status: 'success',
+        durationMs: 10,
+        startedAt: '2026-10-29T08:00:00.000Z',
+        output: '无主图节点输出',
+      },
+    });
     // prompt 任务 run：graphId null 直拒空集
     promptRunId = await mkRun({ taskId: task.id, status: 'success' });
     // 图 run 无节点行（runNodes 前落库的老 run）：空集
@@ -138,6 +161,11 @@ describe('automation/runNodes 运行节点详情（移动端执行详情批）',
 
   it('他人图归属：空集（不暴露存在性）', async () => {
     const nodes = await service.runNodes(otherGraphRunId);
+    expect(nodes).toEqual([]);
+  });
+
+  it('null-userId 图：空集（与 graph/query、runPage 精确过滤口径一致——实体不可见则详情不可读）', async () => {
+    const nodes = await service.runNodes(nullUserGraphRunId);
     expect(nodes).toEqual([]);
   });
 

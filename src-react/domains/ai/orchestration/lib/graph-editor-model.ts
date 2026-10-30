@@ -31,6 +31,7 @@ import {
   type ConditionNode,
   type IntentNode,
   type DelayNode,
+  type HybridSearchNode,
   type VectorSearchNode,
   type VectorizeNode,
   type DocExtractNode,
@@ -55,7 +56,9 @@ export interface DraftSnapshot {
 
 /** 结构化模式局部补丁（可选字段允许显式 undefined = 清除）。
  * kind 字段冲突使直接交叉坍缩为 never——剔除 kind 后取交叉（宽松单字段
- * 透传，kind 分流走 switchNodeKind 专口） */
+ * 透传，kind 分流走 switchNodeKind 专口）。mode 字段同理冲突
+ * （fileWrite append/overwrite vs hybridSearch semantic/keyword/hybrid），
+ * 两处 omit 后联合加宽单独放回（apply 是 spread 透传，运行时无感） */
 export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<LlmNode, "kind">> &
   Partial<Omit<CodeNode, "kind">> &
@@ -68,12 +71,13 @@ export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<JsonParseNode, "kind">> &
   Partial<Omit<ConditionNode, "kind">> &
   Partial<Omit<IntentNode, "kind">> &
-  Partial<Omit<FileWriteNode, "kind">> &
+  Partial<Omit<FileWriteNode, "kind" | "mode">> &
   Partial<Omit<DocExtractNode, "kind">> &
   Partial<Omit<ImageGenNode, "kind">> &
   Partial<Omit<DelayNode, "kind">> &
   Partial<Omit<VectorizeNode, "kind">> &
   Partial<Omit<VectorSearchNode, "kind">> &
+  Partial<Omit<HybridSearchNode, "kind" | "mode">> &
   Partial<Omit<DatabaseNode, "kind">> &
   Partial<Omit<ExcelReadNode, "kind">> &
   Partial<Omit<ExcelWriteNode, "kind">> &
@@ -82,7 +86,10 @@ export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<VariableNode, "kind">> &
   Partial<Omit<AggregateNode, "kind">> &
   Partial<Omit<EmailNode, "kind">> &
-  Partial<Omit<MergeNode, "kind">>;
+  Partial<Omit<MergeNode, "kind">> & {
+    /** fileWrite/hybridSearch 共有字段名（见上注）：联合加宽回补 */
+    mode?: FileWriteNode["mode"] | HybridSearchNode["mode"];
+  };
 
 export const NODE_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -147,6 +154,7 @@ export type NodeKind =
   | "delay"
   | "vectorize"
   | "vectorSearch"
+  | "hybridSearch"
   | "database"
   | "excelRead"
   | "excelWrite"
@@ -653,6 +661,23 @@ export function newVectorSearchNode(id: string): VectorSearchNode {
   };
 }
 
+/** 混合检索节点默认：空集合（全集合）、空检索词、hybrid 三路融合起步、
+ * topK 5、120s 超时；modelId 不占位 0 而留空——executor 以 undefined
+ * 识别 semantic/hybrid 模式未选模型（0 会当真实模型id 试调），keyword
+ * 模式零模型门槛 */
+export function newHybridSearchNode(id: string): HybridSearchNode {
+  return {
+    id,
+    name: "",
+    kind: "hybridSearch",
+    searchQuery: "",
+    collection: "",
+    mode: "hybrid",
+    topK: 5,
+    timeoutMs: 120_000,
+  };
+}
+
 /** 数据库节点默认：SQLite 起步、空 SQL */
 export function newDatabaseNode(id: string): DatabaseNode {
   return {
@@ -782,6 +807,7 @@ export const FACTORY: Record<NodeKind, (id: string) => GraphNode> = {
   delay: newDelayNode,
   vectorize: newVectorizeNode,
   vectorSearch: newVectorSearchNode,
+  hybridSearch: newHybridSearchNode,
   database: newDatabaseNode,
   excelRead: newExcelReadNode,
   excelWrite: newExcelWriteNode,

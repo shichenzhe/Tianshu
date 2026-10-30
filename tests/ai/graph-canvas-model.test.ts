@@ -46,6 +46,22 @@ describe("toCanvas", () => {
     expect(c.nodes.map((n) => n.id)).toEqual(["a", END_NODE_ID]);
     expect(c.edges).toEqual([]);
   });
+  it("hybridSearch 节点映射画布：kind/检索词摘要，collection 缺省归空", () => {
+    const hybrid = {
+      id: "hs",
+      name: "混合检索",
+      kind: "hybridSearch",
+      searchQuery: "{{input.q}}",
+      mode: "hybrid",
+      topK: 5,
+    };
+    const c = toCanvas(g([hybrid], []), {});
+    expect(c.nodes.find((n) => n.id === "hs")).toMatchObject({
+      kind: "hybridSearch",
+      collection: "",
+      query: "{{input.q}}",
+    });
+  });
   it("code 分支节点的 branchOptions 进画布并锚定 sourceHandle（与 llm 同构）", () => {
     const json = g(
       [

@@ -238,6 +238,22 @@ describe("节点结构化编辑", () => {
     });
   });
 
+  it("FACTORY.hybridSearch 生成 hybrid 模式默认节点（modelId 留空非 0 占位）", () => {
+    // modelId 不占位 0：executor 以 undefined 识别 semantic/hybrid 未选模型
+    //（0 会被当真实模型 id 试调）；keyword 模式零模型门槛
+    expect(FACTORY.hybridSearch("h1")).toEqual({
+      id: "h1",
+      name: "",
+      kind: "hybridSearch",
+      searchQuery: "",
+      collection: "",
+      mode: "hybrid",
+      topK: 5,
+      timeoutMs: 120_000,
+    });
+    expect(FACTORY.hybridSearch("h1")).not.toHaveProperty("modelId");
+  });
+
   it("newEdge 默认首节点 → END", () => {
     expect(newEdge(validJson)).toEqual({ from: "collect", to: "END" });
   });

@@ -237,6 +237,7 @@ function NodeBranch({
                 "delay",
                 "vectorize",
                 "vectorSearch",
+                "hybridSearch",
                 "database",
                 "excelRead",
                 "excelWrite",
@@ -309,6 +310,9 @@ function NodeBranch({
             </SelectItem>
             <SelectItem value="vectorSearch">
               {t("chat:orchestration.editor.kindVectorSearch")}
+            </SelectItem>
+            <SelectItem value="hybridSearch">
+              {t("chat:orchestration.editor.kindHybridSearch")}
             </SelectItem>
             <SelectItem value="database">
               {t("chat:orchestration.editor.kindDatabase")}

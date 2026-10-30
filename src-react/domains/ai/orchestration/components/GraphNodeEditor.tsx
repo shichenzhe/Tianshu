@@ -77,6 +77,7 @@ import {
   type GraphNode,
   type HttpKV,
   type HttpNode,
+  type HybridSearchNode,
   type IterateNode,
   type JsonParseNode,
   type JsonStringifyNode,
@@ -456,6 +457,7 @@ export default function GraphNodeEditor({
                 "delay",
                 "vectorize",
                 "vectorSearch",
+                "hybridSearch",
                 "database",
                 "excelRead",
                 "excelWrite",
@@ -520,6 +522,9 @@ export default function GraphNodeEditor({
             </SelectItem>
             <SelectItem value="vectorSearch">
               {t("chat:orchestration.editor.kindVectorSearch")}
+            </SelectItem>
+            <SelectItem value="hybridSearch">
+              {t("chat:orchestration.editor.kindHybridSearch")}
             </SelectItem>
             <SelectItem value="database">
               {t("chat:orchestration.editor.kindDatabase")}
@@ -630,6 +635,8 @@ export function nodeFieldsOf(
       return <VectorizeNodeFields node={node} onPatch={onPatch} />;
     case "vectorSearch":
       return <VectorSearchNodeFields node={node} onPatch={onPatch} />;
+    case "hybridSearch":
+      return <HybridSearchNodeFields node={node} onPatch={onPatch} />;
     case "database":
       return <DatabaseNodeFields node={node} onPatch={onPatch} />;
     case "excelRead":
@@ -3079,6 +3086,97 @@ export function VectorSearchNodeFields({
           }
         />
       </Field>
+      <Field
+        label={t("chat:orchestration.editor.vectorQuery")}
+        className="col-span-full"
+      >
+        <HighlightTextarea
+          value={node.searchQuery}
+          onChange={(next) => onPatch({ searchQuery: next })}
+          language="prompt"
+          height={72}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** 混合检索节点字段区：检索模式三态单选（semantic/keyword/hybrid）+
+ * 集合（空=全部）+ topK（上限 50，同 schema）+ Embedding 模型
+ * （keyword 模式不渲染——免模型门槛即「禁用」语义）+ 检索词 */
+export function HybridSearchNodeFields({
+  node,
+  onPatch,
+}: {
+  node: HybridSearchNode;
+  onPatch: (patch: GraphNodePatch) => void;
+}) {
+  const { t } = useTranslation(["chat"]);
+  return (
+    <>
+      <Field
+        label={t("chat:orchestration.editor.hybridSearchMode")}
+        hint={t("chat:orchestration.editor.hybridSearchHint")}
+      >
+        <Select
+          value={node.mode}
+          onValueChange={(value) =>
+            onPatch({ mode: value as HybridSearchNode["mode"] })
+          }
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="rounded-lg border border-border/50 shadow-lg">
+            <SelectItem value="semantic">
+              {t("chat:orchestration.editor.hybridModeSemantic")}
+            </SelectItem>
+            <SelectItem value="keyword">
+              {t("chat:orchestration.editor.hybridModeKeyword")}
+            </SelectItem>
+            <SelectItem value="hybrid">
+              {t("chat:orchestration.editor.hybridModeHybrid")}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label={t("chat:orchestration.editor.vectorCollection")}>
+        <Input
+          className="h-8 text-xs"
+          placeholder={t("chat:orchestration.editor.vectorAllCollections")}
+          value={node.collection ?? ""}
+          onChange={(e) => onPatch({ collection: e.target.value })}
+        />
+      </Field>
+      <Field label={t("chat:orchestration.editor.vectorTopK")}>
+        <Input
+          className="h-8"
+          type="number"
+          min={1}
+          max={50}
+          step={1}
+          value={node.topK}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            if (Number.isInteger(value) && value >= 1 && value <= 50) {
+              onPatch({ topK: value });
+            }
+          }}
+        />
+      </Field>
+      {node.mode !== "keyword" && (
+        <Field
+          label={t("chat:orchestration.editor.vectorModel")}
+          hint={t("chat:orchestration.editor.vectorModelHint")}
+          className="col-span-full"
+        >
+          <ModelSelect
+            modelId={node.modelId ?? 0}
+            onSelect={(modelId) => onPatch({ modelId })}
+            filterType="embedding"
+          />
+        </Field>
+      )}
       <Field
         label={t("chat:orchestration.editor.vectorQuery")}
         className="col-span-full"

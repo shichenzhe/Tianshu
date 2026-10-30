@@ -38,7 +38,7 @@ export interface CanvasNode {
   source?: string;
   /** delay 节点秒数摘要 */
   seconds?: number;
-  /** vectorize/vectorSearch 集合名与检索词摘要 */
+  /** vectorize/vectorSearch/hybridSearch 集合名与检索词摘要 */
   collection?: string;
   query?: string;
   /** database 节点引擎摘要 */
@@ -115,6 +115,8 @@ function summaryOf(n: GraphNode): Partial<CanvasNode> {
       return { collection: n.collection };
     case "vectorSearch":
       return { collection: n.collection, query: n.searchQuery };
+    case "hybridSearch":
+      return { collection: n.collection ?? "", query: n.searchQuery };
     case "database":
       return { engine: n.engine };
     case "excelRead":

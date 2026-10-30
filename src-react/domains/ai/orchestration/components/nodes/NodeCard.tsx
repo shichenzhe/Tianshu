@@ -30,6 +30,7 @@ import {
   Globe,
   Library,
   Repeat,
+  SearchCheck,
   Sparkles,
   Terminal,
   Workflow,
@@ -168,6 +169,8 @@ function KindIcon({ kind }: { kind: CanvasNode["kind"] }) {
       return <DatabaseZap className={`${className} text-primary`} />;
     case "vectorSearch":
       return <Database className={`${className} text-primary`} />;
+    case "hybridSearch":
+      return <SearchCheck className={`${className} text-primary`} />;
     case "database":
       return <Database className={`${className} text-primary`} />;
     case "excelRead":
@@ -334,6 +337,7 @@ function KindSummary({
       );
     case "vectorize":
     case "vectorSearch":
+    case "hybridSearch":
       return (
         <div className="mt-1">
           <span className={node.collection ? dim : dimEmpty}>

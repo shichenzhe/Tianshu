@@ -1020,6 +1020,31 @@ export function CodeNodeFields({
           </SelectContent>
         </Select>
       </Field>
+      {/* Python 解释器命令名随发行版（Windows 多只有 python，mac/Linux
+       * 常为 python3）——节点级可选，缺省 python */}
+      {node.language === "python" && (
+        <Field
+          label={t("chat:orchestration.editor.pythonCommand")}
+          hint={t("chat:orchestration.editor.pythonCommandHint")}
+        >
+          <Select
+            value={node.pythonCommand ?? "python"}
+            onValueChange={(value) =>
+              onPatch({
+                pythonCommand: value === "python3" ? "python3" : "python",
+              })
+            }
+          >
+            <SelectTrigger className="h-8 w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-lg border border-border/50 shadow-lg">
+              <SelectItem value="python">python</SelectItem>
+              <SelectItem value="python3">python3</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
       <Field
         label={t("chat:orchestration.editor.timeoutSec")}
         hint={t("chat:orchestration.editor.timeoutHint")}

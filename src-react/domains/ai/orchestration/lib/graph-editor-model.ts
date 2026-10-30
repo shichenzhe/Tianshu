@@ -110,13 +110,15 @@ export function newStartNode(id: string): StartNode {
   return { id, name: "开始", kind: "start", variables: [] };
 }
 
-/** 代码节点默认：bash 起步、空脚本、30s 超时、text 输出 */
+/** 代码节点默认：bash 起步、空脚本、30s 超时、text 输出（python 语言
+ * 切换后 pythonCommand 缺省 python，schema/执行器同款默认） */
 export function newCodeNode(id: string): CodeNode {
   return {
     id,
     name: "",
     kind: "code",
     language: "bash",
+    pythonCommand: "python",
     script: "",
     timeoutMs: 30_000,
     outputMode: "text",

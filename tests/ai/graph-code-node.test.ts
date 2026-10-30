@@ -45,6 +45,7 @@ import {
   codeBranchOutcome,
   polishNodePrompt,
 } from "../../electron/domains/ai/orchestration/graph-executor";
+import { validateGraph } from "../../src-react/domains/ai/orchestration/api/graph.schema";
 
 const hasBash = (() => {
   try {
@@ -414,6 +415,87 @@ describe("触发方授权与 runId 回调（webhook 外部触发语义）", () =
     } as never);
     expect(out).toBe("success");
     expect(seen).toEqual([9]);
+  });
+});
+
+describe("python 解释器命令（pythonCommand 节点级配置）", () => {
+  const pyNode = (id: string, extra: object = {}) => ({
+    id,
+    name: id,
+    kind: "code",
+    language: "python",
+    script: "print(1)",
+    ...extra,
+  });
+
+  it("schema：pythonCommand 缺省回填 python，显式 python3 保留，非法值拒绝", () => {
+    const base = {
+      version: 1,
+      inputSchema: {},
+      edges: [{ from: "p", to: "END" }],
+    };
+    const def = validateGraph({ ...base, nodes: [pyNode("p")] });
+    expect(def.ok).toBe(true);
+    if (def.ok) {
+      expect(def.value.nodes[0]).toMatchObject({
+        kind: "code",
+        pythonCommand: "python",
+      });
+    }
+    const explicit = validateGraph({
+      ...base,
+      nodes: [pyNode("p", { pythonCommand: "python3" })],
+    });
+    expect(explicit.ok).toBe(true);
+    if (explicit.ok) {
+      expect(explicit.value.nodes[0]).toMatchObject({
+        pythonCommand: "python3",
+      });
+    }
+    const bad = validateGraph({
+      ...base,
+      nodes: [pyNode("p", { pythonCommand: "python2" })],
+    });
+    expect(bad.ok).toBe(false);
+  });
+
+  it("门禁入参：缺省 python，pythonCommand=python3 时为 python3（block 拦截，无需本机解释器）", async () => {
+    vi.mocked(commandGate).mockReturnValueOnce("block");
+    await executeGraphRun(
+      codeGraph([pyNode("d1")], [{ from: "d1", to: "END" }]),
+    );
+    expect(vi.mocked(commandGate).mock.calls.at(-1)![0]).toBe("python");
+    expect(lastRunUpdate().data.error).toMatch(/node:d1 code_command_blocked/);
+
+    vi.mocked(commandGate).mockReturnValueOnce("block");
+    await executeGraphRun(
+      codeGraph(
+        [pyNode("d2", { pythonCommand: "python3" })],
+        [{ from: "d2", to: "END" }],
+      ),
+    );
+    expect(vi.mocked(commandGate).mock.calls.at(-1)![0]).toBe("python3");
+    expect(lastRunUpdate().data.error).toMatch(/node:d2 code_command_blocked/);
+  });
+
+  it("pythonCommand 不影响非 python 语言：nodejs 门禁仍收到 node", async () => {
+    vi.mocked(commandGate).mockReturnValueOnce("block");
+    await executeGraphRun(
+      codeGraph(
+        [
+          {
+            id: "n1",
+            name: "n1",
+            kind: "code",
+            language: "nodejs",
+            script: "console.log(1)",
+            pythonCommand: "python3",
+          },
+        ],
+        [{ from: "n1", to: "END" }],
+      ),
+    );
+    expect(vi.mocked(commandGate).mock.calls.at(-1)![0]).toBe("node");
   });
 });
 

@@ -2,7 +2,8 @@
  * P3 T4 集成测试：两级审批判定（default 询问 / full 直执行 / mcp__ 恒审批）、
  * 模式组装（ask 零工具 / plan 计划指令段）、bash 注册、status accessMode。
  * send 级用例经 MockLanguageModelV3 捕获 doStream 实际收到的 tools 与 system，
- * 经假 sender 捕获流式 chunk；权限与审批经 service 内部 store/coordinator 直达
+ * 流式 chunk 经 onChatChunk tap 采集（emit 全窗口广播后 sender 不再承载流）；
+ * 权限与审批经 service 内部 store/coordinator 直达
  * （IPC 接线已由 agent-loop.test / permission-mode.test 覆盖）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +21,8 @@ vi.mock("electron", () => ({
     getAppPath: vi.fn(() => `/tmp/tianshu-test-app-${process.pid}`),
     isPackaged: false,
   },
+  // chat.service emit 全窗口广播（审批横幅卡死修复）消费：空窗口集即可
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 
 const prismaStub = {
@@ -105,6 +108,7 @@ import {
 } from "../../electron/domains/ai/agent/tool-registry";
 import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
 import type { ChatStreamChunk } from "../../src-react/domains/ai/api/chat.api";
+import { onChatChunk } from "../../electron/domains/server-face/chat-tap";
 
 // ---------- mock 模型：脚本化多步，捕获每步收到的消息（tools/system/user） ----------
 
@@ -192,14 +196,14 @@ const sessionsStub = (
     getWorkspace: vi.fn(async () => ({ id: 1, directoryPath })),
   }) as unknown as SessionRepository;
 
-/** send 的 sender 替身：捕获 emit 推送的流式 chunk（窗口未销毁） */
-const captureSender = (chunks: ChatStreamChunk[]) =>
-  ({
-    isDestroyed: () => false,
-    send: (_channel: string, chunk: ChatStreamChunk) => {
-      chunks.push(chunk);
-    },
-  }) as unknown as WebContents;
+/** send 的 chunk 采集（emit 全窗口广播改造后 sender 不再承载流）：
+ *  经 onChatChunk tap 订阅采集（emit 必经 tap，序列等价），退订统一收口
+ *  afterEach；返回值仅占位保持 send 第三参形态 */
+const tapUnsubs: Array<() => void> = [];
+const captureSender = (chunks: ChatStreamChunk[]) => {
+  tapUnsubs.push(onChatChunk((_sessionId, chunk) => chunks.push(chunk)));
+  return undefined as unknown as WebContents;
+};
 
 /** service 私有成员直达：权限 store 与审批协调器（P3 判定点） */
 type ServiceInternals = {
@@ -277,6 +281,7 @@ beforeEach(() => {
 
 afterEach(() => {
   mockFactory.current = null;
+  tapUnsubs.splice(0).forEach((off) => off());
   unregisterTools("mcp__");
   unregisterTools("test_");
 });

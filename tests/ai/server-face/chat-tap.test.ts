@@ -12,6 +12,14 @@ import {
   type Mock,
 } from "vitest";
 
+// 桌面渲染层窗口替身（chat:stream 全窗口广播测试用）：数组供用例增删
+const fakeWindows = vi.hoisted(() => [] as Array<{
+  webContents: {
+    send: ReturnType<typeof vi.fn>;
+    isDestroyed: () => boolean;
+  };
+}>);
+
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn(), on: vi.fn() },
   // Log/prisma-client 顶层读取 app.getPath("userData")/getAppPath/isPackaged
@@ -21,6 +29,8 @@ vi.mock("electron", () => ({
     getAppPath: vi.fn(() => `/tmp/tianshu-test-app-${process.pid}`),
     isPackaged: false,
   },
+  // emit 全窗口广播消费（审批横幅卡死修复）：按用例装配的替身窗口集返回
+  BrowserWindow: { getAllWindows: vi.fn(() => fakeWindows) },
 }));
 
 // assembleContext 读通道（vi.hoisted 使 vi.mock 工厂执行前已初始化）
@@ -192,5 +202,85 @@ describe("chat 流 tap 点（server-face T10）", () => {
       throwingOff();
       off();
     }
+  });
+});
+
+describe("chat:stream 渲染层全窗口广播（审批横幅卡死修复）", () => {
+  /** 单替身窗口：send 记参、isDestroyed 可注入 */
+  const makeWindow = (destroyed = false) => ({
+    webContents: {
+      send: vi.fn(),
+      isDestroyed: () => destroyed,
+    },
+  });
+
+  beforeEach(() => {
+    fakeWindows.length = 0;
+    // 与首 describe 同款装配（send 组装上下文读通道 + 大窗防自动压缩）
+    assembleReads.model.findUnique.mockResolvedValue({
+      id: 5,
+      providerId: 1,
+      modelId: "m",
+      temperature: null,
+      topP: null,
+      maxTokens: 100,
+      contextWindow: 1000000,
+    });
+    assembleReads.provider.findUnique.mockResolvedValue({
+      id: 1,
+      type: "openai-compatible",
+      baseUrl: "https://x.example/v1",
+      apiKey: "k",
+      extraHeaders: null,
+    });
+    assembleReads.assistant.findUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    fakeWindows.length = 0;
+    createChatModelMock.mockImplementation(() => ({ invoke: invokeStub }));
+    assembleReads.model.findUnique.mockReset();
+    assembleReads.provider.findUnique.mockReset();
+    assembleReads.assistant.findUnique.mockReset();
+  });
+
+  // 症状根因（2026-10-30）：被控面（移动端经 face）发起的会话 sender=
+  // undefined，原 sender 单窗推送使桌面渲染层零 chat:stream chunk——审批
+  // 横幅只剩 chat:status 快照恢复，移动端应答后 tool-update 到不了渲染层，
+  // 横幅永不消失（finish 同理，isStreaming 卡死）
+  it("sender 缺席（被控面发起）仍推全部窗口：chunk 按序达 chat:stream 通道", async () => {
+    useScriptedModel(["你", "好"]);
+    const winA = makeWindow();
+    const winB = makeWindow();
+    fakeWindows.push(winA, winB);
+    const service = new ChatService(
+      makeSessions() as unknown as SessionRepository,
+    );
+
+    await service.send({ sessionId: 1, content: "hi" }, 1, undefined);
+
+    const expected = [
+      ["chat:stream:1", { type: "text-delta", text: "你" }],
+      ["chat:stream:1", { type: "text-delta", text: "好" }],
+      ["chat:stream:1", { type: "finish" }],
+    ];
+    expect(winA.webContents.send.mock.calls).toEqual(expected);
+    expect(winB.webContents.send.mock.calls).toEqual(expected);
+  });
+
+  it("已销毁窗口跳过不炸：其余窗口照常收齐", async () => {
+    useScriptedModel(["一"]);
+    const destroyed = makeWindow(true);
+    const alive = makeWindow();
+    fakeWindows.push(destroyed, alive);
+    const service = new ChatService(
+      makeSessions() as unknown as SessionRepository,
+    );
+
+    await expect(
+      service.send({ sessionId: 1, content: "hi" }, 1, undefined),
+    ).resolves.toBeUndefined();
+    expect(destroyed.webContents.send).not.toHaveBeenCalled();
+    expect(alive.webContents.send).toHaveBeenCalled();
   });
 });

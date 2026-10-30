@@ -21,6 +21,8 @@ vi.mock("electron", () => ({
     getAppPath: vi.fn(() => `/tmp/tianshu-test-app-${process.pid}`),
     isPackaged: false,
   },
+  // chat.service emit 全窗口广播（审批横幅卡死修复）消费：空窗口集即可
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 
 type MessageUpdateArgs = { where: { id: number }; data: { blocks: string } };

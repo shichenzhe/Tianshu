@@ -9,6 +9,13 @@
 //    事件投影 + 节点 failed progress。
 // 注：queued 态不在 executor 生命周期（createRun 原语即落 running，mirror
 // createRunRow 同款）——留给 T6 控制层队列语义（executor 头注释改造点 7）。
+// code 节点 python 解释器用例：commandGate mock 拦截（block 于 spawn 前，
+// 不依赖宿主机 python）；默认返回 default 与未安装 fail-open 语义等价，
+// llm 用例不受影响。
+jest.mock('../../src/core/security/command-gate', () => ({
+  commandGate: jest.fn(() => 'default'),
+}));
+import { commandGate } from '../../src/core/security/command-gate';
 import { compileStateGraph } from '@tianshu/core';
 import { GraphRepository } from 'src/modules/graph/graph.repository';
 import { executeGraphRun, type GraphRow } from 'src/core/graph/graph-executor';
@@ -504,5 +511,58 @@ describe('graph-executor 副本（GA-T4）', () => {
       completionTokens: 7,
     });
     expect(nodeRows).toHaveLength(3); // intro + loop(聚合) + back
+  });
+
+  it('code 节点 python 解释器：缺省门禁收 python，pythonCommand=python3 收 python3', async () => {
+    const pyGraphJson = (extra: Record<string, unknown>) =>
+      JSON.stringify({
+        version: 1,
+        inputSchema: {},
+        nodes: [
+          {
+            id: 'd1',
+            name: 'd1',
+            kind: 'code',
+            language: 'python',
+            script: 'print(1)',
+            ...extra,
+          },
+        ],
+        edges: [{ from: 'd1', to: 'END' }],
+      });
+    const gate = commandGate as unknown as jest.Mock;
+    const runOnce = async (graphJson: string) => {
+      const row = await db.prisma.graphDefinition.create({
+        data: { name: 'py 图', graphJson, userId: 1 },
+      });
+      gate.mockClear();
+      gate.mockReturnValueOnce('block');
+      events = [];
+      const outcome = await executeGraphRun(
+        {
+          graph: row,
+          task: null,
+          inputs: {},
+          triggerType: 'manual',
+          attempt: 1,
+          abort: new AbortController().signal,
+          workspace: { id: ws.id, directoryPath: null },
+        },
+        makeDeps(new FakeInvokeModel([])),
+      );
+      return { outcome, runId: events[0].runId };
+    };
+
+    const first = await runOnce(pyGraphJson({}));
+    expect(first.outcome).toBe('failed');
+    expect(gate.mock.calls.at(-1)![0]).toBe('python');
+    const runA = await db.prisma.automationRun.findUniqueOrThrow({
+      where: { id: first.runId },
+    });
+    expect(runA.error).toMatch(/node:d1 code_command_blocked/);
+
+    const second = await runOnce(pyGraphJson({ pythonCommand: 'python3' }));
+    expect(second.outcome).toBe('failed');
+    expect(gate.mock.calls.at(-1)![0]).toBe('python3');
   });
 });

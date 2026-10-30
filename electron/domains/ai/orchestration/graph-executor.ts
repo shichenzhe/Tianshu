@@ -858,11 +858,11 @@ function filterNodeTools(
     : defs.filter((def) => (tools as string[]).includes(def.name));
 }
 
-/** 代码节点解释器映射（python 统一 python3；无内嵌运行时，缺装报
- * interpreter_missing 引导） */
+/** 代码节点解释器映射（python 缺省 python，节点 pythonCommand 可切
+ * python3；无内嵌运行时，缺装报 interpreter_missing 引导） */
 const INTERPRETERS: Record<CodeNode["language"], string> = {
   nodejs: "node",
-  python: "python3",
+  python: "python",
   bash: "bash",
 };
 
@@ -1239,7 +1239,12 @@ async function runCodeScript(
   script: string,
   state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
-  const interpreter = INTERPRETERS[node.language];
+  // python 命令节点级可配（pythonCommand，缺省 python）；?? 兜底防
+  // 调用方绕过 schema parse 直构节点对象
+  const interpreter =
+    node.language === "python"
+      ? node.pythonCommand ?? "python"
+      : INTERPRETERS[node.language];
   const decision = commandGate(interpreter);
   if (decision === "block" || decision === "ask") {
     throw new GraphNodeFailure(
@@ -1255,7 +1260,7 @@ async function runCodeScript(
     throw new GraphNodeFailure(
       node.id,
       "code_permission_denied",
-      "代码节点需要任务开启「允许完全访问」，或在设置-安全中心命令名单放行解释器（bash/python3/node）——放行脚本内命令（如 git）无效，脚本以解释器整段执行",
+      "代码节点需要任务开启「允许完全访问」，或在设置-安全中心命令名单放行解释器（bash/python/node）——放行脚本内命令（如 git）无效，脚本以解释器整段执行",
     );
   }
   const dir = await mkdtemp(path.join(os.tmpdir(), "tianshu-code-"));

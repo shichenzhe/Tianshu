@@ -893,6 +893,8 @@
       "kindLlm": "AI 节点",
       "kindCode": "代码节点",
       "language": "语言",
+      "pythonCommand": "Python 命令",
+      "pythonCommandHint": "调用的解释器命令名，缺省 python；本机仅有 python3 时切换",
       "timeoutSec": "超时（秒）",
       "timeoutHint": "默认 30 秒，最长 24 小时，超时强杀进程组",
       "script": "脚本",

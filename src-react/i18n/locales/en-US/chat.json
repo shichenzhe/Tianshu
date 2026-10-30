@@ -893,6 +893,8 @@
       "kindLlm": "AI node",
       "kindCode": "Code node",
       "language": "Language",
+      "pythonCommand": "Python command",
+      "pythonCommandHint": "Interpreter command to invoke, default python; switch to python3 if that's all your machine provides",
       "timeoutSec": "Timeout (sec)",
       "timeoutHint": "Default 30s, max 24h; process group is killed on timeout",
       "script": "Script",

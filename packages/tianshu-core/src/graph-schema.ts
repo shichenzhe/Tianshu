@@ -39,6 +39,9 @@ export const codeNodeSchema = z
     ...nodeBase,
     kind: z.literal("code"),
     language: z.enum(["nodejs", "python", "bash"]),
+    /** Python 解释器命令（缺省 python——Windows 发行版多只有 python；
+     * 仅 python3 的环境节点级切换）；仅 language=python 时生效 */
+    pythonCommand: z.enum(["python", "python3"]).default("python"),
     script: z.string().min(1),
     timeoutMs: z.number().int().min(1_000).max(86_400_000).default(30_000),
     outputMode: z.enum(["text", "branch"]).default("text"),

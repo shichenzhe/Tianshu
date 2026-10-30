@@ -252,6 +252,19 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 （`src/commons/database/db-url.ts`），首启缺库自动 `prisma db push` 建表
 （schema 单一事实源）。
 
+## PG 检索模式（可选）
+
+默认检索走本机 SQLite（内存 BM25 + 余弦）。配置 env `SEARCH_DB_URL`
+（`postgres://…`）后，检索层改指 PostgreSQL 检索库（tsvector 全文 +
+pgvector 向量，Supabase hybrid 配方同构）：
+
+- `docker compose up -d` 起 server + `pgvector/pgvector:pg17` 检索库
+  （compose 已串联 `SEARCH_DB_URL`）
+- **单真源语义**：检索库独立指定时，`vectorize` 入库直写检索库，主库
+  不留 vectorChunk 副本；取消配置切回本地后旧数据不迁移、需重新入库
+- 仅支持 `postgres://`/`postgresql://` 连接串；连接失败/扩展缺失时
+  检索节点显式报错（不静默降级）
+
 ## 目录结构
 
 ```

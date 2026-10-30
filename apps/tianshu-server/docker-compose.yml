@@ -1,0 +1,30 @@
+# apps/tianshu-server/docker-compose.yml
+# 检索模式部署：server + PG 检索库（pgvector 官方镜像，含 FTS 所需全部能力）
+# 默认（SQLite 本地检索）部署不需要本文件——单独 docker run server 即可。
+services:
+  search-pg:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: tianshu
+      POSTGRES_PASSWORD: tianshu_search
+      POSTGRES_DB: tianshu_search
+    volumes:
+      - search-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tianshu -d tianshu_search"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # 宿主直连调试时放开：ports: ["5432:5432"]
+  server:
+    build: .
+    environment:
+      SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search
+    depends_on:
+      search-pg:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  search-pg-data: {}

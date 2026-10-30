@@ -6,7 +6,8 @@
  * 分词与融合复用 @tianshu/core（tokenize/rrfFuse），与 mirror 内存
  * BM25 检索行为同源。
  */
-// import { tokenize } from '@tianshu/core'; // Task 3 启用（运行时层做查询前分词；本 Task 纯函数层暂不使用，避免空 import 告警）
+import { tokenize, type FusedHit } from '@tianshu/core';
+import { VectorStoreError, type VectorChunkRow, type VectorHit } from './vector-store';
 
 /** 幂等建库：扩展→表→索引（首次检索/入库前执行；扩展缺失由调用方
  * 转 search_pg_no_vector_ext 人话错误） */
@@ -73,5 +74,219 @@ export function buildUpsertInsertSql(chunkCount: number): string {
 VALUES ${rows.join(', ')}`;
 }
 
-// （运行时层见下方 Task 3 追加——本文件占位注释，Task 3 删除）
-export const _RUNTIME_LAYER_PLACEHOLDER = true;
+// ---------------------------------------------------------------------------
+// 运行时层（Task 3）：Pool 单例/幂等建库/upsert 事务/双检索/错误码三态
+// ---------------------------------------------------------------------------
+
+const POSTGRES_SCHEME = /^postgres(ql)?:\/\//;
+
+/** 读 SEARCH_DB_URL：空=本地检索（null）；非法 scheme 显式报错 */
+export function searchDbTarget(): string | null {
+  const url = process.env.SEARCH_DB_URL ?? '';
+  if (url === '') {
+    return null;
+  }
+  if (!POSTGRES_SCHEME.test(url)) {
+    throw new VectorStoreError(
+      'search_pg_unsupported_url',
+      'SEARCH_DB_URL 仅支持 postgres:// 或 postgresql:// 连接串（当前配置不是 PG 地址）',
+    );
+  }
+  return url;
+}
+
+/** 是否启用 PG 检索（协议非法不在布尔面抛——四函数入口统一抛） */
+export function isPgSearchConfigured(): boolean {
+  return searchDbTarget() !== null;
+}
+
+/** pg 依赖面最小结构类型：ts-jest 语言服务解析不到根 node_modules 的
+ * @types/pg（tsc 可解析）——type 查询一律改结构类型，运行时值经
+ * await import('pg') 动态取（db-client.ts 同款惯例） */
+interface PgQueryResult {
+  rows: unknown[];
+}
+interface PgClient {
+  query(sql: string, values?: unknown[]): Promise<PgQueryResult>;
+  release(): void;
+}
+interface PgPool {
+  query(sql: string, values?: unknown[]): Promise<PgQueryResult>;
+  connect(): Promise<PgClient>;
+}
+
+let pgPool: PgPool | null = null;
+
+/** Pool 单例：动态 import 隔离 pg 依赖（未配 PG 的部署不加载） */
+async function getPool(): Promise<PgPool> {
+  if (!pgPool) {
+    const { Pool } = await import('pg');
+    // as PgPool：动态导入在 ts-jest 下为 any（不窄化联合），tsc 下与
+    // pg.Pool 结构兼容——两世界同码通过
+    pgPool = new Pool({ connectionString: searchDbTarget()! }) as PgPool;
+  }
+  return pgPool;
+}
+
+/** 连接类异常统一转人话 VectorStoreError（VectorStoreError 原样透传） */
+function toPgError(e: unknown): VectorStoreError {
+  if (e instanceof VectorStoreError) {
+    return e;
+  }
+  return new VectorStoreError(
+    'search_pg_unavailable',
+    `PG 检索库不可用：${e instanceof Error ? e.message : String(e)}`,
+  );
+}
+
+/** 幂等建库（扩展→表→索引）；扩展缺失给人话提示换 pgvector 镜像 */
+export async function ensureSearchPg(): Promise<void> {
+  try {
+    const pool = await getPool();
+    for (const ddl of PG_DDL) {
+      await pool.query(ddl);
+    }
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    if (/extension|vector/i.test(message) && !/ECONN|timeout/i.test(message)) {
+      throw new VectorStoreError(
+        'search_pg_no_vector_ext',
+        'PG 检索库缺少 pgvector 扩展——请使用 pgvector/pgvector 官方镜像（见 docker-compose.yml）',
+      );
+    }
+    throw toPgError(e);
+  }
+}
+
+/** 条目级 upsert（同 collection+sourceName 先删后插，事务包裹保原子）；
+ * 空数组仅清空不插（buildUpsertInsertSql(0) 会产悬空 VALUES） */
+export async function upsertChunksPg(params: {
+  userId: number;
+  collection: string;
+  sourceName: string;
+  model: string;
+  chunks: VectorChunkRow[];
+}): Promise<void> {
+  const client = await (await getPool()).connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'DELETE FROM vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3',
+      [params.userId, params.collection, params.sourceName],
+    );
+    if (params.chunks.length > 0) {
+      await client.query(
+        buildUpsertInsertSql(params.chunks.length),
+        params.chunks.flatMap((chunk) => [
+          params.userId,
+          params.collection,
+          params.sourceName,
+          chunk.seq,
+          chunk.text,
+          tokenize(chunk.text).join(' '),
+          buildVectorLiteral(chunk.vector),
+          params.model,
+        ]),
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw toPgError(e);
+  } finally {
+    client.release();
+  }
+}
+
+/** FTS 检索：词元 OR 匹配 ts_rank 降序（rank 按 returned 序从 1 编号）；
+ * 空词元短路不发查询（to_tsquery('') 语法非法） */
+export async function searchFtsPg(params: {
+  userId: number;
+  collection: string;
+  queryTokens: string[];
+  limit: number;
+}): Promise<FusedHit[]> {
+  if (params.queryTokens.length === 0) {
+    return [];
+  }
+  try {
+    await ensureSearchPg();
+    const { sql } = buildFtsSql(params.collection !== '');
+    const values = params.collection !== ''
+      ? [buildFtsQuery(params.queryTokens), params.userId, params.collection, params.limit]
+      : [buildFtsQuery(params.queryTokens), params.userId, params.limit];
+    const result = await (await getPool()).query(sql, values);
+    return (
+      result.rows as Array<{
+        id: number;
+        collection: string;
+        source_name: string;
+        text: string;
+        score: number;
+      }>
+    ).map((row, index) => ({
+      chunkId: Number(row.id),
+      sourceName: row.source_name,
+      collection: row.collection,
+      text: row.text,
+      score: Number(row.score),
+      rank: index + 1,
+    }));
+  } catch (e) {
+    throw toPgError(e);
+  }
+}
+
+/** 向量检索：余弦距离排序（score = 1 - 距离）；model 过滤保维度防线 */
+export async function searchChunksPg(params: {
+  userId: number;
+  collection: string;
+  model: string;
+  queryVector: number[];
+  topK: number;
+}): Promise<VectorHit[]> {
+  try {
+    await ensureSearchPg();
+    const { sql } = buildVectorSql(params.collection !== '');
+    const values = params.collection !== ''
+      ? [
+          buildVectorLiteral(params.queryVector),
+          params.model,
+          params.userId,
+          params.collection,
+          params.topK,
+        ]
+      : [buildVectorLiteral(params.queryVector), params.model, params.userId, params.topK];
+    const result = await (await getPool()).query(sql, values);
+    return (
+      result.rows as Array<{
+        id: number;
+        collection: string;
+        source_name: string;
+        text: string;
+        score: number;
+      }>
+    ).map((row) => ({
+      chunkId: Number(row.id),
+      sourceName: row.source_name,
+      collection: row.collection,
+      text: row.text,
+      score: Number(row.score),
+    }));
+  } catch (e) {
+    throw toPgError(e);
+  }
+}
+
+/** collection 计数（删除确认/统计面） */
+export async function countCollectionPg(userId: number, collection: string): Promise<number> {
+  try {
+    const result = await (await getPool()).query(
+      'SELECT COUNT(*)::int AS n FROM vector_chunk WHERE user_id = $1 AND collection = $2',
+      [userId, collection],
+    );
+    return Number((result.rows[0] as { n: number }).n);
+  } catch (e) {
+    throw toPgError(e);
+  }
+}

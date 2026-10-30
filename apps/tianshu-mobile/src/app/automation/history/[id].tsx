@@ -114,12 +114,14 @@ function NodeDetail({ node }: { node: AutomationRunNodeRecord }) {
         <>
           <SectionLabel label={t("nodeError")} />
           <View className="gap-1">
-            {err.code != null && <MetaRow label="code" value={err.code} />}
+            {err.code != null && (
+              <MetaRow label={t("errCode")} value={err.code} />
+            )}
             {err.toolName != null && (
-              <MetaRow label="tool" value={err.toolName} />
+              <MetaRow label={t("errTool")} value={err.toolName} />
             )}
             {err.message != null && (
-              <MetaRow label="message" value={err.message} />
+              <MetaRow label={t("errMessage")} value={err.message} />
             )}
             {err.detail != null && (
               <MonoBlock value={err.detail} tone="error" />

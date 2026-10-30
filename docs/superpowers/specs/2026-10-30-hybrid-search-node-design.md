@@ -108,6 +108,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
    sourceName 先删后插，对齐幂等模式）。
 3. **存量回填**：FTS 查询前 count 对比两表，不一致则 FTS 全清后按 vectorChunk
    全量回填（万级亚秒级；桌面与 server 是各自独立 local.db，无跨端竞态）。
+   **进程内单飞**（in-flight Promise 去重）：automation 可并发跑图，两张图并发
+   首查时复用同一次回填，防「count 对比 → 全清 → 重插」窗口内重复执行导致
+   行数翻倍。
 
 查询（参数化绑定，MATCH 串来自分词输出）：
 
@@ -168,6 +171,9 @@ output 文本外挂 `hits` 结构化数组（即 §2 的 FusedHit 形态，含 s
 - **Spike 前置两项**（实施计划第一步，任一翻车回本设计启用兜底）：
   1. Electron 主进程实证 `CREATE VIRTUAL TABLE USING fts5` 可用
   2. Electron 主进程实证 `Intl.Segmenter` 可用（兜底路线：trigram tokenizer）
+  两项在 mac 验证后，**Windows 预编译二进制需复验**（平台 binding 永不硬声明
+  纪律；better-sqlite3 文档口径三平台统一启用 FTS5，仍按纪律实证）——Windows
+  复验可后置到发布前验证清单，不阻塞 mac 开发。
 
 ## Phase 2：rerank 节点（设计定稿，下期实施）
 
@@ -222,7 +228,11 @@ timeoutMs
 - **假设**（已向用户呈现并认可）：双轨保留 vectorSearch；rerank 排期下期但旁路
   本期埋；不加权融合参数。
 - **假设**：better-sqlite3 预编译含 FTS5、主进程含 Intl.Segmenter——均列 Spike
-  实证，翻车有兜底（trigram）。
+  实证，翻车有兜底（trigram）；Windows 复验见 §Phase 1.6。
+- **对齐现状（非本期范围，防误判为遗漏）**：图执行链路不写 llmCallEvent 等
+  监控事件（监控覆盖聊天链路），hybridSearch 的 embedding 调用对齐现状；图无
+  导入/导出/复制功能（graph.repo.ts 查证），节点 kind 无跨版本分发面，老版本
+  兼容场景不存在。
 - **开放**：graph-templates.ts 是否补 RAG 模板（不扩本期范围，实施后视情况）。
 
 ## 影响面清单

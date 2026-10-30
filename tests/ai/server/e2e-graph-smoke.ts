@@ -1,13 +1,16 @@
 /**
- * 编排 E2E 冒烟（GA-T9，直连链路真模型）：capability graph 链路三段
+ * 编排 E2E 冒烟（GA-T9，直连链路真模型）：capability graph 链路四段
  * ① graph：建两节点图（research → report）→ graph/run 202 → SSE 收
  *    graph.run.updated 至 succeeded 且带 output（事件序列含节点 progress）
- * ② automation：tickMs=200 经 NODE_ENV=e2e 的 config.e2e.yml（tianshu 段）
+ * ② hybridSearch：停机面直插 vectorChunk 中文行（绕过 vectorize 的
+ *    embedding 依赖）→ 单节点 keyword 图 → 真 server 子进程 BM25 命中
+ *    （输出含目标条目名与「相关度」、无关条目零分剔除不透传）
+ * ③ automation：tickMs=200 经 NODE_ENV=e2e 的 config.e2e.yml（tianshu 段）
  *    快进调度——once 任务 runAt=+3s 到期触发 → SSE automation.changed +
  *    run 表落 triggerType=schedule/status=success（九端点无 run 查询面，
  *    run 表经 node:sqlite 只读直查——库址由 schema 字面量定死落
  *    tianshu-server 仓 prisma/local.db，e2e-smoke 同一事实面）
- * ③ webhook：实例间经 option 表预置注册（webhook 注册无 HTTP 端点——
+ * ④ webhook：实例间经 option 表预置注册（webhook 注册无 HTTP 端点——
  *    Ruling 13 service 级；reloadRegistrations 仅启动装载，故重启一次
  *    实例 2）→ POST /webhook/<token>（同步模板模式）→ 自定义模板渲染
  *    {{input.topic}}/{{nodes.report.output}} 原样文本往返 + run 表
@@ -45,6 +48,11 @@ let SERVER_DB = path.join(SERVER_DIR, "prisma", "local.db");
 
 const PROVIDER_NAME = "e2e-graph-smoke";
 const GRAPH_NODE_SECOND = "report";
+/** ② hybridSearch 段固定件：集合名/目标条目名（命中断言锚）/无关条目
+ * 名（零分剔除断言锚——BM25 真排序而非全量透传的反证） */
+const HYBRID_COLLECTION = "e2e-hybrid";
+const HYBRID_TARGET_SOURCE = "容错设计手册";
+const HYBRID_OFF_TOPIC_SOURCE = "旅行日记";
 const ONCE_LEAD_MS = 3_000;
 const BOOT_TIMEOUT_MS = 60_000;
 const EVENT_TIMEOUT_MS = 20_000;
@@ -550,6 +558,26 @@ function twoNodeGraphJson(modelId: number): string {
   });
 }
 
+/** 单节点 hybridSearch 图 JSON（keyword 模式零模型门槛，中文 BM25 冒烟） */
+function hybridSearchGraphJson(): string {
+  return JSON.stringify({
+    version: 1,
+    inputSchema: {},
+    nodes: [
+      {
+        id: "hs1",
+        kind: "hybridSearch",
+        name: "混合检索",
+        searchQuery: "容错 设计",
+        collection: HYBRID_COLLECTION,
+        mode: "keyword",
+        topK: 3,
+      },
+    ],
+    edges: [{ from: "hs1", to: "END" }],
+  });
+}
+
 /** provider 幂等落位（e2e-smoke 同款手法）：按名 upsert，返回模型行 id */
 async function ensureProviderModel(
   control: DirectControl,
@@ -641,10 +669,34 @@ async function ensureWorkspace(): Promise<number> {
   }
 }
 
-// —— 阶段①②：单实例内跑完（graph 链 + 调度触发链） ——
+/** ② hybridSearch 预置数据：绕过 vectorize（其依赖真 embedding）直插
+ * vectorChunk 中文行（keyword 路仅吃 text/sourceName 列，vector 空数组
+ * 占位即可；userId=1 对齐 COMPANION_USER_ID——检索面按其过滤）。
+ * 目标条目两块均含「容错/设计」词元，无关条目零词元交集（零分剔除反证） */
+async function seedHybridChunks(): Promise<void> {
+  const { DatabaseSync } = await import("node:sqlite");
+  const db = new DatabaseSync(SERVER_DB);
+  try {
+    const insert = db.prepare(
+      "INSERT INTO vectorChunk (userId, collection, sourceName, seq, text, vector, model) " +
+        "VALUES (1, ?, ?, ?, ?, '[]', 'e2e-bm25-seed')",
+    );
+    db.prepare("DELETE FROM vectorChunk WHERE collection = ?").run(
+      HYBRID_COLLECTION,
+    );
+    insert.run(HYBRID_COLLECTION, HYBRID_TARGET_SOURCE, 0, "高可用架构在设计阶段须引入容错机制，故障隔离与优雅降级是容错设计的第一道防线。");
+    insert.run(HYBRID_COLLECTION, HYBRID_TARGET_SOURCE, 1, "容错设计要求重试、熔断与幂等配合，避免局部故障在设计不当的链路上被放大为全局雪崩。");
+    insert.run(HYBRID_COLLECTION, HYBRID_OFF_TOPIC_SOURCE, 0, "今天的行程是京都的寺庙巡礼与宇治抹茶甜品，傍晚沿鸭川散步。");
+  } finally {
+    db.close();
+  }
+}
+
+// —— 阶段①②③：单实例内跑完（graph 链 + 混合检索 + 调度触发链） ——
 
 interface PhaseOneResult {
   graphId: number;
+  hybridGraphId: number;
   taskId: number;
 }
 
@@ -783,7 +835,100 @@ async function runPhaseOne(
       `run#${runId} 事件至 succeeded（progress 双节点）+ run 表 success；output「${finalOutput.slice(0, 40)}」finishedAt=${graphRun.finishedAt != null}`,
     );
 
-    // ② once 任务到期触发（tickMs=200 快进）
+    // ② hybridSearch keyword 模式：预置中文行 → 单节点图 → BM25 命中。
+    // 事件消费须在 ③ 段后台 automation.changed 收集器启动前收口（同一
+    // SSE 队列两消费者会互抢事件），故紧随 ① 排布
+    await seedHybridChunks();
+    const hybridGraph = (await call(
+      request,
+      "hybrid graph/save",
+      "graph/save",
+      {
+        name: "e2e-graph-smoke 混合检索图",
+        graphJson: hybridSearchGraphJson(),
+      },
+    )) as { id: number; nodeCount: number };
+    if (hybridGraph.nodeCount !== 1) {
+      fail(
+        "hybrid graph/save",
+        `nodeCount 期望 1 实为 ${hybridGraph.nodeCount}`,
+      );
+    }
+    const hybridRun = (await call(request, "hybrid graph/run", "graph/run", {
+      graphId: hybridGraph.id,
+      inputs: {},
+    })) as { runId: number };
+    log(`graph#${hybridGraph.id} run#${hybridRun.runId} 已受理（keyword）`);
+
+    let hybridState = "";
+    let hybridOutput = "";
+    const hybridDeadline = Date.now() + RUN_TIMEOUT_MS;
+    while (hybridState !== "succeeded" && hybridState !== "failed") {
+      const event = await nextEventIn(
+        control,
+        Math.max(1, hybridDeadline - Date.now()),
+        "hybrid graph.run.updated 事件",
+      );
+      if (event.type !== "graph.run.updated") continue;
+      const payload = event.payload as {
+        runId?: number;
+        graphId?: number;
+        state?: string;
+        output?: string;
+        error?: string;
+      };
+      if (
+        payload.runId !== hybridRun.runId ||
+        payload.graphId !== hybridGraph.id
+      ) {
+        continue;
+      }
+      if (
+        payload.state &&
+        payload.state !== "running" &&
+        payload.state !== "progress"
+      ) {
+        hybridState = payload.state;
+        hybridOutput = payload.output ?? payload.error ?? "";
+      }
+    }
+    if (hybridState !== "succeeded") {
+      fail(
+        "hybridSearch 执行",
+        `终态 ${hybridState}（${hybridOutput.slice(0, 200)}）`,
+      );
+    }
+    if (!hybridOutput.includes(HYBRID_TARGET_SOURCE)) {
+      fail(
+        "hybridSearch BM25 命中",
+        `输出未含目标条目「${HYBRID_TARGET_SOURCE}」：${hybridOutput.slice(0, 200)}`,
+      );
+    }
+    if (!hybridOutput.includes("相关度")) {
+      fail(
+        "hybridSearch BM25 命中",
+        `输出未含「相关度」标签：${hybridOutput.slice(0, 200)}`,
+      );
+    }
+    if (hybridOutput.includes(HYBRID_OFF_TOPIC_SOURCE)) {
+      fail(
+        "hybridSearch BM25 命中",
+        `零词元交集条目「${HYBRID_OFF_TOPIC_SOURCE}」未被剔除（疑似全量透传）：${hybridOutput.slice(0, 200)}`,
+      );
+    }
+    const hybridRunRow = await waitForRun(
+      "id = ?",
+      [hybridRun.runId],
+      (rows) => (rows[0]?.status === "success" ? rows[0] : null),
+      EVENT_TIMEOUT_MS,
+      "hybridSearch run 表终态",
+    );
+    pass(
+      "② hybridSearch keyword BM25 命中",
+      `run#${hybridRun.runId} 表 success（finishedAt=${hybridRunRow.finishedAt != null}）；output「${hybridOutput.slice(0, 60)}」`,
+    );
+
+    // ③ once 任务到期触发（tickMs=200 快进）
     const task = (await call(request, "automation/save", "automation/save", {
       name: "e2e-graph-once",
       prompt: "请只回复 pong",
@@ -842,19 +987,23 @@ async function runPhaseOne(
       );
     }
     pass(
-      "② automation 调度触发",
+      "③ automation 调度触发",
       `task#${task.id} run#${runRow.id} triggerType=schedule status=success` +
         `（automation.changed ×${changedCount}，finishedAt=${runRow.finishedAt != null}）`,
     );
 
-    return { graphId: graph.id, taskId: task.id };
+    return {
+      graphId: graph.id,
+      hybridGraphId: hybridGraph.id,
+      taskId: task.id,
+    };
   } finally {
     control?.close();
     await stopChild(child);
   }
 }
 
-// —— 阶段③：webhook 注册预置 → 实例 2 重启装载 → 同步模板往返 ——
+// —— 阶段④：webhook 注册预置 → 实例 2 重启装载 → 同步模板往返 ——
 
 async function runPhaseTwo(
   dataRoot: string,
@@ -958,7 +1107,7 @@ async function runPhaseTwo(
       "webhook run 表终态",
     );
     pass(
-      "③ webhook 同步模板往返",
+      "④ webhook 同步模板往返",
       `200 + 模板原样文本（${response.text.slice(0, 60)}…）+ run#${hookRun.id} triggerType=webhook status=success`,
     );
 
@@ -979,10 +1128,18 @@ async function runPhaseTwo(
         id: phaseOne.graphId,
       },
     );
-    const leftover = await readRuns("taskId = ? OR graphId = ?", [
-      phaseOne.taskId,
-      phaseOne.graphId,
-    ]);
+    await call(
+      control.request.bind(control),
+      "hybrid graph/delete 收敛",
+      "graph/delete",
+      {
+        id: phaseOne.hybridGraphId,
+      },
+    );
+    const leftover = await readRuns(
+      "taskId = ? OR graphId = ? OR graphId = ?",
+      [phaseOne.taskId, phaseOne.graphId, phaseOne.hybridGraphId],
+    );
     if (leftover.length !== 0) {
       fail("清理收敛", `run 残留 ${leftover.length} 行（级联未生效）`);
     }

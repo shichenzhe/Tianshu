@@ -1,4 +1,11 @@
-import { clipboard, dialog, ipcMain, shell, type WebContents } from "electron";
+import {
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  shell,
+  type WebContents,
+} from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -1020,19 +1027,20 @@ export default class ChatService {
     }
   }
 
-  private emit(
-    sender: WebContents | undefined,
-    sessionId: number,
-    chunk: ChatStreamChunk,
-  ) {
-    // server-face tap 点（T10）：无论渲染层 sender 在场与否都先广播，
-    // 供被控面（SSE/relay）订阅；渲染层推送行为不变
+  private emit(sessionId: number, chunk: ChatStreamChunk) {
+    // server-face tap 点（T10）：无论渲染层在场与否都先广播，
+    // 供被控面（SSE/relay）订阅
     emitChatChunk(sessionId, chunk);
-    // 渲染层窗口可能已销毁：跳过推送，避免异常冒泡中断持久化与终止 chunk
-    if (!sender || sender.isDestroyed()) {
-      return;
+    // 渲染层全窗口广播（审批横幅卡死修复 2026-10-30）：被控面（移动端经
+    // face）发起的会话无渲染层 sender，原 sender 单窗推送使桌面视图零
+    // chunk——审批横幅只剩 chat:status 快照恢复、移动端应答后
+    // tool-update 到不了渲染层，横幅永不消失（finish 同理卡 isStreaming）。
+    // 订阅按 chat:stream:<sessionId> 通道自滤，非本会话视图零影响
+    for (const win of BrowserWindow.getAllWindows()) {
+      // 窗口可能已销毁：跳过推送，避免异常冒泡中断持久化与终止 chunk
+      if (win.webContents.isDestroyed()) continue;
+      win.webContents.send(`chat:stream:${sessionId}`, chunk);
     }
-    sender.send(`chat:stream:${sessionId}`, chunk);
   }
 
   /**
@@ -1847,7 +1855,7 @@ export default class ChatService {
         if (this.aborts.has(sessionId)) {
           this.accumulateSnapshot(sessionId, chunk);
         }
-        this.emit(sender, sessionId, chunk);
+        this.emit(sessionId, chunk);
       }
       const result = await run.result;
 
@@ -1878,13 +1886,13 @@ export default class ChatService {
         });
       }
       if (result.errorCode) {
-        this.emit(sender, sessionId, {
+        this.emit(sessionId, {
           type: "error",
           errorCode: result.errorCode,
           message: result.errorMessage ?? "",
         });
       } else {
-        this.emit(sender, sessionId, { type: "finish" });
+        this.emit(sessionId, { type: "finish" });
         // 首轮问答完成 → AI 起标题（不阻塞、失败静默，spec §6）
         void this.generateTitleIfFirstExchange(sessionId, userId, sender, {
           type: ctx.providerRow.type,
@@ -2310,7 +2318,7 @@ export default class ChatService {
         return;
       }
       await this.sessions.renameSession(sessionId, title, userId);
-      this.emit(sender, sessionId, { type: "title-updated", title });
+      this.emit(sessionId, { type: "title-updated", title });
     } catch (e) {
       // 标题失败静默降级（对用户无感知）：仅记录日志保留可观测性
       Log.warn("AI 标题生成失败", e instanceof Error ? e.message : e);

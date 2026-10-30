@@ -21,14 +21,19 @@
 可选 rerank**。ES 8.x、Azure AI Search、Qdrant、Weaviate、LangChain、LlamaIndex
 均为该形态。
 
-- **全文引擎**：SQLite FTS5（内建 BM25 排序）是唯一贴合桌面单机架构的选型——
-  零新引擎、与 vectorChunk 同库同事务；better-sqlite3 官方预编译默认启用 FTS5
-  （Spike 实证前置）。flexsearch 等内存索引与 SQLite 数据面割裂，外部引擎不可接受。
-- **中文分词**：FTS5 默认 unicode61 分词器把中文整句当一个 token，不分词则中文
-  全文检索失效。裁定用 `Intl.Segmenter`（Node/Chromium 内建 ICU 词典，零依赖零
-  原生编译，mirror 与 server 双端可用）；trigram tokenizer 为兜底路线（Spike 翻车
-  时切换）；@node-rs/jieba 为质量升级位（分词器抽单点函数，替换只动一处，但 +1
-  原生依赖须另行裁定依赖铁律）。
+- **全文引擎**：**纯 JS 内存 BM25**（Okapi，k1=1.5/b=0.75，Lucene 式 +1 平滑
+  IDF）——LangChain `BM25Retriever`+`EnsembleRetriever` 的业界主流形态，零原生
+  依赖零 SQLite 版本赌注，且与现有 `searchChunks`「全表读出+内存余弦」完全
+  同构（SQLite 只当行存储）。**SQLite FTS5 已否决**（2026-10-30 实施期裁定）：
+  双端 Prisma 驱动异构——mirror 走 `@prisma/adapter-better-sqlite3`（FTS5 可用），
+  server 走 `prisma-client-js` 内置 engine（不编译 FTS5）且 alpine/musl 补装
+  better-sqlite3 撞依赖铁律与构建风险；FTS5 虚表生命周期（建表/回填/单飞/
+  optimize）相对内存检索是不对称复杂度。flexsearch 等外部引擎与 SQLite 数据面
+  割裂，不可接受。
+- **中文分词**：BM25 以词为 term，中文不切词则整句作单 term、IDF 失效。裁定用
+  `Intl.Segmenter`（Node/Chromium 内建 ICU 词典，零依赖零原生编译，mirror 与
+  server 双端可用，node 侧已实测）；@node-rs/jieba 为质量升级位（分词器抽单点
+  函数，替换只动一处，但 +1 原生依赖须另行裁定依赖铁律）。
 - **融合**：RRF（Reciprocal Rank Fusion，`score = Σ 1/(k + rank)`，k=60）为业界
   事实标准——只看排名不看分值，天然免疫余弦（0~1）与 BM25（无界）的量纲差异，
   无需调参（k=60 为论文值，与 ES `rank_constant` 默认一致，不做成参数）。加权
@@ -52,6 +57,7 @@
 | 4 | 融合算法 | RRF 默认（k=60），不加权重参数 |
 | 5 | rerank | 独立节点（非检索节点内置），Phase 2 实施但本期埋 hits 旁路 |
 | 6 | rerank 模型挂接 | 复用 provider/model 体系，model.type 已预留 `reranker` 类型位，零 schema 变更 |
+| 7 | 全文引擎（2026-10-30 pivot） | FTS5 否决（server Prisma 内置 engine 无 FTS5、双端驱动异构、musl 构建风险）→ 纯 JS 内存 BM25（LangChain BM25Retriever 形态，与内存余弦同构） |
 
 ## Phase 1：hybridSearch 节点（本期实施）
 
@@ -78,73 +84,40 @@ schema 与 handler 均不动，AddNodeMenu 两者并存（假设：双轨过渡�
 文件抽走：
 
 - `tokenize(text): string[]`——`Intl.Segmenter("zh-Hans", {granularity:"word"})`，
-  仅保留含文字/数字的词元（FTS5 查询语法字符 `" * ( ) :` 及 AND/OR/NOT/NEAR
-  关键字形态天然被过滤，注入面自愈）
-- `joinFtsDocument(tokens): string`——入库侧 `tokens.join(" ")`
-- `joinFtsQuery(tokens): string`——查询侧 `term1 OR term2`（对齐 ES 默认 OR 宽
-  召回，靠 BM25 排序）
+  仅保留含文字/数字的词元（标点/符号天然剥离）
+- `rankBm25(queryTokens, docs, topK, k1=1.5, b=0.75): Bm25Hit[]`——Okapi BM25
+  内存评分（公式见 §3），Lucene 式 +1 平滑 IDF；零命中剔除、按分降序切 topK
 - `rrfFuse(vecHits, ftsHits, k=60): FusedHit[]`——按 chunkId 融合累加
   `1/(k+rank)`，融合后按分数降序
 - FusedHit 形态：`{chunkId, sourceName, collection, text, score, rank}`（chunkId
   为融合键；两路结果都携带）
 
-### 3. FTS 数据面（`vector-store.ts`，mirror 与 server 双份薄改）
+### 3. 全文检索数据面（`vector-store.ts`，mirror 与 server 双份薄改）
 
-虚表不进 prisma schema、不走 v1 快照（指纹变化会触发旧库 drop 重建），走
-`ensureGraphRunNodeTable` 同款 `prisma.$executeRawUnsafe` + IF NOT EXISTS 幂等
-补建先例：
+**内存 BM25，无持久化索引**（2026-10-30 pivot 裁定，见综述段）：`searchFts`
+按 userId [+collection] `findMany` 读行（select 限定 id/collection/sourceName/
+text，不拉 vector 大字段）→ 纯函数 `rankBm25(queryTokens, docs, topK)` 内存评分
+→ 返回 FusedHit 形态。性能与现有全表余弦同量级（万级 chunk 毫秒级）：每次查询
+全量分词评分、不做进程级索引缓存（YAGNI；十万级规模再演进为进程级倒排缓存，
+vector-store 头注释的引擎升级位同样覆盖此路径）。
 
-```sql
-CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
-  text,                     -- 预分词空格分隔文本（MATCH 索引面）
-  originalText UNINDEXED,   -- 原文片段（输出/hits/rerank 用——FTS text 列是
-                            -- 分词形态，不可直接出给用户）
-  userId UNINDEXED,
-  collection UNINDEXED,
-  sourceName UNINDEXED,
-  chunkId UNINDEXED,
-  tokenize = 'unicode61'    -- 对预分词文本按空格切即可
-)
-```
-
-独立存储不用 external content——省同步协议；text+originalText 双份存储万级
-chunk 仅几 MB。
-
-生命周期：
-
-1. **建表**：懒触发，读（查询）与写（upsert）两路都在首次 FTS 操作前 ensure
-   ——老库首次跑 vectorize 时 FTS 表不存在，写入路径不 ensure 会同步插失败。
-   不做启动扫描——空载工作流零成本。
-2. **增量**：`upsertChunks` 事务内同步删/插 FTS 行（按 userId+collection+
-   sourceName 先删后插，对齐幂等模式）。
-3. **存量回填**：FTS 查询前 count 对比两表，不一致则 FTS 全清后按 vectorChunk
-   全量回填（万级亚秒级；桌面与 server 是各自独立 local.db，无跨端竞态）。
-   **进程内单飞**（in-flight Promise 去重）：automation 可并发跑图，两张图并发
-   首查时复用同一次回填，防「count 对比 → 全清 → 重插」窗口内重复执行导致
-   行数翻倍。回填末尾执行一次 `INSERT INTO vectorChunkFts(vectorChunkFts)
-   VALUES('optimize')` 合并索引段（大量删插后 FTS5 分段，optimize 廉价正解）。
-   停用词不额外处理：FTS5 无内建停用词，BM25 的 IDF 天然压低高频词权重（业界
-   SQLite FTS 实践同）。
-
-查询（参数化绑定，MATCH 串来自分词输出）：
-
-```sql
-SELECT chunkId, sourceName, collection, originalText AS text,
-       bm25(vectorChunkFts) AS rank
-FROM vectorChunkFts
-WHERE vectorChunkFts MATCH ? AND userId = ? [AND collection = ?]
-ORDER BY rank LIMIT ?
-```
-
-BM25 路不过滤 model（全文与 embedding 模型无关）；向量路保持同 model 过滤。
-两路集合不同源不影响 RRF（只看排名）。`searchChunks` 返回值增加 chunkId 字段
-（现有消费方只用 sourceName/score/text，不破坏）。
+- **零 DDL/零迁移**：无虚表、无回填、无单飞——`upsertChunks` 完全不动（BM25
+  每查询实时读行，天然与 vectorChunk 一致）。
+- **评分公式**（`packages/tianshu-core/src/retrieval.ts` 单份纯函数）：
+  `idf = ln(1 + (N - df + 0.5)/(df + 0.5))`（Lucene/ES 同款 +1 平滑防负），
+  `score = Σ idf·(f·(k1+1))/(f + k1·(1 - b + b·len/avgLen))`，k1=1.5、b=0.75
+  （rank-bm25/LangChain 默认）；term 为 `tokenize` 分词词元，中文按词命中。
+- 停用词不额外处理：IDF 天然压低高频词权重（业界 BM25 实践同）。
+- BM25 路不过滤 model（全文与 embedding 模型无关）；向量路保持同 model 过滤。
+  两路集合不同源不影响 RRF（只看排名）。`searchChunks` 返回值增加 chunkId 字段
+  （现有消费方只用 sourceName/score/text，不破坏）。
+- 空词元短路：`queryTokens` 为空直接返回 `[]`（不发查询）。
 
 ### 4. 执行器 handler 与 hits 旁路（`graph-executor.ts`，双份）
 
 `makeHybridSearchNodeHandler`：render → 按 mode 分路：
 
-- keyword：ensure → 回填检测 → FTS 查询
+- keyword：分词 → `searchFts`（内存 BM25）
 - semantic：`embedTexts`（复用现有）→ `searchChunks`
 - hybrid：两路 `Promise.all` 并行；候选池各取 `max(50, topK×5)`，RRF 融合后切
   topK
@@ -157,10 +130,8 @@ BM25 路不过滤 model（全文与 embedding 模型无关）；向量路保持�
 ```
 
 空命中输出空串不炸图；searchQuery 渲染后为空/纯符号时 tokenize 产出空词元，
-FTS 路直接短路返回空结果（不发 `MATCH ''` 未定义查询）——hybrid 模式下向量路
-照常（空串 embedding 仍可出语义结果），keyword 模式输出空串。FTS5 不可用
-（自编译 SQLite 未启用）时 keyword/hybrid 报
-`VectorStoreError("fts_unavailable")` 人话错误，semantic 路不受影响。hybrid
+keyword 路直接短路返回空结果——hybrid 模式下向量路
+照常（空串 embedding 仍可出语义结果），keyword 模式输出空串。hybrid
 双路任一失败（如 embedding API 挂）即节点整体失败，**不做单路静默降级**（对齐
 rerank 的显式失败哲学，防掩盖配置错误）。
 
@@ -185,18 +156,15 @@ output 文本外挂 `hits` 结构化数组（即 §2 的 FusedHit 形态，含 s
 - 改动面：`vector-store.ts` + `graph-executor.ts` mirror↔server 双改；core 重建
   dist（server 侧 `npm run sync:core`）；drift 容差核算（vector-store/
   graph-executor 为 drift 活跃对，基线 217 行）
-- 纯函数（tokenize/joinFts*/rrfFuse）：mirror vitest 直测（零 DB 依赖）；
-  tokenize 用例覆盖中英混合、专有名词、长句、空串等代表性样本（检索质量评测集
-  v1 裁剪，样本具体化兜住分词回归）
-- FTS 真表交互（建表/回填/BM25 查询）：mirror 侧 vitest 真库不可行（better-sqlite3
-  Electron ABI 已知约束）→ server 侧 jest（node ABI 可载）覆盖同代码副本 +
-  `test:e2e:graph` 冒烟补端到端
-- **Spike 前置两项**（实施计划第一步，任一翻车回本设计启用兜底）：
-  1. Electron 主进程实证 `CREATE VIRTUAL TABLE USING fts5` 可用
-  2. Electron 主进程实证 `Intl.Segmenter` 可用（兜底路线：trigram tokenizer）
-  两项在 mac 验证后，**Windows 预编译二进制需复验**（平台 binding 永不硬声明
-  纪律；better-sqlite3 文档口径三平台统一启用 FTS5，仍按纪律实证）——Windows
-  复验可后置到发布前验证清单，不阻塞 mac 开发。
+- 纯函数（tokenize/rankBm25/rrfFuse）：mirror vitest 直测（零 DB 依赖——
+  BM25 纯函数化后 FTS 无真表交互测试需求，server jest 真表线整个取消）；
+  tokenize 用例覆盖中英混合、专有名词、长句、空串等代表性样本；rankBm25
+  用例钉住「双词命中 > 单词命中 > 零命中剔除」的排序语义与 IDF 平滑
+- handler 级（mock prisma + fetch 打桩，先例 `tests/ai/graph-vector.test.ts`）；
+  `test:e2e:graph` 冒烟补端到端（真 server 子进程跑 keyword 模式中文查询）
+- **前置实证一项**（已过，2026-10-30）：`Intl.Segmenter` node 侧可用
+  （server jest 实测）；Electron 主进程为 Chromium V8 内建 ICU，同 API 零风险。
+  FTS5/Windows 复验随 FTS5 路线否决一并作废。
 
 ## Phase 2：rerank 节点（设计定稿，下期实施）
 
@@ -253,8 +221,9 @@ timeoutMs
 
 - **假设**（已向用户呈现并认可）：双轨保留 vectorSearch；rerank 排期下期但旁路
   本期埋；不加权融合参数。
-- **假设**：better-sqlite3 预编译含 FTS5、主进程含 Intl.Segmenter——均列 Spike
-  实证，翻车有兜底（trigram）；Windows 复验见 §Phase 1.6。
+- **假设**：`Intl.Segmenter` 双端可用（node 已实测，Electron 内建 ICU 零风险）。
+  ~~better-sqlite3 预编译含 FTS5~~ 已随 FTS5 路线否决作废（2026-10-30 pivot，
+  见综述段）。
 - **对齐现状（非本期范围，防误判为遗漏）**：图执行链路不写 llmCallEvent 等
   监控事件（监控覆盖聊天链路），hybridSearch 的 embedding 调用对齐现状；图无
   导入/导出/复制功能（graph.repo.ts 查证），节点 kind 无跨版本分发面，老版本
@@ -268,10 +237,10 @@ timeoutMs
 | 文件 | 份数 | 变更 |
 |------|------|------|
 | `packages/tianshu-core/src/graph-schema.ts` | 单份 | hybridSearch + rerank schema、FusedHit 类型；重建 dist |
-| `packages/tianshu-core/src/retrieval.ts` | 单份（新增） | tokenize / joinFts* / rrfFuse 纯函数 |
-| `electron/domains/ai/orchestration/vector-store.ts` | 双份 | FTS 虚表 ensure / 增量 / 回填 / BM25 查询 |
+| `packages/tianshu-core/src/retrieval.ts` | 单份（新增） | tokenize / rankBm25 / rrfFuse 纯函数 |
+| `electron/domains/ai/orchestration/vector-store.ts` | 双份 | searchFts（内存 BM25 读行评分）、searchChunks 加 chunkId |
 | `electron/domains/ai/orchestration/graph-executor.ts` | 双份 | makeHybridSearchNodeHandler（Phase 2 加 rerank handler）、toNodeUpdate 旁路 |
 | `src-react/domains/ai/orchestration/*` | 单份 | 节点注册 + 属性面板 + 模型选择器；`GraphTestRunDialog`/`GraphRunTraceView` 确认零适配（预期泛化渲染） |
 | `src-react/i18n/locales/{zh-CN,en-US}/chat.json` | 双语 | 节点文案 |
 | server 侧 `src/core/graph/` 对应副本 | 双份 | 与 mirror 同步改 + drift 容差核算 |
-| 测试 | — | core 纯函数单测（mirror vitest）、FTS 交互（server jest）、e2e:graph 冒烟 |
+| 测试 | — | core 纯函数 + handler mock 单测（mirror vitest）、e2e:graph 冒烟 |

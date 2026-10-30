@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 新增 `hybridSearch` 工作流节点——SQLite FTS5 BM25 全文检索 + 向量检索 + RRF 融合，单节点三模式（semantic/keyword/hybrid），并预埋 hits 旁路供 Phase 2 rerank 消费。
+**Goal:** 新增 `hybridSearch` 工作流节点——内存 BM25 全文检索 + 向量检索 + RRF 融合，单节点三模式（semantic/keyword/hybrid），并预埋 hits 旁路供 Phase 2 rerank 消费。
 
-**Architecture:** 检索纯逻辑（分词/FTS 查询串/RRF）下沉 `tianshu-core/src/retrieval.ts`（单份三端，零依赖）；FTS5 虚表 `vectorChunkFts` 为 `vectorChunk` 的全表镜像（独立存储双文本列，`ensure` 幂等建表 + count 对比回填 + upsert 增量同步），挂在天枢 local.db 上走 `prisma.$executeRawUnsafe/$queryRaw`（不进 prisma schema、不走 v1 快照）；executor 新增 handler 按 mode 分路。`vector-store.ts` 与 `graph-executor.ts` 是 mirror ↔ server 双份守护文件，必须同步双改。
+**Architecture:** 检索纯逻辑（分词/BM25 评分/RRF 融合）下沉 `tianshu-core/src/retrieval.ts`（单份三端，零依赖）；全文检索为纯 JS 内存 BM25（2026-10-30 pivot：FTS5 因 server Prisma 内置 engine 不支持且双端驱动异构而否决），与现有 `searchChunks`「全表读出+内存余弦」同构——无虚表/无迁移/无索引生命周期；executor 新增 handler 按 mode 分路。`vector-store.ts` 与 `graph-executor.ts` 是 mirror ↔ server 双份守护文件，必须同步双改。
 
-**Tech Stack:** SQLite FTS5（better-sqlite3 内建）、Intl.Segmenter（Node/Chromium 内建 ICU）、Prisma raw 查询、zod、vitest（mirror）/ jest（server）。
+**Tech Stack:** Intl.Segmenter（Node/Chromium 内建 ICU）、纯 JS Okapi BM25（k1=1.5/b=0.75）、zod、vitest。
 
 **Spec:** `docs/superpowers/specs/2026-10-30-hybrid-search-node-design.md`（本计划从 spec 出发，执行者须同时读 spec）
 
@@ -16,112 +16,52 @@
 - **core 准入**：`packages/tianshu-core` 包内模块零运行时依赖（Intl.Segmenter 是内建 API，准入合规）；改 core 后必须重建 dist：`npm --prefix packages/tianshu-protocol run build && npm --prefix packages/tianshu-core run build`（server 消费 dist，mirror 经 alias 直读 src 不受影响）。
 - **命名规范**：camelCase 变量/函数、kebab-case 文件名、错误码 snake_case（对齐现有 `vector_empty_text`/`embed_api_error` 风格）。
 - **i18n 铁律**：所有用户可见文案走 `t()`，zh-CN 与 en-US 两个 JSON 同步加 key；禁止硬编码中文。
-- **测试环境约束**：mirror 侧 vitest 无法加载真 better-sqlite3（Electron ABI 编译）——真表交互测试只能写 server 侧 jest（node ABI）；mirror 侧一律 mock prisma（先例 `tests/ai/graph-vector.test.ts`）。
-- **worktree 环境**（如执行环境为 worktree）：跑 server jest 前需补 node_modules 双软链；若 jest 因 TS paths 不跟随目录级 symlink 大面积起不来（已知坑），fallback：`git diff main > /tmp/hs.patch` 后在主树 `git apply /tmp/hs.patch` 跑 server jest 验收，验收完主树 `git checkout -- .` 恢复（worktree 是唯一真源，勿在主树提交）。
+- **测试环境约束（2026-10-30 pivot 后）**：全文检索为纯 JS 内存 BM25（零 SQLite 特性依赖）——无真表交互测试需求，全部测试走 mirror vitest（core 纯函数直测 + handler 级 mock prisma/fetch，先例 `tests/ai/graph-vector.test.ts`）。server 侧只做双份源码同步，不新增 jest spec；既有 suite 回归在 Task 8（若 worktree 内 jest 因 TS paths symlink 坑起不来：`git diff main > /tmp/hs.patch` → 主树 `git apply /tmp/hs.patch` 跑完 → `git checkout -- .` 恢复，worktree 是唯一真源，勿在主树提交）。
 - **提交纪律**：每 Task 结束即 commit（sub-agent 分段自提交保命）；commit message 中文 conventional 格式（如 `feat(graph): …`）。
-- **业界主流取向**（用户授权遇疑时的裁决基准）：RRF k=60 不做成参数；FTS 查询词 OR 连接；bm25 负值转正展示；显式失败不做静默降级。
+- **业界主流取向**（用户授权遇疑时的裁决基准）：RRF k=60 不做成参数；BM25 k1=1.5/b=0.75 固定业界默认；显式失败不做静默降级。
 
 ---
 
-### Task 1: Spike——FTS5 与 Intl.Segmenter 实证（server 侧 jest）
+### Task 1: core retrieval.ts 纯函数完整实现 + 单测（tokenize/rankBm25/rrfFuse）
+
+> **2026-10-30 pivot**：原 Task 1（FTS5 spike）实证 server 无 better-sqlite3（Prisma `prisma-client-js` 内置 engine 不编译 FTS5，alpine/musl 补装撞依赖铁律），全文检索改为**纯 JS 内存 BM25**（spec 综述段已更新）；原 Task 2 已并入本任务。
+> **worktree 遗留**（前序 spike 尝试，未提交）：`packages/tianshu-core/src/retrieval.ts`（tokenize 最小版——保留并扩展）、`src/index.ts`（barrel 行已加——保留）、`tsconfig.json`（lib ES2022.Intl——保留，Intl.Segmenter 类型所需）、`apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts`（旧 spike spec——**删除**）。
 
 **Files:**
-- Create: `apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts`（spike 用例后续 Task 6 扩为正式 FTS 测试，不弃）
-
-**Interfaces:**
-- Produces: 实证结论（FTS5 虚表可建、`Intl.Segmenter` 可用、`bm25()`/`rank` 可查）。**任一失败 → 停止后续任务，报告用户**（兜底路线 trigram 需回 spec 重新设计）。
-
-- [ ] **Step 1: 写实证 spec**
-
-先读 `apps/tianshu-server/test/commons/ensure-graph-run-node-table.spec.ts` 学习 server jest 建临时 SQLite 库的模式（env 隔离变量等），照它开库。写以下用例（核心断言给全，建库细节按先例文件对齐）：
-
-```typescript
-// apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts
-/**
- * Spike + 正式 FTS 数据面测试：FTS5 虚表可用性、Intl.Segmenter 可用性、
- * bm25 排序与中文预分词召回（GA 系混合检索）。
- */
-import { tokenize, joinFtsDocument, joinFtsQuery } from "@tianshu/core";
-
-describe("spike: FTS5 + Intl.Segmenter 可用性", () => {
-  it("Intl.Segmenter 中文分词可用", () => {
-    const tokens = tokenize("天枢混合检索支持中文全文匹配");
-    expect(tokens.length).toBeGreaterThan(2);
-    expect(tokens.join("")).toContain("检索");
-  });
-
-  it("FTS5 虚表可建、中文预分词 BM25 召回、OR 查询生效", () => {
-    // 按先例建临时库 db（better-sqlite3 直连）
-    db.exec(`CREATE VIRTUAL TABLE t USING fts5(
-      text, originalText UNINDEXED, userId UNINDEXED, collection UNINDEXED,
-      sourceName UNINDEXED, chunkId UNINDEXED, tokenize = 'unicode61')`);
-    const insert = db.prepare(
-      "INSERT INTO t(text, originalText, userId, collection, sourceName, chunkId) VALUES (?,?,?,?,?,?)");
-    insert.run(joinFtsDocument(tokenize("分布式系统的容错设计与故障恢复")), "分布式系统的容错设计与故障恢复", 1, "c1", "s1", 1);
-    insert.run(joinFtsDocument(tokenize("前端组件的状态管理最佳实践")), "前端组件的状态管理最佳实践", 1, "c1", "s2", 2);
-    // AND 词都命中 → 排第一
-    const both = db.prepare(
-      "SELECT chunkId, bm25(t) AS rank FROM t WHERE t MATCH ? AND userId = 1 ORDER BY rank"
-    ).all(joinFtsQuery(tokenize("容错 故障")));
-    expect(both[0].chunkId).toBe(1);
-    // OR：只含一个词也召回
-    const either = db.prepare(
-      "SELECT chunkId FROM t WHERE t MATCH ? ORDER BY rank"
-    ).all(joinFtsQuery(tokenize("容错 状态管理")));
-    expect(either.map((r: any) => r.chunkId)).toContain(2);
-    // bm25 为负、越小越相关
-    expect(both[0].rank).toBeLessThan(0);
-  });
-});
-```
-
-注意：`tokenize/joinFts*` 此时还不存在——Task 1 内先在 `packages/tianshu-core/src/retrieval.ts` 落最小实现（Task 2 会补全与单测），并重建 dist（见 Global Constraints 命令）。
-
-- [ ] **Step 2: 跑 spec 验证**
-
-Run: `cd apps/tianshu-server && npx jest test/core/graph-vector-store-fts.spec.ts`
-Expected: PASS。若 `CREATE VIRTUAL TABLE` 报 `no such module: fts5` 或 Segmenter undefined → **终止计划**，向用户报告（spec 兜底：trigram）。
-
-- [ ] **Step 3: 版本一致性确认**
-
-Run: `node -e "console.log(require('/Users/hjx/workspace/mirror/node_modules/better-sqlite3/package.json').version, require('/Users/hjx/workspace/mirror/apps/tianshu-server/node_modules/better-sqlite3/package.json').version)"`
-Expected: 两版本号一致（server 侧实证结论可外推 mirror 侧）。不一致则记录并在 Task 6 补 mirror 侧 Electron 环境实证说明。
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts packages/tianshu-core/src/retrieval.ts packages/tianshu-core/dist
-git commit -m "feat(graph): FTS5/Intl.Segmenter spike 实证通过——混合检索前置"
-```
-
----
-
-### Task 2: core retrieval.ts 纯函数完整实现 + 单测
-
-**Files:**
-- Modify: `packages/tianshu-core/src/retrieval.ts`（Task 1 的最小版补全为正式版）
-- Modify: `packages/tianshu-core/src/index.ts`（barrel 导出）
+- Modify: `packages/tianshu-core/src/retrieval.ts`（补 rankBm25/rrfFuse；若存在 joinFts* 则删除）
+- Modify: `packages/tianshu-core/src/index.ts`（确认 barrel 已有 `export * from "./retrieval";`）
+- Modify: `packages/tianshu-core/tsconfig.json`（lib 含 ES2022.Intl）
+- Delete: `apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts`
 - Test: `tests/core/retrieval.test.ts`（mirror vitest，先例 `tests/core/workspace-files-scan.test.ts`）
 
 **Interfaces:**
 - Produces（后续任务依赖的精确签名）:
+  - `interface Bm25Doc { chunkId: number; sourceName: string; collection: string; text: string }`
+  - `interface Bm25Hit extends Bm25Doc { score: number }`
   - `interface FusedHit { chunkId: number; sourceName: string; collection: string; text: string; score: number; rank: number }`
   - `tokenize(text: string): string[]`
-  - `joinFtsDocument(tokens: string[]): string`
-  - `joinFtsQuery(tokens: string[]): string`
+  - `rankBm25(queryTokens: string[], docs: Bm25Doc[], topK: number, k1?: number, b?: number): Bm25Hit[]`
   - `rrfFuse(vecHits: FusedHit[], ftsHits: FusedHit[], k?: number): FusedHit[]`
+  - 常量 `BM25_K1 = 1.5`、`BM25_B = 0.75`（Okapi 业界默认，rank-bm25/LangChain 同参）
 
 - [ ] **Step 1: 写失败测试**
 
 ```typescript
 // tests/core/retrieval.test.ts
 /**
- * 检索纯函数：tokenize（中英混合/专有名词/空串/纯符号/FTS 语法字符剥离）、
- * joinFts*、rrfFuse（同 chunk 累加/rank 重排/空输入）。
+ * 检索纯函数：tokenize（中英混合/专有名词/空串/纯符号）、rankBm25
+ * （排序语义/IDF 平滑/零命中剔除/空输入短路）、rrfFuse（同 chunk 累加/
+ * rank 重排/空输入）。
  */
 import { describe, expect, it } from "vitest";
-import { tokenize, joinFtsDocument, joinFtsQuery, rrfFuse, type FusedHit } from "@tianshu/core";
+import {
+  tokenize, rankBm25, rrfFuse, BM25_K1, BM25_B,
+  type Bm25Doc, type FusedHit,
+} from "@tianshu/core";
 
+const doc = (chunkId: number, text: string): Bm25Doc => ({
+  chunkId, sourceName: `s${chunkId}`, collection: "c", text,
+});
 const hit = (chunkId: number, text: string): FusedHit => ({
   chunkId, sourceName: `s${chunkId}`, collection: "c", text, score: 0.9, rank: 0,
 });
@@ -133,7 +73,7 @@ describe("tokenize", () => {
     expect(tokens.join("")).toBe("天枢支持混合检索");
   });
   it("中英混合与数字保留", () => {
-    const tokens = tokenize("SQLite FTS5 支持 BM25 排序 v2");
+    const tokens = tokenize("SQLite 支持 BM25 排序 v2");
     expect(tokens).toContain("SQLite");
     expect(tokens).toContain("BM25");
     expect(tokens).toContain("v2");
@@ -142,17 +82,31 @@ describe("tokenize", () => {
     expect(tokenize("")).toEqual([]);
     expect(tokenize("！？…—")).toEqual([]);
   });
-  it("FTS5 查询语法字符被剥离（注入面自愈）", () => {
-    const tokens = tokenize('容错" AND (NEAR) * :');
-    expect(tokens.join(" ")).not.toMatch(/AND|NEAR|\*|:|"/);
-    expect(tokens).toContain("容错");
-  });
 });
 
-describe("joinFtsDocument / joinFtsQuery", () => {
-  it("入库侧空格连接、查询侧 OR 连接", () => {
-    expect(joinFtsDocument(["容错", "设计"])).toBe("容错 设计");
-    expect(joinFtsQuery(["容错", "设计"])).toBe("容错 OR 设计");
+describe("rankBm25", () => {
+  const docs = [
+    doc(1, "分布式系统的容错设计与故障恢复"),       // 双词都含
+    doc(2, "容错相关的其它讨论"),                   // 单词命中
+    doc(3, "前端组件的状态管理最佳实践"),           // 零命中
+  ];
+  it("双词命中 > 单词命中；零命中剔除；限 topK", () => {
+    const hits = rankBm25(tokenize("容错 设计"), docs, 2);
+    expect(hits[0].chunkId).toBe(1);
+    expect(hits.map((h) => h.chunkId)).toEqual([1, 2]); // topK=2 且零命中的 3 剔除
+  });
+  it("IDF 平滑：高频词单独命中分数为正（+1 平滑防负）", () => {
+    const hits = rankBm25(tokenize("容错"), docs, 3);
+    expect(hits.length).toBe(2);
+    expect(hits.every((h) => h.score > 0)).toBe(true);
+  });
+  it("空词元或空文档短路返回空数组", () => {
+    expect(rankBm25([], docs, 5)).toEqual([]);
+    expect(rankBm25(["容错"], [], 5)).toEqual([]);
+  });
+  it("默认参数为业界值", () => {
+    expect(BM25_K1).toBe(1.5);
+    expect(BM25_B).toBe(0.75);
   });
 });
 
@@ -164,8 +118,7 @@ describe("rrfFuse", () => {
     expect(fused.map((f) => f.chunkId)).toEqual([1, 2, 3]);
   });
   it("融合后 rank 从 1 重编", () => {
-    const fused = rrfFuse([hit(5, "x")], [], 60);
-    expect(fused[0].rank).toBe(1);
+    expect(rrfFuse([hit(5, "x")], [], 60)[0].rank).toBe(1);
   });
   it("空输入返回空数组", () => {
     expect(rrfFuse([], [])).toEqual([]);
@@ -175,18 +128,32 @@ describe("rrfFuse", () => {
 
 - [ ] **Step 2: 跑测试验证失败**
 
-Run: `npm run test -- tests/core/retrieval.test.ts`（或 `npx vitest run tests/core/retrieval.test.ts`）
-Expected: FAIL（`tokenize` 未导出/`@tianshu/core` 无该导出）。
+Run: `npx vitest run tests/core/retrieval.test.ts`
+Expected: FAIL（`rankBm25`/`rrfFuse` 未导出）。
 
 - [ ] **Step 3: 写正式实现**
+
+`packages/tianshu-core/src/retrieval.ts` 完整版（tokenize 已有则保留）：
 
 ```typescript
 // packages/tianshu-core/src/retrieval.ts
 /**
  * 检索纯逻辑（GA 系单份三端）：中文分词（Intl.Segmenter——Node 16+/
- * Chromium 内建 ICU 词典，零依赖）、FTS5 查询串生成、RRF 融合。分词器
- * 单点抽象：质量升级（jieba 等）只动 tokenize 一处。
+ * Chromium 内建 ICU 词典，零依赖）、内存 BM25（FTS5 否决后 pivot，
+ * LangChain BM25Retriever 形态）、RRF 融合。分词器单点抽象：质量升级
+ * （jieba 等）只动 tokenize 一处。
  */
+export interface Bm25Doc {
+  chunkId: number;
+  sourceName: string;
+  collection: string;
+  text: string;
+}
+
+export interface Bm25Hit extends Bm25Doc {
+  score: number;
+}
+
 export interface FusedHit {
   chunkId: number;
   sourceName: string;
@@ -196,25 +163,68 @@ export interface FusedHit {
   rank: number;
 }
 
+/** Okapi BM25 业界默认参数（rank-bm25/LangChain BM25Retriever 同参） */
+export const BM25_K1 = 1.5;
+export const BM25_B = 0.75;
+
 const segmenter = new Intl.Segmenter("zh-Hans", { granularity: "word" });
 const TOKEN_RE = /[\p{Script=Han}\p{L}\p{N}]/u;
 
-/** 分词：仅保留含文字/数字的词元（FTS5 查询语法字符与关键字形态天然
- * 剥离，MATCH 注入面自愈）；导出供测试 */
+/** 分词：仅保留含文字/数字的词元（标点/符号剥离）；导出供测试 */
 export function tokenize(text: string): string[] {
   return [...segmenter.segment(text)]
     .map((seg) => seg.segment.trim())
     .filter((token) => token.length > 0 && TOKEN_RE.test(token));
 }
 
-/** 入库侧：词元空格连接（FTS5 unicode61 按空格切） */
-export function joinFtsDocument(tokens: string[]): string {
-  return tokens.join(" ");
-}
-
-/** 查询侧：词元 OR 连接（对齐 ES 默认 OR 宽召回，靠 BM25 排序） */
-export function joinFtsQuery(tokens: string[]): string {
-  return tokens.join(" OR ");
+/** 内存 BM25 评分：Lucene 式 +1 平滑 IDF（防负），每查询全量分词评分
+ * （与 searchChunks 全表余弦同构，万级毫秒级）；零命中剔除、降序切 topK */
+export function rankBm25(
+  queryTokens: string[],
+  docs: Bm25Doc[],
+  topK: number,
+  k1 = BM25_K1,
+  b = BM25_B,
+): Bm25Hit[] {
+  if (queryTokens.length === 0 || docs.length === 0) {
+    return [];
+  }
+  const docTokens = docs.map((d) => tokenize(d.text));
+  const avgLen =
+    docTokens.reduce((sum, tokens) => sum + tokens.length, 0) / docTokens.length;
+  const df = new Map<string, number>();
+  for (const tokens of docTokens) {
+    for (const term of new Set(tokens)) {
+      df.set(term, (df.get(term) ?? 0) + 1);
+    }
+  }
+  const idf = (term: string) => {
+    const n = df.get(term) ?? 0;
+    return Math.log(1 + (docs.length - n + 0.5) / (n + 0.5));
+  };
+  const hits: Bm25Hit[] = [];
+  docs.forEach((doc, i) => {
+    const tokens = docTokens[i];
+    const tf = new Map<string, number>();
+    for (const token of tokens) {
+      tf.set(token, (tf.get(token) ?? 0) + 1);
+    }
+    let score = 0;
+    for (const term of new Set(queryTokens)) {
+      const freq = tf.get(term) ?? 0;
+      if (freq === 0) {
+        continue;
+      }
+      score +=
+        (idf(term) * (freq * (k1 + 1))) /
+        (freq + k1 * (1 - b + (b * tokens.length) / avgLen));
+    }
+    if (score > 0) {
+      hits.push({ ...doc, score });
+    }
+  });
+  hits.sort((a, x) => x.score - a.score);
+  return hits.slice(0, topK);
 }
 
 /** RRF 融合（k=60 论文值/ES rank_constant 默认）：按 chunkId 累加
@@ -239,32 +249,29 @@ export function rrfFuse(
   absorb(vecHits);
   absorb(ftsHits);
   return [...merged.values()]
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b2) => b2.score - a.score)
     .map((h, i) => ({ ...h, rank: i + 1 }));
 }
 ```
 
-在 `packages/tianshu-core/src/index.ts` 末尾（`export * from "./tool-alias";` 后）加：
+- [ ] **Step 4: 跑测试验证通过 + 既有回归**
 
-```typescript
-// GA 系：混合检索纯逻辑（分词/FTS 查询串/RRF 融合，零依赖）
-export * from "./retrieval";
-```
+Run: `npx vitest run tests/core tests/ai/graph-vector.test.ts`
+Expected: PASS。
 
-- [ ] **Step 4: 跑测试验证通过**
-
-Run: `npx vitest run tests/core/retrieval.test.ts`
-Expected: PASS（全部用例）。
-
-- [ ] **Step 5: 重建 dist + Commit**
+- [ ] **Step 5: 重建 dist + 清理旧 spike + Commit**
 
 ```bash
 npm --prefix packages/tianshu-protocol run build && npm --prefix packages/tianshu-core run build
-git add packages/tianshu-core/src/retrieval.ts packages/tianshu-core/src/index.ts packages/tianshu-core/dist tests/core/retrieval.test.ts
-git commit -m "feat(core): 检索纯逻辑入包——tokenize/joinFts*/rrfFuse（混合检索 GA 系）"
+rm apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts
+git add packages/tianshu-core/src/retrieval.ts packages/tianshu-core/src/index.ts packages/tianshu-core/tsconfig.json packages/tianshu-core/dist tests/core/retrieval.test.ts
+git add -A apps/tianshu-server/test
+git commit -m "feat(core): 检索纯逻辑入包——tokenize/rankBm25/rrfFuse（FTS5 否决 pivot 内存 BM25）"
 ```
 
----
+### Task 2: （已并入 Task 1，跳过）
+
+> 原「core retrieval.ts 纯函数完整实现 + 单测」已随 FTS5 pivot 并入 Task 1（含 rankBm25/rrfFuse 全部代码与用例）。执行器遇到本任务直接标记完成，勿重复实现。
 
 ### Task 3: core graph-schema 加 hybridSearch 节点 schema
 
@@ -320,44 +327,49 @@ git commit -m "feat(core): hybridSearch 节点 schema 入包（三模式/topK/mo
 
 ---
 
-### Task 4: mirror vector-store.ts FTS 数据面
+### Task 4: mirror vector-store.ts 内存 BM25 检索
 
 **Files:**
 - Modify: `electron/domains/ai/orchestration/vector-store.ts`
-- Test: `tests/ai/graph-hybrid.test.ts`（新建，本 Task 先写 FTS 侧 mock 断言；Task 5 扩 handler 用例）
+- Test: `tests/ai/graph-hybrid.test.ts`（新建，本 Task 写 searchFts 侧；Task 5 扩 handler 用例）
 
 **Interfaces:**
-- Consumes: Task 2 的 `tokenize/joinFtsDocument/joinFtsQuery`、Task 3 无关（本文件不 import schema）。
-- Produces（Task 5 与 Task 6 依赖）:
-  - `ensureVectorFtsTable(): Promise<void>`
-  - `searchFts(params: { userId: number; collection: string; queryTokens: string[]; limit: number }): Promise<FusedHit[]>`（内部 ensure+回填检测；空词元直接返回 `[]`；返回按相关度降序、`score` 为 `-bm25` 正值）
-  - `upsertChunks` 行为扩展：事务内同步删/插 FTS 行（签名不变）
-  - `interface FtsRow { chunkId: number; userId: number; collection: string; sourceName: string; originalText: string }`（回填扫描用）
+- Consumes: Task 1 的 `tokenize/rankBm25`、`Bm25Doc/Bm25Hit`（mirror 经 alias 直读 core src）。
+- Produces（Task 5 依赖）:
+  - `searchFts(params: { userId: number; collection: string; queryTokens: string[]; limit: number }): Promise<FusedHit[]>`（空词元直接 `[]` 不查库；返回按相关度降序、rank 从 1 编）
+  - `searchChunks` 返回值增加 `chunkId` 字段（`findMany` 整行已有 `id`，hits.map 带上 `row.id`；既有字段不变，现有消费方不破坏）
+  - `upsertChunks` **完全不动**（BM25 每查询实时读行，无索引同步——pivot 后无 DDL/无迁移/无生命周期）
 
-- [ ] **Step 1: 写失败测试（FTS 侧 mock 断言）**
+- [ ] **Step 1: 写失败测试（searchFts mock 断言）**
 
-`tests/ai/graph-hybrid.test.ts` 顶部照 `tests/ai/graph-vector.test.ts` 的 `vi.mock("electron")` + `vi.mock("../../electron/commons/prisma-client")` 替身模式，mock 对象在 vector 先例基础上扩 raw 方法（`$executeRawUnsafe: vi.fn()`、`$queryRaw: vi.fn()`、`$transaction: vi.fn(async (fn) => fn(tx))` 交互式形态，tx 同 mock 面）。用例：
+`tests/ai/graph-hybrid.test.ts` 顶部照 `tests/ai/graph-vector.test.ts` 的 `vi.mock("electron")` + `vi.mock("../../electron/commons/prisma-client")` 替身模式（mock 面以本任务所需为限：`vectorChunk.findMany` 即可，无需 raw 方法）。用例：
 
 ```typescript
-describe("vector-store FTS 数据面", () => {
-  it("searchFts：空词元短路返回空（不发 MATCH）", async () => {
+import { searchFts } from "../../electron/domains/ai/orchestration/vector-store";
+
+describe("vector-store searchFts（内存 BM25）", () => {
+  it("空词元短路返回空（不查库）", async () => {
     const hits = await searchFts({ userId: 1, collection: "", queryTokens: [], limit: 5 });
     expect(hits).toEqual([]);
-    expect(prisma.$queryRaw).not.toHaveBeenCalled();
+    expect(prisma.vectorChunk.findMany).not.toHaveBeenCalled();
   });
-  it("searchFts：count 一致时不回填、MATCH 串为 OR 连接", async () => {
-    prisma.vectorChunk.count.mockResolvedValue(10);
-    // FTS count 走 $queryRaw 第一跳返回 10（按实现约定的调用序 mock）
-    prisma.$queryRaw.mockResolvedValueOnce([{ n: 10 }]).mockResolvedValueOnce([
-      { chunkId: 1, sourceName: "s", collection: "c", text: "原文", rank: -1.2 },
+  it("findMany 限定 select 且命中行经 rankBm25 排序返回 FusedHit 形态", async () => {
+    prisma.vectorChunk.findMany.mockResolvedValue([
+      { id: 1, collection: "c", sourceName: "s1", text: "分布式系统的容错设计与故障恢复" },
+      { id: 2, collection: "c", sourceName: "s2", text: "容错相关的其它讨论" },
+      { id: 3, collection: "c", sourceName: "s3", text: "前端组件的状态管理最佳实践" },
     ]);
-    const hits = await searchFts({ userId: 1, collection: "c", queryTokens: ["容错", "设计"], limit: 5 });
-    expect(hits[0]).toMatchObject({ chunkId: 1, text: "原文", score: 1.2 });
+    const hits = await searchFts({ userId: 1, collection: "c", queryTokens: ["容错", "设计"], limit: 2 });
+    expect(prisma.vectorChunk.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { userId: 1, collection: "c" },
+      select: { id: true, collection: true, sourceName: true, text: true },
+    }));
+    expect(hits.map((h) => h.chunkId)).toEqual([1, 2]); // 双词命中 > 单词命中，零命中剔除
+    expect(hits[0]).toMatchObject({ sourceName: "s1", rank: 1 });
+    expect(hits.every((h) => h.score > 0)).toBe(true);
   });
 });
 ```
-
-（mock 约定：FTS 行数 count 用 `$queryRaw` 查 `SELECT COUNT(*) AS n`；具体断言以实现落地的调用形态为准，sub-agent 写实现时保持「count 两跳 → 必要时回填 → MATCH 一跳」的调用序，测试按此 mock。）
 
 - [ ] **Step 2: 跑测试验证失败**
 
@@ -366,65 +378,12 @@ Expected: FAIL（`searchFts` 未导出）。
 
 - [ ] **Step 3: 写实现**
 
-`electron/domains/ai/orchestration/vector-store.ts` 追加（import 区补 `tokenize/joinFtsDocument/joinFtsQuery` 自 `@tianshu/core`，mirror 经 alias 直读 src）：
+`electron/domains/ai/orchestration/vector-store.ts` 追加（import 区补 `rankBm25` 与 `FusedHit` 类型自 `@tianshu/core`）：
 
 ```typescript
-const FTS_TABLE = "vectorChunkFts";
-/** 回填单飞：并发首查复用同一次回填（automation 并发跑图防重） */
-let ftsBackfillInFlight: Promise<void> | null = null;
-
-/** FTS5 虚表幂等建表（vectorChunk 全表镜像；不进 prisma schema/不走
- * v1 快照——对齐 ensureGraphRunNodeTable 先例）。text=分词形态（MATCH
- * 索引面），originalText=原文（输出/hits 用）。 */
-export async function ensureVectorFtsTable(): Promise<void> {
-  await prisma.$executeRawUnsafe(`CREATE VIRTUAL TABLE IF NOT EXISTS ${FTS_TABLE} USING fts5(
-    text, originalText UNINDEXED, userId UNINDEXED, collection UNINDEXED,
-    sourceName UNINDEXED, chunkId UNINDEXED, tokenize = 'unicode61')`);
-}
-
-/** 全清全量回填 + optimize 段合并（万级亚秒；count 对比不一致时触发） */
-async function rebuildFtsIndex(): Promise<void> {
-  await prisma.$executeRawUnsafe(`DELETE FROM ${FTS_TABLE}`);
-  // select 限定列——不拉 vector JSON 大字段（回填只需文本与键）
-  const rows: Array<{
-    id: number; userId: number | null; collection: string;
-    sourceName: string; text: string;
-  }> = await prisma.vectorChunk.findMany({
-    select: { id: true, userId: true, collection: true, sourceName: true, text: true },
-  });
-  for (const row of rows) {
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO ${FTS_TABLE}(text, originalText, userId, collection, sourceName, chunkId)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      joinFtsDocument(tokenize(row.text)), row.text,
-      row.userId ?? 0, row.collection, row.sourceName, row.id,
-    );
-  }
-  await prisma.$executeRawUnsafe(
-    `INSERT INTO ${FTS_TABLE}(${FTS_TABLE}) VALUES('optimize')`);
-}
-
-/** 回填检测（单飞）：vectorChunk 与 FTS 行数不一致时全量重建 */
-async function ensureFtsSynced(): Promise<void> {
-  const [chunkCount] = await prisma.$queryRaw<[{ n: number }>](
-    `SELECT COUNT(*) AS n FROM vectorChunk`);
-  const [ftsCount] = await prisma.$queryRaw<[{ n: number }>](
-    `SELECT COUNT(*) AS n FROM ${FTS_TABLE}`);
-  if (chunkCount.n === ftsCount.n) {
-    return;
-  }
-  if (!ftsBackfillInFlight) {
-    ftsBackfillInFlight = (async () => {
-      await ensureVectorFtsTable();
-      await rebuildFtsIndex();
-    })().finally(() => {
-      ftsBackfillInFlight = null;
-    });
-  }
-  await ftsBackfillInFlight;
-}
-
-/** BM25 全文检索：空词元短路；返回 -bm25 正值（越大越相关，与余弦同向） */
+/** BM25 全文检索（内存，与 searchChunks 全表余弦同构——FTS5 否决后
+ * pivot，LangChain BM25Retriever 形态）：空词元短路；不过滤 model（全文
+ * 与 embedding 模型无关）；万级毫秒级，与全表余弦成本同量级 */
 export async function searchFts(params: {
   userId: number;
   collection: string;
@@ -434,80 +393,40 @@ export async function searchFts(params: {
   if (params.queryTokens.length === 0) {
     return [];
   }
-  await ensureVectorFtsTable();
-  await ensureFtsSynced();
-  const query = joinFtsQuery(params.queryTokens);
-  const rows = await prisma.$queryRaw<
-    Array<{ chunkId: number; sourceName: string; collection: string; text: string; rank: number }>
-  >(`SELECT chunkId, sourceName, collection, originalText AS text,
-       bm25(${FTS_TABLE}) AS rank
-     FROM ${FTS_TABLE}
-     WHERE ${FTS_TABLE} MATCH '${query.replace(/'/g, "''")}'
-       AND userId = ${params.userId}
-       ${params.collection ? `AND collection = '${params.collection.replace(/'/g, "''")}'` : ""}
-     ORDER BY rank LIMIT ${params.limit}`);
-  return rows.map((row) => ({
-    chunkId: row.chunkId, sourceName: row.sourceName, collection: row.collection,
-    text: row.text, score: -Number(row.rank), rank: 0,
-  }));
-}
-```
-
-> 注：`$queryRaw` tagged-template 才支持参数绑定，但条件拼接（collection 可空）用 tagged template 要 `Prisma.sql/Prisma.empty` 组合；上面选择了「词元已过白名单过滤 + 引号转义」的拼接式（`$queryRaw` 普通调用即整串）。两派业界都有——实现时若团队倾向参数化，改写为 `prisma.$queryRaw\`...\${Prisma.sql\`AND collection = \${...}\`}\`` 等价，断言不变。
-
-**改造 `upsertChunks`**：数组式 `$transaction` 改交互式（混 model 与 raw），事务内现有关联后追加 FTS 删/插（分词）：
-
-```typescript
-export async function upsertChunks(params: {
-  userId: number; collection: string; sourceName: string; model: string;
-  chunks: VectorChunkRow[];
-}): Promise<void> {
-  await ensureVectorFtsTable();
-  await prisma.$transaction(async (tx) => {
-    await tx.vectorChunk.deleteMany({
-      where: { userId: params.userId, collection: params.collection, sourceName: params.sourceName },
-    });
-    for (const chunk of params.chunks) {
-      await tx.vectorChunk.create({
-        data: {
-          userId: params.userId, collection: params.collection,
-          sourceName: params.sourceName, seq: chunk.seq, text: chunk.text,
-          vector: JSON.stringify(chunk.vector), model: params.model,
-        },
-      });
-    }
-    await tx.$executeRawUnsafe(
-      `DELETE FROM ${FTS_TABLE} WHERE userId = ? AND collection = ? AND sourceName = ?`,
-      params.userId, params.collection, params.sourceName);
-    for (const chunk of params.chunks) {
-      // create 返回整行含自增 id——直接用 created.id 作 FTS 行 chunkId
-      await tx.$executeRawUnsafe(
-        `INSERT INTO ${FTS_TABLE}(text, originalText, userId, collection, sourceName, chunkId)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        joinFtsDocument(tokenize(chunk.text)), chunk.text,
-        params.userId, params.collection, params.sourceName, created.id);
-    }
+  const rows = await prisma.vectorChunk.findMany({
+    where: {
+      userId: params.userId,
+      ...(params.collection ? { collection: params.collection } : {}),
+    },
+    select: { id: true, collection: true, sourceName: true, text: true },
   });
+  const hits = rankBm25(
+    params.queryTokens,
+    rows.map((row) => ({
+      chunkId: row.id,
+      sourceName: row.sourceName,
+      collection: row.collection,
+      text: row.text,
+    })),
+    params.limit,
+  );
+  return hits.map((hit, index) => ({ ...hit, rank: index + 1 }));
 }
 ```
 
-> 注：上面 `created` 即循环里 `const created = await tx.vectorChunk.create({...})`（create 段与现版一致）；既有调用方（vectorize handler）签名零变化。
+同文件 `searchChunks` 的 `hits.map` 里补 `chunkId: row.id`（返回类型 `VectorHit` 加 `chunkId: number` 字段——现有消费方只用 sourceName/score/text，不破坏）。
 
-- [ ] **Step 4: 扩既有测试并验证全绿**
+- [ ] **Step 4: 跑测试验证通过 + 既有回归**
 
-`tests/ai/graph-vector.test.ts` 若对 `upsertChunks` 的 `$transaction` 有数组式断言，按交互式 mock 更新（`$transaction: vi.fn(async (fn) => fn(tx))`）。跑：
-
-Run: `npx vitest run tests/ai/graph-vector.test.ts tests/ai/graph-hybrid.test.ts`
-Expected: PASS。
+Run: `npx vitest run tests/ai/graph-hybrid.test.ts tests/ai/graph-vector.test.ts`
+Expected: PASS（既有 vector 测试不因 VectorHit 加字段而破）。
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add electron/domains/ai/orchestration/vector-store.ts tests/ai/graph-hybrid.test.ts tests/ai/graph-vector.test.ts
-git commit -m "feat(graph): vector-store FTS 数据面——vectorChunkFts 虚表 ensure/回填单飞/BM25 检索/upsert 增量同步"
+git add electron/domains/ai/orchestration/vector-store.ts tests/ai/graph-hybrid.test.ts
+git commit -m "feat(graph): vector-store 内存 BM25 全文检索——searchFts/searchChunks 加 chunkId"
 ```
-
----
 
 ### Task 5: mirror graph-executor.ts——hits 旁路类型 + hybridSearch handler
 
@@ -551,9 +470,8 @@ const baseNode = {
 };
 
 it("keyword 模式：不调 embedding、输出相关度文案、挂 hits", async () => {
-  prisma.$queryRaw.mockResolvedValue([{ n: 0 }]); // count 一致
-  prisma.$queryRaw.mockResolvedValueOnce([{ n: 0 }]).mockResolvedValueOnce([
-    { chunkId: 1, sourceName: "s1", collection: "c", text: "原文片段", rank: -0.8 },
+  prisma.vectorChunk.findMany.mockResolvedValue([
+    { id: 1, collection: "c", sourceName: "s1", text: "原文片段" },
   ]);
   const update = await runHybrid({ ...baseNode, mode: "keyword", modelId: undefined });
   expect(fetch).not.toHaveBeenCalled();
@@ -567,8 +485,9 @@ it("semantic 模式缺 modelId 报 hybrid_model_missing", async () => {
 });
 
 it("hybrid 模式：两路并行 RRF 融合（同 chunk 累加居首）", async () => {
-  // embedding fetch 打桩为确定性向量（先例）；向量路命中 chunk 1，
-  // FTS 路命中 chunk 1 与 chunk 2 —— 融合后 chunkId 1 第一
+  // embedding fetch 打桩为确定性向量（先例）；prisma.vectorChunk.findMany
+  // mock 行同时携带 vector（余弦路 JSON.parse）与 text（BM25 路评分）——
+  // 向量路命中 chunk 1，BM25 路命中 chunk 1 与 chunk 2，融合后 chunkId 1 第一
   const update = await runHybrid(baseNode);
   expect(update.nodes.hs1.hits?.[0].chunkId).toBe(1);
   expect(update.nodes.hs1.output).toContain("【s1｜相关度");
@@ -694,65 +613,43 @@ git commit -m "feat(graph): hybridSearch 节点 handler——三模式分路/RRF
 
 ---
 
-### Task 6: server 侧双份同步 + 真表 jest 测试
+### Task 6: server 侧双份同步
 
 **Files:**
-- Modify: `apps/tianshu-server/src/core/graph/vector-store.ts`（Task 4 同逻辑段）
-- Modify: `apps/tianshu-server/src/core/graph/graph-executor.ts`（Task 5 同逻辑段：分发注册 670 行区、handler 3716 行 `makeVectorSearchNodeHandler` 后、`NodeOutput` 类型、`toNodeUpdate`）
-- Modify: `apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts`（Task 1 spike 扩为正式真表测试）
+- Modify: `apps/tianshu-server/src/core/graph/vector-store.ts`（Task 4 同逻辑段：searchFts + searchChunks 加 chunkId）
+- Modify: `apps/tianshu-server/src/core/graph/graph-executor.ts`（Task 5 同逻辑段：分发注册、`makeHybridSearchNodeHandler`、`NodeOutput` 加 hits、`toNodeUpdate` 透传）
 
 **Interfaces:**
-- Consumes: Task 1–5 全部产物（core dist 已含 retrieval/schema）。
-- Produces: server 无头端同能力（GraphPanel 遥控跑图时 hybridSearch 可用）。
+- Consumes: Task 1–5 全部产物（core dist 已含 retrieval/schema——注意 worktree 内 server 的 `@tianshu/core` 经软链解析到**主树** dist，移植后用 typecheck 验证解析到的新类型；若类型缺失，确认 Task 1/3/5 的 dist 重建已在 worktree 执行过）。
+- Produces: server 无头端同能力（GraphPanel 遥控跑图时 hybridSearch 三模式可用——BM25 纯函数双端同形，无 SQLite 特性依赖）。
 
 - [ ] **Step 1: 双份同步 vector-store**
 
-读 mirror 侧 Task 4 成品，将 `FTS_TABLE/ensureVectorFtsTable/rebuildFtsIndex/ensureFtsSynced/searchFts` 与 `upsertChunks` 改造段移植到 server 副本（server 版 import 风格保持该文件现状——单引号/路径差异按文件内既有惯例；`@tianshu/core` 在 server 走 dist）。`searchChunks` 同步加 chunkId。
+读 mirror 侧 Task 4 成品，将 `searchFts` 与 `searchChunks` 的 chunkId 改动移植到 server 副本（server 版 import 风格保持该文件现状——单引号/路径差异按文件内既有惯例；`rankBm25`/`FusedHit` 自 `@tianshu/core` 走 dist）。
 
 - [ ] **Step 2: 双份同步 graph-executor**
 
-移植分发注册（670 行区）、`makeHybridSearchNodeHandler`（3716 行后）、`NodeOutput` 加 hits、`toNodeUpdate` 透传。server 版对应工具函数（`GraphNodeFailure`/`traceSuccess`/`writeNodeRecord`）以 server 文件内既有形态为准（grep 同名定位，签名一致则照用）。
+移植分发注册（`if (node.kind === "vectorSearch")` 旁）、`makeHybridSearchNodeHandler`（`makeVectorSearchNodeHandler` 后）、`NodeOutput` 加 hits、`toNodeUpdate` 透传。server 版对应工具函数（`GraphNodeFailure`/`traceSuccess`/`writeNodeRecord`/`embedTexts`/`loadModelRuntime`）以 server 文件内既有形态为准（grep 同名定位，签名一致则照用）。
 
-- [ ] **Step 3: 扩真表测试**
+- [ ] **Step 3: 验证**
 
-`graph-vector-store-fts.spec.ts` 追加真表用例（真 better-sqlite3 临时库直连——注意 server 生产代码走 prisma，测试里真表交互用 better-sqlite3 直连验证「SQL 语义正确性」，另配 handler 级 mock 测试走 server jest 既有 graph-executor.spec.ts 模式）：
+Run: `npm run typecheck`（worktree 根；若 server 侧有独立 typecheck 脚本则一并跑）
+Expected: 零错误。
+Run: `npx vitest run tests/core tests/ai/graph-hybrid.test.ts tests/ai/graph-vector.test.ts`
+Expected: PASS（mirror 侧不回归）。
+server 既有 jest suite 回归放 Task 8 统一执行（环境坑与 fallback 见 Global Constraints）。
 
-```typescript
-describe("FTS 数据面真表交互", () => {
-  it("增量 upsert 同步：同键重跑幂等、FTS 行数不翻倍", async () => {
-    // 经 server 侧 upsertChunks（prisma 指向测试库）两次同参调用
-    // 断言 vectorChunk 与 FTS 表行数一致且等于 chunk 数
-  });
-  it("count 不一致触发全量回填且中文查询召回", async () => {
-    // 直接 SQL 插 vectorChunk 行（绕过 upsert，制造 FTS 落后）
-    // 调 searchFts —— 断言回填后命中原文（originalText 而非分词形态）
-  });
-  it("bm25 排序：双词命中排单词命中前", async () => {
-    // 复用 Task 1 断言形态，经 searchFts 走通
-  });
-});
-```
-
-（测试建库方式照 `ensure-graph-run-node-table.spec.ts` 先例；prisma 测试实例的 env 隔离按先例文件的模式。）
-
-- [ ] **Step 4: 跑 server jest 验证**
-
-Run: `cd apps/tianshu-server && npx jest test/core/graph-vector-store-fts.spec.ts test/core/graph-executor.spec.ts`
-Expected: PASS。若环境起不来（worktree TS paths 坑）→ 按 Global Constraints 的 fallback 流程主树对照验收。
-
-- [ ] **Step 5: drift 核算**
+- [ ] **Step 4: drift 核算**
 
 Run: `npm run check:drift`
 Expected: exit 0（双份同步后差异行不增长；若超容差，评估后 `npm run check:drift -- --rebase` 重置基线并在 commit message 注明）。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/tianshu-server/src/core/graph/ apps/tianshu-server/test/core/graph-vector-store-fts.spec.ts packages/tianshu-core/scripts/drift-manifest.json
-git commit -m "feat(graph): server 侧混合检索双份同步 + FTS 真表 jest 测试"
+git add apps/tianshu-server/src/core/graph/ packages/tianshu-core/scripts/drift-manifest.json
+git commit -m "feat(graph): server 侧混合检索双份同步（内存 BM25，无 FTS5 依赖）"
 ```
-
----
 
 ### Task 7: 前端节点编辑 + i18n
 

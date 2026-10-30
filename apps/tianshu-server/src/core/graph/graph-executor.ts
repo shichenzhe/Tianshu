@@ -86,6 +86,9 @@ import {
   compileStateGraph,
   classifyError,
   computeNextRun,
+  rrfFuse,
+  tokenize,
+  type FusedHit,
   type ScheduleConfig,
   type GraphRunState,
   type NodeHandler,
@@ -96,6 +99,7 @@ import {
   type GraphNode,
   type HttpNode,
   type HttpKV,
+  type HybridSearchNode,
   type IterateNode,
   type LibrarySearchNode,
   type JsonParseNode,
@@ -159,6 +163,9 @@ export interface TraceEntry {
   outputPreview?: string;
   /** 生成图片（imageGen 节点产物，相对数据根路径）→ 轨迹内缩略图展示 */
   outputImage?: string;
+  /** 检索类节点结构化候选预览（hybridSearch：fused hits JSON 截断 2000，
+   * 运行历史排查用） */
+  hitsPreview?: string;
   /** 循环节点死信（continue 模式失败项清单）——运行历史排查用 */
   errorOutput?: string;
   /** 降级继续标记（llm 节点 onError=defaultValue）：实际执行失败但以
@@ -273,6 +280,11 @@ interface NodeOutput {
   errorOutput?: string;
   /** 生成图片相对数据根路径（imageGen 专用，trace 透传） */
   outputImage?: string;
+  /** 检索类节点候选序列化预览（hybridSearch，trace 透传） */
+  hitsPreview?: string;
+  /** 检索类节点结构化候选（hybridSearch；toNodeUpdate 落 state 供 GA 系
+   * rerank 消费） */
+  hits?: FusedHit[];
   route?: string;
   usage?: NodeResult['usage'];
   toolCalls?: TraceEntry['toolCalls'];
@@ -670,6 +682,9 @@ function makeNodeHandler(node: GraphNode, ctx: NodeContext): NodeHandler {
   if (node.kind === 'vectorSearch') {
     return makeVectorSearchNodeHandler(node, ctx);
   }
+  if (node.kind === 'hybridSearch') {
+    return makeHybridSearchNodeHandler(node, ctx);
+  }
   if (node.kind === 'database') {
     return makeDatabaseNodeHandler(node, ctx);
   }
@@ -818,6 +833,7 @@ function toNodeUpdate(
           ? { errorOutput: done.errorOutput }
           : {}),
         usage: done.usage,
+        ...(done.hits !== undefined ? { hits: done.hits } : {}),
       },
     },
     ...(done.route ? { route: done.route } : {}),
@@ -1791,6 +1807,7 @@ function traceSuccess(
     ...(done.toolCalls?.length ? { toolCalls: done.toolCalls } : {}),
     outputPreview: done.output.slice(0, 200),
     ...(done.outputImage ? { outputImage: done.outputImage } : {}),
+    ...(done.hitsPreview ? { hitsPreview: done.hitsPreview } : {}),
     ...(done.errorOutput ? { errorOutput: done.errorOutput } : {}),
   };
 }
@@ -3763,6 +3780,92 @@ function makeVectorSearchNodeHandler(
         failure,
         startedAt,
       );
+      ctx.trace.push(traceFailure(node, startedAt, failure));
+      throw failure;
+    }
+  };
+}
+
+/** 混合检索节点 handler：三模式分路——keyword（FTS BM25）/semantic
+ * （余弦）/hybrid（两路并行 RRF 融合，候选池 max(50, topK×5)）；空词元
+ * FTS 路短路；hits 旁路落 state（rerank 消费）。任一路失败即节点失败
+ * （不静默降级）。导出供测试（handler 级直调，先例 embedTexts） */
+export function makeHybridSearchNodeHandler(
+  node: HybridSearchNode,
+  ctx: NodeContext,
+): NodeHandler {
+  return async (state) => {
+    const startedAt = Date.now();
+    try {
+      const render = (text: string) =>
+        renderNodePrompt(text, {
+          inputs: state.inputs,
+          nodes: state.nodes,
+          now: ctx.now,
+        });
+      const query = render(node.searchQuery);
+      const collection = render(node.collection ?? '');
+      const needsEmbedding = node.mode !== 'keyword';
+      if (needsEmbedding && node.modelId === undefined) {
+        throw new GraphNodeFailure(
+          node.id,
+          'hybrid_model_missing',
+          'semantic/hybrid 模式须选择 embedding 模型（keyword 模式无需）',
+        );
+      }
+      const signal = AbortSignal.any([
+        ctx.abort,
+        AbortSignal.timeout(node.timeoutMs ?? 120_000),
+      ]);
+      const { searchFts, searchChunks } = await import('./vector-store');
+      const poolSize = Math.max(50, (node.topK ?? 5) * 5);
+      const queryTokens = tokenize(query);
+
+      let ftsHits: FusedHit[] = [];
+      let vecHits: FusedHit[] = [];
+      if (node.mode === 'keyword') {
+        ftsHits = await searchFts({
+          userId: ctx.userId,
+          collection,
+          queryTokens,
+          limit: node.topK ?? 5,
+        });
+      } else {
+        // hybrid：embedding 与 FTS 两路同时发起（候选池各自取满再融合）
+        const embedPromise = embedTexts(node.modelId!, [query], signal);
+        const ftsPromise = node.mode === 'hybrid'
+          ? searchFts({ userId: ctx.userId, collection, queryTokens, limit: poolSize })
+          : Promise.resolve([] as FusedHit[]);
+        void ftsPromise.catch(() => {}); // 先败护栏：占位 handler 防 unhandled rejection；错误仍经下方 await 抛出驱动节点失败
+        const [queryVector] = await embedPromise; // 任一 reject 即节点失败
+        ftsHits = await ftsPromise;
+        vecHits = (await searchChunks({
+          userId: ctx.userId,
+          collection,
+          model: String(node.modelId!),
+          queryVector,
+          topK: node.mode === 'hybrid' ? poolSize : (node.topK ?? 5),
+        })).map((hit) => ({ ...hit, chunkId: hit.chunkId, rank: 0 }));
+      }
+
+      const fused = node.mode === 'hybrid'
+        ? rrfFuse(vecHits, ftsHits).slice(0, node.topK ?? 5)
+        : (node.mode === 'keyword' ? ftsHits : vecHits)
+            .slice(0, node.topK ?? 5)
+            .map((hit, i) => ({ ...hit, rank: i + 1 }));
+      const label = node.mode === 'semantic' ? '相似度' : '相关度';
+      const output = fused
+        .map((hit) => `【${hit.sourceName}｜${label} ${hit.score.toFixed(2)}】${hit.text}`)
+        .join('\n\n');
+      await writeNodeRecord(ctx, node, query, output, startedAt);
+      ctx.trace.push(traceSuccess(node, startedAt, {
+        output,
+        hitsPreview: JSON.stringify(fused).slice(0, 2000),
+      }));
+      return toNodeUpdate(node.id, { output, hits: fused });
+    } catch (e) {
+      const failure = toNodeFailure(node, e);
+      await writeNodeFailureRecord(ctx, node, node.searchQuery, failure, startedAt);
       ctx.trace.push(traceFailure(node, startedAt, failure));
       throw failure;
     }

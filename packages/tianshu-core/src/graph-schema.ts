@@ -601,6 +601,22 @@ export const vectorSearchNodeSchema = z.object({
   topK: z.number().int().min(1).max(20).default(5),
 });
 
+/** 混合检索节点（kind:hybridSearch）：BM25 全文 + 向量语义 + RRF 融合，
+ * 单节点三模式（semantic/keyword/hybrid，对齐 Dify 知识检索心智）。FTS
+ * 数据面见 vector-store（vectorChunkFts 虚表镜像 vectorChunk）；
+ * state 另挂 hits 旁路（FusedHit 数组）供 rerank 消费。modelId 在
+ * semantic/hybrid 模式必填（executor 校验），keyword 模式零模型门槛。 */
+export const hybridSearchNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal("hybridSearch"),
+  searchQuery: z.string().min(1),
+  collection: z.string().optional(),
+  mode: z.enum(["hybrid", "keyword", "semantic"]).default("hybrid"),
+  topK: z.number().int().min(1).max(50).default(5),
+  modelId: z.number().int().optional(),
+  timeoutMs: z.number().int().optional(),
+});
+
 export const graphNodeSchema = z.union([
   codeNodeSchema,
   llmNodeSchema,
@@ -620,6 +636,7 @@ export const graphNodeSchema = z.union([
   delayNodeSchema,
   vectorizeNodeSchema,
   vectorSearchNodeSchema,
+  hybridSearchNodeSchema,
   databaseNodeSchema,
   excelReadNodeSchema,
   excelWriteNodeSchema,
@@ -667,6 +684,7 @@ export function isComfyUIImageGen(
 export type DelayNode = z.infer<typeof delayNodeSchema>;
 export type VectorizeNode = z.infer<typeof vectorizeNodeSchema>;
 export type VectorSearchNode = z.infer<typeof vectorSearchNodeSchema>;
+export type HybridSearchNode = z.infer<typeof hybridSearchNodeSchema>;
 export type DatabaseNode = z.infer<typeof databaseNodeSchema>;
 export type ExcelReadNode = z.infer<typeof excelReadNodeSchema>;
 export type ExcelWriteNode = z.infer<typeof excelWriteNodeSchema>;

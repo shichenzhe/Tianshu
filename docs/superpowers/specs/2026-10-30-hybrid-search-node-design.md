@@ -156,7 +156,10 @@ BM25 路不过滤 model（全文与 embedding 模型无关）；向量路保持�
 【条目名｜相似度 0.87】片段文本     （semantic 模式，余弦分）
 ```
 
-空命中输出空串不炸图；FTS5 不可用（自编译 SQLite 未启用）时 keyword/hybrid 报
+空命中输出空串不炸图；searchQuery 渲染后为空/纯符号时 tokenize 产出空词元，
+FTS 路直接短路返回空结果（不发 `MATCH ''` 未定义查询）——hybrid 模式下向量路
+照常（空串 embedding 仍可出语义结果），keyword 模式输出空串。FTS5 不可用
+（自编译 SQLite 未启用）时 keyword/hybrid 报
 `VectorStoreError("fts_unavailable")` 人话错误，semantic 路不受影响。hybrid
 双路任一失败（如 embedding API 挂）即节点整体失败，**不做单路静默降级**（对齐
 rerank 的显式失败哲学，防掩盖配置错误）。
@@ -210,6 +213,9 @@ timeoutMs
 
 `sourceNodeId` 显式引用（下拉选图中检索节点）而非 `{{nodes.x.hits}}` 模板表达式：
 类型安全、UI 直观；任意 JSON 候选场景（jsonParse/code 节点产出）v2 再评估。
+**执行顺序依赖**：图执行顺序由边决定，引用须经图边保证上游先执行（对齐 Dify
+变量引用惯例）——用户配了引用但未连线时 hits 缺失，落入 `rerank_source_invalid`
+报错并提示需连线，此为预期行为而非 bug。
 
 ### 2. 执行器（graph-executor 双份）
 

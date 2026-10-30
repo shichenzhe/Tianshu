@@ -105,7 +105,8 @@ export function searchDbTarget(): string | null {
   return url;
 }
 
-/** 是否启用 PG 检索（协议非法不在布尔面抛——四函数入口统一抛） */
+/** 是否启用 PG 检索（经 searchDbTarget 透传——非法 scheme 即随本调用抛出，
+ * vector-store 四函数入口统一经此报错） */
 export function isPgSearchConfigured(): boolean {
   return searchDbTarget() !== null;
 }
@@ -169,7 +170,9 @@ export async function ensureSearchPg(): Promise<void> {
 }
 
 /** 条目级 upsert（同 collection+sourceName 先删后插，事务包裹保原子）；
- * 空数组仅清空不插（buildUpsertInsertSql(0) 会产悬空 VALUES） */
+ * 前置幂等建库——fresh-PG 首跑 vectorize 直接 upsert 不依赖检索先行建表
+ * （建库失败已在 ensureSearchPg 内统一转人话错误）；空数组仅清空不插
+ * （buildUpsertInsertSql(0) 会产悬空 VALUES） */
 export async function upsertChunksPg(params: {
   userId: number;
   collection: string;
@@ -177,6 +180,7 @@ export async function upsertChunksPg(params: {
   model: string;
   chunks: VectorChunkRow[];
 }): Promise<void> {
+  await ensureSearchPg();
   // connect 在 try 外——取连接即失败无事务可回滚，就地转人话错误
   const client = await (await getPool()).connect().catch((e: unknown) => {
     throw toPgError(e);
@@ -303,12 +307,14 @@ export async function searchChunksPg(params: {
   }
 }
 
-/** collection 计数（删除确认/统计面） */
+/** collection 计数（删除确认/统计面）；前置幂等建库——fresh-PG 首查
+ * 不依赖检索/入库先行建表 */
 export async function countCollectionPg(
   userId: number,
   collection: string,
 ): Promise<number> {
   try {
+    await ensureSearchPg();
     const result = await (
       await getPool()
     ).query(

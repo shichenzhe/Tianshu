@@ -17,8 +17,13 @@ services:
       retries: 10
     # 宿主直连调试时放开：ports: ["5432:5432"]
   server:
-    # 构建上下文须为 monorepo 根——@tianshu/* workspace 包与根 lock 只在根可达
-    # （apps/tianshu-server 内上下文看不见 packages/*，build 必失败）。
+    # 注意：本服务镜像构建暂不可用，待 Docker 治理批修复（本段保留为目标
+    # 形态）——Dockerfile 为独立仓时代产物（COPY package*.json + npm ci 按
+    # 单仓假定），monorepo 化后任何上下文都无法按现配方构建：server-only
+    # 上下文够不着 @tianshu/* workspace 包，根上下文会整体安装/构建整个
+    # monorepo 而非本服务。当下可用形态：宿主进程跑 server（build 后
+    # node dist/src/main.js），SEARCH_DB_URL 指向本 compose 起的 search-pg
+    # （宿主直连时放开上方 search-pg 的 ports 注释）。
     # compose 相对路径以本文件目录为基：monorepo 根 = ../..（非 ..=apps/）
     build:
       context: ../..

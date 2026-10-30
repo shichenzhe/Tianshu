@@ -258,9 +258,16 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 （`postgres://…`）后，检索层改指 PostgreSQL 检索库（tsvector 全文 +
 pgvector 向量，Supabase hybrid 配方同构）：
 
-- `docker compose up -d` 起 server + `pgvector/pgvector:pg17` 检索库
-  （compose 已串联 `SEARCH_DB_URL`）；server 镜像构建上下文为 monorepo
-  根（compose `context: ../..`）——`@tianshu/*` workspace 包需根上下文可达
+- `docker compose up -d search-pg` 即起 pgvector 检索库
+  （`pgvector/pgvector:pg17`，即刻可用）；compose 中的 `server` 服务**镜像
+  构建暂不可用**——Dockerfile 为独立仓时代产物（按单仓假定 `npm ci` 构建），
+  monorepo 化后任何上下文下都无法按现配方构建（server-only 上下文够不着
+  `@tianshu/*` workspace 包；根上下文则会整体安装/构建 monorepo 而非本
+  服务），修复待 Docker 治理批（`server:` 段保留为目标形态）。当下可用
+  形态：宿主/裸机部署 server（`npm run build` 后 `node dist/src/main.js`），
+  env `SEARCH_DB_URL` 指向 compose 起的检索库（本机直连需放开 search-pg
+  的 ports 注释：`postgres://tianshu:tianshu_search@localhost:5432/
+  tianshu_search`）
 - **单真源语义**：检索库独立指定时，`vectorize` 入库直写检索库，主库
   不留 vectorChunk 副本；取消配置切回本地后旧数据不迁移、需重新入库
 - 仅支持 `postgres://`/`postgresql://` 连接串；连接失败/扩展缺失时

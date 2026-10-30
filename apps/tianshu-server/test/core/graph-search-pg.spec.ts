@@ -86,11 +86,13 @@ import { VectorStoreError } from '../../src/core/graph/vector-store';
 
 jest.mock('pg', () => {
   const query = jest.fn();
-  const connect = jest.fn(async () => ({ query, release: jest.fn() }));
+  const release = jest.fn();
+  const connect = jest.fn(async () => ({ query, release }));
   return {
     Pool: jest.fn(() => ({ query, connect, end: jest.fn() })),
     __query: query,
     __connect: connect,
+    __release: release,
   };
 });
 
@@ -168,16 +170,20 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     );
   });
 
-  it('upsertChunksPg：先删后插、分词进 to_tsvector 参数、事务包裹', async () => {
-    const { upsertChunksPg } = await import('../../src/core/graph/search-pg');
-    const { __connect } = require('pg') as { __connect: jest.Mock };
-    // jest.Mock 标注：零参 jest.fn 推断 calls 为 [] 元组，c[0]/[1][5] 索引
-    // 过不了 ts-jest 全量类型检查（同上 __query: jest.Mock 惯用法）
-    const tx: { query: jest.Mock; release: jest.Mock } = {
-      query: jest.fn(async () => ({ rows: [] })),
-      release: jest.fn(),
+  it('upsertChunksPg：建库前置→先删后插、分词进 to_tsvector 参数、事务包裹', async () => {
+    const { upsertChunksPg, PG_DDL } =
+      await import('../../src/core/graph/search-pg');
+    const pg = require('pg') as {
+      __query: jest.Mock;
+      __connect: jest.Mock;
+      __release: jest.Mock;
     };
-    __connect.mockReset().mockResolvedValue(tx);
+    // pool 与 client 共用同一 query 桩：DDL 与事务语句进同一调用日志，
+    // 跨 pool/client 边界的执行顺序可断言（release 同理共用）
+    pg.__query.mockReset();
+    pg.__connect
+      .mockReset()
+      .mockResolvedValue({ query: pg.__query, release: pg.__release });
     await upsertChunksPg({
       userId: 1,
       collection: 'c',
@@ -185,18 +191,47 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
       model: 'm',
       chunks: [{ seq: 0, text: '分布式系统的容错设计', vector: [0.1, 0.2] }],
     });
-    const calls = tx.query.mock.calls.map((c) => c[0]);
-    expect(calls[0]).toContain('BEGIN');
-    expect(calls[1]).toContain('DELETE FROM vector_chunk');
-    expect(calls[2]).toContain('to_tsvector');
+    const calls = pg.__query.mock.calls.map((c) => c[0]);
+    // 前置幂等建库占前 PG_DDL.length 位，事务语句序号顺延
+    const D = PG_DDL.length;
+    expect(calls[D]).toContain('BEGIN');
+    expect(calls[D + 1]).toContain('DELETE FROM vector_chunk');
+    expect(calls[D + 2]).toContain('to_tsvector');
     // 分词参数：空格连接词元串（ICU 实际切分以 tokenize 运行时输出为准——
     // 「容」「错」「设计」等词元必然在列，精确整串不做脆弱断言）
-    const tokensParam = String(tx.query.mock.calls[2][1][5]);
+    const tokensParam = String(pg.__query.mock.calls[D + 2][1][5]);
     expect(tokensParam).toContain('容');
     expect(tokensParam).toContain('设计');
     expect(tokensParam).toContain(' ');
     expect(calls.at(-1)).toContain('COMMIT');
-    expect(tx.release).toHaveBeenCalled();
+    expect(pg.__release).toHaveBeenCalled();
+  });
+
+  it('upsertChunksPg：fresh-PG 首跑前置幂等建库——DDL 全部先于事务 BEGIN', async () => {
+    const { upsertChunksPg, PG_DDL } =
+      await import('../../src/core/graph/search-pg');
+    const pg = require('pg') as {
+      __query: jest.Mock;
+      __connect: jest.Mock;
+      __release: jest.Mock;
+    };
+    pg.__query.mockReset();
+    pg.__connect
+      .mockReset()
+      .mockResolvedValue({ query: pg.__query, release: pg.__release });
+    // 空块路径：建库 + BEGIN/DELETE/COMMIT（无 INSERT），序号最干净
+    await upsertChunksPg({
+      userId: 1,
+      collection: 'c',
+      sourceName: 's',
+      model: 'm',
+      chunks: [],
+    });
+    const calls = pg.__query.mock.calls.map((c) => c[0]);
+    expect(calls.slice(0, PG_DDL.length)).toEqual(PG_DDL); // 建库语句逐条先行
+    expect(calls[PG_DDL.length]).toContain('BEGIN'); // DDL 全部先于事务开启
+    expect(calls).toHaveLength(PG_DDL.length + 3);
+    expect(calls.at(-1)).toContain('COMMIT');
   });
 
   it('upsertChunksPg：connect 失败转 search_pg_unavailable 人话错误', async () => {

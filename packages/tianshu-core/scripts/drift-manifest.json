@@ -265,8 +265,8 @@
       "mirrorPath": "electron/domains/ai/orchestration/vector-store.ts",
       "serverPath": "src/core/graph/vector-store.ts",
       "baselineDiff": true,
-      "baselineLines": 12,
-      "note": "向量存取（GA-T4；仅 prisma→运行时句柄改造点）。2026-10-30 hybridSearch 批基线 10→12：新增 searchFts（内存 BM25，FTS5 否决后 pivot）——findMany 行 prisma→graphExecutorRuntime().db 授权差异再现（同 countCollection 形态，单行不成对 ±2）"
+      "baselineLines": 24,
+      "note": "向量存取（GA-T4；仅 prisma→运行时句柄改造点）。2026-10-30 hybridSearch 批基线 10→12：新增 searchFts（内存 BM25，FTS5 否决后 pivot）——findMany 行 prisma→graphExecutorRuntime().db 授权差异再现（同 countCollection 形态，单行不成对 ±2）。2026-10-31 server-pg-search 批基线 12→24：SEARCH_DB_URL 路由分派——四函数头部各一组 if/return/}（归一化后 4×3=12 行；import 块与注释被归一化剥离不计），server 有意分叉，PG 实现全落单份 search-pg.ts 不入守护面，本地实现零改动（diff 纯增量）"
     },
     {
       "id": "graph-acs3-sign",

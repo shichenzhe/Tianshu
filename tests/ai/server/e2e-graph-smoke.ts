@@ -2,9 +2,10 @@
  * 编排 E2E 冒烟（GA-T9，直连链路真模型）：capability graph 链路四段
  * ① graph：建两节点图（research → report）→ graph/run 202 → SSE 收
  *    graph.run.updated 至 succeeded 且带 output（事件序列含节点 progress）
- * ② hybridSearch：停机面直插 vectorChunk 中文行（绕过 vectorize 的
- *    embedding 依赖）→ 单节点 keyword 图 → 真 server 子进程 BM25 命中
- *    （输出含目标条目名与「相关度」、无关条目零分剔除不透传）
+ * ② hybridSearch：运行态经第二 node:sqlite 连接直插 vectorChunk 中文行
+ *    （绕过 vectorize 的 embedding 依赖；表由 server 启动建，须存活态
+ *    写入，依赖 SQLite 并发访问）→ 单节点 keyword 图 → 真 server 子进程
+ *    BM25 命中（输出含目标条目名与「相关度」、无关条目零分剔除不透传）
  * ③ automation：tickMs=200 经 NODE_ENV=e2e 的 config.e2e.yml（tianshu 段）
  *    快进调度——once 任务 runAt=+3s 到期触发 → SSE automation.changed +
  *    run 表落 triggerType=schedule/status=success（九端点无 run 查询面，

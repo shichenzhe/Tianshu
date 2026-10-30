@@ -602,10 +602,10 @@ export const vectorSearchNodeSchema = z.object({
 });
 
 /** 混合检索节点（kind:hybridSearch）：BM25 全文 + 向量语义 + RRF 融合，
- * 单节点三模式（semantic/keyword/hybrid，对齐 Dify 知识检索心智）。FTS
- * 数据面见 vector-store（vectorChunkFts 虚表镜像 vectorChunk）；
- * state 另挂 hits 旁路（FusedHit 数组）供 rerank 消费。modelId 在
- * semantic/hybrid 模式必填（executor 校验），keyword 模式零模型门槛。 */
+ * 单节点三模式（semantic/keyword/hybrid，对齐 Dify 知识检索心智）。全文
+ * 数据面见 vector-store searchFts（内存 BM25，每查询实时读行评分，
+ * 无虚表）；state 另挂 hits 旁路（FusedHit 数组）供 rerank 消费。modelId
+ * 在 semantic/hybrid 模式必填（executor 校验），keyword 模式零模型门槛。 */
 export const hybridSearchNodeSchema = z.object({
   ...nodeBase,
   kind: z.literal("hybridSearch"),

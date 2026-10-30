@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    // retrieval.ts 用 Intl.Segmenter（类型面在 ES2022.Intl——运行时为
-    // Node 16+/Chromium 内建，ES2020 emit 不受影响）；DOM 系保留：
-    // expert-market 静态数据源码引用 window/console 等（mirror 根 tsconfig
-    // 的 ES2020+ES2022 混配 lib 同款处理）
+    // lib 行为本分支新增：retrieval.ts 用 Intl.Segmenter（类型面在
+    // ES2022.Intl——运行时 Node 16+/Chromium 内建，ES2020 emit 不受影响）；
+    // DOM 系非实证必需（expert-market 的 window 命中经查为 markdown 数据
+    // 内字符串字面量，非 DOM 全局引用）——沿用 mirror 根 tsconfig 的
+    // ES2020+ES2022 混配 lib 属保守选择
     "lib": ["ES2020", "ES2022.Intl", "DOM", "DOM.Iterable"],
     "module": "commonjs",
     "moduleResolution": "node10",

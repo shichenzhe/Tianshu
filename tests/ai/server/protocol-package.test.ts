@@ -239,6 +239,8 @@ describe("@tianshu/protocol 协议包", () => {
         runNow: "automation/runNow",
         // 移动端 CRUD+运行历史批：分页运行历史（载荷剔 graphTrace）
         runPage: "automation/runPage",
+        // 移动端执行详情批：节点级执行详情（38f724ce 加端点漏更本钉测试）
+        runNodes: "automation/runNodes",
       },
       // tool 一段（TB，终审补录）：无头端工具桥应答回传入口——server
       // tool.controller @Controller('tool') + @Post('respond') 实际路由

@@ -7,7 +7,11 @@
  * BM25 检索行为同源。
  */
 import { tokenize, type FusedHit } from '@tianshu/core';
-import { VectorStoreError, type VectorChunkRow, type VectorHit } from './vector-store';
+import {
+  VectorStoreError,
+  type VectorChunkRow,
+  type VectorHit,
+} from './vector-store';
 
 /** 幂等建库：扩展→表→索引（首次检索/入库前执行；扩展缺失由调用方
  * 转 search_pg_no_vector_ext 人话错误） */
@@ -40,7 +44,10 @@ export function buildVectorLiteral(vector: number[]): string {
 }
 
 /** FTS 查询语句（ts_rank 降序；占位序号随 collection 段偏移） */
-export function buildFtsSql(hasCollection: boolean): { sql: string; paramCount: number } {
+export function buildFtsSql(hasCollection: boolean): {
+  sql: string;
+  paramCount: number;
+} {
   const sql = `SELECT id, collection, source_name, text,
   ts_rank(text_tsv, to_tsquery('simple', $1)) AS score
 FROM vector_chunk
@@ -52,7 +59,10 @@ ORDER BY score DESC LIMIT $${hasCollection ? 4 : 3}`;
 
 /** 向量查询语句（余弦距离排序，score = 1 - 距离；model 过滤保维度防线；
  * vector IS NOT NULL 防御 NULL 行） */
-export function buildVectorSql(hasCollection: boolean): { sql: string; paramCount: number } {
+export function buildVectorSql(hasCollection: boolean): {
+  sql: string;
+  paramCount: number;
+} {
   const sql = `SELECT id, collection, source_name, text,
   1 - (vector <=> $1::vector) AS score
 FROM vector_chunk
@@ -167,7 +177,10 @@ export async function upsertChunksPg(params: {
   model: string;
   chunks: VectorChunkRow[];
 }): Promise<void> {
-  const client = await (await getPool()).connect();
+  // connect 在 try 外——取连接即失败无事务可回滚，就地转人话错误
+  const client = await (await getPool()).connect().catch((e: unknown) => {
+    throw toPgError(e);
+  });
   try {
     await client.query('BEGIN');
     await client.query(
@@ -212,9 +225,15 @@ export async function searchFtsPg(params: {
   try {
     await ensureSearchPg();
     const { sql } = buildFtsSql(params.collection !== '');
-    const values = params.collection !== ''
-      ? [buildFtsQuery(params.queryTokens), params.userId, params.collection, params.limit]
-      : [buildFtsQuery(params.queryTokens), params.userId, params.limit];
+    const values =
+      params.collection !== ''
+        ? [
+            buildFtsQuery(params.queryTokens),
+            params.userId,
+            params.collection,
+            params.limit,
+          ]
+        : [buildFtsQuery(params.queryTokens), params.userId, params.limit];
     const result = await (await getPool()).query(sql, values);
     return (
       result.rows as Array<{
@@ -248,15 +267,21 @@ export async function searchChunksPg(params: {
   try {
     await ensureSearchPg();
     const { sql } = buildVectorSql(params.collection !== '');
-    const values = params.collection !== ''
-      ? [
-          buildVectorLiteral(params.queryVector),
-          params.model,
-          params.userId,
-          params.collection,
-          params.topK,
-        ]
-      : [buildVectorLiteral(params.queryVector), params.model, params.userId, params.topK];
+    const values =
+      params.collection !== ''
+        ? [
+            buildVectorLiteral(params.queryVector),
+            params.model,
+            params.userId,
+            params.collection,
+            params.topK,
+          ]
+        : [
+            buildVectorLiteral(params.queryVector),
+            params.model,
+            params.userId,
+            params.topK,
+          ];
     const result = await (await getPool()).query(sql, values);
     return (
       result.rows as Array<{
@@ -279,9 +304,14 @@ export async function searchChunksPg(params: {
 }
 
 /** collection 计数（删除确认/统计面） */
-export async function countCollectionPg(userId: number, collection: string): Promise<number> {
+export async function countCollectionPg(
+  userId: number,
+  collection: string,
+): Promise<number> {
   try {
-    const result = await (await getPool()).query(
+    const result = await (
+      await getPool()
+    ).query(
       'SELECT COUNT(*)::int AS n FROM vector_chunk WHERE user_id = $1 AND collection = $2',
       [userId, collection],
     );

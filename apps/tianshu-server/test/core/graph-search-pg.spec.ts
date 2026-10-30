@@ -5,8 +5,12 @@
  * 序号正确性）。
  */
 import {
-  PG_DDL, buildFtsQuery, buildFtsSql, buildVectorSql,
-  buildVectorLiteral, buildUpsertInsertSql,
+  PG_DDL,
+  buildFtsQuery,
+  buildFtsSql,
+  buildVectorSql,
+  buildVectorLiteral,
+  buildUpsertInsertSql,
 } from '../../src/core/graph/search-pg';
 
 describe('buildFtsQuery', () => {
@@ -27,7 +31,7 @@ describe('buildVectorLiteral', () => {
 describe('SQL 生成（占位序号随 collection 段偏移）', () => {
   it('FTS：无 collection 段 $1=匹配串 $2=userId $3=limit', () => {
     const { sql } = buildFtsSql(false);
-    expect(sql).toContain('to_tsquery(\'simple\', $1)');
+    expect(sql).toContain("to_tsquery('simple', $1)");
     expect(sql).toContain('user_id = $2');
     expect(sql).toContain('LIMIT $3');
     expect(sql).not.toContain('collection = ');
@@ -57,8 +61,12 @@ describe('SQL 生成（占位序号随 collection 段偏移）', () => {
 
 describe('PG_DDL 与 upsert 语句', () => {
   it('DDL 含扩展/表/GIN/复合索引且全部 IF NOT EXISTS 幂等', () => {
-    expect(PG_DDL.join('\n')).toContain('CREATE EXTENSION IF NOT EXISTS vector');
-    expect(PG_DDL.join('\n')).toContain('CREATE TABLE IF NOT EXISTS vector_chunk');
+    expect(PG_DDL.join('\n')).toContain(
+      'CREATE EXTENSION IF NOT EXISTS vector',
+    );
+    expect(PG_DDL.join('\n')).toContain(
+      'CREATE TABLE IF NOT EXISTS vector_chunk',
+    );
     expect(PG_DDL.join('\n')).toContain('USING gin(text_tsv)');
     expect(PG_DDL.join('\n')).toContain('(user_id, collection)');
     expect(PG_DDL.join('\n')).toContain('text_tsv tsvector NOT NULL');
@@ -79,12 +87,18 @@ import { VectorStoreError } from '../../src/core/graph/vector-store';
 jest.mock('pg', () => {
   const query = jest.fn();
   const connect = jest.fn(async () => ({ query, release: jest.fn() }));
-  return { Pool: jest.fn(() => ({ query, connect, end: jest.fn() })), __query: query, __connect: connect };
+  return {
+    Pool: jest.fn(() => ({ query, connect, end: jest.fn() })),
+    __query: query,
+    __connect: connect,
+  };
 });
 
 describe('searchDbTarget（env 读取与协议校验）', () => {
   const OLD = process.env.SEARCH_DB_URL;
-  afterEach(() => { process.env.SEARCH_DB_URL = OLD; });
+  afterEach(() => {
+    process.env.SEARCH_DB_URL = OLD;
+  });
 
   it('未设/空串返回 null；postgres/postgresql 串透传', async () => {
     const { searchDbTarget } = await import('../../src/core/graph/search-pg');
@@ -105,13 +119,16 @@ describe('searchDbTarget（env 读取与协议校验）', () => {
 
 describe('PG 运行时（mock pg.Pool.query）', () => {
   it('ensureSearchPg 顺序执行 DDL；扩展失败转 search_pg_no_vector_ext', async () => {
-    const { ensureSearchPg, PG_DDL } = await import('../../src/core/graph/search-pg');
+    const { ensureSearchPg, PG_DDL } =
+      await import('../../src/core/graph/search-pg');
     const { __query } = require('pg') as { __query: jest.Mock };
     __query.mockReset().mockResolvedValue({ rows: [] });
     process.env.SEARCH_DB_URL = 'postgres://u:p@h:5432/d';
     await ensureSearchPg();
     expect(__query).toHaveBeenCalledTimes(PG_DDL.length);
-    __query.mockReset().mockRejectedValue(new Error('extension "vector" is not available'));
+    __query
+      .mockReset()
+      .mockRejectedValue(new Error('extension "vector" is not available'));
     await expect(ensureSearchPg()).rejects.toThrow(/pgvector/i);
   });
 
@@ -119,14 +136,36 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     const { searchFtsPg } = await import('../../src/core/graph/search-pg');
     const { __query } = require('pg') as { __query: jest.Mock };
     __query.mockReset();
-    expect(await searchFtsPg({ userId: 1, collection: 'c', queryTokens: [], limit: 5 })).toEqual([]);
+    expect(
+      await searchFtsPg({
+        userId: 1,
+        collection: 'c',
+        queryTokens: [],
+        limit: 5,
+      }),
+    ).toEqual([]);
     expect(__query).not.toHaveBeenCalled();
-    __query.mockResolvedValue({ rows: [
-      { id: 9, collection: 'c', source_name: 's', text: '原文', score: 0.8 },
-    ] });
-    const hits = await searchFtsPg({ userId: 1, collection: 'c', queryTokens: ['容'], limit: 5 });
-    expect(hits[0]).toMatchObject({ chunkId: 9, sourceName: 's', text: '原文', rank: 1 });
-    expect(__query).toHaveBeenCalledWith(expect.stringContaining('to_tsquery'), expect.arrayContaining(['容', 1, 'c', 5]));
+    __query.mockResolvedValue({
+      rows: [
+        { id: 9, collection: 'c', source_name: 's', text: '原文', score: 0.8 },
+      ],
+    });
+    const hits = await searchFtsPg({
+      userId: 1,
+      collection: 'c',
+      queryTokens: ['容'],
+      limit: 5,
+    });
+    expect(hits[0]).toMatchObject({
+      chunkId: 9,
+      sourceName: 's',
+      text: '原文',
+      rank: 1,
+    });
+    expect(__query).toHaveBeenCalledWith(
+      expect.stringContaining('to_tsquery'),
+      expect.arrayContaining(['容', 1, 'c', 5]),
+    );
   });
 
   it('upsertChunksPg：先删后插、分词进 to_tsvector 参数、事务包裹', async () => {
@@ -140,7 +179,10 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     };
     __connect.mockReset().mockResolvedValue(tx);
     await upsertChunksPg({
-      userId: 1, collection: 'c', sourceName: 's', model: 'm',
+      userId: 1,
+      collection: 'c',
+      sourceName: 's',
+      model: 'm',
       chunks: [{ seq: 0, text: '分布式系统的容错设计', vector: [0.1, 0.2] }],
     });
     const calls = tx.query.mock.calls.map((c) => c[0]);
@@ -157,11 +199,35 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     expect(tx.release).toHaveBeenCalled();
   });
 
+  it('upsertChunksPg：connect 失败转 search_pg_unavailable 人话错误', async () => {
+    const { upsertChunksPg } = await import('../../src/core/graph/search-pg');
+    const { __connect } = require('pg') as { __connect: jest.Mock };
+    __connect.mockReset().mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED'), {
+        code: 'ECONNREFUSED',
+      }),
+    );
+    const params = {
+      userId: 1,
+      collection: 'c',
+      sourceName: 's',
+      model: 'm',
+      chunks: [{ seq: 0, text: 'x', vector: [0.1] }],
+    };
+    await expect(upsertChunksPg(params)).rejects.toThrow(VectorStoreError);
+    await expect(upsertChunksPg(params)).rejects.toThrow(/PG 检索库/);
+  });
+
   it('连接失败转 search_pg_unavailable 人话错误', async () => {
     const { searchFtsPg } = await import('../../src/core/graph/search-pg');
     const { __query } = require('pg') as { __query: jest.Mock };
-    __query.mockReset().mockRejectedValue(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }));
-    await expect(searchFtsPg({ userId: 1, collection: '', queryTokens: ['x'], limit: 5 }))
-      .rejects.toThrow(/PG 检索库/);
+    __query.mockReset().mockRejectedValue(
+      Object.assign(new Error('connect ECONNREFUSED'), {
+        code: 'ECONNREFUSED',
+      }),
+    );
+    await expect(
+      searchFtsPg({ userId: 1, collection: '', queryTokens: ['x'], limit: 5 }),
+    ).rejects.toThrow(/PG 检索库/);
   });
 });

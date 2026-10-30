@@ -143,6 +143,7 @@
     "searchExperts": "搜索专家",
     "searchSkills": "搜索技能",
     "skillEmpty": "暂无可用技能，点击下方添加",
+    "skillNoneEnabled": "暂无已启用技能，可在管理页启用",
     "skillNoMatch": "未找到相关技能",
     "expertNoMatch": "未找到相关专家",
     "summonExperts": "召唤更多专家",

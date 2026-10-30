@@ -17,7 +17,11 @@ import { invoke } from "@/lib/ipc";
 import { Sparkles } from "lucide-react";
 
 import SkillApi from "../../skills/api/skill.api";
-import { renderTokenSegments } from "../../chat/lib/inline-tokens";
+import {
+  parseInlineTokens,
+  renderTokenSegments,
+  toggleSkillToken,
+} from "../../chat/lib/inline-tokens";
 import PermissionCapsule from "../../chat/components/PermissionCapsule";
 import TaskModelPicker from "./TaskModelPicker";
 import TaskPlusMenu from "./TaskPlusMenu";
@@ -272,6 +276,18 @@ export default function TaskPromptInput({
   };
 
   const segments = useMemo(() => renderTokenSegments(value), [value]);
+  // 已引用技能名（＋菜单技能子菜单勾选态依据；输入流 ⚡token 解析去重）
+  const referencedSkills = useMemo(
+    () => [...new Set(parseInlineTokens(value).skillTokens)],
+    [value],
+  );
+  /** ＋菜单技能引用切换：输入流 ⚡token 增删（与 ChatInput 同口径纯函数） */
+  const handleToggleSkill = useCallback(
+    (name: string) => {
+      onChange(toggleSkillToken(value, name));
+    },
+    [value, onChange],
+  );
   const showSuggestList = suggest !== null;
   const noBind = suggest?.type === "at" && workspaceId === null;
   const noCandidates = suggest !== null && suggestCandidates.length === 0;
@@ -379,6 +395,8 @@ export default function TaskPromptInput({
             }}
             onOpenMcp={onOpenMcp}
             onInsertVariable={(token) => insertAtCaret(token)}
+            referencedSkills={referencedSkills}
+            onToggleSkill={handleToggleSkill}
           />
           <PermissionCapsule
             sessionId={-1}

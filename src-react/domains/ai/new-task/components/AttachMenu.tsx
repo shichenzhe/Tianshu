@@ -7,7 +7,8 @@
  *   选中 storagePath 逐个走 addLocalFile 入 pending）；
  * 草稿组：模式（PlusMenu 导出 MODES 复用，✓ 草稿态写 store，dispatch 时
  *   setMode 落库）、专家（ExpertSubMenu onPick 草稿分支，同 dispatch 落库）、
- *   技能（SkillSubMenu 直接复用——全局启停/本地导入/管理入口无 session 依赖）；
+ *   技能（SkillSubMenu 引用选择器复用——仅启用技能可见，选中挂 skill
+ *   pending pill，启停收口管理页）；
  * 连接器：导航专家页 connectors Tab（ChatView MCP_ROUTE 同目标）。
  * 文案复用 chat:plus.* 词条（两侧一致），触发钮样式同 PlusMenu
  */
@@ -48,7 +49,9 @@ export default function AttachMenu() {
   const { t } = useTranslation(["chat", "newTask"]);
   const navigate = useNavigate();
   const workspaceId = useNewTaskStore((s) => s.workspaceId);
+  const pending = useNewTaskStore((s) => s.pending);
   const addPending = useNewTaskStore((s) => s.addPending);
+  const removePending = useNewTaskStore((s) => s.removePending);
   const mode = useNewTaskStore((s) => s.mode);
   const setMode = useNewTaskStore((s) => s.setMode);
   const assistantId = useNewTaskStore((s) => s.assistantId);
@@ -65,6 +68,19 @@ export default function AttachMenu() {
     queryFn: () => WorkspaceApi.list(),
   });
   const hasWorkspaces = (workspacesQuery.data ?? []).length > 0;
+
+  /** 技能引用（落地页形态 = pending pill）：勾选态按 skill pill 计，
+      切换增删（dispatch 发送时 readSkill 读全文注入，对齐会话 ⚡token 语义） */
+  const referencedSkills = pending
+    .filter((p) => p.kind === "skill")
+    .map((p) => p.ref);
+  const handleToggleSkill = (name: string) => {
+    if (referencedSkills.includes(name)) {
+      removePending(name);
+    } else {
+      addPending({ label: name, ref: name, kind: "skill" });
+    }
+  };
 
   /** 选择器本地文件：仅取路径，内容校验（512KB/权限）在 addLocalFile 内 */
   const handlePickLocalFiles = async () => {
@@ -170,7 +186,11 @@ export default function AttachMenu() {
             onPick={setAssistantId}
             currentAssistantId={assistantId ?? undefined}
           />
-          <SkillSubMenu onImport={() => setImportOpen(true)} />
+          <SkillSubMenu
+            onImport={() => setImportOpen(true)}
+            referencedSkills={referencedSkills}
+            onToggleSkill={handleToggleSkill}
+          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => navigate(MCP_ROUTE)}>
             <Plug />

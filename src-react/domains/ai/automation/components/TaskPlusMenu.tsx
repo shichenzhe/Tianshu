@@ -30,6 +30,10 @@ export interface TaskPlusMenuProps {
   onPickPaths: (paths: string[]) => void;
   onOpenMcp: () => void;
   onInsertVariable: (token: string) => void;
+  /** 当前已引用技能名列表（技能子菜单勾选态依据，宿主按输入流计算） */
+  referencedSkills: string[];
+  /** 技能引用切换回传（宿主接线 ⚡token 增删；启停收口管理页） */
+  onToggleSkill: (name: string) => void;
 }
 
 /** 插入变量三件套:插入 token / i18n 键 / 插值参数名(值形如「日期 {{date}}」) */
@@ -43,6 +47,8 @@ export default function TaskPlusMenu({
   onPickPaths,
   onOpenMcp,
   onInsertVariable,
+  referencedSkills,
+  onToggleSkill,
 }: TaskPlusMenuProps) {
   const { t } = useTranslation(["chat"]);
   const [importOpen, setImportOpen] = useState(false);
@@ -94,7 +100,11 @@ export default function TaskPlusMenu({
             {t("chat:plus.addFile")}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <SkillSubMenu onImport={() => setImportOpen(true)} />
+          <SkillSubMenu
+            onImport={() => setImportOpen(true)}
+            referencedSkills={referencedSkills}
+            onToggleSkill={onToggleSkill}
+          />
           <DropdownMenuSeparator />
           {VARIABLES.map(({ token, key, param }) => (
             <DropdownMenuItem

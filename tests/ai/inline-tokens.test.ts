@@ -9,6 +9,7 @@ import {
   detectSlash,
   parseInlineTokens,
   renderTokenSegments,
+  toggleSkillToken,
 } from "../../src-react/domains/ai/chat/lib/inline-tokens";
 
 describe("parseInlineTokens token 提取", () => {
@@ -160,5 +161,26 @@ describe("detectMention @ 触发检测", () => {
 
   it("光标前的最后 @ 生效", () => {
     expect(detectMention("@a @b", 5)).toEqual({ startIndex: 3, query: "b" });
+  });
+});
+
+describe("toggleSkillToken ＋菜单技能引用切换", () => {
+  it("未引用：末尾追加 token（空文本/尾空白不加额外空格）", () => {
+    expect(toggleSkillToken("", "alpha")).toBe("⚡alpha ");
+    expect(toggleSkillToken("看这个 ", "alpha")).toBe("看这个 ⚡alpha ");
+    expect(toggleSkillToken("看这个", "alpha")).toBe("看这个 ⚡alpha ");
+  });
+
+  it("已引用：移除 token 并收敛残留空白", () => {
+    expect(toggleSkillToken("⚡alpha ", "alpha")).toBe("");
+    expect(toggleSkillToken("⚡alpha 帮我", "alpha")).toBe("帮我");
+    expect(toggleSkillToken("帮我 ⚡alpha", "alpha")).toBe("帮我");
+  });
+
+  it("按全名精确匹配：前缀名不受影响，同名 token 全量移除", () => {
+    // alpha-x 不是 alpha（TOKEN_RE 边界语义），切换 alpha 不动它
+    expect(toggleSkillToken("⚡alpha-x ", "alpha")).toBe("⚡alpha-x ⚡alpha ");
+    // 多处同名 token 一次移除
+    expect(toggleSkillToken("⚡a 看 ⚡a 吧", "a")).toBe("看 吧");
   });
 });

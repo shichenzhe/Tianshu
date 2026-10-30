@@ -120,6 +120,8 @@ function renderPlusMenu(props: Partial<ComponentProps<typeof PlusMenu>>): void {
           sessionId={1}
           currentMode="agent"
           onPickPaths={() => undefined}
+          referencedSkills={[]}
+          onToggleSkill={() => undefined}
           onOpenMcp={() => undefined}
           {...props}
         />
@@ -164,10 +166,11 @@ describe("＋菜单能力展示（预设不过滤）", () => {
     expect(screen.getByText("专家C")).toBeTruthy();
   });
 
-  it("技能子菜单全量显示（挂载集是预设，不收窄可选项）", async () => {
+  it("技能子菜单仅显示已启用技能（引用选择器语义，禁用项隐藏）", async () => {
     renderPlusMenu({});
     await openSubMenu("chat:plus.skill");
     expect(await screen.findByText("alpha-skill")).toBeTruthy();
-    expect(screen.getByText("beta-skill")).toBeTruthy();
+    // beta-skill enabled=false：启停收口管理页，＋菜单不再透出
+    expect(screen.queryByText("beta-skill")).toBeNull();
   });
 });

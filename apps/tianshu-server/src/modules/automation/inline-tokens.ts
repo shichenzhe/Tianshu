@@ -123,6 +123,23 @@ export function detectSlash(
 /** @token 允许字符（@ 后连续输入的部分） */
 export const MENTION_TOKEN_RE = /[\w\-./]/;
 
+/** 切换 ⚡技能 引用（＋菜单技能子菜单消费）：未引用则末尾追加 token
+ *  （保空白边界），已引用则按 TOKEN_RE 同边界语义全量移除并收敛空白 */
+export function toggleSkillToken(input: string, name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const tokenRe = new RegExp(`(^|\\s)⚡${escaped}(?![\\w-])`, 'g');
+  if (tokenRe.test(input)) {
+    return input
+      .replace(new RegExp(`(^|\\s)⚡${escaped}(?![\\w-])`, 'g'), '')
+      .split('\n')
+      .map((line) => line.replace(/[^\S\n]+/g, ' ').trim())
+      .join('\n')
+      .trim();
+  }
+  const sep = input === '' || /\s$/.test(input) ? '' : ' ';
+  return `${input}${sep}⚡${name} `;
+}
+
 /** 联想面板候选上限（@ 文件、/ 技能与 # 待办面板共用） */
 export const MENTION_LIMIT = 8;
 

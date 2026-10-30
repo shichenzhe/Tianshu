@@ -259,7 +259,8 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 pgvector 向量，Supabase hybrid 配方同构）：
 
 - `docker compose up -d` 起 server + `pgvector/pgvector:pg17` 检索库
-  （compose 已串联 `SEARCH_DB_URL`）
+  （compose 已串联 `SEARCH_DB_URL`）；server 镜像构建上下文为 monorepo
+  根（compose `context: ../..`）——`@tianshu/*` workspace 包需根上下文可达
 - **单真源语义**：检索库独立指定时，`vectorize` 入库直写检索库，主库
   不留 vectorChunk 副本；取消配置切回本地后旧数据不迁移、需重新入库
 - 仅支持 `postgres://`/`postgresql://` 连接串；连接失败/扩展缺失时

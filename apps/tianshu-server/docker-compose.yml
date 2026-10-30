@@ -17,7 +17,12 @@ services:
       retries: 10
     # 宿主直连调试时放开：ports: ["5432:5432"]
   server:
-    build: .
+    # 构建上下文须为 monorepo 根——@tianshu/* workspace 包与根 lock 只在根可达
+    # （apps/tianshu-server 内上下文看不见 packages/*，build 必失败）。
+    # compose 相对路径以本文件目录为基：monorepo 根 = ../..（非 ..=apps/）
+    build:
+      context: ../..
+      dockerfile: apps/tianshu-server/Dockerfile
     environment:
       SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search
     depends_on:

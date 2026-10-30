@@ -96,8 +96,9 @@ schema 与 handler 均不动，AddNodeMenu 两者并存（假设：双轨过渡�
 
 ```sql
 CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
-  text,                     -- 预分词空格分隔文本（独立存储，不用 external
-                            -- content——省同步协议，万级 chunk 文本翻倍仅几 MB）
+  text,                     -- 预分词空格分隔文本（MATCH 索引面）
+  originalText UNINDEXED,   -- 原文片段（输出/hits/rerank 用——FTS text 列是
+                            -- 分词形态，不可直接出给用户）
   userId UNINDEXED,
   collection UNINDEXED,
   sourceName UNINDEXED,
@@ -106,9 +107,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
 )
 ```
 
+独立存储不用 external content——省同步协议；text+originalText 双份存储万级
+chunk 仅几 MB。
+
 生命周期：
 
-1. **建表**：懒触发（首次 FTS 操作时 ensure），不做启动扫描——空载工作流零成本。
+1. **建表**：懒触发，读（查询）与写（upsert）两路都在首次 FTS 操作前 ensure
+   ——老库首次跑 vectorize 时 FTS 表不存在，写入路径不 ensure 会同步插失败。
+   不做启动扫描——空载工作流零成本。
 2. **增量**：`upsertChunks` 事务内同步删/插 FTS 行（按 userId+collection+
    sourceName 先删后插，对齐幂等模式）。
 3. **存量回填**：FTS 查询前 count 对比两表，不一致则 FTS 全清后按 vectorChunk
@@ -123,7 +129,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS vectorChunkFts USING fts5(
 查询（参数化绑定，MATCH 串来自分词输出）：
 
 ```sql
-SELECT chunkId, sourceName, collection, text, bm25(vectorChunkFts) AS rank
+SELECT chunkId, sourceName, collection, originalText AS text,
+       bm25(vectorChunkFts) AS rank
 FROM vectorChunkFts
 WHERE vectorChunkFts MATCH ? AND userId = ? [AND collection = ?]
 ORDER BY rank LIMIT ?
@@ -164,8 +171,9 @@ output 文本外挂 `hits` 结构化数组（即 §2 的 FusedHit 形态，含 s
 
 - `AddNodeMenu`：检索分组加「混合检索」
 - `NodeCard`：图标 + 名称
-- `NodePropertiesPanel` / `GraphNodeEditor`：mode 三态单选；keyword 模式下模型
-  选择禁用（视觉提示该模式无需模型）
+- `NodePropertiesPanel` / `GraphNodeEditor`：mode 三态单选；模型选择器过滤
+  `type=embedding`（与 Phase 2 reranker 过滤对称，防选到 llm 模型执行时才炸）；
+  keyword 模式下模型选择禁用（视觉提示该模式无需模型）
 - `graph-editor-model.ts` / `graph-canvas-model.ts`：kind 注册
 - i18n：`chat` 命名空间 zh-CN / en-US 双语同步
 
@@ -257,7 +265,7 @@ timeoutMs
 | `packages/tianshu-core/src/retrieval.ts` | 单份（新增） | tokenize / joinFts* / rrfFuse 纯函数 |
 | `electron/domains/ai/orchestration/vector-store.ts` | 双份 | FTS 虚表 ensure / 增量 / 回填 / BM25 查询 |
 | `electron/domains/ai/orchestration/graph-executor.ts` | 双份 | makeHybridSearchNodeHandler（Phase 2 加 rerank handler）、toNodeUpdate 旁路 |
-| `src-react/domains/ai/orchestration/*` | 单份 | 节点注册 + 属性面板 + 模型选择器 |
+| `src-react/domains/ai/orchestration/*` | 单份 | 节点注册 + 属性面板 + 模型选择器；`GraphTestRunDialog`/`GraphRunTraceView` 确认零适配（预期泛化渲染） |
 | `src-react/i18n/locales/{zh-CN,en-US}/chat.json` | 双语 | 节点文案 |
 | server 侧 `src/core/graph/` 对应副本 | 双份 | 与 mirror 同步改 + drift 容差核算 |
 | 测试 | — | core 纯函数单测（mirror vitest）、FTS 交互（server jest）、e2e:graph 冒烟 |

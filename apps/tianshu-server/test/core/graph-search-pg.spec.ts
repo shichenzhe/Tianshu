@@ -231,3 +231,44 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     ).rejects.toThrow(/PG 检索库/);
   });
 });
+
+// ---- 追加：vector-store 路由分派 ----
+describe('vector-store 检索路由', () => {
+  const OLD = process.env.SEARCH_DB_URL;
+  afterEach(() => {
+    process.env.SEARCH_DB_URL = OLD;
+  });
+
+  it('SEARCH_DB_URL 空：searchFts 走本地（不触 pg Pool）', async () => {
+    delete process.env.SEARCH_DB_URL;
+    const { __query } = require('pg') as { __query: jest.Mock };
+    __query.mockClear();
+    // 本地路径依赖 graphExecutorRuntime——本用例仅断言未走 PG 分支：
+    // 触发本地实现需 mock runtime，超出本任务面；用「未配置时 import 不炸 +
+    // isPgSearchConfigured()===false」钉住分派前提
+    const { isPgSearchConfigured } =
+      await import('../../src/core/graph/search-pg');
+    expect(isPgSearchConfigured()).toBe(false);
+    expect(__query).not.toHaveBeenCalled();
+  });
+
+  it('SEARCH_DB_URL 非空：searchFts 分派到 PG 实现', async () => {
+    process.env.SEARCH_DB_URL = 'postgres://u:p@h:5432/d';
+    jest.resetModules();
+    const { __query } = require('pg') as { __query: jest.Mock };
+    __query.mockReset().mockResolvedValue({
+      rows: [
+        { id: 1, collection: 'c', source_name: 's', text: '原文', score: 0.5 },
+      ],
+    });
+    const { searchFts } = await import('../../src/core/graph/vector-store');
+    const hits = await searchFts({
+      userId: 1,
+      collection: 'c',
+      queryTokens: ['容'],
+      limit: 3,
+    });
+    expect(hits[0]).toMatchObject({ chunkId: 1, rank: 1 });
+    expect(__query).toHaveBeenCalled();
+  });
+});

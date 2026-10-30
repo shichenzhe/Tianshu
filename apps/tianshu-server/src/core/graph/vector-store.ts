@@ -14,6 +14,13 @@
  */
 import { rankBm25, type FusedHit } from '@tianshu/core';
 import { graphExecutorRuntime } from './executor-runtime';
+import {
+  countCollectionPg,
+  isPgSearchConfigured,
+  searchChunksPg,
+  searchFtsPg,
+  upsertChunksPg,
+} from './search-pg';
 
 export interface VectorChunkRow {
   seq: number;
@@ -84,6 +91,9 @@ export async function upsertChunks(params: {
   model: string;
   chunks: VectorChunkRow[];
 }): Promise<void> {
+  if (isPgSearchConfigured()) {
+    return upsertChunksPg(params); // SEARCH_DB_URL 指向 PG 检索库（单真源）
+  }
   await graphExecutorRuntime().db.$transaction([
     graphExecutorRuntime().db.vectorChunk.deleteMany({
       where: {
@@ -116,6 +126,9 @@ export async function searchChunks(params: {
   queryVector: number[];
   topK: number;
 }): Promise<VectorHit[]> {
+  if (isPgSearchConfigured()) {
+    return searchChunksPg(params); // SEARCH_DB_URL 指向 PG 检索库（单真源）
+  }
   const rows = await graphExecutorRuntime().db.vectorChunk.findMany({
     where: {
       userId: params.userId,
@@ -146,6 +159,9 @@ export async function searchFts(params: {
   if (params.queryTokens.length === 0) {
     return [];
   }
+  if (isPgSearchConfigured()) {
+    return searchFtsPg(params); // SEARCH_DB_URL 指向 PG 检索库（单真源）
+  }
   const rows = await graphExecutorRuntime().db.vectorChunk.findMany({
     where: {
       userId: params.userId,
@@ -171,6 +187,9 @@ export async function countCollection(
   userId: number,
   collection: string,
 ): Promise<number> {
+  if (isPgSearchConfigured()) {
+    return countCollectionPg(userId, collection); // SEARCH_DB_URL 指向 PG 检索库（单真源）
+  }
   return graphExecutorRuntime().db.vectorChunk.count({
     where: { userId, collection },
   });

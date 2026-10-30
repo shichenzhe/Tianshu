@@ -1,7 +1,8 @@
 // packages/tianshu-core/src/retrieval.ts
 /**
  * 检索纯逻辑（GA 系单份三端）：中文分词（Intl.Segmenter——Node 16+/
- * Chromium 内建 ICU 词典，零依赖）、内存 BM25（FTS5 否决后 pivot，
+ * Chromium 内建 ICU 词典，零依赖；Hermes 未实测，Segmenter 惰性构造保
+ * barrel 加载期零 Intl 副作用）、内存 BM25（FTS5 否决后 pivot，
  * LangChain BM25Retriever 形态）、RRF 融合。分词器单点抽象：质量升级
  * （jieba 等）只动 tokenize 一处。
  */
@@ -29,11 +30,15 @@ export interface FusedHit {
 export const BM25_K1 = 1.5;
 export const BM25_B = 0.75;
 
-const segmenter = new Intl.Segmenter("zh-Hans", { granularity: "word" });
+// 移动端 Hermes 未实测 Intl.Segmenter——barrel 经 Metro 进包后模块级
+// 构造会在 bundle 加载期执行，一旦缺失炸掉无关页面；惰性初始化（首次
+// tokenize 才构造单例）把风险面收敛到真正调用检索的路径
+let segmenter: Intl.Segmenter | null = null;
 const TOKEN_RE = /[\p{Script=Han}\p{L}\p{N}]/u;
 
 /** 分词：仅保留含文字/数字的词元（标点/符号剥离）；导出供测试 */
 export function tokenize(text: string): string[] {
+  segmenter ??= new Intl.Segmenter("zh-Hans", { granularity: "word" });
   return [...segmenter.segment(text)]
     .map((seg) => seg.segment.trim())
     .filter((token) => token.length > 0 && TOKEN_RE.test(token));

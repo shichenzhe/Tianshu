@@ -6,6 +6,7 @@
  * 维度混用防线：块携带 embedding 模型 id，检索按同模型过滤（不同模型
  * 维度不同，余弦无意义）。
  */
+import { rankBm25, type FusedHit } from "@tianshu/core";
 import prisma from "../../../commons/prisma-client";
 
 export interface VectorChunkRow {
@@ -15,6 +16,7 @@ export interface VectorChunkRow {
 }
 
 export interface VectorHit {
+  chunkId: number;
   sourceName: string;
   collection: string;
   text: string;
@@ -116,6 +118,7 @@ export async function searchChunks(params: {
     },
   });
   const hits: VectorHit[] = rows.map((row) => ({
+    chunkId: row.id,
     sourceName: row.sourceName,
     collection: row.collection,
     text: row.text,
@@ -123,6 +126,38 @@ export async function searchChunks(params: {
   }));
   hits.sort((a, b) => b.score - a.score);
   return hits.slice(0, params.topK);
+}
+
+/** BM25 全文检索（内存，与 searchChunks 全表余弦同构——FTS5 否决后
+ * pivot，LangChain BM25Retriever 形态）：空词元短路；不过滤 model（全文
+ * 与 embedding 模型无关）；万级毫秒级，与全表余弦成本同量级 */
+export async function searchFts(params: {
+  userId: number;
+  collection: string;
+  queryTokens: string[];
+  limit: number;
+}): Promise<FusedHit[]> {
+  if (params.queryTokens.length === 0) {
+    return [];
+  }
+  const rows = await prisma.vectorChunk.findMany({
+    where: {
+      userId: params.userId,
+      ...(params.collection ? { collection: params.collection } : {}),
+    },
+    select: { id: true, collection: true, sourceName: true, text: true },
+  });
+  const hits = rankBm25(
+    params.queryTokens,
+    rows.map((row) => ({
+      chunkId: row.id,
+      sourceName: row.sourceName,
+      collection: row.collection,
+      text: row.text,
+    })),
+    params.limit,
+  );
+  return hits.map((hit, index) => ({ ...hit, rank: index + 1 }));
 }
 
 /** 集合块数清点（入库回执用） */

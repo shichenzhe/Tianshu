@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { HardDriveUpload, Trash2 } from "lucide-react-native";
-import type { BackupMeta } from "@tianshu/protocol";
+import { BACKUP_ADMIN_OWNER, type BackupMeta } from "@tianshu/protocol";
 
 import { GroupSection } from "@/components/GroupSection";
 import { PageHeader } from "@/components/PageHeader";
@@ -58,6 +58,8 @@ export default function BackupScreen() {
   const activeConnId = useConnectionsStore((s) => s.activeConnId);
   const capabilities = useConnectionCapabilities(activeConnId);
   const backups = useBackupStore((s) => s.backups);
+  // admin 视角才渲染行内 owner 徽标（client 恒名下档无区分意义——桌面同款）
+  const isAdminView = useBackupStore((s) => s.viewer?.kind === "admin");
   const loading = useBackupStore((s) => s.loading);
   const creating = useBackupStore((s) => s.creating);
   const progress = useBackupStore((s) => s.progress);
@@ -215,12 +217,21 @@ export default function BackupScreen() {
           >
             <View className="flex-row items-center gap-2">
               <View className="min-w-0 flex-1">
-                <Text
-                  numberOfLines={1}
-                  className="text-[15px] text-black dark:text-white"
-                >
-                  {item.note?.trim() || t("unnamedBackup")}
-                </Text>
+                <View className="flex-row items-center gap-1.5">
+                  <Text
+                    numberOfLines={1}
+                    className="shrink text-[15px] text-black dark:text-white"
+                  >
+                    {item.note?.trim() || t("unnamedBackup")}
+                  </Text>
+                  {isAdminView && (
+                    <Text className="shrink-0 rounded border border-sep px-1.5 py-0.5 text-[10px] text-label2 dark:border-[#545458A6] dark:text-[#EBEBF599]">
+                      {item.owner === BACKUP_ADMIN_OWNER
+                        ? t("ownerAdmin")
+                        : item.owner}
+                    </Text>
+                  )}
+                </View>
                 <Text className="mt-0.5 text-xs text-label2 dark:text-[#EBEBF599]">
                   {relativeTimeLabel(formatRelative(item.createdAt), t)} ·{" "}
                   {sizeLabel(item.fileSize)} · v{item.appVersion}

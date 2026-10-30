@@ -74,6 +74,7 @@ export default function RootLayout() {
             name="session/[id]"
             options={{ title: t("session.title") }}
           />
+          <Stack.Screen name="permissions" options={{ headerShown: false }} />
           <Stack.Screen name="monitor" options={{ headerShown: false }} />
           <Stack.Screen name="providers" options={{ headerShown: false }} />
           <Stack.Screen name="library" options={{ headerShown: false }} />
@@ -83,6 +84,8 @@ export default function RootLayout() {
           <Stack.Screen name="projects/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="skills/[slug]" options={{ headerShown: false }} />
           <Stack.Screen name="skills/market" options={{ headerShown: false }} />
+          <Stack.Screen name="memory" options={{ headerShown: false }} />
+          <Stack.Screen name="backup" options={{ headerShown: false }} />
           <Stack.Screen
             name="automation/new"
             options={{ headerShown: false }}

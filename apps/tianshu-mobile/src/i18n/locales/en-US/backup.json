@@ -14,5 +14,6 @@
   "unnamedBackup": "Untitled backup",
   "statusUploading": "Uploading",
   "deleteTitle": "Delete Backup",
-  "deleteConfirm": "Delete the backup from {{time}}? This cannot be undone."
+  "deleteConfirm": "Delete the backup from {{time}}? This cannot be undone.",
+  "ownerAdmin": "Admin"
 }

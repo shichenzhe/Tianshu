@@ -8,7 +8,11 @@ import type { BackupProgressPayload } from "@tianshu/protocol";
 import { publishFaceEvent } from "./face-events";
 import type { ServerFaceBackup } from "./deps";
 import type { BackupIpcDeps } from "../backup/ipc";
-import { createBackupNow, deleteBackupById, listBackups } from "../backup/ipc";
+import {
+  createBackupNow,
+  deleteBackupById,
+  listBackupsWithViewer,
+} from "../backup/ipc";
 
 /** create 后台执行互斥：占用中再受理直接业务错（face 面单飞语义） */
 let createInflight = false;
@@ -25,7 +29,7 @@ export function createBackupFace(deps: {
     list: async () => {
       const connId = await deps.resolveConnection();
       if (connId === null) throw new Error("未配置直连连接（备份不可用）");
-      return listBackups(connId, deps.backupDeps);
+      return listBackupsWithViewer(connId, deps.backupDeps);
     },
     // 202 受理：fire-and-forget；终态帧收敛（done:true + error?）——
     // 移动端据此复位并重拉列表

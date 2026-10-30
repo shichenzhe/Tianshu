@@ -24,13 +24,13 @@ import { createBackupFace } from "../../../electron/domains/server-face/backup-t
 import {
   createBackupNow,
   deleteBackupById,
-  listBackups,
+  listBackupsWithViewer,
 } from "../../../electron/domains/backup/ipc";
 
 vi.mock("../../../electron/domains/backup/ipc", () => ({
   createBackupNow: vi.fn(),
   deleteBackupById: vi.fn(),
-  listBackups: vi.fn(),
+  listBackupsWithViewer: vi.fn(),
 }));
 
 const createBackupNowMock = createBackupNow as unknown as ReturnType<
@@ -39,7 +39,9 @@ const createBackupNowMock = createBackupNow as unknown as ReturnType<
 const deleteBackupByIdMock = deleteBackupById as unknown as ReturnType<
   typeof vi.fn
 >;
-const listBackupsMock = listBackups as unknown as ReturnType<typeof vi.fn>;
+const listWithViewerMock = listBackupsWithViewer as unknown as ReturnType<
+  typeof vi.fn
+>;
 
 function makeFace(connection: string | null) {
   return createBackupFace({
@@ -56,12 +58,19 @@ describe("backup-tap：connId 解析与代理", () => {
     await expect(face.create(undefined)).rejects.toThrow("未配置直连连接");
   });
 
-  it("list/delete 转发（connId 注入）", async () => {
-    listBackupsMock.mockResolvedValue([]);
+  it("list/delete 转发（connId 注入；list 透传 viewer 身份）", async () => {
+    const listPayload = {
+      backups: [],
+      viewer: { kind: "admin" as const },
+    };
+    listWithViewerMock.mockResolvedValue(listPayload);
     deleteBackupByIdMock.mockResolvedValue(undefined);
     const face = makeFace("conn-1");
-    await face.list();
-    expect(listBackupsMock).toHaveBeenCalledWith("conn-1", expect.anything());
+    await expect(face.list()).resolves.toEqual(listPayload);
+    expect(listWithViewerMock).toHaveBeenCalledWith(
+      "conn-1",
+      expect.anything(),
+    );
     await face.delete("b-1");
     expect(deleteBackupByIdMock).toHaveBeenCalledWith(
       "conn-1",

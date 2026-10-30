@@ -47,3 +47,6 @@ export * from "./plan-date";
 // src-react 原位 re-export，被控面 marketList/marketDetail 端点消费）
 export * from "./expert-market";
 export * from "./tool-alias";
+// GA 系（混合检索 Task 1）：检索纯逻辑入包——tokenize/rankBm25/rrfFuse
+// （FTS5 否决 pivot 内存 BM25），mirror vitest 单测 tests/core/ 同源消费
+export * from "./retrieval";

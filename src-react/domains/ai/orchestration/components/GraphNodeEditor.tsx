@@ -1016,7 +1016,7 @@ export function CodeNodeFields({
           <SelectContent className="rounded-lg border border-border/50 shadow-lg">
             <SelectItem value="bash">Bash</SelectItem>
             <SelectItem value="nodejs">Node.js</SelectItem>
-            <SelectItem value="python">Python 3</SelectItem>
+            <SelectItem value="python">Python</SelectItem>
           </SelectContent>
         </Select>
       </Field>

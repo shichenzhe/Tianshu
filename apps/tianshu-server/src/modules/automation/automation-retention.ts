@@ -8,6 +8,11 @@
  * 照 automation-stat 先例）。其余逐行保持。
  */
 import { Logger } from '@nestjs/common';
+import {
+  engineOf,
+  overriddenDbUrl,
+  type DbEngine,
+} from '../../commons/database/db-url';
 
 const logger = new Logger('automation-retention');
 
@@ -144,8 +149,27 @@ export interface RetentionTrimResult {
 const daysAgo = (now: Date, days: number): Date =>
   new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-/** 每任务条数窗删除（SQLite ≥3.25 窗口函数；taskId NULL 同组=图试运行自成一组） */
-const trimKeepSql = (keep: number, statusWhere: string): string => `
+/** 每任务条数窗删除（SQLite ≥3.25 / PG 同款窗口函数；taskId NULL 同组=
+ * 图试运行自成一组）。双引擎方言（主库双引擎批）：PG 变体须引号 camelCase
+ * 标识符（派生 schema db push 建表为引号 camelCase，裸写被 PG 折叠小写
+ * 即表/列不存在）+ $1 占位符（PG 引擎不认 ?）；SQLite 变体与原串逐字节
+ * 不变。引擎取 env（retention 跑在 boot 后，env 稳定——ensureGraphRunNodeTable
+ * 同款默认参手法；maybeTrim 吞错下 SQL 方言错=裁剪静默永败，单测钉形状）。 */
+const trimKeepSql = (
+  keep: number,
+  statusWhere: string,
+  engine: DbEngine = engineOf(overriddenDbUrl()),
+): string =>
+  engine === 'postgres'
+    ? `
+  DELETE FROM "automationRun" WHERE id IN (
+    SELECT id FROM (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
+      FROM "automationRun" WHERE ${statusWhere}
+    ) WHERE rn > $1
+  )
+`
+    : `
   DELETE FROM automationRun WHERE id IN (
     SELECT id FROM (
       SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
@@ -155,8 +179,22 @@ const trimKeepSql = (keep: number, statusWhere: string): string => `
 `;
 
 /** 条数窗的节点行级联（去会话化 2026-10-28，spec §3.1）：与 trimKeepSql
- * 同窗子查询选 id，先于 run 窗删除执行——run 删除后子查询即失效 */
-const trimKeepNodesSql = (statusWhere: string): string => `
+ * 同窗子查询选 id，先于 run 窗删除执行——run 删除后子查询即失效；
+ * 双引擎方言同 trimKeepSql（PG 引号标识符 + $1） */
+const trimKeepNodesSql = (
+  statusWhere: string,
+  engine: DbEngine = engineOf(overriddenDbUrl()),
+): string =>
+  engine === 'postgres'
+    ? `
+  DELETE FROM "graphRunNode" WHERE "runId" IN (
+    SELECT id FROM (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
+      FROM "automationRun" WHERE ${statusWhere}
+    ) WHERE rn > $1
+  )
+`
+    : `
   DELETE FROM graphRunNode WHERE runId IN (
     SELECT id FROM (
       SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn

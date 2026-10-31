@@ -274,3 +274,91 @@ describe('maybeTrimAutomationRuns 节流', () => {
     expect(touches).toBe(2);
   });
 });
+
+// —— trimKeep SQL 双引擎方言（主库双引擎批终审追加）——
+// trimKeepSql/trimKeepNodesSql 按引擎分流：PG 引号 camelCase 标识符 +
+// $1 占位符；SQLite 与既有串逐字节一致（零行为变化）。真 PG 执行归
+// e2e live 段，单测钉 SQL 形状——maybeTrim 吞错下方言错即裁剪静默永败。
+describe('trimKeep SQL 双引擎方言', () => {
+  const OLD_MAIN = process.env.TIANSHU_DB_URL;
+  // 原值未设时须 delete 复原（env.X = undefined 落字符串 "undefined"，
+  // jest worker 内跨 spec 文件共享 process.env——engine.spec 同款纪律）
+  afterEach(() => {
+    if (OLD_MAIN === undefined) {
+      delete process.env.TIANSHU_DB_URL;
+    } else {
+      process.env.TIANSHU_DB_URL = OLD_MAIN;
+    }
+  });
+
+  /** 最小 RetentionDb 桩：捕获 $executeRawUnsafe 的 SQL（方言断言面）；
+   * 其余面零结果（前置步骤不触真实库） */
+  const captureDb = (sqls: string[]) =>
+    ({
+      automationRun: {
+        updateMany: () => Promise.resolve({ count: 0 }),
+        findMany: () => Promise.resolve([]),
+        deleteMany: () => Promise.resolve({ count: 0 }),
+      },
+      graphRunNode: {
+        deleteMany: () => Promise.resolve({ count: 0 }),
+      },
+      option: {
+        findFirst: () => Promise.resolve(null),
+      },
+      $executeRawUnsafe: (sql: string) => {
+        sqls.push(sql);
+        return Promise.resolve(0);
+      },
+    }) as unknown as Parameters<typeof trimAutomationRuns>[0];
+
+  it('PG 引擎：标识符引号 camelCase + $1 占位符（且无裸 ?）', async () => {
+    process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/main';
+    const sqls: string[] = [];
+    await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
+    // 4 发：成功档 nodes/run + 失败档 nodes/run
+    expect(sqls).toHaveLength(4);
+    for (const sql of sqls) {
+      expect(sql).not.toContain('?');
+      expect(sql).toContain('WHERE rn > $1');
+    }
+    // nodes 语句（第 1/3 发）：级联面 graphRunNode."runId" + 同窗 automationRun
+    for (const nodesSql of [sqls[0], sqls[2]]) {
+      expect(nodesSql).toContain('DELETE FROM "graphRunNode" WHERE "runId" IN');
+      expect(nodesSql).toContain('PARTITION BY "taskId"');
+      expect(nodesSql).toContain('FROM "automationRun" WHERE');
+    }
+    // run 语句（第 2/4 发）：automationRun 直删 + taskId 分区引号
+    for (const runSql of [sqls[1], sqls[3]]) {
+      expect(runSql).toContain('DELETE FROM "automationRun" WHERE id IN');
+      expect(runSql).toContain('PARTITION BY "taskId"');
+    }
+  });
+
+  it('SQLite 引擎：与既有 SQL 逐字节一致（零行为变化）', async () => {
+    delete process.env.TIANSHU_DB_URL;
+    const sqls: string[] = [];
+    await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
+    expect(sqls).toHaveLength(4);
+    const sqliteNodes = (statusWhere: string) => `
+  DELETE FROM graphRunNode WHERE runId IN (
+    SELECT id FROM (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
+      FROM automationRun WHERE ${statusWhere}
+    ) WHERE rn > ?
+  )
+`;
+    const sqliteRuns = (statusWhere: string) => `
+  DELETE FROM automationRun WHERE id IN (
+    SELECT id FROM (
+      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
+      FROM automationRun WHERE ${statusWhere}
+    ) WHERE rn > ?
+  )
+`;
+    expect(sqls[0]).toBe(sqliteNodes("status NOT IN ('failed', 'running')"));
+    expect(sqls[1]).toBe(sqliteRuns("status NOT IN ('failed', 'running')"));
+    expect(sqls[2]).toBe(sqliteNodes("status = 'failed'"));
+    expect(sqls[3]).toBe(sqliteRuns("status = 'failed'"));
+  });
+});

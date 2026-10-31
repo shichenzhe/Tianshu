@@ -74,7 +74,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
 
   async onModuleInit() {
     // 首启建库须先于连接（env 注入态 + dev 态：目录确保 + 缺库/空壳
-    // db push，见 db-url.ts）
+    // migrate deploy，见 db-url.ts）
     ensureDatabase();
     await this.engineClient.$connect();
     // 存量升级库幂等补建 graphRunNode（db push 只覆盖缺库/空壳首启，

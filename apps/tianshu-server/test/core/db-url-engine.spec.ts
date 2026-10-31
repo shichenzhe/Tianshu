@@ -2,7 +2,8 @@
 /**
  * 引擎判定（scheme 分发/非法 scheme 人话报错）与 dbUrlOptions 的
  * postgres 透传（不补 file: 前缀）；ensureDatabasePg 连接类失败有界
- * 重试（终审 F2——spawnSync 桩化，backoffMs=1 保测试即时）。
+ * 重试（终审 F2——spawnSync 桩化，backoffMs=1 保测试即时；migrate 契约
+ * 下重试单位是整条「探测 → resolve? → deploy」序列）。
  */
 import {
   engineOf,
@@ -80,7 +81,7 @@ describe('containsFilter（contains 大小写双引擎统一）', () => {
   });
 });
 
-describe('ensureDatabasePg 连接类失败有界重试（终审 F2）', () => {
+describe('ensureDatabasePg 连接类失败有界重试（终审 F2，migrate 契约）', () => {
   const OLD = process.env.TIANSHU_DB_URL;
   const spawnSync = require('node:child_process')
     .spawnSync as jest.Mock;
@@ -90,6 +91,7 @@ describe('ensureDatabasePg 连接类失败有界重试（终审 F2）', () => {
     stdout: '',
     stderr: 'Error: P1001: Can\'t reach database server … connect ECONNREFUSED 127.0.0.1:5432',
   });
+  const ok = { status: 0, stdout: '', stderr: '' };
 
   afterEach(() => {
     if (OLD === undefined) {
@@ -100,28 +102,45 @@ describe('ensureDatabasePg 连接类失败有界重试（终审 F2）', () => {
     spawnSync.mockReset();
   });
 
-  it('连接类失败重试至成功不抛（spawn 计数=失败次数+1）', () => {
+  it('连接类失败重试至成功不抛（探测连拒 ×2 轮 → 第 3 轮探测×2+deploy 全过）', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@127.0.0.1:5432/d';
     spawnSync
-      .mockReturnValueOnce(refused())
-      .mockReturnValueOnce(refused())
-      .mockReturnValue({ status: 0, stdout: 'db push ok', stderr: '' });
+      .mockReturnValueOnce(refused()) // 第 1 轮：表探测连拒
+      .mockReturnValueOnce(refused()) // 第 2 轮：表探测连拒
+      .mockReturnValueOnce(ok) // 第 3 轮：表探测过
+      .mockReturnValueOnce(ok) // 第 3 轮：journal 探测过（无 resolve）
+      .mockReturnValue({ status: 0, stdout: 'migrate deploy ok', stderr: '' });
     expect(() => ensureDatabasePg(__dirname, RETRY_FAST)).not.toThrow();
-    expect(spawnSync).toHaveBeenCalledTimes(3);
+    expect(spawnSync).toHaveBeenCalledTimes(5);
   });
-  it('确定性失败（schema 漂移类）不重试直接抛', () => {
+  it('确定性失败（探测阶段 P3006 类）不重试直接抛', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@127.0.0.1:5432/d';
     spawnSync.mockReturnValue({
       status: 1,
       stdout: '',
-      stderr: 'Error: P3006: MySQL migration failed to apply',
+      stderr: 'Error: P3006: migration failed to apply',
     });
     expect(() => ensureDatabasePg(__dirname, RETRY_FAST)).toThrow(
-      /PG 首启建库失败/,
+      /迁移前探测失败.*P3006/s,
     );
     expect(spawnSync).toHaveBeenCalledTimes(1);
   });
-  it('连接类失败重试耗尽仍失败 → 抛（attempts 次后止步）', () => {
+  it('确定性失败（deploy 阶段）不重试直接抛（探测全过后止步 deploy）', () => {
+    process.env.TIANSHU_DB_URL = 'postgres://u:p@127.0.0.1:5432/d';
+    spawnSync
+      .mockReturnValueOnce(ok) // 表探测过
+      .mockReturnValueOnce(ok) // journal 探测过（journal 齐 → 无 resolve）
+      .mockReturnValueOnce({
+        status: 1,
+        stdout: '',
+        stderr: 'Error: P3006: migration failed to apply',
+      });
+    expect(() => ensureDatabasePg(__dirname, RETRY_FAST)).toThrow(
+      /PG 首启迁移失败（prisma migrate deploy 退出码 1）.*P3006/s,
+    );
+    expect(spawnSync).toHaveBeenCalledTimes(3);
+  });
+  it('连接类失败重试耗尽仍失败 → 抛（attempts 轮后止步，每轮死于首个探测）', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@127.0.0.1:5432/d';
     spawnSync.mockReturnValue(refused());
     expect(() => ensureDatabasePg(__dirname, RETRY_FAST)).toThrow(

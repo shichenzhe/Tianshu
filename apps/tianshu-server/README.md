@@ -268,6 +268,9 @@ pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
 
 `docker compose up -d` 起 server + PG 检索库全栈：
 
+- **鉴权必配（fail-closed）**：首次启动须 `export TIANSHU_TOKEN=$(openssl
+  rand -hex 32)`（compose 对缺失/空串直接拒绝启动，防无鉴权暴露）；客户端
+  以 `Authorization: Bearer <token>` 携带（SSE 可 `?token=` 等效）
 - server 镜像经 monorepo 根 context 构建（vendor 内嵌 @tianshu/* 共享包），
   `dist/src/main.js` 直跑，`/actuator/health` 探活
 - **SQLite 主库持久化**：`TIANSHU_DB_URL=file:/app/data/local.db` 落

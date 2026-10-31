@@ -22,6 +22,9 @@ services:
       dockerfile: apps/tianshu-server/Dockerfile
     environment:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      # fail-closed：未设/空串直接拒绝起栈——token.guard 将空串当未设放行全部
+      # 路由（graph/session 等 @Public 面 JWT 也不兜底），不可静默无鉴权裸奔
+      TIANSHU_TOKEN: ${TIANSHU_TOKEN:?TIANSHU_TOKEN required (openssl rand -hex 32)}
       # SQLite 主库落数据卷（PrismaService 的 TIANSHU_DB_URL 覆盖机制）
       TIANSHU_DB_URL: file:/app/data/local.db
       SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search

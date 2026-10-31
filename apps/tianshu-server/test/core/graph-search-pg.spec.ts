@@ -455,3 +455,42 @@ describe('vector-store 检索路由', () => {
     );
   });
 });
+
+// ---- 追加：检索跟随主库（双引擎 spec §4）----
+describe('searchDbTarget 跟随主库（双引擎 spec §4）', () => {
+  const OLD_SEARCH = process.env.SEARCH_DB_URL;
+  const OLD_MAIN = process.env.TIANSHU_DB_URL;
+  // 原值未设时须 delete 复原：`env.X = undefined` 会落字符串 "undefined"
+  // （jest worker 内跨 spec 文件共享 process.env，泄漏即后续套件误判路由）
+  afterEach(() => {
+    if (OLD_SEARCH === undefined) {
+      delete process.env.SEARCH_DB_URL;
+    } else {
+      process.env.SEARCH_DB_URL = OLD_SEARCH;
+    }
+    if (OLD_MAIN === undefined) {
+      delete process.env.TIANSHU_DB_URL;
+    } else {
+      process.env.TIANSHU_DB_URL = OLD_MAIN;
+    }
+  });
+
+  it('SEARCH_DB_URL 空且主库 postgres → 返回主库 URL', async () => {
+    delete process.env.SEARCH_DB_URL;
+    process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/main';
+    const { searchDbTarget } = await import('../../src/core/graph/search-pg');
+    expect(searchDbTarget()).toBe('postgres://u:p@h:5432/main');
+  });
+  it('主库 sqlite → 维持 null（本地检索现状）', async () => {
+    delete process.env.SEARCH_DB_URL;
+    process.env.TIANSHU_DB_URL = 'file:/tmp/x.db';
+    const { searchDbTarget } = await import('../../src/core/graph/search-pg');
+    expect(searchDbTarget()).toBeNull();
+  });
+  it('SEARCH_DB_URL 显式设置仍优先', async () => {
+    process.env.SEARCH_DB_URL = 'postgres://u:p@h:5432/search';
+    process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/main';
+    const { searchDbTarget } = await import('../../src/core/graph/search-pg');
+    expect(searchDbTarget()).toBe('postgres://u:p@h:5432/search');
+  });
+});

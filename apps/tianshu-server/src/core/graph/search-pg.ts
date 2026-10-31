@@ -97,11 +97,17 @@ VALUES ${rows.join(', ')}`;
 
 const POSTGRES_SCHEME = /^postgres(ql)?:\/\//;
 
-/** 读 SEARCH_DB_URL：空=本地检索（null）；非法 scheme 显式报错 */
+/** 读 SEARCH_DB_URL：空=跟随主库（主库 postgres→主库 URL；sqlite/未设→
+ * 本地检索 null）；非法 scheme 显式报错 */
 export function searchDbTarget(): string | null {
   const url = process.env.SEARCH_DB_URL ?? '';
   if (url === '') {
-    return null;
+    // 跟随主库（双引擎 spec §4）：主库 postgres 时检索默认指向主库
+    // （检索表 search-pg 幂等 DDL 自建 vector_chunk，与主库 Prisma
+    // vectorChunk 表不同名并存——检索单真源原则延续）；主库 sqlite
+    // 维持本地检索（null）。
+    const mainUrl = process.env.TIANSHU_DB_URL ?? '';
+    return POSTGRES_SCHEME.test(mainUrl) ? mainUrl : null;
   }
   if (!POSTGRES_SCHEME.test(url)) {
     throw new VectorStoreError(

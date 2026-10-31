@@ -95,10 +95,12 @@ interface PgPoolLike {
   end(): Promise<void>;
 }
 
-/** 幂等建库（与 search-pg.ts PG_DDL 同款四语句，进程边界内联不走 import） */
+/** 幂等建库（与 search-pg.ts PG_DDL 同款五语句——schema/扩展/表/GIN/复合
+ * 索引，表限定 tianshu_search 独立 schema；进程边界内联不走 import） */
 const PG_DDL: string[] = [
+  "CREATE SCHEMA IF NOT EXISTS tianshu_search",
   "CREATE EXTENSION IF NOT EXISTS vector",
-  `CREATE TABLE IF NOT EXISTS vector_chunk (
+  `CREATE TABLE IF NOT EXISTS tianshu_search.vector_chunk (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,
   collection TEXT NOT NULL,
@@ -110,9 +112,13 @@ const PG_DDL: string[] = [
   model TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
-  "CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON vector_chunk USING gin(text_tsv)",
-  "CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON vector_chunk (user_id, collection)",
+  "CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON tianshu_search.vector_chunk USING gin(text_tsv)",
+  "CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON tianshu_search.vector_chunk (user_id, collection)",
 ];
+
+/** 检索表清场（幂等；schema 级连清——表/索引随 schema 一并回收） */
+const DROP_SEARCH_SQL =
+  "DROP SCHEMA IF EXISTS tianshu_search CASCADE";
 
 /** upsert INSERT（与运行时 buildUpsertInsertSql 同款：每块 8 参，$6 分词文本
  * 经 to_tsvector、$7 向量字面量 ::vector） */
@@ -121,7 +127,7 @@ function buildUpsertInsertSql(chunkCount: number): string {
     const b = i * 8;
     return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, to_tsvector('simple', $${b + 6}), $${b + 7}::vector, $${b + 8})`;
   });
-  return `INSERT INTO vector_chunk(user_id, collection, source_name, seq, text, text_tsv, vector, model)
+  return `INSERT INTO tianshu_search.vector_chunk(user_id, collection, source_name, seq, text, text_tsv, vector, model)
 VALUES ${rows.join(", ")}`;
 }
 
@@ -137,7 +143,7 @@ async function upsertSeed(
   try {
     await client.query("BEGIN");
     await client.query(
-      "DELETE FROM vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3",
+      "DELETE FROM tianshu_search.vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3",
       [USER_ID, COLLECTION, sourceName],
     );
     if (texts.length > 0) {
@@ -167,7 +173,7 @@ async function upsertSeed(
 /** collection 计数（运行时 countCollectionPg 同款语句） */
 async function countCollection(pool: PgPoolLike): Promise<number> {
   const result = await pool.query(
-    "SELECT COUNT(*)::int AS n FROM vector_chunk WHERE user_id = $1 AND collection = $2",
+    "SELECT COUNT(*)::int AS n FROM tianshu_search.vector_chunk WHERE user_id = $1 AND collection = $2",
     [USER_ID, COLLECTION],
   );
   return Number((result.rows[0] as { n: number }).n);
@@ -534,11 +540,14 @@ async function main(): Promise<number> {
   let control: DirectControl | null = null;
   try {
     // 1. 直连 PG：清场 + 幂等建库（与运行时 PG_DDL 同款）
-    await pool.query("DROP TABLE IF EXISTS vector_chunk");
+    await pool.query(DROP_SEARCH_SQL);
     for (const ddl of PG_DDL) {
       await pool.query(ddl);
     }
-    pass("PG 建库", "DROP 清场 + 扩展/表/GIN·复合索引四语句 DDL 就绪");
+    pass(
+      "PG 建库",
+      "DROP CASCADE 清场 + schema/扩展/表/GIN·复合索引五语句 DDL 就绪",
+    );
 
     // 2. 中文样本直插（目标条目两块均含「容错/设计」词元；无关条目零词元
     //    交集——FTS 真匹配而非全量透传的反证）
@@ -674,8 +683,8 @@ async function main(): Promise<number> {
     await call(request, "graph/delete 收敛", "graph/delete", { id: graph.id });
 
     // 6. PG 清理
-    await pool.query("DROP TABLE IF EXISTS vector_chunk");
-    pass("PG 清理", "vector_chunk 已 DROP");
+    await pool.query(DROP_SEARCH_SQL);
+    pass("PG 清理", "tianshu_search schema 已 DROP");
   } finally {
     control?.close();
     await stopChild(child);

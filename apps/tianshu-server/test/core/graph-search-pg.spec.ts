@@ -2,7 +2,8 @@
 /**
  * search-pg 纯函数层：FTS 查询串（OR 连接 + metachar 全串白名单过滤——
  * tokenize 白名单是包含性测试，混合语法字符词元仍可能混入）、向量字面量、
- * DDL/SQL 生成（collection 可选段与占位序号正确性）。
+ * DDL/SQL 生成（collection 可选段与占位序号正确性；表一律限定
+ * tianshu_search schema——终审 F1，防主库同库 db push drift 误杀）。
  */
 import {
   PG_DDL,
@@ -33,9 +34,10 @@ describe('buildVectorLiteral', () => {
 });
 
 describe('SQL 生成（占位序号随 collection 段偏移）', () => {
-  it('FTS：无 collection 段 $1=匹配串 $2=userId $3=limit', () => {
+  it('FTS：无 collection 段 $1=匹配串 $2=userId $3=limit，表限定独立 schema', () => {
     const { sql } = buildFtsSql(false);
     expect(sql).toContain("to_tsquery('simple', $1)");
+    expect(sql).toContain('FROM tianshu_search.vector_chunk');
     expect(sql).toContain('user_id = $2');
     expect(sql).toContain('LIMIT $3');
     expect(sql).not.toContain('collection = ');
@@ -49,6 +51,7 @@ describe('SQL 生成（占位序号随 collection 段偏移）', () => {
   it('向量：无 collection 段 $1=向量 $2=model $3=userId $4=limit，余弦距离排序 + score 取 1-距离', () => {
     const { sql } = buildVectorSql(false);
     expect(sql).toContain('$1::vector');
+    expect(sql).toContain('FROM tianshu_search.vector_chunk');
     expect(sql).toContain('model = $2');
     expect(sql).toContain('user_id = $3');
     expect(sql).toContain('ORDER BY vector <=> $1::vector');
@@ -64,24 +67,29 @@ describe('SQL 生成（占位序号随 collection 段偏移）', () => {
 });
 
 describe('PG_DDL 与 upsert 语句', () => {
-  it('DDL 含扩展/表/GIN/复合索引且全部 IF NOT EXISTS 幂等', () => {
-    expect(PG_DDL.join('\n')).toContain(
-      'CREATE EXTENSION IF NOT EXISTS vector',
+  it('DDL 含 schema/扩展/表/GIN/复合索引且全部 IF NOT EXISTS 幂等（表限定 tianshu_search——db push 无感面）', () => {
+    const ddl = PG_DDL.join('\n');
+    expect(ddl).toContain('CREATE SCHEMA IF NOT EXISTS tianshu_search');
+    expect(ddl).toContain('CREATE EXTENSION IF NOT EXISTS vector');
+    expect(ddl).toContain(
+      'CREATE TABLE IF NOT EXISTS tianshu_search.vector_chunk',
     );
-    expect(PG_DDL.join('\n')).toContain(
-      'CREATE TABLE IF NOT EXISTS vector_chunk',
+    expect(ddl).toContain(
+      'ON tianshu_search.vector_chunk USING gin(text_tsv)',
     );
-    expect(PG_DDL.join('\n')).toContain('USING gin(text_tsv)');
-    expect(PG_DDL.join('\n')).toContain('(user_id, collection)');
-    expect(PG_DDL.join('\n')).toContain('text_tsv tsvector NOT NULL');
-    expect(PG_DDL.join('\n')).toContain('vector vector');
+    expect(ddl).toContain('ON tianshu_search.vector_chunk (user_id, collection)');
+    expect(ddl).toContain('text_tsv tsvector NOT NULL');
+    expect(ddl).toContain('vector vector');
+    // 裸表名引用零残留（索引名 vector_chunk_* 前缀不构成表引用——
+    // \b 词界不匹配下划线续串）
+    expect(ddl).not.toMatch(/[^.\w]vector_chunk\b(?!_)/);
   });
-  it('upsert INSERT：multi-VALUES 含 to_tsvector(simple) 与 ::vector 转换', () => {
+  it('upsert INSERT：multi-VALUES 含 to_tsvector(simple) 与 ::vector 转换，表带 schema 前缀', () => {
     const sql = buildUpsertInsertSql(2);
     expect(sql).toContain("to_tsvector('simple', $6)"); // 每块 8 参：user/coll/source/seq/text/分词/向量/model
     expect(sql).toContain('$7::vector');
     expect(sql).toMatch(/VALUES \(.+\), \(.+\)/); // 两行 VALUES
-    expect(sql).toContain('INSERT INTO vector_chunk');
+    expect(sql).toContain('INSERT INTO tianshu_search.vector_chunk');
   });
 });
 
@@ -214,7 +222,7 @@ describe('PG 运行时（mock pg.Pool.query）', () => {
     // 前置幂等建库占前 PG_DDL.length 位，事务语句序号顺延
     const D = PG_DDL.length;
     expect(calls[D]).toContain('BEGIN');
-    expect(calls[D + 1]).toContain('DELETE FROM vector_chunk');
+    expect(calls[D + 1]).toContain('DELETE FROM tianshu_search.vector_chunk');
     expect(calls[D + 2]).toContain('to_tsvector');
     // 分词参数：空格连接词元串（ICU 实际切分以 tokenize 运行时输出为准——
     // 「容」「错」「设计」等词元必然在列，精确整串不做脆弱断言）
@@ -408,9 +416,11 @@ describe('vector-store 检索路由', () => {
       chunks: [{ seq: 0, text: 'x', vector: [0.1] }],
     });
     const calls = pg.__query.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((sql) => sql.includes('INSERT INTO vector_chunk'))).toBe(
-      true,
-    );
+    expect(
+      calls.some((sql) =>
+        sql.includes('INSERT INTO tianshu_search.vector_chunk'),
+      ),
+    ).toBe(true);
     expect(pg.__release).toHaveBeenCalledTimes(1);
   });
 
@@ -450,7 +460,7 @@ describe('vector-store 检索路由', () => {
     );
     await expect(countCollection(1, 'c')).resolves.toBe(7);
     expect(__query).toHaveBeenCalledWith(
-      expect.stringContaining('COUNT(*)'),
+      expect.stringContaining('FROM tianshu_search.vector_chunk'),
       [1, 'c'],
     );
   });

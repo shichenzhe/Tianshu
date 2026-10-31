@@ -8,6 +8,10 @@
       {
         "include": "config/config.yml",
         "outDir": "dist"
+      },
+      {
+        "include": "generated",
+        "outDir": "dist/src"
       }
     ]
   }

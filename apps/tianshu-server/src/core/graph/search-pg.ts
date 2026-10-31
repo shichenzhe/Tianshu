@@ -5,19 +5,32 @@
  * v2 维度策略）；独立库 = 检索单一真源（vectorize 直写，主库无副本）。
  * 分词与融合复用 @tianshu/core（tokenize/rrfFuse），与 mirror 内存
  * BM25 检索行为同源。
+ *
+ * 检索表限定独立 schema——主库同库模式下 db push 视而不见（防 drift
+ * 误杀），数据跨重启保全：ensureDatabasePg 每次启动都跑 prisma db push
+ * （派生 schema 只管 public 下的业务表），若 vector_chunk 落 public，
+ * 一旦有数据即被判 drift（非空表 db push 拒绝自动 drop、退出 1）→
+ * onModuleInit 中止 → 服务永远起不来；空表则每次启动被静默 drop 丢数据。
+ * 限定 tianshu_search schema 后 db push 对检索表完全无感（终审 F1）。
  */
 import { tokenize, type FusedHit } from '@tianshu/core';
+import { overriddenDbUrl } from '../../commons/database/db-url';
 import {
   VectorStoreError,
   type VectorChunkRow,
   type VectorHit,
 } from './vector-store';
 
-/** 幂等建库：扩展→表→索引（首次检索/入库前执行；扩展缺失由调用方
+/** 检索表全限定名（独立 schema，见文件头注释——主库同库模式下与
+ * Prisma 派生 schema 的 public 业务表面零交集） */
+const VECTOR_CHUNK_PG = 'tianshu_search.vector_chunk';
+
+/** 幂等建库：schema→扩展→表→索引（首次检索/入库前执行；扩展缺失由调用方
  * 转 search_pg_no_vector_ext 人话错误） */
 export const PG_DDL: string[] = [
+  'CREATE SCHEMA IF NOT EXISTS tianshu_search',
   'CREATE EXTENSION IF NOT EXISTS vector',
-  `CREATE TABLE IF NOT EXISTS vector_chunk (
+  `CREATE TABLE IF NOT EXISTS ${VECTOR_CHUNK_PG} (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,
   collection TEXT NOT NULL,
@@ -29,8 +42,8 @@ export const PG_DDL: string[] = [
   model TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
-  'CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON vector_chunk USING gin(text_tsv)',
-  'CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON vector_chunk (user_id, collection)',
+  `CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON ${VECTOR_CHUNK_PG} USING gin(text_tsv)`,
+  `CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON ${VECTOR_CHUNK_PG} (user_id, collection)`,
 ];
 
 /** 严格词元白名单：全串仅文字/数字（Han/字母/数字）——tokenize 的白名单
@@ -57,7 +70,7 @@ export function buildFtsSql(hasCollection: boolean): {
 } {
   const sql = `SELECT id, collection, source_name, text,
   ts_rank(text_tsv, to_tsquery('simple', $1)) AS score
-FROM vector_chunk
+FROM ${VECTOR_CHUNK_PG}
 WHERE text_tsv @@ to_tsquery('simple', $1)
   AND user_id = $2${hasCollection ? '\n  AND collection = $3' : ''}
 ORDER BY score DESC LIMIT $${hasCollection ? 4 : 3}`;
@@ -72,7 +85,7 @@ export function buildVectorSql(hasCollection: boolean): {
 } {
   const sql = `SELECT id, collection, source_name, text,
   1 - (vector <=> $1::vector) AS score
-FROM vector_chunk
+FROM ${VECTOR_CHUNK_PG}
 WHERE vector IS NOT NULL
   AND model = $2
   AND user_id = $3${hasCollection ? '\n  AND collection = $4' : ''}
@@ -87,7 +100,7 @@ export function buildUpsertInsertSql(chunkCount: number): string {
     const b = i * 8;
     return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, to_tsvector('simple', $${b + 6}), $${b + 7}::vector, $${b + 8})`;
   });
-  return `INSERT INTO vector_chunk(user_id, collection, source_name, seq, text, text_tsv, vector, model)
+  return `INSERT INTO ${VECTOR_CHUNK_PG}(user_id, collection, source_name, seq, text, text_tsv, vector, model)
 VALUES ${rows.join(', ')}`;
 }
 
@@ -103,10 +116,12 @@ export function searchDbTarget(): string | null {
   const url = process.env.SEARCH_DB_URL ?? '';
   if (url === '') {
     // 跟随主库（双引擎 spec §4）：主库 postgres 时检索默认指向主库
-    // （检索表 search-pg 幂等 DDL 自建 vector_chunk，与主库 Prisma
-    // vectorChunk 表不同名并存——检索单真源原则延续）；主库 sqlite
-    // 维持本地检索（null）。
-    const mainUrl = process.env.TIANSHU_DB_URL ?? '';
+    // （检索表 search-pg 幂等 DDL 自建 tianshu_search.vector_chunk，
+    // 独立 schema 与主库 Prisma 业务表无交集——检索单真源原则延续，
+    // 且 db push 对检索表无感不误杀）；主库 sqlite 维持本地检索（null）。
+    // 主库 URL 读取复用 db-url 的 overriddenDbUrl（trim 单源——与引擎
+    // 判定同一路径，TIANSHU_DB_URL 带空白符时不出现读值口径分叉）
+    const mainUrl = overriddenDbUrl() ?? '';
     return POSTGRES_SCHEME.test(mainUrl) ? mainUrl : null;
   }
   if (!POSTGRES_SCHEME.test(url)) {
@@ -206,7 +221,7 @@ export async function upsertChunksPg(params: {
   try {
     await client.query('BEGIN');
     await client.query(
-      'DELETE FROM vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3',
+      `DELETE FROM ${VECTOR_CHUNK_PG} WHERE user_id = $1 AND collection = $2 AND source_name = $3`,
       [params.userId, params.collection, params.sourceName],
     );
     if (params.chunks.length > 0) {
@@ -336,7 +351,7 @@ export async function countCollectionPg(
     const result = await (
       await getPool()
     ).query(
-      'SELECT COUNT(*)::int AS n FROM vector_chunk WHERE user_id = $1 AND collection = $2',
+      `SELECT COUNT(*)::int AS n FROM ${VECTOR_CHUNK_PG} WHERE user_id = $1 AND collection = $2`,
       [userId, collection],
     );
     return Number((result.rows[0] as { n: number }).n);

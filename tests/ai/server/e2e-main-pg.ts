@@ -4,16 +4,18 @@
  * 「检索跟随主库」路径）→ 首启自动 db push（派生 schema）建 23 张业务表 →
  * graph save/run 走 PG 主库（API 行为 + 直查 graphDefinition 行双证，另证
  * 无 SQLite 落库文件）→ hybridSearch keyword 同库检索命中「容错设计手册｜
- * 相关度」+「旅行日记」剔除（跟随规则 §4 实证）→ 清理（子进程 + 检索表
- * DROP；业务表留给 PG 卷/由外部清理——检索单真源原则延续）。SQLite 路径
- * 由既有 e2e/Jest 覆盖。
+ * 相关度」+「旅行日记」剔除（跟随规则 §4 实证）→ 重启两跳（two-boot，终审
+ * F1）：停服复启（每次启动都跑 db push）健康仍 ok 且检索行保全——检索表
+ * 限定 tianshu_search 独立 schema，db push 对其视而不见；限 public 旧形态
+ * 下非空 vector_chunk 必被判 drift（退出 1）永久起不来 → 清理（子进程 +
+ * 检索 schema DROP；业务表留给 PG 卷/由外部清理——检索单真源原则延续）。
+ * SQLite 路径由既有 e2e/Jest 覆盖。
  *
- * spawn/env 注入/直插/断言手法对齐 e2e-graph-search-pg.ts；两处刻意偏差：
- * ① nest build 不随行 src/generated 纯 JS 产物（Dockerfile 同款显式拷贝，
- *    本脚本在 build 后自拷 dist/src/generated）；② 分词模块解析改经
- *    createRequire(SERVER_DIR) 的 require.resolve("@tianshu/core")——本仓
- *    worktree 布局下共享包 dist 不在仓内且 node_modules 软链指主树，
- *    server 进程实际装载的就是该解析位（同树同源不变式更直接的实现）。
+ * spawn/env 注入/直插/断言手法对齐 e2e-graph-search-pg.ts；一处刻意偏差：
+ * 分词模块解析改经 createRequire(SERVER_DIR) 的 require.resolve
+ * ("@tianshu/core")——本仓 worktree 布局下共享包 dist 不在仓内且
+ * node_modules 软链指主树，server 进程实际装载的就是该解析位（同树同源
+ * 不变式更直接的实现）。
  *
  * PG 起法（compose main-pg 端口未发布，e2e 用一次性容器）：
  *   docker run -d --rm --name mainpg-e2e -e POSTGRES_USER=t \
@@ -101,10 +103,12 @@ interface PgPoolLike {
   end(): Promise<void>;
 }
 
-/** 幂等建库（与 search-pg.ts PG_DDL 同款四语句，进程边界内联不走 import） */
+/** 幂等建库（与 search-pg.ts PG_DDL 同款五语句——schema/扩展/表/GIN/复合
+ * 索引，表限定 tianshu_search 独立 schema；进程边界内联不走 import） */
 const PG_DDL: string[] = [
+  "CREATE SCHEMA IF NOT EXISTS tianshu_search",
   "CREATE EXTENSION IF NOT EXISTS vector",
-  `CREATE TABLE IF NOT EXISTS vector_chunk (
+  `CREATE TABLE IF NOT EXISTS tianshu_search.vector_chunk (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL,
   collection TEXT NOT NULL,
@@ -116,9 +120,13 @@ const PG_DDL: string[] = [
   model TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 )`,
-  "CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON vector_chunk USING gin(text_tsv)",
-  "CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON vector_chunk (user_id, collection)",
+  "CREATE INDEX IF NOT EXISTS vector_chunk_tsv_gin ON tianshu_search.vector_chunk USING gin(text_tsv)",
+  "CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON tianshu_search.vector_chunk (user_id, collection)",
 ];
+
+/** 检索表清场（幂等；schema 级连清——表/索引随 schema 一并回收） */
+const DROP_SEARCH_SQL =
+  "DROP SCHEMA IF EXISTS tianshu_search CASCADE";
 
 /** upsert INSERT（与运行时 buildUpsertInsertSql 同款：每块 8 参，$6 分词文本
  * 经 to_tsvector、$7 向量字面量 ::vector） */
@@ -127,7 +135,7 @@ function buildUpsertInsertSql(chunkCount: number): string {
     const b = i * 8;
     return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5}, to_tsvector('simple', $${b + 6}), $${b + 7}::vector, $${b + 8})`;
   });
-  return `INSERT INTO vector_chunk(user_id, collection, source_name, seq, text, text_tsv, vector, model)
+  return `INSERT INTO tianshu_search.vector_chunk(user_id, collection, source_name, seq, text, text_tsv, vector, model)
 VALUES ${rows.join(", ")}`;
 }
 
@@ -142,7 +150,7 @@ async function upsertSeed(
   try {
     await client.query("BEGIN");
     await client.query(
-      "DELETE FROM vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3",
+      "DELETE FROM tianshu_search.vector_chunk WHERE user_id = $1 AND collection = $2 AND source_name = $3",
       [USER_ID, COLLECTION, sourceName],
     );
     if (texts.length > 0) {
@@ -594,8 +602,9 @@ async function main(): Promise<number> {
     );
     return 1;
   }
-  // nest build 不随行 generated 纯 JS 产物（tsc allowJs 关）——Dockerfile 同款
-  // 显式拷贝：dist/src/generated 是 facade require 的解析位
+  // PG 生成物随行：nest build 经 nest-cli assets 自动拷 src/generated →
+  // dist/src/generated（终审 F3；dist/src/generated 是 facade require 的解析
+  // 位）。自拷兜底保留——TIANSHU_E2E_SKIP_BUILD 配旧 dist 时 assets 可能缺席
   if (!fs.existsSync(PG_CLIENT_DIST)) {
     fs.cpSync(PG_CLIENT_SRC, PG_CLIENT_DIST, { recursive: true });
     log(
@@ -615,7 +624,8 @@ async function main(): Promise<number> {
   let control: DirectControl | null = null;
   try {
     // 1. PG 可达性预检（容器 initdb 竞态兜底：SELECT 1 重试至多 30s）+
-    //    检索表清场（幂等 DROP；主库业务表不清——首启建库由 server 自证）
+    //    检索 schema 清场（幂等 DROP CASCADE；主库业务表不清——首启建库由
+    //    server 自证）
     const pgDeadline = Date.now() + HEALTH_TIMEOUT_MS;
     for (;;) {
       try {
@@ -631,8 +641,11 @@ async function main(): Promise<number> {
         await delay(1000);
       }
     }
-    await pool.query("DROP TABLE IF EXISTS vector_chunk");
-    pass("PG 预检", "连接可达 + 检索表 vector_chunk 清场");
+    await pool.query(DROP_SEARCH_SQL);
+    pass(
+      "PG 预检",
+      "连接可达 + 检索 schema tianshu_search 清场（DROP CASCADE）",
+    );
 
     // 2. spawn server 子进程：主库指真 PG（TIANSHU_DB_URL=postgres://…），
     //    SEARCH_DB_URL 显式置空——钉死「检索跟随主库」分支（§4）
@@ -731,8 +744,8 @@ async function main(): Promise<number> {
       `id=${graph.id} nodeCount=1；PG 行在位；无 SQLite 落库文件`,
     );
 
-    // 5. 检索跟随：vector_chunk 直插同库（search-pg 同款 seed）→
-    //    hybridSearch keyword run → 命中/剔除断言
+    // 5. 检索跟随：tianshu_search.vector_chunk 直插同库（search-pg 同款
+    //    seed）→ hybridSearch keyword run → 命中/剔除断言
     const targetTexts = [
       "高可用架构在设计阶段须引入容错机制，故障隔离与优雅降级是容错设计的第一道防线。",
       "容错设计要求重试、熔断与幂等配合，避免局部故障在设计不当的链路上被放大为全局雪崩。",
@@ -747,7 +760,7 @@ async function main(): Promise<number> {
     await upsertSeed(pool, tokenize, OFF_TOPIC_SOURCE, offTopicTexts);
     const seeded = await scalar(
       pool,
-      "SELECT COUNT(*)::int AS n FROM vector_chunk WHERE user_id = $1 AND collection = $2",
+      "SELECT COUNT(*)::int AS n FROM tianshu_search.vector_chunk WHERE user_id = $1 AND collection = $2",
       [USER_ID, COLLECTION],
     );
     if (seeded !== 3) {
@@ -755,7 +768,7 @@ async function main(): Promise<number> {
     }
     pass(
       "检索表同库 seed",
-      `vector_chunk（主库同库）「${TARGET_SOURCE}」×2 +「${OFF_TOPIC_SOURCE}」×1`,
+      `tianshu_search.vector_chunk（主库同库）「${TARGET_SOURCE}」×2 +「${OFF_TOPIC_SOURCE}」×1`,
     );
 
     const accepted = (await call(request, "graph/run", "graph/run", {
@@ -813,14 +826,71 @@ async function main(): Promise<number> {
       `SEARCH_DB_URL 空 → 主库同库检索；run#${accepted.runId} succeeded；output「${output.slice(0, 60)}」`,
     );
 
-    // 6. 清理：检索表 DROP（主库业务表留给 PG 卷/外部清理——一次性容器
-    //    随销毁；收敛段在 finally 保失败路径同样回收）
-    await pool.query("DROP TABLE IF EXISTS vector_chunk");
-    pass("PG 清理", "vector_chunk 已 DROP（业务表留存，随容器/卷销毁）");
+    // 6. 重启两跳（two-boot，终审 F1 断言组）：检索表已有数据 → 停服 →
+    //    复启（ensureDatabasePg 每次启动都跑 db push）→ 健康仍 ok 且检索
+    //    行保全。检索表限 tianshu_search 独立 schema，db push（只管 public
+    //    业务面）对其视而不见；若仍落 public，非空 vector_chunk 会被判
+    //    drift（db push 拒绝 drop 非空表、退出 1）→ 第二次 boot 必炸。
+    control?.close();
+    control = null;
+    await stopChild(child);
+    child = null;
+    const respawned = await spawnScan(
+      process.execPath,
+      [SERVER_ENTRY],
+      /^TIANSHU_HANDSHAKE /,
+      {
+        NODE_ENV: "e2e",
+        TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_DATA_ROOT: dataRoot,
+        TIANSHU_DB_URL: PG_URL,
+        SEARCH_DB_URL: "",
+      },
+    );
+    child = respawned.child;
+    const info2 = parseHandshake(respawned.matched);
+    if (info2.token !== "e2e-main-pg-token" || info2.port !== port) {
+      fail(
+        "重启握手（two-boot）",
+        `token/port 未按 env 回显（token=${info2.token} port=${info2.port} ≠ 配置 ${port}）`,
+      );
+    }
+    control = new DirectControl(info2.port, info2.token);
+    await waitForHealth(request);
+    const survived = await scalar(
+      pool,
+      "SELECT COUNT(*)::int AS n FROM tianshu_search.vector_chunk WHERE user_id = $1 AND collection = $2",
+      [USER_ID, COLLECTION],
+    );
+    if (survived !== 3) {
+      fail(
+        "重启两跳：检索行保全",
+        `第二次 boot 后计数期望 3 实为 ${survived}（检索表疑似被 db push 判 drift 清除）`,
+      );
+    }
+    const tablesAfterReboot = await scalar(
+      pool,
+      "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
+    );
+    if (tablesAfterReboot !== EXPECTED_TABLES) {
+      fail(
+        "重启两跳：业务表幂等",
+        `第二次 boot 后 public 业务表期望 ${EXPECTED_TABLES} 实为 ${tablesAfterReboot}`,
+      );
+    }
+    pass(
+      "重启两跳（two-boot）",
+      `第二次 boot 健康 ok；tianshu_search.vector_chunk 检索行 ${survived} 保全；public 业务表 ${tablesAfterReboot} 张（db push 复跑幂等）`,
+    );
+
+    // 7. 清理：检索 schema DROP CASCADE（主库业务表留给 PG 卷/外部清理——
+    //    一次性容器随销毁；收敛段在 finally 保失败路径同样回收）
+    await pool.query(DROP_SEARCH_SQL);
+    pass("PG 清理", "tianshu_search schema 已 DROP（业务表留存，随容器/卷销毁）");
   } finally {
     control?.close();
     await stopChild(child);
-    await pool.query("DROP TABLE IF EXISTS vector_chunk").catch(() => {});
+    await pool.query(DROP_SEARCH_SQL).catch(() => {});
     await pool.end().catch(() => {});
     fs.rmSync(E2E_CONFIG, { force: true });
     fs.rmSync(dataRoot, { recursive: true, force: true });

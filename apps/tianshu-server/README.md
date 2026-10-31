@@ -289,6 +289,15 @@ server 主库整体切 PG（23 张业务表，首启自动 db push 建表），�
 （同库建检索表）。**PG 模式为全新初始化**（SQLite 存量数据不迁移）；默认不设
 该 env 时为 SQLite 主库（零变化）。
 
+- 本地开发 PG 模式首次须 `npm run prisma:generate:pg`（生成 PG client，
+  gitignored）且 build 后 dist 自动随行（nest-cli assets）
+- 跟随主库的检索表建在独立 schema `tianshu_search`（`vector_chunk`），与
+  业务表的 `public` 面零交集——每次启动执行的 db push 对其视而不见，检索
+  数据跨重启保全
+- **已知差异**：PG 模式下 Prisma `contains` 走 PG LIKE（区分大小写），与
+  SQLite 的 ASCII 大小写不敏感不同——用户/日志关键词检索大小写行为有差异；
+  如需一致可后续在 PG 分支加 `mode: 'insensitive'`（follow-up，本期不实施）
+
 ## 目录结构
 
 ```

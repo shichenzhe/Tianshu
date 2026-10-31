@@ -173,25 +173,54 @@ export function ensureDatabase(startDir = __dirname): void {
  * CLI 形态同上方 SQLite db push 先例（execPath + prisma prod 树 CLI，机器
  * 无需装 node/npx）。无 SQLite 落点的目录确保/空壳判定——建库就绪与否由
  * db push 自身幂等保证。
+ *
+ * 连接类失败有界重试（终审 F2）：compose 起栈竞态下 db push 可能先于
+ * main-pg 就绪（initdb/监听未起 → ECONNREFUSED）。profile 门控不宜为
+ * main-pg 加 depends_on（缺省 SQLite 栈会被连带拉起 PG），竞态由两侧
+ * 兜底——compose server 服务 restart: unless-stopped + 本进程内最多
+ * 3 次、间隔 2s 的短退避重试；确定性失败（schema 漂移/鉴权拒绝等）重试
+ * 无意义，不重试直接抛。导出 + retry 参数注入供单测（默认参数即生产行为）。
  */
-function ensureDatabasePg(startDir: string): void {
+export const PG_DB_PUSH_RETRY_DEFAULTS = { attempts: 3, backoffMs: 2000 };
+
+/** 连接类失败特征（stdout/stderr 合串判读）：connect 系错误码/超时——
+ * prisma P1001/P1002 等不可达错误均携带其中之一 */
+const PG_CONNECT_FAILURE_RE = /ECONNREFUSED|connect|timed?\s*out|timeout/i;
+
+export function ensureDatabasePg(
+  startDir: string,
+  retry: { attempts: number; backoffMs: number } = PG_DB_PUSH_RETRY_DEFAULTS,
+): void {
   const url = overriddenDbUrl()!;
   const root = findSchemaRoot(startDir);
-  const result = spawnSync(
-    process.execPath,
-    [
-      join(root, 'node_modules', 'prisma', 'build', 'index.js'),
-      'db',
-      'push',
-      '--skip-generate',
-      '--schema',
-      join(root, 'prisma', 'schema.prisma.postgresql'),
-    ],
-    {
-      env: { ...process.env, DATABASE_URL: url },
-      encoding: 'utf8',
-    },
-  );
+  const dbPush = (): ReturnType<typeof spawnSync> =>
+    spawnSync(
+      process.execPath,
+      [
+        join(root, 'node_modules', 'prisma', 'build', 'index.js'),
+        'db',
+        'push',
+        '--skip-generate',
+        '--schema',
+        join(root, 'prisma', 'schema.prisma.postgresql'),
+      ],
+      {
+        env: { ...process.env, DATABASE_URL: url },
+        encoding: 'utf8',
+      },
+    );
+  let result = dbPush();
+  for (let attempt = 1; attempt < retry.attempts; attempt++) {
+    if (result.status === 0) break;
+    const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`;
+    if (result.status === null || !PG_CONNECT_FAILURE_RE.test(output)) {
+      break; // 非连接类失败（schema 漂移/鉴权/CLI 缺失等）重试无意义
+    }
+    // 同步短退避（ensureDatabase 全链同步，无异步 sleep 可用）：
+    // Atomics.wait 是 Node 主/工作线程均合法的同步等待原语
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retry.backoffMs);
+    result = dbPush();
+  }
   if (result.status !== 0) {
     const tail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
       .trim()

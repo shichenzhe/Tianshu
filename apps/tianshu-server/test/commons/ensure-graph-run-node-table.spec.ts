@@ -59,4 +59,14 @@ describe('ensureGraphRunNodeTable（存量库幂等补建）', () => {
     assertOneRunDdl(executeRawCalls.slice(2));
     expect(executeRawCalls).toHaveLength(4);
   });
+
+  it('PG 主库引擎早退：不发任何 $executeRawUnsafe（DDL 单源交给派生 schema db push）', async () => {
+    // 双引擎 spec：postgres 态本 DDL 是 SQLite 方言（AUTOINCREMENT 解析期
+    // 即语法错），必须跳过——早退零调用钉死（引擎由入参显式给定，不依赖
+    // 测试环境 env）
+    await expect(
+      ensureGraphRunNodeTable(db, 'postgres'),
+    ).resolves.toBeUndefined();
+    expect(db.$executeRawUnsafe).not.toHaveBeenCalled();
+  });
 });

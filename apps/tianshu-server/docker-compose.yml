@@ -57,6 +57,11 @@ services:
     depends_on:
       search-pg:
         condition: service_healthy
+    # 起栈竞态兜底（终审 F2）：main-pg 走 profile 门控，不加 depends_on——
+    # 缺省 SQLite 栈会被连带拉起 PG；`--profile main-pg` 同时起栈时 db push
+    # 可能先于 main-pg 就绪（ECONNREFUSED），由两侧兜底：本服务 restart
+    # 重启进程 + ensureDatabasePg 连接类失败有界重试（3 次×2s）
+    restart: unless-stopped
     ports:
       - "3000:3000"
     # 存活探测：alpine busybox wget 打 actuator 健康端点。两处不能按直觉写：

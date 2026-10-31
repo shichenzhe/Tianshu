@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // 选择器按模型类型过滤：chat ModelPicker / 自动化 TaskModelPicker 只列
-// llm；图向量节点（vectorize/vectorSearch/hybridSearch）只列 embedding。
+// llm；图向量节点（vectorize/vectorSearch/hybridSearch）只列 embedding；
+// 重排节点（rerank）只列 reranker（来源下拉另验：仅列图中其它
+// hybridSearch 节点）。
 // 真实 i18n（jsdom 恒 zh-CN）；mock providers/models 数据源
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
@@ -42,11 +44,14 @@ import { toast } from "sonner";
 import TaskModelPicker from "../../src-react/domains/ai/automation/components/TaskModelPicker";
 import {
   HybridSearchNodeFields,
+  RerankNodeFields,
   VectorizeNodeFields,
   VectorSearchNodeFields,
 } from "../../src-react/domains/ai/orchestration/components/GraphNodeEditor";
 import type {
+  GraphNode,
   HybridSearchNode,
+  RerankNode,
   VectorizeNode,
 } from "../../src-react/domains/ai/orchestration/api/graph.schema";
 
@@ -56,6 +61,7 @@ window.HTMLElement.prototype.hasPointerCapture = () => false;
 
 const LLM_ID = "deepseek-v3";
 const EMBED_ID = "text-embedding-3";
+const RERANK_ID = "bge-reranker-v2-m3";
 
 function mockCatalog() {
   listProviders.mockResolvedValue([
@@ -77,6 +83,15 @@ function mockCatalog() {
       modelId: EMBED_ID,
       enabled: true,
       type: "embedding",
+      createdAt: "",
+      updatedAt: "",
+    },
+    {
+      id: 3,
+      providerId: 1,
+      modelId: RERANK_ID,
+      enabled: true,
+      type: "reranker",
       createdAt: "",
       updatedAt: "",
     },
@@ -202,5 +217,53 @@ describe("选择器按模型类型过滤", () => {
     const labels = options.map((o) => o.textContent);
     expect(labels).toContain(EMBED_ID);
     expect(labels).not.toContain(LLM_ID);
+  });
+
+  it("rerank 节点模型下拉只列 reranker", async () => {
+    const node = {
+      id: "rr",
+      kind: "rerank",
+      query: "q",
+      sourceNodeId: "hs",
+      modelId: 3,
+      topN: 5,
+    } as RerankNode;
+    withClient(<RerankNodeFields node={node} onPatch={() => {}} />);
+    // combobox[0]=来源下拉，[1]=模型下拉
+    const options = await openSelectOptions(screen.getAllByRole("combobox")[1]);
+    const labels = options.map((o) => o.textContent);
+    expect(labels).toContain(RERANK_ID);
+    expect(labels).not.toContain(LLM_ID);
+    expect(labels).not.toContain(EMBED_ID);
+  });
+
+  it("rerank 来源下拉只列图中其它 hybridSearch 节点（排除自身/非检索）", async () => {
+    const node = {
+      id: "rr",
+      kind: "rerank",
+      query: "q",
+      sourceNodeId: "",
+      modelId: 3,
+      topN: 5,
+    } as RerankNode;
+    const graphNodes = [
+      node,
+      {
+        id: "hs",
+        name: "混合检索",
+        kind: "hybridSearch",
+        searchQuery: "q",
+        collection: "",
+        mode: "hybrid",
+        topK: 5,
+      },
+      { id: "writer", name: "写作", kind: "llm", modelId: 1, prompt: "p" },
+    ] as unknown as GraphNode[];
+    withClient(
+      <RerankNodeFields node={node} onPatch={() => {}} graphNodes={graphNodes} />,
+    );
+    const options = await openSelectOptions(screen.getAllByRole("combobox")[0]);
+    const labels = options.map((o) => o.textContent);
+    expect(labels).toEqual(["hs（混合检索）"]);
   });
 });

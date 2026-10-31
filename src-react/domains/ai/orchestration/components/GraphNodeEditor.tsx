@@ -78,6 +78,7 @@ import {
   type HttpKV,
   type HttpNode,
   type HybridSearchNode,
+  type RerankNode,
   type IterateNode,
   type JsonParseNode,
   type JsonStringifyNode,
@@ -458,6 +459,7 @@ export default function GraphNodeEditor({
                 "vectorize",
                 "vectorSearch",
                 "hybridSearch",
+                "rerank",
                 "database",
                 "excelRead",
                 "excelWrite",
@@ -525,6 +527,9 @@ export default function GraphNodeEditor({
             </SelectItem>
             <SelectItem value="hybridSearch">
               {t("chat:orchestration.editor.kindHybridSearch")}
+            </SelectItem>
+            <SelectItem value="rerank">
+              {t("chat:orchestration.editor.kindRerank")}
             </SelectItem>
             <SelectItem value="database">
               {t("chat:orchestration.editor.kindDatabase")}
@@ -594,11 +599,13 @@ export default function GraphNodeEditor({
 
 /** kind → 专属字段区（编辑器卡壳与属性面板两处共用分流）；
  *  inputSchemaKeys 供 start 字段初始值兜底（JSON 手改/AI 生成的图
- *  node.variables 为空时从 inputSchema 键回显） */
+ *  node.variables 为空时从 inputSchema 键回显）；graphNodes 供 rerank
+ *  来源检索节点下拉（属性面板持有全图传入，卡壳缺省空表仅显引导） */
 export function nodeFieldsOf(
   node: GraphNode,
   onPatch: (patch: GraphNodePatch) => void,
   inputSchemaKeys: string[] = [],
+  graphNodes: GraphNode[] = [],
 ) {
   switch (node.kind) {
     case "llm":
@@ -637,6 +644,14 @@ export function nodeFieldsOf(
       return <VectorSearchNodeFields node={node} onPatch={onPatch} />;
     case "hybridSearch":
       return <HybridSearchNodeFields node={node} onPatch={onPatch} />;
+    case "rerank":
+      return (
+        <RerankNodeFields
+          node={node}
+          onPatch={onPatch}
+          graphNodes={graphNodes}
+        />
+      );
     case "database":
       return <DatabaseNodeFields node={node} onPatch={onPatch} />;
     case "excelRead":
@@ -3184,6 +3199,99 @@ export function HybridSearchNodeFields({
         <HighlightTextarea
           value={node.searchQuery}
           onChange={(next) => onPatch({ searchQuery: next })}
+          language="prompt"
+          height={72}
+        />
+      </Field>
+    </>
+  );
+}
+
+/** 重排节点字段区：来源检索节点下拉（列图中其它 hybridSearch 节点——
+ * 执行序由图边保证，故提示须经连线接至本节点上游）+ topN + reranker
+ * 模型（filterType 过滤；schema 必填——未选渲染内联警告而非禁用）+
+ * 查询词（{{}} 模板，同检索词先例） */
+export function RerankNodeFields({
+  node,
+  onPatch,
+  graphNodes = [],
+}: {
+  node: RerankNode;
+  onPatch: (patch: GraphNodePatch) => void;
+  /** 全图节点表（属性面板传入；来源下拉过滤 hybridSearch 且排除自身） */
+  graphNodes?: GraphNode[];
+}) {
+  const { t } = useTranslation(["chat"]);
+  const candidates = graphNodes.filter(
+    (item) => item.kind === "hybridSearch" && item.id !== node.id,
+  );
+  return (
+    <>
+      <Field
+        label={t("chat:orchestration.editor.rerankSourceNode")}
+        hint={t("chat:orchestration.editor.rerankHint")}
+      >
+        <Select
+          value={node.sourceNodeId}
+          onValueChange={(value) => onPatch({ sourceNodeId: value })}
+        >
+          <SelectTrigger className="h-8 w-full">
+            <SelectValue
+              placeholder={t("chat:orchestration.editor.rerankSourceNode")}
+            />
+          </SelectTrigger>
+          <SelectContent className="rounded-lg border border-border/50 shadow-lg">
+            {candidates.map((item) => (
+              <SelectItem key={item.id} value={item.id}>
+                {item.name ? `${item.id}（${item.name}）` : item.id}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {candidates.length === 0 && (
+          <p className="text-xs text-muted-foreground">
+            {t("chat:orchestration.editor.rerankNoSource")}
+          </p>
+        )}
+      </Field>
+      <Field label={t("chat:orchestration.editor.rerankTopN")}>
+        <Input
+          className="h-8"
+          type="number"
+          min={1}
+          max={50}
+          step={1}
+          value={node.topN}
+          onChange={(e) => {
+            const value = Number(e.target.value);
+            if (Number.isInteger(value) && value >= 1 && value <= 50) {
+              onPatch({ topN: value });
+            }
+          }}
+        />
+      </Field>
+      <Field
+        label={t("chat:orchestration.editor.rerankModel")}
+        className="col-span-full"
+      >
+        <ModelSelect
+          modelId={node.modelId ?? 0}
+          onSelect={(modelId) => onPatch({ modelId })}
+          filterType="reranker"
+        />
+        {!node.modelId && (
+          <p className="text-xs text-destructive">
+            {t("chat:orchestration.editor.rerankModelRequired")}
+          </p>
+        )}
+      </Field>
+      <Field
+        label={t("chat:orchestration.editor.rerankQuery")}
+        className="col-span-full"
+      >
+        <HighlightTextarea
+          value={node.query}
+          onChange={(next) => onPatch({ query: next })}
           language="prompt"
           height={72}
         />

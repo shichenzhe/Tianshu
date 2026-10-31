@@ -7,6 +7,7 @@
 import { createContext, useContext, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowDownWideNarrow,
   Bell,
   Braces,
   Database,
@@ -68,6 +69,7 @@ const KIND_NAME_KEY: Record<NodeKind, string> = {
   vectorize: "chat:orchestration.editor.kindVectorize",
   vectorSearch: "chat:orchestration.editor.kindVectorSearch",
   hybridSearch: "chat:orchestration.editor.kindHybridSearch",
+  rerank: "chat:orchestration.editor.kindRerank",
   database: "chat:orchestration.editor.kindDatabase",
   excelRead: "chat:orchestration.editor.kindExcelRead",
   excelWrite: "chat:orchestration.editor.kindExcelWrite",
@@ -129,6 +131,7 @@ const GROUPS: Array<{
       { kind: "vectorize", icon: DatabaseZap },
       { kind: "vectorSearch", icon: Database },
       { kind: "hybridSearch", icon: SearchCheck },
+      { kind: "rerank", icon: ArrowDownWideNarrow },
       { kind: "database", icon: Database },
     ],
   },

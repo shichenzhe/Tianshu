@@ -9,6 +9,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import {
+  ArrowDownWideNarrow,
   Bell,
   Braces,
   Database,
@@ -171,6 +172,8 @@ function KindIcon({ kind }: { kind: CanvasNode["kind"] }) {
       return <Database className={`${className} text-primary`} />;
     case "hybridSearch":
       return <SearchCheck className={`${className} text-primary`} />;
+    case "rerank":
+      return <ArrowDownWideNarrow className={`${className} text-primary`} />;
     case "database":
       return <Database className={`${className} text-primary`} />;
     case "excelRead":
@@ -343,6 +346,15 @@ function KindSummary({
           <span className={node.collection ? dim : dimEmpty}>
             {node.collection ||
               t("chat:orchestration.editor.vectorAllCollections")}
+          </span>
+        </div>
+      );
+    case "rerank":
+      return (
+        <div className="mt-1">
+          <span className={node.source ? dim : dimEmpty}>
+            {node.source ||
+              t("chat:orchestration.editor.rerankSourceEmpty")}
           </span>
         </div>
       );

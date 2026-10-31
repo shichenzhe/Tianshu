@@ -254,6 +254,21 @@ describe("节点结构化编辑", () => {
     expect(FACTORY.hybridSearch("h1")).not.toHaveProperty("modelId");
   });
 
+  it("FACTORY.rerank 生成重排默认节点（modelId 照 llm 先例 0 占位）", () => {
+    // schema modelId 必填但仅 int 校验（0 可存）——表单未选渲染内联警告，
+    // 运行时 loadModelRuntime(0) 报 model_missing；sourceNodeId 空串
+    // 占位待下拉选来源检索节点
+    expect(FACTORY.rerank("r1")).toEqual({
+      id: "r1",
+      name: "",
+      kind: "rerank",
+      query: "",
+      sourceNodeId: "",
+      modelId: 0,
+      topN: 5,
+    });
+  });
+
   it("newEdge 默认首节点 → END", () => {
     expect(newEdge(validJson)).toEqual({ from: "collect", to: "END" });
   });

@@ -50,7 +50,7 @@ description: 指导创建工作流：当用户想创建、生成一个工作流�
   `inputSchema` 必须与 variables 保持一致（`{ "<变量名>": "string" }`）。
 - start 节点不执行任何操作，其余节点经 `{{input.<变量名>}}` 引用输入。
 
-## 节点速查（29 种）
+## 节点速查（30 种）
 
 **模型与路由**
 - `start`：开始节点（**每图必含，无输入变量也不可省略**）。variables 定义图输入变量（与 inputSchema 一致），无执行语义、不允许入边
@@ -88,6 +88,7 @@ description: 指导创建工作流：当用户想创建、生成一个工作流�
 - `vectorize`：文本分块向量化入库
 - `vectorSearch`：语义相似检索
 - `hybridSearch`：混合检索（BM25 全文+向量语义+RRF 融合）。mode: semantic/keyword/hybrid——semantic/hybrid 须选 embedding 模型（modelId），keyword 免模型；searchQuery（必填）/collection（空=全部）/topK
+- `rerank`：重排（cross-encoder）。query（必填）/sourceNodeId（必填，上游 hybridSearch 节点 id，**须经连线接至本节点上游**）/modelId（必填，model.type=reranker 的模型）/topN
 
 ## 输出引用
 

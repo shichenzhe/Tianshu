@@ -62,6 +62,23 @@ describe("toCanvas", () => {
       query: "{{input.q}}",
     });
   });
+  it("rerank 节点映射画布：kind/来源节点与查询词摘要", () => {
+    const rerank = {
+      id: "rerank",
+      name: "重排",
+      kind: "rerank",
+      query: "{{input.q}}",
+      sourceNodeId: "hs",
+      modelId: 3,
+      topN: 5,
+    };
+    const c = toCanvas(g([rerank], []), {});
+    expect(c.nodes.find((n) => n.id === "rerank")).toMatchObject({
+      kind: "rerank",
+      source: "hs",
+      query: "{{input.q}}",
+    });
+  });
   it("code 分支节点的 branchOptions 进画布并锚定 sourceHandle（与 llm 同构）", () => {
     const json = g(
       [

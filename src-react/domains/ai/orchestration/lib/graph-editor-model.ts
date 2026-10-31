@@ -32,6 +32,7 @@ import {
   type IntentNode,
   type DelayNode,
   type HybridSearchNode,
+  type RerankNode,
   type VectorSearchNode,
   type VectorizeNode,
   type DocExtractNode,
@@ -56,13 +57,14 @@ export interface DraftSnapshot {
 
 /** 结构化模式局部补丁（可选字段允许显式 undefined = 清除）。
  * kind 字段冲突使直接交叉坍缩为 never——剔除 kind 后取交叉（宽松单字段
- * 透传，kind 分流走 switchNodeKind 专口）。mode 字段同理冲突
- * （fileWrite append/overwrite vs hybridSearch semantic/keyword/hybrid），
- * 两处 omit 后联合加宽单独放回（apply 是 spread 透传，运行时无感） */
+ * 透传，kind 分流走 switchNodeKind 专口）。mode/query 字段同理冲突
+ * （mode: fileWrite append/overwrite vs hybridSearch semantic/keyword/
+ * hybrid；query: http KV 数组 vs rerank 字符串），两处 omit 后联合加宽
+ * 单独放回（apply 是 spread 透传，运行时无感） */
 export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<LlmNode, "kind">> &
   Partial<Omit<CodeNode, "kind">> &
-  Partial<Omit<HttpNode, "kind">> &
+  Partial<Omit<HttpNode, "kind" | "query">> &
   Partial<Omit<FileReadNode, "kind">> &
   Partial<Omit<NotifyNode, "kind">> &
   Partial<Omit<SubflowNode, "kind">> &
@@ -78,6 +80,7 @@ export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<VectorizeNode, "kind">> &
   Partial<Omit<VectorSearchNode, "kind">> &
   Partial<Omit<HybridSearchNode, "kind" | "mode">> &
+  Partial<Omit<RerankNode, "kind" | "query">> &
   Partial<Omit<DatabaseNode, "kind">> &
   Partial<Omit<ExcelReadNode, "kind">> &
   Partial<Omit<ExcelWriteNode, "kind">> &
@@ -89,6 +92,8 @@ export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
   Partial<Omit<MergeNode, "kind">> & {
     /** fileWrite/hybridSearch 共有字段名（见上注）：联合加宽回补 */
     mode?: FileWriteNode["mode"] | HybridSearchNode["mode"];
+    /** http/rerank 共有字段名（见上注）：联合加宽回补 */
+    query?: HttpNode["query"] | RerankNode["query"];
   };
 
 export const NODE_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -155,6 +160,7 @@ export type NodeKind =
   | "vectorize"
   | "vectorSearch"
   | "hybridSearch"
+  | "rerank"
   | "database"
   | "excelRead"
   | "excelWrite"
@@ -678,6 +684,21 @@ export function newHybridSearchNode(id: string): HybridSearchNode {
   };
 }
 
+/** 重排节点默认：空查询词、来源节点待选、topN 5；modelId 照 newLlmNode
+ * 先例 0 占位——schema 仅 int 校验不拦 0，表单渲染未选警告引导
+ * （运行时 loadModelRuntime(0) 报 model_missing），超时缺省 executor 兜 120s */
+export function newRerankNode(id: string): RerankNode {
+  return {
+    id,
+    name: "",
+    kind: "rerank",
+    query: "",
+    sourceNodeId: "",
+    modelId: 0,
+    topN: 5,
+  };
+}
+
 /** 数据库节点默认：SQLite 起步、空 SQL */
 export function newDatabaseNode(id: string): DatabaseNode {
   return {
@@ -808,6 +829,7 @@ export const FACTORY: Record<NodeKind, (id: string) => GraphNode> = {
   vectorize: newVectorizeNode,
   vectorSearch: newVectorSearchNode,
   hybridSearch: newHybridSearchNode,
+  rerank: newRerankNode,
   database: newDatabaseNode,
   excelRead: newExcelReadNode,
   excelWrite: newExcelWriteNode,

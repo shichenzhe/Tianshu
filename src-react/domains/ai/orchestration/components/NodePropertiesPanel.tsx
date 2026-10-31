@@ -238,6 +238,7 @@ function NodeBranch({
                 "vectorize",
                 "vectorSearch",
                 "hybridSearch",
+                "rerank",
                 "database",
                 "excelRead",
                 "excelWrite",
@@ -314,6 +315,9 @@ function NodeBranch({
             <SelectItem value="hybridSearch">
               {t("chat:orchestration.editor.kindHybridSearch")}
             </SelectItem>
+            <SelectItem value="rerank">
+              {t("chat:orchestration.editor.kindRerank")}
+            </SelectItem>
             <SelectItem value="database">
               {t("chat:orchestration.editor.kindDatabase")}
             </SelectItem>
@@ -388,7 +392,12 @@ function NodeBranch({
           onChange={(e) => onPatch({ name: e.target.value })}
         />
       </Field>
-      {nodeFieldsOf(node, onPatch, Object.keys(graph.inputSchema))}
+      {nodeFieldsOf(
+        node,
+        onPatch,
+        Object.keys(graph.inputSchema),
+        graph.nodes,
+      )}
     </section>
   );
 }

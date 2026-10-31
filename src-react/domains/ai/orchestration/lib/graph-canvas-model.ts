@@ -34,7 +34,7 @@ export interface CanvasNode {
   graphId?: number;
   /** librarySearch 节点检索词 */
   keywords?: string;
-  /** jsonParse/jsonStringify 来源表达式摘要 */
+  /** jsonParse/jsonStringify 来源表达式摘要；rerank 来源检索节点 id */
   source?: string;
   /** delay 节点秒数摘要 */
   seconds?: number;
@@ -117,6 +117,8 @@ function summaryOf(n: GraphNode): Partial<CanvasNode> {
       return { collection: n.collection, query: n.searchQuery };
     case "hybridSearch":
       return { collection: n.collection ?? "", query: n.searchQuery };
+    case "rerank":
+      return { source: n.sourceNodeId, query: n.query };
     case "database":
       return { engine: n.engine };
     case "excelRead":

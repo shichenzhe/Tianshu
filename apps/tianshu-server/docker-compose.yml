@@ -38,6 +38,18 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    # 存活探测：alpine busybox wget 打 actuator 健康端点。两处不能按直觉写：
+    # ① host 用 127.0.0.1——busybox wget 解析 localhost 优先 ::1，服务只听
+    #   IPv4（0.0.0.0:3000），写 localhost 每探测必 refused、永久 unhealthy；
+    # ② 必须带 Bearer token——StaticTokenGuard 不感知 @Public（豁免仅
+    #   webhook/、backup/ 两前缀），TIANSHU_TOKEN 部署下裸 wget 必 401；
+    #   $$ 转义交由容器内 shell 从 environment 展开真实 token
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --header \"Authorization: Bearer $$TIANSHU_TOKEN\" http://127.0.0.1:3000/actuator/health > /dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   search-pg-data: {}

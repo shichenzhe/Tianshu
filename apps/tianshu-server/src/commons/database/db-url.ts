@@ -83,6 +83,21 @@ export function dbUrlOptions():
   return { datasources: { db: { url: normalized } } };
 }
 
+/** contains 大小写双引擎统一（主库双引擎批 follow-up）：SQLite LIKE 天生
+ * ASCII 大小写不敏感、PG LIKE 区分大小写——PG 分支补 mode: 'insensitive'
+ * （ILIKE，Unicode 级不敏感，覆盖面较 SQLite 只多不少）对齐；SQLite 分支
+ * 绝不能带 mode（Prisma 对 SQLite 上的 mode 直接 ValidationError），故必须
+ * 引擎感知构造而非无脑透传。引擎取 env（ensureGraphRunNodeTable /
+ * trimKeepSql 同款默认参手法；两引擎形状由 db-url-engine.spec 钉死）。 */
+export function containsFilter(
+  value: string,
+  engine: DbEngine = engineOf(overriddenDbUrl()),
+): { contains: string; mode?: 'insensitive' } {
+  return engine === 'postgres'
+    ? { contains: value, mode: 'insensitive' }
+    : { contains: value };
+}
+
 /** 向上寻 prisma/schema.prisma 所在根（src/jest 与 dist 两态深度不同） */
 export function findSchemaRoot(startDir: string): string {
   let dir = startDir;

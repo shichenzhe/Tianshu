@@ -1,6 +1,7 @@
 import { QueryDecoder } from 'src/commons/query/query-decoder.interface';
 import { UserQueryFilter } from './user.queryfilter';
 import { QueryFilter, QuerySort } from 'src/commons/query/query-filter';
+import { containsFilter } from 'src/commons/database/db-url';
 
 export class UserQueryDecoder implements QueryDecoder {
   private static instance: UserQueryDecoder;
@@ -38,52 +39,30 @@ export class UserQueryDecoder implements QueryDecoder {
       where.userType = params.userType;
     }
 
+    // 关键词 contains 经 containsFilter 引擎感知构造：PG 补 mode
+    // insensitive 对齐 SQLite LIKE 的 ASCII 大小写不敏感（双引擎统一）
     if (params.username) {
-      where.username = {
-        contains: params.username,
-      };
+      where.username = containsFilter(params.username);
     }
 
     if (params.name) {
-      where.name = {
-        contains: params.name,
-      };
+      where.name = containsFilter(params.name);
     }
 
     if (params.email) {
-      where.email = {
-        contains: params.email,
-      };
+      where.email = containsFilter(params.email);
     }
 
     if (params.phone) {
-      where.phone = {
-        contains: params.phone,
-      };
+      where.phone = containsFilter(params.phone);
     }
 
     if (params.keyword) {
       where.OR = [
-        {
-          username: {
-            contains: params.keyword,
-          },
-        },
-        {
-          name: {
-            contains: params.keyword,
-          },
-        },
-        {
-          email: {
-            contains: params.keyword,
-          },
-        },
-        {
-          phone: {
-            contains: params.keyword,
-          },
-        },
+        { username: containsFilter(params.keyword) },
+        { name: containsFilter(params.keyword) },
+        { email: containsFilter(params.keyword) },
+        { phone: containsFilter(params.keyword) },
       ];
     }
 

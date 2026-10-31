@@ -12,6 +12,8 @@
  * - findFilesByNames：library_search 命中块回联条目的精确名批量读（mirror
  *   无对应——工具检索面配套新增，仅 file）。
  */
+import { containsFilter } from 'src/commons/database/db-url';
+
 /** 资料库条目 DB 行（libraryItem 表全字段投影） */
 export interface LibraryItemRow {
   id: number;
@@ -39,7 +41,7 @@ export interface LibraryPrismaLike {
     findMany(args: {
       where: {
         kind?: string;
-        name?: { contains?: string; in?: string[] };
+        name?: { contains?: string; in?: string[]; mode?: 'insensitive' };
         userId?: number;
       };
     }): Promise<LibraryItemRow[]>;
@@ -52,8 +54,10 @@ export interface LibraryPrismaLike {
 export class LibraryRepository {
   constructor(private readonly prismaClient: LibraryPrismaLike) {}
 
-  /** 跨层文件名搜索（mirror search 逐字：仅 file；contains = SQLite LIKE，
-   *  ASCII 大小写不敏感；keyword 截 100 防超长 LIKE；空白返空） */
+  /** 跨层文件名搜索（mirror search 逐字：仅 file；contains 经 containsFilter
+   *  引擎感知——PG LIKE 区分大小写须补 mode insensitive 对齐 SQLite 的 ASCII
+   *  大小写不敏感（双引擎统一），SQLite 分支不带 mode；keyword 截 100 防超长
+   *  LIKE；空白返空） */
   async search(keyword: string, userId: number): Promise<LibraryItemRow[]> {
     const trimmed = keyword.trim().slice(0, 100);
     if (!trimmed) {
@@ -62,7 +66,7 @@ export class LibraryRepository {
     return this.prismaClient.libraryItem.findMany({
       where: {
         kind: 'file',
-        name: { contains: trimmed },
+        name: containsFilter(trimmed),
         userId,
       },
     });

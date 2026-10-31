@@ -294,9 +294,12 @@ server 主库整体切 PG（23 张业务表，首启自动 db push 建表），�
 - 跟随主库的检索表建在独立 schema `tianshu_search`（`vector_chunk`），与
   业务表的 `public` 面零交集——每次启动执行的 db push 对其视而不见，检索
   数据跨重启保全
-- **已知差异**：PG 模式下 Prisma `contains` 走 PG LIKE（区分大小写），与
-  SQLite 的 ASCII 大小写不敏感不同——用户/日志关键词检索大小写行为有差异；
-  如需一致可后续在 PG 分支加 `mode: 'insensitive'`（follow-up，本期不实施）
+- **contains 大小写已双引擎统一**（原「已知差异」follow-up 已落地）：关键词
+  检索的 `contains`（用户/操作日志/资料库）经引擎感知构造（`containsFilter`，
+  src/commons/database/db-url.ts）——PG 分支补 `mode: 'insensitive'`（ILIKE），
+  SQLite 分支不带 mode（SQLite 上 Prisma 对 mode 直接 ValidationError）；
+  两引擎大小写行为对齐 SQLite LIKE 的 ASCII 不敏感语义（PG 实为 Unicode 级
+  不敏感，覆盖面只多不少）
 
 ## 目录结构
 

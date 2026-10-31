@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import type { PrismaService } from 'src/commons/database/prisma.service';
+import { containsFilter } from 'src/commons/database/db-url';
 import {
   buildBreadcrumbChain,
   collectSubtreeIds,
@@ -240,8 +241,9 @@ export class LibraryDiskRepository {
     return { items, breadcrumbs };
   }
 
-  /** 跨层文件名搜索（仅 file；contains = SQLite LIKE，ASCII 大小写不敏感；
-   *  keyword 截 100 防超长 LIKE） */
+  /** 跨层文件名搜索（仅 file；contains 经 containsFilter 引擎感知——PG LIKE
+   *  区分大小写须补 mode insensitive 对齐 SQLite 的 ASCII 大小写不敏感（双
+   *  引擎统一），SQLite 分支不带 mode；keyword 截 100 防超长 LIKE） */
   async search(keyword: string, userId: number): Promise<LibraryItem[]> {
     const trimmed = keyword.trim().slice(0, 100);
     if (!trimmed) {
@@ -250,7 +252,7 @@ export class LibraryDiskRepository {
     const rows = await this.prismaClient.libraryItem.findMany({
       where: {
         kind: 'file',
-        name: { contains: trimmed },
+        name: containsFilter(trimmed),
         userId,
       },
     });

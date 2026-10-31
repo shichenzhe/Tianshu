@@ -211,6 +211,46 @@ describe('LibraryService 元数据面', () => {
     expect(await svc.search('   ')).toEqual([]); // 空白返空
   });
 
+  // contains 大小写双引擎统一（主库双引擎批 follow-up）：PG 分支 contains
+  // 补 mode insensitive 对齐 SQLite LIKE；SQLite 分支不带 mode（Prisma 对
+  // SQLite 上的 mode 直接 ValidationError）。双身 findMany 捕获 where 钉形状
+  //（search 首发查询；withLocation 的 folder 链查询在其后，mockClear 隔离）。
+  it('search 双引擎形状：PG 补 mode insensitive；SQLite 不带 mode', async () => {
+    const { prisma } = makePrismaDouble();
+    const repo = new LibraryDiskRepository(prisma as never, libraryRoot);
+    const OLD = process.env.TIANSHU_DB_URL;
+    const firstWhere = () =>
+      (prisma.libraryItem.findMany.mock.calls[0][0] as { where: unknown })
+        .where;
+    try {
+      process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/d';
+      await repo.search('Readme', 5);
+      const pgWhere = firstWhere();
+      prisma.libraryItem.findMany.mockClear();
+      delete process.env.TIANSHU_DB_URL;
+      await repo.search('Readme', 5);
+      const sqliteWhere = firstWhere();
+      expect(pgWhere).toMatchObject({
+        kind: 'file',
+        userId: 5,
+        name: { contains: 'Readme', mode: 'insensitive' },
+      });
+      expect(sqliteWhere).toMatchObject({
+        kind: 'file',
+        userId: 5,
+        name: { contains: 'Readme' },
+      });
+      expect((sqliteWhere as { name?: { mode?: unknown } }).name).not
+        .toHaveProperty('mode');
+    } finally {
+      if (OLD === undefined) {
+        delete process.env.TIANSHU_DB_URL;
+      } else {
+        process.env.TIANSHU_DB_URL = OLD;
+      }
+    }
+  });
+
   it('addLink 仅 http(s)；标题缺省取域名', async () => {
     const { prisma } = makePrismaDouble();
     const svc = makeService(prisma);

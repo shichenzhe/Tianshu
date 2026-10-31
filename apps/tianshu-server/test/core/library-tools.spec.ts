@@ -11,6 +11,10 @@ import {
   type EmbedTexts,
 } from 'src/core/library/library-tools';
 import { LibraryRepository } from 'src/core/library/library.repository';
+import type {
+  LibraryItemRow,
+  LibraryPrismaLike,
+} from 'src/core/library/library.repository';
 import { registry } from 'src/core/tools/tool-registry';
 import { BRIDGE_TOOL_NAMES } from 'src/core/tools/bridge/browser-bridge-tools';
 import {
@@ -279,6 +283,47 @@ describe('library 检索链（PL-2）', () => {
       expect(await repo.search(long, 5)).toEqual([]);
       const exact100 = '季度报告' + 'x'.repeat(96);
       expect((await repo.search(exact100, 5)).length).toBe(0);
+    });
+
+    // contains 大小写双引擎统一（主库双引擎批 follow-up）：PG 分支 contains
+    // 补 mode insensitive 对齐 SQLite LIKE；SQLite 分支不带 mode（Prisma 对
+    // SQLite 上的 mode 直接 ValidationError）。stub 客户端捕获 where 钉形状。
+    it('search 双引擎形状：PG 补 mode insensitive；SQLite 不带 mode', async () => {
+      const OLD = process.env.TIANSHU_DB_URL;
+      const wheres: { name?: unknown }[] = [];
+      const stub: LibraryPrismaLike = {
+        libraryItem: {
+          findMany: jest.fn(async (args) => {
+            wheres.push(args.where);
+            return [] as LibraryItemRow[];
+          }),
+          // search 面不触 findFirst（getById 才用）——接口要求在场即可
+          findFirst: jest.fn(async () => null),
+        },
+      };
+      try {
+        process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/d';
+        await new LibraryRepository(stub).search('Readme', 5);
+        process.env.TIANSHU_DB_URL = 'file:/tmp/x.db';
+        await new LibraryRepository(stub).search('Readme', 5);
+      } finally {
+        if (OLD === undefined) {
+          delete process.env.TIANSHU_DB_URL;
+        } else {
+          process.env.TIANSHU_DB_URL = OLD;
+        }
+      }
+      expect(wheres[0]).toMatchObject({
+        kind: 'file',
+        userId: 5,
+        name: { contains: 'Readme', mode: 'insensitive' },
+      });
+      expect(wheres[1]).toMatchObject({
+        kind: 'file',
+        userId: 5,
+        name: { contains: 'Readme' },
+      });
+      expect(wheres[1].name).not.toHaveProperty('mode');
     });
 
     it('getById：本用户命中返行；缺失/他人所有同报「条目不存在」（不泄露存在性）', async () => {

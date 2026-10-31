@@ -7,6 +7,7 @@
 import {
   engineOf,
   dbUrlOptions,
+  containsFilter,
   ensureDatabasePg,
 } from '../../src/commons/database/db-url';
 
@@ -43,6 +44,39 @@ describe('dbUrlOptions postgres 透传', () => {
   it('file url 维持 normalize 现状', () => {
     process.env.TIANSHU_DB_URL = '/tmp/x.db';
     expect(dbUrlOptions()?.datasources.db.url).toBe('file:/tmp/x.db');
+  });
+});
+
+describe('containsFilter（contains 大小写双引擎统一）', () => {
+  const OLD = process.env.TIANSHU_DB_URL;
+  afterEach(() => {
+    if (OLD === undefined) {
+      delete process.env.TIANSHU_DB_URL;
+    } else {
+      process.env.TIANSHU_DB_URL = OLD;
+    }
+  });
+
+  it('显式引擎：postgres → contains + mode insensitive；sqlite → 仅 contains（mode 在 SQLite 是 Prisma ValidationError，绝不能带）', () => {
+    expect(containsFilter('Admin', 'postgres')).toStrictEqual({
+      contains: 'Admin',
+      mode: 'insensitive',
+    });
+    expect(containsFilter('Admin', 'sqlite')).toStrictEqual({
+      contains: 'Admin',
+    });
+  });
+
+  it('缺省引擎随 env：postgres:// → insensitive；file:/未注入 → 仅 contains', () => {
+    process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/d';
+    expect(containsFilter('kw')).toStrictEqual({
+      contains: 'kw',
+      mode: 'insensitive',
+    });
+    process.env.TIANSHU_DB_URL = 'file:/tmp/x.db';
+    expect(containsFilter('kw')).toStrictEqual({ contains: 'kw' });
+    delete process.env.TIANSHU_DB_URL;
+    expect(containsFilter('kw')).toStrictEqual({ contains: 'kw' });
   });
 });
 

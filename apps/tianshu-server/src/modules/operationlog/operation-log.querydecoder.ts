@@ -2,6 +2,7 @@ import { QueryDecoder } from 'src/commons/query/query-decoder.interface';
 import { QueryFilter, QuerySort } from 'src/commons/query/query-filter';
 import { OperationLogQueryFilter } from './dto/operation-log-query-filter.dto';
 import { DateUtil } from 'src/commons/util/date.util';
+import { containsFilter } from 'src/commons/database/db-url';
 
 /**
  * 操作日志查询解码器
@@ -47,11 +48,10 @@ export class OperationLogQueryDecoder implements QueryDecoder {
       where.userId = params.userId;
     }
 
-    // 操作类型过滤
+    // 操作类型过滤（contains 经 containsFilter 引擎感知构造：PG 补 mode
+    // insensitive 对齐 SQLite LIKE 的 ASCII 大小写不敏感——双引擎统一）
     if (params.operation) {
-      where.operation = {
-        contains: params.operation,
-      };
+      where.operation = containsFilter(params.operation);
     }
 
     // 操作状态过滤
@@ -59,11 +59,9 @@ export class OperationLogQueryDecoder implements QueryDecoder {
       where.status = params.status;
     }
 
-    // IP地址过滤
+    // IP地址过滤（同上引擎感知）
     if (params.ipAddress) {
-      where.ipAddress = {
-        contains: params.ipAddress,
-      };
+      where.ipAddress = containsFilter(params.ipAddress);
     }
 
     // 时间范围过滤

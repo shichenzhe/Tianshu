@@ -7,6 +7,57 @@
  * graph-vector.test.ts）。
  */
 import { describe, expect, it, vi, beforeAll, afterEach } from "vitest";
+import { hybridSearchNodeSchema, rerankNodeSchema } from "@tianshu/core";
+
+const baseHybrid = {
+  id: "n1",
+  kind: "hybridSearch",
+  name: "混合检索",
+  searchQuery: "容错",
+  mode: "keyword",
+} as const;
+
+describe("hybridSearch/rerank timeoutMs schema 界", () => {
+  it("低于 1s / 超过 600s 拒绝；缺省与界内通过", () => {
+    expect(
+      hybridSearchNodeSchema.safeParse({ ...baseHybrid, timeoutMs: 1 }).success,
+    ).toBe(false);
+    expect(
+      hybridSearchNodeSchema.safeParse({
+        ...baseHybrid,
+        timeoutMs: 600_001,
+      }).success,
+    ).toBe(false);
+    expect(hybridSearchNodeSchema.safeParse(baseHybrid).success).toBe(true);
+    expect(
+      hybridSearchNodeSchema.safeParse({ ...baseHybrid, timeoutMs: 120_000 })
+        .success,
+    ).toBe(true);
+    expect(
+      rerankNodeSchema.safeParse({
+        id: "r1",
+        kind: "rerank",
+        name: "重排",
+        query: "容错",
+        sourceNodeId: "n1",
+        modelId: 1,
+        timeoutMs: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      rerankNodeSchema.safeParse({
+        id: "r1",
+        kind: "rerank",
+        name: "重排",
+        query: "容错",
+        sourceNodeId: "n1",
+        modelId: 1,
+        timeoutMs: 120_000,
+      }).success,
+    ).toBe(true);
+  });
+});
+
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },

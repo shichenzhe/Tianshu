@@ -246,3 +246,7 @@ function makeRerankNodeHandler(node: RerankNode, ctx: NodeContext): NodeHandler 
 - [ ] **Step 2: 全量回归**：`npm run test`（mirror 全量）+ `cd apps/tianshu-server && npx jest`（75 suites 基线）+ `npm run typecheck`（恰 5）+ `npm run check:drift`（graph-vector-store 24 不动、graph-executor 过账后持平）。
 - [ ] **Step 3: 终验三项**：① 三错误码双份一致；② hits 消费/旁路链（source.hits → fused hits → toNodeUpdate）双份齐全；③ rerank handler 输出 update 形态双份一致（归一化引号对照）。
 - [ ] **Step 4: Commit（如仅计划注记）**：`docs(plan): rerank e2e 裁定注记——协议形态单测钉死，真端点待模型配置`
+
+---
+
+**e2e 裁定（2026-10-31）**：rerank 不加 e2e 段——真 reranker 端点不可得（需配置 reranker 类型模型），协议形态（请求体/index 回挂/截断/三错误码）已由 Task 2 mock fetch 单测钉死；真端到端验证待有 reranker 模型配置时人工进行（spec Phase 2.3 的「e2e 补段」按真模型门控语义理解）。

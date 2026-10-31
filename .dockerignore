@@ -12,3 +12,4 @@ apps/tianshu-mobile
 release
 coverage
 **/local.db*
+**/.env

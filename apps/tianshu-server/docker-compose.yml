@@ -21,7 +21,10 @@ services:
       context: ../..
       dockerfile: apps/tianshu-server/Dockerfile
     environment:
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      # 缺省空串=未设（applyJwtSecretEnv 空白即 falsy）→ 服务端进程级随机秘密
+      # 回退（不可伪造，JWT 登录关）；显式 export JWT_SECRET=... 方启用 JWT
+      # 登录——不给仓库公开默认值，防公开密钥签出可伪造 admin JWT
+      JWT_SECRET: ${JWT_SECRET:-}
       # fail-closed：未设/空串直接拒绝起栈——token.guard 将空串当未设放行全部
       # 路由（graph/session 等 @Public 面 JWT 也不兜底），不可静默无鉴权裸奔
       TIANSHU_TOKEN: ${TIANSHU_TOKEN:?TIANSHU_TOKEN required (openssl rand -hex 32)}

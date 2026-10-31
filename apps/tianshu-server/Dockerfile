@@ -4,14 +4,17 @@
 # → 三包 build → 组装 vendor 内嵌 bundle（@tianshu/* → file:./vendors/*）。
 # 六坑处置见 docs/superpowers/specs/2026-10-31-server-docker-deploy-design.md
 FROM node:20.19.5-alpine3.22 AS builder
-# node-pty musl arm64 无 prebuilt，需源码编译工具链（bcrypt 有 musl prebuilt；
-# electron 二进制被根 allowScripts 白名单机制天然跳过）
+# node-pty musl arm64 无 prebuilt，需源码编译工具链（bcrypt 有 musl prebuilt）
 RUN apk add --no-cache python3 make g++
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY packages/tianshu-protocol/package.json packages/tianshu-protocol/
 COPY packages/tianshu-core/package.json packages/tianshu-core/
 COPY apps/tianshu-server/package.json apps/tianshu-server/
+# 镜像内 npm 10 无 allowScripts 门禁（那系宿主 npm 11 机制），脚本全跑——
+# electron 二进制经 ELECTRON_SKIP_BINARY_DOWNLOAD=1 显式跳过（官方支持
+# 变量，省时且避 GitHub CDN 依赖）
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 # npmmirror 仅用于 lock 钉死的 ci（不做 semver 解析，无版本集差异风险）
 RUN npm config set registry https://registry.npmmirror.com/ && npm ci
 COPY packages packages

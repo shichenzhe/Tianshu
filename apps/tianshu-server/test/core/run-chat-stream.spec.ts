@@ -69,15 +69,18 @@ const makeAgent = (
   approvals: ApprovalCoordinator,
   fullAccess = false,
   allowedTools: string[] = [],
-): AgentStreamOptions => ({
-  sessionId: 1,
-  workspacePath: '/tmp/ws',
-  fullAccess: () => fullAccess,
-  isToolAllowed: (toolName: string) =>
-    Promise.resolve(allowedTools.includes(toolName)),
-  requestApproval: (toolCallId, argSummary) =>
-    approvals.request(toolCallId, argSummary),
-});
+): AgentStreamOptions => {
+  const sessionId = 1;
+  return {
+    sessionId,
+    workspacePath: '/tmp/ws',
+    fullAccess: () => fullAccess,
+    isToolAllowed: (toolName: string) =>
+      Promise.resolve(allowedTools.includes(toolName)),
+    requestApproval: (toolCallId, argSummary) =>
+      approvals.request(sessionId, toolCallId, argSummary),
+  };
+};
 
 /** 提取第二次模型调用收到的 ToolMessage 文本（引擎自动回喂验证） */
 function fedToolResult(

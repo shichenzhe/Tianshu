@@ -53,7 +53,7 @@ describe('ChatRunnerService run', () => {
     const { runner } = makeRunner(db, dirs, []);
     const internals = runner as unknown as RunnerInternals;
     // 挂起一个审批（等价 manual 模式 awaiting-approval 态）
-    const pending = internals.approvals.request('tc-mem', 'x', 5_000);
+    const pending = internals.approvals.request(1, 'tc-mem', 'x', 5_000);
     const r = await runner.approveRemember(
       session.id,
       'tc-mem',
@@ -611,7 +611,7 @@ describe('ChatRunnerService run', () => {
     const viaAgent = manual.agent.requestApproval('tc1', '摘要');
     // 挂起语义：返回 === approvals.request 同一 Promise（spy 透传），
     // 超时按缺省 300s（config approvalTimeoutMs 未配置）
-    expect(spy).toHaveBeenCalledWith('tc1', '摘要', 300_000);
+    expect(spy).toHaveBeenCalledWith(session.id, 'tc1', '摘要', 300_000);
     expect(viaAgent).toBe(spy.mock.results[spy.mock.results.length - 1].value);
     // 远程应答经 respond 决议进同一 Promise
     expect(internals.approvals.respond('tc1', true)).toBe(true);

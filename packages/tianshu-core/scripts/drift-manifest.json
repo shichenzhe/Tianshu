@@ -87,8 +87,8 @@
       "mirrorPath": "electron/domains/ai/agent/approval.ts",
       "serverPath": "src/core/tools/approval.ts",
       "baselineDiff": true,
-      "baselineLines": 6,
-      "note": "审批决议类型+审批协调器；2026-10 并行批后有意分叉：mirror 缺省 10min 超时（7e22f5f，桌面远控台受益）vs server 5min+config approvalTimeoutMs 覆盖（dbe8eb5 移动端 spec）——GA-T9 入册时基线重置固化登记该分叉"
+      "baselineLines": 10,
+      "note": "审批决议类型+审批协调器；2026-10 并行批后有意分叉：mirror 缺省 10min 超时（7e22f5f，桌面远控台受益）vs server 5min+config approvalTimeoutMs 覆盖（dbe8eb5 移动端 spec）——GA-T9 入册时基线重置固化登记该分叉；2026-10-31 会话隔离修复（request/voidAll 带 sessionId）双侧同步落地，基线 6→10 过账：余差=超时/注释语境语义分叉 + unref/continue 单行 vs 块的 prettier 风格分叉，零逻辑漂移（逐行复核）"
     },
     {
       "id": "agent-permission-mode",

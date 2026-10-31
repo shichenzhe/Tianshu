@@ -3,7 +3,8 @@
  * write 工具挂起等待审批决议——服务端语境下决议由 session/approve 端点
  * （远程控制端应答）经 respond 注入。超时自动 deny（移动端 spec §4.3：
  * manual 模式应答方不在线时防永久挂死）；缺省 5 分钟，chat-runner 按
- * config approvalTimeoutMs 传值覆盖。
+ * config approvalTimeoutMs 传值覆盖。挂起按会话维度隔离——会话收尾
+ * 作废只及本会话，跨会话并发流互不影响（同 mirror 2026-10 修复）。
  */
 type Resolver = (approved: boolean) => void;
 
@@ -11,6 +12,8 @@ type Resolver = (approved: boolean) => void;
 export const APPROVAL_TIMEOUT_MS = 300_000;
 
 interface PendingEntry {
+  /** 挂起所属会话（收尾作废按会话过滤） */
+  sessionId: number;
   resolve: Resolver;
   timer: NodeJS.Timeout;
 }
@@ -23,6 +26,7 @@ export class ApprovalCoordinator {
   }
 
   request(
+    sessionId: number,
     toolCallId: string,
     _argSummary: string,
     timeoutMs: number = APPROVAL_TIMEOUT_MS,
@@ -35,7 +39,7 @@ export class ApprovalCoordinator {
       if (typeof timer.unref === 'function') {
         timer.unref();
       }
-      this.pending.set(toolCallId, { resolve, timer });
+      this.pending.set(toolCallId, { sessionId, resolve, timer });
     });
   }
 
@@ -55,14 +59,18 @@ export class ApprovalCoordinator {
     return true;
   }
 
-  /** 中断/连接销毁：作废全部（resolve false），返回作废数量 */
-  voidAll(): number {
-    const count = this.pending.size;
-    for (const entry of this.pending.values()) {
+  /** 会话收尾：作废该会话全部未决审批（resolve false），返回作废数量 */
+  voidAll(sessionId: number): number {
+    let count = 0;
+    for (const [toolCallId, entry] of this.pending) {
+      if (entry.sessionId !== sessionId) {
+        continue;
+      }
       clearTimeout(entry.timer);
       entry.resolve(false);
+      this.pending.delete(toolCallId);
+      count += 1;
     }
-    this.pending.clear();
     return count;
   }
 }

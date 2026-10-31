@@ -901,8 +901,9 @@ export class ChatRunnerService {
       }
     } finally {
       this.aborts.delete(sessionId);
-      // 中断/收尾：作废全部未决审批（resolve false），释放挂起的 execute
-      this.approvals.voidAll();
+      // 中断/收尾：作废本会话未决审批（resolve false），释放挂起的
+      // execute；会话维度隔离——他会话并发流的挂起审批不受影响
+      this.approvals.voidAll(sessionId);
     }
   }
 
@@ -1072,6 +1073,7 @@ export class ChatRunnerService {
             ? Promise.resolve(true)
             : config.accessMode === 'manual'
               ? this.approvals.request(
+                  sessionId,
                   toolCallId,
                   argSummary,
                   config.approvalTimeoutMs ?? 300_000,

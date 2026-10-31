@@ -16,6 +16,9 @@ shu-init.json
 # 本地数据库
 prisma/local.db
 
+# Prisma 客户端生成产物（prisma:generate:pg 独立 output，不入库）
+src/generated/
+
 # Logs
 logs
 *.log

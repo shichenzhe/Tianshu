@@ -1,3 +1,5 @@
+import { engineOf, overriddenDbUrl, type DbEngine } from './db-url';
+
 /**
  * 图运行节点详情表建表（图执行留痕去会话化 2026-10-28，终审 C2）：
  * 启动幂等补建——ensureDatabase 的 db push 只覆盖「缺库/空壳首启」，
@@ -14,7 +16,15 @@ interface RawExecutor {
 
 export async function ensureGraphRunNodeTable(
   db: RawExecutor,
+  engine: DbEngine = engineOf(overriddenDbUrl()),
 ): Promise<void> {
+  // PG 主库无「存量升级库」面：ensureDatabase 的 PG 分支每次启动都跑派生
+  // schema db push（幂等，graphRunNode 表/索引/唯一约束全覆盖）；本 DDL
+  // 是 SQLite 方言（AUTOINCREMENT 在 PG 解析期即语法错——表已存在也躲不过
+  // IF NOT EXISTS 的解析），postgres 态跳过，DDL 单源交给 schema。
+  if (engine === 'postgres') {
+    return;
+  }
   await db.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS graphRunNode (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

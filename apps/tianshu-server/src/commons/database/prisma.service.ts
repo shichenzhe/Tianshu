@@ -5,6 +5,7 @@ import {
   engineOf,
   ensureDatabase,
   overriddenDbUrl,
+  type DbEngine,
 } from './db-url';
 import { ensureGraphRunNodeTable } from './ensure-graph-run-node-table';
 
@@ -30,6 +31,9 @@ function loadClientClass(
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
   private readonly engineClient: AnyClient;
+  /** 装载引擎（构造期判定）——onModuleInit 传给 ensureGraphRunNodeTable
+   * 做 PG 跳过判定；实例自有字段，与 engineClient 同入 get-trap 放行清单 */
+  private readonly dbEngine: DbEngine;
   // options 供测试注入临时库（datasources url 优先于 env 判 engine，见
   // test/support/test-db.ts）；DI 无参构造 → env（TIANSHU_DB_URL）判定。
   // 类型面保持 extends PrismaClient（SQLite 端，业务代码零改动）；运行时
@@ -39,7 +43,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   constructor(@Optional() options?: PrismaClientOptions) {
     super(options ?? dbUrlOptions());
     const url = (options as any)?.datasources?.db?.url ?? overriddenDbUrl();
-    const ClientClass = loadClientClass(engineOf(url));
+    this.dbEngine = engineOf(url);
+    const ClientClass = loadClientClass(this.dbEngine);
     this.engineClient = new ClientClass(options ?? dbUrlOptions());
     // 转发判定须用显式门面自收口清单，不能用 `prop in target`：实测
     // Prisma 6 生成 client 的 model 代理与 $connect 等均为构造器安装的
@@ -53,6 +58,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
         if (
           typeof prop === 'symbol' ||
           prop === 'engineClient' ||
+          prop === 'dbEngine' ||
           prop === '__proto__' ||
           Object.prototype.hasOwnProperty.call(PrismaService.prototype, prop)
         ) {
@@ -74,7 +80,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     // 存量升级库幂等补建 graphRunNode（db push 只覆盖缺库/空壳首启，
     // 见 ensure-graph-run-node-table.ts 头注释）；this 经 Proxy 已具备
     // Prisma 面（$executeRawUnsafe 转发 engineClient，RawExecutor 结构满足）
-    await ensureGraphRunNodeTable(this);
+    await ensureGraphRunNodeTable(this, this.dbEngine);
   }
 
   async onModuleDestroy() {

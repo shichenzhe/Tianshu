@@ -67,7 +67,9 @@
 | `apps/tianshu-server/src/commons/database/db-url.ts` | server | db push 按 engine 选 schema |
 | `apps/tianshu-server/src/core/graph/search-pg.ts` | server 独有 | searchDbTarget 跟随规则一行 |
 | `apps/tianshu-server/Dockerfile` / `docker-compose.yml` / `README.md` | server | 部署面 |
-| 测试 | — | 派生/装载单测 + e2e 可选段 |
+| `apps/tianshu-server/src/commons/database/ensure-graph-run-node-table.ts` | server | 实施期新增：DDL 按引擎分流（SQLite 存量升级补建语义在 PG 不存在，早退） |
+| `apps/tianshu-server/src/modules/automation/automation-retention.ts` | server | 实施期新增：trim SQL 按引擎分流（PG 引号标识符 + $N 占位符——堵静默裁剪永败） |
+| 测试 | — | 派生/装载/方言单测 + e2e 可选段 |
 | mirror / core / 双端 executor | 零改动 | — |
 
 ## 假设与开放问题

@@ -31,94 +31,45 @@
  * 运行：npm run test:e2e:bridge（node 原生 strip-types，需 Node ≥ 23.6；
  * 文件名无 .test. 段不进 vitest 常规集；TIANSHU_E2E_SKIP_BUILD=1 可跳过
  * server 构建）
+ *
+ * 基建单源：spawnScan（含 stdoutTail——本脚本失败路径打印用）/
+ * DirectControl / parseSseBlock / 握手解析 / getFreePort / 停进程 /
+ * 包装体 call / 断言锚自 e2e-helpers.ts 导入（2026-10-31 五副本归一，
+ * 血统见其头注释）；本脚本保留 fake model 端点、桥事件泵（runBridgeRound）
+ * 与 provider baseUrl 每次刷新策略。
  */
-import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { spawnSync, type ChildProcess } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { setTimeout as delay } from "node:timers/promises";
-
-const MIRROR_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
-const SERVER_DIR =
-  process.env.TIANSHU_SERVER_DIR ??
-  path.resolve(MIRROR_ROOT, "apps/tianshu-server");
-const SERVER_ENTRY = path.join(SERVER_DIR, "dist", "src", "main.js");
-const E2E_CONFIG = path.join(SERVER_DIR, "dist", "config", "config.e2e.yml");
+import {
+  E2E_CONFIG,
+  SERVER_DIR,
+  SERVER_ENTRY,
+  DirectControl,
+  type Envelope,
+  type RequestResult,
+  type ScannedProcess,
+  createE2eReporter,
+  getFreePort,
+  nextEventIn,
+  parseHandshake,
+  spawnScan,
+  stopChild,
+} from "./e2e-helpers.ts";
 
 const PROVIDER_NAME = "e2e-bridge-smoke";
-const BOOT_TIMEOUT_MS = 60_000;
 /** 单断言组事件等待上限（fake 模型即时回，10s 冗余充足） */
 const EVENT_TIMEOUT_MS = 20_000;
 
-/** 断言锚点汇总（终局打印 + 退出码依据） */
-const outcomes: Array<{ label: string; ok: boolean; detail: string }> = [];
+const reporter = createE2eReporter("e2e-bridge");
+const { log, pass, call, printSummary } = reporter;
 
-function log(step: string, ...rest: unknown[]): void {
-  console.log(
-    `[e2e-bridge] ${new Date().toISOString().slice(11, 19)} ${step}`,
-    ...rest,
-  );
-}
-
-function pass(label: string, detail: string): void {
-  outcomes.push({ label, ok: true, detail });
-  console.log(`[e2e-bridge] PASS ${label} — ${detail}`);
-}
-
+/** 断言失败即抛——函数声明形态保 never 控制流分析（reporter 解构件不保） */
 function fail(label: string, detail: string): never {
-  outcomes.push({ label, ok: false, detail });
-  throw new Error(`${label}: ${detail}`);
-}
-
-// —— 协议形状（starter 包装体 + 控制协议事件；e2e-smoke 同款） ——
-
-interface Envelope {
-  success?: boolean;
-  code?: string;
-  data?: unknown;
-  message?: string;
-}
-
-interface ProtocolEvent {
-  type: string;
-  payload: Record<string, unknown>;
-}
-
-interface RequestResult {
-  status: number;
-  body: Envelope | string | null;
-}
-
-/** 包装体展开判错（session/send 的 202 同为 success 包装） */
-async function call(
-  request: (
-    method: "GET" | "POST",
-    reqPath: string,
-    body?: unknown,
-  ) => Promise<RequestResult>,
-  label: string,
-  reqPath: string,
-  body?: unknown,
-  method: "GET" | "POST" = "POST",
-): Promise<unknown> {
-  const result = await request(method, reqPath, body);
-  if (result.status === 401) {
-    fail(label, "HTTP 401（静态 token 未通过）");
-  }
-  const envelope = result.body as Envelope;
-  if (
-    typeof envelope !== "object" ||
-    envelope === null ||
-    envelope.success !== true
-  ) {
-    fail(
-      label,
-      `HTTP ${result.status} body=${JSON.stringify(result.body).slice(0, 300)}`,
-    );
-  }
-  return envelope.data;
+  return reporter.fail(label, detail);
 }
 
 // —— fake model：本地 OpenAI 兼容 SSE 假端点（脚本化 tool_calls/文本） ——
@@ -317,267 +268,6 @@ function fakeCallId(turn: FakeTurn): string {
 function usage(body: FakeModelCall["body"]): Record<string, number> {
   void body;
   return { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 };
-}
-
-// —— 进程/端口基建（e2e-graph-smoke 同款） ——
-
-interface HandshakeInfo {
-  port: number;
-  token: string;
-  instanceId: string;
-}
-
-interface ScannedProcess {
-  child: ChildProcess;
-  matched: string;
-  stderrTail(): string;
-  stdoutTail(): string;
-}
-
-function spawnScan(
-  command: string,
-  args: string[],
-  waitFor: RegExp,
-  extraEnv: Record<string, string>,
-): Promise<ScannedProcess> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      env: { ...process.env, ...extraEnv },
-      cwd: SERVER_DIR,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let buffer = "";
-    let stderr = "";
-    let stdoutTail = "";
-    const timer = setTimeout(() => {
-      destroyChild(child);
-      reject(
-        new Error(
-          `等待 ${String(waitFor)} 超时（${BOOT_TIMEOUT_MS}ms）；stderr 尾部：${stderr.slice(-500)}`,
-        ),
-      );
-    }, BOOT_TIMEOUT_MS);
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdoutTail = (stdoutTail + chunk).slice(-4000);
-      buffer += chunk;
-      let boundary = buffer.indexOf("\n");
-      while (boundary !== -1) {
-        const line = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + 1);
-        if (waitFor.test(line)) {
-          clearTimeout(timer);
-          resolve({
-            child,
-            matched: line,
-            stderrTail: () => stderr,
-            stdoutTail: () => stdoutTail,
-          });
-        }
-        boundary = buffer.indexOf("\n");
-      }
-    });
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk: string) => {
-      stderr = (stderr + chunk).slice(-2000);
-    });
-    child.once("error", (e) => {
-      clearTimeout(timer);
-      reject(new Error(`spawn ${command} 失败: ${e.message}`));
-    });
-  });
-}
-
-function destroyChild(child: ChildProcess | null): void {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGKILL");
-}
-
-async function stopChild(child: ChildProcess | null): Promise<void> {
-  if (!child || child.exitCode !== null) return;
-  const exited = new Promise<void>((resolve) => {
-    child.once("exit", () => resolve());
-  });
-  child.kill("SIGTERM");
-  await Promise.race([exited, delay(3000)]);
-  destroyChild(child);
-}
-
-function getFreePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = net.createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address() as net.AddressInfo;
-      server.close(() => resolve(address.port));
-    });
-  });
-}
-
-/** 握手行解析：TIANSHU_HANDSHAKE {"port":..,"token":..,"instanceId":..} */
-function parseHandshake(line: string): HandshakeInfo {
-  const prefix = "TIANSHU_HANDSHAKE ";
-  const trimmed = line.trim();
-  const parsed = JSON.parse(
-    trimmed.slice(trimmed.indexOf(prefix) + prefix.length),
-  ) as { port?: unknown; token?: unknown; instanceId?: unknown };
-  if (
-    typeof parsed.port !== "number" ||
-    typeof parsed.token !== "string" ||
-    typeof parsed.instanceId !== "string"
-  ) {
-    throw new Error(`握手行字段不全：${trimmed}`);
-  }
-  return {
-    port: parsed.port,
-    token: parsed.token,
-    instanceId: parsed.instanceId,
-  };
-}
-
-// —— 直连控制端：fetch + SSE 手写解析（e2e-smoke 同款） ——
-
-class DirectControl {
-  private readonly base: string;
-  private readonly headers: Record<string, string>;
-  private readonly sseAbort = new AbortController();
-  private readonly queue: ProtocolEvent[] = [];
-  private wake: (() => void) | null = null;
-  private failure: unknown = null;
-  private closed = false;
-
-  constructor(port: number, token: string) {
-    this.base = `http://127.0.0.1:${port}`;
-    this.headers = { authorization: `Bearer ${token}` };
-    void this.pumpSse();
-  }
-
-  async request(
-    method: "GET" | "POST",
-    reqPath: string,
-    body?: unknown,
-  ): Promise<RequestResult> {
-    const response = await fetch(`${this.base}/${reqPath.replace(/^\//, "")}`, {
-      method,
-      headers: {
-        ...this.headers,
-        ...(method === "POST" ? { "content-type": "application/json" } : {}),
-      },
-      body: method === "POST" ? JSON.stringify(body ?? null) : undefined,
-    });
-    const text = await response.text();
-    let parsed: Envelope | string | null = text;
-    if (text) {
-      try {
-        parsed = JSON.parse(text) as Envelope;
-      } catch {
-        /* 非 JSON 原文透传 */
-      }
-    }
-    return { status: response.status, body: parsed };
-  }
-
-  async nextEvent(): Promise<ProtocolEvent> {
-    for (;;) {
-      if (this.queue.length) return this.queue.shift() as ProtocolEvent;
-      if (this.failure) throw this.failure;
-      if (this.closed) throw new Error("SSE 流已关闭");
-      await new Promise<void>((resolve) => {
-        this.wake = resolve;
-      });
-      this.wake = null;
-    }
-  }
-
-  close(): void {
-    this.closed = true;
-    this.sseAbort.abort();
-    this.wake?.();
-  }
-
-  private async pumpSse(): Promise<void> {
-    try {
-      const response = await fetch(`${this.base}/event`, {
-        headers: this.headers,
-        signal: this.sseAbort.signal,
-      });
-      if (!response.ok || !response.body) {
-        throw new Error(`SSE 建流失败 status=${response.status}`);
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) throw new Error("SSE 流意外结束");
-        buffer = (buffer + decoder.decode(value, { stream: true })).replace(
-          /\r\n/g,
-          "\n",
-        );
-        let boundary = buffer.indexOf("\n\n");
-        while (boundary !== -1) {
-          const block = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          boundary = buffer.indexOf("\n\n");
-          const event = parseSseBlock(block);
-          if (event) this.queue.push(event);
-        }
-        this.wake?.();
-      }
-    } catch (e) {
-      if (!this.closed) {
-        this.failure = e;
-        this.wake?.();
-      }
-    }
-  }
-}
-
-/** 单 SSE 块 → 协议事件（坏 JSON 丢弃） */
-function parseSseBlock(block: string): ProtocolEvent | null {
-  let eventName = "message";
-  const dataLines: string[] = [];
-  for (const line of block.split("\n")) {
-    if (line === "" || line.startsWith(":")) continue;
-    const colonAt = line.indexOf(":");
-    const field = colonAt === -1 ? line : line.slice(0, colonAt);
-    let value = colonAt === -1 ? "" : line.slice(colonAt + 1);
-    if (value.startsWith(" ")) value = value.slice(1);
-    if (field === "event") eventName = value;
-    else if (field === "data") dataLines.push(value);
-  }
-  if (!dataLines.length) return null;
-  try {
-    return {
-      type: eventName,
-      payload: JSON.parse(dataLines.join("\n")) as Record<string, unknown>,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/** 限时取下一事件 */
-async function nextEventIn(
-  control: DirectControl,
-  timeoutMs: number,
-  label: string,
-): Promise<ProtocolEvent> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      control.nextEvent(),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`${label}: 等 ${timeoutMs}ms 无事件`)),
-          timeoutMs,
-        );
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 // —— provider 幂等落位（e2e-graph-smoke 手法+每次 baseUrl 刷新）：按名 upsert ——
@@ -1023,14 +713,7 @@ async function main(): Promise<number> {
     fs.rmSync(dataRoot, { recursive: true, force: true });
   }
 
-  const failed = outcomes.filter((o) => !o.ok);
-  console.log(
-    `\n[e2e-bridge] 结果汇总：${outcomes.length - failed.length}/${outcomes.length} 断言组通过`,
-  );
-  for (const o of outcomes) {
-    console.log(`  ${o.ok ? "PASS" : "FAIL"}  ${o.label} — ${o.detail}`);
-  }
-  return failed.length > 0 ? 1 : 0;
+  return printSummary() > 0 ? 1 : 0;
 }
 
 main()

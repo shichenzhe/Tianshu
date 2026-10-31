@@ -28,17 +28,15 @@ export class AutomationService {
     private readonly bus: EventBusService,
   ) {}
 
-  /** 任务列表（QueryFilter 分页 + keyword 任务名内存过滤） */
+  /** 任务列表（查询下推批：keyword contains + DB 分页下推 repo pageTasks，
+   *  graph/query 同款；keyword trim 后空串不过滤） */
   async query(dto: AutomationQueryDto): Promise<QueryResult<TaskRecord>> {
-    const all = await this.repository.listTasks(COMPANION_USER_ID);
     const keyword = dto.keyword?.trim();
-    const filtered = keyword
-      ? all.filter((task) => task.name.includes(keyword))
-      : all;
-    const page = dto.page <= 0 ? 1 : dto.page;
-    const pageSize = dto.pageSize;
-    const records = filtered.slice((page - 1) * pageSize, page * pageSize);
-    return QueryResult.of(records, page, pageSize, filtered.length);
+    return await this.repository.pageTasks(COMPANION_USER_ID, {
+      ...(keyword ? { keyword } : {}),
+      page: dto.page,
+      pageSize: dto.pageSize,
+    });
   }
 
   /** 全量 upsert：带 id 更新，否则创建（创建埋点 stat + 发变更事件）。

@@ -24,17 +24,15 @@ export class GraphService {
     private readonly repository: GraphRepository,
   ) {}
 
-  /** 图列表（QueryFilter 分页 + keyword 名称内存过滤，session/query 同款） */
+  /** 图列表（查询下推批：keyword contains + DB 分页下推 repo pageGraphs，
+   *  session/query 同款；keyword trim 后空串不过滤） */
   async query(dto: GraphQueryDto): Promise<QueryResult<GraphRecord>> {
-    const all = await this.repository.listGraphs(COMPANION_USER_ID);
     const keyword = dto.keyword?.trim();
-    const filtered = keyword
-      ? all.filter((graph) => graph.name.includes(keyword))
-      : all;
-    const page = dto.page <= 0 ? 1 : dto.page;
-    const pageSize = dto.pageSize;
-    const records = filtered.slice((page - 1) * pageSize, page * pageSize);
-    return QueryResult.of(records, page, pageSize, filtered.length);
+    return await this.repository.pageGraphs(COMPANION_USER_ID, {
+      ...(keyword ? { keyword } : {}),
+      page: dto.page,
+      pageSize: dto.pageSize,
+    });
   }
 
   /** 全量 upsert：带 id 更新（version 乐观锁），否则创建 */

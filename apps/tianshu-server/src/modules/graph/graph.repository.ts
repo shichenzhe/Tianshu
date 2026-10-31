@@ -26,6 +26,8 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AutomationRun, GraphDefinition } from '@prisma/client';
 import { validateGraph } from '@tianshu/core';
 import { PrismaService } from 'src/commons/database/prisma.service';
+import { containsFilter } from 'src/commons/database/db-url';
+import { QueryResult } from 'src/commons/query/query-result';
 import {
   toRunRecord,
   type RunPage,
@@ -91,6 +93,13 @@ export interface GraphCreateParams {
 
 export interface GraphUpdateParams extends GraphCreateParams {
   version: number;
+}
+
+/** 图列表分页入参（查询下推批）：keyword trim 后非空才生效 */
+export interface GraphPageParams {
+  keyword?: string;
+  page: number;
+  pageSize: number;
 }
 
 /** graphJson 字符串 → 校验并规范化序列（先例 buildTaskData 的 eventJson：
@@ -176,6 +185,34 @@ export class GraphRepository {
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(toGraphRecord);
+  }
+
+  /** 图列表分页（查询下推批）：keyword contains + skip/take + createdAt
+   *  desc 全部下推 DB——替代 service 侧 listGraphs 全量 + 内存 includes
+   *  过滤 + 切片的全表扫描路径（session.repository.query 同款骨架）。
+   *  contains 经 containsFilter 引擎感知构造（PG LIKE 区分大小写须补
+   *  mode insensitive 对齐 SQLite 的 ASCII 不敏感；SQLite 分支不带
+   *  mode——Prisma 对 SQLite mode 直接 ValidationError）；total 同 where
+   *  count 并发取（listGraphRuns 先例）。page<=0 收敛 1（skip 恒非负） */
+  async pageGraphs(
+    userId: number,
+    params: GraphPageParams,
+  ): Promise<QueryResult<GraphRecord>> {
+    const page = params.page <= 0 ? 1 : params.page;
+    const where = {
+      userId,
+      ...(params.keyword ? { name: containsFilter(params.keyword) } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.graphDefinition.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * params.pageSize,
+        take: params.pageSize,
+      }),
+      this.prisma.graphDefinition.count({ where }),
+    ]);
+    return QueryResult.of(rows.map(toGraphRecord), page, params.pageSize, total);
   }
 
   /** 按归属查图（GA-T3 新增，改造点 7） */

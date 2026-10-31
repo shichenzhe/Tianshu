@@ -337,16 +337,16 @@
       "mirrorPath": "electron/domains/ai/orchestration/graph.repo.ts",
       "serverPath": "src/modules/graph/graph.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 622,
-      "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移"
+      "baselineLines": 647,
+      "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移。2026-10-31 查询下推批：server 新增 pageGraphs（keyword contains 引擎感知下推 + skip/take DB 分页，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 622→647 过账（纯 server 侧新增，无既有行改动）"
     },
     {
       "id": "automation-repository",
       "mirrorPath": "electron/domains/ai/automation/automation.repo.ts",
       "serverPath": "src/modules/automation/automation.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 460,
-      "note": "任务仓储（GA-T3 摘取+GA-T5 runNow 接线：deps 钩子替换 IPC/广播）。含 GA-T3 移交（T9 入册）的内联契约类型对：server 本文件内联 TaskCreateParams/TaskRecord/RunRecord 等逐字段自 mirror src-react/domains/ai/automation/api/automation.api.ts（同文件多对不重复登记，合并于此条）。2026-10-28 去会话化批（Task 5+6）：deleteTasks 级联删 graphRunNode 双端同构；基线 388→427 增量 = 级联新行 server 侧 this.prisma 前缀与 mirror 裸 prisma 不成对（既有授权分叉形态在新代码段的再现）；执行详情批（38f724ce/c7188f66）server 侧增 listRunNodes 桥（端点 automation/runNodes 载荷），mirror 侧同构实现落 graph.repo（跨对落位）——437→460 过账，逐行复核无逻辑漂移"
+      "baselineLines": 486,
+      "note": "任务仓储（GA-T3 摘取+GA-T5 runNow 接线：deps 钩子替换 IPC/广播）。含 GA-T3 移交（T9 入册）的内联契约类型对：server 本文件内联 TaskCreateParams/TaskRecord/RunRecord 等逐字段自 mirror src-react/domains/ai/automation/api/automation.api.ts（同文件多对不重复登记，合并于此条）。2026-10-28 去会话化批（Task 5+6）：deleteTasks 级联删 graphRunNode 双端同构；基线 388→427 增量 = 级联新行 server 侧 this.prisma 前缀与 mirror 裸 prisma 不成对（既有授权分叉形态在新代码段的再现）；执行详情批（38f724ce/c7188f66）server 侧增 listRunNodes 桥（端点 automation/runNodes 载荷），mirror 侧同构实现落 graph.repo（跨对落位）——437→460 过账，逐行复核无逻辑漂移。2026-10-31 查询下推批：server 新增 pageTasks（keyword contains 引擎感知下推 + skip/take DB 分页 + hydrate 逐行补 workspace，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 460→486 过账（纯 server 侧新增，无既有行改动）"
     },
     {
       "id": "webhook-service",

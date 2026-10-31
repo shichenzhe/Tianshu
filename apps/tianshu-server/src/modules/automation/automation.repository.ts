@@ -30,6 +30,8 @@ import {
   type ScheduleConfig,
 } from '@tianshu/core';
 import { PrismaService } from 'src/commons/database/prisma.service';
+import { containsFilter } from 'src/commons/database/db-url';
+import { QueryResult } from 'src/commons/query/query-result';
 import type {
   AutomationChangedPayload,
   AutomationRunNodeRecord,
@@ -138,6 +140,13 @@ export interface TaskCreateParams {
 }
 
 export type TaskUpdateParams = TaskCreateParams;
+
+/** 任务列表分页入参（查询下推批）：keyword trim 后非空才生效 */
+export interface TaskPageParams {
+  keyword?: string;
+  page: number;
+  pageSize: number;
+}
 
 export interface RunRecord {
   id: number;
@@ -449,6 +458,35 @@ export class AutomationRepository {
       orderBy: { createdAt: 'desc' },
     });
     return Promise.all(rows.map((row) => this.hydrate(row)));
+  }
+
+  /** 任务列表分页（查询下推批）：keyword contains + skip/take + createdAt
+   *  desc 全部下推 DB——替代 service 侧 listTasks 全量 + 内存 includes
+   *  过滤 + 切片的全表扫描路径（graph.pageGraphs 同款、session.repository
+   *  .query 同骨架）。contains 经 containsFilter 引擎感知构造（PG 补
+   *  mode insensitive 对齐 SQLite 的 ASCII 不敏感；SQLite 分支不带
+   *  mode）；total 同 where count 并发取；行 hydrate 复用 listTasks 逐行
+   *  补 workspace（页大小有界，不放大查询面）。page<=0 收敛 1 */
+  async pageTasks(
+    userId: number,
+    params: TaskPageParams,
+  ): Promise<QueryResult<TaskRecord>> {
+    const page = params.page <= 0 ? 1 : params.page;
+    const where = {
+      userId,
+      ...(params.keyword ? { name: containsFilter(params.keyword) } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.prisma.automationTask.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * params.pageSize,
+        take: params.pageSize,
+      }),
+      this.prisma.automationTask.count({ where }),
+    ]);
+    const records = await Promise.all(rows.map((row) => this.hydrate(row)));
+    return QueryResult.of(records, page, params.pageSize, total);
   }
 
   /** 创建任务（mirror public 同位：IPC 与 create_schedule 工具共用；

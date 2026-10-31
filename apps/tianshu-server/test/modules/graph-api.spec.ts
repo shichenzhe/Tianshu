@@ -1,7 +1,7 @@
 // GA-T6：graph/automation 九端点 + 事件 contract（e2e，spec §4.1/§4.2）。
 // 覆盖（任务面）：
 // 1. capability：GET /info capabilities 含 graph（协议包 CAPABILITIES 联动）
-// 2. graph 五端点：query（QueryResult 包装+keyword）/ save（create+update
+// 2. graph 五端点：query（QueryResult 包装+keyword contains 下推）/ save（create+update
 //    乐观锁）/ delete / run（202 受理 {runId} + graph.run.updated 事件序列
 //    running→progress→succeeded + run 行落库）/ runAbort（{runId} →
 //    USER_CANCELLED → aborted 投影 + run failed/user_aborted）
@@ -254,7 +254,7 @@ describe('graph/automation 九端点 + 事件（GA-T6 e2e）', () => {
     );
   });
 
-  it('graph/query：统一包装 QueryResult，keyword 内存过滤', async () => {
+  it('graph/query：统一包装 QueryResult，keyword contains 下推过滤', async () => {
     const res = await post('/graph/query', {}).expect(200);
     const body = res.body as WrappedBody<{
       records: Array<{ id: number; name: string; nodeCount: number }>;

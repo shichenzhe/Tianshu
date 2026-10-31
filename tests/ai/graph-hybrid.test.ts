@@ -46,9 +46,14 @@ import prisma from "../../electron/commons/prisma-client";
 import { searchFts } from "../../electron/domains/ai/orchestration/vector-store";
 import {
   makeHybridSearchNodeHandler,
+  makeRerankNodeHandler,
   type NodeContext,
 } from "../../electron/domains/ai/orchestration/graph-executor";
-import type { HybridSearchNode } from "@tianshu/core";
+import type {
+  HybridSearchNode,
+  NodeResult,
+  RerankNode,
+} from "@tianshu/core";
 
 const fetchMock = vi.fn();
 beforeAll(() => {
@@ -346,5 +351,136 @@ describe("hybridSearch 节点 handler（三模式）", () => {
     const done = await runHybrid({ mode: "keyword", searchQuery: "！！" });
     expect(done.output).toBe("");
     expect(done.hits).toEqual([]);
+  });
+});
+
+describe("rerank 节点", () => {
+  const rerankNode: RerankNode = {
+    id: "rr1",
+    kind: "rerank",
+    name: "重排",
+    query: "容错 设计",
+    sourceNodeId: "hs1",
+    modelId: 9,
+    topN: 3,
+  };
+  const seedHits = (n = 2) =>
+    Array.from({ length: n }, (_, i) => ({
+      chunkId: i + 1,
+      sourceName: `s${i + 1}`,
+      collection: "c",
+      text: `原文片段${i + 1}`,
+      score: 0.5,
+      rank: i + 1,
+    }));
+
+  /** model.findUnique 桩指向 reranker 型模型（provider 桩为模块级既有：
+   * openai-compatible / http://localhost:9 / apiKey k，不随 afterEach 复位） */
+  const mockRerankerModel = () => {
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 9,
+      providerId: 2,
+      modelId: "m",
+      type: "reranker",
+    } as never);
+  };
+
+  const jsonResponse = (payload: unknown) => ({
+    ok: true,
+    status: 200,
+    json: async () => payload,
+  });
+
+  /** 直调 handler 工厂（先例 runHybrid）：runId=null 即席不落库；取本
+   * 节点状态更新本体（hits 旁路只落 state，图执行入口不透出） */
+  const runRerank = async (
+    node: RerankNode,
+    nodes: Record<string, NodeResult>,
+  ) => {
+    const handler = makeRerankNodeHandler(node, {
+      runId: null,
+      abort: new AbortController().signal,
+      workspace: { id: 9, directoryPath: null },
+      userId: 1,
+      codeAuthorized: false,
+      subflowStack: [],
+      skills: [],
+      agent: {} as NodeContext["agent"],
+      now: new Date(),
+      trace: [],
+      modelCache: new Map(),
+      deps: {} as NodeContext["deps"],
+    });
+    const update = await handler({ inputs: {}, nodes });
+    return update.nodes![node.id];
+  };
+
+  it("模型非 reranker 报 rerank_model_type", async () => {
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 9,
+      providerId: 2,
+      modelId: "m",
+      type: "llm",
+    } as never);
+    await expect(
+      runRerank(rerankNode, { hs1: { output: "x", hits: seedHits() } }),
+    ).rejects.toMatchObject({ code: "rerank_model_type" });
+  });
+
+  it("来源无 hits 字段（未连线/非检索）报 rerank_source_invalid；空数组透传空", async () => {
+    mockRerankerModel();
+    await expect(
+      runRerank(rerankNode, { other: { output: "x" } }),
+    ).rejects.toMatchObject({ code: "rerank_source_invalid" });
+    const done = await runRerank(rerankNode, {
+      hs1: { output: "", hits: [] },
+    });
+    expect(done.output).toBe("");
+    expect(done.hits).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rerank API 全链路：请求体形态/index 回挂/降序切 topN/hits 旁路", async () => {
+    mockRerankerModel();
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        results: [
+          { index: 1, relevance_score: 0.91 },
+          { index: 0, relevance_score: 0.42 },
+        ],
+      }),
+    );
+    const done = await runRerank(rerankNode, {
+      hs1: { output: "x", hits: seedHits() },
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(fetchMock.mock.calls[0][0]).toContain("/rerank");
+    expect(body).toMatchObject({ model: "m", query: "容错 设计", top_n: 3 });
+    expect(body.documents).toEqual(["原文片段1", "原文片段2"]);
+    expect(done.hits![0]).toMatchObject({
+      sourceName: "s2",
+      score: 0.91,
+      rank: 1,
+    });
+    expect(done.output).toContain("【s2｜相关度 0.91】原文片段2");
+  });
+
+  it("候选 250 上限截断 + 单文档 2000 字符截断 + API 失败显式 rerank_api_error", async () => {
+    mockRerankerModel();
+    const many = seedHits(260).map((h, i) => ({
+      ...h,
+      text: "长".repeat(2100) + i,
+    }));
+    fetchMock.mockResolvedValue(
+      jsonResponse({ results: [{ index: 0, relevance_score: 0.5 }] }),
+    );
+    await runRerank(rerankNode, { hs1: { output: "x", hits: many } });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.documents).toHaveLength(250);
+    expect(body.documents[0].length).toBe(2000);
+    fetchMock.mockResolvedValue(new Response("err", { status: 502 }));
+    await expect(
+      runRerank(rerankNode, { hs1: { output: "x", hits: seedHits() } }),
+    ).rejects.toMatchObject({ code: "rerank_api_error" });
   });
 });

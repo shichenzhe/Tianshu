@@ -33,9 +33,16 @@ export const PG_DDL: string[] = [
   'CREATE INDEX IF NOT EXISTS vector_chunk_user_coll ON vector_chunk (user_id, collection)',
 ];
 
-/** to_tsquery 串：词元 OR 连接（词元来自 tokenize 白名单，无语法字符） */
+/** 严格词元白名单：全串仅文字/数字（Han/字母/数字）——tokenize 的白名单
+ * 是包含性测试（词元含任一文字/数字字符即通过），混合 tsquery 语法字符
+ * 的词元（a&b、x|y、含引号/括号等）仍可能混入，此处全串白名单二次剔除，
+ * 防 to_tsquery('simple', …) 语法错误或词元被解释为 & | ! 运算符 */
+const FTS_TOKEN_RE = /^[\p{Script=Han}\p{L}\p{N}]+$/u;
+
+/** to_tsquery 串：严格词元 OR 连接（语法字符混合词元剔除后 join；
+ * 全部被剔除时产出空串——调用侧对空串短路，to_tsquery('') 语法非法） */
 export function buildFtsQuery(tokens: string[]): string {
-  return tokens.join(' | ');
+  return tokens.filter((token) => FTS_TOKEN_RE.test(token)).join(' | ');
 }
 
 /** pgvector 输入字面量：紧凑 JSON 数组串 */
@@ -119,7 +126,9 @@ interface PgQueryResult {
 }
 interface PgClient {
   query(sql: string, values?: unknown[]): Promise<PgQueryResult>;
-  release(): void;
+  /** pg 语义：release(err) 把连接从池中废弃（销毁底层 TCP 不回池），
+   * 无参 release 连接回池复用 */
+  release(err?: Error): void;
 }
 interface PgPool {
   query(sql: string, values?: unknown[]): Promise<PgQueryResult>;
@@ -185,6 +194,9 @@ export async function upsertChunksPg(params: {
   const client = await (await getPool()).connect().catch((e: unknown) => {
     throw toPgError(e);
   });
+  // 进 catch 即标记坏连接——不区分 ROLLBACK 是否成功：废弃一条可能好的
+  // 连接代价低，坏连接还池会污染后续查询
+  let txError: Error | undefined;
   try {
     await client.query('BEGIN');
     await client.query(
@@ -208,22 +220,27 @@ export async function upsertChunksPg(params: {
     }
     await client.query('COMMIT');
   } catch (e) {
+    txError = e instanceof Error ? e : new Error(String(e));
     await client.query('ROLLBACK').catch(() => {});
     throw toPgError(e);
   } finally {
-    client.release();
+    // release(err) 废弃连接（pg 语义），成功路径无参回池复用
+    client.release(txError);
   }
 }
 
 /** FTS 检索：词元 OR 匹配 ts_rank 降序（rank 按 returned 序从 1 编号）；
- * 空词元短路不发查询（to_tsquery('') 语法非法） */
+ * 空词元与「过滤后为空」（全 metachar 混合词元）均短路不发查询
+ * （to_tsquery('') 语法非法） */
 export async function searchFtsPg(params: {
   userId: number;
   collection: string;
   queryTokens: string[];
   limit: number;
 }): Promise<FusedHit[]> {
-  if (params.queryTokens.length === 0) {
+  // 先过滤再判空：metachar 剔除可能把非空词元集清空
+  const tsQuery = buildFtsQuery(params.queryTokens);
+  if (tsQuery === '') {
     return [];
   }
   try {
@@ -231,13 +248,8 @@ export async function searchFtsPg(params: {
     const { sql } = buildFtsSql(params.collection !== '');
     const values =
       params.collection !== ''
-        ? [
-            buildFtsQuery(params.queryTokens),
-            params.userId,
-            params.collection,
-            params.limit,
-          ]
-        : [buildFtsQuery(params.queryTokens), params.userId, params.limit];
+        ? [tsQuery, params.userId, params.collection, params.limit]
+        : [tsQuery, params.userId, params.limit];
     const result = await (await getPool()).query(sql, values);
     return (
       result.rows as Array<{

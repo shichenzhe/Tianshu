@@ -164,9 +164,11 @@ export interface TraceEntry {
   outputPreview?: string;
   /** 生成图片（imageGen 节点产物，相对数据根路径）→ 轨迹内缩略图展示 */
   outputImage?: string;
-  /** 检索类节点结构化候选预览（hybridSearch：fused hits JSON 截断 2000，
-   * 运行历史排查用） */
+  /** 检索类节点结构化候选预览（hybridSearch/rerank：fused hits JSON 截断
+   * 2000，运行历史排查用） */
   hitsPreview?: string;
+  /** 候选超限截断标注（rerank 250 上限，"原数→上限"形）——运行历史排查用 */
+  hitsTruncated?: string;
   /** 循环节点死信（continue 模式失败项清单）——运行历史排查用 */
   errorOutput?: string;
   /** 降级继续标记（llm 节点 onError=defaultValue）：实际执行失败但以
@@ -283,8 +285,10 @@ interface NodeOutput {
   outputImage?: string;
   /** 检索类节点候选序列化预览（hybridSearch，trace 透传） */
   hitsPreview?: string;
-  /** 检索类节点结构化候选（hybridSearch；toNodeUpdate 落 state 供 GA 系
-   * rerank 消费） */
+  /** 候选超限截断标注（rerank 250 上限，trace 透传） */
+  hitsTruncated?: string;
+  /** 检索类节点结构化候选（hybridSearch 产出 / rerank 消费回挂；经
+   * toNodeUpdate 落 state 供下游检索系节点接力） */
   hits?: FusedHit[];
   route?: string;
   usage?: NodeResult['usage'];
@@ -1816,6 +1820,9 @@ function traceSuccess(
     outputPreview: done.output.slice(0, 200),
     ...(done.outputImage ? { outputImage: done.outputImage } : {}),
     ...(done.hitsPreview ? { hitsPreview: done.hitsPreview } : {}),
+    ...(done.hitsTruncated
+      ? { hitsTruncated: done.hitsTruncated }
+      : {}),
     ...(done.errorOutput ? { errorOutput: done.errorOutput } : {}),
   };
 }
@@ -3893,7 +3900,8 @@ const RERANK_DOC_CHAR_LIMIT = 2000;
  * relevance_score 降序切 topN 回挂 hits 旁路。模型须 model.type=reranker
  * （rerank_model_type）；来源未执行/无 hits 旁路报 rerank_source_invalid
  * （空数组透传空输出不调 API——空召回不算错）。错误链对齐 embedTexts
- * （Bearer/extraHeaders/AbortSignal.any/非 2xx 带 payload 摘要）。导出供
+ * （Bearer/extraHeaders/AbortSignal.any/非 2xx 带 payload 摘要；HTTP 200
+ * 但返回体缺 results 数组同报 rerank_api_error——Array.isArray 先例）。导出供
  * 测试（handler 级直调，先例 makeHybridSearchNodeHandler） */
 export function makeRerankNodeHandler(
   node: RerankNode,
@@ -3934,6 +3942,10 @@ export function makeRerankNodeHandler(
         }));
         return toNodeUpdate(node.id, { output, hits: [] });
       }
+      const hitsTruncated =
+        source.hits.length > RERANK_MAX_CANDIDATES
+          ? `${source.hits.length}→${RERANK_MAX_CANDIDATES}`
+          : undefined;
       const candidates = source.hits
         .slice(0, RERANK_MAX_CANDIDATES)
         .map((hit) => ({
@@ -3961,7 +3973,9 @@ export function makeRerankNodeHandler(
             model: runtime.sdkId,
             query,
             documents: candidates.map((candidate) => candidate.text),
-            top_n: node.topN,
+            // clamp 至候选数（hybridSearch topK < rerank topN 时不发空悬
+            // top_n，防严格校验端点报错；本地重排切片行为不变）
+            top_n: Math.min(node.topN, candidates.length),
           }),
           signal,
         });
@@ -3982,7 +3996,13 @@ export function makeRerankNodeHandler(
         payload as {
           results?: Array<{ index?: number; relevance_score?: number }>;
         }
-      )?.results ?? [];
+      )?.results;
+      if (!Array.isArray(results)) {
+        throw new GraphRunFailure(
+          'rerank_api_error',
+          `重排接口返回体缺少 results 数组（可能端点形态不兼容）: ${JSON.stringify(payload)?.slice(0, 200)}`,
+        );
+      }
       const fused: FusedHit[] = results
         .filter(
           (entry) =>
@@ -4005,6 +4025,7 @@ export function makeRerankNodeHandler(
       ctx.trace.push(traceSuccess(node, startedAt, {
         output,
         hitsPreview: JSON.stringify(fused).slice(0, 2000),
+        ...(hitsTruncated ? { hitsTruncated } : {}),
       }));
       return toNodeUpdate(node.id, { output, hits: fused });
     } catch (e) {

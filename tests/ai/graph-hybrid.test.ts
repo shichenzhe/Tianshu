@@ -48,6 +48,7 @@ import {
   makeHybridSearchNodeHandler,
   makeRerankNodeHandler,
   type NodeContext,
+  type TraceEntry,
 } from "../../electron/domains/ai/orchestration/graph-executor";
 import type {
   HybridSearchNode,
@@ -392,10 +393,12 @@ describe("rerank 节点", () => {
   });
 
   /** 直调 handler 工厂（先例 runHybrid）：runId=null 即席不落库；取本
-   * 节点状态更新本体（hits 旁路只落 state，图执行入口不透出） */
+   * 节点状态更新本体（hits 旁路只落 state，图执行入口不透出）；可选注入
+   * trace 数组收集轨迹条目（截断标注等 payload 断言用） */
   const runRerank = async (
     node: RerankNode,
     nodes: Record<string, NodeResult>,
+    trace: TraceEntry[] = [],
   ) => {
     const handler = makeRerankNodeHandler(node, {
       runId: null,
@@ -407,7 +410,7 @@ describe("rerank 节点", () => {
       skills: [],
       agent: {} as NodeContext["agent"],
       now: new Date(),
-      trace: [],
+      trace,
       modelCache: new Map(),
       deps: {} as NodeContext["deps"],
     });
@@ -455,7 +458,9 @@ describe("rerank 节点", () => {
     });
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(fetchMock.mock.calls[0][0]).toContain("/rerank");
-    expect(body).toMatchObject({ model: "m", query: "容错 设计", top_n: 3 });
+    // top_n clamp 至候选数（Math.min(3, 2)——hybridSearch topK < rerank topN
+    // 时不发空悬 top_n）
+    expect(body).toMatchObject({ model: "m", query: "容错 设计", top_n: 2 });
     expect(body.documents).toEqual(["原文片段1", "原文片段2"]);
     expect(done.hits![0]).toMatchObject({
       sourceName: "s2",
@@ -465,7 +470,7 @@ describe("rerank 节点", () => {
     expect(done.output).toContain("【s2｜相关度 0.91】原文片段2");
   });
 
-  it("候选 250 上限截断 + 单文档 2000 字符截断 + API 失败显式 rerank_api_error", async () => {
+  it("候选 250 上限截断（trace 落 hitsTruncated 标注）+ 单文档 2000 字符截断 + API 失败显式 rerank_api_error", async () => {
     mockRerankerModel();
     const many = seedHits(260).map((h, i) => ({
       ...h,
@@ -474,11 +479,35 @@ describe("rerank 节点", () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ results: [{ index: 0, relevance_score: 0.5 }] }),
     );
-    await runRerank(rerankNode, { hs1: { output: "x", hits: many } });
+    const trace: TraceEntry[] = [];
+    await runRerank(rerankNode, { hs1: { output: "x", hits: many } }, trace);
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
     expect(body.documents).toHaveLength(250);
     expect(body.documents[0].length).toBe(2000);
+    // 截断不静默：成功轨迹条目带 "原数→250" 标注（spec 超限截断并在 trace
+    // 标注条款）
+    expect(trace[trace.length - 1]).toMatchObject({
+      status: "success",
+      hitsTruncated: "260→250",
+    });
     fetchMock.mockResolvedValue(new Response("err", { status: 502 }));
+    await expect(
+      runRerank(rerankNode, { hs1: { output: "x", hits: seedHits() } }),
+    ).rejects.toMatchObject({ code: "rerank_api_error" });
+  });
+
+  it("HTTP 200 返回体缺 results 数组（空对象/嵌套信封）显式 rerank_api_error 不静默空成功", async () => {
+    mockRerankerModel();
+    fetchMock.mockResolvedValue(jsonResponse({}));
+    await expect(
+      runRerank(rerankNode, { hs1: { output: "x", hits: seedHits() } }),
+    ).rejects.toMatchObject({
+      code: "rerank_api_error",
+      message: expect.stringContaining("缺少 results 数组"),
+    });
+    fetchMock.mockResolvedValue(
+      jsonResponse({ output: { results: [] } }), // DashScope 形嵌套信封
+    );
     await expect(
       runRerank(rerankNode, { hs1: { output: "x", hits: seedHits() } }),
     ).rejects.toMatchObject({ code: "rerank_api_error" });

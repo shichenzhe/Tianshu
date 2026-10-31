@@ -1128,7 +1128,7 @@
       "rerankQuery": "Query",
       "rerankModel": "Reranker model",
       "rerankTopN": "Top N",
-      "rerankModelRequired": "No model selected: pick a reranker model first, otherwise saving/running is blocked",
+      "rerankModelRequired": "Select a reranker model first",
       "kindDatabase": "Database",
       "kindExcelRead": "Excel read",
       "kindExcelWrite": "Excel write",

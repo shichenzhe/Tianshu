@@ -250,3 +250,5 @@ function makeRerankNodeHandler(node: RerankNode, ctx: NodeContext): NodeHandler 
 ---
 
 **e2e 裁定（2026-10-31）**：rerank 不加 e2e 段——真 reranker 端点不可得（需配置 reranker 类型模型），协议形态（请求体/index 回挂/截断/三错误码）已由 Task 2 mock fetch 单测钉死；真端到端验证待有 reranker 模型配置时人工进行（spec Phase 2.3 的「e2e 补段」按真模型门控语义理解）。
+
+**终审收尾（2026-10-31）**：全分支终审两 Important 修复已随收尾 commit 落地——① HTTP 200 返回体 `results` 非数组不再 `?? []` 静默空成功，改报 `rerank_api_error`（embedTexts `Array.isArray` 先例）；② 候选超 250 截断不再静默，trace 落 `hitsTruncated: "原数→250"` 标注（另含 top_n clamp 至候选数、i18n 措辞对齐、双份注释更新与 spec minScore 关账/DashScope 措辞）。

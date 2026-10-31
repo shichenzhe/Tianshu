@@ -1128,7 +1128,7 @@
       "rerankQuery": "查询词",
       "rerankModel": "Reranker 模型",
       "rerankTopN": "返回条数（topN）",
-      "rerankModelRequired": "未选择模型：须先选 reranker 类型模型，否则不可保存运行",
+      "rerankModelRequired": "请先选择 reranker 类型模型",
       "kindDatabase": "数据库",
       "kindExcelRead": "Excel 读取",
       "kindExcelWrite": "Excel 写入",

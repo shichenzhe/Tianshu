@@ -43,7 +43,8 @@
   N/A）；semantic 模式余弦与 Phase 2 rerank 的 relevance_score 均为 0~1 可阈值
   化——v1 不加参数，rerank 期评估 minScore（业界「rerank + 阈值」标准组合）。
 - **rerank 端点形态**：Cohere Rerank 定形、Jina/vLLM/SGLang（BGE-reranker、
-  Qwen3-Reranker）/SiliconFlow/DashScope 全兼容：
+  Qwen3-Reranker）/SiliconFlow 兼容；DashScope 端点路径与信封形态有差异，
+  兼容性以实测为准：
   `POST /rerank {model, query, documents[], top_n}` →
   `{results: [{index, relevance_score}]}`。
 
@@ -233,7 +234,9 @@ timeoutMs
   兼容场景不存在。
 - **开放**：graph-templates.ts 是否补 RAG 模板（不扩本期范围，实施后视情况）；
   手动重建 FTS 索引入口（Dify 有「重建索引」按钮，我们 count 对比自动兜底已
-  够，UX 糖 v1 不做）；rerank 期评估 minScore 阈值参数。
+  够，UX 糖 v1 不做）；~~rerank 期评估 minScore 阈值参数~~ 已关账（2026-10-31
+  rerank 落地时显式关账：v1 未实现，保持 defer——minScore 评估随首个真实
+  reranker 配置进行）。
 
 ## 影响面清单
 

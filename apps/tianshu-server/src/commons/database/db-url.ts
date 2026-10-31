@@ -46,6 +46,25 @@ export function normalizeDbUrl(url: string): string {
   return url.startsWith('file:') ? url : `file:${url}`;
 }
 
+/** 主库引擎（双引擎 spec）：未设/file:/裸路径 → sqlite；postgres 系 →
+ * postgres；其他 scheme 显式抛错（防静默建错库） */
+export type DbEngine = 'sqlite' | 'postgres';
+
+export function engineOf(url: string | undefined): DbEngine {
+  if (!url) {
+    return 'sqlite';
+  }
+  if (/^postgres(ql)?:\/\//.test(url)) {
+    return 'postgres';
+  }
+  if (url.startsWith('file:') || !url.includes('://')) {
+    return 'sqlite';
+  }
+  throw new Error(
+    `TIANSHU_DB_URL 不支持的 scheme（仅 file: 路径或 postgres:// 连接串）: ${url}`,
+  );
+}
+
 /** 读取注入的 DB 落点（空/未设 → undefined，dev 态即此） */
 export function overriddenDbUrl(): string | undefined {
   const url = process.env[DB_URL_ENV]?.trim();
@@ -56,9 +75,12 @@ export function overriddenDbUrl(): string | undefined {
 export function dbUrlOptions():
   { datasources: { db: { url: string } } } | undefined {
   const url = overriddenDbUrl();
-  return url
-    ? { datasources: { db: { url: normalizeDbUrl(url) } } }
-    : undefined;
+  if (!url) {
+    return undefined;
+  }
+  // postgres 连接串原样透传（normalizeDbUrl 会错补 file: 前缀）
+  const normalized = engineOf(url) === 'postgres' ? url : normalizeDbUrl(url);
+  return { datasources: { db: { url: normalized } } };
 }
 
 /** 向上寻 prisma/schema.prisma 所在根（src/jest 与 dist 两态深度不同） */
@@ -99,6 +121,11 @@ function isDatabaseReady(dbPath: string): boolean {
 }
 
 export function ensureDatabase(startDir = __dirname): void {
+  // postgres 主库走 PG 分支（目录确保/文件就绪判定为 SQLite 落点专属）
+  if (engineOf(overriddenDbUrl()) === 'postgres') {
+    ensureDatabasePg(startDir);
+    return;
+  }
   const url = overriddenDbUrl();
   const dbPath = url
     ? normalizeDbUrl(url).replace(/^file:/, '')
@@ -133,5 +160,44 @@ export function ensureDatabase(startDir = __dirname): void {
     }
   } finally {
     rmSync(tmpSchema, { force: true });
+  }
+}
+
+/**
+ * PG 首启建库（engine postgres 态，须先于 $connect）：派生 schema
+ * `prisma/schema.prisma.postgresql` db push（幂等，无变更秒级）——其
+ * datasource url 即 env("DATABASE_URL")（派生脚本产物，无需临时改写）。
+ * DATABASE_URL 经 spawn env 显式注入：绕开 configuration.ts 顶层对
+ * process.env.DATABASE_URL 的无条件覆写（见文件头命名偏离记录）。schema
+ * 定位复用 findSchemaRoot 向上寻根（src/jest 与 dist 两态深度不同），进程/
+ * CLI 形态同上方 SQLite db push 先例（execPath + prisma prod 树 CLI，机器
+ * 无需装 node/npx）。无 SQLite 落点的目录确保/空壳判定——建库就绪与否由
+ * db push 自身幂等保证。
+ */
+function ensureDatabasePg(startDir: string): void {
+  const url = overriddenDbUrl()!;
+  const root = findSchemaRoot(startDir);
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(root, 'node_modules', 'prisma', 'build', 'index.js'),
+      'db',
+      'push',
+      '--skip-generate',
+      '--schema',
+      join(root, 'prisma', 'schema.prisma.postgresql'),
+    ],
+    {
+      env: { ...process.env, DATABASE_URL: url },
+      encoding: 'utf8',
+    },
+  );
+  if (result.status !== 0) {
+    const tail = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+      .trim()
+      .slice(-500);
+    throw new Error(
+      `PG 首启建库失败（prisma db push 退出码 ${result.status}）：${tail}`,
+    );
   }
 }

@@ -75,7 +75,7 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 
 - **packages/tianshu-protocol** - 三端共享协议包（纯类型 + 常量：chunk/blocks/send 契约、中继帧、事件与能力常量，零运行时依赖）
 - **packages/tianshu-core** - 三端共享核心逻辑包（chat 纯函数实现：blocks 序列化、历史截断/工具输出瘦身、参数合并、错误分类、时间/场景上下文、chunk 归一、runChatStream 工具循环；peer 依赖 @langchain/*）
-- 消费方式：mirror 桌面端经 alias 直引 `packages/*/src` 源码（vite 顶层 + 主进程、vitest、tsconfig paths 各自登记）；apps/tianshu-server 与 apps/tianshu-mobile 经 workspace 依赖（package.json 里 `"@tianshu/*": "*"`，npm 不支持 yarn/pnpm 的 `workspace:` 协议字面量，名称命中 workspace 即自动链接）消费 `dist` 产物——链接由根 `npm install` 维护；改包源码后须重建 dist（server 侧 `npm run sync:core`，即依次 build 两共享包；或根 `npm --prefix packages/tianshu-core run build`），链接直读、重启即生效
+- 消费方式：mirror 桌面端经 alias 直引 `packages/*/src` 源码（vite 顶层 + 主进程、vitest、tsconfig paths 各自登记）；apps/tianshu-server 与 apps/tianshu-mobile 经 workspace 依赖（package.json 里 `"@tianshu/*": "*"`，npm 不支持 yarn/pnpm 的 `workspace:` 协议字面量，名称命中 workspace 即自动链接）消费 `dist` 产物——链接由根 `npm install` 维护；改包源码后须重建 dist（server 侧 `npm run sync:core`，即依次 build 两共享包；或根 `npm --prefix packages/tianshu-core run build`），链接直读、重启即生效；合并含 packages/ 变更的分支后，主树需 `npm --prefix packages/tianshu-core run build`（或 server 侧 sync:core）刷新 dist——worktree 各自构建不回写主树，主树 dist 滞后会致 server jest 的 @tianshu/core 解析失败
 - 仍双份未收编文件（有意分叉/暂保留）由 `npm run check:drift` 守护：基线 manifest 在 `packages/tianshu-core/scripts/drift-manifest.json`（serverRoot 指向 `apps/tianshu-server`，monorepo 内相对路径），差异行数增长超容差 exit 1，基线变化用 `npm run check:drift -- --rebase` 重置并人工复核
 
 ### IPC 通信

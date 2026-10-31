@@ -402,6 +402,9 @@ JWT 签名密钥除外——已外移 `.env` 的 `JWT_SECRET`（spec §13 项 6�
 - 改 mirror `packages/tianshu-protocol` / `packages/tianshu-core` 源码后：本仓
   `npm run sync:core` 一条命令即可——前置双包 rebuild（协议包+core）再重装
   `file:` 依赖，防 symlink 形态下静默消费旧 dist；重启本服务即生效
+- 主树（mirror）合并含 `packages/` 变更的分支后：先跑 `npm run sync:core`
+  再 jest——worktree 各自构建不回写主树，主树 dist 滞后会致本仓 jest 的
+  `@tianshu/core` 解析失败
 - 改上表仍双份的文件后：mirror 侧跑 `npm run check:drift` 巡检两仓漂移
   （归一化差异行数增长超容差 exit 1，减少仅 WARN 提示收编机会；有意变更
   用 `npm run check:drift -- --rebase` 重置基线并人工复核）

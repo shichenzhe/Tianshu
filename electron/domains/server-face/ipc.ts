@@ -329,7 +329,7 @@ export function attachServerFace(deps: {
   >;
   /** CRUD 批 graph 只读面：listGraphs 全量 → 分页壳（选图）；图编辑遥控
    *  仍无头端专属不透出 */
-  graphRepo?: Pick<GraphRepository, "listGraphs">;
+  graphRepo?: Pick<GraphRepository, "listGraphs" | "listRunNodes">;
   /** 记忆进化批 memory 面（可选——未装配时 memory 五端点报未装配）：
    *  option 读写与 MemoryService AI 操作（memory-tap 成品面直传） */
   memory?: ServerFaceMemory;

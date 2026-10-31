@@ -13,6 +13,7 @@ import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { handleUser } from "../../../commons/ipc-user";
 import { workflowAssetsDir } from "../../../commons/paths";
+import type { AutomationRunNodeRecord } from "@tianshu/protocol";
 import {
   graphNodeSchema,
   normalizeGraph,
@@ -809,7 +810,7 @@ export default class GraphRepository {
   async listRunNodes(
     runId: number,
     userId: number,
-  ): Promise<GraphRunNodeRow[]> {
+  ): Promise<AutomationRunNodeRecord[]> {
     const run = await prisma.automationRun.findFirst({
       where: { id: runId, graphId: { not: null } },
       select: { graphId: true },

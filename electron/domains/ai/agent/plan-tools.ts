@@ -171,13 +171,14 @@ const todoReadSchema = z.object({
   id: z.number().optional().describe("任务 id（#<id> 引用）；缺省=全量清单"),
 });
 
-/** todo_read 清单态：项目内全量任务 → 行摘要（跨项目行不可见） */
+/** todo_read 清单态：项目内全量任务 → 行摘要（跨项目行不可见）；
+ *  projectId 非空由 todo_read execute 入口守卫（非项目会话直接拒绝） */
 async function listItems(
   deps: PlanToolsDeps,
   ctx: ToolContext,
 ): Promise<string> {
   const rows = await deps.prisma.planItem.findMany({
-    where: { projectId: ctx.projectId },
+    where: { projectId: ctx.projectId as number },
     orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
   });
   if (rows.length === 0) {

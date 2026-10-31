@@ -73,6 +73,7 @@ export function extractPaths(row: { role: string; blocks: string }): string[] {
       block?.type === "tool_call" &&
       // canonical 归一（2026-10-29 改名批次）：历史 blocks 存老名 write_file，
       // 新块亦可能记模型模仿历史发的老名——两侧归一后判定
+      typeof block.toolName === "string" &&
       canonicalToolName(block.toolName) === "write" &&
       block.state === "done" &&
       typeof p === "string" &&

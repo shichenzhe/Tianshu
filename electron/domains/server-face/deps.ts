@@ -67,6 +67,7 @@ import type {
   WorkspaceSavePayload,
 } from "@tianshu/protocol";
 import type {
+  AutomationRunNodeRecord,
   AutomationRunPage,
   AutomationRunRecord,
   BackupListResult,

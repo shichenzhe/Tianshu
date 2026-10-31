@@ -1,0 +1,14 @@
+node_modules
+**/node_modules
+dist-electron
+src-react
+tests
+docs
+.superpowers
+.claude
+.git
+*.md
+apps/tianshu-mobile
+release
+coverage
+**/local.db*

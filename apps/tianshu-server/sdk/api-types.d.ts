@@ -1195,6 +1195,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/automation/runNodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 运行节点级执行详情（图 run，空集语义不暴露存在性） */
+        post: operations["AutomationController_runNodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/permission/listRemembered": {
         parameters: {
             query?: never;
@@ -1716,6 +1733,108 @@ export interface paths {
         put?: never;
         /** 删除备份 */
         post: operations["BackupController_delete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 邀请码申领设备身份（clientToken 仅此一次回显） */
+        post: operations["BackupController_claim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/invites/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量生成邀请码（admin） */
+        post: operations["BackupController_createInvites"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/invites/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 邀请码列表（admin，含核销状态） */
+        post: operations["BackupController_listInvites"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/invites/{code}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 撤销邀请码（admin，不拒删已用码） */
+        post: operations["BackupController_deleteInvite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/clients/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 已申领设备列表（admin，不回显 token） */
+        post: operations["BackupController_listClients"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backup/clients/{clientId}/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 踢除设备（admin，该设备名可重新申领） */
+        post: operations["BackupController_deleteClient"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2397,6 +2516,43 @@ export interface components {
             /** @description 当前页记录 */
             items: components["schemas"]["AutomationRunRecordDto"][];
         };
+        AutomationRunNodeDto: {
+            /** @description 节点行标识 */
+            id: number;
+            /** @description 所属运行标识 */
+            runId: number;
+            /** @description 节点 id（环图重入末轮为准） */
+            nodeId: string;
+            /** @description 节点名 */
+            nodeName: string | null;
+            /**
+             * @description 节点状态
+             * @enum {string}
+             */
+            status: "success" | "failed";
+            /** @description 渲染后完整输入（截 64KB） */
+            input: string | null;
+            /** @description 完整输出（截 64KB；failed 行为失败全貌文本） */
+            output: string | null;
+            /** @description 失败结构化 JSON 序列：{ code, message, detail } */
+            errorJson: string | null;
+            /** @description 工具调用摘要数组 JSON 序列：[{ name, ok, durationMs }] */
+            toolCallsJson: string | null;
+            /** @description 提示词 tokens */
+            promptTokens: number | null;
+            /** @description 补全 tokens */
+            completionTokens: number | null;
+            /** @description 耗时（ms） */
+            durationMs: number;
+            /** @description 开始时间（ISO） */
+            startedAt: string;
+            /** @description imageGen 产物相对数据根路径（移动端无文件通道暂不消费） */
+            outputImage: string | null;
+            /** @description 循环节点死信（onItemError=continue） */
+            errorOutput: string | null;
+            /** @description 降级继续标记 JSON 序列：{ code, message } */
+            fallbackJson: string | null;
+        };
         AutomationQueryDto: {
             /**
              * @description 页码，从1开始
@@ -2524,6 +2680,10 @@ export interface components {
              * @enum {string}
              */
             status?: "running" | "success" | "failed" | "skipped";
+        };
+        RunIdDto: {
+            /** @description 运行标识 */
+            runId: number;
         };
         PermissionRememberedWireDto: {
             /** @description 记忆行标识 */
@@ -2681,6 +2841,18 @@ export interface components {
         DownloadDto: {
             /** @description 分块序号（0 起） */
             seq: number;
+        };
+        ClaimDto: {
+            /** @description 邀请码（TS- 前缀 8 位防混淆字符集） */
+            inviteCode: string;
+            /** @description 设备名（1-64 位字母数字下划线连字符） */
+            deviceName: string;
+        };
+        CreateInvitesDto: {
+            /** @description 生成数量（1-50） */
+            count?: number;
+            /** @description 备注 */
+            note?: string;
         };
     };
     responses: never;
@@ -4833,6 +5005,37 @@ export interface operations {
             };
         };
     };
+    AutomationController_runNodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunIdDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: components["schemas"]["AutomationRunNodeDto"][];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
     PermissionController_listRemembered: {
         parameters: {
             query?: never;
@@ -5807,6 +6010,214 @@ export interface operations {
                         data?: {
                             /** @example true */
                             deleted: boolean;
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_claim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClaimDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            clientId: string;
+                            /** @description 后续调用凭据（不再回显） */
+                            clientToken: string;
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_createInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            invites: {
+                                /** @example TS-AB2XYZ9H */
+                                code: string;
+                                note?: string | null;
+                                createdAt: string;
+                                usedAt?: string | null;
+                                usedBy?: string | null;
+                            }[];
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_listInvites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            invites: {
+                                /** @example TS-AB2XYZ9H */
+                                code: string;
+                                note?: string | null;
+                                createdAt: string;
+                                usedAt?: string | null;
+                                usedBy?: string | null;
+                            }[];
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_deleteInvite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            /** @example true */
+                            removed: boolean;
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_listClients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            clients: {
+                                clientId: string;
+                                createdAt: string;
+                                invitedNote?: string | null;
+                            }[];
+                        };
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    BackupController_deleteClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            /** @example true */
+                            removed: boolean;
                         };
                         /** @example success */
                         message?: string;

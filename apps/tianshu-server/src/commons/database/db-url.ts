@@ -180,7 +180,7 @@ export function ensureDatabase(startDir = __dirname): void {
 
 /**
  * PG 首启建库（engine postgres 态，须先于 $connect）：派生 schema
- * `prisma/schema.prisma.postgresql` db push（幂等，无变更秒级）——其
+ * `prisma/pg/schema.prisma` db push（幂等，无变更秒级）——其
  * datasource url 即 env("DATABASE_URL")（派生脚本产物，无需临时改写）。
  * DATABASE_URL 经 spawn env 显式注入：绕开 configuration.ts 顶层对
  * process.env.DATABASE_URL 的无条件覆写（见文件头命名偏离记录）。schema
@@ -217,7 +217,7 @@ export function ensureDatabasePg(
         'push',
         '--skip-generate',
         '--schema',
-        join(root, 'prisma', 'schema.prisma.postgresql'),
+        join(root, 'prisma', 'pg', 'schema.prisma'),
       ],
       {
         env: { ...process.env, DATABASE_URL: url },

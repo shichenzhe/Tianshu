@@ -29,7 +29,7 @@ COPY apps/tianshu-server apps/tianshu-server
 # .dockerignore 另将 src/generated 挡在 context 外（双保险）
 RUN cd apps/tianshu-server && npx prisma generate \
  && npm run prisma:pg:derive && rm -rf src/generated \
- && npx prisma generate --schema prisma/schema.prisma.postgresql
+ && npx prisma generate --schema prisma/pg/schema.prisma
 RUN npm --prefix packages/tianshu-protocol run build \
  && npm --prefix packages/tianshu-core run build \
  && npm run build -w apps/tianshu-server

@@ -3,15 +3,19 @@
  * output 注入、表体逐字节不变、锚点失效防线、幂等重跑。
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const serverRoot = join(__dirname, '..', '..');
 const mainSchema = readFileSync(join(serverRoot, 'prisma/schema.prisma'), 'utf8');
+/** PG 变体唯一落点（prisma-migrate 批 Task 1：migrations 目录跟随 schema
+ * 位置且不可自定义，变体迁 prisma/pg/ 子目录，腾出 prisma/migrations 归
+ * SQLite） */
+const pgSchemaPath = join(serverRoot, 'prisma', 'pg', 'schema.prisma');
 
 function derive(): string {
   execFileSync('node', ['prisma/derive-pg.mjs'], { cwd: serverRoot });
-  return readFileSync(join(serverRoot, 'prisma/schema.prisma.postgresql'), 'utf8');
+  return readFileSync(pgSchemaPath, 'utf8');
 }
 
 describe('prisma:pg:derive 派生', () => {
@@ -22,8 +26,15 @@ describe('prisma:pg:derive 派生', () => {
     expect(pg).not.toContain('provider = "sqlite"');
     expect(pg).not.toContain('file:./local.db');
   });
-  it('generator 注入独立 output（prisma-pg 目录）', () => {
-    expect(derive()).toContain('output   = "../src/generated/prisma-pg"');
+  it('generator 注入独立 output（prisma-pg 目录；pg/ 子目录内多退一级）', () => {
+    expect(derive()).toContain('output   = "../../src/generated/prisma-pg"');
+  });
+  it('旧落点已拆除（变体唯一权威路径为 prisma/pg/schema.prisma）', () => {
+    derive();
+    expect(existsSync(pgSchemaPath)).toBe(true);
+    expect(
+      existsSync(join(serverRoot, 'prisma', 'schema.prisma.postgresql')),
+    ).toBe(false);
   });
   it('表体逐字节不变（显式剥离 datasource/generator 两个头块后与主 schema 全等）', () => {
     const pg = derive();

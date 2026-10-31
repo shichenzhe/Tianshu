@@ -317,7 +317,7 @@ server 主库整体切 PG（23 张业务表，首启自动 db push 建表），�
 
 ## 切换 PostgreSQL
 
-1. `cp prisma/schema.prisma.postgresql prisma/schema.prisma`
+1. `cp prisma/pg/schema.prisma prisma/schema.prisma`
 2. 修改 `src/config/config.yml` 的 `database.url` 为 postgres 连接串
    （如 `postgresql://user:pass@host:5432/db`）。运行时以 config.yml 为准，
    仅设置 `DATABASE_URL` 环境变量会被它覆盖而不生效

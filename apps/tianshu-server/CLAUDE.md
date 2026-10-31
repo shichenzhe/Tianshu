@@ -65,7 +65,7 @@ Fastify → JwtAuthGuard/RolesGuard → 拦截器前置（RequestLogger 等）�
 
 ### 数据库
 
-- Prisma ORM，默认 SQLite（`prisma/local.db`），PostgreSQL 变体 `prisma/schema.prisma.postgresql`
+- Prisma ORM，默认 SQLite（`prisma/local.db`），PostgreSQL 变体 `prisma/pg/schema.prisma`（派生脚本 `prisma/derive-pg.mjs` 产物）
 - 不使用外键（`relationMode = "prisma"`），关联在 service 层维护
 - 主要表：`user`、`operation_log`、`option`
 - 枚举 `UserType`：`admin` / `user`

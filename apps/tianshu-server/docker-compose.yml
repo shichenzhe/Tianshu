@@ -1,6 +1,6 @@
 # apps/tianshu-server/docker-compose.yml
-# 检索模式部署：server + PG 检索库（pgvector 官方镜像，含 FTS 所需全部能力）
-# 默认（SQLite 本地检索）部署不需要本文件——单独 docker run server 即可。
+# 全栈部署：server（SQLite 主库挂卷持久化）+ PG 检索库（可选能力，随栈提供）
+# 一键：docker compose up -d（构建慢首次 ~10 分钟；data 卷持久化 SQLite 主库）
 services:
   search-pg:
     image: pgvector/pgvector:pg17
@@ -17,19 +17,16 @@ services:
       retries: 10
     # 宿主直连调试时放开：ports: ["5432:5432"]
   server:
-    # 注意：本服务镜像构建暂不可用，待 Docker 治理批修复（本段保留为目标
-    # 形态）——Dockerfile 为独立仓时代产物（COPY package*.json + npm ci 按
-    # 单仓假定），monorepo 化后任何上下文都无法按现配方构建：server-only
-    # 上下文够不着 @tianshu/* workspace 包，根上下文会整体安装/构建整个
-    # monorepo 而非本服务。当下可用形态：宿主进程跑 server（build 后
-    # node dist/src/main.js），SEARCH_DB_URL 指向本 compose 起的 search-pg
-    # （宿主直连时放开上方 search-pg 的 ports 注释）。
-    # compose 相对路径以本文件目录为基：monorepo 根 = ../..（非 ..=apps/）
     build:
       context: ../..
       dockerfile: apps/tianshu-server/Dockerfile
     environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      # SQLite 主库落数据卷（PrismaService 的 TIANSHU_DB_URL 覆盖机制）
+      TIANSHU_DB_URL: file:/app/data/local.db
       SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search
+    volumes:
+      - server-data:/app/data
     depends_on:
       search-pg:
         condition: service_healthy
@@ -38,3 +35,4 @@ services:
 
 volumes:
   search-pg-data: {}
+  server-data: {}

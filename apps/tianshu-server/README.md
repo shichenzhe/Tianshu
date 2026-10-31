@@ -256,22 +256,25 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 
 默认检索走本机 SQLite（内存 BM25 + 余弦）。配置 env `SEARCH_DB_URL`
 （`postgres://…`）后，检索层改指 PostgreSQL 检索库（tsvector 全文 +
-pgvector 向量，Supabase hybrid 配方同构）：
+pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
+「Docker 部署（compose 一键）」：
 
-- `docker compose up -d search-pg` 即起 pgvector 检索库
-  （`pgvector/pgvector:pg17`，即刻可用）；compose 中的 `server` 服务**镜像
-  构建暂不可用**——Dockerfile 为独立仓时代产物（按单仓假定 `npm ci` 构建），
-  monorepo 化后任何上下文下都无法按现配方构建（server-only 上下文够不着
-  `@tianshu/*` workspace 包；根上下文则会整体安装/构建 monorepo 而非本
-  服务），修复待 Docker 治理批（`server:` 段保留为目标形态）。当下可用
-  形态：宿主/裸机部署 server（`npm run build` 后 `node dist/src/main.js`），
-  env `SEARCH_DB_URL` 指向 compose 起的检索库（本机直连需放开 search-pg
-  的 ports 注释：`postgres://tianshu:tianshu_search@localhost:5432/
-  tianshu_search`）
 - **单真源语义**：检索库独立指定时，`vectorize` 入库直写检索库，主库
   不留 vectorChunk 副本；取消配置切回本地后旧数据不迁移、需重新入库
 - 仅支持 `postgres://`/`postgresql://` 连接串；连接失败/扩展缺失时
   检索节点显式报错（不静默降级）
+
+## Docker 部署（compose 一键）
+
+`docker compose up -d` 起 server + PG 检索库全栈：
+
+- server 镜像经 monorepo 根 context 构建（vendor 内嵌 @tianshu/* 共享包），
+  `dist/src/main.js` 直跑，`/actuator/health` 探活
+- **SQLite 主库持久化**：`TIANSHU_DB_URL=file:/app/data/local.db` 落
+  `server-data` 卷——容器重建/升级数据不丢
+- **PG 检索模式默认开启**（`SEARCH_DB_URL` 已串联 search-pg 服务）；不启用
+  检索库可删 server 服务的该 env 与 depends_on，退回本地内存检索
+- 单真源语义与 postgres:// scheme 限制见上一节「PG 检索模式」
 
 ## 目录结构
 

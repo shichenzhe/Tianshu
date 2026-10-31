@@ -154,11 +154,13 @@ const BASELINE_MIGRATION = '0_init';
  * 不回显查询结果（仅 "Script executed successfully."），布尔答案经退出码
  * 编码——肯定 → 正常执行退出 0；否定 → 制造确定性运行期报错退出 1
  * （SQLite 除零不报错得 NULL，改用 json_extract 喂非法 JSON 制错；PG 除零
- * 即报错。PG LIKE 显式 `\_` 转义防通配符误伤）。双端 query 形态按
- * brief：sqlite_master / information_schema.tables（public 业务表）。 */
+ * 即报错。双端 LIKE 均显式 `\_` 转义防 `_` 单字符通配符误伤业务表计数——
+ * PG 默认转义符即反斜杠，SQLite 无默认须 ESCAPE 子句显式声明）。双端
+ * query 形态按 brief：sqlite_master / information_schema.tables（public
+ * 业务表）。 */
 const TABLES_EXIST_PROBE: Record<DbEngine, string> = {
   sqlite:
-    "SELECT json_extract(CASE WHEN (SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE '_prisma%') > 0 THEN '{\"ok\":1}' ELSE 'oops' END, '$.ok');",
+    "SELECT json_extract(CASE WHEN (SELECT count(*) FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_prisma%' ESCAPE '\\') > 0 THEN '{\"ok\":1}' ELSE 'oops' END, '$.ok');",
   postgres:
     "SELECT 1 / count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name NOT LIKE '\\_prisma%';",
 };
@@ -329,9 +331,13 @@ export function ensureDatabase(startDir = __dirname): void {
  */
 export const PG_MIGRATE_RETRY_DEFAULTS = { attempts: 3, backoffMs: 2000 };
 
-/** 连接类失败特征（错误消息判读）：connect 系错误码/超时——prisma
- * P1001/P1002 等不可达错误均携带其中之一 */
-const PG_CONNECT_FAILURE_RE = /ECONNREFUSED|connect|timed?\s*out|timeout/i;
+/** 连接类失败特征（错误消息判读，终审收尾实测修正）：prisma CLI 对拒连
+ * PG 端口的真实输出是 `P1001 … Can't reach database server at \`host:port\``
+ * ——不含 connect/ECONNREFUSED 字样（原注释断言有误，P1001/P1002 码与
+ * can't reach/unreachable 文本须显式入列）；传输层失败（pg 驱动部分路径）
+ * 另有 `connect ECONNREFUSED` 形态，ENOTFOUND 与超时特征一并覆盖 */
+const PG_CONNECT_FAILURE_RE =
+  /ECONNREFUSED|ENOTFOUND|connect|timed?\s*out|timeout|P1001|P1002|can'?t reach|unreachable/i;
 
 export function ensureDatabasePg(
   startDir: string,

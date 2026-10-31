@@ -250,7 +250,7 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 **DB 落点覆盖**：env `TIANSHU_DB_URL`（`file:` 绝对路径）可覆盖默认
 `prisma/local.db`——server 经 PrismaClient `datasources` 运行时消费
 （`src/commons/database/db-url.ts`），首启缺库自动 `prisma migrate deploy`
-建表（journal 版本化增量；存量库首启自动 baseline resolve）。
+建表（journal 版本化增量；PG 模式存量库首启自动 baseline resolve）。
 
 ### schema 变更工作流（migrate 体系）
 
@@ -258,8 +258,11 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 ② `npm run prisma:migrate` 与 `npm run prisma:migrate:pg` 双端各生成迁移
 ③ 迁移 SQL 评审后与代码同 commit（**双端成对提交**）。基调向下兼容
 （加法）；破坏性变更须显式迁移+人工评审，禁 `--accept-data-loss`。
-生产启动自动 `migrate deploy`（journal 幂等增量；存量库首启自动
-baseline resolve）。测试桩（prisma:reset/test-db）保留 db push 快速通道。
+生产启动自动 `migrate deploy`（journal 幂等增量；PG 存量库首启自动
+baseline resolve）。注意 SQLite 存量库（快路径）升级时不会自动跑迁移，
+须手动 `npx prisma migrate deploy --schema prisma/schema.prisma`（或重建
+卷）——PG 模式启动自动 deploy。测试桩（prisma:reset/test-db）保留 db push
+快速通道。
 
 ## PG 检索模式（可选）
 
@@ -285,7 +288,9 @@ pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
 - server 镜像经 monorepo 根 context 构建（vendor 内嵌 @tianshu/* 共享包），
   `dist/src/main.js` 直跑，`/actuator/health` 探活
 - **SQLite 主库持久化**：`TIANSHU_DB_URL=file:/app/data/local.db` 落
-  `server-data` 卷——容器重建/升级数据不丢
+  `server-data` 卷——容器重建/升级数据不丢；SQLite 存量库（快路径）升级时
+  不会自动跑迁移，须进容器手动 `npx prisma migrate deploy --schema
+  prisma/schema.prisma`（或重建卷）——PG 模式启动自动 deploy
 - **PG 检索模式默认开启**（`SEARCH_DB_URL` 已串联 search-pg 服务）；不启用
   检索库可删 server 服务的该 env 与 depends_on，退回本地内存检索
 - 单真源语义与 postgres:// scheme 限制见上一节「PG 检索模式」
@@ -326,12 +331,17 @@ server 主库整体切 PG（23 张业务表，首启自动 `migrate deploy` 建�
 
 ## 切换 PostgreSQL
 
-1. 修改 `src/config/config.yml` 的 `database.url` 为 postgres 连接串
-   （如 `postgresql://user:pass@host:5432/db`）。运行时以 config.yml 为准，
-   仅设置 `DATABASE_URL` 环境变量会被它覆盖而不生效
-2. Prisma CLI（migrate）另需 `DATABASE_URL` 环境变量：
-   `export DATABASE_URL="postgresql://user:pass@host:5432/db"`，或写入 `.env` 文件
-3. 迁移命令（migrate 按 schema 同级目录解析 `prisma/pg/migrations`）：
+1. **运行时切换（唯一开关）**：
+   `export TIANSHU_DB_URL="postgresql://user:pass@host:5432/db"`（与上文
+   compose 主库 PG 模式同款 env）——引擎判定/PrismaClient 装载/首启
+   `migrate deploy` 全部取此 env，启动即自动建表并增量
+2. `src/config/config.yml` 的 `database.url` **不是运行时开关**：顶层加载时
+   仅无条件覆写 `process.env.DATABASE_URL`（`configuration.ts`），不参与
+   引擎选择，切库无需改它；`DATABASE_URL` 只在手工跑 Prisma CLI（migrate）
+   时有用：`export DATABASE_URL="postgresql://user:pass@host:5432/db"`，
+   或写入 `.env` 文件
+3. 迁移命令（migrate 按 schema 同级目录解析 `prisma/pg/migrations`；boot
+   自动 deploy，此处为手工/预演通道）：
 
    ```bash
    npx prisma generate --schema prisma/pg/schema.prisma

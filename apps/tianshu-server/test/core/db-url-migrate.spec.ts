@@ -52,12 +52,6 @@ function callAt(index: number): [
 }
 
 const ok = { status: 0, stdout: '', stderr: '' };
-const refused = {
-  status: 1,
-  stdout: '',
-  stderr:
-    "Error: P1001: Can't reach database server … connect ECONNREFUSED 127.0.0.1:5432",
-};
 
 function restoreEnv(original: string | undefined): void {
   if (original === undefined) {
@@ -194,7 +188,7 @@ describe('needsBaselineResolve（探测布尔契约，sqlite 直测）', () => {
       '--stdin',
     ]);
     expect(options.input).toContain('sqlite_master');
-    expect(options.input).toContain("name NOT LIKE '_prisma%'");
+    expect(options.input).toContain("name NOT LIKE '\\_prisma%' ESCAPE '\\'");
   });
 
   it('存量表 + journal 空（no such table）→ true', () => {

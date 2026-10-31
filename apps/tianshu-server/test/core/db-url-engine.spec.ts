@@ -86,10 +86,15 @@ describe('ensureDatabasePg 连接类失败有界重试（终审 F2，migrate 契
   const spawnSync = require('node:child_process')
     .spawnSync as jest.Mock;
   const RETRY_FAST = { attempts: 3, backoffMs: 1 };
+  /** 真实 P1001 文本（终审收尾 live 实测拒连端口的 prisma CLI 输出形状——
+   * 无 connect/ECONNREFUSED 字样，regex 须显式列 P1001 码/can't reach 文本；
+   * 传输层 connect ECONNREFUSED 形态另见重试耗尽用例） */
   const refused = (status: 1 | null = 1) => ({
     status,
     stdout: '',
-    stderr: 'Error: P1001: Can\'t reach database server … connect ECONNREFUSED 127.0.0.1:5432',
+    stderr:
+      "Error: P1001\n\nCan't reach database server at `127.0.0.1:5432`\n" +
+      'Please make sure your database server is running at `127.0.0.1:5432`.',
   });
   const ok = { status: 0, stdout: '', stderr: '' };
 
@@ -140,9 +145,13 @@ describe('ensureDatabasePg 连接类失败有界重试（终审 F2，migrate 契
     );
     expect(spawnSync).toHaveBeenCalledTimes(3);
   });
-  it('连接类失败重试耗尽仍失败 → 抛（attempts 轮后止步，每轮死于首个探测）', () => {
+  it('连接类失败重试耗尽仍失败 → 抛（attempts 轮后止步，每轮死于首个探测；此处用传输层形态 `connect ECONNREFUSED`——pg 驱动部分路径真实输出的另一种连接失败面）', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@127.0.0.1:5432/d';
-    spawnSync.mockReturnValue(refused());
+    spawnSync.mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'Error: connect ECONNREFUSED 127.0.0.1:5432',
+    });
     expect(() => ensureDatabasePg(__dirname, RETRY_FAST)).toThrow(
       /ECONNREFUSED/,
     );

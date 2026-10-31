@@ -38,6 +38,7 @@ import { useAiUiStore } from "../../src-react/domains/ai/store/ai-ui.store";
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   // 内存态归位，防用例间串台（panelMaximized）
   useAiUiStore.setState({ panelMaximized: false });
 });
@@ -85,6 +86,22 @@ describe("DetailPanel 放大/还原", () => {
     expect(cls).toContain("inset-0");
     expect(cls).toContain("z-[60]");
     expect(cls).not.toContain("w-[340px]");
+  });
+
+  it("Windows 最大化从自绘标题栏下方开始，不遮挡 tab 工具行", async () => {
+    vi.stubGlobal("platform", "win32");
+    const { container } = await openPanel();
+    fireEvent.click(
+      within(container).getByRole("button", {
+        name: "chat:detailPanel.maximize",
+      }),
+    );
+    const cls = shellOf(container).className;
+    expect(cls).toContain("top-8");
+    expect(cls).toContain("bottom-0");
+    expect(cls).toContain("left-0");
+    expect(cls).toContain("right-0");
+    expect(cls).not.toContain("inset-0");
   });
 
   it("最大化后再点还原 → store false + 回到 right-0 z-[55] 穿透旁挂", async () => {

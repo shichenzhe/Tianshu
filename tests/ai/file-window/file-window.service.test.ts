@@ -169,6 +169,15 @@ describe("FileWindowService", () => {
     expect(opts).toBeTruthy();
     // 窗口标题区分主窗「天枢」（spec §13 项 1）
     expect((opts as { title: string }).title).toBe("天枢 文件浏览器");
+    // Windows 使用 hidden + 自绘标题栏，无原生 overlay
+    if (process.platform === "win32") {
+      const frame = opts as {
+        titleBarStyle?: string;
+        titleBarOverlay?: unknown;
+      };
+      expect(frame.titleBarStyle).toBe("hidden");
+      expect(frame.titleBarOverlay).toBe(undefined);
+    }
     // 开窗守卫：window.open 恒拒内开（放行域转外开）
     expect(win.handlers.open({ url: "https://x" })).toEqual({ action: "deny" });
     // 页面加载完成后投递 deliver（mock 需手动触发 did-finish-load）

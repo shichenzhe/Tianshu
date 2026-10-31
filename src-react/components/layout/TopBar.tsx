@@ -30,6 +30,7 @@ interface TopBarProps {
 
 export default function TopBar({ leftSlot }: TopBarProps) {
   const isMac = window.platform === "darwin";
+  const isWindows = window.platform === "win32";
   const { t } = useTranslation(["common"]);
   const sidebarCollapsed = useAiUiStore((s) => s.sidebarCollapsed);
   const rightWidth = useAiUiStore((s) =>
@@ -46,7 +47,7 @@ export default function TopBar({ leftSlot }: TopBarProps) {
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-50 h-11 flex pr-0"
+      className={`fixed ${isWindows ? "top-8" : "top-0"} left-0 right-0 z-50 h-11 flex pr-0`}
       style={dragStyle}
     >
       {/* 背景层三段（与下方栏位对齐）：左=侧栏、中=主面板、右=产物面板；
@@ -87,7 +88,8 @@ export default function TopBar({ leftSlot }: TopBarProps) {
         className="absolute inset-0 flex items-center justify-between"
         style={dragStyle}
       >
-        {/* 左侧：Logo（Windows）+ 插槽；macOS 让出红绿灯区域。
+        {/* 左侧：Logo（Linux）+ 插槽；macOS 让出红绿灯区域，Windows/macOS
+            的 Logo 统一在侧栏首行。
             容器宽度与背景左段（侧栏宽）对齐——页面顶行（中段）从主面板
             左缘起渲染，不侵入侧栏背景；折叠时收缩为按钮组本身宽
             （宽度 w-64→auto 不可插值，瞬切——与右段同先例）。
@@ -103,7 +105,7 @@ export default function TopBar({ leftSlot }: TopBarProps) {
             className={`flex items-center gap-1 ${isMac ? "pl-20" : "pl-2"}`}
             style={noDragStyle}
           >
-            {!isMac && (
+            {!isMac && !isWindows && (
               <div className="flex items-center gap-2 mr-1">
                 <AppLogo className="w-5 h-5" />
                 <span className="text-sm font-semibold text-foreground tracking-tight select-none">
@@ -121,22 +123,21 @@ export default function TopBar({ leftSlot }: TopBarProps) {
         {/* 中段：页面顶行（无注册页面留空，左右仍 justify-between） */}
         <PageHeaderHost />
 
-        {/* 右侧：Windows 窗口控制区；minWidth 与背景右段（产物面板宽）
+        {/* 右侧：Linux 窗口控制区；minWidth 与背景右段（产物面板宽）
             对齐——页面顶行（中段）不延伸到产物面板背景上方（与左侧
-            侧栏段对称），面板收起时收缩为内容本身宽。
-            容器 drag：控制区占位周边空白可拖拽窗口（窗口控制按钮由
-            main.ts overlay 绘制在更高层，点击不受影响）；交互块由
-            PageHeaderRightHost 自行标 no-drag */}
+            侧栏段对称），面板收起时收缩为内容本身宽。Windows 使用独立
+            系统标题栏，无需内容区按钮占位。Linux overlay 在更高层；交互块
+            由 PageHeaderRightHost 自行标 no-drag */}
         <div
           className="flex h-full shrink-0 items-center justify-end pr-2"
           style={{ ...dragStyle, minWidth: rightWidth }}
         >
           {/* 页面顶行右段（右侧面板标题等）：靠左渲染，窗口控制保持贴右 */}
           <PageHeaderRightHost />
-          {/* Windows 窗口控制区分隔线（macOS 无） */}
-          {!isMac && <div className="w-px h-5 bg-border" />}
-          {/* Windows Window Controls Placeholder - 保持与 main.ts overlay 一致（macOS 不渲染） */}
-          {!isMac && <div className="w-[138px] h-full" />}
+          {/* Linux 窗口控制区分隔线（Windows 独立系统栏/macOS 无） */}
+          {!isMac && !isWindows && <div className="w-px h-5 bg-border" />}
+          {/* Linux 原生窗口按钮占位（Windows 独立系统栏/macOS 不渲染） */}
+          {!isMac && !isWindows && <div className="w-[138px] h-full" />}
         </div>
       </div>
     </div>

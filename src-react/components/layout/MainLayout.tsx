@@ -21,6 +21,7 @@ export default function MainLayout() {
   const location = useLocation();
   const { t } = useTranslation(["layout"]);
   const { user, isLoginValid, reset } = useUserStore();
+  const isWindows = window.platform === "win32";
 
   // 判断是否显示导航布局
   const shouldShowNav =
@@ -84,7 +85,9 @@ export default function MainLayout() {
 
   return (
     <div className="app-container">
-      {shouldShowNav && <TopBar leftSlot={<AiTopbarActions />} />}
+      {shouldShowNav && (
+        <TopBar leftSlot={isWindows ? undefined : <AiTopbarActions />} />
+      )}
 
       <div
         className="main-content flex"
@@ -107,13 +110,13 @@ export default function MainLayout() {
       <style>{`
         .app-container {
           width: 100%;
-          height: 100vh;
+          height: ${isWindows ? "100%" : "100vh"};
           overflow: hidden;
         }
 
         .main-content {
-          height: calc(100vh - ${shouldShowNav ? 44 : 0}px);
-          overflow: hidden;
+          height: calc(${isWindows ? "100%" : "100vh"} - ${shouldShowNav ? 44 : 0}px);
+          overflow: ${isWindows ? "visible" : "hidden"};
         }
       `}</style>
     </div>

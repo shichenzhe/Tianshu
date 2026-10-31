@@ -8,8 +8,8 @@
  * mock 骨架同 tests/layout/main-layout.test.tsx：i18n 直返 key、
  * __APP_VERSION__ / window.platform 构建注入全局、AppLogo stub
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
 
 vi.hoisted(() => {
   Object.defineProperty(globalThis, "__APP_VERSION__", {
@@ -31,7 +31,9 @@ vi.mock("react-i18next", async (importOriginal) => {
     useTranslation: () => ({ t: (key: string) => key }),
   };
 });
-vi.mock("@/components/common/AppLogo", () => ({ default: () => null }));
+vi.mock("@/components/common/AppLogo", () => ({
+  default: () => <div data-testid="app-logo" />,
+}));
 
 import TopBar from "../../src-react/components/layout/TopBar";
 import { usePageHeaderStore } from "../../src-react/components/layout/page-header.store";
@@ -40,6 +42,10 @@ import { usePageHeader } from "../../src-react/components/layout/page-header.sto
 /** 右段背景层（TopBar 三段背景的第三段）class 列表 */
 const rightClassList = () =>
   document.querySelector("[data-topbar-right-bg]")!.classList;
+
+beforeEach(() => {
+  window.platform = "darwin";
+});
 
 afterEach(() => {
   cleanup();
@@ -72,6 +78,26 @@ describe("usePageHeader 写入抖动（M11）", () => {
     expect(usePageHeaderStore.getState().slot).not.toBeNull();
     unmount();
     expect(usePageHeaderStore.getState().slot).toBeNull();
+  });
+});
+
+describe("TopBar 平台左侧布局", () => {
+  it("Windows 不重复 Logo 块，操作插槽按 pl-2 对齐侧栏", () => {
+    window.platform = "win32";
+    const { container } = render(
+      <TopBar leftSlot={<button data-testid="left-action">折叠</button>} />,
+    );
+    expect(screen.queryByTestId("app-logo")).toBeNull();
+    expect(screen.queryByText("common:appName")).toBeNull();
+    expect(screen.queryByText("0.0.0-test")).toBeNull();
+
+    const action = screen.getByTestId("left-action");
+    const paddedContainer = action.parentElement!;
+    expect(paddedContainer.classList).toContain("pl-2");
+    expect(paddedContainer.classList).not.toContain("pl-20");
+    expect(paddedContainer.parentElement!.classList).toContain("w-64");
+    expect(container.querySelector('[class*="w-[138px]"]')).toBeNull();
+    expect(container.firstElementChild!.classList).toContain("top-8");
   });
 });
 

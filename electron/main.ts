@@ -10,6 +10,10 @@ import WindowService from "./commons/window.service.js";
 import FileWindowService from "./domains/ai/file-window/file-window.service.js";
 import { Constants } from "./Constants.js";
 import { fixPathForGuiProcess } from "./commons/path-env.js";
+import {
+  shouldHideMenuBar,
+  windowFrameOptions,
+} from "./commons/window-frame.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -95,30 +99,12 @@ function createWindow() {
       // 资料库预览 <webview>（html/pdf/音视频走内置 Chromium 渲染，spec 裁定 6）
       webviewTag: true,
     },
-    // macOS 用 hidden（红绿灯浮层），布局上单独留一行给红绿灯；
-    // Windows 生产用 hidden + overlay（自绘窗口按钮），开发用 default。
-    titleBarStyle:
-      process.platform !== "darwin" && process.env.NODE_ENV === "development"
-        ? "default"
-        : "hidden",
-    // macOS 红绿灯垂直对齐 TopBar(h-11=44px) 内容行：钮径约 12px，
-    // y=16 使钮中心落在 22px——与 TopBar 左段按钮组（h-7 居中）同水平
-    // 线；x 取系统默认左缘。Windows 不适用（overlay 自绘）不传
-    ...(process.platform === "darwin"
-      ? { trafficLightPosition: { x: 13, y: 16 } }
-      : {}),
-    titleBarOverlay:
-      process.platform === "darwin"
-        ? undefined
-        : {
-            color: "#ffffff", // 白色背景
-            symbolColor: "#000000", // 黑色图标
-            height: 44, // 控制按钮高度，与前端 TopBar h-11 (44px) 保持一致
-          },
+    // Windows 使用独立自绘标题栏；macOS 红绿灯；Linux 原生 overlay。
+    ...windowFrameOptions(process.platform, process.env.NODE_ENV),
   });
 
-  //生产环境隐藏菜单栏
-  if (process.env.NODE_ENV !== "development") {
+  // Windows 开发/生产均隐藏菜单；其他平台沿用生产隐藏策略
+  if (shouldHideMenuBar(process.platform, process.env.NODE_ENV)) {
     win.setMenuBarVisibility(false);
   }
 

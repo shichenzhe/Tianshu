@@ -10,7 +10,7 @@
  * GlobalSidebar/UserMenu/AppLogo 重依赖 stub、user.store 固定有效登录态
  * （verifyToken resolve）
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
@@ -95,6 +95,10 @@ function renderLayout(pathname: string): void {
   );
 }
 
+beforeEach(() => {
+  window.platform = "darwin";
+});
+
 afterEach(cleanup);
 
 describe("顶栏左侧按钮注入（全局侧边栏配套）", () => {
@@ -106,6 +110,32 @@ describe("顶栏左侧按钮注入（全局侧边栏配套）", () => {
   it("AI 路由 /module/ai → 三按钮注入", () => {
     renderLayout("/module/ai");
     expect(screen.getByTestId("topbar-actions")).toBeTruthy();
+  });
+});
+
+describe("Windows 标题栏接管操作按钮", () => {
+  it("Windows 下方 TopBar 不再重复注入 AiTopbarActions", () => {
+    window.platform = "win32";
+    renderLayout("/module/ai");
+    expect(screen.queryByTestId("topbar-actions")).toBeNull();
+  });
+});
+
+describe("Windows 自绘标题栏高度适配", () => {
+  it("Windows 使用父容器高度，非 Windows 保持视口高度", () => {
+    window.platform = "win32";
+    renderLayout("/module/ai/new");
+    let style = document.querySelector("style")?.textContent ?? "";
+    expect(style).toContain("height: 100%");
+    expect(style).toContain("height: calc(100% - 44px)");
+    expect(style).toContain("overflow: visible");
+    cleanup();
+
+    window.platform = "darwin";
+    renderLayout("/module/ai/new");
+    style = document.querySelector("style")?.textContent ?? "";
+    expect(style).toContain("height: 100vh");
+    expect(style).toContain("height: calc(100vh - 44px)");
   });
 });
 

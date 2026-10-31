@@ -25,6 +25,10 @@ vi.mock("../../electron/commons/Log", () => ({
 import { app, BrowserWindow, globalShortcut, ipcMain } from "electron";
 import Log from "../../electron/commons/Log";
 import WindowService from "../../electron/commons/window.service";
+import {
+  IPC_EVENT_ALLOWLIST,
+  IPC_INVOKE_ALLOWLIST,
+} from "../../electron/commons/ipc-channels";
 
 /** 取指定通道的已注册 IPC handler */
 function ipcHandlerOf(channel: string) {
@@ -66,6 +70,34 @@ function fullScreenWindow(fullScreen: boolean) {
     setFullScreen: vi.fn((next: boolean) => {
       fullScreen = next;
     }),
+  };
+}
+
+/** 自绘标题栏控制桩：原生事件可手动触发，最大化状态随操作变化 */
+function controlWindow(initialMaximized = false) {
+  let maximized = initialMaximized;
+  const listeners = new Map<string, () => void>();
+  return {
+    minimize: vi.fn(),
+    maximize: vi.fn(() => {
+      maximized = true;
+    }),
+    unmaximize: vi.fn(() => {
+      maximized = false;
+    }),
+    isMaximized: vi.fn(() => maximized),
+    close: vi.fn(),
+    on: vi.fn((event: string, listener: () => void) => {
+      listeners.set(event, listener);
+    }),
+    isDestroyed: vi.fn(() => false),
+    webContents: {
+      send: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+    },
+    emit(event: string) {
+      listeners.get(event)?.();
+    },
   };
 }
 
@@ -137,6 +169,86 @@ describe("全屏切换 IPC", () => {
     expect(() =>
       ipcHandlerOf("window:toggleFullScreen")({ sender: {} }),
     ).not.toThrow();
+  });
+});
+
+describe("自绘标题栏窗口 IPC", () => {
+  it("注册控制通道并开放最大化状态事件", () => {
+    new WindowService(() => null);
+    for (const channel of [
+      "window:getState",
+      "window:minimize",
+      "window:toggleMaximize",
+      "window:close",
+    ]) {
+      expect(IPC_INVOKE_ALLOWLIST).toContain(channel);
+      expect(ipcMain.handle).toHaveBeenCalledWith(
+        channel,
+        expect.any(Function),
+      );
+    }
+    expect(IPC_EVENT_ALLOWLIST).toContain("window:stateChanged");
+  });
+
+  it("getState 返回发送者窗口状态且只绑定一次原生事件", () => {
+    new WindowService(() => null);
+    const win = controlWindow(true);
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(win as never);
+    const event = { sender: {} };
+    expect(ipcHandlerOf("window:getState")(event)).toEqual({
+      maximized: true,
+    });
+    expect(ipcHandlerOf("window:getState")(event)).toEqual({
+      maximized: true,
+    });
+    expect(win.on).toHaveBeenCalledTimes(2);
+
+    win.unmaximize();
+    win.emit("unmaximize");
+    expect(win.webContents.send).toHaveBeenCalledWith("window:stateChanged", {
+      maximized: false,
+    });
+    win.maximize();
+    win.emit("maximize");
+    expect(win.webContents.send).toHaveBeenLastCalledWith(
+      "window:stateChanged",
+      { maximized: true },
+    );
+  });
+
+  it("minimize 与 close 仅操作发送者窗口", () => {
+    new WindowService(() => null);
+    const win = controlWindow();
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(win as never);
+    const event = { sender: {} };
+    ipcHandlerOf("window:minimize")(event);
+    ipcHandlerOf("window:close")(event);
+    expect(win.minimize).toHaveBeenCalledTimes(1);
+    expect(win.close).toHaveBeenCalledTimes(1);
+  });
+
+  it("toggleMaximize 切换并返回最新状态", () => {
+    new WindowService(() => null);
+    const win = controlWindow();
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(win as never);
+    const handler = ipcHandlerOf("window:toggleMaximize");
+    expect(handler({ sender: {} })).toEqual({ maximized: true });
+    expect(win.maximize).toHaveBeenCalledTimes(1);
+    expect(handler({ sender: {} })).toEqual({ maximized: false });
+    expect(win.unmaximize).toHaveBeenCalledTimes(1);
+  });
+
+  it("发送者无对应窗口时所有控制通道安全返回", () => {
+    new WindowService(() => null);
+    vi.mocked(BrowserWindow.fromWebContents).mockReturnValue(null);
+    for (const channel of [
+      "window:getState",
+      "window:minimize",
+      "window:toggleMaximize",
+      "window:close",
+    ]) {
+      expect(() => ipcHandlerOf(channel)({ sender: {} })).not.toThrow();
+    }
   });
 });
 

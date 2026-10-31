@@ -12,7 +12,7 @@
  * tab 条贴顶（R24）与红绿灯垂直对齐（R27）：行容器 h-11（44px）+
  * items-center，tab 高 h-7 不变居中——按钮中心 y=22 与 mac 红绿灯
  *（main.ts trafficLightPosition y=16、钮径约 12px → 中心 22）同水平
- * 线；行高取 TopBar h-11 同款，Windows titleBarOverlay 高 44 恰合。
+ * 线；行高取 TopBar h-11 同款，Linux titleBarOverlay 高 44 恰合。
  * 穿透 TopBar（R26）：正常态面板本体同样 fixed 顶到窗口顶，盖掉 TopBar
  * 右段 44px 空带——tab 条贴 y=0（理由与裁剪实测见 return 处注释）。
  */
@@ -69,6 +69,8 @@ export default function DetailPanel({
   const panelMaximized = useAiUiStore((s) => s.panelMaximized);
   const setPanelMaximized = useAiUiStore((s) => s.setPanelMaximized);
   const isMac = window.platform === "darwin";
+  const isWindows = window.platform === "win32";
+  const isLinux = window.platform === "linux";
 
   // 顶部工具栏右段宽度注册（原 ArtifactsPanel 语义原样迁移）：340 与本
   // 面板列宽 w-[340px] 同步维护
@@ -190,8 +192,12 @@ export default function DetailPanel({
         data-detail-panel=""
         className={
           panelMaximized
-            ? "fixed inset-0 z-[60] flex flex-col bg-background"
-            : "fixed right-0 top-0 z-[55] h-full w-[340px] flex flex-col border-l border-border/50 bg-background"
+            ? isWindows
+              ? "fixed left-0 right-0 top-8 bottom-0 z-[60] flex flex-col bg-background"
+              : "fixed inset-0 z-[60] flex flex-col bg-background"
+            : isWindows
+              ? "fixed right-0 top-8 z-[55] h-[calc(100%_-_2rem)] w-[340px] flex flex-col border-l border-border/50 bg-background"
+              : "fixed right-0 top-0 z-[55] h-full w-[340px] flex flex-col border-l border-border/50 bg-background"
         }
         style={
           panelMaximized
@@ -204,14 +210,14 @@ export default function DetailPanel({
             使按钮中心 y=22 与 mac 红绿灯中心同水平线（trafficLightPosition
             y=16 + 钮径/2 ≈ 22），行高取 TopBar h-11 同款；tab h-7 不变。
             最大化态 macOS 让出红绿灯区域（pl-20 让位口径不变）；
-            Windows/Linux 让出原生窗口按钮区：titleBarOverlay（main.ts，
-            非 darwin 恒有，高 44 与本行 h-11 对齐）绘制在 web 内容
-            之上，tab 条行尾「+」/放大按钮正落其下——照抄 TopBar 右段
-            既有占位口径（pr-2 + w-[138px] 控制区 = 146px，TopBar L128-137） */}
+            Windows 使用独立自绘标题栏，面板从其下方开始且不留按钮占位；
+            Linux 让出原生 titleBarOverlay（高 44 与本行 h-11 对齐），
+            照抄 TopBar 右段既有占位口径（pr-2 + w-[138px] 控制区 =
+            146px，TopBar L128-137） */}
         <div
           className={`flex h-11 items-center gap-1 border-b border-border/50 px-2 ${
             panelMaximized && isMac ? "pl-20" : ""
-          } ${!isMac ? "pr-[146px]" : ""}`}
+          } ${isLinux ? "pr-[146px]" : ""}`}
         >
           <DetailTabBar
             tabs={tabs}

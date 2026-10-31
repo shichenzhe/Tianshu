@@ -245,7 +245,9 @@ export default function FileWindowView() {
   );
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div
+      className={`flex flex-col bg-background ${window.platform === "win32" ? "h-full" : "h-screen"}`}
+    >
       <FileWindowTabBar />
       {tabs.length > 0 ? (
         <div className="flex min-h-0 flex-1">

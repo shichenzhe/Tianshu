@@ -12,8 +12,8 @@
  * tab 点击激活——tab 条横滚溢出的兜底入口。
  * 平台让位（照 DetailPanel 顶行口径）：darwin pl-20 让红绿灯
  * （trafficLightPosition，行高 h-11 使按钮中心与红绿灯同水平线）；
- * 非 darwin pr-[146px] 让 titleBarOverlay 窗口按钮区（pr-2 + w-[138px]
- * 控制区 = 146px，TopBar 右段口径）。窗口平台渲染期读取（测试可注入）。
+ * linux pr-[146px] 让 titleBarOverlay 窗口按钮区；win32 使用独立
+ * default 系统标题栏，内容区不留按钮占位。窗口平台渲染期读取（测试可注入）。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -116,6 +116,7 @@ function OpenDocumentsMenu() {
 export default function FileWindowTabBar() {
   const { t } = useTranslation(["chat"]);
   const isMac = window.platform === "darwin";
+  const isLinux = window.platform === "linux";
   const tabs = useFileWindowStore((s) => s.tabs);
   const activeTabId = useFileWindowStore((s) => s.activeTabId);
   const activate = useFileWindowStore((s) => s.activate);
@@ -132,7 +133,7 @@ export default function FileWindowTabBar() {
     <div
       className={`flex h-11 items-center gap-1 border-b border-border/50 px-2 [-webkit-app-region:drag] ${
         isMac ? "pl-20" : ""
-      } ${!isMac ? "pr-[146px]" : ""}`}
+      } ${isLinux ? "pr-[146px]" : ""}`}
     >
       {/* 顶行整体 drag（hidden 标题栏下窗口拖动唯一来源，红绿灯/overlay
           原生区不冲突）；交互块整体 no-drag 隔离——drag 区内点击不生效。

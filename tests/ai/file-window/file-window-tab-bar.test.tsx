@@ -268,7 +268,7 @@ describe("FileWindowTabBar", () => {
     expect(screen.getByText("chat:fileWindow.menu.closeOthers")).toBeTruthy();
   });
 
-  it("平台让位类：darwin pl-20 让红绿灯；非 darwin pr-[146px] 让窗口按钮", () => {
+  it("平台让位类：darwin pl-20；win32 独立系统栏无占位；linux 保留 overlay 占位", () => {
     vi.stubGlobal("platform", "darwin");
     const mac = render(<FileWindowTabBar />);
     expect(rowClassOf(mac.container)).toContain("pl-20");
@@ -277,8 +277,14 @@ describe("FileWindowTabBar", () => {
 
     vi.stubGlobal("platform", "win32");
     const win = render(<FileWindowTabBar />);
-    expect(rowClassOf(win.container)).toContain("pr-[146px]");
+    expect(rowClassOf(win.container)).not.toContain("pr-[146px]");
     expect(rowClassOf(win.container)).not.toContain("pl-20");
+    cleanup();
+
+    vi.stubGlobal("platform", "linux");
+    const linux = render(<FileWindowTabBar />);
+    expect(rowClassOf(linux.container)).toContain("pr-[146px]");
+    expect(rowClassOf(linux.container)).not.toContain("pl-20");
   });
 
   it("顶行可拖动窗口：drag 区 + 交互块 no-drag 隔离", () => {

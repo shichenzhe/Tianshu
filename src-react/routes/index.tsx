@@ -6,12 +6,14 @@ import { lazy, Suspense, useEffect } from "react";
 import {
   createHashRouter,
   Navigate,
+  Outlet,
   useLocation,
   useParams,
 } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 import MainLayout from "@/components/layout/MainLayout";
+import AppShell from "@/components/layout/app-shell";
 import LoginView from "@/domains/user/views/LoginView";
 import {
   fileWindowRoute,
@@ -127,6 +129,13 @@ function ModuleRouteGuard() {
 }
 
 export const router = createHashRouter([
+  {
+    element: (
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    ),
+    children: [
   {
     path: "/",
     // 应用默认落地新建任务页（用户裁定；/module/ai index 仍是对话视图，
@@ -297,6 +306,8 @@ export const router = createHashRouter([
           </LazyWrapper>
         ),
       },
+    ],
+  },
     ],
   },
 ]);

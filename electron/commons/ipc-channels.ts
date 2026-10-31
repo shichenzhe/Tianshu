@@ -277,8 +277,12 @@ export const IPC_INVOKE_ALLOWLIST = [
   "app:getInfo",
   "app:getVersion",
   "app:getName",
-  // 窗口控制（快捷键分发）
+  // 窗口控制（快捷键分发 + Windows 自绘标题栏）
   "window:toggleFullScreen",
+  "window:getState",
+  "window:minimize",
+  "window:toggleMaximize",
+  "window:close",
   // 日志
   "log:info",
   "log:warn",
@@ -446,6 +450,8 @@ export const IPC_EVENT_ALLOWLIST = [
   "update-downloaded",
   "update-error",
   "update-not-available",
+  // Windows 自绘标题栏：原生最大化/还原状态同步
+  "window:stateChanged",
   // 内置浏览器：guest 站内开窗（target=_blank）转新 tab 转发
   "browser:openInNewTab",
   // 业务变更推送（preload 拒听非白名单事件，缺此两通道时

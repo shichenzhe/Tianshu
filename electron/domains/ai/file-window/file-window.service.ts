@@ -26,6 +26,10 @@ import path from "node:path";
 import prisma from "../../../commons/prisma-client";
 import { handleUser } from "../../../commons/ipc-user";
 import { shouldAllowNavigation } from "../../security/renderer-guard";
+import {
+  shouldHideMenuBar,
+  windowFrameOptions,
+} from "../../../commons/window-frame";
 import type { FileWindowResource } from "../../../../src-react/domains/ai/file-window/model/resource";
 
 export const FILE_WINDOW_IPC = {
@@ -322,20 +326,10 @@ export default class FileWindowService {
         preload: this.deps.preloadPath,
         webviewTag: true,
       },
-      // 窗口框样式照抄主窗 createWindow（titleBarStyle/红绿灯/overlay）
-      titleBarStyle:
-        process.platform !== "darwin" && process.env.NODE_ENV === "development"
-          ? "default"
-          : "hidden",
-      ...(process.platform === "darwin"
-        ? { trafficLightPosition: { x: 13, y: 16 } }
-        : {}),
-      titleBarOverlay:
-        process.platform === "darwin"
-          ? undefined
-          : { color: "#ffffff", symbolColor: "#000000", height: 44 },
+      // 窗口框与主窗同源：Windows 自绘标题栏，macOS 红绿灯，Linux 原生 overlay
+      ...windowFrameOptions(process.platform, process.env.NODE_ENV),
     });
-    if (process.env.NODE_ENV !== "development") {
+    if (shouldHideMenuBar(process.platform, process.env.NODE_ENV)) {
       win.setMenuBarVisibility(false);
     }
     win.webContents.setWindowOpenHandler(({ url }) => {

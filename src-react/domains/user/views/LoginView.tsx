@@ -252,7 +252,9 @@ export default function LoginView() {
 
   return (
     // 纯透明容器：壁纸 100% 透出（基础皮肤无壁纸时为 body 纯色底）
-    <div className="flex justify-center items-center h-screen relative">
+    <div
+      className={`flex justify-center items-center relative ${window.platform === "win32" ? "h-full" : "h-screen"}`}
+    >
       {/* Logo 区域 */}
       <div className="absolute top-6 left-6 flex items-center gap-3">
         <AppLogo className="w-8 h-8" />

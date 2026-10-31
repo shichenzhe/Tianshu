@@ -1,6 +1,6 @@
 /**
  * 全局侧边栏（所有 /module/* 路由共用，MainLayout 渲染）：
- * 壳（w-64 右边框 + macOS Logo 区）+ 功能入口（新建任务/项目/专家/自动化/
+ * 壳（w-64 右边框 + macOS/Windows Logo 区）+ 功能入口（新建任务/项目/专家/自动化/
  * 服务端/监控/资料库/浏览器，路由命中高亮）+ 主体区空间分组任务树（SessionTreePanel，二期
  * 批 7 D8「我的项目」区移除——项目导航 = 顶部 nav「项目」+ 任务树项目组
  * 组头点击进入）+ 底部用户区（UserMenu，含语言切换，原顶栏右上角移入）。
@@ -38,6 +38,7 @@ export default function GlobalSidebar() {
   const collapsed = useAiUiStore((s) => s.sidebarCollapsed);
   const user = useUserStore((state) => state.user);
   const isMac = window.platform === "darwin";
+  const isWindows = window.platform === "win32";
 
   const isProjectRoute = location.pathname.startsWith("/module/project");
 
@@ -110,7 +111,10 @@ export default function GlobalSidebar() {
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col overflow-hidden bg-muted/40 transition-[width] duration-200",
+        "flex shrink-0 flex-col overflow-hidden bg-muted/40 transition-[width] duration-200",
+        // Windows 操作按钮已上移至自绘标题栏：侧栏同步上移填补原 TopBar
+        // 左侧空白，并延长 44px 保持底部用户区仍贴窗口底；macOS 不变
+        isWindows ? "relative z-[60] -mt-11 h-[calc(100%+2.75rem)]" : "h-full",
         collapsed ? "w-0" : "w-64",
       )}
     >
@@ -120,8 +124,8 @@ export default function GlobalSidebar() {
         data-sidebar-shell=""
         className="flex h-full w-64 shrink-0 flex-col border-r border-border/50"
       >
-        {/* macOS 顶部 Logo（Windows 标题在 TopBar） */}
-        {isMac && (
+        {/* macOS/Windows 共用顶部 Logo 行（Linux 标题仍在 TopBar） */}
+        {(isMac || isWindows) && (
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">
             <AppLogo className="h-5 w-5" />
             <span className="truncate text-sm font-semibold tracking-tight text-foreground select-none">

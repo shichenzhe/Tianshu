@@ -1,10 +1,13 @@
 /**
- * 窗口服务（快捷键配套的主进程能力）：
- * - window:toggleFullScreen IPC：按事件发送者窗口翻转全屏（渲染层 ⌘⌃F 分发）
- * - 唤起/隐藏主窗口全局快捷键 ⇧⌥W（Shift+Alt+W）：可见→隐藏并出任务栏，
- *   隐藏→显示、回任务栏并聚焦；app will-quit 时注销，避免占用系统热键
+ * 窗口服务：全屏快捷键、Windows 自绘标题栏控制及主窗唤起/隐藏
  */
-import { app, BrowserWindow, globalShortcut, ipcMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  type WebContents,
+} from "electron";
 
 import Log from "./Log";
 
@@ -12,8 +15,15 @@ import Log from "./Log";
 export const SHOW_HIDE_WINDOW_ACCELERATOR = "Shift+Alt+W";
 
 const TOGGLE_FULL_SCREEN_CHANNEL = "window:toggleFullScreen";
+const STATE_CHANGED_CHANNEL = "window:stateChanged";
+
+export interface WindowControlState {
+  maximized: boolean;
+}
 
 export default class WindowService {
+  private readonly stateTrackedWindows = new WeakSet<BrowserWindow>();
+
   /** 主窗口引用以 getter 注入（main.ts 的 win 为模块级变量，重建后仍取到最新） */
   constructor(private getMainWindow: () => BrowserWindow | null) {
     this.registerIpcHandlers();
@@ -21,12 +31,56 @@ export default class WindowService {
     app.on("will-quit", () => this.unregisterGlobalShortcut());
   }
 
-  /** 全屏切换 IPC：以发送者窗口为目标（多窗口下各翻各的） */
+  /** 全屏切换与自绘窗口按钮 IPC：均以发送者窗口为目标 */
   private registerIpcHandlers(): void {
     ipcMain.handle(TOGGLE_FULL_SCREEN_CHANNEL, (event) => {
       const win = BrowserWindow.fromWebContents(event.sender);
       win?.setFullScreen(!win.isFullScreen());
     });
+    ipcMain.handle("window:getState", (event) =>
+      this.getWindowState(event.sender),
+    );
+    ipcMain.handle("window:minimize", (event) => {
+      BrowserWindow.fromWebContents(event.sender)?.minimize();
+    });
+    ipcMain.handle("window:toggleMaximize", (event) =>
+      this.toggleMaximize(event.sender),
+    );
+    ipcMain.handle("window:close", (event) => {
+      BrowserWindow.fromWebContents(event.sender)?.close();
+    });
+  }
+
+  /** 查询时绑定原生状态事件；重复挂载/查询不重复监听 */
+  private getWindowState(sender: WebContents): WindowControlState {
+    const win = BrowserWindow.fromWebContents(sender);
+    if (!win) return { maximized: false };
+    this.trackWindowState(win);
+    return this.stateOf(win);
+  }
+
+  private toggleMaximize(sender: WebContents): WindowControlState {
+    const win = BrowserWindow.fromWebContents(sender);
+    if (!win) return { maximized: false };
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+    return this.stateOf(win);
+  }
+
+  private stateOf(win: BrowserWindow): WindowControlState {
+    return { maximized: win.isMaximized() };
+  }
+
+  /** 双击拖拽区等原生路径也经事件同步按钮图标 */
+  private trackWindowState(win: BrowserWindow): void {
+    if (this.stateTrackedWindows.has(win)) return;
+    this.stateTrackedWindows.add(win);
+    const sendState = () => {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) return;
+      win.webContents.send(STATE_CHANGED_CHANNEL, this.stateOf(win));
+    };
+    win.on("maximize", sendState);
+    win.on("unmaximize", sendState);
   }
 
   /** 注册唤起/隐藏快捷键；被其他应用占用（注册失败）时仅记日志 */

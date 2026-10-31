@@ -105,6 +105,31 @@ describe("vector-store searchFts（内存 BM25）", () => {
     expect(hits[0]).toMatchObject({ sourceName: "s1", rank: 1 });
     expect(hits.every((h) => h.score > 0)).toBe(true);
   });
+
+  it("collection 空串：where 不含 collection 键（全集合语义）", async () => {
+    vi.mocked(prisma.vectorChunk.findMany).mockResolvedValue([
+      {
+        id: 1,
+        collection: "c1",
+        sourceName: "s1",
+        text: "容错设计的原文",
+      },
+    ] as never);
+    const hits = await searchFts({
+      userId: 1,
+      collection: "",
+      queryTokens: ["容", "设计"],
+      limit: 3,
+    });
+    expect(hits.length).toBeGreaterThan(0);
+    // where 恰为 { userId }——空串展开省略 collection 键，若实现误带
+    // collection: "" 会以多键被 deep equal 拒绝
+    expect(prisma.vectorChunk.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 1 },
+      }),
+    );
+  });
 });
 
 describe("hybridSearch 节点 handler（三模式）", () => {

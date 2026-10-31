@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // 选择器按模型类型过滤：chat ModelPicker / 自动化 TaskModelPicker 只列
-// llm；图向量节点（vectorize/vectorSearch）只列 embedding。
+// llm；图向量节点（vectorize/vectorSearch/hybridSearch）只列 embedding。
 // 真实 i18n（jsdom 恒 zh-CN）；mock providers/models 数据源
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
@@ -41,10 +41,14 @@ import ModelPicker from "../../src-react/domains/ai/chat/components/ModelPicker"
 import { toast } from "sonner";
 import TaskModelPicker from "../../src-react/domains/ai/automation/components/TaskModelPicker";
 import {
+  HybridSearchNodeFields,
   VectorizeNodeFields,
   VectorSearchNodeFields,
 } from "../../src-react/domains/ai/orchestration/components/GraphNodeEditor";
-import type { VectorizeNode } from "../../src-react/domains/ai/orchestration/api/graph.schema";
+import type {
+  HybridSearchNode,
+  VectorizeNode,
+} from "../../src-react/domains/ai/orchestration/api/graph.schema";
 
 // Radix Select 触发器 pointerDown 分支依赖 hasPointerCapture/scrollIntoView
 window.HTMLElement.prototype.scrollIntoView = () => {};
@@ -88,9 +92,9 @@ function withClient(ui: React.ReactElement) {
   );
 }
 
-/** Radix Select 选项切换：mouse pointerDown 展开 + click 选中 */
-async function openSelectOptions() {
-  const trigger = screen.getByRole("combobox");
+/** Radix Select 选项切换：mouse pointerDown 展开 + click 选中（多
+ *  combobox 场景可指定触发器，缺省取唯一者） */
+async function openSelectOptions(trigger = screen.getByRole("combobox")) {
   fireEvent.pointerDown(trigger, {
     button: 0,
     ctrlKey: false,
@@ -173,6 +177,28 @@ describe("选择器按模型类型过滤", () => {
     } as unknown as VectorizeNode;
     withClient(<VectorSearchNodeFields node={node} onPatch={() => {}} />);
     const options = await openSelectOptions();
+    const labels = options.map((o) => o.textContent);
+    expect(labels).toContain(EMBED_ID);
+    expect(labels).not.toContain(LLM_ID);
+  });
+
+  it("hybridSearch 节点模型下拉只列 embedding", async () => {
+    const node = {
+      id: "n1",
+      kind: "hybridSearch",
+      name: "混合检索",
+      searchQuery: "q",
+      collection: "",
+      mode: "hybrid",
+      topK: 3,
+      modelId: 2,
+    } as HybridSearchNode;
+    withClient(<HybridSearchNodeFields node={node} onPatch={() => {}} />);
+    // hybrid 模式下模式单选也是 combobox（keyword 模式不渲染模型下拉），
+    // 模型下拉为第二个
+    const options = await openSelectOptions(
+      screen.getAllByRole("combobox")[1],
+    );
     const labels = options.map((o) => o.textContent);
     expect(labels).toContain(EMBED_ID);
     expect(labels).not.toContain(LLM_ID);

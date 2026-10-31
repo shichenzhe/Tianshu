@@ -17,7 +17,7 @@
 - **docker daemon 可用**（本机 29.2.1）：每任务的 build/run 验收是真跑，不是 `config -q` 级。
 - **镜像基线**：~1.13GB（spike 实测）；深度瘦身不扩本期。
 - **提交纪律**：中文 conventional；spike 产物（`Dockerfile.spike`）T1 删除。
-- **回归基线**：mirror vitest 4465 / server jest 74 suites（零源码改动，理论上零影响——T3 跑一遍确证）。
+- **回归基线**：mirror vitest 4465（实测口径 4460 passed + 9 skipped，环境 delta 非失败——2026-10-31 验收记录）/ server jest 74 suites（零源码改动，理论上零影响——T3 跑一遍确证）。
 
 ---
 

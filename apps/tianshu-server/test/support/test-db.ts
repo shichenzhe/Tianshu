@@ -27,6 +27,9 @@ export interface TestDb {
  *   不生效（实测恒解析到 prisma/local.db），故生成临时 schema 副本改
  *   `env("DATABASE_URL")` 后用 `prisma db push` 建表，DDL 始终以
  *   prisma/schema.prisma 为单一事实源（不手写建表 SQL）；
+ * - migrate 体系批（2026-10-31）起生产契约是 `prisma migrate deploy`（journal
+ *   版本化增量）；本测试桩保留 db push 快速通道（临时库随建随弃、无 journal
+ *   需求）——与生产契约有意分离（spec §影响面），勿据此回改生产面；
  * - 测试实例经 PrismaClient `datasources` 运行时覆盖指向临时库
  *   （绝对路径，规避 SQLite 相对路径解析歧义，生产代码零改动）；
  * - 库置于 TIANSHU_DATA_ROOT 临时目录下（mirror ~/.tianshu 的 database/local.db 同构布局）。

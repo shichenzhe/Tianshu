@@ -1,15 +1,24 @@
 /**
  * 主库 PG e2e（可选，门控 MAIN_PG_E2E_URL；未设则 SKIP）：真 server 子进程以
  * TIANSHU_DB_URL=postgres://… 启动（PG 主库模式，SEARCH_DB_URL 显式置空钉死
- * 「检索跟随主库」路径）→ 首启自动 db push（派生 schema）建 23 张业务表 →
- * graph save/run 走 PG 主库（API 行为 + 直查 graphDefinition 行双证，另证
- * 无 SQLite 落库文件）→ hybridSearch keyword 同库检索命中「容错设计手册｜
- * 相关度」+「旅行日记」剔除（跟随规则 §4 实证）→ 重启两跳（two-boot，终审
- * F1）：停服复启（每次启动都跑 db push）健康仍 ok 且检索行保全——检索表
- * 限定 tianshu_search 独立 schema，db push 对其视而不见；限 public 旧形态
- * 下非空 vector_chunk 必被判 drift（退出 1）永久起不来 → 清理（子进程 +
- * 检索 schema DROP；业务表留给 PG 卷/由外部清理——检索单真源原则延续）。
- * SQLite 路径由既有 e2e/Jest 覆盖。
+ * 「检索跟随主库」路径）→ 首启自动 migrate deploy（prisma-migrate 批 T3
+ * 契约：派生 schema prisma/pg/schema.prisma + 基线迁移 0_init）建 23 张业务
+ * 表 + `_prisma_migrations` journal（断言组 ①fresh）→ graph save/run 走 PG
+ * 主库（API 行为 + 直查 graphDefinition 行双证，另证无 SQLite 落库文件）→
+ * hybridSearch keyword 同库检索命中「容错设计手册｜相关度」+「旅行日记」
+ * 剔除（跟随规则 §4 实证）→ 重启两跳（two-boot，终审 F1；断言组 ③幂等）：
+ * 停服复启（每 boot 跑 deploy——journal 齐全即 no-op）健康 ok、journal 不
+ * 重复、检索行保全（检索表限 tianshu_search 独立 schema，migrate 只管
+ * public 业务面，对其视而不见）→ 断言组 ④增量 no-op（brief 务实裁剪）：
+ * 同 schema 直跑 `migrate status` 证 journal 齐全库零待应用——真增量（新
+ * 迁移目录随行 → boot deploy 应用）由 T2 流程留证，试验迁移不入库 →
+ * 断言组 ②baseline：public 整清后旧式 `db push --schema prisma/pg/schema.prisma`
+ * 直跑造「db-push 时代」存量库（有表、无 journal）→ server 首启 journal 自动
+ * 补 0_init（resolve，不重放 DDL）+ 健康 → 清理（子进程 + 检索 schema DROP；
+ * public 业务面留给 PG 卷/由外部清理——一次性容器随销毁；检索单真源原则
+ * 延续）。SQLite 路径由既有 e2e/Jest 覆盖（首启自愈冒烟见批 T5 报告）。
+ * 预检对 public 也整清（DROP/CREATE SCHEMA）：①fresh 的「journal 由本次
+ * boot 建立」需确定性空库起点（复用容器残留旧 journal 会互相污染断言）。
  *
  * spawn/env 注入/直插/断言手法对齐 e2e-graph-search-pg.ts；一处刻意偏差：
  * 分词模块解析改经 createRequire(SERVER_DIR) 的 require.resolve
@@ -31,7 +40,8 @@
  * getFreePort / 停进程 / 包装体 call / 断言锚 / hybridSearchGraphJson /
  * PG 访问层与 seed（createPgSeeder）自 e2e-helpers.ts 导入（2026-10-31
  * 五副本归一，血统见其头注释）；本脚本保留 waitForHealth / scalar、
- * tokenize 的 createRequire(SERVER_DIR) 解析策略与 two-boot 断言编排。
+ * journalRows / runPrismaCli（migrate 断言组直查与 CLI 直跑）、tokenize
+ * 的 createRequire(SERVER_DIR) 解析策略与 two-boot 断言编排。
  */
 import { spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -77,10 +87,32 @@ const COLLECTION = "e2e-main-pg-hybrid";
 const TARGET_SOURCE = "容错设计手册";
 const OFF_TOPIC_SOURCE = "旅行日记";
 const SEED_MODEL = "e2e-main-pg-seed";
-/** 派生 schema 的业务表数（23 model，db push 建表单源钉死；探针库实测） */
+/** 派生 schema 的业务表数（23 model，基线迁移 0_init 建表单源钉死；探针库
+ * 实测）——migrate 体系起 public 另有 journal 簿记表，计数排除（见下 SQL） */
 const EXPECTED_TABLES = 23;
+/** 基线迁移名（prisma-migrate 批 T2 双端产出）——journal 断言锚 */
+const BASELINE_MIGRATION = "0_init";
+/** 业务表计数（排除 `_prisma%` 簿记表——migrate deploy 起 public 含
+ *  `_prisma_migrations`；`\_` 转义防 LIKE 通配误伤，口径对齐 db-url.ts 探测） */
+const BUSINESS_TABLES_SQL =
+  "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT LIKE '\\_prisma%'";
+/** 业务表名清单（失败路径诊断用；过滤口径同上） */
+const BUSINESS_NAMES_SQL =
+  "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT LIKE '\\_prisma%' ORDER BY table_name";
+/** 派生 PG schema（T1 迁入 prisma/pg/ 子目录；migrations 目录 prisma/pg/
+ *  migrations 按约定在其同级）与 prisma CLI（server 自身 ensureDatabasePg
+ *  同一棵解析树——SERVER_DIR/node_modules）——断言组 ②④ 直跑 CLI 用 */
+const PG_SCHEMA = path.join(SERVER_DIR, "prisma", "pg", "schema.prisma");
+const PRISMA_CLI = path.join(
+  SERVER_DIR,
+  "node_modules",
+  "prisma",
+  "build",
+  "index.js",
+);
 const HEALTH_TIMEOUT_MS = 30_000;
 const RUN_TIMEOUT_MS = 120_000;
+const PRISMA_CLI_TIMEOUT_MS = 120_000;
 
 const reporter = createE2eReporter("e2e-main-pg");
 const { outcomes, log, pass, call, printSummary } = reporter;
@@ -107,7 +139,64 @@ async function scalar(
   return Number((result.rows[0] as { n: number }).n);
 }
 
-/** 健康探测（带重试）：握手行后仍容忍 db push 尾延/网络抖动，30s 内
+/** journal 行直查（public._prisma_migrations；①fresh/③幂等/②baseline 三
+ * 组断言锚。时间戳 ::text 化——pg 驱动默认把无时区戳解析为 Date，取文本
+ * 便于失败明细 JSON 化） */
+async function journalRows(
+  pool: PgPoolLike,
+): Promise<
+  Array<{
+    migration_name: string;
+    finished_at: string | null;
+    rolled_back_at: string | null;
+  }>
+> {
+  const result = await pool.query(
+    "SELECT migration_name, finished_at::text AS finished_at, rolled_back_at::text AS rolled_back_at FROM public._prisma_migrations ORDER BY migration_name",
+  );
+  return result.rows as Array<{
+    migration_name: string;
+    finished_at: string | null;
+    rolled_back_at: string | null;
+  }>;
+}
+
+/** 直跑 prisma CLI 子命令（断言组 ②造库 / ④no-op 证）：DATABASE_URL 经
+ *  spawn env 注入（派生 schema datasource 即 env("DATABASE_URL") 引用，
+ *  env 覆盖原生生效——T2 实测）；CLI 形态对齐 server 自身 ensureDatabasePg
+ *  （process.execPath + prod 树 CLI 直引） */
+function runPrismaCli(args: string[]) {
+  return spawnSync(process.execPath, [PRISMA_CLI, ...args], {
+    env: { ...process.env, DATABASE_URL: PG_URL },
+    encoding: "utf8",
+    timeout: PRISMA_CLI_TIMEOUT_MS,
+  });
+}
+
+/** journal 行是否恰一行 0_init 且 applied（finished 非 null、未回滚）——
+ *  ①fresh 与 ②baseline 共用判据（deploy 应用与 resolve 标记的终态同形） */
+function assertJournalApplied(
+  rows: Array<{
+    migration_name: string;
+    finished_at: string | null;
+    rolled_back_at: string | null;
+  }>,
+  label: string,
+): void {
+  if (
+    rows.length !== 1 ||
+    rows[0].migration_name !== BASELINE_MIGRATION ||
+    rows[0].rolled_back_at !== null ||
+    rows[0].finished_at === null
+  ) {
+    fail(
+      label,
+      `journal 期望恰一行 ${BASELINE_MIGRATION}（applied：finished_at 非空、未回滚）：${JSON.stringify(rows)}`,
+    );
+  }
+}
+
+/** 健康探测（带重试）：握手行后仍容忍 migrate deploy 尾延/网络抖动，30s 内
  * status=ok 才放行（T5 停留竞态的 e2e 侧兜底）。/actuator/health 在
  * ResponseInterceptor 排除表——terminus 原生 {status:"ok"}；StaticTokenGuard
  * 不豁免 @Public，须带 Bearer。 */
@@ -250,9 +339,14 @@ async function main(): Promise<number> {
       }
     }
     await pool.query(DROP_SEARCH_SQL);
+    // public 整清（DROP/CREATE SCHEMA）：①fresh 的「journal 由本次 boot 建立」
+    // 断言需确定性空库起点——复用容器若残留旧 journal 会污染 ①② 判据。本
+    // 脚本文档口径 MAIN_PG_E2E_URL 即一次性容器（见头注释），勿指共享库
+    await pool.query("DROP SCHEMA public CASCADE");
+    await pool.query("CREATE SCHEMA public");
     pass(
       "PG 预检",
-      "连接可达 + 检索 schema tianshu_search 清场（DROP CASCADE）",
+      "连接可达 + 检索 schema tianshu_search 清场（DROP CASCADE）+ public 整清（确定性空库）",
     );
 
     // 2. spawn server 子进程：主库指真 PG（TIANSHU_DB_URL=postgres://…），
@@ -295,19 +389,16 @@ async function main(): Promise<number> {
     ): Promise<RequestResult> =>
       (control as DirectControl).request(method, reqPath, body);
 
-    // 3. 健康（带重试）+ 首启建库实证：boot 自动 db push（派生 schema）
-    //    → 23 张业务表 + graphDefinition 在位（直查 information_schema）
+    // 3. 健康（带重试）+ 首启建库实证（断言组 ①fresh）：boot 自动 migrate
+    //    deploy（T3 契约，派生 PG schema + 0_init）→ 23 张业务表 +
+    //    graphDefinition 在位 + _prisma_migrations journal 恰一行 0_init
+    //    （applied 形状）——直查 information_schema
     await waitForHealth(request);
-    const tables = await scalar(
-      pool,
-      "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
-    );
+    const tables = await scalar(pool, BUSINESS_TABLES_SQL);
     if (tables !== EXPECTED_TABLES) {
-      const names = await pool.query(
-        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name",
-      );
+      const names = await pool.query(BUSINESS_NAMES_SQL);
       fail(
-        "首启建库（boot db push）",
+        "首启建库（boot migrate deploy）",
         `业务表数期望 ${EXPECTED_TABLES} 实为 ${tables}：${names.rows.map((r) => (r as { table_name: string }).table_name).join(",")}`,
       );
     }
@@ -316,11 +407,15 @@ async function main(): Promise<number> {
       `SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'graphDefinition'`,
     );
     if (graphTable !== 1) {
-      fail("首启建库（boot db push）", "graphDefinition 表不在 PG 中");
+      fail("首启建库（boot migrate deploy）", "graphDefinition 表不在 PG 中");
     }
+    assertJournalApplied(
+      await journalRows(pool),
+      "首启建库（boot migrate deploy）",
+    );
     pass(
-      "首启建库（boot db push）+ 健康",
-      `/actuator/health ok；public 业务表 ${tables} 张，graphDefinition 在位`,
+      "首启建库（boot migrate deploy）+ journal（①fresh）",
+      `/actuator/health ok；public 业务表 ${tables} 张 + journal 表 _prisma_migrations，graphDefinition 在位；journal 恰一行 ${BASELINE_MIGRATION}（applied）`,
     );
 
     // 4. graph save 走 PG 主库：API 受理 + 直查 "graphDefinition" 行双证
@@ -434,11 +529,13 @@ async function main(): Promise<number> {
       `SEARCH_DB_URL 空 → 主库同库检索；run#${accepted.runId} succeeded；output「${output.slice(0, 60)}」`,
     );
 
-    // 6. 重启两跳（two-boot，终审 F1 断言组）：检索表已有数据 → 停服 →
-    //    复启（ensureDatabasePg 每次启动都跑 db push）→ 健康仍 ok 且检索
-    //    行保全。检索表限 tianshu_search 独立 schema，db push（只管 public
-    //    业务面）对其视而不见；若仍落 public，非空 vector_chunk 会被判
-    //    drift（db push 拒绝 drop 非空表、退出 1）→ 第二次 boot 必炸。
+    // 6. 重启两跳（two-boot，终审 F1 断言组 + 断言组 ③幂等）：检索表已有
+    //    数据 → 停服 → 复启（ensureDatabasePg 每 boot 跑 migrate deploy——
+    //    journal 齐全即 no-op）→ 健康仍 ok、journal 不重复（仍恰一行
+    //    0_init）、检索行保全。检索表限 tianshu_search 独立 schema，migrate
+    //    只管 public 业务面对其视而不见；若检索表误落 public，journal 之外
+    //    的表 migrate 虽不清理，但首启建表与表数断言即翻车（防退化为
+    //    「迁移面吞并检索面」的隐性耦合）。
     control?.close();
     control = null;
     await stopChild(child);
@@ -473,13 +570,20 @@ async function main(): Promise<number> {
     if (survived !== 3) {
       fail(
         "重启两跳：检索行保全",
-        `第二次 boot 后计数期望 3 实为 ${survived}（检索表疑似被 db push 判 drift 清除）`,
+        `第二次 boot 后计数期望 3 实为 ${survived}（检索表疑似被启动迁移面清除）`,
       );
     }
-    const tablesAfterReboot = await scalar(
-      pool,
-      "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'",
-    );
+    const secondJournal = await journalRows(pool);
+    if (
+      secondJournal.length !== 1 ||
+      secondJournal[0].migration_name !== BASELINE_MIGRATION
+    ) {
+      fail(
+        "重启两跳：journal 幂等（③）",
+        `第二次 boot 后 journal 期望仍恰一行 ${BASELINE_MIGRATION}：${JSON.stringify(secondJournal)}`,
+      );
+    }
+    const tablesAfterReboot = await scalar(pool, BUSINESS_TABLES_SQL);
     if (tablesAfterReboot !== EXPECTED_TABLES) {
       fail(
         "重启两跳：业务表幂等",
@@ -487,14 +591,129 @@ async function main(): Promise<number> {
       );
     }
     pass(
-      "重启两跳（two-boot）",
-      `第二次 boot 健康 ok；tianshu_search.vector_chunk 检索行 ${survived} 保全；public 业务表 ${tablesAfterReboot} 张（db push 复跑幂等）`,
+      "重启两跳（two-boot + ③幂等）",
+      `第二次 boot 健康 ok；tianshu_search.vector_chunk 检索行 ${survived} 保全；journal 仍恰一行 ${BASELINE_MIGRATION}（不重复）；public 业务表 ${tablesAfterReboot} 张（deploy 复跑 no-op）`,
     );
 
-    // 7. 清理：检索 schema DROP CASCADE（主库业务表留给 PG 卷/外部清理——
-    //    一次性容器随销毁；收敛段在 finally 保失败路径同样回收）
+    // 6.5 断言组 ④（增量 no-op 语义——brief 务实裁剪）：ensureDatabasePg 每
+    //     boot 跑 deploy，对「journal 已含全部迁移」的库必须是零动作——直接
+    //     证据：同一 schema 对该库直跑 `prisma migrate status` 退出 0 且报
+    //     up to date（deploy 与 status 共用同一 journal 对账口径）。真增量
+    //     （主 schema 加列 → 派生 + 双端 migrate dev 生成 1_xxx → boot deploy
+    //     应用新列）的演示由 T2 流程留证（见批 T5 报告）——试验迁移文件不
+    //     入库，e2e 侧不落迁移目录污染。
+    const status = runPrismaCli(["migrate", "status", "--schema", PG_SCHEMA]);
+    const statusOut = `${status.stdout ?? ""}\n${status.stderr ?? ""}`;
+    const statusLine =
+      statusOut
+        .split("\n")
+        .map((l) => l.trim())
+        .find((l) => /up to date/i.test(l)) ?? "";
+    if (status.status !== 0 || !statusLine) {
+      fail(
+        "deploy no-op 语义（④增量裁剪）",
+        `migrate status 期望退出 0 + up to date，实为退出码 ${status.status}：${statusOut.trim().slice(-300)}`,
+      );
+    }
+    pass(
+      "deploy no-op 语义（④增量裁剪）",
+      `journal 齐全时 deploy 零待应用：migrate status →「${statusLine}」（真增量演示见 T2 流程留证）`,
+    );
+
+    // 6.7 断言组 ②（baseline：db-push 时代存量库首启自动 resolve）：停服 →
+    //     public 整清（此前断言已完结，业务数据不作数）→ 旧式
+    //     `db push --schema prisma/pg/schema.prisma` 直跑造存量库——db push
+    //     从不建 journal，「有表无 journal」即本批之前部署库的真实形状 →
+    //     形状自证 → server 首启：needsBaselineResolve 探测命中 →
+    //     `migrate resolve --applied 0_init` 补 journal（标记已应用，不重放
+    //     DDL）→ deploy no-op → 健康 + journal resolved + 表数不变
+    control?.close();
+    control = null;
+    await stopChild(child);
+    child = null;
+    await pool.query("DROP SCHEMA public CASCADE");
+    await pool.query("CREATE SCHEMA public");
+    const legacyPush = runPrismaCli([
+      "db",
+      "push",
+      "--schema",
+      PG_SCHEMA,
+      "--skip-generate",
+    ]);
+    const legacyPushOut = `${legacyPush.stdout ?? ""}\n${legacyPush.stderr ?? ""}`;
+    if (legacyPush.status !== 0) {
+      fail(
+        "baseline 造库（db push 时代形状）",
+        `prisma db push 退出码 ${legacyPush.status}：${legacyPushOut.trim().slice(-300)}`,
+      );
+    }
+    const legacyTables = await scalar(pool, BUSINESS_TABLES_SQL);
+    if (legacyTables !== EXPECTED_TABLES) {
+      fail(
+        "baseline 造库（db push 时代形状）",
+        `db push 后业务表期望 ${EXPECTED_TABLES} 实为 ${legacyTables}`,
+      );
+    }
+    const legacyJournal = await pool.query(
+      "SELECT to_regclass('public._prisma_migrations')::text AS t",
+    );
+    if ((legacyJournal.rows[0] as { t: string | null }).t !== null) {
+      fail(
+        "baseline 造库（db push 时代形状）",
+        "db push 后不应存在 _prisma_migrations journal（db push 从不建 journal）",
+      );
+    }
+    pass(
+      "baseline 造库（db push 时代形状）",
+      `旧式 db push --schema prisma/pg/schema.prisma 建业务表 ${legacyTables} 张；有表、无 journal`,
+    );
+
+    const baselineBoot = await spawnScan(
+      process.execPath,
+      [SERVER_ENTRY],
+      /^TIANSHU_HANDSHAKE /,
+      {
+        NODE_ENV: "e2e",
+        TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_DATA_ROOT: dataRoot,
+        TIANSHU_DB_URL: PG_URL,
+        SEARCH_DB_URL: "",
+      },
+    );
+    child = baselineBoot.child;
+    const info3 = parseHandshake(baselineBoot.matched);
+    if (info3.token !== "e2e-main-pg-token" || info3.port !== port) {
+      fail(
+        "baseline 首启握手",
+        `token/port 未按 env 回显（token=${info3.token} port=${info3.port} ≠ 配置 ${port}）`,
+      );
+    }
+    control = new DirectControl(info3.port, info3.token);
+    await waitForHealth(request);
+    assertJournalApplied(
+      await journalRows(pool),
+      "baseline 首启自动 resolve（②）",
+    );
+    const resolvedTables = await scalar(pool, BUSINESS_TABLES_SQL);
+    if (resolvedTables !== EXPECTED_TABLES) {
+      fail(
+        "baseline 首启自动 resolve（②）",
+        `resolve 后业务表期望仍 ${EXPECTED_TABLES} 实为 ${resolvedTables}（resolve 只标 journal，不得重放/破坏 DDL）`,
+      );
+    }
+    pass(
+      "baseline 首启自动 resolve（②）",
+      `存量库首启：journal 自动补 ${BASELINE_MIGRATION}（resolved、未重放 DDL）；/actuator/health ok；业务表 ${resolvedTables} 张不变`,
+    );
+
+    // 7. 清理：检索 schema DROP CASCADE（public 业务面终态为 ②baseline 留下
+    //    的 23 表 + journal，留给 PG 卷/外部清理——一次性容器随销毁；收敛段
+    //    在 finally 保失败路径同样回收）
     await pool.query(DROP_SEARCH_SQL);
-    pass("PG 清理", "tianshu_search schema 已 DROP（业务表留存，随容器/卷销毁）");
+    pass(
+      "PG 清理",
+      "tianshu_search schema 已 DROP（public 业务面留存，随容器/卷销毁）",
+    );
   } finally {
     control?.close();
     await stopChild(child);

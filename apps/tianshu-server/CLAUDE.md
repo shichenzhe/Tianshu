@@ -25,6 +25,7 @@ npm run lint
 npm run prisma:generate   # 生成客户端
 npm run prisma:reset      # 重建 SQLite + seed 初始 admin
 npm run prisma:migrate    # 迁移（开发）
+npm run prisma:migrate:pg # 迁移（开发，PG 变体 --schema prisma/pg/schema.prisma）
 npm run prisma:deploy     # 迁移（生产）
 npm run prisma:studio     # 数据库 GUI
 ```

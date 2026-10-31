@@ -385,8 +385,8 @@
       "mirrorPath": "electron/domains/ai/automation/automation-retention.ts",
       "serverPath": "src/modules/automation/automation-retention.ts",
       "baselineDiff": true,
-      "baselineLines": 5,
-      "note": "执行历史保留裁剪（2026 方案 A：双限分级+graphTrace 先行降级）：照 automation-stat 形态逐行同构——仅引号风格/trailingComma/Log→Nest Logger/头注释差异，期望 diff 趋零；条数窗 SQL 双端 better-sqlite3 同引擎窗口函数。2026-10-28 去会话化批（Task 5+6）：run 删除级联删节点行（按天 findMany+deleteMany 两档、条数窗 trimKeepNodesSql 同窗子查询）双端同构，diff 持平 5"
+      "baselineLines": 36,
+      "note": "执行历史保留裁剪（2026 方案 A：双限分级+graphTrace 先行降级）：照 automation-stat 形态逐行同构——仅引号风格/trailingComma/Log→Nest Logger/头注释差异，期望 diff 趋零；条数窗 SQL 双端 better-sqlite3 同引擎窗口函数。2026-10-28 去会话化批（Task 5+6）：run 删除级联删节点行（按天 findMany+deleteMany 两档、条数窗 trimKeepNodesSql 同窗子查询）双端同构，diff 持平 5；2026-10-31 主库双引擎批：trim SQL 按引擎方言分流（PG 引号标识符+$N）——定向 36，graph/automation-repository 预存告警不动"
     },
     {
       "id": "security-command-risk",

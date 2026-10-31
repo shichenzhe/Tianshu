@@ -1,5 +1,6 @@
 # apps/tianshu-server/docker-compose.yml
-# 全栈部署：server（SQLite 主库挂卷持久化）+ PG 检索库（可选能力，随栈提供）
+# 全栈部署：server（SQLite 主库挂卷持久化，缺省）+ PG 检索库（可选能力，
+# 随栈提供）+ 主库 PG（可选 profile main-pg，见 README 双模式段）
 # 一键：docker compose up -d（构建慢首次 ~10 分钟；data 卷持久化 SQLite 主库）
 services:
   search-pg:
@@ -16,6 +17,23 @@ services:
       timeout: 3s
       retries: 10
     # 宿主直连调试时放开：ports: ["5432:5432"]
+  # 主库 PG（双引擎 spec 2026-10-31）：仅 --profile main-pg 启用时存在——
+  # 配合 server 的 TIANSHU_DB_URL=postgres://tianshu:tianshu_main@main-pg:5432/
+  # tianshu_main 整体切 PG 主库（缺省不启用，SQLite 主库零变化）
+  main-pg:
+    profiles: ["main-pg"]
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: tianshu
+      POSTGRES_PASSWORD: tianshu_main
+      POSTGRES_DB: tianshu_main
+    volumes:
+      - main-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tianshu -d tianshu_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   server:
     build:
       context: ../..
@@ -28,8 +46,11 @@ services:
       # fail-closed：未设/空串直接拒绝起栈——token.guard 将空串当未设放行全部
       # 路由（graph/session 等 @Public 面 JWT 也不兜底），不可静默无鉴权裸奔
       TIANSHU_TOKEN: ${TIANSHU_TOKEN:?TIANSHU_TOKEN required (openssl rand -hex 32)}
-      # SQLite 主库落数据卷（PrismaService 的 TIANSHU_DB_URL 覆盖机制）
-      TIANSHU_DB_URL: file:/app/data/local.db
+      # 主库落点（PrismaService 的 TIANSHU_DB_URL 覆盖机制）：缺省 SQLite
+      # 落 server-data 卷；main-pg 模式（--profile main-pg）先
+      # export TIANSHU_DB_URL=postgres://tianshu:tianshu_main@main-pg:5432/tianshu_main
+      # 整体切 PG 主库（首启自动 db push 建表，检索层同库跟随）
+      TIANSHU_DB_URL: ${TIANSHU_DB_URL:-file:/app/data/local.db}
       SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search
     volumes:
       - server-data:/app/data
@@ -53,4 +74,5 @@ services:
 
 volumes:
   search-pg-data: {}
+  main-pg-data: {}
   server-data: {}

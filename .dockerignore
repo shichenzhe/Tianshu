@@ -13,3 +13,6 @@ release
 coverage
 **/local.db*
 **/.env
+# tianshu-server PG client 生成物（gitignored 构建期产物，含宿主平台 engine
+# 二进制）——builder 内派生重生成，宿主副本入 context 会污染镜像
+apps/tianshu-server/src/generated

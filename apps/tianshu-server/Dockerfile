@@ -19,8 +19,17 @@ ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 RUN npm config set registry https://registry.npmmirror.com/ && npm ci
 COPY packages packages
 COPY apps/tianshu-server apps/tianshu-server
-# prisma client 生成必须先于 nest build（DTO 引用生成枚举类型）
-RUN cd apps/tianshu-server && npx prisma generate
+# prisma client 生成必须先于 nest build（DTO 引用生成枚举类型）。
+# 双引擎（spec 2026-10-31）双 generate：SQLite 本尊（node_modules/.prisma）+
+# 派生 PG 变体——derive 单源派生 schema → 独立 output src/generated/prisma-pg
+# （PrismaService Proxy 门面运行时按 scheme require，postgres 态消费）。
+# 派生与生成同在镜像内跑。注意 prisma 自定义 output 不清场：context 若随行
+# 宿主（darwin/win）生成物，其平台 engine 二进制会残留混入镜像——先 rm 再
+# 生成，产物 engine 仅 builder 平台（linux-musl，与 runner 同源）；root
+# .dockerignore 另将 src/generated 挡在 context 外（双保险）
+RUN cd apps/tianshu-server && npx prisma generate \
+ && npm run prisma:pg:derive && rm -rf src/generated \
+ && npx prisma generate --schema prisma/schema.prisma.postgresql
 RUN npm --prefix packages/tianshu-protocol run build \
  && npm --prefix packages/tianshu-core run build \
  && npm run build -w apps/tianshu-server
@@ -29,12 +38,20 @@ RUN npm --prefix packages/tianshu-protocol run build \
 # （db-url.ts 的 prod 树契约），提升进 dependencies 并钉 builder 已装版本。
 # @prisma/client 同随钉版：源声明是 ^6.9.0 范围，bundle lock 重解析可能取到
 # 6.x 新运行时，与已拷贝的 6.19.3 .prisma 生成物错配——钉 builder 已装精确版本
+#
+# PG client 生成物（src/generated/prisma-pg）须显式拷贝进 dist 树：nest build
+# 是 tsc（allowJs 关），纯 JS/.d.ts 产物不随编译进 dist；PrismaService 编译后
+# 位于 dist/src/commons/database/，其 require('../../generated/prisma-pg')
+# 解析到 dist/src/generated/prisma-pg——拷贝目标按此布局钉定（不是 /bundle/
+# 顶层：dist/src/main.js 相对 require 不命中）。产物自含 runtime/ 与 engine
+# 二进制（builder 平台生成，随 dir 整体拷贝即可用），schema.prisma 也在其中
 RUN mkdir -p /bundle/vendors/tianshu-protocol /bundle/vendors/tianshu-core \
  && cp -r packages/tianshu-protocol/dist /bundle/vendors/tianshu-protocol/ \
  && cp packages/tianshu-protocol/package.json /bundle/vendors/tianshu-protocol/ \
  && cp -r packages/tianshu-core/dist /bundle/vendors/tianshu-core/ \
  && cp packages/tianshu-core/package.json /bundle/vendors/tianshu-core/ \
  && cp -r apps/tianshu-server/dist /bundle/ \
+ && cp -r apps/tianshu-server/src/generated /bundle/dist/src/ \
  && cp -r apps/tianshu-server/prisma /bundle/prisma \
  && node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('apps/tianshu-server/package.json','utf8'));for(const k of ['@tianshu/core','@tianshu/protocol'])p.dependencies[k]='file:./vendors/'+k.slice(1).replace('/','-');const ver=f=>{try{return JSON.parse(fs.readFileSync(f,'utf8')).version}catch(e){}};p.dependencies.prisma=ver('apps/tianshu-server/node_modules/prisma/package.json')||ver('node_modules/prisma/package.json')||p.devDependencies.prisma;p.dependencies['@prisma/client']=ver('apps/tianshu-server/node_modules/@prisma/client/package.json')||ver('node_modules/@prisma/client/package.json')||p.dependencies['@prisma/client'];delete p.devDependencies;fs.writeFileSync('/bundle/package.json',JSON.stringify(p,null,2))"
 # bundle lock：官方源生成（semver 解析需官方版本集；npmmirror 有同步缺口），

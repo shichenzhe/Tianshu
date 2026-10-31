@@ -281,6 +281,14 @@ pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
   检索库可删 server 服务的该 env 与 depends_on，退回本地内存检索
 - 单真源语义与 postgres:// scheme 限制见上一节「PG 检索模式」
 
+### 主库 PostgreSQL 模式（可选 profile）
+
+`docker compose --profile main-pg up -d` 前先
+`export TIANSHU_DB_URL=postgres://tianshu:tianshu_main@main-pg:5432/tianshu_main`——
+server 主库整体切 PG（23 张业务表，首启自动 db push 建表），检索层自动跟随
+（同库建检索表）。**PG 模式为全新初始化**（SQLite 存量数据不迁移）；默认不设
+该 env 时为 SQLite 主库（零变化）。
+
 ## 目录结构
 
 ```

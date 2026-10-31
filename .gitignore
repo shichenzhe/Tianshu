@@ -8,7 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-database
+# 锚定根级：裸规则曾误伤 apps/tianshu-server/src/commons/database 源码（新文件静默忽略、须 git add -f）
+/database
 dist
 dist-electron
 release

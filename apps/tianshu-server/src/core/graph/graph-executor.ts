@@ -126,6 +126,7 @@ import {
   type MergeNode,
   type LlmNode,
   type NotifyNode,
+  type RerankNode,
   type SubflowNode,
 } from '@tianshu/core';
 import { format as dateFnsFormat } from 'date-fns';
@@ -315,6 +316,9 @@ export interface NodeContext {
 interface ModelRuntime {
   provider: ProviderRuntimeInfo;
   sdkId: string;
+  /** 模型类型位（model.type：llm/embedding/reranker…）——rerank 节点判型
+   * 用；行缺 type（历史桩/脏行）兜底 llm */
+  modelType: string;
 }
 
 interface FinishParams {
@@ -684,6 +688,9 @@ function makeNodeHandler(node: GraphNode, ctx: NodeContext): NodeHandler {
   }
   if (node.kind === 'hybridSearch') {
     return makeHybridSearchNodeHandler(node, ctx);
+  }
+  if (node.kind === 'rerank') {
+    return makeRerankNodeHandler(node, ctx);
   }
   if (node.kind === 'database') {
     return makeDatabaseNodeHandler(node, ctx);
@@ -1547,6 +1554,7 @@ async function loadModelRuntime(modelId: number): Promise<ModelRuntime> {
       extraHeaders: providerRow.extraHeaders,
     },
     sdkId: modelRow.modelId,
+    modelType: modelRow.type ?? 'llm',
   };
 }
 
@@ -3866,6 +3874,142 @@ export function makeHybridSearchNodeHandler(
     } catch (e) {
       const failure = toNodeFailure(node, e);
       await writeNodeFailureRecord(ctx, node, node.searchQuery, failure, startedAt);
+      ctx.trace.push(traceFailure(node, startedAt, failure));
+      throw failure;
+    }
+  };
+}
+
+/** 重排候选条数上限（跨过上限截断保序——重排 API 计费/时延随文档数
+ * 线性涨，Cohere/Jina 惯例量级） */
+const RERANK_MAX_CANDIDATES = 250;
+
+/** 单候选文档字符截断（cross-encoder 输入上限惯例，超长保首段） */
+const RERANK_DOC_CHAR_LIMIT = 2000;
+
+/** 重排节点 handler：消费上游 hybridSearch 的 hits 旁路（sourceNodeId
+ * 指定来源，图边保证先执行）→ POST /rerank（业界事实标准形态：
+ * model/query/documents/top_n，Cohere/Jina/vLLM 同形）→ 按
+ * relevance_score 降序切 topN 回挂 hits 旁路。模型须 model.type=reranker
+ * （rerank_model_type）；来源未执行/无 hits 旁路报 rerank_source_invalid
+ * （空数组透传空输出不调 API——空召回不算错）。错误链对齐 embedTexts
+ * （Bearer/extraHeaders/AbortSignal.any/非 2xx 带 payload 摘要）。导出供
+ * 测试（handler 级直调，先例 makeHybridSearchNodeHandler） */
+export function makeRerankNodeHandler(
+  node: RerankNode,
+  ctx: NodeContext,
+): NodeHandler {
+  return async (state) => {
+    const startedAt = Date.now();
+    try {
+      const render = (text: string) =>
+        renderNodePrompt(text, {
+          inputs: state.inputs,
+          nodes: state.nodes,
+          now: ctx.now,
+        });
+      const query = render(node.query);
+      const runtime = await loadModelRuntime(node.modelId);
+      if ((runtime.modelType ?? 'llm') !== 'reranker') {
+        throw new GraphNodeFailure(
+          node.id,
+          'rerank_model_type',
+          '重排节点须选择 reranker 类型模型（模型管理里的类型标记）',
+        );
+      }
+      const source = state.nodes[node.sourceNodeId];
+      if (!source || source.hits === undefined) {
+        throw new GraphNodeFailure(
+          node.id,
+          'rerank_source_invalid',
+          `来源节点未执行或无结构化候选：须将「${node.sourceNodeId}」（hybridSearch 节点）连线至本节点上游`,
+        );
+      }
+      if (source.hits.length === 0) {
+        const output = '';
+        await writeNodeRecord(ctx, node, query, output, startedAt);
+        ctx.trace.push(traceSuccess(node, startedAt, {
+          output,
+          hitsPreview: JSON.stringify([]).slice(0, 2000),
+        }));
+        return toNodeUpdate(node.id, { output, hits: [] });
+      }
+      const candidates = source.hits
+        .slice(0, RERANK_MAX_CANDIDATES)
+        .map((hit) => ({
+          ...hit,
+          text: hit.text.slice(0, RERANK_DOC_CHAR_LIMIT),
+        }));
+      const signal = AbortSignal.any([
+        ctx.abort,
+        AbortSignal.timeout(node.timeoutMs ?? 120_000),
+      ]);
+      const { parseExtraHeaders } = await import('../provider/model-factory');
+      const base = runtime.provider.baseUrl.replace(/\/+$/, '');
+      let response: Response;
+      try {
+        response = await fetch(`${base}/rerank`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(runtime.provider.apiKey
+              ? { Authorization: `Bearer ${runtime.provider.apiKey}` }
+              : {}),
+            ...parseExtraHeaders(runtime.provider.extraHeaders),
+          },
+          body: JSON.stringify({
+            model: runtime.sdkId,
+            query,
+            documents: candidates.map((candidate) => candidate.text),
+            top_n: node.topN,
+          }),
+          signal,
+        });
+      } catch (e) {
+        throw new GraphRunFailure(
+          'rerank_api_error',
+          `重排请求失败: ${errorMessage(e)}`,
+        );
+      }
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new GraphRunFailure(
+          'rerank_api_error',
+          `重排接口返回 HTTP ${response.status}: ${JSON.stringify(payload)?.slice(0, 200)}`,
+        );
+      }
+      const results = (
+        payload as {
+          results?: Array<{ index?: number; relevance_score?: number }>;
+        }
+      )?.results ?? [];
+      const fused: FusedHit[] = results
+        .filter(
+          (entry) =>
+            typeof entry.index === 'number' &&
+            candidates[entry.index] !== undefined,
+        )
+        .sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0))
+        .slice(0, node.topN)
+        .map((entry, i) => ({
+          ...candidates[entry.index!],
+          score: entry.relevance_score ?? 0,
+          rank: i + 1,
+        }));
+      const output = fused
+        .map(
+          (hit) => `【${hit.sourceName}｜相关度 ${hit.score.toFixed(2)}】${hit.text}`,
+        )
+        .join('\n\n');
+      await writeNodeRecord(ctx, node, query, output, startedAt);
+      ctx.trace.push(traceSuccess(node, startedAt, {
+        output,
+        hitsPreview: JSON.stringify(fused).slice(0, 2000),
+      }));
+      return toNodeUpdate(node.id, { output, hits: fused });
+    } catch (e) {
+      const failure = toNodeFailure(node, e);
+      await writeNodeFailureRecord(ctx, node, node.query, failure, startedAt);
       ctx.trace.push(traceFailure(node, startedAt, failure));
       throw failure;
     }

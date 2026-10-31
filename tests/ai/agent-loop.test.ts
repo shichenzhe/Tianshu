@@ -108,14 +108,17 @@ const makeAgent = (
   approvals: ApprovalCoordinator,
   fullAccess = false,
   allowedTools: string[] = [],
-): AgentStreamOptions => ({
-  sessionId: 1,
-  workspacePath: "/tmp/ws",
-  fullAccess: () => fullAccess,
-  isToolAllowed: async (toolName: string) => allowedTools.includes(toolName),
-  requestApproval: (toolCallId, argSummary) =>
-    approvals.request(toolCallId, argSummary),
-});
+): AgentStreamOptions => {
+  const sessionId = 1;
+  return {
+    sessionId,
+    workspacePath: "/tmp/ws",
+    fullAccess: () => fullAccess,
+    isToolAllowed: async (toolName: string) => allowedTools.includes(toolName),
+    requestApproval: (toolCallId, argSummary) =>
+      approvals.request(sessionId, toolCallId, argSummary),
+  };
+};
 
 /** 提取第二次模型调用收到的 ToolMessage 文本（引擎自动回喂验证）。
  * LangChain 形状：ToolMessage {content, tool_call_id, name} */
@@ -456,7 +459,7 @@ describe("agent:approve 审批接线", () => {
 
     // handleUser 形态：末参 token（无效 token 整体拒绝）
     const token = generateUserToken({ id: 1, username: "t" });
-    const pending = approvals.request("t9", "write → a.txt");
+    const pending = approvals.request(1, "t9", "write → a.txt");
     expect(await approveHandler({}, "t9", true, token)).toBe(true);
     await expect(pending).resolves.toBe(true);
     expect(await approveHandler({}, "ghost", true, token)).toBe(false);

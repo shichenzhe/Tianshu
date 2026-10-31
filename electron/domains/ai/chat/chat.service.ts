@@ -1558,7 +1558,7 @@ export default class ChatService {
         return row !== null;
       },
       requestApproval: (toolCallId, argSummary) =>
-        this.approvals.request(toolCallId, argSummary),
+        this.approvals.request(sessionId, toolCallId, argSummary),
       // 监控埋点（spec §4.1 #3）：终态工具事件 → fire-and-forget 落库
       // （recordToolCall 自吞错，失败不影响主流程）；userId 取 session 行
       toolStats: (e) =>
@@ -1907,8 +1907,9 @@ export default class ChatService {
     } finally {
       this.aborts.delete(sessionId);
       this.snapshots.delete(sessionId);
-      // 中断/收尾：作废全部未决审批（resolve false），释放挂起的 execute（spec 决策 #5）
-      this.approvals.voidAll();
+      // 中断/收尾：作废本会话未决审批（resolve false），释放挂起的
+      // execute（spec 决策 #5）；会话维度隔离——他会话并发流的挂起审批不受影响
+      this.approvals.voidAll(sessionId);
     }
   }
 

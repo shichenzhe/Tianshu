@@ -249,8 +249,20 @@ node_modules 里是 **symlink 直指 mirror 仓**（`../mirror/packages/*`）：
 
 **DB 落点覆盖**：env `TIANSHU_DB_URL`（`file:` 绝对路径）可覆盖默认
 `prisma/local.db`——server 经 PrismaClient `datasources` 运行时消费
-（`src/commons/database/db-url.ts`），首启缺库自动 `prisma db push` 建表
-（schema 单一事实源）。
+（`src/commons/database/db-url.ts`），首启缺库自动 `prisma migrate deploy`
+建表（journal 版本化增量；PG 模式存量库首启自动 baseline resolve）。
+
+### schema 变更工作流（migrate 体系）
+
+主 `schema.prisma` 变更后：① `npm run prisma:pg:derive`（派生 PG 变体）
+② `npm run prisma:migrate` 与 `npm run prisma:migrate:pg` 双端各生成迁移
+③ 迁移 SQL 评审后与代码同 commit（**双端成对提交**）。基调向下兼容
+（加法）；破坏性变更须显式迁移+人工评审，禁 `--accept-data-loss`。
+生产启动自动 `migrate deploy`（journal 幂等增量；PG 存量库首启自动
+baseline resolve）。注意 SQLite 存量库（快路径）升级时不会自动跑迁移，
+须手动 `npx prisma migrate deploy --schema prisma/schema.prisma`（或重建
+卷）——PG 模式启动自动 deploy。测试桩（prisma:reset/test-db）保留 db push
+快速通道。
 
 ## PG 检索模式（可选）
 
@@ -276,7 +288,9 @@ pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
 - server 镜像经 monorepo 根 context 构建（vendor 内嵌 @tianshu/* 共享包），
   `dist/src/main.js` 直跑，`/actuator/health` 探活
 - **SQLite 主库持久化**：`TIANSHU_DB_URL=file:/app/data/local.db` 落
-  `server-data` 卷——容器重建/升级数据不丢
+  `server-data` 卷——容器重建/升级数据不丢；SQLite 存量库（快路径）升级时
+  不会自动跑迁移，须进容器手动 `npx prisma migrate deploy --schema
+  prisma/schema.prisma`（或重建卷）——PG 模式启动自动 deploy
 - **PG 检索模式默认开启**（`SEARCH_DB_URL` 已串联 search-pg 服务）；不启用
   检索库可删 server 服务的该 env 与 depends_on，退回本地内存检索
 - 单真源语义与 postgres:// scheme 限制见上一节「PG 检索模式」
@@ -285,15 +299,15 @@ pgvector 向量，Supabase hybrid 配方同构）。compose 部署见下一节
 
 `docker compose --profile main-pg up -d` 前先
 `export TIANSHU_DB_URL=postgres://tianshu:tianshu_main@main-pg:5432/tianshu_main`——
-server 主库整体切 PG（23 张业务表，首启自动 db push 建表），检索层自动跟随
-（同库建检索表）。**PG 模式为全新初始化**（SQLite 存量数据不迁移）；默认不设
-该 env 时为 SQLite 主库（零变化）。
+server 主库整体切 PG（23 张业务表，首启自动 `migrate deploy` 建表），
+检索层自动跟随（同库建检索表）。**PG 模式为全新初始化**（SQLite 存量
+数据不迁移）；默认不设该 env 时为 SQLite 主库（零变化）。
 
 - 本地开发 PG 模式首次须 `npm run prisma:generate:pg`（生成 PG client，
   gitignored）且 build 后 dist 自动随行（nest-cli assets）
 - 跟随主库的检索表建在独立 schema `tianshu_search`（`vector_chunk`），与
-  业务表的 `public` 面零交集——每次启动执行的 db push 对其视而不见，检索
-  数据跨重启保全
+  业务表的 `public` 面零交集——每次启动执行的 `migrate deploy` 对其视而不见，
+  检索数据跨重启保全
 - **contains 大小写已双引擎统一**（原「已知差异」follow-up 已落地）：关键词
   检索的 `contains`（用户/操作日志/资料库）经引擎感知构造（`containsFilter`，
   src/commons/database/db-url.ts）——PG 分支补 `mode: 'insensitive'`（ILIKE），
@@ -317,13 +331,25 @@ server 主库整体切 PG（23 张业务表，首启自动 db push 建表），�
 
 ## 切换 PostgreSQL
 
-1. `cp prisma/schema.prisma.postgresql prisma/schema.prisma`
-2. 修改 `src/config/config.yml` 的 `database.url` 为 postgres 连接串
-   （如 `postgresql://user:pass@host:5432/db`）。运行时以 config.yml 为准，
-   仅设置 `DATABASE_URL` 环境变量会被它覆盖而不生效
-3. Prisma CLI（migrate/deploy）另需 `DATABASE_URL` 环境变量：
-   `export DATABASE_URL="postgresql://user:pass@host:5432/db"`，或写入 `.env` 文件
-4. `npx prisma generate && npm run prisma:deploy`
+1. **运行时切换（唯一开关）**：
+   `export TIANSHU_DB_URL="postgresql://user:pass@host:5432/db"`（与上文
+   compose 主库 PG 模式同款 env）——引擎判定/PrismaClient 装载/首启
+   `migrate deploy` 全部取此 env，启动即自动建表并增量
+2. `src/config/config.yml` 的 `database.url` **不是运行时开关**：顶层加载时
+   仅无条件覆写 `process.env.DATABASE_URL`（`configuration.ts`），不参与
+   引擎选择，切库无需改它；`DATABASE_URL` 只在手工跑 Prisma CLI（migrate）
+   时有用：`export DATABASE_URL="postgresql://user:pass@host:5432/db"`，
+   或写入 `.env` 文件
+3. 迁移命令（migrate 按 schema 同级目录解析 `prisma/pg/migrations`；boot
+   自动 deploy，此处为手工/预演通道）：
+
+   ```bash
+   npx prisma generate --schema prisma/pg/schema.prisma
+   npx prisma migrate deploy --schema prisma/pg/schema.prisma
+   ```
+
+   主 `schema.prisma` 保持 SQLite 单源（`prisma:pg:derive` 派生源），不再
+   cp 覆盖
 
 ## 配置
 

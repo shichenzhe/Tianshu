@@ -6,12 +6,13 @@
  * 分词与融合复用 @tianshu/core（tokenize/rrfFuse），与 mirror 内存
  * BM25 检索行为同源。
  *
- * 检索表限定独立 schema——主库同库模式下 db push 视而不见（防 drift
- * 误杀），数据跨重启保全：ensureDatabasePg 每次启动都跑 prisma db push
- * （派生 schema 只管 public 下的业务表），若 vector_chunk 落 public，
- * 一旦有数据即被判 drift（非空表 db push 拒绝自动 drop、退出 1）→
- * onModuleInit 中止 → 服务永远起不来；空表则每次启动被静默 drop 丢数据。
- * 限定 tianshu_search schema 后 db push 对检索表完全无感（终审 F1）。
+ * 检索表限定独立 schema——主库同库模式下与 migrate 体系正交（防波及/
+ * 误杀），数据跨重启保全：ensureDatabasePg 每次启动都跑 prisma migrate
+ * deploy（派生 migrations 只管 public 下的业务表），检索表若落 public 即
+ * 混入 migrate 管辖面——db push 时代有数据即被判 drift（拒绝自动 drop、
+ * 退出 1）→ onModuleInit 中止 → 服务永远起不来，空表则每次启动被静默
+ * drop 丢数据。限定 tianshu_search schema 后 migrate deploy 对检索表
+ * 完全无感（终审 F1）。
  */
 import { tokenize, type FusedHit } from '@tianshu/core';
 import { overriddenDbUrl } from '../../commons/database/db-url';
@@ -118,7 +119,7 @@ export function searchDbTarget(): string | null {
     // 跟随主库（双引擎 spec §4）：主库 postgres 时检索默认指向主库
     // （检索表 search-pg 幂等 DDL 自建 tianshu_search.vector_chunk，
     // 独立 schema 与主库 Prisma 业务表无交集——检索单真源原则延续，
-    // 且 db push 对检索表无感不误杀）；主库 sqlite 维持本地检索（null）。
+    // 且 migrate deploy 对检索表无感不误杀）；主库 sqlite 维持本地检索（null）。
     // 主库 URL 读取复用 db-url 的 overriddenDbUrl（trim 单源——与引擎
     // 判定同一路径，TIANSHU_DB_URL 带空白符时不出现读值口径分叉）
     const mainUrl = overriddenDbUrl() ?? '';

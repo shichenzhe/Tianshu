@@ -49,7 +49,7 @@ services:
       # 主库落点（PrismaService 的 TIANSHU_DB_URL 覆盖机制）：缺省 SQLite
       # 落 server-data 卷；main-pg 模式（--profile main-pg）先
       # export TIANSHU_DB_URL=postgres://tianshu:tianshu_main@main-pg:5432/tianshu_main
-      # 整体切 PG 主库（首启自动 db push 建表，检索层同库跟随）
+      # 整体切 PG 主库（首启自动 migrate deploy 建表，检索层同库跟随）
       TIANSHU_DB_URL: ${TIANSHU_DB_URL:-file:/app/data/local.db}
       SEARCH_DB_URL: postgres://tianshu:tianshu_search@search-pg:5432/tianshu_search
     volumes:
@@ -58,8 +58,8 @@ services:
       search-pg:
         condition: service_healthy
     # 起栈竞态兜底（终审 F2）：main-pg 走 profile 门控，不加 depends_on——
-    # 缺省 SQLite 栈会被连带拉起 PG；`--profile main-pg` 同时起栈时 db push
-    # 可能先于 main-pg 就绪（ECONNREFUSED），由两侧兜底：本服务 restart
+    # 缺省 SQLite 栈会被连带拉起 PG；`--profile main-pg` 同时起栈时 migrate
+    # deploy 可能先于 main-pg 就绪（ECONNREFUSED），由两侧兜底：本服务 restart
     # 重启进程 + ensureDatabasePg 连接类失败有界重试（3 次×2s）
     restart: unless-stopped
     ports:

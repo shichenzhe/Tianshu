@@ -29,13 +29,13 @@ COPY apps/tianshu-server apps/tianshu-server
 # .dockerignore 另将 src/generated 挡在 context 外（双保险）
 RUN cd apps/tianshu-server && npx prisma generate \
  && npm run prisma:pg:derive && rm -rf src/generated \
- && npx prisma generate --schema prisma/schema.prisma.postgresql
+ && npx prisma generate --schema prisma/pg/schema.prisma
 RUN npm --prefix packages/tianshu-protocol run build \
  && npm --prefix packages/tianshu-core run build \
  && npm run build -w apps/tianshu-server
 # 组装 vendor 内嵌 bundle：@tianshu/* → file:./vendors/*（server 独立部署语义）。
-# prisma CLI 原系 devDependencies，但运行时首启建库要跑 `prisma db push`
-# （db-url.ts 的 prod 树契约），提升进 dependencies 并钉 builder 已装版本。
+# prisma CLI 原系 devDependencies，但运行时迁移要跑 `prisma migrate deploy`
+# （migrate 体系批 T3 契约，db-url.ts），提升进 dependencies 并钉 builder 已装版本。
 # @prisma/client 同随钉版：源声明是 ^6.9.0 范围，bundle lock 重解析可能取到
 # 6.x 新运行时，与已拷贝的 6.19.3 .prisma 生成物错配——钉 builder 已装精确版本
 #
@@ -45,6 +45,11 @@ RUN npm --prefix packages/tianshu-protocol run build \
 # 解析到 dist/src/generated/prisma-pg——拷贝目标按此布局钉定（不是 /bundle/
 # 顶层：dist/src/main.js 相对 require 不命中）。产物自含 runtime/ 与 engine
 # 二进制（builder 平台生成，随 dir 整体拷贝即可用），schema.prisma 也在其中
+# prisma 整树随行（migrate 体系批 T4）：runner 首启 `migrate deploy` 按 schema
+# 同级目录解析 migrations——SQLite 用 prisma/migrations、PG 用 prisma/pg/
+# migrations（db-url.ts 运行时契约同源），双端迁移随整目录 cp 一并入镜像、
+# 无需单列 cp；dev 库 local.db 已被 root .dockerignore 的 **/local.db*
+# 挡在 context 外，不会混入镜像
 RUN mkdir -p /bundle/vendors/tianshu-protocol /bundle/vendors/tianshu-core \
  && cp -r packages/tianshu-protocol/dist /bundle/vendors/tianshu-protocol/ \
  && cp packages/tianshu-protocol/package.json /bundle/vendors/tianshu-protocol/ \

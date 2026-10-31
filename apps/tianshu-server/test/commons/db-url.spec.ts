@@ -1,12 +1,15 @@
 // PK-T3：DB 落点 env 覆盖（src/commons/database/db-url.ts）单测——env 读取/
 // 归一/options 构造/schema 改写纯函数直测；ensureDatabase 首启建库分支
 // （dev 态缺库/空壳自愈、dev 态就绪跳过、注入态三分支）经 fs/spawn 桩验证。
-// 真机全链（独立部署首启建库）经 TIANSHU_DB_URL 指临时库实测。
+// migrate 契约（T3）：缺库分支 migrate deploy 替代 db push（三分支/
+// 探测形态钉形另见 test/core/db-url-migrate.spec.ts）。真机全链（独立部
+// 署首启建库）经 TIANSHU_DB_URL 指临时库实测。
 const mockExists = jest.fn();
 const mockStat = jest.fn();
 const mockMkdir = jest.fn();
 const mockRead = jest.fn();
 const mockWrite = jest.fn();
+const mockCp = jest.fn();
 const mockRm = jest.fn();
 const mockSpawn = jest.fn();
 
@@ -19,6 +22,7 @@ jest.mock('node:fs', () => {
     mkdirSync: mockMkdir,
     readFileSync: mockRead,
     writeFileSync: mockWrite,
+    cpSync: mockCp,
     rmSync: mockRm,
   };
 });
@@ -28,6 +32,8 @@ jest.mock('node:child_process', () => {
     jest.requireActual<typeof import('child_process')>('child_process');
   return { ...actual, spawnSync: mockSpawn };
 });
+
+import { dirname } from 'node:path';
 
 import {
   DB_URL_ENV,
@@ -113,9 +119,16 @@ describe('findSchemaRoot（向上寻根）', () => {
   });
 });
 
-describe('ensureDatabase（首启建库）', () => {
+describe('ensureDatabase（首启建库，migrate deploy 契约）', () => {
   const original = process.env[DB_URL_ENV];
   const startDir = '/proj/dist/src/commons/database';
+  /** 表探测否定应答（缺库/空壳 ⇒ 无业务表 → malformed JSON 退出 1） */
+  const probeEmpty = {
+    status: 1,
+    stdout: '',
+    stderr: 'Error: SQLite database error\nmalformed JSON',
+  };
+  const spawnOk = { status: 0, stdout: '', stderr: '' };
 
   beforeEach(() => {
     mockExists.mockReset();
@@ -123,6 +136,7 @@ describe('ensureDatabase（首启建库）', () => {
     mockMkdir.mockReset();
     mockRead.mockReset();
     mockWrite.mockReset();
+    mockCp.mockReset();
     mockRm.mockReset();
     mockSpawn.mockReset();
   });
@@ -132,25 +146,29 @@ describe('ensureDatabase（首启建库）', () => {
     else process.env[DB_URL_ENV] = original;
   });
 
-  it('dev 态缺库（未注入 env，新 clone 首启）→ 对 schema 字面量落点 db push 自愈', () => {
+  it('dev 态缺库（未注入 env，新 clone 首启）→ 对 schema 字面量落点 migrate deploy 自愈', () => {
     delete process.env[DB_URL_ENV];
     // schema.prisma 在（寻根桩）、仓内 local.db 不在
     mockExists.mockImplementation(
       (path: unknown) => path === '/proj/prisma/schema.prisma',
     );
     mockRead.mockReturnValue(SCHEMA);
-    mockSpawn.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    mockSpawn
+      .mockReturnValueOnce(probeEmpty) // 表探测：空库否定（无 resolve）
+      .mockReturnValue(spawnOk); // deploy
     ensureDatabase(startDir);
 
     expect(mockMkdir).toHaveBeenCalledWith('/proj/prisma', {
       recursive: true,
     });
-    const [, args, options] = mockSpawn.mock.calls[0] as [
+    const [, args, options] = mockSpawn.mock.calls[1] as [
       string,
       string[],
       { env: Record<string, string> },
     ];
     expect(args[0]).toBe('/proj/node_modules/prisma/build/index.js');
+    expect(args[1]).toBe('migrate');
+    expect(args[2]).toBe('deploy');
     // dev 态建库目标 = schema 字面量落点（<root>/prisma/local.db 绝对路径）
     expect(options.env[DB_URL_ENV]).toBe('file:/proj/prisma/local.db');
   });
@@ -164,10 +182,13 @@ describe('ensureDatabase（首启建库）', () => {
     );
     mockStat.mockReturnValue({ size: 0 });
     mockRead.mockReturnValue(SCHEMA);
-    mockSpawn.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    mockSpawn
+      .mockReturnValueOnce(probeEmpty)
+      .mockReturnValueOnce(spawnOk);
     ensureDatabase(startDir);
-    expect(mockSpawn).toHaveBeenCalledTimes(1);
-    const [, , options] = mockSpawn.mock.calls[0] as [
+    // 探测（空库否定）+ deploy，无 resolve
+    expect(mockSpawn).toHaveBeenCalledTimes(2);
+    const [, , options] = mockSpawn.mock.calls[1] as [
       string,
       string[],
       { env: Record<string, string> },
@@ -175,7 +196,7 @@ describe('ensureDatabase（首启建库）', () => {
     expect(options.env[DB_URL_ENV]).toBe('file:/proj/prisma/local.db');
   });
 
-  it('dev 态库就绪（存在且非空）→ 不跑 db push（每次启动快路径）', () => {
+  it('dev 态库就绪（存在且非空）→ 不跑 migrate deploy（每次启动快路径）', () => {
     delete process.env[DB_URL_ENV];
     mockExists.mockReturnValue(true);
     mockStat.mockReturnValue({ size: 4096 });
@@ -183,7 +204,7 @@ describe('ensureDatabase（首启建库）', () => {
     expect(mockSpawn).not.toHaveBeenCalled();
   });
 
-  it('注入态库文件就绪 → 仅确保目录，不跑 db push（非首启快路径）', () => {
+  it('注入态库文件就绪 → 仅确保目录，不跑 migrate deploy（非首启快路径）', () => {
     process.env[DB_URL_ENV] = '/data/db/local.db';
     mockExists.mockReturnValue(true);
     mockStat.mockReturnValue({ size: 4096 });
@@ -201,9 +222,9 @@ describe('ensureDatabase（首启建库）', () => {
     );
     mockStat.mockReturnValue({ size: 0 });
     mockRead.mockReturnValue(SCHEMA);
-    mockSpawn.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    mockSpawn.mockReturnValueOnce(probeEmpty).mockReturnValueOnce(spawnOk);
     ensureDatabase(startDir);
-    const [, , options] = mockSpawn.mock.calls[0] as [
+    const [, , options] = mockSpawn.mock.calls[1] as [
       string,
       string[],
       { env: Record<string, string> },
@@ -211,13 +232,13 @@ describe('ensureDatabase（首启建库）', () => {
     expect(options.env[DB_URL_ENV]).toBe('file:/data/db/local.db');
   });
 
-  it('注入态首启缺库 → 临时 schema 改写 env 后 db push（execPath + CLI + 归一 URL 注入）', () => {
+  it('注入态首启缺库 → 临时 migrate 工作区（schema 改写 env + migrations 随行）后 migrate deploy（execPath + CLI + 归一 URL 注入）', () => {
     process.env[DB_URL_ENV] = '/data/db/local.db';
     mockExists.mockImplementation(
       (path: unknown) => path === '/proj/prisma/schema.prisma',
     );
     mockRead.mockReturnValue(SCHEMA);
-    mockSpawn.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    mockSpawn.mockReturnValueOnce(probeEmpty).mockReturnValueOnce(spawnOk);
     ensureDatabase(startDir);
 
     expect(mockMkdir).toHaveBeenCalledWith('/data/db', { recursive: true });
@@ -225,37 +246,47 @@ describe('ensureDatabase（首启建库）', () => {
     const [, written] = mockWrite.mock.calls[0] as [string, string];
     expect(written).toContain(`url = env("${DB_URL_ENV}")`);
     expect(written).not.toContain('file:./local.db');
-    // db push：process.execPath + <root>/node_modules/prisma/build/index.js
-    const [cmd, args, options] = mockSpawn.mock.calls[0] as [
+    // migrations 整目录复制到临时 schema 同级（prisma 按 schema 同级解析）
+    expect(mockCp).toHaveBeenCalledWith(
+      '/proj/prisma/migrations',
+      expect.stringMatching(/tianshu-migrate-\d+[/\\]migrations$/),
+      { recursive: true },
+    );
+    // migrate deploy：process.execPath + <root>/node_modules/prisma/build/index.js
+    const [cmd, args, options] = mockSpawn.mock.calls[1] as [
       string,
       string[],
       { env: Record<string, string> },
     ];
     expect(cmd).toBe(process.execPath);
     expect(args[0]).toBe('/proj/node_modules/prisma/build/index.js');
-    expect(args[1]).toBe('db');
-    expect(args[2]).toBe('push');
-    expect(args[3]).toBe('--skip-generate');
-    expect(args[4]).toBe('--schema');
-    expect(args[5]).toMatch(/tianshu-schema-\d+\.prisma$/);
+    expect(args[1]).toBe('migrate');
+    expect(args[2]).toBe('deploy');
+    expect(args[3]).toBe('--schema');
+    expect(args[4]).toMatch(/tianshu-migrate-\d+[/\\]schema\.prisma$/);
     expect(options.env[DB_URL_ENV]).toBe('file:/data/db/local.db');
-    // 临时 schema 清理
-    expect(mockRm).toHaveBeenCalledWith(args[5], { force: true });
+    // 临时 migrate 工作区递归清理
+    expect(mockRm).toHaveBeenCalledWith(dirname(args[4]), {
+      recursive: true,
+      force: true,
+    });
   });
 
-  it('db push 失败 → 抛错带退出码与输出尾段（建库失败必须响亮）', () => {
+  it('migrate deploy 失败 → 抛错带退出码与输出尾段（建库失败必须响亮）', () => {
     process.env[DB_URL_ENV] = 'file:/data/db/local.db';
     mockExists.mockImplementation(
       (path: unknown) => path === '/proj/prisma/schema.prisma',
     );
     mockRead.mockReturnValue(SCHEMA);
-    mockSpawn.mockReturnValue({
-      status: 1,
-      stdout: '',
-      stderr: 'Error: schema engine boom',
-    });
+    mockSpawn
+      .mockReturnValueOnce(probeEmpty)
+      .mockReturnValueOnce({
+        status: 1,
+        stdout: '',
+        stderr: 'Error: schema engine boom',
+      });
     expect(() => ensureDatabase(startDir)).toThrow(
-      /退出码 1.*schema engine boom/s,
+      /首启建库失败（prisma migrate deploy 退出码 1）.*schema engine boom/s,
     );
   });
 });

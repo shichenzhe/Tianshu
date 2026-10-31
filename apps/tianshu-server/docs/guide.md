@@ -18,7 +18,7 @@ model note {
 }
 ```
 
-执行 `npx prisma generate`。若用 PostgreSQL，同步修改 `schema.prisma.postgresql`。
+执行 `npx prisma generate`。若用 PostgreSQL，同步修改 `prisma/pg/schema.prisma`。
 本地开发直接 `npm run prisma:reset` 重建库（会清空数据）。
 
 ## 第 2 步：entity（库表实体 + 查询解码）

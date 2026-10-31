@@ -20,6 +20,7 @@ server Dockerfile 是独立仓时代产物（subtree 前史）：`COPY package*.
 | 4 | `prisma generate` 必须先于 `nest build`（TS 类型依赖生成物） | 层序：generate → build |
 | 5 | workspace 不提升：prisma CLI 与 `.prisma` 生成物在 `apps/tianshu-server/node_modules/`；根 `node_modules/.prisma` 是 postinstall **占位**（空 schema 生成物，`UserType` 等枚举缺失 → IsEnum 崩） | COPY 源精确到 `/repo/apps/tianshu-server/node_modules/.prisma` |
 | 6 | compose 相对 context 相对 compose 文件目录（`..` 只到 apps/） | `context: ../..`（上批已落） |
+| 7 | **实施期新增**：spike 的健康 ok 系假阳性——主树 gitignored 开发库 `prisma/local.db` 被 COPY 烘进镜像，掩盖了首启 `prisma db push` 依赖 CLI（devDep 被 transform 删除）的事实 | transform 将 `prisma` CLI 按 builder 实装精确版本提升进 prod 依赖；`.dockerignore` 加 `**/local.db*`（另加 `**/.env` 防开发密钥入构建上下文——终审追加） |
 
 ## 设计
 

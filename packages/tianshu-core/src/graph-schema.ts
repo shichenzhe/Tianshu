@@ -617,6 +617,21 @@ export const hybridSearchNodeSchema = z.object({
   timeoutMs: z.number().int().optional(),
 });
 
+/** 重排节点（kind:rerank）：消费上游 hybridSearch 的 hits 旁路做
+ * cross-encoder 重排（业界事实标准 POST /rerank，Cohere/Jina/vLLM 同形）；
+ * 模型须 model.type=reranker（provider/model 体系已预留类型位）。
+ * sourceNodeId 须经图边保证先执行——未连线时 hits 缺失报
+ * rerank_source_invalid 系预期行为而非 bug（对齐 Dify 变量引用惯例）。 */
+export const rerankNodeSchema = z.object({
+  ...nodeBase,
+  kind: z.literal("rerank"),
+  query: z.string().min(1),
+  sourceNodeId: z.string().min(1),
+  modelId: z.number().int(),
+  topN: z.number().int().min(1).max(50).default(5),
+  timeoutMs: z.number().int().optional(),
+});
+
 export const graphNodeSchema = z.union([
   codeNodeSchema,
   llmNodeSchema,
@@ -637,6 +652,7 @@ export const graphNodeSchema = z.union([
   vectorizeNodeSchema,
   vectorSearchNodeSchema,
   hybridSearchNodeSchema,
+  rerankNodeSchema,
   databaseNodeSchema,
   excelReadNodeSchema,
   excelWriteNodeSchema,
@@ -685,6 +701,7 @@ export type DelayNode = z.infer<typeof delayNodeSchema>;
 export type VectorizeNode = z.infer<typeof vectorizeNodeSchema>;
 export type VectorSearchNode = z.infer<typeof vectorSearchNodeSchema>;
 export type HybridSearchNode = z.infer<typeof hybridSearchNodeSchema>;
+export type RerankNode = z.infer<typeof rerankNodeSchema>;
 export type DatabaseNode = z.infer<typeof databaseNodeSchema>;
 export type ExcelReadNode = z.infer<typeof excelReadNodeSchema>;
 export type ExcelWriteNode = z.infer<typeof excelWriteNodeSchema>;

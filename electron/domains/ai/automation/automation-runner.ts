@@ -93,17 +93,37 @@ export interface AutomationPermissions {
   requestApproval: () => Promise<boolean>;
 }
 
+/** 审批记忆查表闭包（chat 链同款，审查批 F3 收口）：workspaceId 缺席
+ *  恒 false；命中 toolPermission 行（工作空间已记忆）返回 true */
+export function rememberedToolOf(
+  workspaceId: number | null | undefined,
+): (toolName: string) => Promise<boolean> {
+  return async (toolName) => {
+    if (workspaceId == null) return false;
+    const row = await prisma.toolPermission.findUnique({
+      where: { workspaceId_toolName: { workspaceId, toolName } },
+      select: { id: true },
+    });
+    return row !== null;
+  };
+}
+
 /** 无人值守权限分流:full=完全访问+审批放行(原行为);default=只读执行,
  * 写类审批被拒但任务继续(agent 收到拒绝反馈),与会话 default 语义对齐。
  * isToolAllowed 必须随 full 变 false:chat.service 写门禁对 isToolAllowed=true
- * 的工具直接放行(门禁短路),requestApproval 永不触达 */
+ * 的工具直接放行(门禁短路),requestApproval 永不触达。
+ * rememberedTool（2026-11-01 审查批，F3 半边收口）：default 档命中
+ * 「工作空间已记忆工具」直执行——chat 链同语义（chat.service agent 装配），
+ * 此前图/自动化链一律拒；缺省不查（原行为，测试注入面） */
 export function resolveAutomationPermissions(
   accessMode: "default" | "full",
+  rememberedTool?: (toolName: string) => Promise<boolean>,
 ): AutomationPermissions {
   const full = accessMode === "full";
   return {
     fullAccess: () => full,
-    isToolAllowed: async () => full,
+    isToolAllowed: async (toolName) =>
+      full || (await rememberedTool?.(toolName)) === true,
     requestApproval: async () => full,
   };
 }
@@ -376,9 +396,11 @@ async function streamAndRecord(
       userId: task.userId ?? undefined,
       workspaceId: task.workspaceId,
       modelId: task.modelId,
-      // 权限按任务持久化 accessMode 分流(spec §2.3),不再无条件放行
+      // 权限按任务持久化 accessMode 分流(spec §2.3),不再无条件放行；
+      // 审批记忆查表（审查批 F3 收口）：命中工作空间已记忆工具直执行
       ...resolveAutomationPermissions(
         task.accessMode === "full" ? "full" : "default",
+        rememberedToolOf(task.workspaceId),
       ),
       // 命令判定门(SP2):与 chat 共享模块单例;无人值守 ask 强拒不挂审批
       decideCommand: commandGate,

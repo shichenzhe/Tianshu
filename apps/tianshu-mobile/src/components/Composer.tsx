@@ -163,7 +163,7 @@ export function Composer({
           {pendingImages.map((image) => (
             <View
               key={image.name}
-              className="flex-row items-center gap-1.5 rounded-lg bg-field px-2.5 py-1.5 dark:bg-[#2C2C2E]"
+              className="min-h-11 flex-row items-center gap-1.5 rounded-lg bg-field px-2.5 dark:bg-[#2C2C2E]"
             >
               <ImagePlus size={13} color={colors.primary} />
               <Text
@@ -174,9 +174,11 @@ export function Composer({
               </Text>
               <Pressable
                 onPress={() => onRemoveImage(image.name)}
-                hitSlop={8}
+                className="h-11 w-11 items-center justify-center"
                 disabled={sending}
-                accessibilityLabel="remove image"
+                accessibilityRole="button"
+                accessibilityLabel={t("removeImage", { name: image.name })}
+                accessibilityState={{ disabled: sending }}
               >
                 <X size={14} color="#8E8E93" />
               </Pressable>
@@ -189,7 +191,7 @@ export function Composer({
           {fileRefs.map((path) => (
             <View
               key={path}
-              className="flex-row items-center gap-1 rounded-md bg-field px-2 py-1 dark:bg-[#2C2C2E]"
+              className="min-h-11 flex-row items-center gap-1 rounded-md bg-field px-2 dark:bg-[#2C2C2E]"
             >
               <FileText size={11} color={colors.primary} />
               <Text
@@ -200,9 +202,11 @@ export function Composer({
               </Text>
               <Pressable
                 onPress={() => onRemoveFileRef(path)}
-                hitSlop={6}
+                className="h-11 w-11 items-center justify-center"
                 disabled={sending}
-                accessibilityLabel={`remove ref ${path}`}
+                accessibilityRole="button"
+                accessibilityLabel={t("removeFileRef", { name: path })}
+                accessibilityState={{ disabled: sending }}
               >
                 <X size={12} color="#8E8E93" />
               </Pressable>
@@ -215,7 +219,7 @@ export function Composer({
           {localFiles.map((file) => (
             <View
               key={file.name}
-              className="flex-row items-center gap-1 rounded-md bg-field px-2 py-1 dark:bg-[#2C2C2E]"
+              className="min-h-11 flex-row items-center gap-1 rounded-md bg-field px-2 dark:bg-[#2C2C2E]"
             >
               <FileUp size={11} color={colors.primary} />
               <Text
@@ -226,9 +230,11 @@ export function Composer({
               </Text>
               <Pressable
                 onPress={() => onRemoveLocalFile?.(file.name)}
-                hitSlop={6}
+                className="h-11 w-11 items-center justify-center"
                 disabled={sending}
-                accessibilityLabel={`remove file ${file.name}`}
+                accessibilityRole="button"
+                accessibilityLabel={t("removeLocalFile", { name: file.name })}
+                accessibilityState={{ disabled: sending }}
               >
                 <X size={12} color="#8E8E93" />
               </Pressable>
@@ -241,7 +247,7 @@ export function Composer({
           {skillRefs.map((name) => (
             <View
               key={name}
-              className="flex-row items-center gap-1 rounded-md bg-field px-2 py-1 dark:bg-[#2C2C2E]"
+              className="min-h-11 flex-row items-center gap-1 rounded-md bg-field px-2 dark:bg-[#2C2C2E]"
             >
               <Zap size={11} color={colors.primary} />
               <Text
@@ -252,9 +258,11 @@ export function Composer({
               </Text>
               <Pressable
                 onPress={() => onRemoveSkillRef(name)}
-                hitSlop={6}
+                className="h-11 w-11 items-center justify-center"
                 disabled={sending}
-                accessibilityLabel={`remove skill ${name}`}
+                accessibilityRole="button"
+                accessibilityLabel={t("removeSkillRef", { name })}
+                accessibilityState={{ disabled: sending }}
               >
                 <X size={12} color="#8E8E93" />
               </Pressable>
@@ -267,7 +275,11 @@ export function Composer({
           <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
             {t("editing")}
           </Text>
-          <Pressable onPress={onCancelEdit} hitSlop={8}>
+          <Pressable
+            onPress={onCancelEdit}
+            accessibilityRole="button"
+            className="min-h-11 justify-center px-2"
+          >
             <Text className="text-xs" style={{ color: colors.primary }}>
               {t("cancelEdit")}
             </Text>
@@ -290,10 +302,14 @@ export function Composer({
             <Pressable
               onPress={() => setPlusOpen(true)}
               disabled={busy}
-              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: busy }}
               accessibilityLabel={t("plusMenuTitle")}
-              className="h-9 w-9 items-center justify-center self-center rounded-full"
-              style={{ opacity: busy ? 0.4 : 1 }}
+              className="h-11 w-11 items-center justify-center self-center rounded-full"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.subtle : "transparent",
+                opacity: busy ? 0.4 : 1,
+              })}
             >
               <AppIcon
                 name="plus"
@@ -311,16 +327,20 @@ export function Composer({
             placeholderTextColor="#8E8E93"
             multiline
             editable={!sending}
-            className="max-h-32 min-h-[36px] flex-1 px-1 py-1.5 text-[15px] text-black dark:text-white"
+            className="max-h-32 min-h-11 flex-1 px-1 py-2 text-[15px] text-black dark:text-white"
           />
           {onPolish != null && !sending && text.trim() !== "" && (
             <Pressable
               onPress={() => void handlePolish()}
               disabled={polishing}
-              hitSlop={4}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: polishing, busy: polishing }}
               accessibilityLabel={t("polish")}
-              className="h-9 w-9 items-center justify-center self-center rounded-full"
-              style={{ opacity: polishing ? 0.4 : 1 }}
+              className="h-11 w-11 items-center justify-center self-center rounded-full"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.subtle : "transparent",
+                opacity: polishing ? 0.4 : 1,
+              })}
             >
               {polishing ? (
                 <ActivityIndicator size="small" color={colors.primary} />
@@ -332,9 +352,13 @@ export function Composer({
           {sending ? (
             <Pressable
               onPress={onStop}
+              accessibilityRole="button"
               accessibilityLabel={t("stop")}
-              className="h-9 w-9 items-center justify-center rounded-full"
-              style={{ backgroundColor: STOP_BG }}
+              className="h-11 w-11 items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                backgroundColor: STOP_BG,
+                opacity: pressed ? 0.72 : 1,
+              })}
             >
               <Square size={12} color="#fff" fill="#fff" />
             </Pressable>
@@ -342,12 +366,14 @@ export function Composer({
             <Pressable
               onPress={() => void handleSend()}
               disabled={!canSend}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSend }}
               accessibilityLabel={t("send")}
-              className="h-9 w-9 items-center justify-center rounded-full"
-              style={{
+              className="h-11 w-11 items-center justify-center rounded-full"
+              style={({ pressed }) => ({
                 backgroundColor: colors.primary,
-                opacity: canSend ? 1 : 0.4,
-              }}
+                opacity: !canSend ? 0.4 : pressed ? 0.72 : 1,
+              })}
             >
               <AppIcon
                 name="arrow.up"

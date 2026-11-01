@@ -27,18 +27,26 @@ export function ChatsHeaderActions() {
     : undefined;
 
   return (
-    <View className="mr-2 flex-row items-center gap-3">
+    <View className="mr-1 flex-row items-center gap-0.5">
       <Pressable
         onPress={() => router.push("/connections")}
-        hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel={activeConfig?.name ?? t("noConnection")}
+        className="h-11 w-11 items-center justify-center rounded-full"
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? colors.subtle : "transparent",
+        })}
       >
         <StateDot state={activeState} />
       </Pressable>
       <Pressable
         onPress={toggleSearch}
-        hitSlop={8}
+        accessibilityRole="button"
         accessibilityLabel={t("searchPlaceholder")}
+        className="h-11 w-11 items-center justify-center rounded-full"
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? colors.subtle : "transparent",
+        })}
       >
         <AppIcon
           name="magnifyingglass"

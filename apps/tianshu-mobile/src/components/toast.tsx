@@ -50,6 +50,7 @@ export function ToastHost() {
   const colors = useThemeColors();
   const [current, setCurrent] = useState<ToastPayload | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-12)).current;
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const dismiss = useCallback(
@@ -58,13 +59,20 @@ export function ToastHost() {
         clearTimeout(hideTimer.current);
         hideTimer.current = null;
       }
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration,
-        useNativeDriver: true,
-      }).start(() => setCurrent(null));
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -8,
+          duration,
+          useNativeDriver: true,
+        }),
+      ]).start(() => setCurrent(null));
     },
-    [opacity],
+    [opacity, translateY],
   );
 
   useEffect(() => {
@@ -74,25 +82,32 @@ export function ToastHost() {
         hideTimer.current = null;
       }
       setCurrent(payload); // 新条替换在显条
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 160,
-        useNativeDriver: true,
-      }).start();
+      translateY.setValue(-12);
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 160,
+          useNativeDriver: true,
+        }),
+      ]).start();
       hideTimer.current = setTimeout(
         () => {
           hideTimer.current = null;
           dismiss(200);
         },
-        KIND_DURATION[payload.kind] +
-          (payload.action ? ACTION_EXTRA_MS : 0),
+        KIND_DURATION[payload.kind] + (payload.action ? ACTION_EXTRA_MS : 0),
       );
     });
     return () => {
       unsubscribe();
       if (hideTimer.current !== null) clearTimeout(hideTimer.current);
     };
-  }, [opacity, dismiss]);
+  }, [opacity, translateY, dismiss]);
 
   if (current === null) return null;
 
@@ -100,6 +115,8 @@ export function ToastHost() {
     <AnimatedPressable
       // 点击即收（长 error 文案阅读完手动关）
       onPress={() => dismiss(120)}
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
       className={`absolute left-4 right-4 overflow-hidden rounded-2xl border border-[#54545866] px-3.5 py-2.5 ${
         // GL-P6③：iOS 真毛玻璃（Liquid Glass）——BlurView 承担底，tint 减轻；
         // Android blur 需 experimentalBlurMethod（性能权衡），保持半透明实底
@@ -108,6 +125,7 @@ export function ToastHost() {
       style={{
         top: insets.top + 8,
         opacity,
+        transform: [{ translateY }],
         shadowColor: "#000",
         shadowOpacity: 0.25,
         shadowRadius: 8,
@@ -139,7 +157,9 @@ export function ToastHost() {
               current.action?.onAction();
               dismiss(120);
             }}
+            accessibilityRole="button"
             accessibilityLabel={current.action.label}
+            className="min-h-11 justify-center px-2"
           >
             <Text
               className="text-sm font-semibold"

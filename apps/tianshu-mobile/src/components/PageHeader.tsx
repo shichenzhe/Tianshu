@@ -22,23 +22,29 @@ export function PageHeader({
   const router = useRouter();
   const colors = useThemeColors();
   return (
-    <View className="flex-row items-center gap-2 px-3 pb-3 pt-2">
+    <View className="h-12 flex-row items-center px-2">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={backLabel}
         onPress={onBack ?? (() => router.back())}
-        hitSlop={12}
-        className="h-9 w-9 items-center justify-center"
+        className="h-11 w-11 items-center justify-center rounded-full"
+        style={({ pressed }) => ({
+          backgroundColor: pressed ? colors.subtle : "transparent",
+        })}
       >
         <ChevronLeft size={26} color={colors.primary} />
       </Pressable>
-      <Text
-        numberOfLines={1}
-        className="min-w-0 flex-1 text-[17px] font-semibold text-black dark:text-white"
-      >
-        {title}
-      </Text>
-      {right}
+      <View className="min-w-0 flex-1 items-center">
+        <Text
+          numberOfLines={1}
+          className="text-center text-[17px] font-semibold text-black dark:text-white"
+        >
+          {title}
+        </Text>
+      </View>
+      <View className="min-w-11 flex-row items-center justify-end">
+        {right}
+      </View>
     </View>
   );
 }

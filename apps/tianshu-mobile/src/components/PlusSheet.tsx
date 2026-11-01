@@ -1,7 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { Modal, Pressable, Text, View } from "react-native";
 import { Camera, FileText, FileUp, Zap, Plus } from "lucide-react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { sheetBottomPadding } from "@/lib/sheet-layout";
 import { useThemeColors } from "@/store/theme";
 
 /**
@@ -34,6 +36,7 @@ export function PlusSheet({
 }) {
   const { t } = useTranslation("chat");
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
 
   const items = [
     ...(filesCap
@@ -70,13 +73,15 @@ export function PlusSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable className="flex-1 justify-end bg-black/60" onPress={onClose}>
+      <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          className="rounded-t-2xl bg-white shadow-lg shadow-black/25 px-4 pb-8 pt-3 dark:bg-neutral-900"
+          accessibilityViewIsModal
+          className="rounded-t-2xl bg-white px-4 pt-3 shadow-lg shadow-black/25 dark:bg-neutral-900"
+          style={{ paddingBottom: sheetBottomPadding(insets.bottom) }}
         >
           <View className="mb-2 self-center h-[5px] w-9 rounded-full bg-black/20 dark:bg-white/25" />
           <Text className="mb-1 px-1 text-xs font-medium text-label3 dark:text-[#EBEBF54D]">
@@ -87,13 +92,13 @@ export function PlusSheet({
               <Pressable
                 key={key}
                 onPress={() => {
-                  onClose();
-                  // iOS：系统 document-picker 需 present 到根控制器，RN Modal
+                  onClose(); // iOS：系统 document-picker 需 present 到根控制器，RN Modal
                   // 关闭动画进行中同帧调起会 present 冲突立即 canceled（真机
                   // 「上传文件无反应」根因）——待 Modal 退场后再回调入口
                   setTimeout(onPress, 350);
                 }}
-                className="w-1/3 items-center gap-1.5 py-3"
+                className="min-h-24 w-1/3 items-center justify-center gap-1.5 py-3"
+                accessibilityRole="button"
                 style={({ pressed }) => ({
                   opacity: pressed ? 0.6 : 1,
                 })}
@@ -110,6 +115,19 @@ export function PlusSheet({
               </Pressable>
             ))}
           </View>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("common:cancel")}
+            className="mt-1 min-h-12 items-center justify-center rounded-lg border-t border-sep dark:border-[#545458A6]"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.subtle : "transparent",
+            })}
+          >
+            <Text className="text-[16px] font-medium text-black dark:text-white">
+              {t("common:cancel")}
+            </Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>
@@ -130,11 +148,13 @@ export function PlusButton({
     <Pressable
       onPress={onPress}
       disabled={disabled}
-      className="h-9 w-9 items-center justify-center rounded-lg"
+      className="h-11 w-11 items-center justify-center rounded-full"
       style={{
         backgroundColor: colors.subtle,
         opacity: disabled ? 0.4 : 1,
       }}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: disabled === true }}
       accessibilityLabel={t("plusMenuTitle")}
     >
       <Plus size={18} color={colors.primary} />

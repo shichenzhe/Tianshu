@@ -41,15 +41,19 @@ import { RectButton } from "react-native-gesture-handler";
 function ActionButton({
   Icon,
   color,
+  label,
   onPress,
 }: {
   Icon: typeof Pin;
   color: string;
+  label: string;
   onPress: () => void;
 }) {
   return (
     <RectButton
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={{
         width: 56,
         justifyContent: "center",
@@ -123,6 +127,7 @@ export function SessionRow({
             <ActionButton
               Icon={Pin}
               color={colors.primary}
+              label={t(session.pinnedAt == null ? "pin" : "unpin")}
               onPress={() => {
                 tapLight();
                 closeAnd(onTogglePin);
@@ -131,6 +136,7 @@ export function SessionRow({
             <ActionButton
               Icon={Archive}
               color="#8E8E93"
+              label={t(session.archivedAt == null ? "archive" : "unarchive")}
               onPress={() => {
                 tapLight();
                 closeAnd(onToggleArchive);
@@ -139,6 +145,7 @@ export function SessionRow({
             <ActionButton
               Icon={Trash2}
               color="#FF3B30"
+              label={t("delete")}
               onPress={() => {
                 tapLight();
                 closeAnd(onDelete);
@@ -152,6 +159,7 @@ export function SessionRow({
         <Pressable
           onPress={onPress}
           onLongPress={onLongPress}
+          accessibilityRole="button"
           className="flex-row items-center gap-3 bg-card px-4 py-3 dark:bg-[#1C1C1E]"
           style={({ pressed }) => ({
             backgroundColor: pinnedBg(pressed),

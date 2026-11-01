@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 
+import { useThemeColors } from "@/store/theme";
+
 /** 微信式通用行：左图标/头像 + 标题(+副标题) + 右槽 + chevron；
  *  hairline 分隔，isLast（GroupSection 注入）末行去线 */
 export function ListItem({
@@ -21,13 +23,18 @@ export function ListItem({
   showChevron?: boolean;
   isLast?: boolean;
 }) {
+  const colors = useThemeColors();
   return (
     <Pressable
       onPress={onPress}
       disabled={onPress == null}
-      className={`flex-row items-center gap-3 bg-card px-3 py-3 dark:bg-[#1C1C1E] ${
+      accessibilityRole={onPress == null ? undefined : "button"}
+      className={`min-h-[52px] flex-row items-center gap-3 bg-card px-4 py-3 dark:bg-[#1C1C1E] ${
         isLast ? "" : "border-b border-sep dark:border-[#545458A6]"
       }`}
+      style={({ pressed }) =>
+        pressed ? { backgroundColor: colors.subtle } : {}
+      }
     >
       {icon}
       <View className="min-w-0 flex-1">

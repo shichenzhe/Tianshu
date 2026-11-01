@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FlatList, Modal, Pressable, Text, View } from "react-native";
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Plus, Radio } from "lucide-react-native";
 
@@ -44,8 +53,12 @@ export default function ConnectionsScreen() {
       <View className="flex-row gap-3 border-b border-sep px-4 py-3 dark:border-[#545458A6]">
         <Pressable
           onPress={() => openCreate("direct")}
-          className="flex-1 flex-row items-center justify-center gap-1 rounded-lg px-3 py-2.5"
-          style={{ backgroundColor: colors.primary }}
+          accessibilityRole="button"
+          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-lg px-3"
+          style={({ pressed }) => ({
+            backgroundColor: colors.primary,
+            opacity: pressed ? 0.72 : 1,
+          })}
         >
           <Plus size={14} color="#fff" />
           <Text className="text-sm text-white">
@@ -54,8 +67,12 @@ export default function ConnectionsScreen() {
         </Pressable>
         <Pressable
           onPress={() => openCreate("relay")}
-          className="flex-1 flex-row items-center justify-center gap-1 rounded-lg border px-3 py-2.5"
-          style={{ borderColor: colors.primary }}
+          accessibilityRole="button"
+          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-lg border px-3"
+          style={({ pressed }) => ({
+            borderColor: colors.primary,
+            backgroundColor: pressed ? colors.subtle : "transparent",
+          })}
         >
           <Radio size={14} color={colors.primary} />
           <Text className="text-sm" style={{ color: colors.primary }}>
@@ -97,17 +114,32 @@ export default function ConnectionsScreen() {
         animationType="slide"
         onRequestClose={closeForm}
       >
-        {/* 全屏 Modal 无 Stack 头部，SafeAreaView 代 pt-10 手调（T13 布局顺手项） */}
-        <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-          <View className="flex-1 bg-white px-4 dark:bg-black">
-            {formVisible && (
-              <ConnectionForm
-                initial={editing}
-                defaultMode={createMode}
-                onDone={closeForm}
-              />
-            )}
-          </View>
+        {/* 全屏表单随键盘避让并可滚动，保证小屏上底部保存按钮始终可达。 */}
+        <SafeAreaView
+          className="flex-1 bg-white dark:bg-black"
+          edges={["top", "bottom"]}
+        >
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{
+                flexGrow: 1,
+                padding: 16,
+                paddingBottom: 32,
+              }}
+            >
+              {formVisible && (
+                <ConnectionForm
+                  initial={editing}
+                  defaultMode={createMode}
+                  onDone={closeForm}
+                />
+              )}
+            </ScrollView>
+          </KeyboardAvoidingView>
         </SafeAreaView>
       </Modal>
     </View>

@@ -107,7 +107,10 @@ export function ConnectionCard({ config, onEdit, isLast = false }: Props) {
           className="mr-2 h-2.5 w-2.5 rounded-full"
           style={{ backgroundColor: STATE_DOT[shown] }}
         />
-        <Text className="flex-1 text-base font-medium text-black dark:text-white">
+        <Text
+          numberOfLines={1}
+          className="flex-1 text-base font-medium text-black dark:text-white"
+        >
           {config.name}
         </Text>
         <View
@@ -122,28 +125,37 @@ export function ConnectionCard({ config, onEdit, isLast = false }: Props) {
         </View>
       </View>
 
-      <Text className="mt-1 pl-4 text-xs text-label2 dark:text-[#EBEBF599]">
+      <Text
+        numberOfLines={1}
+        ellipsizeMode="middle"
+        className="mt-1 pl-4 text-[13px] text-label2 dark:text-[#EBEBF599]"
+      >
         {`${endpoint} · ${t(`connections:state${kebabToPascal(shown)}`)}`}
       </Text>
 
       {username != null && (
         <View className="mt-1 flex-row items-center gap-1 pl-4">
           <UserRound size={11} color={colors.primary} />
-          <Text className="text-xs" style={{ color: colors.primary }}>
+          <Text className="text-[13px]" style={{ color: colors.primary }}>
             {t("connections:controlledUser", { name: username })}
           </Text>
         </View>
       )}
 
-      <View className="mt-3 flex-row items-center gap-2">
+      <View className="mt-3 flex-row flex-wrap items-center gap-2">
         <Pressable
           onPress={() => activate(config.id)}
           disabled={active}
-          className="rounded-lg px-3 py-1.5"
-          style={{ backgroundColor: active ? colors.subtle : colors.primary }}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: active, selected: active }}
+          className="min-h-11 items-center justify-center rounded-lg px-3"
+          style={({ pressed }) => ({
+            backgroundColor: active ? colors.subtle : colors.primary,
+            opacity: pressed ? 0.72 : 1,
+          })}
         >
           <Text
-            className={active ? "text-xs" : "text-xs text-white"}
+            className={active ? "text-[13px]" : "text-[13px] text-white"}
             style={active ? { color: colors.primaryActive } : undefined}
           >
             {active ? t("connections:inUse") : t("connections:use")}
@@ -152,29 +164,43 @@ export function ConnectionCard({ config, onEdit, isLast = false }: Props) {
         <Pressable
           onPress={handleTest}
           disabled={testing}
-          className="rounded-lg border px-3 py-1.5"
-          style={{ borderColor: colors.primary, opacity: testing ? 0.5 : 1 }}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: testing, busy: testing }}
+          className="min-h-11 items-center justify-center rounded-lg border px-3"
+          style={({ pressed }) => ({
+            borderColor: colors.primary,
+            backgroundColor: pressed ? colors.subtle : "transparent",
+            opacity: testing ? 0.5 : 1,
+          })}
         >
-          <Text className="text-xs" style={{ color: colors.primary }}>
+          <Text className="text-[13px]" style={{ color: colors.primary }}>
             {testing ? t("connections:testing") : t("connections:test")}
           </Text>
         </Pressable>
         <Pressable
           onPress={onEdit}
-          className="flex-row items-center gap-1 rounded-lg border border-black/15 px-3 py-1.5 dark:border-[#545458A6]"
+          accessibilityRole="button"
+          className="min-h-11 flex-row items-center justify-center gap-1 rounded-lg border border-black/15 px-3 dark:border-[#545458A6]"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.subtle : "transparent",
+          })}
         >
           <Pencil size={12} color="#8E8E93" />
-          <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+          <Text className="text-[13px] text-label2 dark:text-[#EBEBF599]">
             {t("connections:edit")}
           </Text>
         </Pressable>
         <Pressable
           onPress={handleDelete}
-          className="flex-row items-center gap-1 rounded-lg px-3 py-1.5"
-          style={{ backgroundColor: `${DANGER}1a` }}
+          accessibilityRole="button"
+          className="min-h-11 flex-row items-center justify-center gap-1 rounded-lg px-3"
+          style={({ pressed }) => ({
+            backgroundColor: `${DANGER}1a`,
+            opacity: pressed ? 0.6 : 1,
+          })}
         >
           <Trash size={12} color={DANGER} />
-          <Text className="text-xs" style={{ color: DANGER }}>
+          <Text className="text-[13px]" style={{ color: DANGER }}>
             {t("connections:delete")}
           </Text>
         </Pressable>

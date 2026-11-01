@@ -105,6 +105,23 @@ describe("i18n 双语 key 齐平（防单语漏 key）", () => {
     expect(enChat).toHaveProperty("approveUnsupported");
   });
 
+  it("附件移除操作在两种语言下均提供包含名称的读屏标签", async () => {
+    const keys = [
+      "removeImage",
+      "removeFileRef",
+      "removeLocalFile",
+      "removeSkillRef",
+    ] as const;
+    for (const locale of ["zh-CN", "en-US"] as const) {
+      await i18n.changeLanguage(locale);
+      for (const key of keys) {
+        const label = i18n.t(`chat:${key}`, { name: "示例.txt" });
+        expect(label).not.toBe(`chat:${key}`);
+        expect(label).toContain("示例.txt");
+      }
+    }
+  });
+
   it("namespaces 数组与 locales 目录 JSON 文件名一致（M4：漏登记即红）", () => {
     // locales 目录是资源真值：新增 ns JSON 文件而未 import/未登记进
     // namespaces 数组（双语齐平用例不覆盖）时此用例红

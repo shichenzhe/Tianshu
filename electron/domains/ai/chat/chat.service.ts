@@ -1361,10 +1361,12 @@ export default class ChatService {
       if (ctx.session.archivedAt) {
         return null;
       }
-      // 空配置兜底 128K（2026-11-01 裁定，DEFAULT_CONTEXT_WINDOW 注释）：
-      // NULL 不兜底则自动压缩永不触发（长会话输入失控的根因之一）
-      const contextWindow =
-        ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
+      // 三层兜底（provider 窗口批 2026-11-01，effectiveContextWindow）：
+      // model > provider > 131072——NULL 全空时自动压缩曾永不触发
+      const contextWindow = this.effectiveContextWindow(
+        ctx.modelRow,
+        ctx.providerRow,
+      );
       if (!contextWindow) {
         return null;
       }
@@ -1700,6 +1702,23 @@ export default class ChatService {
    * 推荐能力同生同灭）；工具禁用面由 collectToolDefinitions 外层
    * filterDisabledTools 统一收口
    */
+  /**
+   * 生效上下文窗口（provider 窗口批 2026-11-01）：三层优先级 model 显式
+   * > provider 级默认 > 全局兜底 131072——本地部署/中转的真实窗口与
+   * 全局兜底分化时，provider 级默认即兜住该服务商全部空配置 llm 模型
+   * （截断/压缩/面板分母同源）
+   */
+  private effectiveContextWindow(
+    modelRow: { contextWindow: number | null },
+    providerRow: { contextWindow: number | null } | null,
+  ): number {
+    return (
+      modelRow.contextWindow ??
+      providerRow?.contextWindow ??
+      DEFAULT_CONTEXT_WINDOW
+    );
+  }
+
   private allowExpertRecommend(ctx: {
     mode: "agent" | "ask" | "plan";
     assistantRow: unknown;
@@ -1913,7 +1932,10 @@ export default class ChatService {
         ),
         system: ctx.systemWithSummary,
         history: ctx.history,
-        contextWindow: ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+        contextWindow: this.effectiveContextWindow(
+          ctx.modelRow,
+          ctx.providerRow,
+        ),
         params: ctx.merged,
         abortSignal: abort.signal,
         toolDefinitions:
@@ -2270,8 +2292,11 @@ export default class ChatService {
         skills: ctx.skills,
         toolDefinitions,
         history: ctx.history,
-        // 兜底 128K（生效值口径）：截断按它执行，面板显示同源
-        contextWindow: ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+        // 三层生效值（provider 窗口批）：截断按它执行，面板显示同源
+        contextWindow: this.effectiveContextWindow(
+          ctx.modelRow,
+          ctx.providerRow,
+        ),
         params: ctx.merged,
       });
     } catch {

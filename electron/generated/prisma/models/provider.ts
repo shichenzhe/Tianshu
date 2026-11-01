@@ -28,11 +28,13 @@ export type AggregateProvider = {
 
 export type ProviderAvgAggregateOutputType = {
   id: number | null
+  contextWindow: number | null
   userId: number | null
 }
 
 export type ProviderSumAggregateOutputType = {
   id: number | null
+  contextWindow: number | null
   userId: number | null
 }
 
@@ -44,6 +46,7 @@ export type ProviderMinAggregateOutputType = {
   apiKey: string | null
   extraHeaders: string | null
   enabled: boolean | null
+  contextWindow: number | null
   createdAt: Date | null
   updatedAt: Date | null
   userId: number | null
@@ -57,6 +60,7 @@ export type ProviderMaxAggregateOutputType = {
   apiKey: string | null
   extraHeaders: string | null
   enabled: boolean | null
+  contextWindow: number | null
   createdAt: Date | null
   updatedAt: Date | null
   userId: number | null
@@ -70,6 +74,7 @@ export type ProviderCountAggregateOutputType = {
   apiKey: number
   extraHeaders: number
   enabled: number
+  contextWindow: number
   createdAt: number
   updatedAt: number
   userId: number
@@ -79,11 +84,13 @@ export type ProviderCountAggregateOutputType = {
 
 export type ProviderAvgAggregateInputType = {
   id?: true
+  contextWindow?: true
   userId?: true
 }
 
 export type ProviderSumAggregateInputType = {
   id?: true
+  contextWindow?: true
   userId?: true
 }
 
@@ -95,6 +102,7 @@ export type ProviderMinAggregateInputType = {
   apiKey?: true
   extraHeaders?: true
   enabled?: true
+  contextWindow?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -108,6 +116,7 @@ export type ProviderMaxAggregateInputType = {
   apiKey?: true
   extraHeaders?: true
   enabled?: true
+  contextWindow?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -121,6 +130,7 @@ export type ProviderCountAggregateInputType = {
   apiKey?: true
   extraHeaders?: true
   enabled?: true
+  contextWindow?: true
   createdAt?: true
   updatedAt?: true
   userId?: true
@@ -221,6 +231,7 @@ export type ProviderGroupByOutputType = {
   apiKey: string | null
   extraHeaders: string | null
   enabled: boolean
+  contextWindow: number | null
   createdAt: Date
   updatedAt: Date
   userId: number | null
@@ -257,6 +268,7 @@ export type providerWhereInput = {
   apiKey?: Prisma.StringNullableFilter<"provider"> | string | null
   extraHeaders?: Prisma.StringNullableFilter<"provider"> | string | null
   enabled?: Prisma.BoolFilter<"provider"> | boolean
+  contextWindow?: Prisma.IntNullableFilter<"provider"> | number | null
   createdAt?: Prisma.DateTimeFilter<"provider"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"provider"> | Date | string
   userId?: Prisma.IntNullableFilter<"provider"> | number | null
@@ -270,6 +282,7 @@ export type providerOrderByWithRelationInput = {
   apiKey?: Prisma.SortOrderInput | Prisma.SortOrder
   extraHeaders?: Prisma.SortOrderInput | Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -286,6 +299,7 @@ export type providerWhereUniqueInput = Prisma.AtLeast<{
   apiKey?: Prisma.StringNullableFilter<"provider"> | string | null
   extraHeaders?: Prisma.StringNullableFilter<"provider"> | string | null
   enabled?: Prisma.BoolFilter<"provider"> | boolean
+  contextWindow?: Prisma.IntNullableFilter<"provider"> | number | null
   createdAt?: Prisma.DateTimeFilter<"provider"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"provider"> | Date | string
   userId?: Prisma.IntNullableFilter<"provider"> | number | null
@@ -299,6 +313,7 @@ export type providerOrderByWithAggregationInput = {
   apiKey?: Prisma.SortOrderInput | Prisma.SortOrder
   extraHeaders?: Prisma.SortOrderInput | Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -320,6 +335,7 @@ export type providerScalarWhereWithAggregatesInput = {
   apiKey?: Prisma.StringNullableWithAggregatesFilter<"provider"> | string | null
   extraHeaders?: Prisma.StringNullableWithAggregatesFilter<"provider"> | string | null
   enabled?: Prisma.BoolWithAggregatesFilter<"provider"> | boolean
+  contextWindow?: Prisma.IntNullableWithAggregatesFilter<"provider"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"provider"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"provider"> | Date | string
   userId?: Prisma.IntNullableWithAggregatesFilter<"provider"> | number | null
@@ -332,6 +348,7 @@ export type providerCreateInput = {
   apiKey?: string | null
   extraHeaders?: string | null
   enabled?: boolean
+  contextWindow?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -345,6 +362,7 @@ export type providerUncheckedCreateInput = {
   apiKey?: string | null
   extraHeaders?: string | null
   enabled?: boolean
+  contextWindow?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -357,6 +375,7 @@ export type providerUpdateInput = {
   apiKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   extraHeaders?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -370,6 +389,7 @@ export type providerUncheckedUpdateInput = {
   apiKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   extraHeaders?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -383,6 +403,7 @@ export type providerCreateManyInput = {
   apiKey?: string | null
   extraHeaders?: string | null
   enabled?: boolean
+  contextWindow?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
   userId?: number | null
@@ -395,6 +416,7 @@ export type providerUpdateManyMutationInput = {
   apiKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   extraHeaders?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -408,6 +430,7 @@ export type providerUncheckedUpdateManyInput = {
   apiKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   extraHeaders?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -421,6 +444,7 @@ export type providerCountOrderByAggregateInput = {
   apiKey?: Prisma.SortOrder
   extraHeaders?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -428,6 +452,7 @@ export type providerCountOrderByAggregateInput = {
 
 export type providerAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrder
   userId?: Prisma.SortOrder
 }
 
@@ -439,6 +464,7 @@ export type providerMaxOrderByAggregateInput = {
   apiKey?: Prisma.SortOrder
   extraHeaders?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -452,6 +478,7 @@ export type providerMinOrderByAggregateInput = {
   apiKey?: Prisma.SortOrder
   extraHeaders?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -459,6 +486,7 @@ export type providerMinOrderByAggregateInput = {
 
 export type providerSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
+  contextWindow?: Prisma.SortOrder
   userId?: Prisma.SortOrder
 }
 
@@ -480,6 +508,7 @@ export type providerSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   apiKey?: boolean
   extraHeaders?: boolean
   enabled?: boolean
+  contextWindow?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -493,6 +522,7 @@ export type providerSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   apiKey?: boolean
   extraHeaders?: boolean
   enabled?: boolean
+  contextWindow?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -506,6 +536,7 @@ export type providerSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   apiKey?: boolean
   extraHeaders?: boolean
   enabled?: boolean
+  contextWindow?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
@@ -519,12 +550,13 @@ export type providerSelectScalar = {
   apiKey?: boolean
   extraHeaders?: boolean
   enabled?: boolean
+  contextWindow?: boolean
   createdAt?: boolean
   updatedAt?: boolean
   userId?: boolean
 }
 
-export type providerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "type" | "baseUrl" | "apiKey" | "extraHeaders" | "enabled" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["provider"]>
+export type providerOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "type" | "baseUrl" | "apiKey" | "extraHeaders" | "enabled" | "contextWindow" | "createdAt" | "updatedAt" | "userId", ExtArgs["result"]["provider"]>
 
 export type $providerPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "provider"
@@ -537,6 +569,7 @@ export type $providerPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     apiKey: string | null
     extraHeaders: string | null
     enabled: boolean
+    contextWindow: number | null
     createdAt: Date
     updatedAt: Date
     userId: number | null
@@ -970,6 +1003,7 @@ export interface providerFieldRefs {
   readonly apiKey: Prisma.FieldRef<"provider", 'String'>
   readonly extraHeaders: Prisma.FieldRef<"provider", 'String'>
   readonly enabled: Prisma.FieldRef<"provider", 'Boolean'>
+  readonly contextWindow: Prisma.FieldRef<"provider", 'Int'>
   readonly createdAt: Prisma.FieldRef<"provider", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"provider", 'DateTime'>
   readonly userId: Prisma.FieldRef<"provider", 'Int'>

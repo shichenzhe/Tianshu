@@ -27,6 +27,8 @@ export interface ProviderRecord {
   baseUrl: string;
   apiKey?: string;
   extraHeaders?: string;
+  /** 服务商级默认上下文窗口：该服务商 llm 型模型 contextWindow 空时继承 */
+  contextWindow?: number | null;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +40,7 @@ export interface ProviderCreateParams {
   baseUrl: string;
   apiKey?: string;
   extraHeaders?: string;
+  contextWindow?: number | null;
   enabled?: boolean;
 }
 
@@ -49,6 +52,7 @@ export interface ProviderUpdateParams {
   /** 可空字段：null 表示清空（undefined = 不修改） */
   apiKey?: string | null;
   extraHeaders?: string | null;
+  contextWindow?: number | null;
   enabled?: boolean;
 }
 

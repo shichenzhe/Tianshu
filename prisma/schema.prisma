@@ -41,6 +41,12 @@ model provider {
   apiKey       String?
   extraHeaders String?
   enabled      Boolean  @default(true)
+  // 服务商级默认上下文窗口（provider 窗口批 2026-11-01）：llm 型模型
+  // contextWindow 空时继承（三层 model > provider > DEFAULT_CONTEXT_WINDOW
+  // 131072）——本地部署/中转的真实窗口与全局兜底分化时在此填。
+  // 实际加列由 ensureProviderColumns 启动幂等补建（不走 v1 快照，避免
+  // 指纹变化触发旧库 drop 重建）
+  contextWindow Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   userId       Int? // v12 多用户隔离

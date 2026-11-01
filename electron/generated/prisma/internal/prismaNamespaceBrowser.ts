@@ -138,6 +138,7 @@ export const ProviderScalarFieldEnum = {
   apiKey: 'apiKey',
   extraHeaders: 'extraHeaders',
   enabled: 'enabled',
+  contextWindow: 'contextWindow',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   userId: 'userId'

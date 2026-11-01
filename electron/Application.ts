@@ -62,6 +62,7 @@ import prisma, {
   ensureEventStatMaintenance,
   ensureGraphRunNodeTable,
   ensureMonitorTables,
+  ensureProviderColumns,
 } from "./commons/prisma-client";
 import { Constants } from "./Constants";
 import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
@@ -132,6 +133,10 @@ export default class Application {
     void ensureGraphRunNodeTable()
       .then(() => cleanupGraphRunSessions())
       .catch((e) => console.error("图运行节点表/存量会话清理失败:", e));
+    // provider 表加列（服务商级默认上下文窗口，2026-11-01）：幂等补建
+    void ensureProviderColumns().catch((e) =>
+      console.error("provider 表加列失败:", e),
+    );
     await this.registerServices();
     this.memoryScheduler?.start();
     console.info("register dbservice success");

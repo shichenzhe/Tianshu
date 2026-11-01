@@ -83,6 +83,9 @@ export class ProviderRepository {
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
         extraHeaders: p.extraHeaders,
+        // 服务商级默认上下文窗口（2026-11-01）：null/undefined 皆存 null
+        // （三层兜底语义在组装侧，DB 只存显式值）
+        contextWindow: p.contextWindow ?? null,
         enabled: p.enabled ?? true,
         userId,
       },
@@ -103,6 +106,8 @@ export class ProviderRepository {
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
         extraHeaders: p.extraHeaders,
+        // null=清空（undefined=不修改，与 apiKey/extraHeaders 同语义）
+        contextWindow: p.contextWindow,
         enabled: p.enabled,
       },
     });

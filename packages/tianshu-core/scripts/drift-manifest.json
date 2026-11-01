@@ -215,9 +215,9 @@
       "mirrorPath": "src-react/domains/ai/chat/model/blocks.ts",
       "serverPath": "../../packages/tianshu-core/src/blocks.ts",
       "baselineDiff": true,
-      "baselineLines": 84,
+      "baselineLines": 99,
       "tolerance": 0,
-      "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。"
+      "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。2026-11-01 skill_ref 批：isValidBlock 双改遵守（skill_ref 分支两份同步，双实现 describe.each 测试钉），diff 增长全部来自 core 侧 blocksToModelMessages 专属段的 skill_ref 展开 + SkillBodyLoader 扩展——基线 84→99 过账"
     },
     {
       "id": "security-events-shape",

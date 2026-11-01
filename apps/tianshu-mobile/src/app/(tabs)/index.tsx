@@ -41,10 +41,7 @@ import { groupSessionsByWorkspace } from "@/logic/workspace-grouping";
 import type { SessionTimeFilter } from "@/logic/session-time-filter";
 import { useConnectionsStore } from "@/store/connections.store";
 import { useSearchUiStore } from "@/store/search-ui";
-import {
-  useSessionsStore,
-  type SessionBrief,
-} from "@/store/sessions.store";
+import { useSessionsStore, type SessionBrief } from "@/store/sessions.store";
 import { useThemeColors } from "@/store/theme";
 
 /** 会话列表页（T13）：防抖搜索 + 归档筛选 + 分页 FlatList +
@@ -139,7 +136,9 @@ const GroupHeaderRow = memo(function GroupHeaderRow({
           stretch 本就撑满行宽 */}
       <Pressable
         onPress={() => onToggle(wsId, open)}
-        className="flex-row items-center gap-2 px-1 py-2.5"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        className="min-h-11 flex-row items-center gap-1 px-1"
         style={({ pressed }) => ({
           backgroundColor: pressed ? colors.subtle : "transparent",
         })}
@@ -155,9 +154,10 @@ const GroupHeaderRow = memo(function GroupHeaderRow({
         <Pressable
           onPress={() => onCreate(wsId)}
           disabled={creating}
-          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: creating, busy: creating }}
           accessibilityLabel={t("chat:newSession")}
-          className="rounded-full p-1"
+          className="h-11 w-11 items-center justify-center rounded-full"
           style={({ pressed }) => ({
             backgroundColor: pressed ? colors.subtle : "transparent",
             opacity: creating ? 0.5 : 1,
@@ -482,11 +482,7 @@ export default function SessionsScreen() {
         return;
       }
       groupItems.forEach((session, i) => {
-        const edge:
-          | "first"
-          | "middle"
-          | "last"
-          | "single" =
+        const edge: "first" | "middle" | "last" | "single" =
           groupItems.length === 1
             ? "single"
             : i === 0
@@ -550,7 +546,7 @@ export default function SessionsScreen() {
             收起搜索即复位「未归档」（search-ui store 内联动） */}
         {(searchOpen || keyword !== "") && (
           <View className="mx-4 mb-2 mt-2 rounded-xl bg-field dark:bg-[#2C2C2E]">
-            <View className="flex-row items-center gap-2 px-3 py-2">
+            <View className="min-h-11 flex-row items-center gap-1 px-2">
               <AppIcon
                 name="magnifyingglass"
                 fallback={Search}
@@ -564,10 +560,18 @@ export default function SessionsScreen() {
                 placeholderTextColor="#8E8E93"
                 returnKeyType="search"
                 autoCorrect={false}
-                className="flex-1 text-sm text-black dark:text-white"
+                className="h-11 flex-1 px-1 py-0 text-sm text-black dark:text-white"
               />
               {keyword !== "" && (
-                <Pressable onPress={() => search("")} hitSlop={8}>
+                <Pressable
+                  onPress={() => search("")}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("chat:searchClear")}
+                  className="h-11 w-11 items-center justify-center rounded-full"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.subtle : "transparent",
+                  })}
+                >
                   <X size={14} color="#8E8E93" />
                 </Pressable>
               )}
@@ -576,8 +580,9 @@ export default function SessionsScreen() {
                   search("");
                   closeSearch();
                 }}
-                hitSlop={8}
+                accessibilityRole="button"
                 accessibilityLabel={t("common:cancel")}
+                className="min-h-11 justify-center px-2"
               >
                 <Text className="text-sm" style={{ color: colors.primary }}>
                   {t("common:cancel")}
@@ -585,11 +590,13 @@ export default function SessionsScreen() {
               </Pressable>
             </View>
             {/* 归档筛选（微信搜索面板式选项行） */}
-            <View className="flex-row justify-center gap-10 border-t border-sep px-3 py-2 dark:border-[#3A3A3C]">
+            <View className="flex-row justify-center gap-10 border-t border-sep px-3 dark:border-[#3A3A3C]">
               <Pressable
                 onPress={() => handleFilter(false)}
-                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !showArchived }}
                 accessibilityLabel={t("chat:filterActive")}
+                className="min-h-11 items-center justify-center px-2"
               >
                 <Text
                   className={`text-[13px] ${!showArchived ? "font-medium" : ""}`}
@@ -602,8 +609,10 @@ export default function SessionsScreen() {
               </Pressable>
               <Pressable
                 onPress={() => handleFilter(true)}
-                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityState={{ selected: showArchived }}
                 accessibilityLabel={t("chat:filterAll")}
+                className="min-h-11 items-center justify-center px-2"
               >
                 <Text
                   className={`text-[13px] ${showArchived ? "font-medium" : ""}`}
@@ -617,15 +626,17 @@ export default function SessionsScreen() {
             </View>
             {/* 时间筛选（A11 批：归档行下紧邻行，四钮组；选中主色调
                 高亮，与归档筛选独立可叠加） */}
-            <View className="flex-row justify-center gap-5 border-t border-sep px-3 py-2 dark:border-[#3A3A3C]">
+            <View className="flex-row justify-center gap-3 border-t border-sep px-3 dark:border-[#3A3A3C]">
               {TIME_FILTER_OPTIONS.map((opt) => {
                 const selected = timeFilter === opt.value;
                 return (
                   <Pressable
                     key={opt.value}
                     onPress={() => handleTimeFilter(opt.value)}
-                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
                     accessibilityLabel={t(opt.labelKey)}
+                    className="min-h-11 items-center justify-center px-1"
                   >
                     <Text
                       className={`text-[13px] ${selected ? "font-medium" : ""}`}

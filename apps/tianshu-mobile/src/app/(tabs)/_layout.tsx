@@ -6,6 +6,7 @@ import {
   Workflow,
 } from "lucide-react-native";
 import { useTranslation } from "react-i18next";
+import { useColorScheme } from "nativewind";
 
 import { AppIcon } from "@/components/AppIcon";
 import { ChatsHeaderActions } from "@/components/chats-header-actions";
@@ -19,11 +20,32 @@ import { useThemeColors } from "@/store/theme";
 export default function TabsLayout() {
   const { t } = useTranslation("common");
   const colors = useThemeColors();
+  const { colorScheme } = useColorScheme();
+  const dark = colorScheme === "dark";
   return (
     <Tabs
       screenOptions={{
+        headerStyle: {
+          backgroundColor: dark ? "#1C1C1E" : "#FFFFFF",
+          borderBottomWidth: 0.5,
+          borderBottomColor: dark ? "#545458A6" : "rgba(60,60,67,0.12)",
+        },
+        headerTintColor: colors.primary,
+        headerTitleStyle: {
+          color: dark ? "#FFFFFF" : "#000000",
+          fontSize: 17,
+          fontWeight: "600",
+        },
+        headerShadowVisible: false,
+        sceneStyle: { backgroundColor: dark ? "#000000" : "#F2F2F7" },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: "#8E8E93",
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+        tabBarStyle: {
+          backgroundColor: dark ? "#1C1C1E" : "#FFFFFF",
+          borderTopWidth: 0.5,
+          borderTopColor: dark ? "#545458A6" : "rgba(60,60,67,0.12)",
+        },
       }}
     >
       <Tabs.Screen

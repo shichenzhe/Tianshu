@@ -1,6 +1,9 @@
 import type { ComponentType } from "react";
 import { Modal, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 
+import { sheetBottomPadding } from "@/lib/sheet-layout";
 import { useThemeColors } from "@/store/theme";
 
 export interface ActionSheetItem {
@@ -30,23 +33,27 @@ export function AppActionSheet({
   onClose: () => void;
 }) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation("common");
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable className="flex-1 justify-end bg-black/60" onPress={onClose}>
+      <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
         <Pressable
           onPress={(e) => e.stopPropagation()}
-          className="rounded-t-2xl bg-white px-4 pb-8 pt-3 shadow-lg shadow-black/25 dark:bg-neutral-900"
+          accessibilityViewIsModal
+          className="rounded-t-2xl bg-white px-4 pt-3 shadow-lg shadow-black/25 dark:bg-neutral-900"
+          style={{ paddingBottom: sheetBottomPadding(insets.bottom) }}
         >
           <View className="mb-2 h-[5px] w-9 self-center rounded-full bg-black/20 dark:bg-white/25" />
           {title != null && (
             <Text
               numberOfLines={1}
-              className="mb-1 px-1 text-xs text-label3 dark:text-[#EBEBF54D]"
+              className="mb-1 px-1 text-center text-xs text-label3 dark:text-[#EBEBF54D]"
             >
               {title}
             </Text>
@@ -55,11 +62,13 @@ export function AppActionSheet({
             <Pressable
               key={key}
               disabled={disabled === true}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: disabled === true }}
               onPress={() => {
                 onClose();
                 onPress();
               }}
-              className="flex-row items-center gap-3 rounded-lg px-3 py-3"
+              className="min-h-12 flex-row items-center gap-3 rounded-lg px-3"
               style={({ pressed }) => ({
                 backgroundColor: pressed ? colors.subtle : "transparent",
                 opacity: disabled === true ? 0.4 : 1,
@@ -82,6 +91,19 @@ export function AppActionSheet({
               </Text>
             </Pressable>
           ))}
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={t("cancel")}
+            className="mt-1 min-h-12 items-center justify-center rounded-lg border-t border-sep dark:border-[#545458A6]"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.subtle : "transparent",
+            })}
+          >
+            <Text className="text-[16px] font-medium text-black dark:text-white">
+              {t("cancel")}
+            </Text>
+          </Pressable>
         </Pressable>
       </Pressable>
     </Modal>

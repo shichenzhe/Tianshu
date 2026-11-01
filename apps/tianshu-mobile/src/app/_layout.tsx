@@ -15,6 +15,7 @@ import { useConnectionsStore } from "@/store/connections.store";
 import { useOrchestrationStore } from "@/store/orchestration.store";
 import { useBackupStore } from "@/store/backup.store";
 import { useSessionsStore } from "@/store/sessions.store";
+import { useThemeColors } from "@/store/theme";
 
 // 后台屏冻结（切页丝滑批）：非聚焦屏整树暂停 reconcile——推送新页/切 Tab
 // 过程中，被盖住的会话列表不再因流式 session.updated/事件订阅反复重渲
@@ -58,6 +59,8 @@ function useBootstrap() {
 export default function RootLayout() {
   const { colorScheme } = useColorScheme();
   const { t } = useTranslation("common");
+  const colors = useThemeColors();
+  const dark = colorScheme === "dark";
   useBootstrap();
 
   return (
@@ -67,7 +70,21 @@ export default function RootLayout() {
         {/* StatusBar 显式反转：expo auto 跟 RN Appearance，不随手动明暗档 */}
         <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
         <Stack
-          screenOptions={{ headerShown: true, animation: "slide_from_right" }}
+          screenOptions={{
+            headerShown: true,
+            animation: "slide_from_right",
+            headerStyle: {
+              backgroundColor: dark ? "#1C1C1E" : "#FFFFFF",
+            },
+            headerTintColor: colors.primary,
+            headerTitleStyle: {
+              color: dark ? "#FFFFFF" : "#000000",
+              fontSize: 17,
+              fontWeight: "600",
+            },
+            headerShadowVisible: true,
+            contentStyle: { backgroundColor: dark ? "#000000" : "#F2F2F7" },
+          }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen

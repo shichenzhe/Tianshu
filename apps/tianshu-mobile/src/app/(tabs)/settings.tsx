@@ -9,6 +9,7 @@ import {
   BarChart3,
   Building2,
   Check,
+  ChevronRight,
   Folder,
   FolderGit2,
   LibraryBig,
@@ -89,11 +90,14 @@ function ThemeCard({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-1 items-center gap-2 rounded-lg border-2 py-3"
-      style={{
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      className="min-h-16 flex-1 items-center justify-center gap-2 rounded-lg border-2 py-3"
+      style={({ pressed }) => ({
         borderColor: selected ? preset.primary : "transparent",
         backgroundColor: preset.subtle,
-      }}
+        opacity: pressed ? 0.65 : 1,
+      })}
     >
       <View
         className="h-8 w-8 rounded-full"
@@ -129,6 +133,12 @@ function ToggleRow({
         value={value}
         disabled={disabled}
         onValueChange={onValueChange}
+        accessibilityRole="switch"
+        accessibilityLabel={label}
+        accessibilityState={{
+          checked: value,
+          disabled: disabled === true,
+        }}
         trackColor={{ false: "#d4d4d8", true: colors.primary }}
         ios_backgroundColor="#3f3f46"
       />
@@ -210,6 +220,7 @@ export default function SettingsScreen() {
         {/* 当前主机卡片：状态点 + 连接名，点击进入连接管理 */}
         <Pressable
           onPress={() => router.push("/connections")}
+          accessibilityRole="button"
           className="flex-row items-center gap-3 rounded-2xl bg-card px-4 py-4 dark:bg-[#1C1C1E]"
           style={({ pressed }) => ({
             backgroundColor: pressed ? colors.subtle : undefined,
@@ -227,6 +238,7 @@ export default function SettingsScreen() {
               {activeConfig?.name ?? t("chat:noConnection")}
             </Text>
           </View>
+          <ChevronRight size={18} color="#C7C7CC" />
         </Pressable>
 
         <GroupSection label={t("language")}>
@@ -441,11 +453,6 @@ export default function SettingsScreen() {
               </Text>
               <Text className="text-sm text-label2 dark:text-[#EBEBF599]">
                 {appVersion}
-              </Text>
-              {/* 构建戳（真机排查「加载的是哪份代码」用）：metro 每次重编
-                  该文件都会变化——重连后时间没变=没加载新代码 */}
-              <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
-                build 2026-10-21 19:12
               </Text>
             </View>
             <Text className="text-xs leading-4 text-label3 dark:text-[#EBEBF54D]">

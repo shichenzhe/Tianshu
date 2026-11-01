@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Text, TextInput, View } from "react-native";
 
+import { PressableButton } from "@/components/PressableButton";
 import { toast } from "@/lib/toast-bus";
 import { kebabToPascal } from "@/lib/str";
 import {
@@ -10,7 +11,6 @@ import {
   useConnectionsStore,
   type ConnectionConfig,
 } from "@/store/connections.store";
-import { useThemeColors } from "@/store/theme";
 
 interface Props {
   /** 编辑态回填；缺省为新建 */
@@ -59,7 +59,6 @@ function TextField({
  */
 export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
   const { t } = useTranslation();
-  const colors = useThemeColors();
   const save = useConnectionsStore((s) => s.save);
   const activate = useConnectionsStore((s) => s.activate);
   const activeConnId = useConnectionsStore((s) => s.activeConnId);
@@ -128,39 +127,18 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
       {/* 模式切换（两段式） */}
       <View className="mb-4 flex-row gap-2">
         {(["direct", "relay"] as const).map((m) => (
-          <Pressable
+          <PressableButton
             key={m}
+            label={t(
+              m === "direct"
+                ? "connections:modeDirect"
+                : "connections:modeRelay",
+            )}
             onPress={() => setMode(m)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: mode === m }}
-            className={`min-h-11 flex-1 items-center justify-center rounded-lg border px-3 ${
-              mode === m
-                ? "border-transparent"
-                : "border-black/15 dark:border-[#545458A6]"
-            }`}
-            style={({ pressed }) =>
-              mode === m
-                ? {
-                    backgroundColor: colors.primary,
-                    opacity: pressed ? 0.72 : 1,
-                  }
-                : {
-                    backgroundColor: pressed ? colors.subtle : "transparent",
-                  }
-            }
-          >
-            <Text
-              className={`text-center text-sm ${
-                mode === m ? "text-white" : "text-label2 dark:text-[#EBEBF599]"
-              }`}
-            >
-              {t(
-                m === "direct"
-                  ? "connections:modeDirect"
-                  : "connections:modeRelay",
-              )}
-            </Text>
-          </Pressable>
+            variant={mode === m ? "filled" : "plain"}
+            selected={mode === m}
+            className="flex-1"
+          />
         ))}
       </View>
 
@@ -204,49 +182,29 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
         </>
       )}
 
-      <Pressable
-        onPress={handleTest}
-        disabled={testing}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: testing, busy: testing }}
-        className="mb-3 min-h-11 items-center justify-center rounded-lg border px-4"
-        style={({ pressed }) => ({
-          borderColor: colors.primary,
-          backgroundColor: pressed ? colors.subtle : "transparent",
-          opacity: testing ? 0.5 : 1,
-        })}
-      >
-        <Text className="text-center text-sm" style={{ color: colors.primary }}>
-          {testing ? t("connections:testing") : t("connections:test")}
-        </Text>
-      </Pressable>
+      <View className="mb-3">
+        <PressableButton
+          label={testing ? t("connections:testing") : t("connections:test")}
+          onPress={handleTest}
+          variant="outlined"
+          busy={testing}
+          className="w-full"
+        />
+      </View>
 
       <View className="flex-row gap-3">
-        <Pressable
+        <PressableButton
+          label={t("connections:cancel")}
           onPress={onDone}
-          accessibilityRole="button"
-          className="min-h-11 flex-1 items-center justify-center rounded-lg border border-black/15 px-4 dark:border-[#545458A6]"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.subtle : "transparent",
-          })}
-        >
-          <Text className="text-center text-sm text-black/70 dark:text-white/70">
-            {t("connections:cancel")}
-          </Text>
-        </Pressable>
-        <Pressable
+          variant="plain"
+          className="flex-1"
+        />
+        <PressableButton
+          label={t("connections:save")}
           onPress={handleSave}
-          accessibilityRole="button"
-          className="min-h-11 flex-1 items-center justify-center rounded-lg px-4"
-          style={({ pressed }) => ({
-            backgroundColor: colors.primary,
-            opacity: pressed ? 0.72 : 1,
-          })}
-        >
-          <Text className="text-center text-sm text-white">
-            {t("connections:save")}
-          </Text>
-        </Pressable>
+          variant="filled"
+          className="flex-1"
+        />
       </View>
     </View>
   );

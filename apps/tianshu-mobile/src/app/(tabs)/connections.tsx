@@ -5,7 +5,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   ScrollView,
   Text,
   View,
@@ -15,6 +14,7 @@ import { Plus, Radio } from "lucide-react-native";
 
 import { ConnectionCard } from "@/components/ConnectionCard";
 import { ConnectionForm } from "@/components/ConnectionForm";
+import { PressableButton } from "@/components/PressableButton";
 import {
   useConnectionsStore,
   type ConnectionConfig,
@@ -51,34 +51,22 @@ export default function ConnectionsScreen() {
   return (
     <View className="flex-1 bg-grouped dark:bg-black">
       <View className="flex-row gap-3 border-b border-sep px-4 py-3 dark:border-[#545458A6]">
-        <Pressable
+        <PressableButton
+          label={t("connections:addDirect")}
           onPress={() => openCreate("direct")}
-          accessibilityRole="button"
-          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-lg px-3"
-          style={({ pressed }) => ({
-            backgroundColor: colors.primary,
-            opacity: pressed ? 0.72 : 1,
-          })}
-        >
-          <Plus size={14} color="#fff" />
-          <Text className="text-sm text-white">
-            {t("connections:addDirect")}
-          </Text>
-        </Pressable>
-        <Pressable
+          variant="filled"
+          size="sm"
+          className="flex-1"
+          icon={<Plus size={14} color="#fff" />}
+        />
+        <PressableButton
+          label={t("connections:addRelay")}
           onPress={() => openCreate("relay")}
-          accessibilityRole="button"
-          className="min-h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-lg border px-3"
-          style={({ pressed }) => ({
-            borderColor: colors.primary,
-            backgroundColor: pressed ? colors.subtle : "transparent",
-          })}
-        >
-          <Radio size={14} color={colors.primary} />
-          <Text className="text-sm" style={{ color: colors.primary }}>
-            {t("connections:addRelay")}
-          </Text>
-        </Pressable>
+          variant="outlined"
+          size="sm"
+          className="flex-1"
+          icon={<Radio size={14} color={colors.primary} />}
+        />
       </View>
 
       <FlatList

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
 import { sheetBottomPadding } from "@/lib/sheet-layout";
+import { ACTION_DANGER } from "@/theme/colors";
 import { useThemeColors } from "@/store/theme";
 
 export interface ActionSheetItem {
@@ -16,8 +17,9 @@ export interface ActionSheetItem {
   onPress: () => void;
 }
 
-/** 删除等破坏性操作的标准红（跨组件同语义色） */
-export const ACTION_DANGER = "#FF3B30";
+/** 删除等破坏性操作的标准红——单源在 theme/colors（本批上移），此处保留
+ *  出口供既有引用方（FormFooter/PlanItemDialog/[id].tsx）零改动 */
+export { ACTION_DANGER };
 
 /** 微信式底部操作面板（微信范式批抽取）：圆角组卡 + 把手 + 遮罩点关；
  *  SessionActionsSheet/MessageActionsSheet 共用 */

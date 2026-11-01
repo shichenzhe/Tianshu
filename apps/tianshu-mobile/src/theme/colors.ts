@@ -47,6 +47,9 @@ export type ThemeName = keyof typeof THEME_PRESETS;
 
 export type ThemePreset = (typeof THEME_PRESETS)[ThemeName];
 
+/** 破坏性操作标准红（iOS systemRed）——删除/移除类按钮与确认弹层统一取色 */
+export const ACTION_DANGER = "#FF3B30";
+
 /** 明暗模式：system 跟随系统，light/dark 手动钉死（nativewind colorScheme.set 同语义） */
 export type ThemeMode = "system" | "light" | "dark";
 

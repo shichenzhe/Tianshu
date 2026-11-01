@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Text, View } from "react-native";
 import { Pencil, Trash, UserRound } from "lucide-react-native";
 import { ENDPOINTS } from "@tianshu/protocol";
 
+import { PressableButton } from "@/components/PressableButton";
 import { toast } from "@/lib/toast-bus";
 import { kebabToPascal } from "@/lib/str";
 import {
@@ -12,6 +13,7 @@ import {
   type ConnectionConfig,
 } from "@/store/connections.store";
 import { useThemeColors } from "@/store/theme";
+import { ACTION_DANGER } from "@/theme/colors";
 import type { TransportState } from "@/transport/types";
 import { wireRequest } from "@/transport/wire";
 
@@ -24,9 +26,6 @@ const STATE_DOT: Record<TransportState, string> = {
   connecting: "#8E8E93",
   closed: "#8E8E93",
 };
-
-/** 删除等破坏性操作的标准红 */
-const DANGER = "#FF3B30";
 
 interface Props {
   config: ConnectionConfig;
@@ -143,67 +142,35 @@ export function ConnectionCard({ config, onEdit, isLast = false }: Props) {
       )}
 
       <View className="mt-3 flex-row flex-wrap items-center gap-2">
-        <Pressable
+        <PressableButton
+          label={active ? t("connections:inUse") : t("connections:use")}
           onPress={() => activate(config.id)}
+          variant={active ? "tinted" : "filled"}
+          size="sm"
           disabled={active}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: active, selected: active }}
-          className="min-h-11 items-center justify-center rounded-lg px-3"
-          style={({ pressed }) => ({
-            backgroundColor: active ? colors.subtle : colors.primary,
-            opacity: pressed ? 0.72 : 1,
-          })}
-        >
-          <Text
-            className={active ? "text-[13px]" : "text-[13px] text-white"}
-            style={active ? { color: colors.primaryActive } : undefined}
-          >
-            {active ? t("connections:inUse") : t("connections:use")}
-          </Text>
-        </Pressable>
-        <Pressable
+          selected={active}
+        />
+        <PressableButton
+          label={testing ? t("connections:testing") : t("connections:test")}
           onPress={handleTest}
-          disabled={testing}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: testing, busy: testing }}
-          className="min-h-11 items-center justify-center rounded-lg border px-3"
-          style={({ pressed }) => ({
-            borderColor: colors.primary,
-            backgroundColor: pressed ? colors.subtle : "transparent",
-            opacity: testing ? 0.5 : 1,
-          })}
-        >
-          <Text className="text-[13px]" style={{ color: colors.primary }}>
-            {testing ? t("connections:testing") : t("connections:test")}
-          </Text>
-        </Pressable>
-        <Pressable
+          variant="outlined"
+          size="sm"
+          busy={testing}
+        />
+        <PressableButton
+          label={t("connections:edit")}
           onPress={onEdit}
-          accessibilityRole="button"
-          className="min-h-11 flex-row items-center justify-center gap-1 rounded-lg border border-black/15 px-3 dark:border-[#545458A6]"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.subtle : "transparent",
-          })}
-        >
-          <Pencil size={12} color="#8E8E93" />
-          <Text className="text-[13px] text-label2 dark:text-[#EBEBF599]">
-            {t("connections:edit")}
-          </Text>
-        </Pressable>
-        <Pressable
+          variant="plain"
+          size="sm"
+          icon={<Pencil size={12} color="#8E8E93" />}
+        />
+        <PressableButton
+          label={t("connections:delete")}
           onPress={handleDelete}
-          accessibilityRole="button"
-          className="min-h-11 flex-row items-center justify-center gap-1 rounded-lg px-3"
-          style={({ pressed }) => ({
-            backgroundColor: `${DANGER}1a`,
-            opacity: pressed ? 0.6 : 1,
-          })}
-        >
-          <Trash size={12} color={DANGER} />
-          <Text className="text-[13px]" style={{ color: DANGER }}>
-            {t("connections:delete")}
-          </Text>
-        </Pressable>
+          variant="danger"
+          size="sm"
+          icon={<Trash size={12} color={ACTION_DANGER} />}
+        />
       </View>
     </View>
   );

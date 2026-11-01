@@ -69,9 +69,12 @@ const prismaStub = {
             (!("error" in where) || row.error === where.error),
         )
         // id 自增与 createdAt 同向，以 id 代理排序（orderBy 为 args 顶层，
-        // 兼容旧形态嵌在 where 内的调用）
+        // 兼容旧形态嵌在 where 内的调用；2026-11-01 审查快修后生产消息
+        // 查询用 id 序，mock 同步认 id/createdAt 两键）
         .sort((a, b) =>
-          (args?.orderBy?.createdAt ?? where.orderBy?.createdAt) === "desc"
+          (args?.orderBy?.id ??
+            args?.orderBy?.createdAt ??
+            where.orderBy?.createdAt) === "desc"
             ? b.id - a.id
             : a.id - b.id,
         );
@@ -825,6 +828,44 @@ describe("ChatService.editAndResend（编辑重发）", () => {
     });
   });
 
+  it("目标带 skill_ref 块：⚡技能引用随行保留且前置（2026-11-01 审查快修）", async () => {
+    // send 落库结构 [skill_ref…, text, ...images]：编辑换 text 后
+    // skill_ref 与 image 均保留、skill_ref 前置——此前 skill_ref 被
+    // 静默丢弃，编辑后续轮不再展开技能正文
+    const imageBlock = {
+      type: "image",
+      imagePath: "attachments/a1b2.png",
+      mime: "image/png",
+      name: "截图.png",
+    };
+    prismaStub.messages = fourChatRows().map((row) =>
+      row.id === 3
+        ? {
+            ...row,
+            blocks: JSON.stringify([
+              { type: "skill_ref", name: "xmf" },
+              { type: "text", text: "再问" },
+              imageBlock,
+            ]),
+          }
+        : row,
+    );
+    const { service } = makeService();
+    await expect(service.editAndResend(1, 1, 3, "改后的内容")).rejects.toThrow(
+      "NO_MODEL",
+    );
+    expect(prismaStub.messageUpdate).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: {
+        blocks: JSON.stringify([
+          { type: "skill_ref", name: "xmf" },
+          { type: "text", text: "改后的内容" },
+          imageBlock,
+        ]),
+      },
+    });
+  });
+
   it("消息不存在 → MESSAGE_NOT_FOUND，不触写通道", async () => {
     prismaStub.messages = fourChatRows();
     const { service } = makeService();
@@ -1206,10 +1247,15 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     );
     const names = await toolNames(service);
     // 未绑定目录：文件四件缺席（create_skill 由 SkillRepository 注册，
-    // 测试环境不实例化）；仅挂载 alpha 但 beta 也注入（预设外可按需用）
+    // 测试环境不实例化）；browser 四件经白名单在场（2026-11-01 审查快修，
+    // 执行与目录无涉）；仅挂载 alpha 但 beta 也注入（预设外可按需用）
     expect(names).toEqual([
       "read_skill",
       "bash",
+      "browser_snapshot",
+      "browser_navigate",
+      "browser_click",
+      "browser_type",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1259,6 +1305,10 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     expect(names).toEqual([
       "read_skill",
       "bash",
+      "browser_snapshot",
+      "browser_navigate",
+      "browser_click",
+      "browser_type",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1289,6 +1339,10 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
     expect(await toolNames(service)).toEqual([
       "read_skill",
       "bash",
+      "browser_snapshot",
+      "browser_navigate",
+      "browser_click",
+      "browser_type",
       "show_widget",
       "mcp__alpha__query",
       "mcp__beta__fetch",
@@ -1595,6 +1649,16 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     const names = await toolNames(service);
     expect(names).not.toContain("recommend_expert");
     expect(names).toContain("list_experts");
+  });
+
+  it("browser 四件未绑定目录也在场（2026-11-01 审查快修：执行按 sessionId 解析与目录无涉）", async () => {
+    // 未绑定目录（agent.workspacePath undefined）走无工作空间白名单——
+    // browser_* 前缀放行，右栏浏览器操控不再被连带剔除
+    const names = await toolNames(makeSvc({ assistantId: null }).service);
+    expect(names).toContain("browser_snapshot");
+    expect(names).toContain("browser_navigate");
+    expect(names).toContain("browser_click");
+    expect(names).toContain("browser_type");
   });
 
   it("项目会话：挂载集收窄优先，专家附带技能不并入", async () => {

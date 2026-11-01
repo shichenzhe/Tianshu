@@ -1774,6 +1774,24 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     );
     expect(other).toContain("dispatch");
   });
+
+  it("contextWindow 空配置兜底 128K（2026-11-01 裁定）：usage 拆解按 131072 生效值", async () => {
+    // modelRow 夹具 contextWindow: null（存量未配置形态）——截断/压缩/
+    // 面板分母三消费同源兜底，不再回落 null（截断失效根因）。
+    // userId: 1——getUsageBreakdown 走 assembleContext(1, 1) 双参，
+    // session.userId 缺省 undefined 会被归属校验拒（SESSION_NOT_FOUND）
+    const { service } = makeSvc({ assistantId: null, userId: 1 });
+    const breakdown = await (
+      service as unknown as {
+        getUsageBreakdown: (
+          sessionId: number,
+          userId: number,
+        ) => Promise<{ contextWindow: number | null } | null>;
+      }
+    ).getUsageBreakdown(1, 1);
+    expect(breakdown).not.toBeNull();
+    expect(breakdown?.contextWindow).toBe(131072);
+  });
 });
 
 /**

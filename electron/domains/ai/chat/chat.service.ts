@@ -31,7 +31,11 @@ import { loadPersonalization } from "../personalization/personalization.repo";
 import { aiMessageContentToText } from "./ai-content";
 import { createLangChainAgentRunner } from "./agent-runner";
 import { parseBlocks, serializeBlocks, type ImageBlock } from "./blocks";
-import { mergeParams, type ChatModelParams } from "./param-merge";
+import {
+  DEFAULT_CONTEXT_WINDOW,
+  mergeParams,
+  type ChatModelParams,
+} from "./param-merge";
 import { buildScenarioSystem } from "./scenario-prompt";
 import { withTimeBlock } from "./time-context";
 import {
@@ -1357,7 +1361,10 @@ export default class ChatService {
       if (ctx.session.archivedAt) {
         return null;
       }
-      const contextWindow = ctx.modelRow.contextWindow ?? 0;
+      // 空配置兜底 128K（2026-11-01 裁定，DEFAULT_CONTEXT_WINDOW 注释）：
+      // NULL 不兜底则自动压缩永不触发（长会话输入失控的根因之一）
+      const contextWindow =
+        ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
       if (!contextWindow) {
         return null;
       }
@@ -1906,7 +1913,7 @@ export default class ChatService {
         ),
         system: ctx.systemWithSummary,
         history: ctx.history,
-        contextWindow: ctx.modelRow.contextWindow ?? undefined,
+        contextWindow: ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
         params: ctx.merged,
         abortSignal: abort.signal,
         toolDefinitions:
@@ -2263,7 +2270,8 @@ export default class ChatService {
         skills: ctx.skills,
         toolDefinitions,
         history: ctx.history,
-        contextWindow: ctx.modelRow.contextWindow ?? null,
+        // 兜底 128K（生效值口径）：截断按它执行，面板显示同源
+        contextWindow: ctx.modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
         params: ctx.merged,
       });
     } catch {

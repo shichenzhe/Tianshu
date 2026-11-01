@@ -99,6 +99,22 @@ export type FaceEvent =
        *  失败原因），移动端据此复位并重拉列表 */
       type: "backup.progress";
       payload: BackupProgressPayload;
+    }
+  | {
+      /** 空间/项目变更跨端刷新批（2026-11-01）：workspace 行级变更（创建·
+       *  更新·删除）列表级刷新信号——发射点=无头端 workspace.service 写后
+       *  与桌面被控面（repo 埋点经 change-bus→face 桥，本地 UI 写面与远
+       *  程写面同覆盖）；payload 空（消费端以重拉列表为准，对齐
+       *  automation.changed taskId 0 列表级语义） */
+      type: "workspace.changed";
+      payload: Record<string, never>;
+    }
+  | {
+      /** 同上批：project 变更列表级刷新信号——仅桌面被控端发射（无头端
+       *  无 project 模块）；资产空间行连带变不另发 workspace 事件（不进
+       *  workspace 分组树，projectId:null 过滤语义不变） */
+      type: "project.changed";
+      payload: Record<string, never>;
     };
 
 /** graph.run.updated 事件载荷（GA-T6；GA-T4 executor publishRunUpdated 同形） */

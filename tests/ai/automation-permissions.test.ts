@@ -5,8 +5,10 @@ vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
 
-/** toolPermission.findUnique 可控替身（rememberedToolOf 查表链） */
-const findUnique = vi.fn(async () => null);
+/** toolPermission.findUnique 可控替身（rememberedToolOf 查表链）——
+ *  vi.hoisted：vi.mock 工厂被提升到文件顶执行，裸顶层 const 在工厂内
+ *  引用即 TDZ ReferenceError（reset 重放遗留，2026-11-02 修） */
+const findUnique = vi.hoisted(() => vi.fn(async () => null));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: { toolPermission: { findUnique } },
 }));

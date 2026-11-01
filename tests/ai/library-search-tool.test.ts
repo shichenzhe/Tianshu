@@ -4,7 +4,7 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-const findMany = vi.fn(async () => [] as unknown[]);
+const findMany = vi.hoisted(() => vi.fn(async () => [] as unknown[]));
 vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: { libraryItem: { findMany } },

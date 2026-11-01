@@ -35,6 +35,10 @@ import MarkdownView from "./MarkdownView";
 import AssistantAvatar from "./AssistantAvatar";
 import WidgetRenderer from "./WidgetRenderer";
 import ExpertRecommendCard from "./ExpertRecommendCard";
+import TableViewCard from "./TableViewCard";
+import SummaryCard from "./SummaryCard";
+import ChartViewCard from "./ChartViewCard";
+import ConfirmFormCard from "./ConfirmFormCard";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
 import { MessageImage } from "./MessageImage";
 import MessageFileRef from "./MessageFileRef";
@@ -438,6 +442,26 @@ function MessageItemImpl({
           <ExpertRecommendCard
             key={rec.toolCallId}
             item={rec}
+            sessionId={sessionId}
+          />
+        ))}
+        {/* 数据表格卡（show_table 工具块分流）：消息流正文位渲染 */}
+        {grouped.tables.map((table) => (
+          <TableViewCard key={table.toolCallId} item={table} />
+        ))}
+        {/* 摘要指标卡（show_summary 工具块分流）：消息流正文位渲染 */}
+        {grouped.summaries.map((summary) => (
+          <SummaryCard key={summary.toolCallId} item={summary} />
+        ))}
+        {/* 图表卡（show_chart 工具块分流）：消息流正文位渲染 */}
+        {grouped.charts.map((chart) => (
+          <ChartViewCard key={chart.toolCallId} item={chart} />
+        ))}
+        {/* 工作流确认卡（confirm_form 工具块分流）：消息流正文位渲染 */}
+        {grouped.confirmForms.map((confirm) => (
+          <ConfirmFormCard
+            key={confirm.toolCallId}
+            item={confirm}
             sessionId={sessionId}
           />
         ))}

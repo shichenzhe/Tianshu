@@ -202,6 +202,26 @@ export default class ChatApi {
     );
   }
 
+  /**
+   * 确认卡决议（切片 B 2026-10-29：confirm_form 工具挂起 → 渲染层
+   * ConfirmFormCard 确认/取消）：本地 IPC agent:confirmRespond（sessionId
+   * 键控协调器；远程主机路由化不在本切片范围——远程会话无 confirm_form
+   * 注入，卡片不出现即无决议可回）
+   */
+  static async confirmFormRespond(
+    sessionId: number,
+    decision:
+      | {
+          action: "confirm";
+          values: Record<string, string | number | boolean>;
+        }
+      | {
+          action: "cancel";
+        },
+  ): Promise<boolean> {
+    return invoke<boolean>("agent:confirmRespond", sessionId, decision);
+  }
+
   /** /compact 会话压缩(v8):摘要走一次流式 send 后落 session */
   static async compact(sessionId: number): Promise<void> {
     return invoke<void>("chat:compact", sessionId);

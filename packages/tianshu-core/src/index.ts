@@ -26,6 +26,7 @@ export * from "./run-chat-stream";
 // GA-T2：编排纯逻辑 + graph/schedule zod schema 全量入包（controller
 // ruling 3；schedule-schema 为 schedule.ts 的闭包随行件）
 export * from "./graph-schema";
+export * from "./graph-inputs";
 export * from "./schedule-schema";
 export * from "./graph-compiler";
 export * from "./graph-prompt";

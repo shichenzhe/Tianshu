@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -89,6 +90,8 @@ import {
   type SubflowNode,
   type VectorSearchNode,
   type VectorizeNode,
+  type GraphInputField,
+  type GraphJson,
 } from "../api/graph.schema";
 import { CODE_NODE_EXAMPLES } from "../lib/code-node-examples";
 import {
@@ -606,6 +609,7 @@ export function nodeFieldsOf(
   onPatch: (patch: GraphNodePatch) => void,
   inputSchemaKeys: string[] = [],
   graphNodes: GraphNode[] = [],
+  inputSchema?: GraphJson["inputSchema"],
 ) {
   switch (node.kind) {
     case "llm":
@@ -675,6 +679,7 @@ export function nodeFieldsOf(
         <StartNodeFields
           node={node}
           inputSchemaKeys={inputSchemaKeys}
+          inputSchema={inputSchema}
           onPatch={onPatch}
         />
       );
@@ -2901,32 +2906,159 @@ export function DelayNodeFields({
   );
 }
 
-/** 开始节点字段区：变量列表（回写 inputSchema 由编辑器层 patchNode 分流
- *  收口，节点与图同一提交同步）；字段初始值从 inputSchema 键兜底
- *  （JSON 手改/AI 生成的图 node.variables 为空时保持一致回显） */
+/** 开始节点字段区：变量列表 + 变量类型编辑（切片 D——名称+类型+可选
+ * 配置；回写 inputSchema 由编辑器层 patchNode 分流收口，节点与图同一
+ * 提交同步）；字段初始值从 inputSchema 键兜底（JSON 手改/AI 生成的图
+ * node.variables 为空时保持一致回显） */
 export function StartNodeFields({
   node,
   inputSchemaKeys,
+  inputSchema = {},
   onPatch,
 }: {
   node: StartNode;
   inputSchemaKeys: string[];
+  /** 图级 inputSchema 原始形态（类型编辑回写口经 onPatch({inputSchema})） */
+  inputSchema?: GraphJson["inputSchema"];
   onPatch: (patch: GraphNodePatch) => void;
 }) {
   const { t } = useTranslation(["chat"]);
   const values = node.variables.length > 0 ? node.variables : inputSchemaKeys;
+  const entryOf = (key: string): GraphInputField =>
+    typeof inputSchema[key] === "object" && inputSchema[key] !== null
+      ? (inputSchema[key] as GraphInputField)
+      : { type: "string" };
+  const patchField = (key: string, next: GraphInputField) =>
+    onPatch({ inputSchema: { ...inputSchema, [key]: next } });
+  /** default 文本按类型转换（不可转换/空 → 省略，交给保存期校验引导） */
+  const defaultOf = (text: string, field: GraphInputField) => {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      return undefined;
+    }
+    if (field.type === "number") {
+      const num = Number(trimmed);
+      return Number.isFinite(num) ? num : undefined;
+    }
+    if (field.type === "boolean") {
+      return trimmed === "true" || trimmed === "false"
+        ? trimmed === "true"
+        : undefined;
+    }
+    if (field.type === "enum") {
+      return (field.enumValues ?? []).includes(trimmed) ? trimmed : undefined;
+    }
+    return trimmed;
+  };
   return (
-    <Field
-      label={t("chat:orchestration.editor.variablesLabel")}
-      hint={t("chat:orchestration.editor.variablesHint")}
-      className="col-span-full"
-    >
-      <StringListInput
-        values={values}
-        placeholder={t("chat:orchestration.editor.variablePlaceholder")}
-        onChange={(variables) => onPatch({ variables })}
-      />
-    </Field>
+    <>
+      <Field
+        label={t("chat:orchestration.editor.variablesLabel")}
+        hint={t("chat:orchestration.editor.variablesHint")}
+        className="col-span-full"
+      >
+        <StringListInput
+          values={values}
+          placeholder={t("chat:orchestration.editor.variablePlaceholder")}
+          onChange={(variables) => onPatch({ variables })}
+        />
+      </Field>
+      {values.length > 0 && (
+        <Field
+          label={t("chat:orchestration.editor.varTypeLabel")}
+          hint={t("chat:orchestration.editor.varTypeHint")}
+          className="col-span-full"
+        >
+          <div className="flex flex-col gap-2">
+            {values.map((key) => {
+              const field = entryOf(key);
+              return (
+                <div
+                  key={key}
+                  className="grid grid-cols-[1fr_auto] items-end gap-2 rounded-md border border-border/50 p-2"
+                >
+                  <div className="grid gap-1.5">
+                    <span className="truncate font-mono text-xs text-foreground">
+                      {key}
+                    </span>
+                    <Select
+                      value={field.type}
+                      onValueChange={(type) =>
+                        patchField(key, {
+                          type: type as GraphInputField["type"],
+                          required: field.required,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-full text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-lg border border-border/50 shadow-lg">
+                        {(
+                          [
+                            "string",
+                            "number",
+                            "boolean",
+                            "enum",
+                            "date",
+                          ] as const
+                        ).map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {t(`chat:orchestration.editor.varType.${type}`)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {field.type === "enum" && (
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder={t(
+                          "chat:orchestration.editor.varEnumValues",
+                        )}
+                        value={(field.enumValues ?? []).join(",")}
+                        onChange={(e) =>
+                          patchField(key, {
+                            ...field,
+                            enumValues: e.target.value
+                              .split(/[,，]/)
+                              .map((v) => v.trim())
+                              .filter((v) => v !== ""),
+                          })
+                        }
+                      />
+                    )}
+                    <Input
+                      className="h-7 text-xs"
+                      placeholder={t("chat:orchestration.editor.varDefault")}
+                      value={String(field.default ?? "")}
+                      onChange={(e) => {
+                        const next = defaultOf(e.target.value, field);
+                        patchField(key, {
+                          ...field,
+                          ...(next !== undefined ? { default: next } : {}),
+                        });
+                      }}
+                    />
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-1 pb-1 text-xs text-muted-foreground">
+                    <Checkbox
+                      checked={field.required ?? true}
+                      onCheckedChange={(required) =>
+                        patchField(key, {
+                          ...field,
+                          required: required === true,
+                        })
+                      }
+                    />
+                    {t("chat:orchestration.editor.varRequired")}
+                  </label>
+                </div>
+              );
+            })}
+          </div>
+        </Field>
+      )}
+    </>
   );
 }
 

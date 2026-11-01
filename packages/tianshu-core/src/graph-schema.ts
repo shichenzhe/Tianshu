@@ -411,6 +411,11 @@ export const databaseNodeSchema = z.object({
   ...nodeBase,
   kind: z.literal("database"),
   engine: z.enum(["sqlite", "postgres", "mysql", "oracle", "sqlserver"]),
+  /** 数据源引用（可选，切片 B 2026-10-29）：指向元库 dataSourceConfig 行
+   *  ——节点 JSON 只存 id，连接参数（host/port/database/username/password/
+   *  ssl，含 engine）在执行层解析并覆盖裸配置（引用优先，两者并存）；
+   *  凭据不进图定义/画布/聊天上下文 */
+  dataSourceId: z.number().int().positive().optional(),
   sqlitePath: z.string().default(""),
   host: z.string().default(""),
   port: z.number().int().min(1).max(65_535).default(5432),
@@ -769,9 +774,87 @@ export const graphEdgeSchema = z.object({
     .optional(),
 });
 
+/** 输入变量类型字面量（typed 输入，切片 D 2026-10-29）：string 为旧简写
+ *  等价形态；number/boolean 原生传递（database 参数直通驱动）；enum
+ *  值域收口；date 归一 yyyy-MM-dd */
+export const INPUT_TYPES = [
+  "string",
+  "number",
+  "boolean",
+  "enum",
+  "date",
+] as const;
+export type InputType = (typeof INPUT_TYPES)[number];
+
+/** default 与 type 自洽判定（enum 宽收 string|number——按 String() 比值域） */
+function defaultFitsType(
+  value: string | number | boolean,
+  type: InputType,
+): boolean {
+  switch (type) {
+    case "string":
+    case "date":
+      return typeof value === "string";
+    case "number":
+      return typeof value === "number";
+    case "boolean":
+      return typeof value === "boolean";
+    case "enum":
+      return typeof value === "string" || typeof value === "number";
+  }
+}
+
+/**
+ * 对象形态输入变量声明（切片 D 新形态）：旧字符串简写 "string" 继续合法
+ * （存量图零迁移，解析等价 {type:"string"}）。校验完备：类型字面量、
+ * default 与类型自洽（enum 须在值域内）、enum 必带非空且不重复的
+ * enumValues（仅 enum 可带）、未知键拒绝（strict）
+ */
+export const inputFieldSchema = z
+  .object({
+    type: z.enum(INPUT_TYPES),
+    required: z.boolean().optional(),
+    default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    enumValues: z.array(z.string().min(1)).optional(),
+    description: z.string().max(200).optional(),
+  })
+  .strict()
+  .superRefine((field, ctx) => {
+    const addIssue = (path: string, message: string) =>
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (field.type === "enum") {
+      if (!field.enumValues || field.enumValues.length === 0) {
+        addIssue("enumValues", "enum 类型必须提供非空 enumValues");
+      } else if (new Set(field.enumValues).size !== field.enumValues.length) {
+        addIssue("enumValues", "enumValues 存在重复值");
+      } else if (
+        field.default !== undefined &&
+        !field.enumValues.includes(String(field.default))
+      ) {
+        addIssue("default", "default 必须在 enumValues 值域内");
+      }
+    } else if (field.enumValues !== undefined) {
+      addIssue("enumValues", "enumValues 仅 enum 类型可提供");
+    }
+    if (
+      field.default !== undefined &&
+      !defaultFitsType(field.default, field.type)
+    ) {
+      addIssue("default", `default 类型与 ${field.type} 不自洽`);
+    }
+  });
+
+export type GraphInputField = z.infer<typeof inputFieldSchema>;
+
+/** inputSchema 值域：旧简写 ∪ 对象形态（双形态并存，parseInputSchema 归一） */
+export const graphInputSchemaValue = z.union([
+  z.literal("string"),
+  inputFieldSchema,
+]);
+
 export const graphJsonSchema = z.object({
   version: z.literal(1),
-  inputSchema: z.record(z.string(), z.literal("string")).default({}),
+  inputSchema: z.record(z.string(), graphInputSchemaValue).default({}),
   nodes: z.array(graphNodeSchema).min(1),
   // edges 不设 min(1)：「多节点零边」是非法图但须由 validateGraph 的
   // 唯一入口检查给出可读错误，而非 schema 层笼统的 Too small
@@ -835,15 +918,100 @@ function toGraphIssue(i: ZodIssueLike, json: unknown): GraphIssue {
 const RESERVED_NODE_IDS = new Set(["inputs", "nodes", "route"]);
 
 /** 跨节点结构校验（spec §3 保存期校验清单） */
+/** union 分支的窄化重校验器（E1 字段级回喂前提）：zod union 失败只报
+ *  节点级 Invalid input（无字段定位），按「最少错误的分支」重校验展开 */
+interface BranchLike {
+  safeParse(value: unknown): {
+    success: boolean;
+    error?: { issues: ZodIssueLike[] };
+  };
+}
+
+/** nodes.<i> 的裸 Invalid input → 字段级 issue（每节点至多展开 4 条） */
+function expandNodeUnionIssues(
+  issues: ZodIssueLike[],
+  json: unknown,
+): ZodIssueLike[] {
+  const nodes = (json as { nodes?: unknown[] } | null)?.nodes;
+  if (!Array.isArray(nodes)) {
+    return issues;
+  }
+  const branches = (graphNodeSchema as unknown as { options: BranchLike[] })
+    .options;
+  const out: ZodIssueLike[] = [];
+  for (const issue of issues) {
+    const idx = issue.path[0] === "nodes" ? Number(issue.path[1]) : Number.NaN;
+    const bare =
+      issue.code !== "custom" &&
+      /^Invalid input/.test(issue.message) &&
+      issue.path.length === 2 &&
+      Number.isInteger(idx) &&
+      idx >= 0 &&
+      idx < nodes.length;
+    if (!bare) {
+      out.push(issue);
+      continue;
+    }
+    let best: ZodIssueLike[] | null = null;
+    let branchPassed = false;
+    // kind 判别直选（E1）：raw.kind 为字符串时，喂 {kind} 探针挑出唯一
+    // 不报 kind 错的分支重校验——最少错误启发式会误选字段最少的宽容
+    // 分支（如 delay）；kind 缺失/探针不唯一时回退启发式（缺省 llm 补默
+    // 认的旧图即走回退）
+    const raw = nodes[idx];
+    const kind = (raw as { kind?: unknown } | null)?.kind;
+    if (typeof kind === "string" && kind !== "") {
+      for (const branch of branches) {
+        const probe = branch.safeParse({ kind });
+        const kindRejected = (probe.error?.issues ?? []).some(
+          (i) => String(i.path[0] ?? "") === "kind",
+        );
+        if (kindRejected) {
+          continue;
+        }
+        const full = branch.safeParse(raw);
+        if (full.success) {
+          branchPassed = true;
+          break;
+        }
+        best = full.error?.issues ?? null;
+        break;
+      }
+    }
+    if (!best && !branchPassed) {
+      for (const branch of branches) {
+        const result = branch.safeParse(raw);
+        if (result.success) {
+          branchPassed = true;
+          break;
+        }
+        const errs = result.error?.issues ?? [];
+        if (!best || errs.length < best.length) {
+          best = errs;
+        }
+      }
+    }
+    if (branchPassed || !best) {
+      out.push(issue);
+      continue;
+    }
+    for (const err of best.slice(0, 4)) {
+      out.push({ ...err, path: ["nodes", idx, ...err.path] });
+    }
+  }
+  return out;
+}
+
 export function validateGraph(
   json: unknown,
 ): { ok: true; value: GraphJson } | { ok: false; issues: GraphIssue[] } {
   const parsed = graphJsonSchema.safeParse(json);
   if (!parsed.success) {
-    return {
-      ok: false,
-      issues: parsed.error.issues.map((issue) => toGraphIssue(issue, json)),
-    };
+    const issues = expandNodeUnionIssues(
+      parsed.error.issues as ZodIssueLike[],
+      json,
+    ).map((issue) => toGraphIssue(issue, json));
+    return { ok: false, issues };
   }
   const { nodes, edges } = parsed.data;
   const ids = new Set(nodes.map((n) => n.id));

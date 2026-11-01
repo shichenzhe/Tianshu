@@ -18,6 +18,7 @@ import {
   newImageGenNode,
   newNode,
   nextNodeId,
+  patchInputSchema,
   patchStartVariables,
   readTemplatePrefill,
   suggestHttpBodyType,
@@ -74,6 +75,57 @@ const validJson: GraphJson = {
     { from: "report", to: "END" },
   ],
 };
+
+describe("start 变量 typed 编辑（切片 D）", () => {
+  const graph = {
+    version: 1 as const,
+    inputSchema: {
+      amount: { type: "number" as const, required: true },
+      category: {
+        type: "enum" as const,
+        enumValues: ["餐饮", "交通"],
+        default: "餐饮",
+      },
+      legacy: "string",
+    },
+    nodes: [
+      {
+        id: "start",
+        name: "开始",
+        kind: "start" as const,
+        variables: ["amount", "category", "legacy"],
+      },
+    ],
+    edges: [],
+  };
+
+  it("patchStartVariables：既有键保留类型声明，新键缺省 string", () => {
+    const next = patchStartVariables(graph, ["legacy", "category", "newVar"]);
+    expect(next.inputSchema).toEqual({
+      legacy: "string",
+      category: graph.inputSchema.category,
+      newVar: "string",
+    });
+    expect(next.nodes[0].kind === "start" && next.nodes[0].variables).toEqual([
+      "legacy",
+      "category",
+      "newVar",
+    ]);
+  });
+
+  it("patchInputSchema：整体回写并同步 start.variables 键序", () => {
+    const schema = {
+      amount: { type: "number" as const },
+      flag: { type: "boolean" as const, required: false },
+    };
+    const next = patchInputSchema(graph, schema);
+    expect(next.inputSchema).toEqual(schema);
+    expect(next.nodes[0].kind === "start" && next.nodes[0].variables).toEqual([
+      "amount",
+      "flag",
+    ]);
+  });
+});
 
 describe("EditorMode（编辑模式取值）", () => {
   it("画布 ⇄ JSON 源码双模式（画布为默认主模式）", () => {

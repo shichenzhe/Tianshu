@@ -831,7 +831,8 @@
       "workspaceMissing": "Selected workspace not found",
       "failed": "Test run failed: {{message}}",
       "cancelRun": "Interrupt Run",
-      "cancelSent": "Interrupt request sent; status will refresh shortly"
+      "cancelSent": "Interrupt request sent; status will refresh shortly",
+      "selectValue": "Select a value"
     },
     "runs": {
       "title": "Run history",
@@ -1338,7 +1339,19 @@
       "emailRetriesHint": "Retry SMTP transient failures (0-5, 0.5s interval)",
       "intentTimeoutHint": "Classification call timeout (default 60s, max 24h)",
       "rowsLimitLabel": "Max rows",
-      "excelMaxRowsHint": "Safety fuse (1-100k, default 1000); exceeding fails the node — shard or raise the limit"
+      "excelMaxRowsHint": "Safety fuse (1-100k, default 1000); exceeding fails the node — shard or raise the limit",
+      "varTypeLabel": "Variable Types",
+      "varTypeHint": "Fill by type: number, enum dropdown, boolean switch, date picker; empty default means none",
+      "varEnumValues": "Values (comma-separated, required for enum)",
+      "varDefault": "Default (optional)",
+      "varRequired": "Required",
+      "varType": {
+        "string": "Text",
+        "number": "Number",
+        "boolean": "Boolean",
+        "enum": "Enum",
+        "date": "Date"
+      }
     },
     "templates": {
       "dailyBriefTitle": "Branch Briefing",
@@ -1697,5 +1710,29 @@
         }
       }
     }
+  },
+  "showTable": {
+    "defaultTitle": "Table",
+    "loading": "Generating table…",
+    "empty": "No data"
+  },
+  "showSummary": {
+    "defaultTitle": "Summary",
+    "loading": "Generating summary…",
+    "empty": "No content"
+  },
+  "confirmForm": {
+    "defaultTitle": "Confirm Execution",
+    "confirm": "Confirm & Run",
+    "empty": "No parameters to confirm",
+    "cancelled": "Cancelled — nothing was executed",
+    "doneFallback": "Executed with confirmed parameters; see run history",
+    "error": "Failed to deliver confirmation, please retry from the chat",
+    "selectValue": "Select a value"
+  },
+  "showChart": {
+    "defaultTitle": "Chart",
+    "loading": "Generating chart…",
+    "empty": "No data"
   }
 }

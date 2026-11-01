@@ -658,6 +658,8 @@ export default class ProjectRepository {
       ...row,
       assistantId: row.assistantId ?? undefined,
       currentModelId: row.currentModelId ?? undefined,
+      // 应用绑定（切片 C）：null 归一 undefined（普通会话）
+      appId: row.appId ?? undefined,
       mode: (row.mode as SessionMode | null) ?? "agent",
       lastMessageAt: row.lastMessageAt?.toISOString() ?? undefined,
       pinnedAt: row.pinnedAt?.toISOString() ?? undefined,

@@ -34,7 +34,9 @@
     "installNow": "立即安装",
     "installLaterHint": "更新将在下次启动时安装",
     "checkUpdateTitle": "检查更新",
-    "checkUpdateDesc": "是否检查应用更新？"
+    "checkUpdateDesc": "是否检查应用更新？",
+    "dataSources": "数据源配置",
+    "apps": "应用管理"
   },
   "auth": {
     "loginRequired": "请先登录",

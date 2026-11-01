@@ -27,6 +27,13 @@ export const IPC_INVOKE_ALLOWLIST = [
   "provider:delete",
   // provider 级连通测试（终审 I-2：comfyui 无模型行，设置页「测试连接」）
   "provider:test",
+  // 数据源配置（PG 首选通道，切片 B 2026-10-29）：database 节点
+  // dataSourceId 的配置面 CRUD + 连通测试（凭据只写不读）
+  "dataSource:list",
+  "dataSource:create",
+  "dataSource:update",
+  "dataSource:delete",
+  "dataSource:test",
   "model:listByProvider",
   "model:listAll",
   "model:create",
@@ -69,6 +76,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   // P1 尾未读角标：已读游标单调推进（ChatPane 消息就绪/定稿后上报；
   // repo.markSessionRead 归属 + message 属会话校验，同报 SESSION_NOT_FOUND）
   "session:markRead",
+  // 会话绑定/解绑应用（切片 C P1）：appId null=解绑
+  "session:setApp",
   "message:listBySession",
   "message:search",
   "assistant:list",
@@ -87,6 +96,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "chat:polish",
   "chat:handoverSummary",
   "agent:approve",
+  // 确认卡决议（切片 B 2026-10-29）：confirm_form 挂起 → 渲染层确认/取消
+  "agent:confirmRespond",
   "permission:get",
   "permission:set",
   "permission:rememberTool",
@@ -164,6 +175,11 @@ export const IPC_INVOKE_ALLOWLIST = [
   "mcpServer:statuses",
   "mcpServer:sync",
   "mcpServer:openHub",
+  // 应用定义（聚合期核心，切片 C）：CRUD 四通道
+  "app:list",
+  "app:create",
+  "app:update",
+  "app:delete",
   // 自动化模块
   "automation:list",
   "automation:create",

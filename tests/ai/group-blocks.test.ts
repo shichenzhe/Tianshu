@@ -97,6 +97,132 @@ describe("recommend_expert 块分流（会话内专家推荐卡）", () => {
   });
 });
 
+describe("confirm_form 块分流（工作流执行确认卡）", () => {
+  it("confirm_form 工具块分流到 confirmForms（含 output 回执透传）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c1",
+        toolName: "confirm_form",
+        args: {
+          workflowId: 3,
+          workflowName: "记账·记一笔",
+          title: "执行确认",
+          fields: [
+            { key: "amount", label: "金额", value: "35" },
+            { key: "note", label: "备注", value: "午饭", hint: "可空" },
+          ],
+        },
+        state: "running",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-c2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.confirmForms).toHaveLength(1);
+    expect(grouped.confirmForms[0]).toMatchObject({
+      workflowId: 3,
+      workflowName: "记账·记一笔",
+      state: "running",
+    });
+    expect(grouped.confirmForms[0].fields[1]).toMatchObject({
+      key: "note",
+      hint: "可空",
+    });
+    expect(grouped.confirmForms[0].output).toBeUndefined();
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("done 态带 output 回执；args 渐进（fields 非数组/workflowName 缺失）退空结构", () => {
+    const done = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c3",
+        toolName: "confirm_form",
+        args: { workflowId: 3, fields: [{ key: "a", label: "A", value: "1" }] },
+        state: "done",
+        output: "用户已取消本次工作流执行（未运行）",
+      } as never,
+    ]);
+    expect(done.confirmForms[0].output).toContain("用户已取消");
+    const partial = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-c4",
+        toolName: "confirm_form",
+        args: { fields: "半截" },
+        state: "running",
+      } as never,
+    ]);
+    expect(partial.confirmForms[0].fields).toEqual([]);
+    expect(partial.confirmForms[0].workflowName).toBe("");
+    expect(partial.confirmForms[0].workflowId).toBe(0);
+  });
+});
+
+describe("show_chart 块分流（消息流图表卡）", () => {
+  it("show_chart 工具块分流到 charts（line 型原样保留系列与标签）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch1",
+        toolName: "show_chart",
+        args: {
+          title: "近 6 个月支出",
+          chartType: "line",
+          labels: ["5月", "6月", "7月"],
+          series: [{ name: "支出", values: [120, 88, 200] }],
+        },
+        state: "done",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.charts).toHaveLength(1);
+    expect(grouped.charts[0].chartType).toBe("line");
+    expect(grouped.charts[0].labels).toEqual(["5月", "6月", "7月"]);
+    expect(grouped.charts[0].series[0].values).toEqual([120, 88, 200]);
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进（chartType 缺省 line、labels/series 非数组退空）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch3",
+        toolName: "show_chart",
+        args: { chartType: "bar" },
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.charts[0].chartType).toBe("bar");
+    expect(grouped.charts[0].labels).toEqual([]);
+    expect(grouped.charts[0].series).toEqual([]);
+    const bad = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-ch4",
+        toolName: "show_chart",
+        args: { chartType: "pie", labels: "半截" },
+        state: "running",
+      } as never,
+    ]);
+    expect(bad.charts[0].chartType).toBe("line");
+    expect(bad.charts[0].labels).toEqual([]);
+  });
+});
+
 describe("summarizeThinking 折叠摘要", () => {
   it("短文本原样返回", () => {
     expect(summarizeThinking("我来梳理一下思路。")).toBe("我来梳理一下思路。");
@@ -152,5 +278,102 @@ describe("show_widget 块分流（聊天面板可视化组件）", () => {
     ]);
     expect(grouped.tools.map((t) => t.toolName)).toEqual(["read"]);
     expect(grouped.widgets).toHaveLength(1);
+  });
+});
+
+describe("show_table 块分流（消息流数据表格卡）", () => {
+  const tableBlock = {
+    type: "tool_call",
+    toolCallId: "tc-t1",
+    toolName: "show_table",
+    args: {
+      title: "支出明细",
+      columns: [
+        { key: "amount", label: "金额" },
+        { key: "note", label: "备注" },
+      ],
+      rows: [
+        { amount: 35, note: "午饭" },
+        { amount: 12.5, note: null },
+      ],
+    },
+    state: "done",
+  } as never;
+
+  it("show_table 工具块分流到 tables（不进思考面板工具组）", () => {
+    const grouped = groupBlocks([
+      tableBlock,
+      { type: "text", text: "结论" } as never,
+    ]);
+    expect(grouped.tables).toHaveLength(1);
+    expect(grouped.tables[0].title).toBe("支出明细");
+    expect(grouped.tables[0].columns).toHaveLength(2);
+    expect(grouped.tables[0].rows[1]).toMatchObject({ amount: 12.5 });
+    expect(grouped.tools).toHaveLength(0);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进/缺失（columns/rows 非数组）退空结构，不炸分流", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-t2",
+        toolName: "show_table",
+        args: { columns: "半截", rows: null },
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.tables).toHaveLength(1);
+    expect(grouped.tables[0].columns).toEqual([]);
+    expect(grouped.tables[0].rows).toEqual([]);
+    expect(grouped.tables[0].state).toBe("running");
+  });
+});
+
+describe("show_summary 块分流（消息流摘要指标卡）", () => {
+  it("show_summary 工具块分流到 summaries（不进思考面板工具组）", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-s1",
+        toolName: "show_summary",
+        args: {
+          title: "月度汇总",
+          items: [
+            { label: "总支出", value: "¥123.5", hint: "含退款" },
+            { label: "笔数", value: 12 },
+          ],
+        },
+        state: "done",
+      } as never,
+      {
+        type: "tool_call",
+        toolCallId: "tc-s2",
+        toolName: "read_file",
+        args: {},
+        state: "done",
+      } as never,
+    ]);
+    expect(grouped.summaries).toHaveLength(1);
+    expect(grouped.summaries[0].items[0]).toMatchObject({
+      label: "总支出",
+      hint: "含退款",
+    });
+    expect(grouped.tools.map((t) => t.toolName)).toEqual(["read_file"]);
+    expect(grouped.hasProcess).toBe(true);
+  });
+
+  it("args 渐进（items 非数组）退空结构", () => {
+    const grouped = groupBlocks([
+      {
+        type: "tool_call",
+        toolCallId: "tc-s3",
+        toolName: "show_summary",
+        args: {},
+        state: "running",
+      } as never,
+    ]);
+    expect(grouped.summaries).toHaveLength(1);
+    expect(grouped.summaries[0].items).toEqual([]);
   });
 });

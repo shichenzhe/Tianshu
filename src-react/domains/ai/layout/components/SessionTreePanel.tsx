@@ -20,6 +20,7 @@ import {
   FolderKanban,
   FolderOpen,
   FolderPlus,
+  LayoutGrid,
   ListChecks,
   MoreHorizontal,
   Pencil,
@@ -100,6 +101,7 @@ import { useAiUiStore } from "../../store/ai-ui.store";
 import { sessionResourceIndex } from "../../file-window/lib/session-map";
 import type { FileWindowResource } from "../../file-window/model/resource";
 import UnbindDirectoryDialog from "../../chat/components/UnbindDirectoryDialog";
+import BindAppDialog from "../../apps/components/BindAppDialog";
 import BatchActionBar from "./BatchActionBar";
 import WorkspaceMenu from "./WorkspaceMenu";
 
@@ -1716,12 +1718,14 @@ const TaskTreeItem = memo(function TaskTreeItem({
   onArchive,
   onOpenFolder,
 }: TaskTreeItemProps) {
-  const { t } = useTranslation(["chat", "common"]);
+  const { t } = useTranslation(["chat", "common", "ai"]);
   const locale = getDateFnsLocale();
   const timeText = formatDistanceToNow(
     new Date(session.lastMessageAt ?? session.updatedAt),
     { addSuffix: true, locale },
   );
+  // 绑定应用弹窗（切片 C P1）：会话内 ⋯ 菜单入口，最小侵入不动主流程
+  const [bindAppOpen, setBindAppOpen] = useState(false);
   // 绿点：该任务流式进行中（chat.store 前端派生）
   const streaming = useChatStore((s) => Boolean(s.isStreaming[session.id]));
   const pinned = Boolean(session.pinnedAt);
@@ -1778,6 +1782,10 @@ const TaskTreeItem = memo(function TaskTreeItem({
           <DropdownMenuItem onClick={() => onArchive(session)}>
             <Archive className="mr-2 h-4 w-4" />
             {t("chat:task.archive")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setBindAppOpen(true)}>
+            <LayoutGrid className="mr-2 h-4 w-4" />
+            {session.appId ? t("ai:app.bindMenuBound") : t("ai:app.bindMenu")}
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
@@ -1934,6 +1942,12 @@ const TaskTreeItem = memo(function TaskTreeItem({
         <span className="block text-xs text-muted-foreground">{timeText}</span>
       </button>
       {!batchMode && quickActions}
+      <BindAppDialog
+        open={bindAppOpen}
+        onOpenChange={setBindAppOpen}
+        sessionId={session.id}
+        currentAppId={session.appId}
+      />
     </div>
   );
 });

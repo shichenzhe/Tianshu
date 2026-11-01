@@ -196,3 +196,13 @@ export type llmCallEvent = Prisma.llmCallEventModel
  * 
  */
 export type toolCallEvent = Prisma.toolCallEventModel
+/**
+ * Model dataSourceConfig
+ * 
+ */
+export type dataSourceConfig = Prisma.dataSourceConfigModel
+/**
+ * Model appDefinition
+ * 
+ */
+export type appDefinition = Prisma.appDefinitionModel

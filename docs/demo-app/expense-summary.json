@@ -1,0 +1,90 @@
+{
+  "name": "记账·月度汇总",
+  "description": "按月聚合支出（总额/笔数/均值 + 分类行集 + 近 6 个月趋势行集）。inputs：month 月份 yyyy-MM（空串=当月，SQL 内 date('now') 兜底）。终点 payload 含三段：summary（show_summary 结构）、byCategory（可透传 show_table 或 show_chart bar）、trend（近 6 个月行集，可 show_chart line）。jsonParse 提标量 + merge 模板组装（零 code 节点——打包态不依赖系统 node 解释器）。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {
+      "month": "string"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": ["month"],
+        "position": { "x": 80, "y": 200 }
+      },
+      {
+        "id": "summary-total",
+        "name": "月度总额聚合",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT COUNT(*) AS cnt, ROUND(TOTAL(amount), 2) AS total, ROUND(COALESCE(AVG(amount), 0), 2) AS avg_amount FROM expense WHERE strftime('%Y-%m', spent_at) = COALESCE(NULLIF(?, ''), strftime('%Y-%m', 'now', 'localtime'))",
+        "params": ["{{input.month}}"],
+        "position": { "x": 300, "y": 200 }
+      },
+      {
+        "id": "parse-total",
+        "name": "提取总额",
+        "kind": "jsonParse",
+        "source": "{{nodes.summary-total.output}}",
+        "path": "0.total",
+        "position": { "x": 520, "y": 100 }
+      },
+      {
+        "id": "parse-cnt",
+        "name": "提取笔数",
+        "kind": "jsonParse",
+        "source": "{{nodes.summary-total.output}}",
+        "path": "0.cnt",
+        "position": { "x": 520, "y": 200 }
+      },
+      {
+        "id": "parse-avg",
+        "name": "提取均值",
+        "kind": "jsonParse",
+        "source": "{{nodes.summary-total.output}}",
+        "path": "0.avg_amount",
+        "position": { "x": 520, "y": 300 }
+      },
+      {
+        "id": "summary-by-category",
+        "name": "分类聚合",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT category, COUNT(*) AS cnt, ROUND(TOTAL(amount), 2) AS total FROM expense WHERE strftime('%Y-%m', spent_at) = COALESCE(NULLIF(?, ''), strftime('%Y-%m', 'now', 'localtime')) GROUP BY category ORDER BY total DESC",
+        "params": ["{{input.month}}"],
+        "position": { "x": 740, "y": 100 }
+      },
+      {
+        "id": "trend-6m",
+        "name": "近 6 个月趋势",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT strftime('%Y-%m', spent_at) AS month, ROUND(TOTAL(amount), 2) AS total FROM expense WHERE spent_at >= date('now', 'localtime', '-5 month', 'start of month') GROUP BY month ORDER BY month",
+        "params": [],
+        "position": { "x": 740, "y": 240 }
+      },
+      {
+        "id": "build-payload",
+        "name": "组装汇总载荷",
+        "kind": "merge",
+        "template": "{\"summary\":{\"title\":\"月度汇总\",\"items\":[{\"label\":\"总支出\",\"value\":\"¥{{nodes.parse-total.output}}\"},{\"label\":\"笔数\",\"value\":\"{{nodes.parse-cnt.output}}\",\"hint\":\"平均 ¥{{nodes.parse-avg.output}}\"}]},\"byCategory\":{{nodes.summary-by-category.output}},\"trend\":{{nodes.trend-6m.output}}}",
+        "position": { "x": 980, "y": 180 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "summary-total" },
+      { "from": "summary-total", "to": "parse-total" },
+      { "from": "parse-total", "to": "parse-cnt" },
+      { "from": "parse-cnt", "to": "parse-avg" },
+      { "from": "parse-avg", "to": "summary-by-category" },
+      { "from": "summary-by-category", "to": "trend-6m" },
+      { "from": "trend-6m", "to": "build-payload" },
+      { "from": "build-payload", "to": "END" }
+    ]
+  }
+}

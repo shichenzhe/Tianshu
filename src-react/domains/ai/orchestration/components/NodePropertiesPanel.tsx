@@ -397,6 +397,7 @@ function NodeBranch({
         onPatch,
         Object.keys(graph.inputSchema),
         graph.nodes,
+        graph.inputSchema,
       )}
     </section>
   );

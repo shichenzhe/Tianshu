@@ -41,6 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAutomationStore } from "@/domains/ai/automation/store/automation.store";
+import { parseInputSchema } from "../api/graph.schema";
 import {
   GRAPH_IN_USE_ERROR,
   GraphApi,
@@ -261,11 +262,14 @@ export default function GraphListView({
     });
   }
 
-  /** 库内 graphJson → 输入变量名清单（容错：解析失败按无变量） */
-  function variablesOf(record: GraphRecord): string[] {
+  /** 库内 graphJson → typed 输入字段清单（切片 D：parseInputSchema 归一；
+   *  容错：解析失败按无变量） */
+  function fieldsOf(record: GraphRecord) {
     try {
       const schema = JSON.parse(record.graphJson).inputSchema;
-      return schema && typeof schema === "object" ? Object.keys(schema) : [];
+      return schema && typeof schema === "object"
+        ? parseInputSchema(schema)
+        : [];
     } catch {
       return [];
     }
@@ -460,7 +464,7 @@ export default function GraphListView({
         <GraphTestRunDialog
           graphId={pendingRun.id}
           draftJson={pendingRun.graphJson}
-          variables={variablesOf(pendingRun)}
+          fields={fieldsOf(pendingRun)}
           open={pendingRun !== undefined}
           onOpenChange={(open) => {
             if (!open) {

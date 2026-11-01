@@ -22,6 +22,21 @@ export const RECOMMEND_TOOL_NAMES: ReadonlySet<string> = new Set([
   "recommend_experts",
 ]);
 
+/** show_table 工具名（会话内数据表格卡；与后端
+ *  electron/domains/ai/agent/display-tools.ts 同名约定——工具块按名分流） */
+export const SHOW_TABLE_TOOL_NAME = "show_table";
+
+/** show_summary 工具名（会话内摘要指标卡；同名约定同上） */
+export const SHOW_SUMMARY_TOOL_NAME = "show_summary";
+
+/** show_chart 工具名（会话内图表卡；与后端
+ *  electron/domains/ai/agent/display-tools.ts 同名约定） */
+export const SHOW_CHART_TOOL_NAME = "show_chart";
+
+/** confirm_form 工具名（工作流执行前的人确认卡；与后端
+ *  electron/domains/ai/agent/confirm-form-tool.ts 同名约定） */
+export const CONFIRM_FORM_TOOL_NAME = "confirm_form";
+
 /** 面板内工具条目（平铺 ToolCallCard props，与流式 ToolStreamState 同构） */
 export interface ToolPanelItem {
   toolName: string;
@@ -50,6 +65,75 @@ export interface RecommendPanelItem {
   state: string;
 }
 
+/** 表格卡列定义（show_table args.columns；与 display-tools schema 同形） */
+export interface TableColumn {
+  key: string;
+  label: string;
+}
+
+/** 表格卡条目（show_table 工具块分流；args 为
+ *  { title?, columns, rows }，渲染层经 TableViewCard 呈现；rows 单元格
+ *  仅标量——args 渐进期未过校验时按空表渲染） */
+export interface TablePanelItem {
+  toolCallId: string;
+  title?: string;
+  columns: TableColumn[];
+  rows: Array<Record<string, unknown>>;
+  state: string;
+}
+
+/** 摘要卡条目（show_summary 工具块分流；args 为
+ *  { title?, items }，渲染层经 SummaryCard 呈现） */
+export interface SummaryPanelItem {
+  toolCallId: string;
+  title?: string;
+  items: Array<{ label: string; value: string | number; hint?: string }>;
+  state: string;
+}
+
+/** 图表卡数据系列（show_chart args.series；与 display-tools schema 同形） */
+export interface ChartSeries {
+  name: string;
+  values: number[];
+}
+
+/** 图表卡条目（show_chart 工具块分流；args 为
+ *  { title?, chartType, labels, series }，渲染层经 ChartViewCard 手绘
+ *  SVG 呈现——values 与 labels 等长由工具 schema superRefine 收口，
+ *  渐进期未过校验按空数据退空态） */
+export interface ChartPanelItem {
+  toolCallId: string;
+  title?: string;
+  chartType: "line" | "bar";
+  labels: string[];
+  series: ChartSeries[];
+  state: string;
+}
+
+/** 确认卡表单字段（confirm_form args.fields；与 confirm-form-tool schema
+ *  同形——type/enumValues 供卡片按类型出控件，切片 D4） */
+export interface ConfirmFormField {
+  key: string;
+  label: string;
+  value: string;
+  type?: "string" | "number" | "boolean" | "enum" | "date";
+  enumValues?: string[];
+  hint?: string;
+}
+
+/** 确认卡条目（confirm_form 工具块分流；args 为
+ *  { workflowId, workflowName?, title?, fields }，渲染层经
+ *  ConfirmFormCard 呈现——running 态可编辑待确认，output 为终态回执） */
+export interface ConfirmFormPanelItem {
+  toolCallId: string;
+  title?: string;
+  workflowId: number;
+  workflowName: string;
+  fields: ConfirmFormField[];
+  state: string;
+  output?: string;
+}
+
 export interface GroupedBlocks {
   /** 全部 thinking 块按序以空行拼接 */
   thinkingText: string;
@@ -58,6 +142,14 @@ export interface GroupedBlocks {
   widgets: WidgetPanelItem[];
   /** recommend_expert 工具块（消息流内推荐卡，不进思考面板） */
   recommends: RecommendPanelItem[];
+  /** show_table 工具块（消息流内表格卡，不进思考面板） */
+  tables: TablePanelItem[];
+  /** show_summary 工具块（消息流内摘要卡，不进思考面板） */
+  summaries: SummaryPanelItem[];
+  /** show_chart 工具块（消息流内图表卡，不进思考面板） */
+  charts: ChartPanelItem[];
+  /** confirm_form 工具块（消息流内确认卡，不进思考面板） */
+  confirmForms: ConfirmFormPanelItem[];
   texts: TextBlock[];
   usage?: UsageBlock;
   /** thinking 或 tool_call 存在任一即为 true（面板渲染门槛） */
@@ -69,6 +161,10 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
   const tools: ToolPanelItem[] = [];
   const widgets: WidgetPanelItem[] = [];
   const recommends: RecommendPanelItem[] = [];
+  const tables: TablePanelItem[] = [];
+  const summaries: SummaryPanelItem[] = [];
+  const charts: ChartPanelItem[] = [];
+  const confirmForms: ConfirmFormPanelItem[] = [];
   const texts: TextBlock[] = [];
   let usage: UsageBlock | undefined;
 
@@ -110,6 +206,75 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
           });
           break;
         }
+        // show_table 分流消息流（正文位表格卡渲染）
+        if (block.toolName === SHOW_TABLE_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            columns?: TableColumn[];
+            rows?: Array<Record<string, unknown>>;
+          };
+          tables.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            columns: Array.isArray(args.columns) ? args.columns : [],
+            rows: Array.isArray(args.rows) ? args.rows : [],
+            state: block.state,
+          });
+          break;
+        }
+        // show_summary 分流消息流（正文位摘要卡渲染）
+        if (block.toolName === SHOW_SUMMARY_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            items?: SummaryPanelItem["items"];
+          };
+          summaries.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            items: Array.isArray(args.items) ? args.items : [],
+            state: block.state,
+          });
+          break;
+        }
+        // show_chart 分流消息流（正文位图表卡渲染）
+        if (block.toolName === SHOW_CHART_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            chartType?: "line" | "bar";
+            labels?: string[];
+            series?: ChartSeries[];
+          };
+          charts.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            chartType: args.chartType === "bar" ? "bar" : "line",
+            labels: Array.isArray(args.labels) ? args.labels : [],
+            series: Array.isArray(args.series) ? args.series : [],
+            state: block.state,
+          });
+          break;
+        }
+        // confirm_form 分流消息流（正文位确认卡渲染；output 供终态回执展示）
+        if (block.toolName === CONFIRM_FORM_TOOL_NAME) {
+          const args = (block.args ?? {}) as {
+            title?: string;
+            workflowId?: number;
+            workflowName?: string;
+            fields?: ConfirmFormField[];
+          };
+          confirmForms.push({
+            toolCallId: block.toolCallId,
+            title: args.title,
+            workflowId:
+              typeof args.workflowId === "number" ? args.workflowId : 0,
+            workflowName:
+              typeof args.workflowName === "string" ? args.workflowName : "",
+            fields: Array.isArray(args.fields) ? args.fields : [],
+            state: block.state,
+            output: typeof block.output === "string" ? block.output : undefined,
+          });
+          break;
+        }
         tools.push({
           toolName: block.toolName,
           args: block.args,
@@ -131,13 +296,21 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
     tools,
     widgets,
     recommends,
+    tables,
+    summaries,
+    charts,
+    confirmForms,
     texts,
     usage,
     hasProcess:
       thinkingText.length > 0 ||
       tools.length > 0 ||
       widgets.length > 0 ||
-      recommends.length > 0,
+      recommends.length > 0 ||
+      tables.length > 0 ||
+      summaries.length > 0 ||
+      charts.length > 0 ||
+      confirmForms.length > 0,
   };
 }
 

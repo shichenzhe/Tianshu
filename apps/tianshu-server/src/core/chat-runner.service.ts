@@ -73,6 +73,11 @@ import { BROWSER_BRIDGE_TOOLS } from './tools/bridge/browser-bridge-tools';
 import { makeLibrarySearchTool } from './library/library-tools';
 import { normalizeWorkspacePath } from './tools/workspace-path';
 import type { ToolDefinition } from './tools/tool-definition';
+import { WORKFLOW_TOOL_NAMES } from './tools/workflow-tools';
+import { DISPLAY_TOOL_NAMES } from './tools/display-tools';
+// 工具实例经零依赖 toolbox 取用——chat-runner 顶部直接 import registry
+// 会补全既有静态环②（见 workflow-toolbox 头注释），registry 不在此引
+import { getWorkflowToolbox } from './tools/workflow-toolbox';
 import type { AgentStreamOptions } from './tools/tool-gate';
 import { toLangChainTools } from './tools/langchain-tool-adapter';
 import { ApprovalCoordinator } from './tools/approval';
@@ -299,6 +304,9 @@ interface AssembledContext {
   mode: 'agent' | 'ask' | 'plan';
   skills: SkillInfo[];
   isProjectSession: boolean;
+  /** 发起场景（F1 门控消费：automation/coding 带工作流工具面——mirror
+   *  tool-groups filterToolsBySession 的轻量复刻位） */
+  scenario: string | null;
 }
 
 @Injectable()
@@ -1088,6 +1096,7 @@ export class ChatRunnerService {
       mode,
       skills,
       isProjectSession,
+      scenario: session.scenario ?? null,
     };
   }
 
@@ -1161,7 +1170,30 @@ export class ChatRunnerService {
       // PL-2：library_search 资料库语义检索常驻（用户级资料库不依赖工作
       // 空间；显式注入本仓 prisma，不经 graph 运行时解析）
       makeLibrarySearchTool({ db: this.prisma }),
+      // F1/F2（2026-10-29）：工作流六件 + 展示三件——mirror
+      // filterToolsBySession 展示组/工作流组同门轻量复刻（automation/
+      // coding 场景，或安装了 workflow-creator 技能）；实例自聚合 registry
+      // 取（装配在 GraphModule 启动工厂，run 闭包走 GraphService.run——
+      // registry 缺席即测试态未挂 GraphModule，自然不注入）
+      ...this.workflowTools(ctx),
     ];
+  }
+
+  /** 工作流+展示工具门控（mirror tool-groups 轻量复刻；场景值域
+   *  daily/coding/design/automation 按值判定） */
+  private workflowTools(ctx: AssembledContext): ToolDefinition[] {
+    const capable =
+      ctx.scenario === 'automation' ||
+      ctx.scenario === 'coding' ||
+      ctx.skills.some((skill) => skill.name === 'workflow-creator');
+    if (!capable) {
+      return [];
+    }
+    const names = new Set<string>([
+      ...WORKFLOW_TOOL_NAMES,
+      ...DISPLAY_TOOL_NAMES,
+    ]);
+    return getWorkflowToolbox().filter((def) => names.has(def.name));
   }
 
   /**

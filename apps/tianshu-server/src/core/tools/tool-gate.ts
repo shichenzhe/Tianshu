@@ -59,7 +59,9 @@ export interface AgentStreamOptions {
   /** 完全访问实时判定：每次 write 工具判定与执行前查询，撤回立即生效 */
   fullAccess: () => boolean;
   /** 工作空间级工具记忆：命中跳过审批直执行；每次 write 判定前查询。
-   *  服务端未移植 toolPermission 表，装配恒 false（每 write 必审批） */
+   *  F3（2026-10-29）：chat 链查 toolPermission 表（session/approve
+   *  remember 写入）；automation/graph 任务链经
+   *  resolveAutomationPermissions 注入同款查表，缺席装配恒 false */
   isToolAllowed: (toolName: string) => Promise<boolean>;
   /** 挂起等待审批决议（relay 应答注入）；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;

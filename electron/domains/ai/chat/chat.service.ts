@@ -93,6 +93,13 @@ import { AUTOMATION_TOOL_NAME } from "../agent/automation-tool";
 import { makePlanTools, PLAN_TOOL_NAMES } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
 import {
+  makeShowChartTool,
+  makeShowSummaryTool,
+  makeShowTableTool,
+} from "../agent/display-tools";
+import { makeConfirmFormTool } from "../agent/confirm-form-tool";
+import { confirmForms } from "../agent/confirm-registry";
+import {
   DISPATCH_MEMBER_TOOL_NAME,
   makeDispatchMemberTool,
   type DispatchMemberDeps,
@@ -157,6 +164,24 @@ type ChatMessageRow = Awaited<
 registerTools(makePlanTools({ prisma }));
 // show_widget：聊天面板可视化组件（渲染层消费 args，无工作空间依赖）
 registerTools([makeWidgetTool()]);
+// show_table/show_summary：工作流查询结果的消息流渲染卡（demo 切片
+// 2026-10-28）。门控进展示组（tool-groups，与工作流组同门），未开工作流
+// 语境的会话不注入；未绑定目录的会话被 collectToolDefinitions 的无工作
+// 空间过滤剔除（无 run_workflow 即无查询结果可渲染）
+registerTools([
+  makeShowTableTool(),
+  makeShowSummaryTool(),
+  makeShowChartTool(),
+]);
+// confirm_form：写类工作流执行前的人确认卡（切片 B 2026-10-29）——确认
+// 后经 registry 直调 run_workflow 执行体（免双重审批，卡即人工门）；同门
+// 展示组；delegates 同 plan tools 模块级装配口径
+registerTools([
+  makeConfirmFormTool({
+    graphDefinition: prisma.graphDefinition as never,
+    session: prisma.session as never,
+  }),
+]);
 
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 export const COMPACT_DIRECTIVE =
@@ -494,6 +519,28 @@ export default class ChatService {
       "agent:approve",
       (_, _userId, toolCallId: string, approved: boolean) =>
         this.approvals.respond(toolCallId, approved),
+    );
+    // 确认卡决议（切片 B 2026-10-29）：confirm_form 挂起 → 渲染层
+    // ConfirmFormCard 确认/取消——sessionId 键控（execute 阻塞整条流，
+    // 一次会话至多一张待确认卡）；handleUser 鉴权后 userId 不参与
+    // （工具执行时按会话归属校验，agent:approve 同口径）
+    handleUser(
+      "agent:confirmRespond",
+      (
+        _,
+        _userId,
+        sessionId: number,
+        decision: {
+          action: "confirm" | "cancel";
+          values?: Record<string, string>;
+        },
+      ) =>
+        confirmForms.respond(
+          sessionId,
+          decision.action === "confirm"
+            ? { action: "confirm", values: decision.values ?? {} }
+            : { action: "cancel" },
+        ),
     );
     // P3 会话工具权限：default 询问 / full 放行（spec §8：无会话校验静默收）
     handleUser("permission:get", async (_, userId, sessionId: number) => {
@@ -1908,8 +1955,10 @@ export default class ChatService {
       this.aborts.delete(sessionId);
       this.snapshots.delete(sessionId);
       // 中断/收尾：作废本会话未决审批（resolve false），释放挂起的
-      // execute（spec 决策 #5）；会话维度隔离——他会话并发流的挂起审批不受影响
+      // execute（spec 决策 #5）；会话维度隔离——他会话并发流的挂起审批不受影响；
+      // 确认卡同口径作废（resolve cancel，confirm_form execute 不悬挂）
       this.approvals.voidAll(sessionId);
+      confirmForms.respond(sessionId, { action: "cancel" });
     }
   }
 

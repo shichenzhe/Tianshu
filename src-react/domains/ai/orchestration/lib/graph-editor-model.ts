@@ -61,7 +61,9 @@ export interface DraftSnapshot {
  * （mode: fileWrite append/overwrite vs hybridSearch semantic/keyword/
  * hybrid；query: http KV 数组 vs rerank 字符串），两处 omit 后联合加宽
  * 单独放回（apply 是 spread 透传，运行时无感） */
-export type GraphNodePatch = Partial<Omit<StartNode, "kind">> &
+export type GraphNodePatch = {
+  inputSchema?: GraphJson["inputSchema"];
+} & Partial<Omit<StartNode, "kind">> &
   Partial<Omit<LlmNode, "kind">> &
   Partial<Omit<CodeNode, "kind">> &
   Partial<Omit<HttpNode, "kind" | "query">> &
@@ -307,9 +309,34 @@ export function patchStartVariables(
   const unique = [...new Set(variables)];
   return {
     ...graph,
-    inputSchema: Object.fromEntries(unique.map((key) => [key, "string"])),
+    // 既有键保留原类型声明（对象形态带 required/default/enumValues），
+    // 新键缺省 string（切片 D：编辑变量名不再打回全 string）
+    inputSchema: Object.fromEntries(
+      unique.map((key) => [
+        key,
+        graph.inputSchema[key] !== undefined
+          ? graph.inputSchema[key]
+          : "string",
+      ]),
+    ),
     nodes: graph.nodes.map((node) =>
       node.kind === "start" ? { ...node, variables: unique } : node,
+    ),
+  };
+}
+
+/** start 变量类型编辑（切片 D）：整体写 inputSchema（对象形态）并同步
+ *  start.variables 键序（单一事实源不变——节点与图同一提交同步） */
+export function patchInputSchema(
+  graph: GraphJson,
+  schema: GraphJson["inputSchema"],
+): GraphJson {
+  const keys = Object.keys(schema);
+  return {
+    ...graph,
+    inputSchema: schema,
+    nodes: graph.nodes.map((node) =>
+      node.kind === "start" ? { ...node, variables: keys } : node,
     ),
   };
 }

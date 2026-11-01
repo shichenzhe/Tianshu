@@ -141,7 +141,8 @@ CREATE TABLE IF NOT EXISTS session (
     planItemId INTEGER NULL,
     scenario TEXT NULL,
     userId INTEGER NULL,
-    lastReadMessageId INTEGER NULL -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
+    lastReadMessageId INTEGER NULL, -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
+    appId INTEGER NULL -- 应用绑定（切片 C）：null=普通会话，绑定后工作流工具面收窄到 appDefinition.graphIds
 );
 
 --/p v12 多用户隔离：会话归属用户（冗余列，创建时随工作空间写入）
@@ -482,3 +483,38 @@ CREATE TABLE IF NOT EXISTS vectorChunk (
 CREATE INDEX IF NOT EXISTS idx_vectorChunk_user_collection ON vectorChunk (userId, collection);
 --/ignore
 CREATE INDEX IF NOT EXISTS idx_vectorChunk_user_model ON vectorChunk (userId, model);
+
+
+--/p 新建数据源配置表（PG 首选通道）：database 节点 dataSourceId 引用，连接凭据只落元库
+--/p （不进图定义/画布/聊天上下文）；首版 engine 恒 postgres
+CREATE TABLE IF NOT EXISTS dataSourceConfig (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    engine TEXT NOT NULL DEFAULT 'postgres',
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL DEFAULT 5432,
+    database TEXT NOT NULL,
+    username TEXT NOT NULL,
+    password TEXT NULL,
+    ssl BOOLEAN NOT NULL DEFAULT 0,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL,
+    userId INTEGER NULL
+);
+--/ignore
+CREATE INDEX IF NOT EXISTS dataSourceConfig_userId_index ON dataSourceConfig (userId);
+
+
+--/p 新建应用定义表（聚合期核心，切片 C 2026-10-29）：一组工作流组成一个应用，
+--/p 会话绑定（session.appId）后工作流工具面收窄到 graphIds
+CREATE TABLE IF NOT EXISTS appDefinition (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT NULL,
+    graphIds TEXT NOT NULL DEFAULT '[]',
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updatedAt DATETIME NOT NULL,
+    userId INTEGER NULL
+);
+--/ignore
+CREATE INDEX IF NOT EXISTS appDefinition_userId_index ON appDefinition (userId);

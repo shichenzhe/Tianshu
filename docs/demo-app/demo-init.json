@@ -1,0 +1,31 @@
+{
+  "name": "记账·初始化 demo 库",
+  "description": "在当前工作空间根建 demo.db 并创建 expense 记账表（幂等，重复跑无副作用）。先于记一笔/查账明细/月度汇总执行一次。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {},
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": [],
+        "position": { "x": 80, "y": 160 }
+      },
+      {
+        "id": "init-demo-db",
+        "name": "建 expense 表",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "CREATE TABLE IF NOT EXISTS expense(id INTEGER PRIMARY KEY AUTOINCREMENT, amount REAL NOT NULL, category TEXT NOT NULL, note TEXT, spent_at TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+        "params": [],
+        "position": { "x": 320, "y": 160 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "init-demo-db" },
+      { "from": "init-demo-db", "to": "END" }
+    ]
+  }
+}

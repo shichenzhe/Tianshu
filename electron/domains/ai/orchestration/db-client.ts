@@ -22,8 +22,13 @@ export interface DbQueryParams {
   database: string;
   username: string;
   password: string;
+  /** TLS 开关（postgres 等连接类引擎消费；sqlite 忽略）——开启时宽松
+   * 校验（rejectUnauthorized false，内网/云 PG 自签证书场景） */
+  ssl?: boolean;
   sql: string;
-  params: string[];
+  /** 参数化值（切片 D typed 输入）：number/boolean 由执行层原生直通，
+   *  其余为渲染串；sqlite 侧 boolean 归一 1/0（better-sqlite3 不收布尔） */
+  params: Array<string | number | boolean>;
   /** SELECT 行数上限（输出字节联动）；批量模式忽略 */
   maxRows: number;
   /** 批量模式行集（每项一维参数数组）；空数组/null 走单语句 */
@@ -211,15 +216,18 @@ async function batchClientServer(
 
 /** sqlserver request.query 不接收参数数组——批量行经参数化值内联（值仅
  * string；转义单引号防破碎，数值形态保持裸值） */
-function interpolateSqlserver(sql: string, row: string[]): string {
+function interpolateSqlserver(
+  sql: string,
+  row: Array<string | number | boolean>,
+): string {
   return sql.replace(/\?/g, () => {
     const value = row.shift();
     if (value === undefined) {
       throw new DbError("db_query_failed", "批量参数与 ? 占位数量不符");
     }
-    return /^-?\d+(\.\d+)?$/.test(value)
-      ? value
-      : `'${value.replace(/'/g, "''")}'`;
+    return typeof value === "number"
+      ? String(value)
+      : `'${String(value).replace(/'/g, "''")}'`;
   });
 }
 
@@ -230,6 +238,7 @@ function pgConfig(params: DbQueryParams) {
     database: params.database,
     user: params.username,
     password: params.password,
+    ...(params.ssl ? { ssl: { rejectUnauthorized: false } } : {}),
     connectionTimeoutMillis: 15_000,
     query_timeout: 120_000,
   };
@@ -306,13 +315,17 @@ function openSqlite(params: DbQueryParams): Database.Database {
 /** SQLite：限工作空间内文件（复用执行器授权边界语义）；SELECT 经
  * iterate 流式取行至 maxRows+1（+1 为超限哨兵行，formatDbResult 据此出
  * 截断标注）——大表不全量驻留内存 */
+/** sqlite 绑定值归一：better-sqlite3 不收 boolean（切片 D） */
+const toSqliteValue = (value: string | number | boolean): string | number =>
+  typeof value === "boolean" ? (value ? 1 : 0) : value;
+
 async function querySqlite(params: DbQueryParams): Promise<DbQueryResult> {
   const db = openSqlite(params);
   try {
     const stmt = db.prepare(params.sql);
     if (stmt.reader) {
       const rows: Array<Record<string, unknown>> = [];
-      for (const row of stmt.iterate(...params.params)) {
+      for (const row of stmt.iterate(...params.params.map(toSqliteValue))) {
         rows.push(row as Record<string, unknown>);
         if (rows.length > params.maxRows) {
           break;
@@ -320,7 +333,7 @@ async function querySqlite(params: DbQueryParams): Promise<DbQueryResult> {
       }
       return { rows };
     }
-    const info = stmt.run(...params.params);
+    const info = stmt.run(...params.params.map(toSqliteValue));
     return { rowCount: info.changes };
   } catch (e) {
     throw wrapDbError(e);

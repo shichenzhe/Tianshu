@@ -81,7 +81,9 @@ export const ModelName = {
   graphDefinition: 'graphDefinition',
   vectorChunk: 'vectorChunk',
   llmCallEvent: 'llmCallEvent',
-  toolCallEvent: 'toolCallEvent'
+  toolCallEvent: 'toolCallEvent',
+  dataSourceConfig: 'dataSourceConfig',
+  appDefinition: 'appDefinition'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -222,7 +224,8 @@ export const SessionScalarFieldEnum = {
   lastMessageAt: 'lastMessageAt',
   userId: 'userId',
   planItemId: 'planItemId',
-  lastReadMessageId: 'lastReadMessageId'
+  lastReadMessageId: 'lastReadMessageId',
+  appId: 'appId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -585,6 +588,37 @@ export const ToolCallEventScalarFieldEnum = {
 } as const
 
 export type ToolCallEventScalarFieldEnum = (typeof ToolCallEventScalarFieldEnum)[keyof typeof ToolCallEventScalarFieldEnum]
+
+
+export const DataSourceConfigScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  engine: 'engine',
+  host: 'host',
+  port: 'port',
+  database: 'database',
+  username: 'username',
+  password: 'password',
+  ssl: 'ssl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type DataSourceConfigScalarFieldEnum = (typeof DataSourceConfigScalarFieldEnum)[keyof typeof DataSourceConfigScalarFieldEnum]
+
+
+export const AppDefinitionScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  description: 'description',
+  graphIds: 'graphIds',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  userId: 'userId'
+} as const
+
+export type AppDefinitionScalarFieldEnum = (typeof AppDefinitionScalarFieldEnum)[keyof typeof AppDefinitionScalarFieldEnum]
 
 
 export const SortOrder = {

@@ -12,6 +12,10 @@ import { createReadStream } from "node:fs";
 import { BrowserWindow, Notification } from "electron";
 import prisma from "../../../commons/prisma-client";
 import {
+  resolveDataSource,
+  type ResolvedDataSource,
+} from "./datasource-resolver";
+import {
   skillsDir,
   libraryDir,
   workflowAssetsDir,
@@ -66,6 +70,7 @@ import { format as dateFnsFormat } from "date-fns";
 import {
   renderNodePrompt,
   GraphTemplateError,
+  type GraphInputValue,
   type PromptRenderContext,
 } from "./graph-prompt";
 import { createChatModel } from "./langchain-model-factory";
@@ -123,7 +128,7 @@ export type GraphRow = NonNullable<
 export interface GraphRunParams {
   graph: GraphRow;
   task: AutomationTaskRow | null;
-  inputs: Record<string, string>;
+  inputs: Record<string, GraphInputValue>;
   triggerType:
     | "schedule"
     | "catchUp"
@@ -1047,7 +1052,10 @@ function makeHttpNodeHandler(node: HttpNode, ctx: NodeContext): NodeHandler {
 async function runHttpRequest(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const attempts = (node.retries ?? 0) + 1;
   let lastError: unknown;
@@ -1069,7 +1077,10 @@ async function runHttpRequest(
 async function fetchOnce(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const render = (text: string) =>
     renderNodePrompt(text, {
@@ -1262,7 +1273,10 @@ async function runCodeScript(
   node: CodeNode,
   ctx: NodeContext,
   script: string,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   // python 命令节点级可配（pythonCommand，缺省 python）；?? 兜底防
   // 调用方绕过 schema parse 直构节点对象
@@ -1919,7 +1933,10 @@ function makeFileReadNodeHandler(
 async function runFileRead(
   node: FileReadNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const raw = renderNodePrompt(node.path, {
     inputs: state.inputs,
@@ -2022,7 +2039,7 @@ function makeNotifyNodeHandler(
 async function launchAsyncSubflow(
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string>,
+  inputs: Record<string, GraphInputValue>,
 ): Promise<string> {
   void runSubflowGraph(
     "async",
@@ -2041,7 +2058,7 @@ async function runSubflowGraph(
   nodeId: string,
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string>,
+  inputs: Record<string, GraphInputValue>,
   outerAbort?: AbortSignal,
 ): Promise<string> {
   if (ctx.subflowStack.includes(String(graphId))) {
@@ -2092,7 +2109,7 @@ function makeSubflowNodeHandler(
     const startedAt = Date.now();
     const label = `子工作流 #${node.graphId}`;
     try {
-      const inputs: Record<string, string> = {};
+      const inputs: Record<string, GraphInputValue> = {};
       for (const kv of node.inputs) {
         if (kv.key !== "") {
           inputs[kv.key] = renderNodePrompt(kv.value, {
@@ -2556,7 +2573,10 @@ function makeJsonParseNodeHandler(
 async function runJsonParse(
   node: JsonParseNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const source = renderNodePrompt(node.source, {
     inputs: state.inputs,
@@ -3439,7 +3459,7 @@ function notifyNodeStatus(
  * 不推（无图运行态）。inputs/nodes 由前端从占位符表单构造 */
 export async function testSingleNode(params: {
   node: GraphNode;
-  inputs: Record<string, string>;
+  inputs: Record<string, GraphInputValue>;
   nodes: Record<string, { output: string }>;
   workspace: { id: number; directoryPath: string | null };
   userId: number;
@@ -3920,16 +3940,54 @@ export function makeRerankNodeHandler(
   };
 }
 
+/** 数据源解析结果的 handler 侧适配：失败判别 → 节点失败（GraphNodeFailure
+ * 归 executor 侧类型，resolver 零环依赖）；null = 无引用走裸配置 */
+function resolveDataSourceResult(
+  result: Awaited<ReturnType<typeof resolveDataSource>>,
+  nodeId: string,
+): ResolvedDataSource | null {
+  if (result === null) {
+    return null;
+  }
+  if (!result.ok) {
+    throw new GraphNodeFailure(nodeId, result.code, result.message);
+  }
+  return result.config;
+}
+
+/** database 参数的「单一 input 引用」形态（typed 直通判定）：整段恰为
+ *  {{input.x}} 而无拼接文本（切片 D） */
+const DIRECT_INPUT_REF = /^\{\{input\.([A-Za-z0-9_]+)\}\}$/;
+
 /** 数据库节点 handler：连接参数/SQL/params 全渲染 → runDatabaseQuery →
- * 结果 JSON 为 output（SELECT 行数组 / 写操作 affectedRows） */
+ * 结果 JSON 为 output（SELECT 行数组 / 写操作 affectedRows）。数据源引用
+ * （切片 B 2026-10-29）：dataSourceId 指向元库 dataSourceConfig——执行层
+ * 解析出连接字段并覆盖节点裸配置（引用优先，两者并存），凭据不进图
+ * 定义/画布/聊天上下文（graph JSON 与运行记录只有 id） */
 function makeDatabaseNodeHandler(
   node: DatabaseNode,
   ctx: NodeContext,
 ): NodeHandler {
   return async (state) => {
     const startedAt = Date.now();
-    const label = `${node.engine}:${node.database || node.sqlitePath}`;
+    // 节点标签（运行记录 input 列）：裸配置先行，数据源引用解析成功后
+    // 覆盖为配置面的 engine/database（catch 侧也引用，故 try 外声明）
+    let label = `${node.engine}:${node.database || node.sqlitePath}`;
     try {
+      const ds = resolveDataSourceResult(
+        await resolveDataSource({
+          dataSourceId: node.dataSourceId,
+          userId: ctx.userId,
+          lookup: (id, owner) =>
+            prisma.dataSourceConfig.findFirst({
+              where: { id, userId: owner },
+            }),
+        }),
+        node.id,
+      );
+      if (ds) {
+        label = `${ds.engine}:${ds.database}`;
+      }
       const render = (text: string) =>
         renderNodePrompt(text, {
           inputs: state.inputs,
@@ -3966,15 +4024,26 @@ function makeDatabaseNodeHandler(
       const result = await retryAsync(
         () =>
           db.runDatabaseQuery({
-            engine: node.engine,
+            engine: ds?.engine ?? node.engine,
             sqlitePath: render(node.sqlitePath),
-            host: render(node.host),
-            port: node.port,
-            database: render(node.database),
-            username: render(node.username),
-            password: render(node.password),
+            host: ds?.host ?? render(node.host),
+            port: ds?.port ?? node.port,
+            database: ds?.database ?? render(node.database),
+            username: ds?.username ?? render(node.username),
+            password: ds?.password ?? render(node.password),
+            ssl: ds?.ssl ?? false,
             sql: render(node.sql),
-            params: node.params.map((param) => render(param)),
+            // typed 直通（切片 D）：param 模板恰为单一 input 引用（如
+            // "{{input.amount}}"）且值为 number/boolean 时原生透传驱动
+            // （pg/sqlite 原生支持，SQL 内不再依赖 CAST 兜底）；其余
+            // （拼字模板/节点引用/纯文本）走渲染串——模板替换语义不变
+            params: node.params.map((param) => {
+              const direct = DIRECT_INPUT_REF.exec(param.trim());
+              const hit = direct ? state.inputs[direct[1]] : undefined;
+              return typeof hit === "number" || typeof hit === "boolean"
+                ? hit
+                : render(param);
+            }),
             maxRows: node.maxRows ?? 1_000,
             batchRows,
             ctx,

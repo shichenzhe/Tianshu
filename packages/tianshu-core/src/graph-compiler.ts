@@ -10,6 +10,7 @@
 import { END, START, StateGraph, Annotation } from "@langchain/langgraph";
 import type { GraphJson } from "./graph-schema";
 import type { FusedHit } from "./retrieval";
+import type { GraphInputValue } from "./graph-inputs";
 
 export const GRAPH_RECURSION_LIMIT = 25;
 
@@ -24,7 +25,7 @@ export interface NodeResult {
 }
 
 export interface GraphRunState {
-  inputs: Record<string, string>;
+  inputs: Record<string, GraphInputValue>;
   nodes: Record<string, NodeResult>;
   route?: string;
 }
@@ -49,7 +50,7 @@ const ROUTE_FALLBACK = "__fallback__";
 const END_SENTINEL = "END";
 
 const GraphState = Annotation.Root({
-  inputs: Annotation<Record<string, string>>(),
+  inputs: Annotation<Record<string, GraphInputValue>>(),
   nodes: Annotation<Record<string, NodeResult>>({
     reducer: (prev, next) => ({ ...prev, ...next }),
     default: () => ({}),

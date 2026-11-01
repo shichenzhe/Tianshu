@@ -189,7 +189,9 @@ export type AutomationTaskRow = NonNullable<
 export interface GraphRunParams {
   graph: GraphRow;
   task: AutomationTaskRow | null;
-  inputs: Record<string, string>;
+  /** typed 输入（F1 对齐 mirror GraphInputValue：number/boolean 原生透传
+   *  database 参数；模板替换语义下 String() 归一——core graph-prompt 同款） */
+  inputs: Record<string, string | number | boolean>;
   triggerType:
     | 'schedule'
     | 'catchUp'
@@ -610,6 +612,23 @@ function buildAgentContext(
     projectId: params.task?.projectId ?? null,
     ...resolveAutomationPermissions(
       params.task?.accessMode === 'full' ? 'full' : 'default',
+      // F3：toolPermission 查表（工作空间级 remembered 免审；runtime db
+      // 注入面同 graphRunNode 写入——default 任务命中记忆即跳审批）
+      params.task === null
+        ? undefined
+        : async (toolName: string) => {
+            const row = await graphExecutorRuntime().db.toolPermission.findUnique(
+              {
+                where: {
+                  workspaceId_toolName: {
+                    workspaceId: params.workspace.id,
+                    toolName,
+                  },
+                },
+              },
+            );
+            return row != null;
+          },
     ),
     decideCommand: commandGate,
     decideFileAccess: fileGate,
@@ -1149,7 +1168,7 @@ function makeHttpNodeHandler(node: HttpNode, ctx: NodeContext): NodeHandler {
 async function runHttpRequest(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const attempts = (node.retries ?? 0) + 1;
   let lastError: unknown;
@@ -1171,7 +1190,7 @@ async function runHttpRequest(
 async function fetchOnce(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const render = (text: string) =>
     renderNodePrompt(text, {
@@ -1364,7 +1383,7 @@ async function runCodeScript(
   node: CodeNode,
   ctx: NodeContext,
   script: string,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   // python 命令节点级可配（pythonCommand，缺省 python）；?? 兜底防
   // 调用方绕过 schema parse 直构节点对象
@@ -2030,7 +2049,7 @@ function makeFileReadNodeHandler(
 async function runFileRead(
   node: FileReadNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const raw = renderNodePrompt(node.path, {
     inputs: state.inputs,
@@ -2135,7 +2154,7 @@ function makeNotifyNodeHandler(
 async function launchAsyncSubflow(
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string>,
+  inputs: Record<string, string | number | boolean>,
 ): Promise<string> {
   void runSubflowGraph(
     'async',
@@ -2154,7 +2173,7 @@ async function runSubflowGraph(
   nodeId: string,
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string>,
+  inputs: Record<string, string | number | boolean>,
   outerAbort?: AbortSignal,
 ): Promise<string> {
   if (ctx.subflowStack.includes(String(graphId))) {
@@ -2205,7 +2224,7 @@ function makeSubflowNodeHandler(
     const startedAt = Date.now();
     const label = `子工作流 #${node.graphId}`;
     try {
-      const inputs: Record<string, string> = {};
+      const inputs: Record<string, string | number | boolean> = {};
       for (const kv of node.inputs) {
         if (kv.key !== '') {
           inputs[kv.key] = renderNodePrompt(kv.value, {
@@ -2679,7 +2698,7 @@ function makeJsonParseNodeHandler(
 async function runJsonParse(
   node: JsonParseNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const source = renderNodePrompt(node.source, {
     inputs: state.inputs,
@@ -3560,7 +3579,7 @@ function notifyNodeStatus(
  * 不推（无图运行态）。inputs/nodes 由前端从占位符表单构造 */
 export async function testSingleNode(params: {
   node: GraphNode;
-  inputs: Record<string, string>;
+  inputs: Record<string, string | number | boolean>;
   nodes: Record<string, { output: string }>;
   workspace: { id: number; directoryPath: string | null };
   userId: number;
@@ -4039,6 +4058,9 @@ export function makeRerankNodeHandler(
 
 /** 数据库节点 handler：连接参数/SQL/params 全渲染 → runDatabaseQuery →
  * 结果 JSON 为 output（SELECT 行数组 / 写操作 affectedRows） */
+/** database 参数的「单一 input 引用」形态（typed 直通判定，mirror 同款） */
+const DIRECT_INPUT_REF = /^\{\{input\.([A-Za-z0-9_]+)\}\}$/;
+
 function makeDatabaseNodeHandler(
   node: DatabaseNode,
   ctx: NodeContext,
@@ -4091,7 +4113,15 @@ function makeDatabaseNodeHandler(
             username: render(node.username),
             password: render(node.password),
             sql: render(node.sql),
-            params: node.params.map((param) => render(param)),
+            // typed 直通（F1 对齐 mirror）：param 模板恰为单一 input 引用
+            // 且值 number/boolean 时原生透传驱动；其余走渲染串
+            params: node.params.map((param) => {
+              const direct = DIRECT_INPUT_REF.exec(param.trim());
+              const hit = direct ? state.inputs[direct[1]] : undefined;
+              return typeof hit === 'number' || typeof hit === 'boolean'
+                ? hit
+                : render(param);
+            }),
             maxRows: node.maxRows ?? 1_000,
             batchRows,
             ctx,
@@ -4912,15 +4942,25 @@ export interface AutomationPermissions {
 
 /** 无人值守权限分流：full=完全访问+审批放行（原行为）；default=只读执行，
  * 写类审批被拒但任务继续（agent 收到拒绝反馈），与会话 default 语义对齐。
- * isToolAllowed 必须随 full 变 false：写门禁对 isToolAllowed=true 的工具
- * 直接放行（门禁短路），requestApproval 永不触达 */
+ * F3（2026-10-29）：isToolAllowed 可注入 toolPermission 查表（工作空间级
+ * remembered 免审——chat 链 2026-10 审批记忆批同款）；缺席时保持旧语义
+ * （full 短路 true、default 恒 false=每 write 必审批）。
+ * requestApproval 永不触达（isToolAllowed=true 直接放行门禁短路） */
 export function resolveAutomationPermissions(
   accessMode: 'default' | 'full',
+  isToolAllowed?: (toolName: string) => Promise<boolean>,
 ): AutomationPermissions {
   const full = accessMode === 'full';
   return {
     fullAccess: () => full,
-    isToolAllowed: async () => full,
+    // full=完全访问恒 true（注入的查表不收窄完全访问语义）；default=
+    // 注入查表按表判定，缺席恒 false（旧语义）
+    isToolAllowed: async (toolName: string) => {
+      if (full) {
+        return true;
+      }
+      return isToolAllowed ? isToolAllowed(toolName) : false;
+    },
     requestApproval: async () => full,
   };
 }

@@ -1,0 +1,42 @@
+{
+  "name": "记账·查账明细",
+  "description": "查询支出明细并组装为 show_table 表格结构（终点输出可直接透传 show_table 工具）。inputs：month 月份 yyyy-MM（空串=不限月份）、limit 最近 N 笔（空串=5，钳 0..200）。merge 模板直嵌 database 行集 JSON 组装（零 code 节点——打包态不依赖系统 node 解释器）。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {
+      "month": "string",
+      "limit": "string"
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": ["month", "limit"],
+        "position": { "x": 80, "y": 200 }
+      },
+      {
+        "id": "select-expenses",
+        "name": "查明细行集",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "SELECT spent_at, category, amount, note FROM expense WHERE (? = '' OR strftime('%Y-%m', spent_at) = ?) ORDER BY spent_at DESC, id DESC LIMIT MAX(0, MIN(CAST(COALESCE(NULLIF(?, ''), '5') AS INTEGER), 200))",
+        "params": ["{{input.month}}", "{{input.month}}", "{{input.limit}}"],
+        "position": { "x": 320, "y": 200 }
+      },
+      {
+        "id": "build-table",
+        "name": "组装表格结构",
+        "kind": "merge",
+        "template": "{\"title\":\"支出明细\",\"columns\":[{\"key\":\"spent_at\",\"label\":\"日期\"},{\"key\":\"category\",\"label\":\"类别\"},{\"key\":\"amount\",\"label\":\"金额\"},{\"key\":\"note\",\"label\":\"备注\"}],\"rows\":{{nodes.select-expenses.output}}}",
+        "position": { "x": 560, "y": 200 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "select-expenses" },
+      { "from": "select-expenses", "to": "build-table" },
+      { "from": "build-table", "to": "END" }
+    ]
+  }
+}

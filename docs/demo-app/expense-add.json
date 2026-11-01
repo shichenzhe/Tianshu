@@ -1,0 +1,59 @@
+{
+  "name": "记账·记一笔",
+  "description": "向 demo 记账库（demo.db/expense）插入一笔支出。typed 输入（切片 D）：amount 数值必填、category 枚举（缺省其他）、note 可空（缺省空串存 NULL）、spent_at 日期（缺省今天，入口归一 yyyy-MM-dd）。四键可省略有缺省者；amount 为 number 直传（database 参数原生绑定，SQL 无 CAST）。",
+  "graphJson": {
+    "version": 1,
+    "inputSchema": {
+      "amount": {
+        "type": "number",
+        "required": true,
+        "description": "金额（元）"
+      },
+      "category": {
+        "type": "enum",
+        "enumValues": ["餐饮", "交通", "购物", "娱乐", "医疗", "其他"],
+        "default": "其他",
+        "description": "类别"
+      },
+      "note": {
+        "type": "string",
+        "required": false,
+        "default": "",
+        "description": "备注（可空）"
+      },
+      "spent_at": {
+        "type": "date",
+        "default": "today",
+        "description": "日期（缺省今天）"
+      }
+    },
+    "nodes": [
+      {
+        "id": "start",
+        "name": "开始",
+        "kind": "start",
+        "variables": ["amount", "category", "note", "spent_at"],
+        "position": { "x": 80, "y": 160 }
+      },
+      {
+        "id": "insert-expense",
+        "name": "插入一笔支出",
+        "kind": "database",
+        "engine": "sqlite",
+        "sqlitePath": "demo.db",
+        "sql": "INSERT INTO expense (amount, category, note, spent_at) VALUES (?, ?, NULLIF(?, ''), ?)",
+        "params": [
+          "{{input.amount}}",
+          "{{input.category}}",
+          "{{input.note}}",
+          "{{input.spent_at}}"
+        ],
+        "position": { "x": 320, "y": 160 }
+      }
+    ],
+    "edges": [
+      { "from": "start", "to": "insert-expense" },
+      { "from": "insert-expense", "to": "END" }
+    ]
+  }
+}

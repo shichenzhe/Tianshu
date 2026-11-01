@@ -21,9 +21,24 @@ import { GraphRepository } from './graph.repository';
 import { recordGraphMonitorEvents } from '@tianshu/core';
 import { GraphService } from './graph.service';
 import { GraphController } from './graph.controller';
+import {
+  makeWorkflowTools,
+  WORKFLOW_TOOL_NAMES,
+} from 'src/core/tools/workflow-tools';
+import {
+  makeDisplayTools,
+  DISPLAY_TOOL_NAMES,
+} from 'src/core/tools/display-tools';
+import { unregisterTools, registerTools } from 'src/core/tools/tool-registry';
+import { installWorkflowTools } from 'src/core/tools/workflow-toolbox';
 
 /** 运行时安装 provider token（无消费面——Nest 启动期实例化工厂即安装） */
 export const GRAPH_EXECUTOR_RUNTIME = Symbol('GRAPH_EXECUTOR_RUNTIME');
+
+/** registry 注册 provider token（无消费面——Nest 启动期实例化工厂即注册） */
+export const GRAPH_TOOLS_REGISTRATION = Symbol('GRAPH_TOOLS_REGISTRATION');
+
+
 
 @Module({
   // WebhookModule（GA-T7）：deleteGraph 钩子接线依赖 WebhookService + 触发
@@ -66,6 +81,32 @@ export const GRAPH_EXECUTOR_RUNTIME = Symbol('GRAPH_EXECUTOR_RUNTIME');
       },
     },
     GraphService,
+    // F1/F2（2026-10-29）：工作流六件 + 展示三件注册进聚合 registry——
+    // graph LLM 节点 tools:true 经 registry 获得（mirror 同构：六件在
+    // mirror 由 GraphRepository 构造注册）；chat 会话另经
+    // ChatRunnerService.collectToolDefinitions 按 mirror 场景门控取用。
+    // subflow 节点与 run_workflow 非冗余：subflow 是设计期静态引用
+    // （graphId 固定），run_workflow 是运行期动态选择（list→选→填参），
+    // 图内 LLM 两者互补（结论备案）
+    {
+      provide: GRAPH_TOOLS_REGISTRATION,
+      inject: [PrismaService, GraphService],
+      useFactory: (prisma: PrismaService, graphService: GraphService) => {
+        const toolbox = [
+          ...makeWorkflowTools({
+            prisma: prisma as never,
+            runGraph: (dto) => graphService.run(dto),
+          }),
+          ...makeDisplayTools(),
+        ];
+        unregisterTools([...WORKFLOW_TOOL_NAMES, ...DISPLAY_TOOL_NAMES]);
+        registerTools(toolbox);
+        // chat 侧取用口（零依赖传递盒——不经 chat-runner import registry，
+        // 避免补全既有静态环②致 library-tools 半初始化）
+        installWorkflowTools(toolbox);
+        return true;
+      },
+    },
   ],
   exports: [GraphRepository],
 })

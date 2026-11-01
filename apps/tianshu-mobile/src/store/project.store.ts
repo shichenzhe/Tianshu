@@ -29,6 +29,7 @@ import {
 } from "@tianshu/protocol";
 import { wireRequest } from "../transport/wire";
 import { activeTransport, useConnectionsStore } from "./connections.store";
+import { useSessionsStore } from "./sessions.store";
 
 export type TaskScope = "all" | "assigned" | "created";
 export type TaskSource = "all" | "local" | "project";
@@ -515,24 +516,32 @@ export const useProjectStore = create<ProjectState>((set, get) => {
 
     setHubKeyword: (keyword) => set({ hubKeyword: keyword }),
 
+    // 批③（2026-11-01）：项目写后联动聊天主页 sessions.store（乐观刷新不等
+    // project.changed 事件回环）——create/remove 连带会话/资产空间行故全量
+    // loadFirst；纯名变（rename/instruction）仅重拉项目组概要。
+    // 单向依赖（project → sessions）防循环：sessions.store 不反向引本 store
     create: (payload) =>
       enqueueWrite(ENDPOINTS.project.create, payload, () => {
         void get().load();
+        void useSessionsStore.getState().loadFirst();
       }),
 
     rename: (id, name) =>
       enqueueWrite(ENDPOINTS.project.update, { id, name }, () => {
         void get().load();
+        void useSessionsStore.getState().loadProjects();
       }),
 
     updateInstruction: (id, systemPrompt) =>
       enqueueWrite(ENDPOINTS.project.update, { id, systemPrompt }, () => {
         void get().load();
+        void useSessionsStore.getState().loadProjects();
       }),
 
     remove: (id) =>
       enqueueWrite(ENDPOINTS.project.delete, { id }, () => {
         void get().load();
+        void useSessionsStore.getState().loadFirst();
       }),
 
     loadMine: async () => {

@@ -356,6 +356,46 @@ describe("stream store", () => {
     );
   });
 
+  it("startSend skillRefs（skill_ref 批）：名单随 body 上行 + 乐观消息前置 SkillRefBlock；缺省不带键", async () => {
+    transport.request.mockImplementation(async (_m: string, path: string) =>
+      path === ENDPOINTS.session.getById
+        ? ok(detail(historyMsgs))
+        : ok({ accepted: true }, 202),
+    );
+    await useStreamStore.getState().loadHistory(7);
+    transport.request.mockClear();
+
+    const accepted = await useStreamStore
+      .getState()
+      .startSend(7, "⚡demo 帮我处理", undefined, undefined, undefined, [
+        "demo-skill",
+      ]);
+    expect(accepted).toBe(true);
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      ENDPOINTS.session.send,
+      {
+        sessionId: 7,
+        content: "⚡demo 帮我处理",
+        skillRefs: ["demo-skill"],
+      },
+    );
+
+    // 乐观消息与落库同构：skill_ref 块前置于 text（渲染侧 SkillRefCard
+    // 即时可见；引用名不进 text，气泡零泄漏）
+    const e = useStreamStore.getState().bySession[7];
+    expect(e?.history.at(-1)?.blocks).toEqual([
+      { type: "skill_ref", name: "demo-skill" },
+      { type: "text", text: "⚡demo 帮我处理" },
+    ]);
+
+    // 缺省不带 skillRefs 键（既有载荷口径零扰动）
+    transport.request.mockResolvedValue(ok({ accepted: true }, 202));
+    await useStreamStore.getState().startSend(7, "普通");
+    const last = transport.request.mock.calls.at(-1);
+    expect(last?.[2]).toEqual({ sessionId: 7, content: "普通" });
+  });
+
   it("startSend 业务错：乐观消息回滚 + 流态置错 + 解锁，返回 false", async () => {
     transport.request.mockResolvedValue(ok(detail(historyMsgs)));
     await useStreamStore.getState().loadHistory(7);

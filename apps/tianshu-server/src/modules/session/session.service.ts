@@ -534,6 +534,7 @@ export class SessionService {
         sessionId: dto.sessionId,
         content: dto.content,
         images: dto.images,
+        skillRefs: dto.skillRefs,
         assistantId: dto.assistantId,
         modelId: dto.modelId,
         onChunk: (chunk) => this.publishChunk(dto.sessionId, chunk),

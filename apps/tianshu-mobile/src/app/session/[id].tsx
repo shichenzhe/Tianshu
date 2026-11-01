@@ -992,8 +992,8 @@ export default function SessionScreen() {
               // 自读，省双程流量，面板只显示路径行）；ask 会话无工具集
               // （无头端 chat-runner ask → []），回退内容注入（files/read
               // 拉全文——读失败该引用跳过并提示，对齐桌面「读失败不阻断
-              // 发送」口径）；技能逐个 skills/read 全文注入（对齐 PC @技能
-              // token 注入语义）
+              // 发送」口径）；技能引用 skill_ref 批改名单直传落块（不再
+              // skills/read 拉全文——被控端组装侧展开，根治空行切段泄漏）
               const refs: Array<{
                 path: string;
                 content: string;
@@ -1022,37 +1022,23 @@ export default function SessionScreen() {
                 }
                 failedRefs.push(path);
               }
-              const failedSkills: string[] = [];
-              for (const name of skillRefs) {
-                const r = await wireRequest("POST", ENDPOINTS.skills.read, {
-                  name,
-                });
-                if (r.ok) {
-                  const text = (r.data as { content?: unknown } | null)
-                    ?.content;
-                  if (typeof text === "string") {
-                    refs.push({ path: name, content: text, kind: "skill" });
-                    continue;
-                  }
-                }
-                failedSkills.push(name);
-              }
               // 本地文件（添加文件对齐批）：内容已在选择时读入，直接并入
               // 注入块（[引用文件 name] 前缀——对齐桌面 pickAndRead 语义）
               for (const file of localFiles) {
                 refs.push({ path: file.name, content: file.content });
               }
-              if (failedRefs.length + failedSkills.length > 0) {
+              if (failedRefs.length > 0) {
                 toast.warning(
                   t("refReadFailed", {
-                    names: [...failedRefs, ...failedSkills].join(", "),
+                    names: failedRefs.join(", "),
                   }),
                 );
               }
               const injected = buildInjectedContent(content, refs);
               // 注入前缀必须随消息上行（LT-T4 至今死变量 bug：injected
               // 算出却仍传 content——文件内容从未进过模型，「会话识别
-              // 不到文件」根因；乐观消息同 PC 口径带前缀）
+              // 不到文件」根因；乐观消息同 PC 口径带前缀）；技能名单
+              // 经 skillRefs 第六参随行落块
               const accepted = await useStreamStore
                 .getState()
                 .startSend(
@@ -1061,6 +1047,7 @@ export default function SessionScreen() {
                   modelId ?? undefined,
                   pendingImages.length > 0 ? pendingImages : undefined,
                   expertId ?? undefined,
+                  skillRefs.length > 0 ? skillRefs : undefined,
                 );
               if (accepted) {
                 setPendingImages([]);

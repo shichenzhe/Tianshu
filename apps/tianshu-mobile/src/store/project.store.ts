@@ -500,18 +500,12 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     load: async () => {
       const token = beginRequest("hub");
       if (!token) return;
-      await fetchInto(
-        token,
-        ENDPOINTS.project.query,
-        null,
-        "hub",
-        (data) => {
-          const projects = parseArray(data, parseProject);
-          if (!projects) return false;
-          set({ projects });
-          return true;
-        },
-      );
+      await fetchInto(token, ENDPOINTS.project.query, null, "hub", (data) => {
+        const projects = parseArray(data, parseProject);
+        if (!projects) return false;
+        set({ projects });
+        return true;
+      });
     },
 
     setHubKeyword: (keyword) => set({ hubKeyword: keyword }),
@@ -630,27 +624,26 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       patchFacet("plan", { loading: true, error: null });
       try {
         // 事项 + 字段定义 + 视图（含懒播种语义）三联并联
-        const [itemsResult, fieldsResult, viewsResult] =
-          await Promise.all([
-            wireRequest(
-              "POST",
-              ENDPOINTS.planItem.list,
-              { projectId },
-              token.transport,
-            ),
-            wireRequest(
-              "POST",
-              ENDPOINTS.planItem.fieldsList,
-              { projectId },
-              token.transport,
-            ),
-            wireRequest(
-              "POST",
-              ENDPOINTS.planView.list,
-              { projectId },
-              token.transport,
-            ),
-          ]);
+        const [itemsResult, fieldsResult, viewsResult] = await Promise.all([
+          wireRequest(
+            "POST",
+            ENDPOINTS.planItem.list,
+            { projectId },
+            token.transport,
+          ),
+          wireRequest(
+            "POST",
+            ENDPOINTS.planItem.fieldsList,
+            { projectId },
+            token.transport,
+          ),
+          wireRequest(
+            "POST",
+            ENDPOINTS.planView.list,
+            { projectId },
+            token.transport,
+          ),
+        ]);
         if (!isCurrentRequest(token)) return;
         const planFailed = [itemsResult, fieldsResult, viewsResult].find(
           (result) => !result.ok,
@@ -661,19 +654,15 @@ export const useProjectStore = create<ProjectState>((set, get) => {
         }
         if (!itemsResult.ok || !fieldsResult.ok || !viewsResult.ok) return;
         const items = parseArray(itemsResult.data, parsePlanItem);
-        const fields = parseArray(
-          fieldsResult.data,
-          (value) =>
-            isRecord(value) && typeof value.name === "string"
-              ? (value as unknown as PlanFieldDefDto)
-              : null,
+        const fields = parseArray(fieldsResult.data, (value) =>
+          isRecord(value) && typeof value.name === "string"
+            ? (value as unknown as PlanFieldDefDto)
+            : null,
         );
-        const views = parseArray(
-          viewsResult.data,
-          (value) =>
-            isRecord(value) && typeof value.id === "number"
-              ? (value as unknown as PlanViewRecordDto)
-              : null,
+        const views = parseArray(viewsResult.data, (value) =>
+          isRecord(value) && typeof value.id === "number"
+            ? (value as unknown as PlanViewRecordDto)
+            : null,
         );
         if (!items || !fields || !views) {
           patchFacet("plan", { error: "Invalid response" });
@@ -712,19 +701,18 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       const token = beginRequest("assets");
       if (!token) return;
       set({ currentProjectId: projectId, folderPath: path });
-      const body = path.length > 0 ? { projectId, path: path.join("/") } : { projectId };
+      const body =
+        path.length > 0 ? { projectId, path: path.join("/") } : { projectId };
       await fetchInto(
         token,
         ENDPOINTS.projectAsset.list,
         body,
         "assets",
         (data) => {
-          const entries = parseArray(
-            data,
-            (value) =>
-              isRecord(value) && typeof value.name === "string"
-                ? (value as unknown as AssetEntryDto)
-                : null,
+          const entries = parseArray(data, (value) =>
+            isRecord(value) && typeof value.name === "string"
+              ? (value as unknown as AssetEntryDto)
+              : null,
           );
           if (!entries) return false;
           set({ entries });
@@ -737,13 +725,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       const body =
         path.length > 0 ? { projectId, path: path.join("/") } : { projectId };
       const data = await fetchData("assets", ENDPOINTS.projectAsset.list, body);
-      return parseArray(
-        data,
-        (value) =>
+      return (
+        parseArray(data, (value) =>
           isRecord(value) && typeof value.name === "string"
             ? (value as unknown as AssetEntryDto)
             : null,
-      ) ?? [];
+        ) ?? []
+      );
     },
 
     loadStorage: async (projectId) => {

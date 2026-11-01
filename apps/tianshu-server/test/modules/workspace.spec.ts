@@ -101,9 +101,8 @@ describe('WorkspaceController (e2e)', () => {
 
     // name 空串/纯空白/缺省：稳定码经 message 信封（与桌面 face 同码）
     for (const payload of [{ name: '' }, { name: '   ' }, {}]) {
-      const invalid = (
-        await post('/workspace/create', payload).expect(200)
-      ).body as WrappedBody<null>;
+      const invalid = (await post('/workspace/create', payload).expect(200))
+        .body as WrappedBody<null>;
       expect(invalid.success).toBe(false);
       expect(invalid.message).toBe('WORKSPACE_INVALID');
     }
@@ -244,18 +243,16 @@ describe('WorkspaceController (e2e)', () => {
       data: { userId: 2, name: '他人空间-3' },
     });
     for (const id of [other.id, target.id]) {
-      const notFound = (
-        await post('/workspace/delete', { id }).expect(200)
-      ).body as WrappedBody<null>;
+      const notFound = (await post('/workspace/delete', { id }).expect(200))
+        .body as WrappedBody<null>;
       expect(notFound.success).toBe(false);
       expect(notFound.message).toBe('WORKSPACE_NOT_FOUND');
     }
   });
 
   it('写面载荷形态校验：update id 非整数被 ValidationPipe 拒', async () => {
-    const badId = (
-      await post('/workspace/update', { id: 'x' }).expect(200)
-    ).body as WrappedBody<null>;
+    const badId = (await post('/workspace/update', { id: 'x' }).expect(200))
+      .body as WrappedBody<null>;
     expect(badId.success).toBe(false);
   });
 });

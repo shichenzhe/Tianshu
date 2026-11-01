@@ -12,7 +12,9 @@ export interface SessionGroup<T> {
   data: T[];
 }
 
-export function groupSessionsByWorkspace<T extends { id: number; workspaceId?: number | null }>(
+export function groupSessionsByWorkspace<
+  T extends { id: number; workspaceId?: number | null },
+>(
   rows: T[],
   workspaces: Array<{ id: number; name: string }>,
   fallbackTitle: string,
@@ -21,7 +23,10 @@ export function groupSessionsByWorkspace<T extends { id: number; workspaceId?: n
   const byWorkspace = new Map<number, T[]>();
   const fallback: T[] = [];
   for (const row of rows) {
-    if (row.workspaceId != null && workspaces.some((w) => w.id === row.workspaceId)) {
+    if (
+      row.workspaceId != null &&
+      workspaces.some((w) => w.id === row.workspaceId)
+    ) {
       const bucket = byWorkspace.get(row.workspaceId);
       if (bucket) {
         bucket.push(row);

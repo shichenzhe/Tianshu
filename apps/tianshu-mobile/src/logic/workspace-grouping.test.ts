@@ -87,10 +87,13 @@ describe("splitProjectSessions（批③，对齐桌面 D4 项目组语义）", (
   });
 
   it("无会话项目不产出空组；projects 空 → 全留 rest（无头端）", () => {
-    const only = splitProjectSessions([prow(1, 7)], [
-      { id: 7, name: "甲" },
-      { id: 8, name: "空项目" },
-    ]);
+    const only = splitProjectSessions(
+      [prow(1, 7)],
+      [
+        { id: 7, name: "甲" },
+        { id: 8, name: "空项目" },
+      ],
+    );
     expect(only.groups.map((g) => g.name)).toEqual(["甲"]);
     const headless = splitProjectSessions([prow(1, 7), prow(2, null)], []);
     expect(headless.groups).toEqual([]);

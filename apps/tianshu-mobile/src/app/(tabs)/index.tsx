@@ -37,7 +37,10 @@ import {
 } from "@/logic/archive-undo";
 import { tapLight } from "@/lib/haptics";
 import { toast } from "@/lib/toast-bus";
-import { groupSessionsByWorkspace, splitProjectSessions } from "@/logic/workspace-grouping";
+import {
+  groupSessionsByWorkspace,
+  splitProjectSessions,
+} from "@/logic/workspace-grouping";
 import type { SessionTimeFilter } from "@/logic/session-time-filter";
 import { useConnectionsStore } from "@/store/connections.store";
 import { useSearchUiStore } from "@/store/search-ui";
@@ -499,14 +502,12 @@ export default function SessionsScreen() {
           title: s.title,
           data: s.data,
         })),
-        ...projectGroups.map(
-          (g): ListEntry => ({
-            kind: "search",
-            key: `prj-${g.id}`,
-            title: g.name,
-            data: g.items,
-          }),
-        ),
+        ...projectGroups.map((g): ListEntry => ({
+          kind: "search",
+          key: `prj-${g.id}`,
+          title: g.name,
+          data: g.items,
+        })),
       ];
     }
     // 组态：仅真实工作空间目录（用户裁定——未归属目录常态为空没必要

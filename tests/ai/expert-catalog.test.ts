@@ -1,13 +1,13 @@
 /**
  * 专家目录运行时辅助纯函数单测（专家 2.0 Task 4）：
  * mergeExpertSkills 并入语义 = skills ∪ (allSkills ∩ skillNames)，保持
- * skills 原序、新增项按 skillNames 序追加；buildExpertCatalogPrompt 目录
- * 段文案。无 fs/electron 依赖，vitest 直测（skill-prompt 先例）。
+ * skills 原序、新增项按 skillNames 序追加；parseJsonStringArray 坏数据
+ * 回退。buildExpertCatalogPrompt 已删（2026-11-01 目录出 system 批——
+ * 目录文案断言移 recommend-expert-tool.test 的 list_experts 用例）。
+ * 无 fs/electron 依赖，vitest 直测（skill-prompt 先例）。
  */
 import { describe, expect, it } from "vitest";
-import { MARKET_EXPERTS } from "../../src-react/domains/ai/experts/data/marketplace";
 import {
-  buildExpertCatalogPrompt,
   mergeExpertSkills,
   parseJsonStringArray,
 } from "../../electron/domains/ai/chat/expert-catalog";
@@ -52,24 +52,6 @@ describe("mergeExpertSkills", () => {
     const all = [skill("x"), skill("y"), skill("z"), skill("a")];
     const merged = mergeExpertSkills(enabled, ["z", "y", "x"], all);
     expect(merged.map((s) => s.name)).toEqual(["a", "z", "y", "x"]);
-  });
-});
-
-describe("buildExpertCatalogPrompt", () => {
-  it("含目录条目与工具使用规则", () => {
-    const text = buildExpertCatalogPrompt(MARKET_EXPERTS);
-    expect(text).toContain("recommend_expert");
-    expect(text).toContain("code-review-expert");
-    expect(text).toContain("最多一次");
-  });
-
-  it("目录条目含 slug/名称/一句话描述", () => {
-    const text = buildExpertCatalogPrompt(MARKET_EXPERTS);
-    const item = MARKET_EXPERTS.find((e) => e.slug === "code-review-expert");
-    expect(item).toBeDefined();
-    expect(text).toContain(
-      `- ${item!.slug}｜${item!.name}（${item!.subtitle}）`,
-    );
   });
 });
 

@@ -1,6 +1,4 @@
 import {
-  buildExpertCatalogPrompt,
-  type ExpertCatalogItem,
   mergeExpertSkills,
   parseJsonStringArray,
 } from 'src/core/expert-catalog';
@@ -8,22 +6,8 @@ import type { SkillSummary } from 'src/core/skill-prompt';
 
 // 移植自 mirror tests/ai/expert-catalog.test.ts（2084a7e）：
 // mirror 版夹具引前端 MARKET_EXPERTS 与完整 SkillInfo——服务端无渲染层
-// 数据，以同形状本地夹具代之（目录段仅消费四展示字段）。
-
-const CATALOG: ExpertCatalogItem[] = [
-  {
-    slug: 'code-reviewer',
-    name: '代码评审专家',
-    subtitle: '工程质量',
-    description: '聚焦代码缺陷、风险与工程最佳实践的评审专家。',
-  },
-  {
-    slug: 'doc-writer',
-    name: '公文写作专家',
-    subtitle: '日常办公',
-    description: '擅长公文、报告与邮件等正式文书的撰写专家。',
-  },
-];
+// 数据，以同形状本地夹具代之。buildExpertCatalogPrompt 已删
+// （2026-11-01 目录出 system 批，双端同删）。
 
 const skill = (name: string): SkillSummary => ({
   name,
@@ -60,24 +44,6 @@ describe('mergeExpertSkills', () => {
     const all = [skill('x'), skill('y'), skill('z'), skill('a')];
     const merged = mergeExpertSkills(enabled, ['z', 'y', 'x'], all);
     expect(merged.map((s) => s.name)).toEqual(['a', 'z', 'y', 'x']);
-  });
-});
-
-describe('buildExpertCatalogPrompt', () => {
-  it('含目录条目与工具使用规则', () => {
-    const text = buildExpertCatalogPrompt(CATALOG);
-    expect(text).toContain('recommend_expert');
-    expect(text).toContain('code-reviewer');
-    expect(text).toContain('最多一次');
-  });
-
-  it('目录条目含 slug/名称/一句话描述', () => {
-    const text = buildExpertCatalogPrompt(CATALOG);
-    const item = CATALOG.find((e) => e.slug === 'code-reviewer');
-    expect(item).toBeDefined();
-    expect(text).toContain(
-      `- ${item!.slug}｜${item!.name}（${item!.subtitle}）`,
-    );
   });
 });
 

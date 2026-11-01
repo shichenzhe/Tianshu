@@ -17,7 +17,7 @@ import {
   teamMemberSchema,
   validateTeamMembers,
 } from "../agent/create-expert";
-import { makeRecommendExpertTool } from "../agent/recommend-expert-tool";
+import { makeListExpertsTool, makeRecommendExpertTool } from "../agent/recommend-expert-tool";
 import { parseJsonStringArray } from "./expert-catalog";
 import { parseTeamMembers, type TeamMember } from "./expert-team";
 import type {
@@ -203,8 +203,10 @@ export class AssistantRepository {
           prisma: prisma.assistant,
           listInstalledSkillNames,
         }),
-        // recommend_expert：未绑专家会话的专家推荐卡（渲染层消费 args、
-        // 无落库副作用 → read 免审批，无 deps 纯函数，show_widget 先例）
+        // 专家推荐两跳组（2026-11-01 目录出 system 批）：list_experts
+        // 查目录 + recommend_expert 渲染推荐卡（渲染层消费 args、无落库
+        // 副作用 → read 免审批，无 deps 纯函数，show_widget 先例）
+        makeListExpertsTool(),
         makeRecommendExpertTool(),
       ]);
     } catch (e) {

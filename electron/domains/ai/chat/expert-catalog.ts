@@ -1,11 +1,11 @@
 /**
- * 专家目录运行时辅助（纯函数，专家 2.0）：专家附带技能并入会话技能清单
- * + 未绑专家会话的目录推荐指令段构造（WorkBuddy recommend-experts 语义）。
+ * 专家目录运行时辅助（纯函数，专家 2.0）：专家附带技能并入会话技能清单。
+ * 目录推荐指令段已删（2026-11-01 目录出 system 批，spec
+ * docs/superpowers/specs/2026-11-01-expert-catalog-to-tool-design.md）：
+ * 目录改随 list_experts 工具结果两跳注入。
  * 无 fs/electron 依赖（仅引工具名常量），vitest 直测（skill-prompt 先例）。
  */
 import type { SkillInfo } from "../agent/skill-loader";
-import { RECOMMEND_TOOL_NAME } from "../agent/recommend-expert-tool";
-import type { ExpertMarketItem } from "../../../../src-react/domains/ai/experts/data/marketplace";
 
 /**
  * JSON 数组字符串列解析（assistant 行 tags/quickPrompts/skillNames 同款）：
@@ -51,23 +51,4 @@ export function mergeExpertSkills(
     }
   }
   return merged;
-}
-
-/**
- * 专家目录推荐指令段（未绑专家的 agent 会话注入）：目录条目 +
- * recommend_expert 工具使用规则（文案给模型看，不进前端 i18n）。
- */
-export function buildExpertCatalogPrompt(items: ExpertMarketItem[]): string {
-  const lines = items.map(
-    (e) => `- ${e.slug}｜${e.name}（${e.subtitle}）：${e.description}`,
-  );
-  return [
-    "【专家目录】以下为可推荐的内置专家（按需选 1-3 位）：",
-    ...lines,
-    "",
-    `当任务明显受益于某专业角色时，调用 ${RECOMMEND_TOOL_NAME} 工具渲染推荐卡` +
-      "（参数 candidates 为 slug 数组、reason 一句话理由）。规则：当前会话" +
-      "已绑定专家时禁止推荐；每次回复调用最多一次；用户未采纳不重复推荐；" +
-      "不得代替用户启用专家；任务与目录无明显匹配时静默继续任务。",
-  ].join("\n");
 }

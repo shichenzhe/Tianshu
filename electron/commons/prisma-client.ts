@@ -63,6 +63,22 @@ export async function ensureArtifactTable(): Promise<void> {
 }
 
 /**
+ * provider 表加列（provider 窗口批 2026-11-01）：服务商级默认上下文窗口
+ * contextWindow。启动幂等补建（artifact/监控表先例，不走 v1 快照避免
+ * 指纹变化触发旧库 drop 重建）——SQLite ALTER ADD COLUMN 无 IF NOT
+ * EXISTS 形态，先查 pragma_table_info 判列存在再补。
+ */
+export async function ensureProviderColumns(): Promise<void> {
+  const columns = await prisma.$queryRawUnsafe<
+    Array<{ name: string }>
+  >("SELECT name FROM pragma_table_info('provider')");
+  if (columns.some((col) => col.name === "contextWindow")) return;
+  await prisma.$executeRawUnsafe(
+    "ALTER TABLE provider ADD COLUMN contextWindow INTEGER",
+  );
+}
+
+/**
  * 监控事件表建表（token/工具监控 spec §3.2）：启动幂等补建，不走 v1
  * 快照（指纹变化会触发旧库 drop 重建）。须在 initDatabase 之后调用。
  */

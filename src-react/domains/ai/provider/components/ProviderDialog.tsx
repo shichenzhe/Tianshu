@@ -55,6 +55,7 @@ export default function ProviderDialog({
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [extraHeaders, setExtraHeaders] = useState("");
+  const [contextWindow, setContextWindow] = useState("");
   const [enabled, setEnabled] = useState(true);
   const [preset, setPreset] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -66,6 +67,9 @@ export default function ProviderDialog({
       setBaseUrl(editing?.baseUrl ?? "");
       setApiKey(editing?.apiKey ?? "");
       setExtraHeaders(editing?.extraHeaders ?? "");
+      setContextWindow(
+        editing?.contextWindow != null ? String(editing.contextWindow) : "",
+      );
       setEnabled(editing?.enabled ?? true);
       setPreset(null);
     }
@@ -83,6 +87,13 @@ export default function ProviderDialog({
         return;
       }
     }
+    const parsedContextWindow = contextWindow.trim()
+      ? Number(contextWindow.trim())
+      : undefined;
+    if (parsedContextWindow !== undefined && !Number.isInteger(parsedContextWindow)) {
+      toast.error(t("ai:provider.contextWindowInvalid"));
+      return;
+    }
     setSubmitting(true);
     try {
       const shared = {
@@ -99,12 +110,16 @@ export default function ProviderDialog({
           ...shared,
           apiKey: diffOptionalString(apiKey, editing.apiKey),
           extraHeaders: diffOptionalString(extraHeaders, editing.extraHeaders),
+          contextWindow:
+            parsedContextWindow ??
+            (editing.contextWindow != null ? null : undefined),
         });
       } else {
         const created = await ProviderApi.create({
           ...shared,
           apiKey: apiKey.trim() || undefined,
           extraHeaders: extraHeaders.trim() || undefined,
+          contextWindow: parsedContextWindow ?? null,
         });
         createdId = created.id;
       }
@@ -207,6 +222,18 @@ export default function ProviderDialog({
               value={extraHeaders}
               onChange={(e) => setExtraHeaders(e.target.value)}
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("ai:provider.contextWindow")}</Label>
+            <Input
+              inputMode="numeric"
+              value={contextWindow}
+              onChange={(e) => setContextWindow(e.target.value)}
+              placeholder={t("ai:provider.contextWindowPlaceholder")}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("ai:provider.contextWindowHint")}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Switch

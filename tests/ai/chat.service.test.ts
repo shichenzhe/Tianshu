@@ -1792,6 +1792,34 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(breakdown).not.toBeNull();
     expect(breakdown?.contextWindow).toBe(131072);
   });
+
+  it("provider 级默认上下文窗口：三层优先级 model 显式 > provider 默认 > 全局兜底", async () => {
+    const usageWindow = async () =>
+      (
+        await (
+          makeSvc({ assistantId: null, userId: 1 }).service as unknown as {
+            getUsageBreakdown: (
+              sessionId: number,
+              userId: number,
+            ) => Promise<{ contextWindow: number | null } | null>;
+          }
+        ).getUsageBreakdown(1, 1)
+      )?.contextWindow;
+    // 双空：回落全局兜底 131072
+    expect(await usageWindow()).toBe(131072);
+    // provider 默认 32768（本地小窗部署形态）
+    assembleReads.provider.findUnique.mockResolvedValue({
+      ...providerRow,
+      contextWindow: 32768,
+    });
+    expect(await usageWindow()).toBe(32768);
+    // model 显式 65536 压过 provider 默认
+    assembleReads.model.findUnique.mockResolvedValue({
+      ...modelRow,
+      contextWindow: 65536,
+    });
+    expect(await usageWindow()).toBe(65536);
+  });
 });
 
 /**

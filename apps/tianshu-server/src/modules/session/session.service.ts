@@ -311,7 +311,9 @@ export class SessionService {
       }
       data.currentModelId = fields.currentModelId;
     }
-    if (data.title === '' && Object.keys(data).length === 1) {
+    // 空标题无条件拦（trim 后空串即非法）——曾仅当 title 为唯一字段才
+    // 拦：title:"  " 与 mode/archived 同交时静默清空会话标题
+    if (data.title === '') {
       throw new BusinessException(
         '标题不能为空',
         ErrorCodeEnum.INTERNAL_SERVER_ERROR,
@@ -532,6 +534,7 @@ export class SessionService {
         sessionId: dto.sessionId,
         content: dto.content,
         images: dto.images,
+        skillRefs: dto.skillRefs,
         assistantId: dto.assistantId,
         modelId: dto.modelId,
         onChunk: (chunk) => this.publishChunk(dto.sessionId, chunk),

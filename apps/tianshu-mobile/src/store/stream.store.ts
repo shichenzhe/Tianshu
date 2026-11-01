@@ -83,6 +83,9 @@ interface StreamState {
     images?: Array<{ name: string; base64: string }>,
     /** MT-T2：请求级专家覆盖（sessionSend 参数——写回会话当前值） */
     assistantId?: number,
+    /** skill_ref 批：技能引用名单——落 SkillRefBlock（被控端组装侧
+     *  展开；省「手机拉全文再上行」双程流量） */
+    skillRefs?: string[],
   ): Promise<boolean>;
   /** 末条 assistant 原位重跑（MB-T3）：受理即置流态，chunk 链收口 */
   regenerate(sessionId: number): Promise<boolean>;
@@ -304,7 +307,14 @@ export const useStreamStore = create<StreamState>((set, get) => {
       }
     },
 
-    startSend: async (sessionId, content, modelId, images, assistantId) => {
+    startSend: async (
+      sessionId,
+      content,
+      modelId,
+      images,
+      assistantId,
+      skillRefs,
+    ) => {
       // MB-T1：发送时上传（选图仅暂存——弃发不浪费）。图片引用不正常
       // （任一上传失败/回包畸形）即阻断发送（裁定 2026-10-21：明确图片
       // 正常才发文本，不剔图发纯文）——置错返回 false，调用方保留输入
@@ -341,7 +351,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
         }));
         return false;
       }
-      const optimistic = buildOptimisticUserMessage(sessionId, content);
+      const optimistic = buildOptimisticUserMessage(sessionId, content, skillRefs);
       const entry = get().bySession[sessionId] ?? blankSession();
       set((s) => ({
         bySession: {
@@ -368,6 +378,9 @@ export const useStreamStore = create<StreamState>((set, get) => {
         ...(modelId != null ? { modelId } : {}),
         ...(assistantId != null ? { assistantId } : {}),
         ...(imagePaths.length > 0 ? { images: imagePaths } : {}),
+        ...(skillRefs != null && skillRefs.length > 0
+          ? { skillRefs }
+          : {}),
       });
       if (r.ok) return true;
       // 受理失败回滚：乐观消息撤回、流态置错、解锁（errorMessage 供 UI 展示）

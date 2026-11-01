@@ -1256,6 +1256,12 @@ export default class ChatService {
       sessionId: params.sessionId,
       role: "user",
       blocks: serializeBlocks([
+        // skill_ref 批：引用块前置（组装侧 loadSkill 展开注入，消息库
+        // 只存技能名不膨胀）；正文照旧 text 块
+        ...(params.skillRefs ?? []).map((name) => ({
+          type: "skill_ref" as const,
+          name,
+        })),
         { type: "text", text: params.content },
         ...imageBlocks,
       ]),
@@ -1897,6 +1903,22 @@ export default class ChatService {
         maxSteps,
         // 历史图片块回喂：按数据根读盘转 dataUrl（读不到由转换层降级占位）
         loadImage: (imagePath) => readImageAsDataUrl(appDataHome(), imagePath),
+        // skill_ref 块展开（skill_ref 批）：ctx.allSkills 精确匹配读正文——
+        // 护栏对齐 read_skill 工具（NUL 拒读/256K 截断）；查不到/读失败
+        // 返回 null 由 core 降级行注入，不阻断流
+        loadSkill: async (name) => {
+          const skill = ctx.allSkills.find((s) => s.name === name);
+          if (!skill) return null;
+          try {
+            const buf = await fs.readFile(skill.bodyPath);
+            if (buf.includes(0)) return null;
+            return buf.byteLength > 256 * 1024
+              ? `${buf.subarray(0, 256 * 1024).toString("utf8")}\n…（已截断）`
+              : buf.toString("utf8");
+          } catch {
+            return null;
+          }
+        },
       });
       // 引擎 chunk：先累积主进程快照（供切回会话恢复），再照常推送渲染层；
       // 流收尾（finally 清理后）到达的迟到工具事件只转发不落快照

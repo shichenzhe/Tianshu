@@ -42,7 +42,8 @@ import ConfirmFormCard from "./ConfirmFormCard";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
 import { MessageImage } from "./MessageImage";
 import MessageFileRef from "./MessageFileRef";
-import type { ImageBlock } from "../model/blocks";
+import SkillRefCard from "./SkillRefCard";
+import type { ImageBlock, SkillRefBlock } from "../model/blocks";
 import EditBar from "./EditBar";
 
 interface MessageItemProps {
@@ -326,6 +327,16 @@ function MessageItemImpl({
       />
     ));
 
+    // 技能引用块（skill_ref 批）：独立技能卡片区（点击 readSkill 预览全文）
+    // ——rawText 只 join text 块，引用名天然不进气泡正文（新消息零泄漏；
+    // 历史 text 前缀消息仍走 splitFileRefPrefix 兜底拆卡）
+    const skillRefs = parsed.filter(
+      (block): block is SkillRefBlock => block.type === "skill_ref",
+    );
+    const skillRefNodes = skillRefs.map((block) => (
+      <SkillRefCard key={block.name} name={block.name} />
+    ));
+
     // 原位编辑态：EditBar 替换气泡与 hover 操作栏（items-end 列内右对齐，
     // 宽度由 EditBar 外层 75% 上限自适配）；hideActions（会话 sending）期间
     // 恢复普通气泡防呆，流结束自动回到编辑态（editing state 由 ChatView 持有）
@@ -333,6 +344,11 @@ function MessageItemImpl({
       return (
         <div className="flex flex-col items-end">
           {fileRefCards}
+          {skillRefs.length > 0 && (
+            <div className="mb-1.5 flex max-w-[75%] flex-col items-end gap-1.5">
+              {skillRefNodes}
+            </div>
+          )}
           {images.length > 0 && (
             <div className="mb-1.5 flex max-w-[75%] flex-wrap justify-end gap-1">
               {imageChipNodes}
@@ -354,6 +370,11 @@ function MessageItemImpl({
         onMouseLeave={() => setHovered(false)}
       >
         {fileRefCards}
+        {skillRefs.length > 0 && (
+          <div className="mb-1.5 flex max-w-[75%] flex-col items-end gap-1.5">
+            {skillRefNodes}
+          </div>
+        )}
         {/* 纯图消息（rest 空）气泡仍渲染——chip 即气泡内容（参照形态：
             [chip] 文本 同行内联；多图 flex-wrap 换行续排） */}
         {(images.length > 0 || rest.trim() !== "") && (

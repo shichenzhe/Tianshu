@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { WorkspaceIdDto } from './dto/workspace-id.dto';
@@ -41,26 +42,39 @@ export class WorkspaceService {
     ).map((row) => this.toBrief(row));
   }
 
-  /** 新建空间（库行创建，不涉宿主目录——directoryPath 写面属桌面端） */
+  /** 新建空间（库行创建，不涉宿主目录——directoryPath 写面属桌面端）。
+   *  重名（schema @@unique(userId,name)）收口稳定码：裸 P2002 冒泡经
+   *  filter 归 code 5000 + 原始报错文本，移动端不可判读 */
   async create(dto: WorkspaceSaveDto): Promise<WorkspaceBrief> {
     const name = dto.name?.trim();
     if (!name) {
       throw new Error('WORKSPACE_INVALID');
     }
-    const row = await this.prisma.workspace.create({
-      data: {
-        name,
-        userId: COMPANION_USER_ID,
-        ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
-        ...(dto.defaultModelId !== undefined
-          ? { defaultModelId: dto.defaultModelId }
-          : {}),
-      },
-    });
-    return this.toBrief(row);
+    try {
+      const row = await this.prisma.workspace.create({
+        data: {
+          name,
+          userId: COMPANION_USER_ID,
+          ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+          ...(dto.defaultModelId !== undefined
+            ? { defaultModelId: dto.defaultModelId }
+            : {}),
+        },
+      });
+      return this.toBrief(row);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new Error('WORKSPACE_NAME_DUPLICATE');
+      }
+      throw error;
+    }
   }
 
-  /** 更新（归属校验后全量字段写；未传键保持原值；id 缺省视为载荷不合法） */
+  /** 更新（归属校验后全量字段写；未传键保持原值；id 缺省视为载荷不合法；
+   *  重名同 create 收口稳定码） */
   async update(dto: WorkspaceSaveDto): Promise<WorkspaceBrief> {
     if (dto.id == null) {
       throw new Error('WORKSPACE_INVALID');
@@ -69,33 +83,50 @@ export class WorkspaceService {
       throw new Error('WORKSPACE_INVALID');
     }
     await this.assertOwned(dto.id);
-    const row = await this.prisma.workspace.update({
-      where: { id: dto.id },
-      data: {
-        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-        ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
-        ...(dto.defaultModelId !== undefined
-          ? { defaultModelId: dto.defaultModelId }
-          : {}),
-      },
-    });
-    return this.toBrief(row);
+    try {
+      const row = await this.prisma.workspace.update({
+        where: { id: dto.id },
+        data: {
+          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+          ...(dto.icon !== undefined ? { icon: dto.icon } : {}),
+          ...(dto.defaultModelId !== undefined
+            ? { defaultModelId: dto.defaultModelId }
+            : {}),
+        },
+      });
+      return this.toBrief(row);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new Error('WORKSPACE_NAME_DUPLICATE');
+      }
+      throw error;
+    }
   }
 
-  /** 删除：桌面同款硬级联（消息→会话→工作空间行），不删磁盘文件 */
+  /** 删除：桌面同款硬级联（消息→会话→工作空间行），不删磁盘文件。
+   *  事务化（三 delete 中途失败不留半删态）+ 清 toolPermission 记忆行
+   *  （防 permission/listRemembered 残留 workspaceName 回落 #id 的孤儿行） */
   async delete(dto: WorkspaceIdDto): Promise<null> {
     await this.assertOwned(dto.id);
-    const sessions = await this.prisma.sessionRecord.findMany({
-      where: { workspaceId: dto.id },
-      select: { id: true },
+    await this.prisma.$transaction(async (tx) => {
+      const sessions = await tx.sessionRecord.findMany({
+        where: { workspaceId: dto.id },
+        select: { id: true },
+      });
+      await tx.messageRecord.deleteMany({
+        where: { sessionId: { in: sessions.map((s) => s.id) } },
+      });
+      await tx.sessionRecord.deleteMany({
+        where: { workspaceId: dto.id },
+      });
+      await tx.toolPermission.deleteMany({
+        where: { workspaceId: dto.id },
+      });
+      await tx.workspace.delete({ where: { id: dto.id } });
     });
-    await this.prisma.messageRecord.deleteMany({
-      where: { sessionId: { in: sessions.map((s) => s.id) } },
-    });
-    await this.prisma.sessionRecord.deleteMany({
-      where: { workspaceId: dto.id },
-    });
-    await this.prisma.workspace.delete({ where: { id: dto.id } });
     return null;
   }
 

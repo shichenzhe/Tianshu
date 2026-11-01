@@ -108,6 +108,17 @@ describe('WorkspaceController (e2e)', () => {
     }
   });
 
+  it('POST /workspace/create 重名：P2002 收口稳定码（不冒 5000 原始报错）', async () => {
+    await db.prisma.workspace.create({
+      data: { userId: 1, name: '重名测试空间' },
+    });
+    const duplicate = (
+      await post('/workspace/create', { name: '重名测试空间' }).expect(200)
+    ).body as WrappedBody<null>;
+    expect(duplicate.success).toBe(false);
+    expect(duplicate.message).toBe('WORKSPACE_NAME_DUPLICATE');
+  });
+
   it('POST /workspace/update：改名/图标/默认模型；他人空间报 WORKSPACE_NOT_FOUND；name 空拒', async () => {
     const target = await db.prisma.workspace.create({
       data: { userId: 1, name: '原名称' },
@@ -167,6 +178,10 @@ describe('WorkspaceController (e2e)', () => {
         { sessionId: s2.id, role: 'assistant', blocks: '[]' },
       ],
     });
+    // 工具记忆行随空间删除清理（防 permission/listRemembered 孤儿行）
+    await db.prisma.toolPermission.create({
+      data: { workspaceId: target.id, toolName: 'write' },
+    });
 
     const deleted = (
       await post('/workspace/delete', { id: target.id }).expect(200)
@@ -186,6 +201,12 @@ describe('WorkspaceController (e2e)', () => {
     expect(
       await db.prisma.sessionRecord.count({ where: { workspaceId: keep.id } }),
     ).toBe(1);
+    // 工具记忆行已清（无孤儿残留）
+    expect(
+      await db.prisma.toolPermission.count({
+        where: { workspaceId: target.id },
+      }),
+    ).toBe(0);
 
     // 他人空间与重复删除同码（命名避开 query 用例已建的同名行）
     const other = await db.prisma.workspace.create({

@@ -88,6 +88,16 @@ describe.each(IMPLS)(
       ).toEqual([]);
     });
 
+    it("skill_ref 块往返一致（skill_ref 批新块型）", () => {
+      const blocks = [{ type: "skill_ref", name: "workflow-creator" }];
+      expect(parseBlocks(serializeBlocks(blocks))).toEqual(blocks);
+    });
+
+    it("skill_ref 块缺 name / name 非字符串被过滤", () => {
+      expect(parseBlocks('[{"type":"skill_ref"}]')).toEqual([]);
+      expect(parseBlocks('[{"type":"skill_ref","name":42}]')).toEqual([]);
+    });
+
     it("混合数组仅保留合法块", () => {
       const json = JSON.stringify([
         { type: "text", text: "ok" },
@@ -197,6 +207,49 @@ describe("blocksToModelMessages image 块转换（主进程实现，LangChain �
     expect(messages).toHaveLength(1);
     expect(messages[0]).toBeInstanceOf(AIMessage);
     expect(messages[0]?.content).toBe("[图片 attachments/a.png 已失效]");
+  });
+
+  it("skill_ref 块经 loadSkill 展开为旧注入前缀口径（[引用技能 name]\\n全文，前置正文）", async () => {
+    const messages = await blocksToModelMessages(
+      [
+        { type: "skill_ref", name: "workflow-creator" },
+        { type: "text", text: "帮我建个流程" },
+      ],
+      "user",
+      undefined,
+      async (name) => (name === "workflow-creator" ? "# 技能全文" : null),
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toBeInstanceOf(HumanMessage);
+    expect(messages[0]?.content).toContain(
+      "[引用技能 workflow-creator]\n# 技能全文",
+    );
+    expect(messages[0]?.content).toContain("帮我建个流程");
+    // 展开段前置于正文（引用块前置语义）
+    expect((messages[0]?.content as string).indexOf("[引用技能")).toBeLessThan(
+      (messages[0]?.content as string).indexOf("帮我建个流程"),
+    );
+  });
+
+  it("skill_ref 读不到（null/抛错）与 loader 缺席都降级行，不阻断流", async () => {
+    const messages = await blocksToModelMessages(
+      [
+        { type: "skill_ref", name: "gone" },
+        { type: "skill_ref", name: "boom" },
+      ],
+      "user",
+      undefined,
+      async (name) => (name === "boom" ? Promise.reject(new Error("io")) : null),
+    );
+    expect(messages[0]?.content).toBe(
+      "[引用技能 gone]（内容读取失败）\n[引用技能 boom]（内容读取失败）",
+    );
+
+    const noLoader = await blocksToModelMessages(
+      [{ type: "skill_ref", name: "any" }],
+      "user",
+    );
+    expect(noLoader[0]?.content).toBe("[引用技能 any]（内容读取失败）");
   });
 
   it("tool_call 块 → AIMessage.tool_calls + ToolMessage（T3-3 LangChain 回喂形态）", async () => {

@@ -10,6 +10,7 @@ import { IsOptional, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Public } from 'src/commons/auth/decorator/public.decorator';
 import { ApiWrappedOk } from 'src/commons/swagger/wrapped-response';
+import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { MonitorService, isMonitorScene } from './monitor.service';
 
 class MonitorStatsDto {
@@ -35,6 +36,7 @@ export class MonitorController {
   @ApiWrappedOk()
   async stats(@Body() dto: MonitorStatsDto): Promise<MonitorStats> {
     const scene = isMonitorScene(dto.scene) ? dto.scene : undefined;
-    return await this.monitorService.getStats(1, scene);
+    // 伴生用户常量（全仓 20+ 处同口径——硬编码 1 在常量调整时静默漏改）
+    return await this.monitorService.getStats(COMPANION_USER_ID, scene);
   }
 }

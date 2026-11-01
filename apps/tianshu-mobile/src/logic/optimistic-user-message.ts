@@ -22,7 +22,9 @@ export interface MessageRecord {
  * 乐观用户消息（负数临时 id 占位）：发送瞬间插入消息列表，
  * 流结束（finish/error）后的重取拿回服务器真值（正 id）替换。
  * 图片附件不乐观——乐观阶段的绝对路径无法解析；输入区粘贴预览已
- * 覆盖输入期体验，图片随重取出现。
+ * 覆盖输入期体验，图片随重取出现。skillRefs（skill_ref 批）：与真实
+ * 落库同构前置 SkillRefBlock（乐观卡片即时可见——渲染侧 SkillRefCard
+ * 已就位）。
  *
  * 移动端搬迁（T10）：仅搬 buildOptimisticUserMessage 纯函数；
  * 桌面端 appendOptimisticMessage（react-query setQueryData 无限缓存
@@ -32,12 +34,19 @@ export interface MessageRecord {
 export function buildOptimisticUserMessage(
   sessionId: number,
   content: string,
+  skillRefs?: string[],
 ): MessageRecord {
   return {
     id: -Date.now(),
     sessionId,
     role: "user",
-    blocks: serializeBlocks(content ? [{ type: "text", text: content }] : []),
+    blocks: serializeBlocks([
+      ...(skillRefs ?? []).map((name) => ({
+        type: "skill_ref" as const,
+        name,
+      })),
+      ...(content ? [{ type: "text" as const, text: content }] : []),
+    ]),
     createdAt: new Date().toISOString(),
   };
 }

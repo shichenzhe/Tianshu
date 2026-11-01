@@ -35,6 +35,15 @@ export class SessionSendDto {
   images?: string[];
 
   @ApiProperty({
+    description: '技能引用名单（skill_ref 批：落 SkillRefBlock 组装侧展开）',
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: '技能引用必须是数组' })
+  @IsString({ each: true, message: '技能引用名必须是字符串' })
+  skillRefs?: string[];
+
+  @ApiProperty({
     description: '助手（请求级覆盖，写回会话当前值）',
     required: false,
   })

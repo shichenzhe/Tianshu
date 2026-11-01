@@ -82,17 +82,21 @@ export default class ChatApi {
    * 空 images 归一化掉（无附件时载荷与既往一致）
    */
   static async send(params: ChatSendParams): Promise<void> {
-    const { images, ...rest } = params;
+    const { images, skillRefs, ...rest } = params;
     // 远程链（FA-T3 图片批）：带 base64 的图逐张上传被控端 attachments/
     // （files/uploadImage），返回的数据根相对路径进 sessionSend.images
     // 落 ImageBlock——远端引擎 loadImage 回喂零适配。图片引用不正常
     // （无 base64 的本地路径图——补齐链 [粘贴 LT-T1/剪贴板兜底] 以外的
     // 场景，如资料库图片 pill；上传业务错/网络错由 ServerApi throw）一律
-    // 阻断发送（裁定 2026-10-21：明确图片正常才发文本，不静默剔图发纯文）
+    // 阻断发送（裁定 2026-10-21：明确图片正常才发文本，不静默剔图发纯文）。
+    // skillRefs（skill_ref 批）直传落块——省「手机/控制端拉全文再上行」
+    // 双程流量，远端组装侧展开
     return routeInvoke(
       {
         ch: "chat:send",
-        args: [{ ...rest, ...(images && images.length > 0 ? { images } : {}) }],
+        args: [
+          { ...rest, ...(images && images.length > 0 ? { images } : {}) },
+        ],
       },
       async (connId) => {
         // 先全量校验再上传（快速失败——不因序列后半的坏图浪费前半上传）
@@ -117,6 +121,7 @@ export default class ChatApi {
           params.modelId,
           undefined,
           remoteImages.length > 0 ? remoteImages : undefined,
+          skillRefs && skillRefs.length > 0 ? skillRefs : undefined,
         );
       },
     );

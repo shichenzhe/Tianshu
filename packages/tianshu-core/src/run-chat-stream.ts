@@ -34,7 +34,11 @@ import type {
   ThinkingBlock,
   ToolCallBlock,
 } from "@tianshu/protocol";
-import { blocksToModelMessages, type ImageDataUrlLoader } from "./blocks";
+import {
+  blocksToModelMessages,
+  type ImageDataUrlLoader,
+  type SkillBodyLoader,
+} from "./blocks";
 import { estimateReserveTokens, truncateHistory } from "./history-truncate";
 import { trimHistoryToolOutputs } from "./tool-output-trim";
 import { classifyError } from "./error-classify";
@@ -136,6 +140,8 @@ export interface ChatStreamOptions<
   maxSteps?: number;
   /** 历史图片块 → dataUrl 读取器（多模态回喂）；缺省时 image 块降级占位 */
   loadImage?: ImageDataUrlLoader;
+  /** skill_ref 块 → 技能全文读取器（组装侧展开注入）；缺省时降级行 */
+  loadSkill?: SkillBodyLoader;
 }
 
 export interface ChatStreamResult {
@@ -279,7 +285,14 @@ export async function runChatStream<
             options.toolDefinitions ?? [],
           ),
         },
-      ).map((m) => blocksToModelMessages(m.blocks, m.role, options.loadImage)),
+      ).map((m) =>
+        blocksToModelMessages(
+          m.blocks,
+          m.role,
+          options.loadImage,
+          options.loadSkill,
+        ),
+      ),
     )
   ).flat();
 

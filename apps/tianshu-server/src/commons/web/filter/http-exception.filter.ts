@@ -23,12 +23,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<FastifyReply>(); // 使用 FastifyReply
     if (exception instanceof UnauthorizedException) {
+      // return 收口：无 return 会继续走到下方 status(200).send 二次发送
+      // （Fastify 对已发送响应的二次 send 侥幸仅告警忽略，Nest/Fastify
+      // 升级即可能变成 200 覆盖 401）
       response.status(401).send({
         code: ErrorCodeFactory.get(exception),
         success: false,
         data: null,
         message: exception.message,
       });
+      return;
     }
     const status = ErrorCodeFactory.get(exception);
     const errorResponse: ResponseDto<any> = {

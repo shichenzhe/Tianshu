@@ -41,6 +41,8 @@ function isValidBlock(block: unknown): block is MessageBlock {
       return typeof b.toolCallId === "string" && typeof b.toolName === "string";
     case "image":
       return typeof b.imagePath === "string" && typeof b.mime === "string";
+    case "skill_ref":
+      return typeof b.name === "string";
     default:
       return false;
   }
@@ -66,6 +68,15 @@ export function parseBlocks(json: string): MessageBlock[] {
  * （由调用方注入实现——blocks.ts 保持纯 Node 无 electron 依赖，测试可 stub）
  */
 export type ImageDataUrlLoader = (imagePath: string) => Promise<string | null>;
+
+/**
+ * 技能全文读取器：name → SKILL.md 正文；读不到返回 null（由调用方注入
+ * 实现——blocks.ts 保持纯 Node，测试可 stub）。skill_ref 块组装侧展开：
+ * `[引用技能 name]\n<全文>`（旧注入前缀口径逐字一致），多块/与正文间的
+ * 分隔经 mergeTextPreamble join("\n") 合并（旧前缀注入的 "\n\n" 分隔差异
+ * 为纯空白，模型语义等价）；读失败（null/抛错）降级行不阻断流
+ */
+export type SkillBodyLoader = (name: string) => Promise<string | null>;
 
 /** 多模态图片 part（LangChain image_url 形态） */
 type ImageUrlPart = { type: "image_url"; image_url: { url: string } };
@@ -105,6 +116,7 @@ export async function blocksToModelMessages(
   blocks: MessageBlock[],
   role: "user" | "assistant" = "assistant",
   loadImage?: ImageDataUrlLoader,
+  loadSkill?: SkillBodyLoader,
 ): Promise<BaseMessage[]> {
   const messages: BaseMessage[] = [];
   // 图片 part 单独累积，flush 时前置（多图保持相对序）
@@ -131,6 +143,19 @@ export async function blocksToModelMessages(
   for (const block of blocks) {
     if (block.type === "text") {
       parts.push({ type: "text", text: block.text });
+    } else if (block.type === "skill_ref") {
+      // 只在 user 侧展开（assistant 消息无技能引用，防御性降级同 image）
+      const body =
+        role === "user" && loadSkill
+          ? await loadSkill(block.name).catch(() => null)
+          : null;
+      parts.push({
+        type: "text",
+        text:
+          body != null
+            ? `[引用技能 ${block.name}]\n${body}`
+            : `[引用技能 ${block.name}]（内容读取失败）`,
+      });
     } else if (block.type === "image") {
       const dataUrl =
         role === "user" && loadImage ? await loadImage(block.imagePath) : null;

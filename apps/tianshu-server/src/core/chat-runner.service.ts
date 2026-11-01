@@ -93,6 +93,10 @@ export interface ChatRunnerRunOptions {
    *  须 attachments/ 前缀——越界拒 FILES_IMAGE_PATH_INVALID）；落
    *  ImageBlock，引擎回喂走现有 loadImage 数据根读盘链 */
   images?: string[];
+  /** 技能引用名单（skill_ref 批）：落 SkillRefBlock 前置于 text——
+   *  消息库不存全文，组装侧 loadSkill 展开注入（控制端省「拉全文再
+   *  上行」双程流量） */
+  skillRefs?: string[];
   /** 请求级助手覆盖（写进会话当前值，会话记住上次选择） */
   assistantId?: number;
   /** 请求级模型覆盖（写进会话当前值，会话记住上次选择——mirror setSessionModel 同语义） */
@@ -439,11 +443,15 @@ export class ChatRunnerService {
         });
       }
       // 用户消息立即落库（FA-T1 起 images 落 ImageBlock——控制端经
-      // files/uploadImage 上传后的数据根相对路径，回喂走 loadImage 链）
+      // files/uploadImage 上传后的数据根相对路径，回喂走 loadImage 链；
+      // skill_ref 批：引用块前置，组装侧 loadSkill 展开）
       await this.appendMessage({
         sessionId: options.sessionId,
         role: 'user',
         blocks: serializeBlocks([
+          ...(options.skillRefs ?? []).map(
+            (name): MessageBlock => ({ type: 'skill_ref', name }),
+          ),
           { type: 'text', text: options.content },
           ...(options.images?.length ? imageBlocksOf(options.images) : []),
         ]),
@@ -909,6 +917,21 @@ export class ChatRunnerService {
         // 落盘同口径读写闭环；读不到由 core 降级占位）
         loadImage: (imagePath) =>
           readImageAsDataUrl(this.config().dataRoot, imagePath),
+        // skill_ref 块展开（skill_ref 批）：ctx.skills 精确匹配读正文——
+        // 护栏对齐 read_skill 工具口径（256K 截断）；查不到/读失败返回
+        // null 由 core 降级行注入，不阻断流
+        loadSkill: async (name) => {
+          const skill = ctx.skills.find((s) => s.name === name);
+          if (!skill) return null;
+          try {
+            const body = await fs.promises.readFile(skill.bodyPath, 'utf-8');
+            return body.length > 256 * 1024
+              ? `${body.slice(0, 256 * 1024)}…（已截断）`
+              : body;
+          } catch {
+            return null;
+          }
+        },
       });
 
       // 持久化 assistant 消息（中断也保留已生成部分）

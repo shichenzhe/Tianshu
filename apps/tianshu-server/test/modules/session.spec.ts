@@ -579,6 +579,19 @@ describe('SessionController (e2e)', () => {
       }).expect(200);
       expect(empty.body.code).toBe('5000');
 
+      // 混合字段空标题（曾漏拦：title:"  " 与 mode 同交时静默清空标题）
+      const mixed = await post('/session/update', {
+        sessionId: id,
+        title: '   ',
+        mode: 'ask',
+      }).expect(200);
+      expect(mixed.body.code).toBe('5000');
+      const after = (
+        (await post('/session/getById', { id }).expect(200))
+          .body as WrappedBody<{ session: SessionRow }>
+      ).data.session;
+      expect(after.title).toBe('重命名后');
+
       const foreign = await post('/session/update', {
         sessionId: 424242,
         title: 'x',

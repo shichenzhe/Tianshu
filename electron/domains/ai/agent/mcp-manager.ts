@@ -1,6 +1,10 @@
 /**
  * MCP 服务器生命周期管理与工具注册（P2）：
  * 连接 → listTools → 以 `mcp__<server>__<tool>` 前缀注册进 tool-registry。
+ * 工具面预算折叠（2026-11-01，spec
+ * docs/superpowers/specs/2026-11-01-mcp-tool-surface-budget.md）：单 server
+ * 直接工具面超预算时折叠为 list_tools/call_tool 两聚合工具——引擎
+ * （langgraph）工具集静态绑定不支持动态挂载，defer 必须在注册层完成。
  * prisma 与 client 工厂全部依赖注入；SDK 仅在本文件的生产工厂触碰，
  * 传递依赖 Log（→ electron）在单测经 vi.mock 替换（仓库既有模式）。
  */
@@ -8,12 +12,23 @@ import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { estimateTokens } from "@tianshu/core";
 import type { ToolDefinition } from "./file-tools";
 import { registerTools, unregisterTools } from "./tool-registry";
 import { getNetworkGate } from "../../security/network-gate";
 import type { NetworkVerdict } from "../../security/domain-policy";
 import Log from "../../../commons/Log";
 import { errorMessageWithCause } from "../../../commons/error-message-with-cause";
+
+/**
+ * 单 server 工具面注入预算（token，estimateTokens 1token≈2 字符口径，
+ * 与 context-usage toolDefinitionTokens 同源）：超线 server 折叠为
+ * list_tools/call_tool 两聚合工具，直接工具 schema 不再常驻每会话
+ * payload——依据 2026-11-01 实测：22 工具 HTTP MCP ≈12K 字符 ≈6K
+ * token/每轮；4K token 线让小 server 直注体验不变，大 server 改两跳
+ * （专家目录出 system 批同构的渐进披露）
+ */
+export const MCP_TOOL_SURFACE_BUDGET_TOKENS = 4000;
 
 export interface McpServerConfig {
   id: number;
@@ -63,6 +78,8 @@ export interface McpServerStatus {
   name: string;
   state: McpServerState;
   toolCount: number;
+  /** 工具面超预算已折叠（聚合两跳注入；toolCount 仍为元数据工具数） */
+  deferred: boolean;
   error?: string;
 }
 
@@ -76,6 +93,7 @@ interface ServerRecord {
   state: McpServerState;
   client?: McpClientLike;
   toolCount: number;
+  deferred: boolean;
   error?: string;
   /**
    * 连接代际：connect 开始与 setEnabled(false) 各自递增；挂起的 connect 在
@@ -190,6 +208,15 @@ async function closeQuietly(client: McpClientLike): Promise<void> {
   }
 }
 
+/** call_tool 聚合工具参数（zod infer 驱动 execute 的 args 类型） */
+const callToolArgsSchema = z.object({
+  tool: z.string().describe("工具名（来自 list_tools 返回目录）"),
+  arguments: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe("工具参数对象（按 list_tools 返回的参数 Schema 构造）"),
+});
+
 export class McpManager {
   private readonly deps: McpManagerDeps;
   private readonly records = new Map<number, ServerRecord>();
@@ -232,10 +259,17 @@ export class McpManager {
       // const 快照：let 在 map 回调闭包中收窄失效，以窄化后的 const 传入注册
       const connected = client;
       const defs = tools.map((tool) => this.toDefinition(row, connected, tool));
-      registerTools(defs);
+      // 工具面预算折叠：超线不注册直接工具（schema 不常驻每会话），
+      // 改挂 list_tools/call_tool 两聚合工具（spec §1）；线内零行为变化
+      const deferred =
+        estimateTokens(JSON.stringify(defs)) > MCP_TOOL_SURFACE_BUDGET_TOKENS;
+      registerTools(
+        deferred ? this.toAggregateTools(row, connected, tools) : defs,
+      );
       record.client = connected;
       record.state = "connected";
       record.toolCount = defs.length;
+      record.deferred = deferred;
     } catch (e) {
       // 半成品 client（createClient 成功但后续失败）不留活连接
       if (client) {
@@ -248,6 +282,7 @@ export class McpManager {
       record.client = undefined;
       record.state = "error";
       record.toolCount = 0;
+      record.deferred = false;
       record.error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -276,6 +311,7 @@ export class McpManager {
         const client = record.client;
         record.client = undefined;
         record.toolCount = 0;
+        record.deferred = false;
         record.state = client ? "error" : record.state;
         if (client) {
           void closeQuietly(client);
@@ -296,6 +332,7 @@ export class McpManager {
     record.client = undefined;
     record.state = "disabled";
     record.toolCount = 0;
+    record.deferred = false;
     record.error = undefined;
     if (client) {
       await closeQuietly(client);
@@ -308,6 +345,7 @@ export class McpManager {
       name: record.row.name,
       state: record.state,
       toolCount: record.toolCount,
+      deferred: record.deferred,
       error: record.error,
     }));
   }
@@ -315,7 +353,13 @@ export class McpManager {
   private ensureRecord(row: McpServerConfig): ServerRecord {
     let record = this.records.get(row.id);
     if (!record) {
-      record = { row, state: "connecting", toolCount: 0, generation: 0 };
+      record = {
+        row,
+        state: "connecting",
+        toolCount: 0,
+        deferred: false,
+        generation: 0,
+      };
       this.records.set(row.id, record);
     }
     record.row = row;
@@ -335,6 +379,55 @@ export class McpManager {
       kind: tool.annotations?.readOnlyHint === true ? "read" : "write",
       execute: (_ctx, args) => this.callTool(row, client, tool.name, args),
     };
+  }
+
+  /**
+   * 超预算 server 的聚合两跳工具组（spec §1 项 2）：list_tools 返回全工具
+   * 目录（schema 仅在模型查询时进上下文），call_tool 按目录转发——
+   * 专家目录出 system 批同构的渐进披露。call_tool kind 恒 write：
+   * 目标工具只读性运行时未知，保守走审批（readOnlyHint 缺失时直接注册
+   * 本就按 write，语义等价）
+   */
+  private toAggregateTools(
+    row: McpServerConfig,
+    client: McpClientLike,
+    tools: Array<Awaited<ReturnType<McpClientLike["listTools"]>>["tools"][number]>,
+  ): ToolDefinition<z.infer<typeof callToolArgsSchema>>[] {
+    const callName = `${toolPrefix(row.name)}call_tool`;
+    const listing = tools
+      .map(
+        (tool) =>
+          `${tool.name}\n描述: ${tool.description ?? "(无)"}\n参数 Schema: ${JSON.stringify(tool.inputSchema ?? { type: "object" })}`,
+      )
+      .join("\n\n");
+    return [
+      {
+        name: `${toolPrefix(row.name)}list_tools`,
+        description:
+          `查看 MCP 服务 ${row.name} 的 ${tools.length} 个工具清单（含各工具参数` +
+          ` JSON Schema），按需选择后用 ${callName} 调用（该服务工具面较大，` +
+          "已按需展开）",
+        parameters: z.object({}),
+        kind: "read",
+        execute: async () => listing,
+      },
+      {
+        name: callName,
+        description:
+          `调用 MCP 服务 ${row.name} 的工具（tool 取 list_tools 返回的工具名，` +
+          "arguments 按该工具的参数 Schema 构造）",
+        parameters: callToolArgsSchema,
+        kind: "write",
+        execute: (_ctx, args) => {
+          if (!tools.some((tool) => tool.name === args.tool)) {
+            return Promise.resolve(
+              `错误: 工具 ${args.tool} 不在 ${row.name} 目录中，请先调用 list_tools 获取目录`,
+            );
+          }
+          return this.callTool(row, client, args.tool, args.arguments);
+        },
+      },
+    ];
   }
 
   /** 任何抛错（含断连）统一转为错误文案回喂模型，不向 agent-loop 抛出 */

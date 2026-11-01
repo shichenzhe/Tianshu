@@ -10,6 +10,8 @@ export class TianshuConfig {
   automation?: TianshuAutomationConfig;
   // 桌面工具桥配置（TB-T1：桥调用超时可配，E2E/测试缩短用）
   bridge?: TianshuBridgeConfig;
+  // 安全门配置（2026-11-01 审查批：command/file gate 装配值面）
+  security?: TianshuSecurityConfig;
   // relay 客户端配置（E2E-T2：端到端加密模式）
   relay?: TianshuRelayConfig;
   // 是否启用与桌面端的握手
@@ -21,9 +23,37 @@ export class TianshuConfig {
     defaultConfig.chat = TianshuChatConfig.getDefault();
     defaultConfig.automation = TianshuAutomationConfig.getDefault();
     defaultConfig.bridge = TianshuBridgeConfig.getDefault();
+    defaultConfig.security = TianshuSecurityConfig.getDefault();
     defaultConfig.relay = TianshuRelayConfig.getDefault();
     defaultConfig.handshake = true;
     return defaultConfig;
+  }
+}
+
+/**
+ * 安全门配置（config.yml `tianshu.security` 段，2026-11-01 审查批）：
+ * sandboxEnabled=false 时两门旁路回 default（既有审批链）；缺省 true——
+ * 内置敏感路径清单（已自 mirror 逐字移植）此前因 gate 未装配恒 fail-open，
+ * 本段即装配值面。自定义规则与 mirror 安全中心（option 表）不同源——
+ * server 侧以 config.yml 为配置口径（先例 chat/automation 段）
+ */
+export class TianshuSecurityConfig {
+  sandboxEnabled: boolean;
+  programBlacklist: string[];
+  cmdAsk: Array<{ prefix: string[] }>;
+  cmdAllow: Array<{ prefix: string[] }>;
+  fileBlocklist: string[];
+  fileAllowlist: string[];
+
+  static getDefault(): TianshuSecurityConfig {
+    const config = new TianshuSecurityConfig();
+    config.sandboxEnabled = true;
+    config.programBlacklist = [];
+    config.cmdAsk = [];
+    config.cmdAllow = [];
+    config.fileBlocklist = [];
+    config.fileAllowlist = [];
+    return config;
   }
 }
 

@@ -31,6 +31,7 @@ import { loadPersonalization } from "../personalization/personalization.repo";
 import { aiMessageContentToText } from "./ai-content";
 import { createLangChainAgentRunner } from "./agent-runner";
 import { parseBlocks, serializeBlocks, type ImageBlock } from "./blocks";
+import type { SkillRefBlock } from "@tianshu/protocol";
 import {
   DEFAULT_CONTEXT_WINDOW,
   mergeParams,
@@ -1510,15 +1511,25 @@ export default class ChatService {
       if (targetIdx === -1) {
         throw new Error("MESSAGE_NOT_FOUND");
       }
-      // 编辑只改文本：原 image 块（多模态输入）随行保留，与 send 落库
-      // 结构 [text, ...images] 对齐；thinking/usage 等畸形块随重写丢弃
-      const keptImages = parseBlocks(rows[targetIdx].blocks).filter(
+      // 编辑只改文本：原 skill_ref（⚡技能引用）与 image 块（多模态输入）
+      // 随行保留，与 send 落库结构 [skill_ref…, text, ...images] 对齐
+      // （2026-11-01 审查快修：此前 skill_ref 被静默丢弃，编辑后续轮
+      // 不再展开技能正文）；thinking/usage 等畸形块随重写丢弃
+      const keptBlocks = parseBlocks(rows[targetIdx].blocks).filter(
+        (block): block is SkillRefBlock | ImageBlock =>
+          block.type === "skill_ref" || block.type === "image",
+      );
+      const keptSkillRefs = keptBlocks.filter(
+        (block): block is SkillRefBlock => block.type === "skill_ref",
+      );
+      const keptImages = keptBlocks.filter(
         (block): block is ImageBlock => block.type === "image",
       );
       await prisma.message.update({
         where: { id: messageId },
         data: {
           blocks: serializeBlocks([
+            ...keptSkillRefs,
             { type: "text", text: content },
             ...keptImages,
           ]),

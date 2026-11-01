@@ -100,8 +100,12 @@ export default class AutomationScheduler {
     if (disabledTools) {
       this.disabledTools = disabledTools;
     }
-    // 崩溃残留:running 的 run 全部置 failed(interrupted)(spec §7)
-    void this.recoverInterruptedRuns();
+    // 崩溃残留:running 的 run 全部置 failed(interrupted)(spec §7)。
+    // catch 兜底（2026-11-01 审查快修，server 同款）：启动期 DB 抖动时
+    // 不产生 unhandled rejection
+    void this.recoverInterruptedRuns().catch((e) =>
+      Log.error("启动中断恢复失败:", e),
+    );
     // 执行历史保留裁剪：启动即裁一次（option 配置实时读，改配置无需重启）
     void maybeTrimAutomationRuns(prisma);
     this.timer = setInterval(() => {

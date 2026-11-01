@@ -98,19 +98,17 @@ function toolsOf(deps: ReturnType<typeof makeDeps>) {
   });
 }
 
-describe('工作流六件（F1）', () => {
-  it('六件齐备且命名与 mirror 静态注册名一一对应', () => {
+describe('工作流四件（F1 六件坍缩对齐 mirror，2026-11-01 审查批）', () => {
+  it('四件齐备且命名与 mirror 静态注册名一一对应', () => {
     const tools = toolsOf(makeDeps());
     expect(tools.map((tool) => tool.name)).toEqual([
-      'create_workflow',
-      'list_workflows',
-      'get_workflow',
-      'update_workflow',
+      'workflow_write',
+      'workflow_read',
       'run_workflow',
       'get_workflow_run',
     ]);
     expect(tools.find((t) => t.name === 'run_workflow')?.kind).toBe('write');
-    expect(tools.find((t) => t.name === 'list_workflows')?.kind).toBe('read');
+    expect(tools.find((t) => t.name === 'workflow_read')?.kind).toBe('read');
   });
 
   it('run_workflow：typed 归一（number 保型+default 填充+未声明键丢弃）经 runGraph 闭包返 runId', async () => {
@@ -147,7 +145,7 @@ describe('工作流六件（F1）', () => {
 
   it('E1 字段级回喂：缺 sql 定位到节点与字段并给期望形态（core union 展开共享）', async () => {
     const deps = makeDeps();
-    const create = toolsOf(deps).find((t) => t.name === 'create_workflow')!;
+    const create = toolsOf(deps).find((t) => t.name === 'workflow_write')!;
     const result = await create.execute(CTX, {
       name: 'bad',
       graphJson: {
@@ -176,7 +174,7 @@ describe('工作流六件（F1）', () => {
 
   it('create：E3 软提示（description/输入变量 description）；成功入集 userId 隔离', async () => {
     const deps = makeDeps();
-    const create = toolsOf(deps).find((t) => t.name === 'create_workflow')!;
+    const create = toolsOf(deps).find((t) => t.name === 'workflow_write')!;
     const result = await create.execute(CTX, {
       name: '新图',
       graphJson: TYPED_GRAPH,
@@ -189,12 +187,12 @@ describe('工作流六件（F1）', () => {
     });
     // create 描述含 E2 cookbook（照猫画虎引导）
     expect(create.description).toContain('【照猫画虎】');
-    expect(create.description).toContain('get_workflow');
+    expect(create.description).toContain('workflow_read');
   });
 
   it('list：行附 typed 输入摘要（enum 值域+缺省）', async () => {
     const deps = makeDeps();
-    const list = toolsOf(deps).find((t) => t.name === 'list_workflows')!;
+    const list = toolsOf(deps).find((t) => t.name === 'workflow_read')!;
     const result = await list.execute(CTX, {});
     expect(result).toContain('id=1 记账·记一笔');
     expect(result).toContain('amount:number(必填)');

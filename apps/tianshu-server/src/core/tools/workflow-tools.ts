@@ -18,12 +18,12 @@ import {
   parseInputSchema,
 } from '@tianshu/core';
 
-/** 六件名（与 mirror 静态注册名一一对应；改名断回喂，mirror 裁定同源） */
+/** 四件名（2026-11-01 审查批对齐 mirror 2026-10-29 六件坍缩：write/read
+ * 二合一，run 双件未改名）；老名（create/update/list/get_workflow）经
+ * @tianshu/core tool-alias 归一路由，历史回喂透明，DB 不迁移 */
 export const WORKFLOW_TOOL_NAMES = [
-  'create_workflow',
-  'list_workflows',
-  'get_workflow',
-  'update_workflow',
+  'workflow_write',
+  'workflow_read',
   'run_workflow',
   'get_workflow_run',
 ] as const;
@@ -107,8 +107,7 @@ export function makeWorkflowTools(deps: {
   prisma: WorkflowPrismaLike;
   runGraph: RunGraphFn;
 }): ToolDefinition[] {
-  const userIdOf = (ctx: ToolContext): number =>
-    ctx.userId ?? FALLBACK_USER_ID;
+  const userIdOf = (ctx: ToolContext): number => ctx.userId ?? FALLBACK_USER_ID;
 
   /** ============ E1 字段级回喂（桌面单份精简复刻，文案同源） ============ */
 
@@ -142,7 +141,7 @@ export function makeWorkflowTools(deps: {
     params: '字符串数组，如 ["{{input.amount}}","{{input.category}}"]',
     variables: '字符串数组（变量名清单，如 ["amount","category"]）',
     url: '完整 URL（支持 {{}} 占位）',
-    graphId: '子工作流的真实 id（正整数，可用 list_workflows 查）',
+    graphId: '子工作流的真实 id（正整数，可用 workflow_read 无参清单查）',
     inputs: '键值数组 [{key, value}]，value 支持 {{}} 占位',
     timeoutMs: '毫秒数（整数，按各节点上限）',
     maxRows: '正整数（行数上限）',
@@ -157,9 +156,10 @@ export function makeWorkflowTools(deps: {
     if (message === 'Required') {
       return '缺少必填字段';
     }
-    const enumMatch = /^Invalid enum value(?:\(s\))?\.\s*Expected (.+?)(?:,|$|\.)/.exec(
-      message,
-    );
+    const enumMatch =
+      /^Invalid enum value(?:\(s\))?\.\s*Expected (.+?)(?:,|$|\.)/.exec(
+        message,
+      );
     if (enumMatch) {
       return `取值必须是 ${enumMatch[1]} 之一`;
     }
@@ -172,9 +172,8 @@ export function makeWorkflowTools(deps: {
     if (/String must contain at least 1 character/.test(message)) {
       return '不能为空串';
     }
-    const missingMatch = /^Invalid input: expected (.+?), received undefined$/.exec(
-      message,
-    );
+    const missingMatch =
+      /^Invalid input: expected (.+?), received undefined$/.exec(message);
     if (missingMatch) {
       return `缺少必填字段（应为 ${missingMatch[1]}）`;
     }
@@ -236,8 +235,7 @@ export function makeWorkflowTools(deps: {
     try {
       const fields = parseInputSchema(
         (JSON.parse(graphJson) as { inputSchema?: unknown }).inputSchema as
-          | Record<string, unknown>
-          | undefined,
+          Record<string, unknown> | undefined,
       );
       if (fields.length === 0) {
         return null;
@@ -290,152 +288,86 @@ export function makeWorkflowTools(deps: {
     return { ok: true, inputs: result.inputs };
   }
 
-  const createSchema = z.object({
-    name: z.string().min(1).max(100).describe('工作流名称（同名会冲突）'),
-    description: z.string().max(500).optional().describe('一句话用途说明'),
-    graphJson: z
-      .object({})
-      .passthrough()
-      .describe('图定义对象（节点与连线规范见工具描述速查）'),
-  });
-
-  const create: ToolDefinition<z.infer<typeof createSchema>> = {
-    name: 'create_workflow',
-    description: `创建并保存新工作流（校验失败按节点/字段返回可自纠问题清单）；写操作需批准。\n${WORKFLOW_NODE_COOKBOOK}`,
-    parameters: createSchema,
-    kind: 'write',
-    execute: async (ctx, args) => {
-      const userId = userIdOf(ctx);
-      const result = validateGraph(args.graphJson);
-      if (!result.ok) {
-        return `校验未通过（问题按「节点/字段/原因/期望」逐条列出），请修正 graphJson 后重试：\n${formatGraphIssues(result.issues)}`;
-      }
-      try {
-        const row = await deps.prisma.graphDefinition.create({
-          data: {
-            name: args.name,
-            description: args.description ?? null,
-            graphJson: JSON.stringify(normalizeGraph(result.value)),
-            userId,
-          },
-        });
-        // E3 软提示（精简复刻）：list 路由依据是名称+描述+类型摘要
-        const hints: string[] = [];
-        if (!args.description || args.description.trim() === '') {
-          hints.push(
-            '提示：未写 description——list_workflows 按名称+描述路由选图，建议 update_workflow 补一句用途说明',
-          );
-        }
-        const missing = parseInputSchema(result.value.inputSchema)
-          .filter((field) => !field.description)
-          .map((field) => field.key);
-        if (missing.length > 0) {
-          hints.push(
-            `提示：输入变量 [${missing.join('、')}] 未写 description，建议补写（类型摘要行含描述更利填参）`,
-          );
-        }
-        return `成功: 工作流「${row.name}」已创建（id=${row.id}）${hints.length ? `\n${hints.join('\n')}` : ''}`;
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (message.includes('UNIQUE')) {
-          return `错误: 工作流「${args.name}」已存在，请换个名称`;
-        }
-        return `错误: 创建失败 ${message}`;
-      }
-    },
-  };
-
-  const list: ToolDefinition<Record<string, never>> = {
-    name: 'list_workflows',
-    description:
-      '列出已保存工作流（含输入参数类型说明）；子图引用须用真实 id',
-    parameters: z.object({}).describe('无参数'),
-    kind: 'read',
-    execute: async (ctx) => {
-      const rows = await deps.prisma.graphDefinition.findMany({
-        where: { userId: userIdOf(ctx) },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (rows.length === 0) {
-        return '暂无已保存的工作流';
-      }
-      return rows
-        .map((row) => {
-          const summary = inputSummaryOf(row.graphJson);
-          return `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ''}${summary ? ` · 输入: ${summary}` : ''}`;
-        })
-        .join('\n');
-    },
-  };
-
-  const getSchema = z.object({
-    id: z.number().int().positive().optional().describe('工作流 id（与 name 二选一）'),
-    name: z.string().min(1).optional().describe('工作流名称（与 id 二选一）'),
-  });
-
-  async function findGraph(
-    ctx: ToolContext,
-    args: z.infer<typeof getSchema>,
-  ): Promise<GraphRowLike | null | 'MISSING_ARGS'> {
-    const userId = userIdOf(ctx);
-    if (args.id !== undefined) {
-      return deps.prisma.graphDefinition.findFirst({
-        where: { id: args.id, userId },
-      });
-    }
-    if (args.name !== undefined) {
-      const rows = await deps.prisma.graphDefinition.findMany({
-        where: { userId },
-      });
-      const hit = rows.find((row) => row.name === args.name);
-      return hit ?? null;
-    }
-    return 'MISSING_ARGS';
-  }
-
-  const get: ToolDefinition<z.infer<typeof getSchema>> = {
-    name: 'get_workflow',
-    description: '读取工作流完整定义；修改前必先调用取 version（乐观锁）',
-    parameters: getSchema,
-    kind: 'read',
-    execute: async (ctx, args) => {
-      const row = await findGraph(ctx, args);
-      if (row === 'MISSING_ARGS') {
-        return '错误: id 与 name 至少提供一个';
-      }
-      if (!row) {
-        return '错误: 工作流不存在（可先用 list_workflows 核对 id）';
-      }
-      return [
-        `id=${row.id} version=${row.version}`,
-        `name=${row.name}`,
-        row.description ? `description=${row.description}` : '',
-        'graphJson:',
-        row.graphJson,
-      ]
-        .filter(Boolean)
-        .join('\n');
-    },
-  };
-
-  const updateSchema = z.object({
-    id: z.number().int().positive().describe('目标工作流 id'),
+  const writeSchema = z.object({
+    id: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('目标工作流 id（修改必填；省略=新建）'),
     version: z
       .number()
       .int()
       .positive()
-      .describe('当前版本号（先 get_workflow 获取；不符会冲突）'),
-    name: z.string().min(1).max(100).optional(),
-    description: z.string().max(500).optional(),
-    graphJson: z.object({}).passthrough().optional().describe('新图定义'),
+      .optional()
+      .describe('当前版本号（修改必填，先 workflow_read 获取；不符会冲突）'),
+    name: z
+      .string()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe('工作流名称（新建必填；同名会冲突）'),
+    description: z.string().max(500).optional().describe('一句话用途说明'),
+    graphJson: z
+      .object({})
+      .passthrough()
+      .optional()
+      .describe('图定义对象（新建必填；节点与连线规范见工具描述速查）'),
   });
 
-  const update: ToolDefinition<z.infer<typeof updateSchema>> = {
-    name: 'update_workflow',
-    description: `修改工作流（须带 get_workflow 的 version；校验失败按节点/字段返回可自纠问题清单）；写操作需批准。\n${WORKFLOW_NODE_COOKBOOK}`,
-    parameters: updateSchema,
+  const write: ToolDefinition<z.infer<typeof writeSchema>> = {
+    name: 'workflow_write',
+    description: `新建或修改工作流（无 id=新建，name+graphJson 必填；id+version=修改，先 workflow_read 取 version；校验失败按节点/字段返回可自纠问题清单）；写操作需批准。\n${WORKFLOW_NODE_COOKBOOK}`,
+    parameters: writeSchema,
     kind: 'write',
     execute: async (ctx, args) => {
+      // ---- 新建分支（无 id；与原 create_workflow 参数兼容）----
+      if (args.id === undefined) {
+        if (args.name === undefined || args.graphJson === undefined) {
+          return '错误: 新建须提供 name 与 graphJson（修改已有图请带 id+version）';
+        }
+        const userId = userIdOf(ctx);
+        const result = validateGraph(args.graphJson);
+        if (!result.ok) {
+          return `校验未通过（问题按「节点/字段/原因/期望」逐条列出），请修正 graphJson 后重试：\n${formatGraphIssues(result.issues)}`;
+        }
+        try {
+          const row = await deps.prisma.graphDefinition.create({
+            data: {
+              name: args.name,
+              description: args.description ?? null,
+              graphJson: JSON.stringify(normalizeGraph(result.value)),
+              userId,
+            },
+          });
+          // E3 软提示（精简复刻）：read 路由依据是名称+描述+类型摘要
+          const hints: string[] = [];
+          if (!args.description || args.description.trim() === '') {
+            hints.push(
+              '提示：未写 description——workflow_read 按名称+描述路由选图，建议补一句用途说明',
+            );
+          }
+          const missing = parseInputSchema(result.value.inputSchema)
+            .filter((field) => !field.description)
+            .map((field) => field.key);
+          if (missing.length > 0) {
+            hints.push(
+              `提示：输入变量 [${missing.join('、')}] 未写 description，建议补写（类型摘要行含描述更利填参）`,
+            );
+          }
+          return `成功: 工作流「${row.name}」已创建（id=${row.id}）${hints.length ? `\n${hints.join('\n')}` : ''}`;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          if (message.includes('UNIQUE')) {
+            return `错误: 工作流「${args.name}」已存在，请换个名称`;
+          }
+          return `错误: 创建失败 ${message}`;
+        }
+      }
+      // ---- 修改分支（id+version；与原 update_workflow 参数兼容）----
+      if (args.version === undefined) {
+        return '错误: 修改须提供 version（先 workflow_read 获取当前版本）';
+      }
       const userId = userIdOf(ctx);
       let serialized: string | undefined;
       let hints: string[] = [];
@@ -446,7 +378,9 @@ export function makeWorkflowTools(deps: {
         }
         serialized = JSON.stringify(normalizeGraph(result.value));
         if (!args.description) {
-          hints.push('提示：未写 description——建议补一句用途说明（list 路由依据）');
+          hints.push(
+            '提示：未写 description——建议补一句用途说明（read 路由依据）',
+          );
         }
         const missing = parseInputSchema(result.value.inputSchema)
           .filter((field) => !field.description)
@@ -471,10 +405,83 @@ export function makeWorkflowTools(deps: {
           where: { id: args.id, userId },
         });
         return exists
-          ? `错误: 版本冲突（当前 version=${exists.version}），请重新 get_workflow 后再更新`
-          : '错误: 工作流不存在（可先用 list_workflows 核对 id）';
+          ? `错误: 版本冲突（当前 version=${exists.version}），请重新 workflow_read 后再更新`
+          : '错误: 工作流不存在（可先用 workflow_read 核对 id）';
       }
       return `成功: 工作流 id=${args.id} 已更新（新 version=${args.version + 1}）${hints.length ? `\n${hints.join('\n')}` : ''}`;
+    },
+  };
+
+  const readSchema = z.object({
+    id: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('工作流 id（与 name 二选一；省略=已保存清单）'),
+    name: z.string().min(1).optional().describe('工作流名称（与 id 二选一）'),
+  });
+
+  async function findGraph(
+    ctx: ToolContext,
+    args: Pick<z.infer<typeof readSchema>, 'id' | 'name'>,
+  ): Promise<GraphRowLike | null | 'MISSING_ARGS'> {
+    const userId = userIdOf(ctx);
+    if (args.id !== undefined) {
+      return deps.prisma.graphDefinition.findFirst({
+        where: { id: args.id, userId },
+      });
+    }
+    if (args.name !== undefined) {
+      const rows = await deps.prisma.graphDefinition.findMany({
+        where: { userId },
+      });
+      const hit = rows.find((row) => row.name === args.name);
+      return hit ?? null;
+    }
+    return 'MISSING_ARGS';
+  }
+
+  const read: ToolDefinition<z.infer<typeof readSchema>> = {
+    name: 'workflow_read',
+    description:
+      '读取工作流：无参=已保存清单（id/名称/说明/输入类型摘要，子图引用须用真实 id）；带 id 或 name=完整定义（修改前必先调用取 version——乐观锁）',
+    parameters: readSchema,
+    kind: 'read',
+    execute: async (ctx, args) => {
+      // ---- 清单分支（无参；与原 list_workflows 兼容）----
+      if (args.id === undefined && args.name === undefined) {
+        const rows = await deps.prisma.graphDefinition.findMany({
+          where: { userId: userIdOf(ctx) },
+          orderBy: { createdAt: 'desc' },
+        });
+        if (rows.length === 0) {
+          return '暂无已保存的工作流';
+        }
+        return rows
+          .map((row) => {
+            const summary = inputSummaryOf(row.graphJson);
+            return `id=${row.id} ${row.name}${row.description ? ` — ${row.description}` : ''}${summary ? ` · 输入: ${summary}` : ''}`;
+          })
+          .join('\n');
+      }
+      // ---- 单图分支（与原 get_workflow 兼容）----
+      const row = await findGraph(ctx, args);
+      if (row === 'MISSING_ARGS') {
+        return '错误: id 与 name 至少提供一个';
+      }
+      if (!row) {
+        return '错误: 工作流不存在（可先用 workflow_read 无参清单核对 id）';
+      }
+      return [
+        `id=${row.id} version=${row.version}`,
+        `name=${row.name}`,
+        row.description ? `description=${row.description}` : '',
+        'graphJson:',
+        row.graphJson,
+      ]
+        .filter(Boolean)
+        .join('\n');
     },
   };
 
@@ -484,14 +491,14 @@ export function makeWorkflowTools(deps: {
       .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
       .optional()
       .describe(
-        '输入变量（键与类型以 list_workflows 的输入说明为准；number 直传、enum 限值域、date 为 yyyy-MM-dd）',
+        '输入变量（键与类型以 workflow_read 各工作流的输入说明为准；number 直传、enum 限值域、date 为 yyyy-MM-dd）',
       ),
   });
 
   const run: ToolDefinition<z.infer<typeof runSchema>> = {
     name: 'run_workflow',
     description:
-      '异步试运行工作流（真实执行，受理即返 runId）；inputs 键与类型以 list_workflows 各工作流的「输入」说明为准；写操作需批准',
+      '异步试运行工作流（真实执行，受理即返 runId）；inputs 键与类型以 workflow_read 各工作流的「输入」说明为准；写操作需批准',
     parameters: runSchema,
     kind: 'write',
     execute: async (ctx, args) => {
@@ -500,9 +507,12 @@ export function makeWorkflowTools(deps: {
         where: { id: args.id, userId },
       });
       if (!row) {
-        return '错误: 工作流不存在（可先用 list_workflows 核对 id）';
+        return '错误: 工作流不存在（可先用 workflow_read 无参清单核对 id）';
       }
-      const normalized = normalizeInputsForGraph(row.graphJson, args.inputs ?? {});
+      const normalized = normalizeInputsForGraph(
+        row.graphJson,
+        args.inputs ?? {},
+      );
       if (!normalized.ok) {
         return normalized.error;
       }
@@ -544,7 +554,7 @@ export function makeWorkflowTools(deps: {
         where: { id: args.id, userId },
       });
       if (!graph) {
-        return '错误: 工作流不存在（可先用 list_workflows 核对 id）';
+        return '错误: 工作流不存在（可先用 workflow_read 无参清单核对 id）';
       }
       const run = await deps.prisma.automationRun.findFirst({
         where: { graphId: args.id },
@@ -584,9 +594,7 @@ export function makeWorkflowTools(deps: {
     },
   };
 
-  function lastSuccessNodeId(
-    graphTrace: string | null,
-  ): string | undefined {
+  function lastSuccessNodeId(graphTrace: string | null): string | undefined {
     if (!graphTrace) {
       return undefined;
     }
@@ -595,16 +603,16 @@ export function makeWorkflowTools(deps: {
         id?: string;
         status?: string;
       }>;
-      const hit = [...entries].reverse().find((entry) => entry.status === 'success');
+      const hit = [...entries]
+        .reverse()
+        .find((entry) => entry.status === 'success');
       return typeof hit?.id === 'string' ? hit.id : undefined;
     } catch {
       return undefined;
     }
   }
 
-  function lastSuccessPreview(
-    graphTrace: string | null,
-  ): string | null {
+  function lastSuccessPreview(graphTrace: string | null): string | null {
     if (!graphTrace) {
       return null;
     }
@@ -613,14 +621,16 @@ export function makeWorkflowTools(deps: {
         status?: string;
         outputPreview?: string;
       }>;
-      const hit = [...entries].reverse().find((entry) => entry.status === 'success');
+      const hit = [...entries]
+        .reverse()
+        .find((entry) => entry.status === 'success');
       return hit?.outputPreview ?? null;
     } catch {
       return null;
     }
   }
 
-  return [create, list, get, update, run, getRun];
+  return [write, read, run, getRun];
 }
 
 /** ============ E2 cookbook（桌面 graph-cookbook.ts 同源复刻） ============ */
@@ -640,4 +650,4 @@ export const WORKFLOW_NODE_COOKBOOK = `【节点速查】输入输出均为文�
 
 【输入声明】inputSchema 支持对象形态 {type:"string"|"number"|"boolean"|"enum"|"date", required?, default?, enumValues?(enum 必填), description?}——number 参数原生传库免 CAST，enum 收口值域，date 归一 yyyy-MM-dd（default "today"=执行日）
 
-【照猫画虎】动手前先 get_workflow 看同类图（id 可 list_workflows 查，如「记账」三件是 database+merge 范式的现成样板）`;
+【照猫画虎】动手前先 workflow_read 看同类图（id 可无参清单查，如「记账」三件是 database+merge 范式的现成样板）`;

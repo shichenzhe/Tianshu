@@ -59,6 +59,8 @@ export interface McpServerStatus {
   name: string;
   state: McpServerState;
   toolCount: number;
+  /** 工具面超预算已折叠（聚合两跳注入；UI 暂不消费，2026-11-01 批） */
+  deferred: boolean;
   error?: string;
 }
 

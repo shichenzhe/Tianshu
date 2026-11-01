@@ -104,6 +104,7 @@ describe("McpManager.connect", () => {
         name: "srv",
         state: "connected",
         toolCount: 2,
+        deferred: false,
         error: undefined,
       },
     ]);
@@ -173,6 +174,7 @@ describe("McpManager.startupConnectAll", () => {
         name: "srv",
         state: "error",
         toolCount: 0,
+        deferred: false,
         error: "spawn failed",
       },
       {
@@ -180,6 +182,7 @@ describe("McpManager.startupConnectAll", () => {
         name: "srv2",
         state: "connected",
         toolCount: 1,
+        deferred: false,
         error: undefined,
       },
     ]);
@@ -198,7 +201,14 @@ describe("McpManager.setEnabled", () => {
     expect(mcpDefs()).toEqual([]);
     expect(closeCount()).toBe(1);
     expect(manager.getStatuses()).toEqual([
-      { id: 1, name: "srv", state: "disabled", toolCount: 0, error: undefined },
+      {
+        id: 1,
+        name: "srv",
+        state: "disabled",
+        toolCount: 0,
+        deferred: false,
+        error: undefined,
+      },
     ]);
   });
 
@@ -347,6 +357,7 @@ describe("McpManager 连接竞态守卫与旧连接释放", () => {
       name: "srv",
       state: "disabled",
       toolCount: 0,
+      deferred: false,
       error: undefined,
     });
     expect(late.closeCount()).toBe(1);
@@ -427,6 +438,156 @@ describe("McpManager 连接竞态守卫与旧连接释放", () => {
       toolCount: 1,
     });
     expect(mcpDefs().map((d) => d.name)).toEqual(["mcp__srv__t2"]);
+  });
+});
+
+describe("McpManager 工具面预算折叠（spec 2026-11-01-mcp-tool-surface-budget）", () => {
+  /** 超线工具集：3 工具 × 3000 字符描述 ≈ 9K+ 字符面 > 4000 token 线 */
+  const bigTools = () => [
+    {
+      name: "big_a",
+      description: "A".repeat(3000),
+      inputSchema: { type: "object", properties: { q: { type: "string" } } },
+    },
+    { name: "big_b", description: "B".repeat(3000) },
+    {
+      name: "big_c",
+      description: "C".repeat(3000),
+      annotations: { readOnlyHint: true },
+    },
+  ];
+
+  it("超线折叠：直接工具不注册，聚合两工具在场，deferred=true 且 toolCount 保持元数据数", async () => {
+    const { client } = fakeClient(bigTools());
+    const { manager } = makeManager([client]);
+
+    await manager.connect(server);
+
+    const defs = mcpDefs();
+    expect(defs.map((d) => d.name)).toEqual([
+      "mcp__srv__list_tools",
+      "mcp__srv__call_tool",
+    ]);
+    expect(manager.getStatuses()[0]).toMatchObject({
+      state: "connected",
+      toolCount: 3,
+      deferred: true,
+    });
+  });
+
+  it("线内零行为变化：小工具集直接注册且 deferred=false", async () => {
+    const { client } = fakeClient([
+      { name: "small", description: "小工具", inputSchema: { type: "object" } },
+    ]);
+    const { manager } = makeManager([client]);
+
+    await manager.connect(server);
+
+    expect(mcpDefs().map((d) => d.name)).toEqual(["mcp__srv__small"]);
+    expect(manager.getStatuses()[0].deferred).toBe(false);
+  });
+
+  it("聚合工具 kind：list_tools=read（免审批）、call_tool=write（保守走审批）", async () => {
+    const { client } = fakeClient(bigTools());
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    expect(registry.find("mcp__srv__list_tools")!.kind).toBe("read");
+    expect(registry.find("mcp__srv__call_tool")!.kind).toBe("write");
+  });
+
+  it("list_tools execute：返回全工具目录（名/描述/schema）", async () => {
+    const { client } = fakeClient(bigTools());
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    const out = await registry.find("mcp__srv__list_tools")!.execute(ctx(), {});
+    expect(out).toContain("big_a");
+    expect(out).toContain("描述: A");
+    expect(out).toContain("参数 Schema:");
+    expect(out).toContain('"properties"');
+    // 3 个工具各占一段
+    expect(out.split("\n\n")).toHaveLength(3);
+  });
+
+  it("call_tool execute：合法工具名转发 callTool 且参数透传", async () => {
+    const { client } = fakeClient(bigTools());
+    const calls: Array<{ name: string; arguments?: unknown }> = [];
+    client.callTool = async (args) => {
+      calls.push(args);
+      return { content: [{ type: "text", text: "done" }] };
+    };
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    const out = await registry
+      .find("mcp__srv__call_tool")!
+      .execute(ctx(), { tool: "big_a", arguments: { q: "x" } });
+    expect(out).toBe("done");
+    expect(calls).toEqual([{ name: "big_a", arguments: { q: "x" } }]);
+  });
+
+  it("call_tool execute：未知工具名（幻觉防护）错误文案回指 list_tools", async () => {
+    const { client } = fakeClient(bigTools());
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    const out = await registry
+      .find("mcp__srv__call_tool")!
+      .execute(ctx(), { tool: "made_up" });
+    expect(out).toContain("错误");
+    expect(out).toContain("list_tools");
+  });
+
+  it("call_tool execute：转发断连错误统一回喂（callTool 错误处理复用）", async () => {
+    const { client } = fakeClient(bigTools(), { throwOnCall: true });
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    const out = await registry
+      .find("mcp__srv__call_tool")!
+      .execute(ctx(), { tool: "big_a" });
+    expect(out).toBe("错误: MCP 服务不可用（srv）：connection closed");
+  });
+
+  it("超线 server 重连：聚合工具随新目录更新（旧前缀注销语义不变）", async () => {
+    const first = fakeClient(bigTools());
+    // 新目录同样超线（3 工具 × 3000 字符），保持折叠态
+    const second = fakeClient([
+      { name: "new_a", description: "N".repeat(3000) },
+      { name: "new_b", description: "M".repeat(3000) },
+      { name: "new_c", description: "K".repeat(3000) },
+    ]);
+    const { manager } = makeManager([first.client, second.client]);
+    await manager.connect(server);
+
+    await manager.reconnect(server);
+
+    const names = mcpDefs().map((d) => d.name);
+    expect(names).toEqual(["mcp__srv__list_tools", "mcp__srv__call_tool"]);
+    const listing = await registry
+      .find("mcp__srv__list_tools")!
+      .execute(ctx(), {});
+    expect(listing).toContain("new_a");
+    expect(listing).not.toContain("big_a");
+    expect(manager.getStatuses()[0]).toMatchObject({
+      toolCount: 3,
+      deferred: true,
+    });
+  });
+
+  it("超线 server 停用：聚合工具注销且 deferred 归位 false", async () => {
+    const { client } = fakeClient(bigTools());
+    const { manager } = makeManager([client]);
+    await manager.connect(server);
+
+    await manager.setEnabled(server, false);
+
+    expect(mcpDefs()).toEqual([]);
+    expect(manager.getStatuses()[0]).toMatchObject({
+      state: "disabled",
+      deferred: false,
+    });
   });
 });
 

@@ -2,6 +2,7 @@ import request from 'supertest';
 import * as http from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { WorkspaceModule } from 'src/modules/workspace/workspace.module';
+import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { createTestDb, TestDb } from '../support/test-db';
 import { createTestApp, WrappedBody } from '../support/test-app';
 
@@ -117,6 +118,36 @@ describe('WorkspaceController (e2e)', () => {
     ).body as WrappedBody<null>;
     expect(duplicate.success).toBe(false);
     expect(duplicate.message).toBe('WORKSPACE_NAME_DUPLICATE');
+  });
+
+  it('批③（2026-11-01）：写面 create/update/delete 成功后发 workspace.changed 刷新信号（失败不发）', async () => {
+    const bus = app.get(EventBusService);
+    const events: string[] = [];
+    const unsubscribe = bus.subscribe((e) => events.push(e.type));
+
+    // create：成功发一枚；name 空拒（失败路径）不发
+    await post('/workspace/create', { name: '事件空间' }).expect(200);
+    await post('/workspace/create', { name: '' }).expect(200);
+    expect(events).toEqual(['workspace.changed']);
+
+    // update：命中发；他人空间（不存在 id）拒不发
+    const row = await db.prisma.workspace.findFirst({
+      where: { name: '事件空间' },
+    });
+    events.length = 0;
+    await post('/workspace/update', {
+      id: row!.id,
+      name: '事件空间改名',
+    }).expect(200);
+    await post('/workspace/update', { id: 99999, name: 'x' }).expect(200);
+    expect(events).toEqual(['workspace.changed']);
+
+    // delete：成功发一枚
+    events.length = 0;
+    await post('/workspace/delete', { id: row!.id }).expect(200);
+    expect(events).toEqual(['workspace.changed']);
+
+    unsubscribe();
   });
 
   it('POST /workspace/update：改名/图标/默认模型；他人空间报 WORKSPACE_NOT_FOUND；name 空拒', async () => {

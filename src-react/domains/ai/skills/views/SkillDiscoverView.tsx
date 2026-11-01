@@ -80,7 +80,9 @@ export default function SkillDiscoverView({
       });
       const workspaceId = workspaces[0]?.id;
       if (workspaceId === undefined) {
-        toast.info(t("chat:skills.comingSoon"));
+        // 真实原因是本地无工作空间（创建流程取首个空间开引导会话）——
+        // 提示语引导建空间，不说「即将上线」误导功能未开放
+        toast.info(t("chat:skills.createNeedWorkspace"));
         return;
       }
       const created = await SessionApi.create({ workspaceId });

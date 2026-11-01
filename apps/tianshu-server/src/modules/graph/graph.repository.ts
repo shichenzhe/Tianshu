@@ -24,7 +24,7 @@
 // 其余逻辑逐段保持 mirror 原样。
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AutomationRun, GraphDefinition } from '@prisma/client';
-import { validateGraph } from '@tianshu/core';
+import { normalizeGraph, validateGraph } from '@tianshu/core';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { containsFilter } from 'src/commons/database/db-url';
 import { QueryResult } from 'src/commons/query/query-result';
@@ -104,7 +104,8 @@ export interface GraphPageParams {
 
 /** graphJson 字符串 → 校验并规范化序列（先例 buildTaskData 的 eventJson：
  * 非法 JSON/结构不合保存期即拒，错误码即校验 issues；zod 默认值随
- * 规范化落库） */
+ * 规范化落库）。校验通过后 normalizeGraph 归一补齐（2026-11-01 审查批
+ * 补齐，mirror 同款）：start 节点缺失与末节点断头在保存统一口自愈 */
 function parseGraphJson(graphJson: string): string {
   let parsed: unknown;
   try {
@@ -124,7 +125,7 @@ function parseGraphJson(graphJson: string): string {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     throw new Error(validated.issues.map((issue) => issue.code).join('; '));
   }
-  return JSON.stringify(validated.value);
+  return JSON.stringify(normalizeGraph(validated.value));
 }
 
 /** run 行写入原语入参（mirror createRunRow 消费字段的具名收口） */

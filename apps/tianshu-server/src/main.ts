@@ -15,7 +15,7 @@ import { instanceId } from './modules/info/info.controller';
 import {
   resolveRelayLaunch,
   startHeadlessRelay,
-  stopRelayAndExit,
+  stopHeadlessRelay,
 } from './relay/relay-client';
 import { TianshuConfig } from './commons/config/tianshu-config.entity';
 import { AppConfig } from './commons/config/app-config.entity';
@@ -25,6 +25,7 @@ import {
   emitListenSecurityWarnings,
   resolveListenHostname,
 } from './commons/web/listen-host';
+import { shutdownAndExit } from './commons/web/shutdown';
 import compression from 'compression';
 
 async function bootstrap() {
@@ -124,11 +125,10 @@ async function bootstrap() {
         console.error('[relay-client] 启动失败（HTTP 面不受影响）:', error);
       },
     );
-    // 信号收口：停 relay → app.close() → 进程退出（只停 relay 的话 fastify
-    // 仍监听，首个 Ctrl-C 后进程不退出）
-    const stopRelay = () => void stopRelayAndExit(app);
-    process.once('SIGINT', stopRelay);
-    process.once('SIGTERM', stopRelay);
+    // 信号收口统一在 gracefullShutdown（main 顶部已注册）：停 relay
+    // 前置进关闭流程——先于 app.close()（relay 连接清理完再走 Nest
+    // 生命周期与退出）
+    beforeAppClose = () => stopHeadlessRelay();
   }
 }
 
@@ -150,19 +150,32 @@ function initSwagger(app: NestFastifyApplication) {
 }
 
 /**
- * 优雅关闭应用
- * @param app NestFastifyApplication 实例
+ * 优雅关闭应用：Nest 生命周期接线 + 统一信号收口。
+ * enableShutdownHooks 接通 onModuleDestroy/onApplicationShutdown——
+ * 调度器 abort 在途任务、工具桥收敛挂起请求、webhook 中止、Prisma
+ * $disconnect；无 hooks 时 SIGTERM（docker stop）直接杀进程这些全不跑，
+ * 在途 run 滞留 running 只能靠下次启动 recoverInterruptedRuns 兜底。
+ * relay 分支经 beforeAppClose 注入停 relay 前置步骤；收口流程在
+ * commons/web/shutdown.ts（旧版 gracefulShutdown 闭包从未被调用，属
+ * 死代码；relay 分支原独立信号注册已合并至此）。
  */
+let beforeAppClose: (() => void) | null = null;
 
 function gracefullShutdown(app: NestFastifyApplication) {
-  const gracefulShutdown = async (signal: string) => {
+  app.enableShutdownHooks();
+  let closing = false;
+  const shutdown = (signal: string) => {
+    if (closing) {
+      // 二次信号：优雅关闭耗住时的强退逃生门
+      process.exit(1);
+    }
+    closing = true;
     console.log(`收到 ${signal} 信号，开始优雅关闭...`);
-
-    // 监听进程信号
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-    // 监听Windows下的关闭信号
-    process.on('SIGBREAK', () => gracefulShutdown('SIGBREAK'));
+    return shutdownAndExit(app, beforeAppClose ?? undefined);
   };
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  // Windows 下的关闭信号
+  process.once('SIGBREAK', () => void shutdown('SIGBREAK'));
 }
 bootstrap();

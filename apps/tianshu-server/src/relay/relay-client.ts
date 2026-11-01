@@ -591,24 +591,6 @@ export function stopHeadlessRelay(): void {
   }
 }
 
-/** relay 模式信号收口所需最小 app 面（NestFastifyApplication 结构满足） */
-export interface RelayShutdownApp {
-  close(): Promise<void>;
-}
-
-/** relay 模式信号收口（main.ts SIGINT/SIGTERM）：停 relay 客户端 → 关闭
- * HTTP 应用 → 退出进程。只调 stopHeadlessRelay 不够——fastify 监听与
- * Nest 生命周期未动，首个 Ctrl-C 后进程仍存活（T15/T16 minor F2） */
-export async function stopRelayAndExit(app: RelayShutdownApp): Promise<void> {
-  stopHeadlessRelay();
-  try {
-    await app.close();
-  } catch (error) {
-    console.error('[relay-client] 应用关闭异常:', error);
-  }
-  process.exit(0);
-}
-
 /** CLI/环境驱动解析（main.ts 调用）：CLI 优先于环境变量；两者齐备才启动
  * （缺任一返回 null——relay 接入必须鉴权，不半启动） */
 export function resolveRelayLaunch(

@@ -132,7 +132,19 @@ function parseDetail(data: unknown): McpDetailResult | null {
   };
 }
 
-let reqSeq = 0;
+/** 资源内请求序号：list（列表查询，内串联 statuses 并入）/ statuses
+ *  （15s 轮询 tick 与手动刷新）/ detail（编辑弹层）/ write（写串行面）
+ *  各自独立——列表加载期间（relay 慢链路 >15s 或快速打开编辑弹层）轮询/
+ *  详情请求不再使 load 响应互判过期（旧全局 reqSeq 下 MCP 管理段卡
+ *  loading、列表不渲染）；同资源内后发仍使先发过期 */
+type McpResource = "list" | "statuses" | "detail" | "write";
+
+const reqSeqs: Record<McpResource, number> = {
+  list: 0,
+  statuses: 0,
+  detail: 0,
+  write: 0,
+};
 let writeChain: Promise<unknown> = Promise.resolve();
 let pendingWrites = 0;
 /** statuses 刷新 in-flight 守卫：轮询 tick 与手动刷新（重连/写后）共享，
@@ -140,12 +152,13 @@ let pendingWrites = 0;
 let statusesInFlight = false;
 
 interface RequestToken {
+  resource: McpResource;
   seq: number;
   connId: string | null;
   transport: ReturnType<typeof activeTransport>;
 }
 
-function beginRequest(): RequestToken | null {
+function beginRequest(resource: McpResource): RequestToken | null {
   const connId = useConnectionsStore.getState().activeConnId;
   if (!connId) return null;
   const capabilities =
@@ -153,12 +166,12 @@ function beginRequest(): RequestToken | null {
   if (!capabilities?.includes("mcp")) return null;
   const transport = activeTransport();
   if (!transport) return null;
-  return { seq: ++reqSeq, connId, transport };
+  return { resource, seq: ++reqSeqs[resource], connId, transport };
 }
 
 function isCurrentRequest(token: RequestToken): boolean {
   return (
-    token.seq === reqSeq &&
+    token.seq === reqSeqs[token.resource] &&
     token.connId === useConnectionsStore.getState().activeConnId &&
     token.transport === activeTransport()
   );
@@ -181,7 +194,7 @@ export const useMcpConfigStore = create<McpConfigState>((set, get) => {
     body: unknown,
     refresh: "load" | "statuses" = "load",
   ): Promise<boolean> {
-    const token = beginRequest();
+    const token = beginRequest("write");
     if (!token) return false;
     pendingWrites += 1;
     set({ saving: true, loading: false, error: null });
@@ -217,7 +230,7 @@ export const useMcpConfigStore = create<McpConfigState>((set, get) => {
     initialized: false,
 
     load: async () => {
-      const token = beginRequest();
+      const token = beginRequest("list");
       if (!token) return;
       set({ loading: true, error: null });
       try {
@@ -265,7 +278,7 @@ export const useMcpConfigStore = create<McpConfigState>((set, get) => {
 
     refreshStatuses: async () => {
       if (statusesInFlight) return;
-      const token = beginRequest();
+      const token = beginRequest("statuses");
       if (!token) return;
       statusesInFlight = true;
       try {
@@ -292,7 +305,7 @@ export const useMcpConfigStore = create<McpConfigState>((set, get) => {
     },
 
     loadDetail: async (id) => {
-      const token = beginRequest();
+      const token = beginRequest("detail");
       if (!token) return null;
       try {
         const result = await wireRequest(
@@ -332,7 +345,9 @@ export const useMcpConfigStore = create<McpConfigState>((set, get) => {
       enqueueWrite(ENDPOINTS.mcp.reconnect, { id }, "statuses"),
 
     resetForTest: () => {
-      reqSeq += 1;
+      for (const resource of Object.keys(reqSeqs) as McpResource[]) {
+        reqSeqs[resource] += 1;
+      }
       writeChain = Promise.resolve();
       pendingWrites = 0;
       statusesInFlight = false;

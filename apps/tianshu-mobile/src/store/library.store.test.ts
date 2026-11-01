@@ -101,6 +101,30 @@ describe("library.store", () => {
     });
   });
 
+  it("资源独立防迟到：列表在途时 loadTree 先回不判 load 过期（旧全局 reqSeq 下列表响应被丢弃、loading 悬挂）", async () => {
+    const t = makeTransport();
+    const listDefer = deferred<ReturnType<typeof successBody>>();
+    t.request.mockImplementation((_method: string, path: string) => {
+      if (path === ENDPOINTS.library.list) return listDefer.promise;
+      // tree（移动弹层）立即返回
+      return Promise.resolve(successBody([FOLDER]));
+    });
+    connMock.activeTransport.mockReturnValue(t);
+
+    // 慢网：列表在途（用户点开文件夹）→ 打开移动弹层（tree 先回）
+    const listPromise = useLibraryStore.getState().load(7);
+    const tree = await useLibraryStore.getState().loadTree();
+    expect(tree).toHaveLength(1);
+    listDefer.resolve(successBody(LIST_RESULT));
+    await listPromise;
+
+    const s = useLibraryStore.getState();
+    expect(s.items).toHaveLength(2);
+    expect(s.currentParentId).toBe(7);
+    expect(s.loading).toBe(false);
+    expect(s.initialized).toBe(true);
+  });
+
   it("load(parentId) 带目录 id 请求", async () => {
     const t = makeTransport();
     t.request.mockResolvedValue(successBody(LIST_RESULT));

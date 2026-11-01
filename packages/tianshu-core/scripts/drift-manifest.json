@@ -19,6 +19,14 @@
       "note": "run_command 工具；server 无 electron child-monitor 监控——有意分叉"
     },
     {
+      "id": "automation-event-bus",
+      "mirrorPath": "electron/domains/ai/automation/automation-event-bus.ts",
+      "serverPath": "src/modules/automation/automation-event-bus.ts",
+      "baselineDiff": true,
+      "baselineLines": 66,
+      "note": "自动化事件总线（2026-11-01 审查批入册）：双端事件触发/链式/catchUp/防环语义同构；server 为 createAutomationEventBus DI 工厂 + taskFinishedEvent 移入 runner + AutomationChainEvent 命名（Nest 生命周期适配）——改造点 11 原仅在 runner/scheduler 头注释提及，入册防单侧改动无告警"
+    },
+    {
       "id": "agent-web-tools",
       "mirrorPath": "electron/domains/ai/agent/web-tools.ts",
       "serverPath": "src/core/tools/web-tools.ts",
@@ -55,7 +63,7 @@
       "mirrorPath": "electron/domains/ai/agent/tool-gate.ts",
       "serverPath": "src/core/tools/tool-gate.ts",
       "baselineDiff": true,
-      "baselineLines": 189,
+      "baselineLines": 187,
       "note": "工具门禁主表；server 摘取改造版（安全中心出口不同）；权限放宽批（2026-10-24）server 已同构危险分级/write 兜底收窄/网络域免审/write_file 直执行留痕（§4.7，Task 5 review 补齐），残余分叉=allowDangerousTools 前置门+autoDenyApprovals（T7）取代 mirror unattended 三段强拒+BRIDGE_TOOL_NAMES+denyWithChunk 重构（基线 169→197 复核过账）"
     },
     {
@@ -297,7 +305,7 @@
       "mirrorPath": "electron/domains/ai/automation/automation-scheduler.ts",
       "serverPath": "src/modules/automation/automation-scheduler.ts",
       "baselineDiff": true,
-      "baselineLines": 125,
+      "baselineLines": 127,
       "note": "调度器（GA-T5 副本）：BrowserWindow 推送→publishAutomationChanged 钩子、NestJS 生命周期、tickMs 可配（config tianshu.automation.tickMs）；决策树/重试扫描逐行保持；2026-10-22 基线 +8：server 独有 automationStat 90 天裁剪段（onApplicationBootstrap fire-and-forget，controller 裁定有意分叉；mirror 对应物在 commons ensureEventStatMaintenance 启动链，不属 scheduler）"
     },
     {

@@ -98,6 +98,10 @@ import { AUTOMATION_TOOL_NAME } from "../agent/automation-tool";
 import { makePlanTools, PLAN_TOOL_NAMES } from "../agent/plan-tools";
 import { makeWidgetTool, WIDGET_TOOL_NAME } from "../agent/widget-tool";
 import {
+  LIBRARY_SEARCH_TOOL_NAME,
+  makeLibrarySearchTool,
+} from "../agent/library-search-tool";
+import {
   makeShowChartTool,
   makeShowSummaryTool,
   makeShowTableTool,
@@ -167,6 +171,9 @@ type ChatMessageRow = Awaited<
 registerTools(makePlanTools({ prisma }));
 // show_widget：聊天面板可视化组件（渲染层消费 args，无工作空间依赖）
 registerTools([makeWidgetTool()]);
+// library_search（2026-11-01 审查余项⑨）：chat 模型检索资料库（文件名
+// 关键词，用户级能力无工作空间依赖——无工作空间白名单成员）
+registerTools([makeLibrarySearchTool()]);
 // show_table/show_summary：工作流查询结果的消息流渲染卡（demo 切片
 // 2026-10-28）。门控进展示组（tool-groups，与工作流组同门），未开工作流
 // 语境的会话不注入；未绑定目录的会话被 collectToolDefinitions 的无工作
@@ -1762,6 +1769,9 @@ export default class ChatService {
           (def) =>
             def.name.startsWith("mcp__") ||
             def.name === "bash" ||
+            // library_search（审查余项⑨）：资料库用户级能力，未绑定目录
+            // 会话同权检索
+            def.name === LIBRARY_SEARCH_TOOL_NAME ||
             // browser 四件（2026-11-01 审查快修）：执行按 sessionId 解析
             // GuestControl（browser-tools.ts），与绑定目录无涉——此前被
             // 工作空间过滤连带剔除，未绑定目录会话失去右栏浏览器操控

@@ -34,6 +34,7 @@ import PlanItemRepository from "./domains/project/plan-item.repo";
 import PlanViewRepository from "./domains/project/plan-view.repo";
 import AutomationScheduler from "./domains/ai/automation/automation-scheduler";
 import { setEventBusDisabledTools } from "./domains/ai/automation/automation-event-bus";
+import { setAutomationDataSafety } from "./domains/ai/automation/automation-runner";
 import { graphTestInflight } from "./domains/ai/orchestration/graph-inflight";
 import MemoryScheduler from "./domains/ai/personalization/memory-scheduler";
 import MemoryService from "./domains/ai/personalization/memory.service";
@@ -437,6 +438,20 @@ export default class Application {
       // 不存在（collectToolDefinitions 组装尾统一收口）
       () => securityService.getConfigValue().disabledTools,
     );
+    // SP4 数据安全同源装配（审查批⑧）：scheduler/repo/event-bus 三触发
+    // 路径的 executeTask 均不传 opts.dataSafety——模块级注入使此处一处
+    // 装配全路径生效（与 ChatService 第 5 参同款闭包）
+    setAutomationDataSafety({
+      backupFile: (absPath, sessionId) => {
+        if (!securityService.getConfigValue().fileBackupEnabled) {
+          return Promise.resolve({ ok: false, reason: "disabled" });
+        }
+        return fileHistory.backupFile(absPath, sessionId);
+      },
+      deleteProtection: () => securityService.getConfigValue().deleteProtection,
+      bulkDeleteThreshold: () =>
+        securityService.getConfigValue().bulkDeleteThreshold,
+    });
     // A4 批装配顺序修正：MCP manager+repo 必须先于 attachServerFace 创建
     // 并保留实例注入被控面（此前 repo 在 attachServerFace 之后才 new 且未
     // 保留，被控面 mcps 桥只能裸 updateMany——进程/工具注册态不切换、行

@@ -71,7 +71,8 @@ export async function collectTools(
     .getDefinitions()
     .filter(
       (def) =>
-        !def.name.startsWith("plan_") && !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
+        !def.name.startsWith("plan_") &&
+        !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
     );
   const injected = workspacePath
     ? registered
@@ -132,9 +133,10 @@ export interface ExecuteTaskOptions {
   triggerType: "schedule" | "catchUp" | "retry" | "manual" | "event";
   attempt: number;
   abort: AbortSignal;
-  /** 数据安全装配（SP4 裁定）：可选透传，缺省 undefined——automation 现无
-   * SecurityService/FileHistoryService 依赖，不注入即走缺省值
-   * （unattended 流对批量删除已有强拒兜底） */
+  /** 数据安全装配（SP4 裁定）：可选透传；缺省回落 setAutomationDataSafety
+   *  的模块级注入（2026-11-01 审查批⑧：scheduler/repo/event-bus 三调用
+   *  点此前均不传——安全中心删除保护/批量阈值对自动化不生效；两处都
+   *  缺省即原行为 undefined，unattended 流强拒兜底不变） */
   dataSafety?: ChatDataSafety;
   /** 工具禁用清单（SP6 裁定 2）：可选透传闭包（Application 注入实时读
    * 安全配置），缺省不滤——注入层过滤，禁用=对模型不存在 */
@@ -142,6 +144,14 @@ export interface ExecuteTaskOptions {
   /** graph 任务输入变量（spec §4）：事件触发={outcome}，定时/手动=空对象；
    * prompt 任务不消费 */
   inputs?: Record<string, string>;
+}
+
+/** 模块级数据安全闭包（Application 启动注入；先例 event-bus
+ *  setEventBusDisabledTools——三触发路径安全口径一致） */
+let automationDataSafety: ChatDataSafety | undefined;
+
+export function setAutomationDataSafety(dataSafety?: ChatDataSafety): void {
+  automationDataSafety = dataSafety;
 }
 
 /** running 状态 run 行（按需建：graph 任务 run 由 executor 落库带
@@ -406,13 +416,23 @@ async function streamAndRecord(
       decideCommand: commandGate,
       // 文件判定门(SP3):同命令门共享模块单例;无人值守 block 强拒不挂审批
       decideFileAccess: fileGate,
-      // SP4 数据安全:可选注入透传,缺省 undefined(automation 无备份与批量
-      // 门装配——unattended 流已有强拒兜底)
-      deleteProtection: opts.dataSafety?.deleteProtection(),
-      bulkDeleteThreshold: opts.dataSafety?.bulkDeleteThreshold(),
-      onBackupFile: opts.dataSafety
-        ? (absPath, sid) => opts.dataSafety!.backupFile(absPath, sid)
-        : undefined,
+      // SP4 数据安全:opts 显式透传优先，缺省回落模块级注入（审查批⑧：
+      // 三触发路径 scheduler/repo/event-bus 均不传 opts.dataSafety——
+      // 回落使 Application 一处装配全路径生效；两处皆缺省即原行为）
+      deleteProtection: (
+        opts.dataSafety ?? automationDataSafety
+      )?.deleteProtection(),
+      bulkDeleteThreshold: (
+        opts.dataSafety ?? automationDataSafety
+      )?.bulkDeleteThreshold(),
+      onBackupFile:
+        (opts.dataSafety ?? automationDataSafety)
+          ? (absPath: string, sid: string) =>
+              (opts.dataSafety ?? automationDataSafety)!.backupFile(
+                absPath,
+                sid,
+              )
+          : undefined,
       unattended: true,
       // 监控埋点（spec §4.1 #3）：终态工具事件 → fire-and-forget 落库
       // （recordToolCall 自吞错，失败不影响主流程）

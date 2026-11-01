@@ -78,5 +78,10 @@
     "dateInvalid": "日期格式须为 YYYY-MM-DD",
     "saveFailed": "保存失败",
     "customFields": "自定义字段"
-  }
+  },
+  "searchTasks": "搜索任务标题",
+  "template": "项目模版",
+  "deleteItem": "删除事项",
+  "deleteItemConfirm": "确定删除「{{title}}」？该操作不可撤销。",
+  "moveTo": "移到{{status}}"
 }

@@ -78,5 +78,10 @@
     "dateInvalid": "Date must be YYYY-MM-DD",
     "saveFailed": "Save failed",
     "customFields": "Custom fields"
-  }
+  },
+  "searchTasks": "Search task titles",
+  "template": "Template",
+  "deleteItem": "Delete Item",
+  "deleteItemConfirm": "Delete \"{{title}}\"? This cannot be undone.",
+  "moveTo": "Move to {{status}}"
 }

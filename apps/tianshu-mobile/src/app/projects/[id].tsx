@@ -26,6 +26,7 @@ import {
   Bot,
   Boxes,
   ChevronRight,
+  CircleDot,
   File,
   Folder,
   Link2,
@@ -58,6 +59,7 @@ import { DialogShell } from "@/components/DialogShell";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
 import { FormField } from "@/components/FormField";
 import { FormFooter } from "@/components/FormFooter";
+import { MarkdownLite } from "@/components/MarkdownLite";
 import { PageHeader } from "@/components/PageHeader";
 import { PlanItemDialog } from "@/components/PlanItemDialog";
 import { formatSize } from "@/lib/format-size";
@@ -175,9 +177,7 @@ const PlanGroupHeaderRow = memo(function PlanGroupHeaderRow({
       <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
         {t(`status.${status}`)}
       </Text>
-      <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
-        {count}
-      </Text>
+      <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">{count}</Text>
     </View>
   );
 });
@@ -207,17 +207,20 @@ const PlanGroupAddRow = memo(function PlanGroupAddRow({
 });
 
 /** 事项行：标题/优先级色点/处理人昵称/截止 MM-dd（行上禁 flex-1——
- *  仅文本节点收 min-w-0，防 Yoga 0 高塌行） */
+ *  仅文本节点收 min-w-0，防 Yoga 0 高塌行）；批②：长按开操作面板
+ *  （状态快捷流转+删除） */
 const PlanItemRow = memo(function PlanItemRow({
   item,
   assigneeName,
   isLast,
   onOpen,
+  onLongPress,
 }: {
   item: PlanItemRecordDto;
   assigneeName: string;
   isLast: boolean;
   onOpen: (item: PlanItemRecordDto) => void;
+  onLongPress: (item: PlanItemRecordDto) => void;
 }) {
   const colors = useThemeColors();
   const dueKey = isoToDateKey(item.dueDate);
@@ -228,6 +231,7 @@ const PlanItemRow = memo(function PlanItemRow({
   return (
     <Pressable
       onPress={() => onOpen(item)}
+      onLongPress={() => onLongPress(item)}
       className={`flex-row items-center gap-2 bg-card px-3 py-3 dark:bg-[#1C1C1E] ${
         isLast ? "" : "border-b border-sep dark:border-[#545458A6]"
       }`}
@@ -418,9 +422,11 @@ export default function ProjectWorkspaceScreen() {
     | { mode: "edit"; item: PlanItemRecordDto }
     | null
   >(null);
-  const [assetSheetTarget, setAssetSheetTarget] = useState<AssetEntryDto | null>(
-    null,
-  );
+  const [assetSheetTarget, setAssetSheetTarget] =
+    useState<AssetEntryDto | null>(null);
+  /** 批②：计划事项长按目标（状态快捷流转+删除入口面板） */
+  const [planSheetTarget, setPlanSheetTarget] =
+    useState<PlanItemRecordDto | null>(null);
   const [folderDialog, setFolderDialog] = useState<"create" | "rename" | null>(
     null,
   );
@@ -493,6 +499,45 @@ export default function ProjectWorkspaceScreen() {
     (status: PlanStatus) => setItemDialog({ mode: "create", status }),
     [],
   );
+
+  /** 批②：状态快捷流转（updateItem 不动排序——moveItem 留给真排序场景）；
+   *  失败 toast，成功面板即闭（refreshPlanAfterWrite 局部重拉） */
+  async function handleStatusChange(
+    item: PlanItemRecordDto,
+    status: PlanStatus,
+  ) {
+    setPlanSheetTarget(null);
+    if (item.status === status) return;
+    const store = useProjectStore.getState();
+    const ok = await store.updateItem({ id: item.id, status });
+    if (!ok) toast.error(store.hub.error || t("project:itemDialog.saveFailed"));
+  }
+
+  /** 批②：删除计划事项（Alert 二次确认——对齐资产/项目删除先例） */
+  function confirmDeletePlanItem(item: PlanItemRecordDto) {
+    Alert.alert(
+      t("project:deleteItem"),
+      t("project:deleteItemConfirm", { title: item.title }),
+      [
+        { text: t("common:cancel"), style: "cancel" },
+        {
+          text: t("project:deleteItem"),
+          style: "destructive",
+          onPress: () => void performDeletePlanItem(item.id),
+        },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  async function performDeletePlanItem(id: number) {
+    const ok = await useProjectStore.getState().removeItem(id);
+    if (!ok) {
+      toast.error(
+        useProjectStore.getState().hub.error || t("project:loadFailed"),
+      );
+    }
+  }
 
   function notifyFailure() {
     const message = useProjectStore.getState().hub.error;
@@ -643,7 +688,10 @@ export default function ProjectWorkspaceScreen() {
           }
           if (entry.kind === "add") {
             return (
-              <PlanGroupAddRow status={entry.status} onPress={openQuickCreate} />
+              <PlanGroupAddRow
+                status={entry.status}
+                onPress={openQuickCreate}
+              />
             );
           }
           return (
@@ -656,6 +704,7 @@ export default function ProjectWorkspaceScreen() {
                   : (memberNames.get(entry.item.assigneeId) ?? "-")
               }
               onOpen={openPlanItem}
+              onLongPress={setPlanSheetTarget}
             />
           );
         }}
@@ -707,7 +756,10 @@ export default function ProjectWorkspaceScreen() {
             </Text>
           </Pressable>
           {folderPath.map((segment, index) => (
-            <View key={`${segment}-${index}`} className="flex-row items-center gap-1">
+            <View
+              key={`${segment}-${index}`}
+              className="flex-row items-center gap-1"
+            >
               <ChevronRight size={12} color="#C7C7CC" />
               <Pressable
                 onPress={() =>
@@ -773,6 +825,7 @@ export default function ProjectWorkspaceScreen() {
 
   function renderAbout() {
     const bindings = detail?.bindings ?? [];
+    const instructionText = detail?.project.systemPrompt?.trim() ?? "";
     const bindingIcon = (itemType: ProjectBindingItemDto["itemType"]) =>
       itemType === "assistant" ? (
         <Bot size={18} color={colors.primary} />
@@ -787,9 +840,15 @@ export default function ProjectWorkspaceScreen() {
           <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
             {t("project:instruction")}
           </Text>
-          <Text className="text-sm leading-5 text-black dark:text-white">
-            {detail?.project.systemPrompt?.trim() || "-"}
-          </Text>
+          {/* 批②：指令 Markdown 子集渲染（项目指令为多段结构化提示词，
+              纯文本长串可读性差——桌面同位 MarkdownView） */}
+          {instructionText === "" ? (
+            <Text className="text-sm leading-5 text-black dark:text-white">
+              -
+            </Text>
+          ) : (
+            <MarkdownLite text={instructionText} />
+          )}
         </View>
         <View className="mx-3 gap-2">
           <Text className="px-1 text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
@@ -900,12 +959,12 @@ export default function ProjectWorkspaceScreen() {
                 return (
                   <Pressable
                     key={view.id}
-                    onPress={() => useProjectStore.getState().setActiveView(view.id)}
+                    onPress={() =>
+                      useProjectStore.getState().setActiveView(view.id)
+                    }
                     className="rounded-full px-3 py-1.5"
                     style={{
-                      backgroundColor: active
-                        ? colors.primary
-                        : colors.subtle,
+                      backgroundColor: active ? colors.primary : colors.subtle,
                     }}
                   >
                     <Text
@@ -933,6 +992,40 @@ export default function ProjectWorkspaceScreen() {
           )}
         </>
       )}
+      {/* 批②：计划事项长按面板——状态快捷流转（当前态不列）+ 删除 */}
+      <AppActionSheet
+        visible={planSheetTarget !== null}
+        title={planSheetTarget?.title ?? undefined}
+        items={
+          planSheetTarget
+            ? [
+                ...PLAN_STATUSES.filter(
+                  (status) => status !== planSheetTarget.status,
+                ).map((status) => ({
+                  key: `status-${status}`,
+                  label: t("project:moveTo", {
+                    status: t(`project:status.${status}`),
+                  }),
+                  Icon: CircleDot,
+                  onPress: () =>
+                    void handleStatusChange(planSheetTarget, status),
+                })),
+                {
+                  key: "delete",
+                  label: t("project:deleteItem"),
+                  Icon: Trash2,
+                  danger: true,
+                  onPress: () => {
+                    const target = planSheetTarget;
+                    setPlanSheetTarget(null);
+                    confirmDeletePlanItem(target);
+                  },
+                },
+              ]
+            : []
+        }
+        onClose={() => setPlanSheetTarget(null)}
+      />
       <AppActionSheet
         visible={assetSheetTarget !== null}
         title={assetSheetTarget?.name}
@@ -988,9 +1081,7 @@ export default function ProjectWorkspaceScreen() {
       {itemDialog !== null && (
         <PlanItemDialog
           projectId={projectId}
-          item={
-            itemDialog.mode === "edit" ? itemDialog.item : undefined
-          }
+          item={itemDialog.mode === "edit" ? itemDialog.item : undefined}
           defaultStatus={
             itemDialog.mode === "create" ? itemDialog.status : undefined
           }
@@ -999,6 +1090,10 @@ export default function ProjectWorkspaceScreen() {
           busy={saving}
           onClose={() => setItemDialog(null)}
           onSubmit={(payload) => void handleItemSubmit(payload)}
+          onDelete={(item) => {
+            setItemDialog(null);
+            confirmDeletePlanItem(item);
+          }}
         />
       )}
       <AssetImageModal

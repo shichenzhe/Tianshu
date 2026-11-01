@@ -107,31 +107,33 @@ function AttachmentSection({
     void useProjectStore
       .getState()
       .peekAssets(projectId)
-      .then((rows) =>
-        setCandidates(rows.filter((row) => row.type === "file")),
-      );
+      .then((rows) => setCandidates(rows.filter((row) => row.type === "file")));
   }
 
   function confirmRemove(row: PlanItemAttachmentRecordDto) {
-    Alert.alert(t("attachments"), t("removeAttachmentConfirm", { name: row.fileName }), [
-      { text: t("common:cancel"), style: "cancel" },
-      {
-        text: t("common:confirm"),
-        style: "destructive",
-        onPress: () => {
-          void useProjectStore
-            .getState()
-            .removeAttachment(row.id)
-            .then((ok) => {
-              if (ok) {
-                setAttachments(
-                  (rows) => rows?.filter((r) => r.id !== row.id) ?? null,
-                );
-              }
-            });
+    Alert.alert(
+      t("attachments"),
+      t("removeAttachmentConfirm", { name: row.fileName }),
+      [
+        { text: t("common:cancel"), style: "cancel" },
+        {
+          text: t("common:confirm"),
+          style: "destructive",
+          onPress: () => {
+            void useProjectStore
+              .getState()
+              .removeAttachment(row.id)
+              .then((ok) => {
+                if (ok) {
+                  setAttachments(
+                    (rows) => rows?.filter((r) => r.id !== row.id) ?? null,
+                  );
+                }
+              });
+          },
         },
-      },
-    ]);
+      ],
+    );
   }
 
   function attach(row: AssetEntryDto) {
@@ -227,6 +229,7 @@ export function PlanItemDialog({
   busy,
   onClose,
   onSubmit,
+  onDelete,
 }: {
   /** 所属项目 id；null = 本地任务（隐藏项目字段与附件区） */
   projectId: number | null;
@@ -238,9 +241,10 @@ export function PlanItemDialog({
   fields: PlanFieldDefDto[];
   busy: boolean;
   onClose: () => void;
-  onSubmit: (
-    payload: PlanItemCreatePayload | PlanItemUpdatePayload,
-  ) => void;
+  onSubmit: (payload: PlanItemCreatePayload | PlanItemUpdatePayload) => void;
+  /** 批②：编辑态删除入口（二次确认在调用方 Alert——对齐 confirmDelete 先例）；
+   *  新建态/缺省不渲染 */
+  onDelete?: (item: PlanItemRecordDto) => void;
 }) {
   const { t } = useTranslation(["project", "common"]);
   const isEdit = item !== undefined;
@@ -263,7 +267,8 @@ export function PlanItemDialog({
     const initial: Record<string, string> = {};
     fields.forEach((field) => {
       const value = item?.customFields?.[field.name];
-      initial[field.name] = value === undefined || value === null ? "" : String(value);
+      initial[field.name] =
+        value === undefined || value === null ? "" : String(value);
     });
     return initial;
   });
@@ -334,7 +339,9 @@ export function PlanItemDialog({
 
   return (
     <DialogShell
-      title={t(isEdit ? "project:itemDialog.edit" : "project:itemDialog.create")}
+      title={t(
+        isEdit ? "project:itemDialog.edit" : "project:itemDialog.create",
+      )}
       busy={busy}
       onClose={onClose}
       footer={
@@ -343,6 +350,10 @@ export function PlanItemDialog({
           confirmDisabled={!title.trim()}
           onConfirm={handleConfirm}
           onCancel={onClose}
+          deleteLabel={
+            isEdit && onDelete && item ? t("project:deleteItem") : undefined
+          }
+          onDelete={onDelete && item ? () => onDelete(item) : undefined}
         />
       }
     >
@@ -361,11 +372,7 @@ export function PlanItemDialog({
         <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
           {t("project:itemDialog.status")}
         </Text>
-        <ChipRow
-          options={statusOptions}
-          value={status}
-          onSelect={setStatus}
-        />
+        <ChipRow options={statusOptions} value={status} onSelect={setStatus} />
       </View>
       <View className="gap-1.5">
         <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
@@ -434,9 +441,7 @@ export function PlanItemDialog({
                   onChangeText={(text) =>
                     setCustomInput((prev) => ({ ...prev, [field.name]: text }))
                   }
-                  keyboardType={
-                    field.type === "number" ? "numeric" : "default"
-                  }
+                  keyboardType={field.type === "number" ? "numeric" : "default"}
                   placeholder={field.type === "date" ? "YYYY-MM-DD" : undefined}
                 />
               ))}

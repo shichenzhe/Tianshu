@@ -25,6 +25,7 @@ import {
   Pencil,
   Plus,
   ScanText,
+  Search,
   Trash2,
 } from "lucide-react-native";
 
@@ -33,6 +34,11 @@ import { DialogShell } from "@/components/DialogShell";
 import { FormField, PLACEHOLDER } from "@/components/FormField";
 import { FormFooter } from "@/components/FormFooter";
 import { PageHeader } from "@/components/PageHeader";
+import {
+  DEFAULT_TEMPLATE_KEY,
+  PROJECT_TEMPLATES,
+  getTemplate,
+} from "@/logic/project-templates";
 import { PlanItemDialog } from "@/components/PlanItemDialog";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
 import { toast } from "@/lib/toast-bus";
@@ -190,8 +196,7 @@ function TaskRow({
       <View
         className="h-2 w-2 rounded-full"
         style={{
-          backgroundColor:
-            PRIORITY_DOT_COLORS[item.priority] ?? colors.primary,
+          backgroundColor: PRIORITY_DOT_COLORS[item.priority] ?? colors.primary,
         }}
       />
       <Text
@@ -279,6 +284,9 @@ export default function ProjectsScreen() {
   >(null);
   const [name, setName] = useState("");
   const [instruction, setInstruction] = useState("");
+  /** 批②：新建模版选择（默认空白；选中非空白模版时指令框预填模版 prompt
+   *  可改——对齐桌面「模版预选+指令可覆盖」语义） */
+  const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
 
   useEffect(() => {
     if (activeConnId && supported) {
@@ -314,6 +322,7 @@ export default function ProjectsScreen() {
   function openCreate() {
     setName("");
     setInstruction("");
+    setTemplateKey(DEFAULT_TEMPLATE_KEY);
     setDialog("create");
   }
 
@@ -353,9 +362,17 @@ export default function ProjectsScreen() {
   async function handleCreate() {
     const trimmed = name.trim();
     if (!trimmed) return;
+    // 批②：模版上送（wire create 已支持 templateKey/welcomeMessage）——
+    // 指令框空且非空白模版时随模版（被控端按模版落 prompt）；用户改过指令
+    // 则指令优先（templateKey 仍送——被控端 prompt 语义为模板+覆盖）
+    const template = getTemplate(templateKey);
     const ok = await useProjectStore.getState().create({
       name: trimmed,
       systemPrompt: instruction.trim() || undefined,
+      templateKey,
+      ...(template && instruction.trim() === ""
+        ? { welcomeMessage: template.welcome }
+        : {}),
     });
     if (ok) setDialog(null);
     else notifyFailure();
@@ -384,9 +401,10 @@ export default function ProjectsScreen() {
     payload: PlanItemCreatePayload | PlanItemUpdatePayload,
   ) {
     const store = useProjectStore.getState();
-    const ok = itemDialogItem === "new"
-      ? await store.createItem(payload as PlanItemCreatePayload)
-      : await store.updateItem(payload as PlanItemUpdatePayload);
+    const ok =
+      itemDialogItem === "new"
+        ? await store.createItem(payload as PlanItemCreatePayload)
+        : await store.updateItem(payload as PlanItemUpdatePayload);
     if (ok) setItemDialogItem(null);
     else toast.error(store.hub.error || t("project:itemDialog.saveFailed"));
   }
@@ -458,6 +476,21 @@ export default function ProjectsScreen() {
     return (
       <ScrollView className="flex-1">
         <View className="gap-2 pb-2">
+          {/* 批②：标题搜索（store tasksKeyword 此前就绪未渲染——filterMine 已接参） */}
+          <View className="mx-3 min-h-11 flex-row items-center gap-2 rounded-lg border border-black/15 px-3 dark:border-[#545458A6]">
+            <Search size={14} color="#8E8E93" />
+            <TextInput
+              value={tasksKeyword}
+              onChangeText={(v) =>
+                useProjectStore.getState().setTasksKeyword(v)
+              }
+              placeholder={t("project:searchTasks")}
+              placeholderTextColor="#8E8E93"
+              returnKeyType="search"
+              autoCorrect={false}
+              className="h-11 flex-1 px-1 py-0 text-sm text-black dark:text-white"
+            />
+          </View>
           <FilterChips
             options={scopeOptions}
             value={scope}
@@ -486,7 +519,16 @@ export default function ProjectsScreen() {
                     : (projectNames.get(item.projectId) ??
                       t("project:tasks.sourceProject"))
                 }
-                onOpen={setItemDialogItem}
+                onOpen={(target) => {
+                  // 批②：对齐桌面 TasksPane 分流——项目任务跳工作台全功能
+                  // 编辑（此前以 projectId=null 降级弹窗，处理人/日期/自定义
+                  // 字段/附件全被隐藏）；本地任务留弹窗
+                  if (target.projectId !== null) {
+                    router.push(`/projects/${target.projectId}`);
+                  } else {
+                    setItemDialogItem(target);
+                  }
+                }}
               />
             ))}
           </View>
@@ -552,7 +594,9 @@ export default function ProjectsScreen() {
             accessibilityRole="button"
             accessibilityLabel={t("project:createProject")}
             disabled={!supported || saving}
-            onPress={() => (tab === "projects" ? openCreate() : setItemDialogItem("new"))}
+            onPress={() =>
+              tab === "projects" ? openCreate() : setItemDialogItem("new")
+            }
             hitSlop={12}
             className="h-9 w-9 items-center justify-center rounded-full"
             style={({ pressed }) => ({
@@ -637,9 +681,7 @@ export default function ProjectsScreen() {
           footer={
             <FormFooter
               busy={saving}
-              confirmDisabled={
-                dialog !== "instruction" ? !name.trim() : false
-              }
+              confirmDisabled={dialog !== "instruction" ? !name.trim() : false}
               onConfirm={() => {
                 if (dialog === "create") void handleCreate();
                 else if (dialog === "rename") void handleRename();
@@ -655,6 +697,50 @@ export default function ProjectsScreen() {
               value={name}
               onChangeText={setName}
             />
+          )}
+          {/* 批②：模版选择（新建态）——chips 横滚四选；切换非空白模版
+              预填其 prompt 到指令框（可改），选回空白清空 */}
+          {dialog === "create" && (
+            <View className="mb-3">
+              <Text className="mb-1.5 text-[13px] text-label2 dark:text-[#EBEBF599]">
+                {t("project:template")}
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {PROJECT_TEMPLATES.map((tpl) => {
+                  const active = tpl.key === templateKey;
+                  return (
+                    <Pressable
+                      key={tpl.key}
+                      onPress={() => {
+                        setTemplateKey(tpl.key);
+                        setInstruction(tpl.key === "blank" ? "" : tpl.prompt);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      className="rounded-lg px-3 py-2"
+                      style={{
+                        backgroundColor: active
+                          ? colors.primary
+                          : colors.subtle,
+                      }}
+                    >
+                      <Text
+                        className="text-[13px]"
+                        style={{
+                          color: active ? "#FFFFFF" : colors.primary,
+                        }}
+                      >
+                        {tpl.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
           )}
           {dialog !== "rename" && (
             <FormField

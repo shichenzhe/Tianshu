@@ -5,10 +5,10 @@
  * 本文件 re-export 兼容——老 import 链不变；ChatStatusResult/PolishStyle
  * 为本机 IPC 形态非线上契约，留原地。
  * 流式五方法（send/regenerate/editAndResend/stop/usage）、onChatStream、
- * status、审批 approveToolCall 与权限 get/set 已主机路由化（HD-T3/P2a）：
- * 本地 invoke 原通道参数逐字；远程走 server:* 对应端点。其余方法
- * （polish/compact/工作空间记忆等）仍本地 IPC——polish/compact 远程
- * 不支持由 caps 门控。
+ * status、审批 approveToolCall 与权限 get/set、compact/polish 已主机路由
+ * 化：本地 invoke 原通道参数逐字；远程走 server:* 对应端点（A9 批两端
+ * 被控面 session/compact、session/polish 齐备）。其余方法（工作空间记忆
+ * 等）仍本地 IPC。
  */
 
 import { invoke } from "@/lib/ipc";
@@ -222,9 +222,14 @@ export default class ChatApi {
     return invoke<boolean>("agent:confirmRespond", sessionId, decision);
   }
 
-  /** /compact 会话压缩(v8):摘要走一次流式 send 后落 session */
+  /** /compact 会话压缩(v8):摘要走一次流式 send 后落 session；远程
+   *  sessionCompact（A9 批：202 受理后台执行，完成后 session.updated
+   *  事件驱动 app 级缓存失效刷新——受理即回即可） */
   static async compact(sessionId: number): Promise<void> {
-    return invoke<void>("chat:compact", sessionId);
+    return routeInvoke(
+      { ch: "chat:compact", args: [sessionId] },
+      (connId) => ServerApi.sessionCompact(sessionId, connId),
+    );
   }
 
   /** 设置会话工具权限模式（P3；主进程内存态，无会话校验）；
@@ -262,13 +267,19 @@ export default class ChatApi {
     return invoke<void>("permission:forgetTool", workspaceId, toolName);
   }
 
-  /** 新建任务落地页润色（一次性补全，不落库不建 session） */
+  /** 新建任务落地页润色（一次性补全，不落库不建 session）；远程
+   *  sessionPolish 同形透传——workspaceId 为远端空间 id（单 UI 远程态
+   *  落地页列表值；修复前恒走本地通道：无同 id 空间即报错、自增 id
+   *  撞号时用本地空间模型润色远端草稿——跨主机串数据） */
   static async polish(params: {
     workspaceId: number;
     text: string;
     style: PolishStyle;
   }): Promise<{ text: string }> {
-    return invoke<{ text: string }>("chat:polish", params);
+    return routeInvoke(
+      { ch: "chat:polish", args: [params] },
+      (connId) => ServerApi.sessionPolish(params, connId),
+    );
   }
 
   /** 会话转办交接摘要（批 12）：五段式 markdown，一次性补全不落库 */

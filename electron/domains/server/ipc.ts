@@ -169,6 +169,17 @@ export function registerServerIpc(
   );
   // —— P1 尾未读角标：已读推进透传（session/read，与移动端上报同语义） ——
   ipcMain.handle("server:sessionRead", remoteHandler(registry, "session/read"));
+  // —— 会话内工具批（A9）：压缩 202 受理 + 润色同步透传（两端被控面
+  //  session/compact、session/polish 齐备——修复前缺注册致远程恒走
+  //  本地通道） ——
+  ipcMain.handle(
+    "server:sessionCompact",
+    remoteHandler(registry, "session/compact"),
+  );
+  ipcMain.handle(
+    "server:sessionPolish",
+    remoteHandler(registry, "session/polish"),
+  );
   // —— 文件面（FA-T3，spec 2026-10-20）：files 三端点透传 ——
   ipcMain.handle("server:filesList", remoteHandler(registry, "files/list"));
   ipcMain.handle("server:filesRead", remoteHandler(registry, "files/read"));

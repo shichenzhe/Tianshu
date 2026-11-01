@@ -24,6 +24,8 @@ const serverApi = vi.hoisted(() => ({
   sessionAccessMode: vi.fn(),
   approveSession: vi.fn(),
   filesUploadImage: vi.fn(),
+  sessionCompact: vi.fn(),
+  sessionPolish: vi.fn(),
 }));
 vi.mock("../../../src-react/domains/ai/server/api/server.api", () => ({
   default: serverApi,
@@ -246,6 +248,40 @@ describe("ChatApi 远程主机（适配器映射）", () => {
       9,
       "full",
       "c6",
+    );
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("compact/polish：invoke 原通道参数逐字（本地主机）", async () => {
+    invoke.mockResolvedValue(undefined);
+    await ChatApi.compact(7);
+    expect(invoke).toHaveBeenCalledWith("chat:compact", 7);
+
+    invoke.mockResolvedValue({ text: "润色后" });
+    await expect(
+      ChatApi.polish({ workspaceId: 3, text: "草稿", style: "professional" }),
+    ).resolves.toEqual({ text: "润色后" });
+    expect(invoke).toHaveBeenCalledWith("chat:polish", {
+      workspaceId: 3,
+      text: "草稿",
+      style: "professional",
+    });
+  });
+
+  it("compact/polish：sessionCompact/sessionPolish 映射（远程主机——修复前恒走本地通道）", async () => {
+    useHostStore.getState().switchHost({ kind: "remote", connId: "c7" });
+    serverApi.sessionCompact.mockResolvedValue(undefined);
+    serverApi.sessionPolish.mockResolvedValue({ text: "polished" });
+
+    await ChatApi.compact(9);
+    expect(serverApi.sessionCompact).toHaveBeenCalledWith(9, "c7");
+
+    await expect(
+      ChatApi.polish({ workspaceId: 5, text: "draft", style: "concise" }),
+    ).resolves.toEqual({ text: "polished" });
+    expect(serverApi.sessionPolish).toHaveBeenCalledWith(
+      { workspaceId: 5, text: "draft", style: "concise" },
+      "c7",
     );
     expect(invoke).not.toHaveBeenCalled();
   });

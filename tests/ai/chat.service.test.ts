@@ -213,6 +213,12 @@ import {
   registerTools,
   unregisterTools,
 } from "../../electron/domains/ai/agent/tool-registry";
+import {
+  LIST_TOOL_NAME,
+  makeListExpertsTool,
+  makeRecommendExpertTool,
+  RECOMMEND_TOOL_NAME,
+} from "../../electron/domains/ai/agent/recommend-expert-tool";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
 import type { ToolGroupGate } from "../../electron/domains/ai/agent/tool-groups";
 import { ipcMain } from "electron";
@@ -1346,11 +1352,12 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
 });
 
 /**
- * 专家 2.0 运行时接线（Task 4）：
+ * 专家 2.0 运行时接线（Task 4）+ 目录出 system 批（2026-11-01）：
  * ① 绑定专家 → 附带技能并入 sessionSkills（并入 = 启用集 ∪ (扫描全集 ∩
  *   skillNames)：未启用可补入、既启用不重复、已卸载静略）；
- * ② 未绑专家且 agent 模式 → 个性化段之后、场景段之前注入专家目录推荐
- *   指令段（绑定专家 / ask / plan 均不注入）。
+ * ② 专家目录已从 system 段删除，改随 list_experts/recommend_expert
+ *   两跳工具组注入（agent 模式且未绑专家时在场；绑定专家 / ask / plan
+ *   整组缺席）。
  * 直接调私有 assembleContext（本文件既有内部访问模式）。
  */
 describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
@@ -1435,6 +1442,8 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
           mode: string;
           isProjectSession: boolean;
           agent: { workspacePath?: string };
+          /** 已绑专家为非 null（专家推荐工具组注入面判定输入） */
+          assistantRow: { id: number } | null;
           /** 专家团调度注入面（二期 T3）：非 team 会话为 null */
           team: { members: Array<{ id: string }> } | null;
           /** 工具分组场景门控判定输入（spec §20 项 B） */
@@ -1443,9 +1452,9 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
       }
     ).assembleContext(1);
 
-  /** 生产同口径注入工具集名（二期 T3）：第 4 参 team 从 ctx 取（与
-   *  getUsageBreakdown 调用式一致；modelText 由 assembleContext 装配，
-   *  名断言不触达） */
+  /** 生产同口径注入工具集名（二期 T3）：第 4 参 team 与第 6 参专家
+   *  推荐注入面从 ctx 取（与 getUsageBreakdown 调用式一致；modelText
+   *  由 assembleContext 装配，名断言不触达） */
   const toolNames = async (service: ChatService) => {
     const ctx = await assemble(service);
     if (ctx.mode === "ask") return [];
@@ -1457,6 +1466,7 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
           isProjectSession: boolean,
           team: { members: Array<{ id: string }> } | null,
           gate: ToolGroupGate,
+          expertRecommend: boolean,
         ) => ToolDefinition[];
       }
     )
@@ -1466,9 +1476,21 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
         ctx.isProjectSession,
         ctx.team,
         ctx.toolGate,
+        ctx.mode === "agent" && ctx.assistantRow === null,
       )
       .map((def) => def.name);
   };
+
+  // 生产序里推荐工具组由 assistant.repo 启动注册进 registry（本测试直
+  // new ChatService 不经该序）——beforeAll 注册真工具（顺带验证注册面与
+  // collectToolDefinitions 剔除逻辑对同一 name 集生效），afterAll 精确注销
+  beforeAll(() => {
+    registerTools([makeListExpertsTool(), makeRecommendExpertTool()]);
+  });
+  afterAll(() => {
+    unregisterTools(LIST_TOOL_NAME);
+    unregisterTools(RECOMMEND_TOOL_NAME);
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1506,17 +1528,19 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(system).not.toContain("gone");
   });
 
-  it("未绑专家 agent 会话：目录段注入，无 base 时单独成段无开头空行", async () => {
+  it("未绑专家 agent 会话：system 零目录注入，两跳工具组在场（目录出 system 批）", async () => {
     const { service } = makeSvc({ assistantId: null });
     const ctx = await assemble(service);
-    const system = ctx.systemWithSummary ?? "";
-    // 无助手 prompt/无技能/个性化默认 → 目录段即 system 全文（非空拼接种模式）
-    expect(system.startsWith("【专家目录】")).toBe(true);
-    expect(system).toContain("recommend_expert");
-    expect(system).toContain("code-review-expert");
+    // 无助手 prompt/无技能/个性化默认 → system 整体 undefined（目录段
+    // 删除后不再单独成段）
+    expect(ctx.systemWithSummary).toBeUndefined();
+    const names = await toolNames(service);
+    // 目录随 list_experts 工具结果两跳注入，推荐卡工具同组在场
+    expect(names).toContain("list_experts");
+    expect(names).toContain("recommend_expert");
   });
 
-  it("注入位置：个性化段（含技能清单）之后、场景段之前", async () => {
+  it("注入位置：个性化段（含技能清单）之后为场景段（目录段已删）", async () => {
     skillScanStub.skills = [skillStub("s1")];
     const { service } = makeSvc({
       assistantId: null,
@@ -1525,14 +1549,13 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     const ctx = await assemble(service);
     const system = ctx.systemWithSummary ?? "";
     const skillIdx = system.indexOf("你可以使用以下技能");
-    const catalogIdx = system.indexOf("【专家目录】");
     const scenarioIdx = system.indexOf("当前处于代码开发场景");
     expect(skillIdx).toBeGreaterThanOrEqual(0);
-    expect(catalogIdx).toBeGreaterThan(skillIdx);
-    expect(scenarioIdx).toBeGreaterThan(catalogIdx);
+    expect(scenarioIdx).toBeGreaterThan(skillIdx);
+    expect(system).not.toContain("【专家目录】");
   });
 
-  it("绑定专家 / ask / plan：均不注入目录段", async () => {
+  it("绑定专家 / plan：system 不含目录段，两跳工具组整组缺席", async () => {
     // 已绑专家（agent 模式）
     assembleReads.assistant.findUnique.mockResolvedValue({
       id: 1,
@@ -1541,38 +1564,37 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
       topP: null,
       maxTokens: null,
     });
-    const bound = await assemble(makeSvc({ assistantId: 1 }).service);
+    const boundSvc = makeSvc({ assistantId: 1 }).service;
+    const bound = await assemble(boundSvc);
     expect(bound.systemWithSummary).not.toContain("【专家目录】");
-    // 未绑专家但 ask 模式：无 base（无助手/项目/个性化）时 system 整体为
-    // undefined——先钉 undefined 再空串兜底断言，防恒真（终审顺手修）
+    expect(await toolNames(boundSvc)).not.toContain("recommend_expert");
+    expect(await toolNames(boundSvc)).not.toContain("list_experts");
+    // 未绑专家但 ask 模式：工具集整体为空（上游零工具，无目录段）
     const askCtx = await assemble(
       makeSvc({ assistantId: null, mode: "ask" }).service,
     );
     expect(askCtx.systemWithSummary).toBeUndefined();
     expect(askCtx.systemWithSummary ?? "").not.toContain("【专家目录】");
-    // 未绑专家但 plan 模式：注入计划指令段（string），仅断言不含目录段
-    const planCtx = await assemble(
-      makeSvc({ assistantId: null, mode: "plan" }).service,
-    );
+    // 未绑专家但 plan 模式：注入计划指令段（string），工具组同缺席
+    const planSvc = makeSvc({ assistantId: null, mode: "plan" }).service;
+    const planCtx = await assemble(planSvc);
     expect(planCtx.systemWithSummary ?? "").not.toContain("【专家目录】");
+    expect(await toolNames(planSvc)).not.toContain("recommend_expert");
+    expect(await toolNames(planSvc)).not.toContain("list_experts");
   });
 
-  it("禁用 recommend_expert：不注入目录段（system 不指示调用被禁工具）", async () => {
+  it("禁用 recommend_expert：单名消失（list_experts 仍在），system 无目录指示", async () => {
     const { service } = makeSvc(
       { assistantId: null },
       { runtimeFilter: () => ["recommend_expert"] },
     );
     const ctx = await assemble(service);
-    // 未绑专家 agent 会话本应注入目录段；工具被安全中心禁用后整段不注入
-    //（注入层 filterDisabledTools 同一 runtimeFilter 来源），无 base 时
-    // system 回落 undefined
+    // system 侧本批已零注入；工具侧禁用=对模型不存在（filterDisabledTools
+    // 逐名收口，list_experts 不受连带）
     expect(ctx.systemWithSummary).toBeUndefined();
-    // 其他工具禁用不影响目录段（门控只对 recommend_expert 生效）
-    const other = await assemble(
-      makeSvc({ assistantId: null }, { runtimeFilter: () => ["bash"] })
-        .service,
-    );
-    expect(other.systemWithSummary ?? "").toContain("【专家目录】");
+    const names = await toolNames(service);
+    expect(names).not.toContain("recommend_expert");
+    expect(names).toContain("list_experts");
   });
 
   it("项目会话：挂载集收窄优先，专家附带技能不并入", async () => {

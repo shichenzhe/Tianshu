@@ -15,6 +15,7 @@ import { normalizeWorkspacePath } from "../agent/workspace-path";
 import { serializeBlocks, type MessageBlock } from "../chat/blocks";
 import { createChatModel } from "../orchestration/langchain-model-factory";
 import { registry, filterDisabledTools } from "../agent/tool-registry";
+import { EXPERT_RECOMMEND_TOOL_NAMES } from "../agent/recommend-expert-tool";
 import type { SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
@@ -64,9 +65,14 @@ export async function collectTools(
 ) {
   // plan_* 仅项目会话可用(依赖 ctx.projectId);定时任务 agent 不带 projectId,
   // 带上只会得到「未关联项目」拒绝——剔除,避免污染模型的工具列表
+  // 专家推荐两跳组同剔(2026-11-01 目录出 system 批):无人值守语境无
+  // 推荐卡消费方(渲染层在聊天会话 UI),目录不进自动化 payload
   const registered = registry
     .getDefinitions()
-    .filter((def) => !def.name.startsWith("plan_"));
+    .filter(
+      (def) =>
+        !def.name.startsWith("plan_") && !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
+    );
   const injected = workspacePath
     ? registered
     : registered.filter(

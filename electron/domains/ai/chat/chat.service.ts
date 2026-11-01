@@ -105,18 +105,16 @@ import {
   type DispatchMemberDeps,
   type DispatchMemberModelTextFn,
 } from "../agent/dispatch-member-tool";
-import { RECOMMEND_TOOL_NAME } from "../agent/recommend-expert-tool";
+import { EXPERT_RECOMMEND_TOOL_NAMES } from "../agent/recommend-expert-tool";
 import {
   CREATE_EXPERT_TOOL_NAME,
   UPDATE_EXPERT_TOOL_NAME,
 } from "../agent/create-expert";
 import {
-  buildExpertCatalogPrompt,
   mergeExpertSkills,
   parseJsonStringArray,
 } from "./expert-catalog";
 import { buildTeamLeadSystem, parseTeamMembers } from "./expert-team";
-import { MARKET_EXPERTS } from "../../../../src-react/domains/ai/experts/data/marketplace";
 import { filterDisabledSkills } from "../skill/skill-sync";
 import type { ToolDefinition } from "../agent/file-tools";
 import { resolveSafePath } from "../agent/file-tools";
@@ -1373,6 +1371,7 @@ export default class ChatService {
               // 估算口径与下次请求同集（getUsageBreakdown 同款：无流无中止信号）
               ctx.team,
               ctx.toolGate,
+              this.allowExpertRecommend(ctx),
             );
       const historyCost = trimHistoryToolOutputs(ctx.history).reduce(
         (sum, m) => sum + estimateMessageTokens(m.blocks),
@@ -1687,14 +1686,37 @@ export default class ChatService {
    * 禁用后两层叠加，独立于用户禁用配置）；其余工具（mcp 前缀/技能挂载/
    * 面板类等）不属门控组照旧放行
    */
+  /**
+   * 专家推荐工具组注入面（2026-11-01 目录出 system 批）：原 system 目录
+   * 段三合一条件的会话侧输入——agent 模式且未绑专家（专家团 team 助手
+   * 亦为绑定态）；ask/plan 与已绑专家会话整组缺席（工具不在=目录不在，
+   * 推荐能力同生同灭）；工具禁用面由 collectToolDefinitions 外层
+   * filterDisabledTools 统一收口
+   */
+  private allowExpertRecommend(ctx: {
+    mode: "agent" | "ask" | "plan";
+    assistantRow: unknown;
+  }): boolean {
+    return ctx.mode === "agent" && ctx.assistantRow === null;
+  }
+
   private collectToolDefinitions(
     agent: AgentStreamOptions,
     skills: SkillInfo[],
     isProjectSession: boolean,
     team: DispatchMemberDeps | null,
     gate: ToolGroupGate,
+    expertRecommend: boolean,
   ): ToolDefinition[] {
-    const registered = registry.getDefinitions();
+    // 专家推荐两跳组注入面（2026-11-01 目录出 system 批）：原 system
+    // 目录段三合一条件的工具层平移——非 agent 模式/已绑专家时整组缺席
+    // （目录在 list_experts 的工具结果里，工具缺席即目录缺席）；安全
+    // 中心禁用面由外层 filterDisabledTools 统一收口（单名禁用单名消失）
+    const registered = registry
+      .getDefinitions()
+      .filter(
+        (def) => expertRecommend || !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
+      );
     const workspaceScoped = agent.workspacePath
       ? registered
       : registered.filter(
@@ -1712,7 +1734,7 @@ export default class ChatService {
             def.name === WIDGET_TOOL_NAME ||
             def.name === CREATE_EXPERT_TOOL_NAME ||
             def.name === UPDATE_EXPERT_TOOL_NAME ||
-            def.name === RECOMMEND_TOOL_NAME,
+            EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
         );
     const injected = isProjectSession
       ? workspaceScoped
@@ -1898,6 +1920,7 @@ export default class ChatService {
                 // 当次流透传（成员子 agent 与主对话同生共死）
                 ctx.team ? { ...ctx.team, abortSignal: abort.signal } : null,
                 ctx.toolGate,
+                this.allowExpertRecommend(ctx),
               ),
         agent: ctx.agent,
         maxSteps,
@@ -2151,25 +2174,17 @@ export default class ChatService {
       personalization,
       buildModeSystem(mode, base, sessionSkills),
     );
-    // 专家目录推荐指令段（专家 2.0 spec §6）：未绑专家且 agent 模式注入
-    // （个性化段之后、场景段之前）；已绑专家/ask/plan 零成本不注入；
-    // 终审 G1 门控：recommend_expert 被安全中心禁用时同步不注入——目录段
-    // 指示模型调用该工具，而注入层 filterDisabledTools 已对模型隐藏它
-    // （collectToolDefinitions 同一 runtimeFilter 来源、闭包实时读配置，
-    // 缺席（测试）不滤，与 SP6 注入层同语义）；personalized 为空时目录段
-    // 单独成段（沿用摘要段的空基拼接模式）
-    const catalogAllowed = !(this.runtimeFilter?.() ?? []).includes(
-      RECOMMEND_TOOL_NAME,
-    );
-    const withCatalog =
-      !assistantRow && mode === "agent" && catalogAllowed
-        ? `${personalized ? `${personalized}\n\n` : ""}${buildExpertCatalogPrompt(MARKET_EXPERTS)}`
-        : personalized;
+    // 专家目录段已删（2026-11-01 目录出 system 批，spec 见
+    // docs/superpowers/specs/2026-11-01-expert-catalog-to-tool-design.md）：
+    // 目录随 list_experts 两跳工具注入面走（collectToolDefinitions
+    // expertRecommend 参），system 侧零注入——未绑专家 agent 会话每轮
+    // 省 ~2970 字符（原 86% 固定开销归零，仅推荐真实发生时经工具结果
+    // 付一次性目录成本）
     // 场景提示段注入（新建任务 spec §4.2）：session.scenario 非空且已知时
     // 追加到 system 末尾；未知值/null 原样返回 base
     const scenarioSystem = buildScenarioSystem(
       session.scenario as string | null | undefined,
-      withCatalog,
+      personalized,
     );
     // 工作流挂载元说明（条件见 WORKFLOW_MOUNT_NOTE 注释）：未挂载会话
     // 在场景段之后追加，模型由此知道解锁路径而非"猜生效时机"
@@ -2241,6 +2256,7 @@ export default class ChatService {
               // 二期 T3：估算口径与下次请求同集；无中止信号（未发起流）
               ctx.team,
               ctx.toolGate,
+              this.allowExpertRecommend(ctx),
             );
       return computeUsageBreakdown({
         systemWithSummary: ctx.systemWithSummary,

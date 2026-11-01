@@ -207,7 +207,7 @@
       "mirrorPath": "electron/domains/ai/chat/expert-catalog.ts",
       "serverPath": "src/core/expert-catalog.ts",
       "baselineDiff": true,
-      "baselineLines": 15,
+      "baselineLines": 6,
       "note": "专家目录"
     },
     {
@@ -289,7 +289,7 @@
       "mirrorPath": "electron/domains/ai/automation/automation-runner.ts",
       "serverPath": "src/modules/automation/automation-runner.ts",
       "baselineDiff": true,
-      "baselineLines": 156,
+      "baselineLines": 159,
       "note": "自动化执行器（GA-T5 副本）：授权面 11 条——prisma→graphExecutorRuntime().db、chat.service→server chat-runner、@tianshu/core 引用、四符号（advanceTask 等）单向引自 executor 副本尾段（Ruling 8 勿复制成双份）。2026-10-29 切片 F：F3 resolveAutomationPermissions 注入 toolPermission 查表闭包（chat 链审批记忆批同款）——基线 139→152 过账。2026-11-01 dataRoot 收敛批（server 单侧）：resolveAttachments skillsRootDir 改走 graphExecutorRuntime().skillsDir（config 口径；mirror 侧对应段走桌面目录链不动）——基线 152→156 过账，分叉方向：本批改 server 侧；同批顺带清 library-repository-search 672→674 / library-disk-repository 151→153 预存 +2 已知态（cf564b11 登记的保留态，择机清零兑现）"
     },
     {

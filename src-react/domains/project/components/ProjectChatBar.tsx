@@ -163,6 +163,7 @@ export default function ProjectChatBar({
     content: string,
     files: PendingFile[],
     overrides?: ChatModelParams,
+    skillRefs?: string[],
   ) => {
     // 图片附件分流为多模态 image part（与 ChatPane.handleSend 同口径）
     const { textFiles, images } = splitImageFiles(files);
@@ -171,7 +172,13 @@ export default function ProjectChatBar({
       ? `${injected}${LOCAL_TASK_DIRECTIVE}`
       : injected;
     try {
-      const inFlight = send(finalContent, undefined, overrides, images);
+      const inFlight = send(
+        finalContent,
+        undefined,
+        overrides,
+        images,
+        skillRefs,
+      );
       invalidatePlanCachesOnStreamEnd({
         sessionId: session.id,
         projectId: detail.project.id,

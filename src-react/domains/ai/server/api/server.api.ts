@@ -396,6 +396,8 @@ export default class ServerApi {
     assistantId?: number,
     /** FA-T3 图片批：被控端数据根相对路径（files/uploadImage 返回值） */
     images?: string[],
+    /** skill_ref 批：技能引用名单——被控端落 SkillRefBlock 组装侧展开 */
+    skillRefs?: string[],
   ): Promise<void> {
     await requestRemote(
       "server:sessionSend",
@@ -405,6 +407,7 @@ export default class ServerApi {
         ...(modelId != null ? { modelId } : {}),
         ...(assistantId != null ? { assistantId } : {}),
         ...(images != null ? { images } : {}),
+        ...(skillRefs != null ? { skillRefs } : {}),
       },
       connId,
     );

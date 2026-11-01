@@ -34,6 +34,10 @@ export interface ChatSendParams {
   overrides?: ChatModelParams;
   /** 图片附件（多模态输入，视觉模型识别）；缺省纯文本 */
   images?: ChatSendImage[];
+  /** 技能引用（skill_ref 批）：引用 ⚡技能 名单——落 SkillRefBlock 前置
+   *  于 text 块（消息库不存全文，组装侧 loadSkill 展开注入）；
+   *  缺省走旧 text 前缀注入形态（历史兼容） */
+  skillRefs?: string[];
 }
 
 export type ChatStreamChunk =

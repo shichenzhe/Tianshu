@@ -169,7 +169,11 @@
     "imageSaveAs": "另存为…",
     "fileRefExport": "导出内容",
     "fileRefExported": "已开始下载",
-    "fileRefExportUnsupported": "该文件类型暂不支持导出"
+    "fileRefExportUnsupported": "该文件类型暂不支持导出",
+    "skillRefOpen": "点击预览技能 {{name}}",
+    "skillRefPreviewTitle": "技能预览：{{name}}",
+    "skillRefKind": "技能引用",
+    "skillRefFailed": "技能读取失败"
   },
   "codeBlock": {
     "copy": "复制代码",

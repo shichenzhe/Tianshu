@@ -141,11 +141,14 @@ interface ChatInputProps {
   onOpenMcp: () => void;
   /** 斜杠命令执行(/compact 等);ChatView 接压缩等实现 */
   onRunCommand: (command: string) => void;
-  /** 发送链路（错误 toast 由 ChatView toast+rethrow 负责，此处静默防双弹） */
+  /** 发送链路（错误 toast 由 ChatView toast+rethrow 负责，此处静默防双弹）；
+   *  skillRefs 为技能引用名单（skill_ref 批：不再 readSkill 拼全文，落块
+   *  组装侧展开） */
   onSend: (
     content: string,
     files: PendingFile[],
     overrides?: ChatModelParams,
+    skillRefs?: string[],
   ) => Promise<void>;
   onStop: () => void;
   /** 自定义占位文案（项目底栏传项目文案）；缺省沿用 chat 默认（AI 模块不变） */
@@ -596,14 +599,10 @@ export default function ChatInput({
           failures.push(filePath);
         }
       }
-      for (const name of new Set(skillTokens)) {
-        try {
-          const result = await SkillApi.readSkill(name);
-          files.push({ path: name, content: result.content, kind: "skill" });
-        } catch {
-          failures.push(name);
-        }
-      }
+      // 技能引用（skill_ref 批）：不再 readSkill 拼全文——名单直传落
+      // SkillRefBlock（组装侧 loadSkill 展开，消息库不膨胀）；⚡token
+      // 手输的坏技能不在此预检（模型侧降级行 + 卡片点击预览报错）
+      const skillRefs = [...new Set(skillTokens)];
       // 待办引用:token id 在 todoItems 命中即组摘要注入(查无 id 静默忽略);
       // aiSummary 非空时附 [进展] 块(末 10 行——长进展截尾保最新)
       for (const token of new Set(todoTokens)) {
@@ -683,7 +682,12 @@ export default function ChatInput({
         }
         return;
       }
-      void onSend(messageText, files).catch(() => {
+      // 无技能引用保持两参调用（既有 onSend 断言与调用方签名零扰动）
+      const sendCall =
+        skillRefs.length > 0
+          ? onSend(messageText, files, undefined, skillRefs)
+          : onSend(messageText, files);
+      void sendCall.catch(() => {
         /* 错误提示由 onSend 链路（toast+rethrow）与持久化错误块负责。
          * 早期失败（含远程图片上传失败——裁定 2026-10-21 阻断语义）时
          * 输入与 pill 已被乐观清空，此处恢复防吞输入（与上方 libFailures

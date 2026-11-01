@@ -366,6 +366,9 @@ export const IPC_INVOKE_ALLOWLIST = [
   // 聊天面板对齐（CU 批）：编辑重发 + 会话权限模式
   "server:sessionEditResend",
   "server:sessionAccessMode",
+  // 会话内工具批（A9）：压缩 202 受理 + 润色同步透传（P1-A 路由化补登记）
+  "server:sessionCompact",
+  "server:sessionPolish",
   // P1 尾未读角标：远程主机已读推进透传（session/read——与移动端
   // loadHistory 后上报同语义，被控端清远端角标经 enriched session.updated）
   "server:sessionRead",

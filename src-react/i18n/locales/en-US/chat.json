@@ -169,7 +169,11 @@
     "imageSaveAs": "Save as…",
     "fileRefExport": "Export content",
     "fileRefExported": "Download started",
-    "fileRefExportUnsupported": "This file type cannot be exported"
+    "fileRefExportUnsupported": "This file type cannot be exported",
+    "skillRefOpen": "Click to preview skill {{name}}",
+    "skillRefPreviewTitle": "Skill preview: {{name}}",
+    "skillRefKind": "Skill reference",
+    "skillRefFailed": "Failed to read skill"
   },
   "codeBlock": {
     "copy": "Copy code",

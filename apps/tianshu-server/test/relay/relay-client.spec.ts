@@ -10,9 +10,9 @@ import {
   resolveRelayLaunch,
   startHeadlessRelay,
   stopHeadlessRelay,
-  stopRelayAndExit,
   type HeadlessRelayApp,
 } from 'src/relay/relay-client';
+import { shutdownAndExit } from 'src/commons/web/shutdown';
 import { createTestDb, type TestDb } from '../support/test-db';
 import { createTestApp } from '../support/test-app';
 
@@ -334,7 +334,7 @@ describe('resolveRelayLaunch（CLI/环境驱动）', () => {
   });
 });
 
-describe('stopRelayAndExit（relay 模式信号收口）', () => {
+describe('shutdownAndExit（统一信号收口，main.ts gracefullShutdown 消费）', () => {
   const exitCalls: (number | undefined)[] = [];
   let exitSpy: jest.SpyInstance;
 
@@ -352,10 +352,15 @@ describe('stopRelayAndExit（relay 模式信号收口）', () => {
     exitSpy.mockRestore();
   });
 
-  it('停 relay → app.close() → process.exit(0)；close 异常也保证退出', async () => {
-    const close = jest.fn(() => Promise.resolve());
-    await stopRelayAndExit({ close });
+  it('前置钩子先于 close → app.close() → process.exit(0)；close 异常也保证退出', async () => {
+    const calls: string[] = [];
+    const beforeClose = () => calls.push('before');
+    const close = jest.fn(async () => {
+      calls.push('close');
+    });
+    await shutdownAndExit({ close }, beforeClose);
     expect(close).toHaveBeenCalledTimes(1);
+    expect(calls).toEqual(['before', 'close']);
     expect(exitCalls).toEqual([0]);
 
     // app.close() 抛错：仍要退出进程（否则首个 Ctrl-C 后进程存活——F2 原症状）
@@ -364,7 +369,7 @@ describe('stopRelayAndExit（relay 模式信号收口）', () => {
       Promise.reject(new Error('close failed')),
     );
     await expect(
-      stopRelayAndExit({ close: brokenClose }),
+      shutdownAndExit({ close: brokenClose }),
     ).resolves.toBeUndefined();
     expect(brokenClose).toHaveBeenCalledTimes(1);
     expect(exitCalls).toEqual([0]);

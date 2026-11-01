@@ -9,14 +9,15 @@
  * 4MiB 余量，spec §6 假设 1）。
  */
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { listWorkspaceFiles, readTextFileGuarded } from '@tianshu/core';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
-// 数据根 ~ 展开/环境变量覆写解析收口 commons（backup-root 同源消费）
-import { resolveDataRoot } from 'src/commons/util/path.util';
+// 数据根 config 口径单点（TIANSHU_DATA_ROOT 覆写链同源）
+import { tianshuDataRoot } from 'src/commons/config/tianshu-data-root';
 import type {
   RemoteFileContent,
   RemoteFileUploadInput,
@@ -30,10 +31,14 @@ const IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 export class FilesService {
   private readonly dataRoot: string;
 
-  constructor(private readonly prisma: PrismaService) {
-    // dataRoot 经环境变量注入（TIANSHU_DATA_ROOT——测试隔离同口径）；
-    // 不做构造参（Nest DI 无法解析普通对象参数，e2e 构建产物装配即炸）
-    this.dataRoot = resolveDataRoot('~/.tianshu-server');
+  constructor(
+    private readonly prisma: PrismaService,
+    configService: ConfigService,
+  ) {
+    // dataRoot 走 config tianshu 段（chat/automation 同口径；曾硬编码
+    // '~/.tianshu-server' 只认 env，config.yml 调 dataRoot 时上传目录与
+    // chat 读写面分裂）。ConfigService 为可 DI 类型，无普通对象构造参问题
+    this.dataRoot = tianshuDataRoot(configService);
   }
 
   /** workspace 绑定目录（未绑/不存在 → FILES_NO_WORKSPACE） */

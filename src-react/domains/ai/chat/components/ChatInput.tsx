@@ -359,15 +359,13 @@ export default function ChatInput({
     }
     const query = suggest.query.toLowerCase();
     if (suggest.type === "slash") {
-      // caps.files=false：compact 命令隐藏（远端不支持 chat:compact，
-      // spec §2.3 不映射清单）；技能候选保留（远程 skillsQuery 有面）
-      const commands: SuggestCandidate[] = (
-        filesCap
-          ? SLASH_COMMANDS
-          : SLASH_COMMANDS.filter((c) => c !== "compact")
-      )
-        .filter((cmd) => !query || cmd.includes(query))
-        .map((cmd) => ({ kind: "command", name: cmd }));
+      // compact 已主机路由化（A9 批 session/compact 两端被控面齐备）——
+      // 不再按 filesCap 隐藏（旧门控前提「远端不支持 chat:compact」已
+      // 失效，隐藏反而造成可用命令不可见）；技能候选保留（远程
+      // skillsQuery 有面）
+      const commands: SuggestCandidate[] = SLASH_COMMANDS.filter(
+        (cmd) => !query || cmd.includes(query),
+      ).map((cmd) => ({ kind: "command", name: cmd }));
       const skills: SuggestCandidate[] = (skillsQuery.data ?? [])
         .filter((r) => r.enabled)
         .filter((r) => !query || r.name.toLowerCase().includes(query))

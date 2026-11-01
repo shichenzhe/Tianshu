@@ -119,6 +119,28 @@ describe("mcp-config.store", () => {
     );
   });
 
+  it("资源独立防迟到：load 在途时轮询 tick 先回不判 load 过期（旧全局 reqSeq 下管理段卡 loading、列表不渲染）", async () => {
+    const t = makeTransport();
+    const queryDefer = deferred<ReturnType<typeof successBody>>();
+    t.request.mockImplementation((_m: string, path: string) => {
+      if (path === ENDPOINTS.mcp.query) return queryDefer.promise;
+      // statuses（轮询 tick）立即返回
+      return Promise.resolve(successBody([STATUS_ITEM]));
+    });
+    connMock.activeTransport.mockReturnValue(t);
+
+    // relay 慢链路：load(query+statuses 串联)在途 → 15s 轮询 tick 先回
+    const loadPromise = useMcpConfigStore.getState().load();
+    await useMcpConfigStore.getState().refreshStatuses();
+    queryDefer.resolve(successBody([QUERY_ROW]));
+    await loadPromise;
+
+    const s = useMcpConfigStore.getState();
+    expect(s.rows).toHaveLength(1);
+    expect(s.loading).toBe(false);
+    expect(s.initialized).toBe(true);
+  });
+
   it("statuses 失败（旧被控端）行保留 null 运行态不阻断列表", async () => {
     const t = makeTransport();
     t.request.mockImplementation((_m: string, path: string) => {

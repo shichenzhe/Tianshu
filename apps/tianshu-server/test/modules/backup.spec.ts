@@ -30,7 +30,9 @@ process.env.TIANSHU_BACKUP_DIR = backupRoot;
 delete process.env.TIANSHU_DATA_ROOT;
 prismaStub.option.findUnique.mockResolvedValue(null); // maxKeep 走默认 10
 
-const service = new BackupService(prismaStub as never);
+// config 替身：dataRoot 缺省值（BACKUP_DIR_ENV 优先级更高，dataRoot 不参与）
+const configStub = { get: () => ({ dataRoot: '~/.tianshu-server' }) };
+const service = new BackupService(prismaStub as never, configStub as never);
 const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 const IDENTITY_ADMIN = { kind: 'admin' } as const;

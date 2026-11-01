@@ -173,13 +173,9 @@ describe('ChatRunnerService run', () => {
 
   it('loadImage 回喂：落盘图片转 dataUrl 传给模型、读不到降级占位文本（修复：runChatStream 缺席 loader 时整链静默降级）', async () => {
     const { session } = await seedSession(db, dirs);
-    // uploadImage 落盘根同口径（files.service resolveDataRoot：
-    // TIANSHU_DATA_ROOT > ~/.tianshu-server）
-    const attachRoot = join(
-      process.env.TIANSHU_DATA_ROOT!,
-      'attachments',
-      'timgfeed',
-    );
+    // uploadImage 落盘根同口径：loader 读 config().dataRoot（makeRunner
+    // 注入 dirs.dataRoot——与 files.service uploadImage 的 config 口径闭环）
+    const attachRoot = join(dirs.dataRoot, 'attachments', 'timgfeed');
     mkdirSync(attachRoot, { recursive: true });
     writeFileSync(join(attachRoot, 'shot.png'), Buffer.from('fake-png'));
     const { runner, model } = makeRunner(db, dirs, [

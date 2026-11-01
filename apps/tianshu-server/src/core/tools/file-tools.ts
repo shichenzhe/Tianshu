@@ -7,10 +7,10 @@
  */
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import type { ToolContext, ToolDefinition } from './tool-definition';
+import { resolveDataRoot } from 'src/commons/util/path.util';
 
 export type { ToolDefinition } from './tool-definition';
 
@@ -457,9 +457,14 @@ async function listFilesUnder(root: string): Promise<string[]> {
   return files;
 }
 
-/** 服务端回收目录根（mirror shell.trashItem 的无头替代）：数据根下 trash/ */
+/** 服务端回收目录根（mirror shell.trashItem 的无头替代）：数据根下 trash/。
+ *  生产 ctx.trashRoot 恒由 chat-runner config 注入（config dataRoot 口径）；
+ *  兜底走 env 链（TIANSHU_DATA_ROOT > ~/.tianshu-server）——独立调用/测试面 */
 export function trashRootOf(ctx: ToolContext): string {
-  return ctx.trashRoot ?? path.join(os.homedir(), '.tianshu-server', 'trash');
+  return (
+    ctx.trashRoot ??
+    path.join(resolveDataRoot('~/.tianshu-server'), 'trash')
+  );
 }
 
 /** 递归复制（跨设备 EXDEV 回退用） */

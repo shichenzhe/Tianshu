@@ -480,7 +480,7 @@ describe("session 透传与 invalid-token 连接态", () => {
 });
 
 describe("IPC 装配（registerServerIpc）", () => {
-  it("48 通道注册（P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
+  it("50 通道注册（P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
     const port = await reservePort();
     const face = await FakeFace.start(port, "face-token");
     const registry = newRegistry();
@@ -523,11 +523,13 @@ describe("IPC 装配（registerServerIpc）", () => {
         "server:sessionAbort",
         "server:sessionAccessMode",
         "server:sessionApprove",
+        "server:sessionCompact",
         "server:sessionCreate",
         "server:sessionDelete",
         "server:sessionEditResend",
         "server:sessionGet",
         "server:sessionList",
+        "server:sessionPolish",
         "server:sessionRead",
         "server:sessionRegenerate",
         "server:sessionSend",

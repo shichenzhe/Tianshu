@@ -14,6 +14,8 @@ import type { ChatStreamChunk } from "@/domains/ai/api/chat.api";
 import type {
   RemoteFileUploadInput,
   RemoteWorkspaceBrief,
+  SessionPolishParams,
+  SessionPolishResult,
   SessionReadResult,
   SessionUsageBreakdown,
   ToolRequestPayload,
@@ -628,6 +630,24 @@ export default class ServerApi {
       { sessionId, ...(messageId != null ? { messageId } : {}) },
       connId,
     );
+  }
+
+  /** 会话压缩（A9 会话内工具批）：202 受理后台执行——完成后 session.updated
+   * 事件驱动刷新（渲染层 app 级缓存失效常驻注册），Promise 受理即回 */
+  static async sessionCompact(
+    sessionId: number,
+    connId: string,
+  ): Promise<void> {
+    await requestRemote("server:sessionCompact", { sessionId }, connId);
+  }
+
+  /** 落地页润色（A9 会话内工具批）：一次性非流式补全（被控端同步 30s
+   * 窗口）；workspaceId 为远端空间 id（单 UI 远程态列表值） */
+  static async sessionPolish(
+    params: SessionPolishParams,
+    connId: string,
+  ): Promise<SessionPolishResult> {
+    return requestRemote("server:sessionPolish", params, connId);
   }
 
   /** 专家列表（发送选专家用；headless 空表如实返回空；icon 头像列显示） */

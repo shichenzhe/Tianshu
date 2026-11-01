@@ -22,14 +22,14 @@ export async function wireRequest(
   path: string,
   body?: unknown,
   transport: Transport | null = activeTransport(),
+  options?: { timeoutMs?: number },
 ): Promise<WireResult> {
   if (!transport) return { ok: false, code: "", message: "" };
   try {
-    const result: TransportRequestResult = await transport.request(
-      method,
-      path,
-      body,
-    );
+    // 无 options 不多传尾参——消费方 mock 断言普遍按三参全参匹配
+    const result: TransportRequestResult = await (options
+      ? transport.request(method, path, body, options)
+      : transport.request(method, path, body));
     if (typeof result.body !== "object" || result.body === null) {
       return { ok: false, code: "", message: "", status: result.status };
     }

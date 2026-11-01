@@ -16,8 +16,11 @@ jest.mock('src/commons/database/prisma.service', () => ({
 
 const dataRoot = mkdtempSync(path.join(os.tmpdir(), 'files-svc-'));
 process.env.TIANSHU_DATA_ROOT = dataRoot;
-// dataRoot 经环境变量注入（Nest DI 不解析普通构造参——服务同口径）
-const svc = () => new FilesService(prismaStub as never);
+// config 替身：dataRoot 同测试临时目录（env 覆写链同源——resolveDataRoot
+// 优先 env，config 值被覆盖，两口径汇于同目录）
+const configStub = { get: () => ({ dataRoot: '~/.tianshu-server' }) };
+const svc = () =>
+  new FilesService(prismaStub as never, configStub as never);
 
 function bindWorkspace(directoryPath: string | null) {
   prismaStub.workspace.findFirst.mockResolvedValue(

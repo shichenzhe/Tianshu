@@ -24,8 +24,10 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
+import { tianshuDataRoot } from 'src/commons/config/tianshu-data-root';
 import { resolveBackupRoot } from './backup-root';
 import type { BackupIdentity } from './backup.guard';
 import {
@@ -49,10 +51,18 @@ export class BackupService {
   /** 已收块游标（id → 期望下一 seq） */
   private readonly cursor = new Map<string, number>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  /** config 数据根（备份根派生口径——chat 同源） */
+  private readonly dataRoot: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    configService: ConfigService,
+  ) {
+    this.dataRoot = tianshuDataRoot(configService);
+  }
 
   private dir(id: string) {
-    return path.join(resolveBackupRoot(), id);
+    return path.join(resolveBackupRoot(this.dataRoot), id);
   }
   private partPath(id: string) {
     return path.join(this.dir(id), 'data.tar.gz.part');
@@ -174,7 +184,7 @@ export class BackupService {
   }
 
   async list(identity: BackupIdentity): Promise<BackupListResult> {
-    const root = resolveBackupRoot();
+    const root = resolveBackupRoot(this.dataRoot);
     const ids = existsSync(root)
       ? readdirSync(root).filter((d) => existsSync(this.metaPath(d)))
       : [];

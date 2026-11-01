@@ -164,11 +164,33 @@ function parseReadImageResult(data: unknown): LibraryReadImageResult | null {
   return { mime: result.mime, dataBase64: result.dataBase64 };
 }
 
-let reqSeq = 0;
+/** 资源内请求序号：list（浏览/搜索/最近/收藏——同一 items 面的不同
+ *  查询，后发覆盖先发为既定语义）/ tree（移动弹层）/ subtree（删除确认
+ *  计数）/ readText / readImage（预览单读）/ write（写串行面）各自独立
+ *  ——列表在途时打开移动弹层/图片预览/删除确认不再互判过期（旧全局
+ *  reqSeq 下列表响应被弹层请求判过期丢弃：文件夹点击没反应且 loading
+ *  悬挂；反向场景预览误报 stale response）；同资源内后发仍使先发过期 */
+type LibraryResource =
+  | "list"
+  | "tree"
+  | "subtree"
+  | "readText"
+  | "readImage"
+  | "write";
+
+const reqSeqs: Record<LibraryResource, number> = {
+  list: 0,
+  tree: 0,
+  subtree: 0,
+  readText: 0,
+  readImage: 0,
+  write: 0,
+};
 let writeChain: Promise<unknown> = Promise.resolve();
 let pendingWrites = 0;
 
 interface RequestToken {
+  resource: LibraryResource;
   seq: number;
   connId: string | null;
   transport: ReturnType<typeof activeTransport>;
@@ -176,7 +198,7 @@ interface RequestToken {
 
 /** 请求前置四重门禁：活动连接存在 + library 能力已协商 + transport 可用，
  *  不满足不发请求（返回 null，调用方静默返回） */
-function beginRequest(): RequestToken | null {
+function beginRequest(resource: LibraryResource): RequestToken | null {
   const connId = useConnectionsStore.getState().activeConnId;
   if (!connId) return null;
   const capabilities =
@@ -184,12 +206,12 @@ function beginRequest(): RequestToken | null {
   if (!capabilities?.includes("library")) return null;
   const transport = activeTransport();
   if (!transport) return null;
-  return { seq: ++reqSeq, connId, transport };
+  return { resource, seq: ++reqSeqs[resource], connId, transport };
 }
 
 function isCurrentRequest(token: RequestToken): boolean {
   return (
-    token.seq === reqSeq &&
+    token.seq === reqSeqs[token.resource] &&
     token.connId === useConnectionsStore.getState().activeConnId &&
     token.transport === activeTransport()
   );
@@ -215,7 +237,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
   /** 写面统一出口：串行排队 + saving 态 + 三重防迟到校验；响应 data 不消费
    *  （服务端不返权威列表），成功后走 refreshAfterWrite 局部刷新 */
   async function enqueueWrite(path: string, body: unknown): Promise<boolean> {
-    const token = beginRequest();
+    const token = beginRequest("write");
     if (!token) return false;
     pendingWrites += 1;
     set({ saving: true, loading: false, error: null });
@@ -258,7 +280,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     body: unknown,
     apply: (items: LibraryRow[]) => void,
   ): Promise<boolean> {
-    const token = beginRequest();
+    const token = beginRequest("list");
     if (!token) return false;
     set({ loading: true, error: null });
     try {
@@ -297,7 +319,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     stale: { ...INITIAL_STALE },
 
     load: async (parentId = null) => {
-      const token = beginRequest();
+      const token = beginRequest("list");
       if (!token) return;
       set({
         loading: true,
@@ -385,7 +407,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     },
 
     loadTree: async () => {
-      const token = beginRequest();
+      const token = beginRequest("tree");
       if (!token) return [];
       try {
         const result = await wireRequest(
@@ -402,7 +424,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     },
 
     subtreeCount: async (id) => {
-      const token = beginRequest();
+      const token = beginRequest("subtree");
       if (!token) return null;
       try {
         const result = await wireRequest(
@@ -458,7 +480,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     markViewed: (id) => enqueueWrite(ENDPOINTS.library.markViewed, { id }),
 
     readText: async (id) => {
-      const token = beginRequest();
+      const token = beginRequest("readText");
       if (!token) throw new Error("no connection");
       const result = await wireRequest(
         "POST",
@@ -479,7 +501,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     },
 
     readImage: async (id) => {
-      const token = beginRequest();
+      const token = beginRequest("readImage");
       if (!token) throw new Error("no connection");
       const result = await wireRequest(
         "POST",
@@ -500,7 +522,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     },
 
     writeContent: async (id, content) => {
-      const token = beginRequest();
+      const token = beginRequest("write");
       if (!token) throw new Error("no connection");
       pendingWrites += 1;
       set({ saving: true, loading: false, error: null });
@@ -559,7 +581,7 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
      *  writeContent）。成功回传新行：浏览态就地插入当前目录列表行（不重拉），
      * 非浏览态置脏；失败抛 codedError（LIBRARY_UPLOAD_INVALID 等） */
     uploadFile: async (parentId, name, base64) => {
-      const token = beginRequest();
+      const token = beginRequest("write");
       if (!token) throw new Error("no connection");
       pendingWrites += 1;
       set({ saving: true, loading: false, error: null });
@@ -610,7 +632,9 @@ export const useLibraryStore = create<LibraryState>((set, get) => {
     },
 
     resetForTest: () => {
-      reqSeq += 1;
+      for (const resource of Object.keys(reqSeqs) as LibraryResource[]) {
+        reqSeqs[resource] += 1;
+      }
       writeChain = Promise.resolve();
       pendingWrites = 0;
       set({

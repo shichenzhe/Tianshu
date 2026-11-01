@@ -43,13 +43,17 @@ export function createDirectTransport(config: DirectConfig): Transport {
     method: "GET" | "POST",
     path: string,
     body?: unknown,
+    options?: { timeoutMs?: number },
   ): Promise<TransportRequestResult> {
     // 手动 AbortController + 完成即清（不用 AbortSignal.timeout：后者倒计时
     // 与 fetch 生命周期解耦，响应后仍会到期 abort——expo/fetch 对「已完成
     // fetch 的 signal 事后 abort」存在内部 promise 链无 handler 路径，真机
     // LogBox 报 Uncaught (in promise) AbortError）
     const timeoutAbort = new AbortController();
-    const timer = setTimeout(() => timeoutAbort.abort(), 15_000);
+    const timer = setTimeout(
+      () => timeoutAbort.abort(),
+      options?.timeoutMs ?? 15_000,
+    );
     try {
       const res = await fetch(`${config.baseUrl}/${path.replace(/^\//, "")}`, {
         method,

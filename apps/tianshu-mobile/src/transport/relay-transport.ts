@@ -175,13 +175,14 @@ export function createRelayTransport(config: RelayConfig): Transport {
     method: "GET" | "POST",
     path: string,
     body?: unknown,
+    options?: { timeoutMs?: number },
   ): Promise<TransportRequestResult> {
     return new Promise((resolve) => {
       const id = nextId++;
       const timer = setTimeout(() => {
         pending.delete(id);
         resolve({ status: 0, body: null }); // 超时=不可达语义
-      }, REQ_TIMEOUT_MS);
+      }, options?.timeoutMs ?? REQ_TIMEOUT_MS);
       pending.set(id, { resolve, timer });
       send({
         kind: "req",

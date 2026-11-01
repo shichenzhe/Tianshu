@@ -7,8 +7,8 @@
       "mirrorPath": "electron/domains/ai/agent/file-tools.ts",
       "serverPath": "src/core/tools/file-tools.ts",
       "baselineDiff": true,
-      "baselineLines": 74,
-      "note": "工具集五件文件工具本体；server 为无头摘取版（emitPanel/commandWatchBlacklist 不移植）——有意分叉，基线守护"
+      "baselineLines": 77,
+      "note": "工具集五件文件工具本体；server 为无头摘取版（emitPanel/commandWatchBlacklist 不移植）——有意分叉，基线守护。2026-11-01 dataRoot 收敛批（server 单侧）：trashRootOf 兜底改 env 感知 resolveDataRoot（mirror 侧无此函数，os.homedir 直拼保留）——基线 74→77 过账，分叉方向：本批改 server 侧"
     },
     {
       "id": "agent-command-tool",
@@ -289,8 +289,8 @@
       "mirrorPath": "electron/domains/ai/automation/automation-runner.ts",
       "serverPath": "src/modules/automation/automation-runner.ts",
       "baselineDiff": true,
-      "baselineLines": 152,
-      "note": "自动化执行器（GA-T5 副本）：授权面 11 条——prisma→graphExecutorRuntime().db、chat.service→server chat-runner、@tianshu/core 引用、四符号（advanceTask 等）单向引自 executor 副本尾段（Ruling 8 勿复制成双份）。2026-10-29 切片 F：F3 resolveAutomationPermissions 注入 toolPermission 查表闭包（chat 链审批记忆批同款）——基线 139→152 过账"
+      "baselineLines": 156,
+      "note": "自动化执行器（GA-T5 副本）：授权面 11 条——prisma→graphExecutorRuntime().db、chat.service→server chat-runner、@tianshu/core 引用、四符号（advanceTask 等）单向引自 executor 副本尾段（Ruling 8 勿复制成双份）。2026-10-29 切片 F：F3 resolveAutomationPermissions 注入 toolPermission 查表闭包（chat 链审批记忆批同款）——基线 139→152 过账。2026-11-01 dataRoot 收敛批（server 单侧）：resolveAttachments skillsRootDir 改走 graphExecutorRuntime().skillsDir（config 口径；mirror 侧对应段走桌面目录链不动）——基线 152→156 过账，分叉方向：本批改 server 侧；同批顺带清 library-repository-search 672→674 / library-disk-repository 151→153 预存 +2 已知态（cf564b11 登记的保留态，择机清零兑现）"
     },
     {
       "id": "automation-scheduler",
@@ -377,7 +377,7 @@
       "mirrorPath": "electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 672,
+      "baselineLines": 674,
       "note": "资料库仓储（PL-2）：仅检索段同构（search keyword trim 截 100 contains 仅 file / getById↔mustGet 同报不泄露存在性）——mirror 写面（addFiles/importFolder/rename/move/delete 等磁盘双写）与 location 面包屑投影不在本文件（graph 检索消费面零改动，library 批不回归）；写面 golden 移植见 library-disk-repository 对。文件名 library.repository.ts 沿 server *.repository.ts 先例（graph/automation repository 同形）"
     },
     {
@@ -409,7 +409,7 @@
       "mirrorPath": "electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library-disk.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 151,
+      "baselineLines": 153,
       "note": "资料库磁盘管理仓储（library 批）：mirror library.repo.ts 业务逻辑逐行对齐（addFiles 复制入库/递归导入跳隐藏软链/move/delete 级联/subtreeCount/rename/move 撞名磁盘双写+断裂补偿）；有意分叉留档头注释——无 IPC handler 注册、openLink/revealItem（shell 专属）不移植、Log.warn→可注入 onWarn、libraryRoot 构造注入、AddFilesResult 内联本文件；检索面摘取在 library-repository-search 对"
     }
   ]

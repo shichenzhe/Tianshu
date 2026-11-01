@@ -614,7 +614,9 @@ export const hybridSearchNodeSchema = z.object({
   mode: z.enum(["hybrid", "keyword", "semantic"]).default("hybrid"),
   topK: z.number().int().min(1).max(50).default(5),
   modelId: z.number().int().optional(),
-  timeoutMs: z.number().int().optional(),
+  /** embedding/FTS 调用整体超时（optional 保持——JSON 手改图缺省走
+   * executor 兜底 120s；界对齐 vectorSearch 家族 1s~600s） */
+  timeoutMs: z.number().int().min(1_000).max(600_000).optional(),
 });
 
 /** 重排节点（kind:rerank）：消费上游 hybridSearch 的 hits 旁路做
@@ -629,7 +631,8 @@ export const rerankNodeSchema = z.object({
   sourceNodeId: z.string().min(1),
   modelId: z.number().int(),
   topN: z.number().int().min(1).max(50).default(5),
-  timeoutMs: z.number().int().optional(),
+  /** 重排 API 调用整体超时（optional 保持；界对齐 vectorSearch 家族） */
+  timeoutMs: z.number().int().min(1_000).max(600_000).optional(),
 });
 
 export const graphNodeSchema = z.union([

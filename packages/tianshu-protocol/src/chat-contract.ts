@@ -97,8 +97,25 @@ export interface ImageBlock {
   name?: string;
 }
 
+/**
+ * 技能引用块（user 消息）：引用 ⚡技能 落块的形态——只存技能名，全文由
+ * 组装侧 loadSkill 展开注入（对齐 WorkBuddy resource_link 语义：消息库
+ * 不膨胀、技能改版后重发取新版全文；引用块前置于 text，与旧注入前缀
+ * 同序）。渲染侧独立技能卡片（点击按名预览全文）。
+ */
+export interface SkillRefBlock {
+  type: "skill_ref";
+  /** 技能名（readSkill 键） */
+  name: string;
+}
+
 export type MessageBlock =
-  TextBlock | ThinkingBlock | UsageBlock | ToolCallBlock | ImageBlock;
+  | TextBlock
+  | ThinkingBlock
+  | UsageBlock
+  | ToolCallBlock
+  | ImageBlock
+  | SkillRefBlock;
 
 /** 审批应答（移动端 spec §4.1）：批准/拒绝挂起的 write 工具调用；
  *  remember=true 时被控端写工作空间级工具记忆（toolPermission 持久行，

@@ -11,6 +11,7 @@ import type { MessageBlock } from "@tianshu/protocol";
 export type {
   ImageBlock,
   MessageBlock,
+  SkillRefBlock,
   TextBlock,
   ThinkingBlock,
   ToolCallBlock,
@@ -42,6 +43,8 @@ function isValidBlock(block: unknown): block is MessageBlock {
       return typeof b.toolCallId === "string" && typeof b.toolName === "string";
     case "image":
       return typeof b.imagePath === "string" && typeof b.mime === "string";
+    case "skill_ref":
+      return typeof b.name === "string";
     default:
       return false;
   }

@@ -179,6 +179,9 @@ export class SessionRepository {
     userId: number,
   ): Promise<QueryResult<SessionSummaryRecord>> {
     const { keyword, ...rest } = params;
+    // page<=0 收敛 1（skip 恒非负——graph.repository 同款防御，客户端
+    // 错参直发时 Prisma 拒负 skip 即 500）
+    const page = params.page <= 0 ? 1 : params.page;
     const where = {
       ...SessionQueryDecoder.getInstance().condition(rest),
       userId,
@@ -189,7 +192,7 @@ export class SessionRepository {
       const [records, total] = await Promise.all([
         this.prisma.sessionRecord.findMany({
           where,
-          skip: (params.page - 1) * params.pageSize,
+          skip: (page - 1) * params.pageSize,
           take: params.pageSize,
           orderBy,
         }),
@@ -197,7 +200,7 @@ export class SessionRepository {
       ]);
       return QueryResult.of<SessionSummaryRecord>(
         await this.enrichRecords(records),
-        params.page,
+        page,
         params.pageSize,
         total,
       );
@@ -206,10 +209,10 @@ export class SessionRepository {
     const filtered = (
       await this.prisma.sessionRecord.findMany({ where, orderBy })
     ).filter((row) => (row.title ?? '').includes(keyword));
-    const start = (params.page - 1) * params.pageSize;
+    const start = (page - 1) * params.pageSize;
     return QueryResult.of<SessionSummaryRecord>(
       await this.enrichRecords(filtered.slice(start, start + params.pageSize)),
-      params.page,
+      page,
       params.pageSize,
       filtered.length,
     );

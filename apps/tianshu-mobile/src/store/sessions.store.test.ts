@@ -842,7 +842,7 @@ describe("sessions store", () => {
       "POST",
       ENDPOINTS.session.query,
       {
-        page: 0,
+        page: 1,
         pageSize: 50,
         keyword: "",
         workspaceId: 3,
@@ -860,7 +860,7 @@ describe("sessions store", () => {
       "POST",
       ENDPOINTS.session.query,
       {
-        page: 0,
+        page: 1,
         pageSize: 50,
         keyword: "",
         archived: false,

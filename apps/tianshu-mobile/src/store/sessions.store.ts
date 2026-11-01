@@ -469,7 +469,9 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
         },
       }));
       const r = await request(ENDPOINTS.session.query, {
-        page: 0,
+        // 1 基分页（主列表同参）：曾发 page:0——直连无头端 skip 负值
+        // 直接 500，组展开恒显「暂无会话」（relay 桌面被控端有钳制侥幸正常）
+        page: 1,
         pageSize: PAGE_SIZE,
         keyword: "",
         ...(workspaceId != null ? { workspaceId } : {}),

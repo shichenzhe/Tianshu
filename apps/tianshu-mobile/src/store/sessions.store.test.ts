@@ -12,6 +12,8 @@ const connMock = vi.hoisted(() => {
   // state 订阅回调可手动发射（subscribe 用普通函数——注册须跨用例存续）
   const connStateCbs = new Set<(s: { activeConnId: string | null }) => void>();
   let activeConnId: string | null = null;
+  // 批③：能力面缓存（loadProjects 门禁消费；undefined 对应未协商/旧替身）
+  let capabilitiesByConn: Record<string, string[]> | undefined;
   return {
     state,
     activeTransport: vi.fn(),
@@ -24,7 +26,7 @@ const connMock = vi.hoisted(() => {
       for (const cb of [...cbs]) cb(e);
     },
     useConnectionsStore: {
-      getState: () => ({ activeConnId }),
+      getState: () => ({ activeConnId, capabilitiesByConn }),
       subscribe: (cb: (s: { activeConnId: string | null }) => void) => {
         connStateCbs.add(cb);
         return () => connStateCbs.delete(cb);
@@ -34,6 +36,9 @@ const connMock = vi.hoisted(() => {
     setActiveConnId: (id: string | null) => {
       activeConnId = id;
       for (const cb of [...connStateCbs]) cb({ activeConnId: id });
+    },
+    setCapabilitiesByConn: (caps: Record<string, string[]> | undefined) => {
+      capabilitiesByConn = caps;
     },
   };
 });
@@ -378,6 +383,55 @@ describe("sessions store", () => {
     expect(
       useSessionsStore.getState().items.find((i) => i.id === 2)?.unreadCount,
     ).toBe(7);
+  });
+
+  it("workspace.changed / project.changed（批③）：触发 loadFirst 全量刷新", async () => {
+    transport.request.mockResolvedValue(ok(page1));
+    await useSessionsStore.getState().loadFirst();
+    transport.request.mockClear();
+
+    for (const type of ["workspace.changed", "project.changed"] as const) {
+      connMock.emit({ type, payload: {} });
+      for (
+        let i = 0;
+        i < 10 && transport.request.mock.calls.length < 1;
+        i += 1
+      ) {
+        await Promise.resolve();
+      }
+      expect(transport.request).toHaveBeenCalledWith(
+        "POST",
+        ENDPOINTS.session.query,
+        expect.objectContaining({ page: 1 }),
+      );
+      transport.request.mockClear();
+    }
+  });
+
+  it("loadProjects（批③）：project 能力才拉取投影 id/name；无能力清表", async () => {
+    connMock.setActiveConnId("conn-p");
+    connMock.setCapabilitiesByConn({ "conn-p": ["chat", "project"] });
+    transport.request.mockResolvedValueOnce(
+      ok([{ id: 7, name: "项目甲", systemPrompt: "裁剪掉" }]),
+    );
+    await useSessionsStore.getState().loadProjects();
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      ENDPOINTS.project.query,
+      {},
+    );
+    expect(useSessionsStore.getState().projects).toEqual([
+      { id: 7, name: "项目甲" },
+    ]);
+
+    // 无 project 能力（无头端）：不发请求、清表防换连残留
+    transport.request.mockClear();
+    connMock.setCapabilitiesByConn({ "conn-p": ["chat"] });
+    await useSessionsStore.getState().loadProjects();
+    expect(transport.request).not.toHaveBeenCalled();
+    expect(useSessionsStore.getState().projects).toEqual([]);
+    connMock.setCapabilitiesByConn(undefined);
+    connMock.setActiveConnId(null);
   });
 
   it("server.connected：触发 loadFirst 全量刷新", async () => {

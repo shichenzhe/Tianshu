@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { groupSessionsByWorkspace } from "./workspace-grouping";
+import {
+  groupSessionsByWorkspace,
+  splitProjectSessions,
+} from "./workspace-grouping";
 
 /** 列表行子集（分组只消费 workspaceId，其余字段略） */
 const row = (id: number, workspaceId?: number | null) =>
@@ -54,5 +57,43 @@ describe("groupSessionsByWorkspace（MB-T2，对齐桌面 HD-A2 语义）", () =
       "x",
     );
     expect(groups.map((g) => g.title)).toEqual(["有会话"]);
+  });
+});
+
+describe("splitProjectSessions（批③，对齐桌面 D4 项目组语义）", () => {
+  const prow = (id: number, projectId?: number | null) =>
+    ({ id, projectId }) as { id: number; projectId?: number | null };
+
+  it("projectId 命中项目剥为组（组序随 projects 序）、其余留 rest", () => {
+    const { groups, rest } = splitProjectSessions(
+      [prow(1, 7), prow(2, null), prow(3, 8), prow(4, 7)],
+      [
+        { id: 8, name: "项目乙" },
+        { id: 7, name: "项目甲" },
+      ],
+    );
+    expect(groups.map((g) => g.name)).toEqual(["项目乙", "项目甲"]);
+    expect(groups[1].items.map((r) => r.id)).toEqual([1, 4]);
+    expect(rest.map((r) => r.id)).toEqual([2]);
+  });
+
+  it("projectId 非空但项目不可见不剥离（窗口期防丢行）", () => {
+    const { groups, rest } = splitProjectSessions(
+      [prow(1, 99), prow(2, 7)],
+      [{ id: 7, name: "项目甲" }],
+    );
+    expect(groups).toHaveLength(1);
+    expect(rest.map((r) => r.id)).toEqual([1]);
+  });
+
+  it("无会话项目不产出空组；projects 空 → 全留 rest（无头端）", () => {
+    const only = splitProjectSessions([prow(1, 7)], [
+      { id: 7, name: "甲" },
+      { id: 8, name: "空项目" },
+    ]);
+    expect(only.groups.map((g) => g.name)).toEqual(["甲"]);
+    const headless = splitProjectSessions([prow(1, 7), prow(2, null)], []);
+    expect(headless.groups).toEqual([]);
+    expect(headless.rest.map((r) => r.id)).toEqual([1, 2]);
   });
 });

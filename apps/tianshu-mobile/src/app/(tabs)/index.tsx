@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -37,7 +37,7 @@ import {
 } from "@/logic/archive-undo";
 import { tapLight } from "@/lib/haptics";
 import { toast } from "@/lib/toast-bus";
-import { groupSessionsByWorkspace } from "@/logic/workspace-grouping";
+import { groupSessionsByWorkspace, splitProjectSessions } from "@/logic/workspace-grouping";
 import type { SessionTimeFilter } from "@/logic/session-time-filter";
 import { useConnectionsStore } from "@/store/connections.store";
 import { useSearchUiStore } from "@/store/search-ui";
@@ -109,7 +109,8 @@ interface GroupHeaderRowProps {
   /** 组间空隙由组头承担（首组免顶距） */
   gapTop: boolean;
   onToggle: (wsId: number, isOpen: boolean) => void;
-  onCreate: (wsId: number) => void;
+  /** null=不渲染「+」（项目组——创建入口在项目页） */
+  onCreate: ((wsId: number) => void) | null;
 }
 
 /** 工作空间组头（性能批 memo）：展开/收缩只重渲染受影响的组头——props
@@ -151,20 +152,22 @@ const GroupHeaderRow = memo(function GroupHeaderRow({
         >
           {title}
         </Text>
-        <Pressable
-          onPress={() => onCreate(wsId)}
-          disabled={creating}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: creating, busy: creating }}
-          accessibilityLabel={t("chat:newSession")}
-          className="h-11 w-11 items-center justify-center rounded-full"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.subtle : "transparent",
-            opacity: creating ? 0.5 : 1,
-          })}
-        >
-          <MessageSquarePlus size={17} color={colors.primary} />
-        </Pressable>
+        {onCreate != null && (
+          <Pressable
+            onPress={() => onCreate(wsId)}
+            disabled={creating}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: creating, busy: creating }}
+            accessibilityLabel={t("chat:newSession")}
+            className="h-11 w-11 items-center justify-center rounded-full"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.subtle : "transparent",
+              opacity: creating ? 0.5 : 1,
+            })}
+          >
+            <MessageSquarePlus size={17} color={colors.primary} />
+          </Pressable>
+        )}
         <View className="flex-1" />
         {count !== null && (
           <Text className="text-[13px] text-label3 dark:text-[#EBEBF54D]">
@@ -225,6 +228,7 @@ export default function SessionsScreen() {
 
   const items = useSessionsStore((s) => s.items);
   const workspaces = useSessionsStore((s) => s.workspaces);
+  const projects = useSessionsStore((s) => s.projects);
   const keyword = useSessionsStore((s) => s.keyword);
   const showArchived = useSessionsStore((s) => s.showArchived);
   const timeFilter = useSessionsStore((s) => s.timeFilter);
@@ -249,6 +253,11 @@ export default function SessionsScreen() {
   /** 展开组集合（key=workspaceId；默认全收缩——GL-P5；未归属目录已移除，
       组态列表仅真实工作空间） */
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  /** 批③：项目组展开集合（key=projectId，与 workspace id 空间独立——
+      两者同为自增 number 存在撞值可能，不共集合） */
+  const [expandedProjects, setExpandedProjects] = useState<Set<number>>(
+    new Set(),
+  );
   /** 组头「+」创建防重入（value=正在创建的 workspaceId） */
   const [creatingWs, setCreatingWs] = useState<number | null>(null);
   /** 重命名目标（null=对话框关闭；B1 对齐桌面 renameSession） */
@@ -256,9 +265,14 @@ export default function SessionsScreen() {
   /** 长按目标（操作面板数据源；null=面板关闭） */
   const [sheetSession, setSheetSession] = useState<SessionBrief | null>(null);
 
-  useEffect(() => {
-    void loadFirst();
-  }, [loadFirst]);
+  // 批③：挂载即聚焦，useFocusEffect 覆盖首拉；Tab 常驻挂载（切项目/设置
+  // 页返回不重跑 useEffect），聚焦兜底重拉——他端/本端其他页写入的漏事件
+  // 缺口（事件链为主、聚焦为兜底）与微信进列表即刷新语义对齐
+  useFocusEffect(
+    useCallback(() => {
+      void loadFirst();
+    }, [loadFirst]),
+  );
 
   /** 置顶/归档切换：失败提示（成功本地即时反映无需提示） */
   const handleUpdate = useCallback(
@@ -347,6 +361,20 @@ export default function SessionsScreen() {
     [loadWorkspaceSessions],
   );
 
+  /** 批③：项目组展开/收缩（行来自主列表剥离，无懒加载——不触组缓存拉取） */
+  const toggleProjectGroup = useCallback((projectId: number) => {
+    tapLight();
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
+
   /** 行回调组（全 stable——memo 会话行 props 稳定的根基） */
   const openSheetFor = useCallback((s: SessionBrief) => {
     tapLight();
@@ -417,10 +445,17 @@ export default function SessionsScreen() {
 
   // MB-T2：按 workspace 分组（组随空间 id 升序、未匹配沉底兜底——兜底
   // 仅搜索态呈现；组态目录已按用户裁定去掉未归属组）；GL-P5：keyword 空
-  // 走折叠组模式（workspace 清单，展开才查），搜索态用全量 sections
+  // 走折叠组模式（workspace 清单，展开才查），搜索态用全量 sections。
+  // 批③：先剥离项目会话（projectId 命中项目列表，项目不可见不剥离防丢行）
+  // ——项目组独立渲染在空间组之后（对齐桌面 D4；此前项目会话因资产空间
+  // 不在 workspace 清单而恒落兜底/组态不可见）
+  const { groups: projectGroups, rest } = useMemo(
+    () => splitProjectSessions(items, projects),
+    [items, projects],
+  );
   const sections = useMemo(
-    () => groupSessionsByWorkspace(items, workspaces, t("ungrouped")),
-    [items, workspaces, t],
+    () => groupSessionsByWorkspace(rest, workspaces, t("ungrouped")),
+    [rest, workspaces, t],
   );
   /** 拍平列表条目（性能批）：组态把展开组的会话行提升为独立 FlatList
    *  条目——整列表虚拟化生效（旧结构整组建在一个 item 里，展开 N 条一次
@@ -436,6 +471,16 @@ export default function SessionsScreen() {
         creating: boolean;
         gapTop: boolean;
       }
+    | {
+        /** 批③：项目组头（行直接来自主列表剥离——无懒加载组缓存；组内全量
+         *  性随翻页累积，深翻页对齐留待 session/query 增 projectId 过滤批） */
+        kind: "pgroup";
+        key: string;
+        projectId: number;
+        title: string;
+        count: number;
+        open: boolean;
+      }
     | { kind: "pending"; key: string; state: "loading" | "empty" }
     | {
         kind: "row";
@@ -446,13 +491,23 @@ export default function SessionsScreen() {
     | { kind: "search"; key: string; title: string; data: SessionBrief[] };
   const listData = useMemo<ListEntry[]>(() => {
     if (keyword.trim() !== "") {
-      return sections.map((s): ListEntry => ({
-        kind: "search",
-        // s.key（ws-<id>/ws-ungrouped）全表唯一；同名工作空间标题会撞 key
-        key: s.key,
-        title: s.title,
-        data: s.data,
-      }));
+      return [
+        ...sections.map((s): ListEntry => ({
+          kind: "search",
+          // s.key（ws-<id>/ws-ungrouped）全表唯一；同名工作空间标题会撞 key
+          key: s.key,
+          title: s.title,
+          data: s.data,
+        })),
+        ...projectGroups.map(
+          (g): ListEntry => ({
+            kind: "search",
+            key: `prj-${g.id}`,
+            title: g.name,
+            data: g.items,
+          }),
+        ),
+      ];
     }
     // 组态：仅真实工作空间目录（用户裁定——未归属目录常态为空没必要
     // 存在；两端建会话必挂空间，未匹配会话仅在搜索态兜底分组出现）；
@@ -493,8 +548,41 @@ export default function SessionsScreen() {
         entries.push({ kind: "row", key: `r${session.id}`, session, edge });
       });
     });
+    // 批③：项目组接在空间组之后（对齐桌面侧栏 D4 渲染序）
+    projectGroups.forEach((pg) => {
+      const open = expandedProjects.has(pg.id);
+      entries.push({
+        kind: "pgroup",
+        key: `pg${pg.id}`,
+        projectId: pg.id,
+        title: pg.name,
+        count: pg.items.length,
+        open,
+      });
+      if (!open) return;
+      pg.items.forEach((session, i) => {
+        const edge: "first" | "middle" | "last" | "single" =
+          pg.items.length === 1
+            ? "single"
+            : i === 0
+              ? "first"
+              : i === pg.items.length - 1
+                ? "last"
+                : "middle";
+        entries.push({ kind: "row", key: `r${session.id}`, session, edge });
+      });
+    });
     return entries;
-  }, [keyword, sections, workspaces, workspaceSessions, expanded, creatingWs]);
+  }, [
+    keyword,
+    sections,
+    projectGroups,
+    workspaces,
+    workspaceSessions,
+    expanded,
+    expandedProjects,
+    creatingWs,
+  ]);
 
   function renderEmpty() {
     if (!activeConnId) {
@@ -701,6 +789,20 @@ export default function SessionsScreen() {
             }
             if (item.kind === "pending") {
               return <GroupPendingRow state={item.state} />;
+            }
+            if (item.kind === "pgroup") {
+              return (
+                <GroupHeaderRow
+                  wsId={item.projectId}
+                  title={item.title}
+                  count={item.count}
+                  open={item.open}
+                  creating={false}
+                  gapTop
+                  onToggle={toggleProjectGroup}
+                  onCreate={null}
+                />
+              );
             }
             return (
               <SessionEntryRow

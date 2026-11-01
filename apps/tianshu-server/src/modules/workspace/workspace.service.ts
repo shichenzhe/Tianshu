@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { PrismaService } from 'src/commons/database/prisma.service';
+import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { WorkspaceIdDto } from './dto/workspace-id.dto';
 import { WorkspaceSaveDto } from './dto/workspace-save.dto';
 
@@ -25,7 +26,16 @@ export interface WorkspaceBrief {
  */
 @Injectable()
 export class WorkspaceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly bus: EventBusService,
+  ) {}
+
+  /** 批③（2026-11-01）：写后发 workspace.changed 列表级刷新信号（SSE/relay
+   *  出口扇出给已连控制端重拉——session.updated 同款先例） */
+  private publishChanged(): void {
+    this.bus.publish({ type: 'workspace.changed', payload: {} });
+  }
 
   async query(): Promise<WorkspaceBrief[]> {
     return (
@@ -61,6 +71,7 @@ export class WorkspaceService {
             : {}),
         },
       });
+      this.publishChanged();
       return this.toBrief(row);
     } catch (error) {
       if (
@@ -94,6 +105,7 @@ export class WorkspaceService {
             : {}),
         },
       });
+      this.publishChanged();
       return this.toBrief(row);
     } catch (error) {
       if (
@@ -127,6 +139,7 @@ export class WorkspaceService {
       });
       await tx.workspace.delete({ where: { id: dto.id } });
     });
+    this.publishChanged();
     return null;
   }
 

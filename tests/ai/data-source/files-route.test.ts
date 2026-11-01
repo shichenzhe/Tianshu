@@ -128,6 +128,8 @@ describe("ChatApi.send 远程 images 链（FA-T3 图片批）", () => {
       undefined,
       undefined,
       ["attachments/d1/a.png", "attachments/d1/b.jpg"],
+      // skill_ref 批：sessionSend 第 7 参 skillRefs（无引用时缺省）
+      undefined,
     );
 
     // 无 base64 的图（如资料库图片 pill）：阻断——REMOTE_IMAGE_UNAVAILABLE，

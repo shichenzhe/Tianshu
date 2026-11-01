@@ -139,6 +139,8 @@ describe("ChatApi 远程主机（适配器映射）", () => {
       4,
       undefined,
       undefined,
+      // skill_ref 批：sessionSend 第 7 参 skillRefs（无引用时缺省）
+      undefined,
     );
 
     await ChatApi.send({ sessionId: 9, content: "再发" });
@@ -146,6 +148,7 @@ describe("ChatApi 远程主机（适配器映射）", () => {
       9,
       "再发",
       "c1",
+      undefined,
       undefined,
       undefined,
       undefined,

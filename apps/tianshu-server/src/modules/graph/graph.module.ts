@@ -6,9 +6,12 @@
  * 运行时先于其 scheduler/runner 消费就位。
  */
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import path from 'node:path';
 import { PrismaModule } from 'src/commons/database/prisma.module';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
+import { tianshuDataRoot } from 'src/commons/config/tianshu-data-root';
 import { WebhookModule } from 'src/modules/webhook/webhook.module';
 import { WebhookService } from 'src/modules/webhook/webhook.service';
 import {
@@ -59,15 +62,23 @@ export const GRAPH_TOOLS_REGISTRATION = Symbol('GRAPH_TOOLS_REGISTRATION');
     },
     {
       provide: GRAPH_EXECUTOR_RUNTIME,
-      inject: [PrismaService, GraphRepository, EventBusService],
+      inject: [PrismaService, GraphRepository, EventBusService, ConfigService],
       useFactory: (
         prisma: PrismaService,
         repository: GraphRepository,
         bus: EventBusService,
+        configService: ConfigService,
       ): GraphExecutorRuntime => {
+        // 目录三件显式注入 config 数据根派生（chat/automation 同口径）——
+        // 缺席时 executor-runtime 兜底只认 env（TIANSHU_DATA_ROOT >
+        // ~/.tianshu-server），config.yml 调 dataRoot 会与 chat 分裂
+        const dataRoot = tianshuDataRoot(configService);
         const runtime: GraphExecutorRuntime = {
           db: prisma,
           runs: repository,
+          skillsDir: () => path.join(dataRoot, 'skills'),
+          libraryDir: () => path.join(dataRoot, 'library'),
+          workflowAssetsDir: () => path.join(dataRoot, 'workflow-assets'),
           // 授权面 2/7（GA-T4 头注释）：db/run 原语 + 事件出口注入化
           publishRunUpdated: (payload) =>
             bus.publish({ type: 'graph.run.updated', payload }),

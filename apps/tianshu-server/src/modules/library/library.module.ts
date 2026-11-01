@@ -5,9 +5,12 @@
  * 路由。AppModule 显式注册。
  */
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import path from 'node:path';
 import { PrismaModule } from 'src/commons/database/prisma.module';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { LoggerFactory } from 'src/commons/log/logger-factory';
+import { tianshuDataRoot } from 'src/commons/config/tianshu-data-root';
 import { LibraryDiskRepository } from 'src/core/library/library-disk.repository';
 import { LibraryController } from './library.controller';
 import { LibraryService } from './library.service';
@@ -18,13 +21,22 @@ import { LibraryService } from './library.service';
   providers: [
     {
       provide: LibraryDiskRepository,
-      useFactory: (prisma: PrismaService, logFactory: LoggerFactory) =>
-        new LibraryDiskRepository(prisma, undefined, (message, error) =>
-          logFactory
-            .create('LibraryDiskRepository')
-            .warn(message, { error: String(error) }),
+      useFactory: (
+        prisma: PrismaService,
+        logFactory: LoggerFactory,
+        configService: ConfigService,
+      ) =>
+        new LibraryDiskRepository(
+          prisma,
+          // libraryRoot 显式注入 config 数据根派生（chat 同口径；构造缺省
+          // 只认 env，config.yml 调 dataRoot 时资料库盘面与 chat 分裂）
+          path.join(tianshuDataRoot(configService), 'library'),
+          (message, error) =>
+            logFactory
+              .create('LibraryDiskRepository')
+              .warn(message, { error: String(error) }),
         ),
-      inject: [PrismaService, LoggerFactory],
+      inject: [PrismaService, LoggerFactory, ConfigService],
     },
     LibraryService,
   ],

@@ -140,14 +140,16 @@ const IMAGE_READ_LIMIT = 10 * 1024 * 1024;
  * imagePath（数据根相对）→ dataUrl：历史 ImageBlock 模型回喂读取通道
  * （mirror workspace-files.readImageAsDataUrl 纯 Node 同构）。越出数据根
  * （防 ../ 穿越）、未收录格式、超 10MB、读失败一律返回 null（core 侧
- * 降级占位文本，不抛错）。根与 files.service uploadImage 落盘同口径
- * （resolveDataRoot：TIANSHU_DATA_ROOT > ~/.tianshu-server）——读写闭环；
- * config.yml dataRoot 双口径收敛属另批（skills/trash 已走 config 侧）
+ * 降级占位文本，不抛错）。root 由调用方传 config().dataRoot——与
+ * files.service uploadImage 落盘同口径（config tianshu.dataRoot 经
+ * TIANSHU_DATA_ROOT 可覆盖）读写闭环
  */
-async function readImageAsDataUrl(imagePath: string): Promise<string | null> {
-  const root = path.resolve(resolveDataRoot('~/.tianshu-server'));
-  const abs = path.resolve(root, imagePath);
-  if (!abs.startsWith(root + path.sep)) {
+async function readImageAsDataUrl(
+  root: string,
+  imagePath: string,
+): Promise<string | null> {
+  const abs = path.resolve(path.resolve(root), imagePath);
+  if (!abs.startsWith(path.resolve(root) + path.sep)) {
     return null;
   }
   const mime = IMAGE_MIME_OF[path.extname(abs).toLowerCase()];
@@ -903,8 +905,10 @@ export class ChatRunnerService {
           ctx.mode === 'ask' ? [] : this.collectToolDefinitions(ctx),
         agent: ctx.agent,
         onChunk: options.onChunk,
-        // 历史图片块回喂：数据根读盘转 dataUrl（读不到由 core 降级占位）
-        loadImage: readImageAsDataUrl,
+        // 历史图片块回喂：config 数据根读盘转 dataUrl（与 files.service
+        // 落盘同口径读写闭环；读不到由 core 降级占位）
+        loadImage: (imagePath) =>
+          readImageAsDataUrl(this.config().dataRoot, imagePath),
       });
 
       // 持久化 assistant 消息（中断也保留已生成部分）

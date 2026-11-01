@@ -57,7 +57,10 @@ import { createChatModel } from '../../core/provider/model-factory';
 import { buildSystemPrompt } from '../../core/skill-prompt';
 import { commandGate } from '../../core/security/command-gate';
 import { fileGate } from '../../core/security/file-gate';
-import { resolveAttachments } from './resolve-attachments';
+import {
+  resolveAttachments,
+  defaultResolveDeps,
+} from './resolve-attachments';
 import {
   advanceTask,
   collectTools,
@@ -349,10 +352,18 @@ async function streamAndRecord(
   ctx: StreamContext,
 ): Promise<'success' | 'failed'> {
   // 引用解析(spec §2)：失败短路 failRun；成功取注入文本与聚焦技能清单
+  // ——技能目录与 chat/graph 节点同源（executor-runtime skillsDir，
+  // graph.module 注入 config dataRoot 派生；defaultResolveDeps 的缺省
+  // 只认 env，config.yml 调 dataRoot 时 prompt 任务技能引用与 chat
+  // 加载面分裂）
   const resolution = await resolveAttachments(
     task.prompt,
     ctx.workspacePath,
     new Date(),
+    {
+      ...defaultResolveDeps,
+      skillsRootDir: graphExecutorRuntime().skillsDir,
+    },
   );
   if ('error' in resolution) {
     return await failRun(

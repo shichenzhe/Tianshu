@@ -249,7 +249,7 @@
       "mirrorPath": "electron/domains/ai/orchestration/graph-executor.ts",
       "serverPath": "src/core/graph/graph-executor.ts",
       "baselineDiff": true,
-      "baselineLines": 328,
+      "baselineLines": 329,
       "note": "图执行器（GA-T4 副本，executor 4095→4314 行）：授权面 7 条+环境适配——prisma→运行时句柄、Electron 副作用→钩子、事件出口 graph.run.updated、automation-runner 断环摘取段尾部追加；逐 hunk 改造点登记见 server 文件头注释——基线必然大。PL-3 裁定（PL-T2 concern ①）：断环摘取段 collectTools 无工作空间白名单加入 library_search（mirror 无该工具，server 独有偏离，头注释改造点 9）。随行支撑件 executor-runtime.ts（GraphRunStore 类型+进程级 install/accessor）为 server 新建、无 mirror 单文件对应（类型散在 mirror graph.repo/graph-executor），不入比对。2026-10-28 去会话化同批双改（Task 3+6）：旧 session/message 双份段（createGraphSession/writeNodeMessages/writeNodeFailure）拆除、节点详情落 graphRunNode——基线 231→219（旧段 server 侧 this.prisma 前缀行本就多差 12 行，拆除后回落）；残余 2 行 = prisma→runtime 句柄（db.graphRunNode.create）授权差异。2026-10-29 切片 B：mirror 独有数据源引用解析（dataSourceId → 元库 dataSourceConfig，datasource-resolver.ts 桌面单份随行件不入比对）+ db-client ssl 透传（两份同改，db-client 对仍 0 差异）——executor 内 handler 装配段 +36 行基线过账。2026-10-29 切片 D：mirror 独有 typed 输入链（GraphRunParams/state inputs 放宽 GraphInputValue + database 参数单一 input 引用原生直通 DIRECT_INPUT_REF）——+29 行基线过账；D2 收尾 prettier 折行再 +15。2026-10-29 切片 F：server 侧 typed 输入链补齐（GraphRunParams/state inputs 放宽对齐 mirror D 批——修 D 批只改 core 未同步 server 注解的编译债）+ DIRECT_INPUT_REF 参数原生直通同构 + resolveAutomationPermissions toolPermission 查表注入（F3）——基线 302→314 过账。2026-10-31 rerank 节点批（T2 mirror 888053cb 对段移植双份同步）：基线 217→231，增量 14 = traceSuccess payload 两处 server 惯用 hug 形（mirror 断行 6 行 vs server 4 行，2×6=12）+ parseExtraHeaders 动态 import 路径分叉（../provider/provider-runtime → ../provider/model-factory，先例 embedTexts，-1/+1=2）；handler 其余段归一化后逐行同形（引号/注释/import 块均被归一化剥离）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 314→328：分支基线 314 不含 HEAD 线 rerank/hybridSearch 批的分叉增量 14（hug 形+import 路径——两线并行各自过账，合并后叠加），hybridSearch/rerank handler 与数据源/typed 输入落位同文件互不复用段，逐段语义并立无逻辑漂移"
     },
     {
@@ -297,7 +297,7 @@
       "mirrorPath": "electron/domains/ai/automation/automation-runner.ts",
       "serverPath": "src/modules/automation/automation-runner.ts",
       "baselineDiff": true,
-      "baselineLines": 159,
+      "baselineLines": 188,
       "note": "自动化执行器（GA-T5 副本）：授权面 11 条——prisma→graphExecutorRuntime().db、chat.service→server chat-runner、@tianshu/core 引用、四符号（advanceTask 等）单向引自 executor 副本尾段（Ruling 8 勿复制成双份）。2026-10-29 切片 F：F3 resolveAutomationPermissions 注入 toolPermission 查表闭包（chat 链审批记忆批同款）——基线 139→152 过账。2026-11-01 dataRoot 收敛批（server 单侧）：resolveAttachments skillsRootDir 改走 graphExecutorRuntime().skillsDir（config 口径；mirror 侧对应段走桌面目录链不动）——基线 152→156 过账，分叉方向：本批改 server 侧；同批顺带清 library-repository-search 672→674 / library-disk-repository 151→153 预存 +2 已知态（cf564b11 登记的保留态，择机清零兑现）"
     },
     {
@@ -345,7 +345,7 @@
       "mirrorPath": "electron/domains/ai/orchestration/graph.repo.ts",
       "serverPath": "src/modules/graph/graph.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 674,
+      "baselineLines": 672,
       "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移。2026-10-29 切片 C：mirror 独有会话应用作用域装配（run/list/create_workflow 注 appDelegate，作用域实现单份在 create-workflow.ts 不入比对）——+3 行基线过账。2026-10-29 切片 D：mirror 独有 runTest 入口归一（normalizeInputsFor + typed launch 签名）——631→652 过账。2026-10-31 查询下推批：server 新增 pageGraphs（keyword contains 引擎感知下推 + skip/take DB 分页，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 622→647 过账（纯 server 侧新增，无既有行改动）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 652→674：分支基线 652 不含 HEAD 线查询下推批的 server 单侧 pageGraphs 增量（两线并行各自过账，合并后叠加）；HEAD 线工具名精简四件注册与分支线 appDelegate 装配同落构造块，逐段语义并立无逻辑漂移"
     },
     {

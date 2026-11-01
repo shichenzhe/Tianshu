@@ -125,7 +125,9 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
         UID,
       );
       expect(created.id).toBeGreaterThan(0);
-      expect(created.nodeCount).toBe(2);
+      // fixture 无 start 节点：保存链 normalizeGraph 自愈补齐（2026-11-01
+      // 审查批④对齐 mirror）——落库 nodes=3（start+collect+report）
+      expect(created.nodeCount).toBe(3);
       expect(created.version).toBe(1);
       expect(created.description).toBe('备注');
     });

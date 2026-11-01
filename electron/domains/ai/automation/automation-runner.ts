@@ -426,8 +426,8 @@ async function streamAndRecord(
         opts.dataSafety ?? automationDataSafety
       )?.bulkDeleteThreshold(),
       onBackupFile:
-        (opts.dataSafety ?? automationDataSafety)
-          ? (absPath: string, sid: string) =>
+        opts.dataSafety ?? automationDataSafety
+          ? (absPath: string, sid: number | null) =>
               (opts.dataSafety ?? automationDataSafety)!.backupFile(
                 absPath,
                 sid,

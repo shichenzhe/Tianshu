@@ -19,6 +19,11 @@ import { wireRequest } from "../transport/wire";
 /** 润色风格：对齐桌面现状固定 professional（桌面 UI 无风格选择） */
 export const POLISH_STYLE: SessionPolishStyle = "professional";
 
+/** 润色请求超时覆写：被控端同步窗口 30s（AbortSignal.timeout(30_000)，
+ *  协议 SessionPolishParams 注释口径）+ 网络余量——transport 缺省
+ *  10s/15s 会提前 abort 假失败（服务端可能仍成功，结果被丢） */
+const POLISH_TIMEOUT_MS = 35_000;
+
 export type PolishResult =
   { ok: true; text: string } | { ok: false; message: string };
 
@@ -73,6 +78,8 @@ export const useSessionToolsStore = create<SessionToolsState>((set, get) => ({
           ...(workspaceId != null ? { workspaceId } : {}),
         },
         transport ?? activeTransport(),
+        // 同步 LLM 补全长操作：放宽 transport 缺省超时（见 POLISH_TIMEOUT_MS）
+        { timeoutMs: POLISH_TIMEOUT_MS },
       );
       if (!r.ok) {
         return { ok: false, message: r.message };

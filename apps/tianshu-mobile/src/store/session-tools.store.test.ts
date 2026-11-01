@@ -81,30 +81,42 @@ describe("compact（A9 阶段 2）", () => {
 });
 
 describe("polish（A9 阶段 3）", () => {
-  it("端点映射：POST session/polish + {text,style,workspaceId} 载荷", async () => {
+  it("端点映射：POST session/polish + {text,style,workspaceId} 载荷 + 35s 超时覆写", async () => {
     const transport = makeTransport();
     transport.request.mockResolvedValue(ok({ text: "润色后文本" }));
     const r = await useSessionToolsStore
       .getState()
       .polish("草稿", 3, transport);
     expect(r).toEqual({ ok: true, text: "润色后文本" });
-    expect(transport.request).toHaveBeenCalledWith("POST", "session/polish", {
-      text: "草稿",
-      style: POLISH_STYLE,
-      workspaceId: 3,
-    });
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      "session/polish",
+      {
+        text: "草稿",
+        style: POLISH_STYLE,
+        workspaceId: 3,
+      },
+      // 润色是一次同步 LLM 补全，被控端窗口 30s（AbortSignal.timeout，
+      // 协议注释口径）——transport 缺省 10s/15s 会提前 abort 假失败
+      { timeoutMs: 35_000 },
+    );
     expect(ENDPOINTS.session.polish).toBe("session/polish");
     expect(POLISH_STYLE).toBe("professional");
   });
 
-  it("workspaceId 为 null 时不带该字段（载荷可选语义）", async () => {
+  it("workspaceId 为 null 时不带该字段（载荷可选语义；超时覆写保持）", async () => {
     const transport = makeTransport();
     transport.request.mockResolvedValue(ok({ text: "x" }));
     await useSessionToolsStore.getState().polish("草稿", null, transport);
-    expect(transport.request).toHaveBeenCalledWith("POST", "session/polish", {
-      text: "草稿",
-      style: "professional",
-    });
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      "session/polish",
+      {
+        text: "草稿",
+        style: "professional",
+      },
+      { timeoutMs: 35_000 },
+    );
   });
 
   it("成功返回润色文本（调用方据此替换草稿）", async () => {

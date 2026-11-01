@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 import { installSkillZip } from 'src/core/tools/skill-installer';
+import { resolveDataRoot } from 'src/commons/util/path.util';
+import type { TianshuConfig } from 'src/commons/config/tianshu-config.entity';
+import { TianshuConfig as TianshuConfigEntity } from 'src/commons/config/tianshu-config.entity';
 
 /** A3 尾：base64 zip 上传上限（与 mirror files/uploadImage 3MB 同口径，
  *  relay 单帧 4MiB 余量约束） */
@@ -24,7 +28,22 @@ export interface SkillStatItem {
  */
 @Injectable()
 export class SkillsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  /** skills 目录（chat-runner skillsDir 同口径：config tianshu.dataRoot，
+   *  TIANSHU_DATA_ROOT 环境变量可覆盖）。曾用 resolveDataRoot('.')——未设
+   *  env 时为进程 CWD 相对路径，默认部署下管理面与 chat 消费目录分叉
+   *  （query 恒空/install 落错目录），远控技能面整体失效 */
+  private skillsDir(): string {
+    const tianshu = this.configService.get<TianshuConfig>(
+      'tianshu',
+      TianshuConfigEntity.getDefault(),
+    );
+    return path.join(resolveDataRoot(tianshu.dataRoot), 'skills');
+  }
 
   private async listSkills(): Promise<
     Array<{
@@ -35,12 +54,9 @@ export class SkillsService {
     }>
   > {
     const { loadSkills } = await import('src/core/tools/skill-loader');
-    const { resolveDataRoot } = await import('src/core/chat-runner.service');
     // 与 chat-runner collectSkills 同口径（用户级目录；enabled 过滤由
     // 调用方 skillRecord 过滤——联想清单展示全部，禁用技能发送侧拒）
-    const skills = loadSkills([
-      { dir: path.join(resolveDataRoot('.'), 'skills'), source: 'user' },
-    ]);
+    const skills = loadSkills([{ dir: this.skillsDir(), source: 'user' }]);
     return skills.map((skill) => ({
       name: skill.name,
       description: skill.description,
@@ -127,8 +143,7 @@ export class SkillsService {
     if (buf.length > UPLOAD_MAX_BYTES) {
       throw new BusinessException('zip 超过 3MB 上限', 'SKILL_UPLOAD_INVALID');
     }
-    const { resolveDataRoot } = await import('src/core/chat-runner.service');
-    const skillsRoot = path.join(resolveDataRoot('.'), 'skills');
+    const skillsRoot = this.skillsDir();
     try {
       return await installSkillZip(buf, {
         skillsRoot,

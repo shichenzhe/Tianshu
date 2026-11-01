@@ -12,7 +12,7 @@
  * - 自动压缩（T32 autoCompact/compactRound/handover-summary）不移植——
  *   超窗兜底仍由 truncateHistory 硬截；压缩态**读取**（compactedUpToId/
  *   summary 过滤 + system 摘要段注入）保留，桌面端写入的压缩态可正确消费
- * - 标题自动生成 / 图片附件（多模态输入落盘与回喂）/
+ * - 标题自动生成 /
  *   专家目录与专家团（recommend_expert/dispatch）/ 项目上下文
  *   prompt（project-prompt）/ 监控埋点（recordLlmCall/recordToolCall）不移植
  * - 个性化 prompt 注入 PL-1 起移植：读侧 src/core/personalization.ts（option
@@ -131,6 +131,39 @@ function imageBlocksOf(images: string[]): MessageBlock[] {
       name,
     } satisfies MessageBlock;
   });
+}
+
+/** 图片回喂读取上限 10MB（mirror workspace-files IMAGE_READ_LIMIT 同口径） */
+const IMAGE_READ_LIMIT = 10 * 1024 * 1024;
+
+/**
+ * imagePath（数据根相对）→ dataUrl：历史 ImageBlock 模型回喂读取通道
+ * （mirror workspace-files.readImageAsDataUrl 纯 Node 同构）。越出数据根
+ * （防 ../ 穿越）、未收录格式、超 10MB、读失败一律返回 null（core 侧
+ * 降级占位文本，不抛错）。根与 files.service uploadImage 落盘同口径
+ * （resolveDataRoot：TIANSHU_DATA_ROOT > ~/.tianshu-server）——读写闭环；
+ * config.yml dataRoot 双口径收敛属另批（skills/trash 已走 config 侧）
+ */
+async function readImageAsDataUrl(imagePath: string): Promise<string | null> {
+  const root = path.resolve(resolveDataRoot('~/.tianshu-server'));
+  const abs = path.resolve(root, imagePath);
+  if (!abs.startsWith(root + path.sep)) {
+    return null;
+  }
+  const mime = IMAGE_MIME_OF[path.extname(abs).toLowerCase()];
+  if (!mime) {
+    return null;
+  }
+  try {
+    const stat = await fs.promises.stat(abs);
+    if (!stat.isFile() || stat.size > IMAGE_READ_LIMIT) {
+      return null;
+    }
+    const buf = await fs.promises.readFile(abs);
+    return `data:${mime};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
 }
 
 /** 运行配置（config.yml tianshu 段的最小消费集） */
@@ -870,6 +903,8 @@ export class ChatRunnerService {
           ctx.mode === 'ask' ? [] : this.collectToolDefinitions(ctx),
         agent: ctx.agent,
         onChunk: options.onChunk,
+        // 历史图片块回喂：数据根读盘转 dataUrl（读不到由 core 降级占位）
+        loadImage: readImageAsDataUrl,
       });
 
       // 持久化 assistant 消息（中断也保留已生成部分）

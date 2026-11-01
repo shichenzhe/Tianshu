@@ -171,6 +171,49 @@ describe('ChatRunnerService run', () => {
     expect(escape).toBe('FILES_IMAGE_PATH_INVALID');
   });
 
+  it('loadImage 回喂：落盘图片转 dataUrl 传给模型、读不到降级占位文本（修复：runChatStream 缺席 loader 时整链静默降级）', async () => {
+    const { session } = await seedSession(db, dirs);
+    // uploadImage 落盘根同口径（files.service resolveDataRoot：
+    // TIANSHU_DATA_ROOT > ~/.tianshu-server）
+    const attachRoot = join(
+      process.env.TIANSHU_DATA_ROOT!,
+      'attachments',
+      'timgfeed',
+    );
+    mkdirSync(attachRoot, { recursive: true });
+    writeFileSync(join(attachRoot, 'shot.png'), Buffer.from('fake-png'));
+    const { runner, model } = makeRunner(db, dirs, [
+      { steps: [{ kind: 'text', delta: 'ok' }] },
+    ]);
+
+    await runner.run({
+      sessionId: session.id,
+      content: '看图',
+      images: ['attachments/timgfeed/shot.png', 'attachments/timgfeed/gone.png'],
+      onChunk: () => {},
+    });
+
+    // 模型首轮收到的末条 HumanMessage：落盘图 → image_url dataUrl part；
+    // 缺失图 → 降级占位文本（core imageFallbackText）
+    const human = model.seenInputs[0].at(-1)!;
+    const parts = human.content as Array<{
+      type: string;
+      text?: string;
+      image_url?: { url: string };
+    }>;
+    expect(Array.isArray(parts)).toBe(true);
+    const imageUrl = parts.find((part) => part.type === 'image_url');
+    expect(imageUrl?.image_url?.url.startsWith('data:image/png;base64,')).toBe(
+      true,
+    );
+    expect(
+      parts.some(
+        (part) =>
+          part.type === 'text' && part.text!.includes('gone.png 已失效'),
+      ),
+    ).toBe(true);
+  });
+
   it('bash：allowDangerousTools=false 时整体拒绝（denied 终态块，命令不执行）', async () => {
     const { session } = await seedSession(db, dirs);
     const { runner, model } = makeRunner(db, dirs, [

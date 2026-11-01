@@ -32,3 +32,32 @@ describe('SessionRepository.query keyword null 标题防御', () => {
     expect(result.records[0].title).toBe('alpha test log');
   });
 });
+
+describe('SessionRepository.query page<=0 收敛', () => {
+  it('page:0 不产生负 skip（Prisma 拒负值即 500），回传 page 归一为 1', async () => {
+    // 客户端错参直发场景（mobile 组懒加载曾发 page:0）：graph.repository
+    // 同款钳制——skip 恒非负，分页基准归一
+    const findManyCalls: Array<{ skip?: number; take?: number }> = [];
+    const prisma = {
+      sessionRecord: {
+        findMany: async (args?: { skip?: number; take?: number }) => {
+          findManyCalls.push(args ?? {});
+          return [{ id: 2, title: 'ok' }];
+        },
+        count: async () => 1,
+      },
+      messageRecord: {
+        groupBy: async () => [],
+        findMany: async () => [],
+      },
+    } as unknown as PrismaService;
+    const repo = new SessionRepository(prisma);
+
+    const result = await repo.query({ page: 0, pageSize: 10 }, 1);
+
+    expect(findManyCalls[0]?.skip).toBe(0);
+    expect(findManyCalls[0]?.take).toBe(10);
+    expect(result.page).toBe(1);
+    expect(result.records).toHaveLength(1);
+  });
+});

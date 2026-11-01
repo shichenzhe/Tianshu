@@ -57,7 +57,7 @@ export interface AgentStreamOptions {
   modelId?: number;
   /**
    * 绑定目录的规范化绝对路径（无尾部分隔符）；未绑定目录时为 undefined——
-   * 文件四件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
+   * 文件五件依赖它（不注入），read_skill 与 mcp__ 工具不依赖（P2 常驻）
    */
   workspacePath?: string;
   /**
@@ -217,7 +217,7 @@ async function executeToolSafe(
   try {
     return await def.execute(
       // 未绑定工作空间时无路径（文件工具不会注入；mcp/read_skill 不读 ctx）；
-      // fullAccess 供文件四件边界放开与 bash cwd 放开（P3 spec §6）；
+      // fullAccess 供文件五件边界放开与 bash cwd 放开（P3 spec §6）；
       // projectId 供 plan_* 工具属地校验（子系统 F，非项目会话 null）；
       // onSecurityEvent 供 bash 拦截/cwd 回退上报（SP1 审计）；
       // userId 供 create/update_expert 按用户隔离落库（专家 2.0）；
@@ -446,7 +446,7 @@ function resolveCommandRisk(toolName: string, input: unknown): CommandRisk {
  * （unattended 强拒；full 豁免）/ allow 跳审批 / default 回落既有链路；
  * 危险分级线（权限放宽 2026-10-24 spec §4.5）：HIGH/CRITICAL 危险命令
  * default/full 两档均审批（对齐 WorkBuddy bypass），unattended 强拒；
- * 文件判定门（SP3，SP4 增 rm）：文件四件先经 gate——block 审批
+ * 文件判定门（SP3，SP4 增 rm）：文件五件先经 gate——block 审批
  * （unattended 强拒；full 豁免）/ allow 跳审批 / default 回落既有链路（与命令门互斥，default 时链路不变）；
  * 批量删除预估门（SP4）：rm 目录预估 ≥ 阈值 → 无条件强制审批
  * （unattended 强拒；full 豁免——2026-10-23 三档递进裁定推翻 SP4 旧不豁免

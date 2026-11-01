@@ -10,7 +10,9 @@
 
 /**
  * 核心组（恒注入）：file 5 + browser 4 + browse + bash +
- * fetch + create_skill + read_skill——任何 agent 会话的常驻最小面。
+ * fetch + create_skill + read_skill——绑定目录的 agent 会话常驻最小面
+ * （未绑定目录时文件五件/browse/fetch 另被 collectToolDefinitions 的
+ * 无工作空间白名单剔除，browser 四件与 bash 保留——2026-11-01 审查快修）。
  * 仅作文档/测试对照：门控实现是「两组门控组之外一律放行」的黑名单式，
  * mcp 前缀与技能挂载工具等照旧注入，新增工具不会因不在核心组被误剔
  */

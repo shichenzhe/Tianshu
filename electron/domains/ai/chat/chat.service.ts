@@ -1698,7 +1698,7 @@ export default class ChatService {
    * dispatch 为专家团会话专属（二期 T3）：team 助手注入主理人调度
    * 工具（成员子 agent 非流式单轮补全），非 team/成员空不构造；ask 模式
    * 调用方本就传空工具集，无需特判
-   * 文件四件依赖工作空间路径，仅绑定目录后注入；bash 例外——
+   * 文件五件依赖工作空间路径，仅绑定目录后注入；bash 例外——
    * 未绑定目录也注入（默认态锚点落家目录、钳制语义不变，见 command-tool
    * resolveCwd；默认权限仍逐条审批）
    * 工具分组场景门控（spec §20 项 B，WorkBuddy 窄常驻+按需挂载）：工作流

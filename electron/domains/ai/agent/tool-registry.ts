@@ -1,6 +1,6 @@
 /**
  * 工具注册表：P2 MCP 工具聚合进同一注册表（spec 决策 #10）。
- * 初始集 = 内置文件四件 + bash 终端工具（P3 spec §3）+ web 工具
+ * 初始集 = 内置文件五件 + bash 终端工具（P3 spec §3）+ web 工具
  * （fetch/browse，spec 2026-10-13-ai-web-tools）+ browser_use
  * 工具组（操控会话绑定的右栏浏览器 tab，guest 注册表解析操控目标）；
  * mcp__ 动态注册

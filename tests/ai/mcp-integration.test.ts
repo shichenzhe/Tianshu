@@ -251,8 +251,8 @@ describe("ToolSet 组装（send 级集成）", () => {
     const names = capturedToolNames[0] ?? [];
     // registry 顺序：read_skill 在前，其后为文件五件（read/write/list/search/delete）+
     // bash（P3 注册）+ web 工具（fetch/browse，W3 注册）+
-    // browser_use 四件（snapshot/navigate/click/type，操控绑定 tab），
-    // mcp__ 注册序殿后
+    // browser_use 四件（snapshot/navigate/click/type，操控绑定 tab）+
+    // show_widget + library_search（2026-11-01 审查余项⑨），mcp__ 注册序殿后
     expect(names.filter((name) => !name.startsWith("mcp__"))).toEqual([
       "read_skill",
       "read",
@@ -268,6 +268,7 @@ describe("ToolSet 组装（send 级集成）", () => {
       "browser_click",
       "browser_type",
       "show_widget",
+      "library_search",
     ]);
     expect(names).toContain("mcp__srv__echo");
   });

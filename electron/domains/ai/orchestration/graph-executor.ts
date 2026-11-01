@@ -90,6 +90,7 @@ import { fileGate } from "../../security/file-gate";
 import {
   advanceTask,
   collectTools,
+  rememberedToolOf,
   resolveAutomationPermissions,
   type AutomationTaskRow,
 } from "../automation/automation-runner";
@@ -530,6 +531,9 @@ function buildAgentContext(
     projectId: params.task?.projectId ?? null,
     ...resolveAutomationPermissions(
       params.task?.accessMode === "full" ? "full" : "default",
+      // 审批记忆查表（审查批 F3 收口）：调度/试运行挂任务时按任务工作
+      // 空间查已记忆工具——chat 链同语义；无任务（纯试运行）恒 false
+      rememberedToolOf(params.task?.workspaceId),
     ),
     decideCommand: commandGate,
     decideFileAccess: fileGate,

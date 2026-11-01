@@ -395,8 +395,6 @@ function denyWithChunk(
  */
 const AUTO_EXEMPT_WRITE_TOOLS = new Set([
   'todo_write',
-  'todo_write',
-  'todo_write',
   'create_skill',
   'create_expert',
   'update_expert',

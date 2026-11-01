@@ -24,7 +24,8 @@ export interface ContextUsageBreakdown {
   skills: number;
   /** 五项之和 */
   total: number;
-  /** 模型上限（未配置为 null，前端显示 --） */
+  /** 生效模型上限（三层兜底 model>provider>131072 后恒有值；类型保留 null
+   *  供纯函数直测与未来无模型语境，生产调用侧不再出现 null） */
   contextWindow: number | null;
 }
 

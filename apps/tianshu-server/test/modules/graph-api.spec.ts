@@ -264,6 +264,8 @@ describe('graph/automation 九端点 + 事件（GA-T6 e2e）', () => {
     expect(body.data.total).toBeGreaterThanOrEqual(2);
     const demo = body.data.records.find((r) => r.id === graphId);
     expect(demo?.name).toBe('demo 图');
+    // demo 图为 db 直造 fixture（不经保存链自愈）：nodeCount 保持 2；
+    // /graph/save 端点路径的自愈由下方 createdBody 断言覆盖（=3）
     expect(demo?.nodeCount).toBe(2);
 
     const filtered = await post('/graph/query', { keyword: '挂起' });
@@ -289,7 +291,7 @@ describe('graph/automation 九端点 + 事件（GA-T6 e2e）', () => {
     }>;
     expect(createdBody.code).toBe('2000');
     expect(createdBody.data.version).toBe(1);
-    expect(createdBody.data.nodeCount).toBe(2);
+    expect(createdBody.data.nodeCount).toBe(3); // 自愈补 start（审查批④）
 
     const updated = await post('/graph/save', {
       id: createdBody.data.id,

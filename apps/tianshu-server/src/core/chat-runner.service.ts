@@ -44,7 +44,10 @@ import {
   buildScenarioSystem,
   DEFAULT_CONTEXT_WINDOW,
   estimateMessageTokens,
+  estimateReserveTokens,
   estimateTokens,
+  truncateHistory,
+  trimHistoryToolOutputs,
   mergeParams,
   runChatStream as runChatStreamCore,
   serializeBlocks,
@@ -855,10 +858,20 @@ export class ChatRunnerService {
         ctx.mode === 'ask'
           ? 0
           : estimateTokens(JSON.stringify(this.collectToolDefinitions(ctx)));
-      const messages = ctx.history.reduce(
-        (sum, row) => sum + estimateMessageTokens(row.blocks),
-        0,
-      );
+      // messages 经截断+工具输出瘦身（2026-11-01 审查批补齐，与
+      // computeUsageBreakdown/mirror 同口径——此前原样求和可超窗，与
+      // 自家 core/context-usage.ts 的「下次请求实际占用」语义相悖）
+      const messages = truncateHistory(
+        trimHistoryToolOutputs(ctx.history),
+        ctx.contextWindow ?? undefined,
+        {
+          reserveTokens: estimateReserveTokens(
+            ctx.merged.maxTokens,
+            ctx.systemWithSummary,
+            ctx.mode === 'ask' ? [] : this.collectToolDefinitions(ctx),
+          ),
+        },
+      ).reduce((sum, row) => sum + estimateMessageTokens(row.blocks), 0);
       return {
         system,
         tools,
@@ -919,16 +932,19 @@ export class ChatRunnerService {
         loadImage: (imagePath) =>
           readImageAsDataUrl(this.config().dataRoot, imagePath),
         // skill_ref 块展开（skill_ref 批）：ctx.skills 精确匹配读正文——
-        // 护栏对齐 read_skill 工具口径（256K 截断）；查不到/读失败返回
-        // null 由 core 降级行注入，不阻断流
+        // 护栏对齐 read_skill 工具口径（2026-11-01 审查批补齐：NUL 二进制
+        // 拒读 + 字节级 256K 截断，与 mirror 同款；此前按字符截断且无 NUL
+        // 防护，注释却自称对齐）；查不到/读失败返回 null 由 core 降级行
+        // 注入，不阻断流
         loadSkill: async (name) => {
           const skill = ctx.skills.find((s) => s.name === name);
           if (!skill) return null;
           try {
-            const body = await fs.promises.readFile(skill.bodyPath, 'utf-8');
-            return body.length > 256 * 1024
-              ? `${body.slice(0, 256 * 1024)}…（已截断）`
-              : body;
+            const buf = await fs.promises.readFile(skill.bodyPath);
+            if (buf.includes(0)) return null;
+            return buf.byteLength > 256 * 1024
+              ? `${buf.subarray(0, 256 * 1024).toString('utf8')}\n…（已截断）`
+              : buf.toString('utf8');
           } catch {
             return null;
           }

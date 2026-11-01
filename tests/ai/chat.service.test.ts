@@ -1257,6 +1257,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_click",
       "browser_type",
       "show_widget",
+      "library_search",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);
@@ -1310,6 +1311,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_click",
       "browser_type",
       "show_widget",
+      "library_search",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);
@@ -1344,6 +1346,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_click",
       "browser_type",
       "show_widget",
+      "library_search",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);

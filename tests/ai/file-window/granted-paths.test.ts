@@ -24,6 +24,8 @@ vi.mock("electron", () => ({
     isPackaged: false,
   },
   shell: { trashItem: vi.fn() },
+  // 批③：session.repo workspace 写面 emitWorkspaceChanged（无窗=空扇出）
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 
 // option 表行集 + 落盘失败开关（真实唯一键为 type+name+userId（T28 起

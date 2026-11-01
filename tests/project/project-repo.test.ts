@@ -21,6 +21,8 @@ const { USER_DATA, fsStub } = vi.hoisted(() => ({
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
   app: { getPath: vi.fn(() => USER_DATA) },
+  // 批③：repo 写面 emitProjectChanged → change-bus 全窗广播（无窗=空扇出）
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 // project.repo 引 commons/Log（Winston，模块加载即建 transport）——mock 掉避免测试写日志
 vi.mock("../../electron/commons/Log", () => ({

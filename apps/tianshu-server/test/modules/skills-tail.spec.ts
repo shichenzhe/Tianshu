@@ -7,13 +7,12 @@ import { SkillsService } from 'src/modules/skills/skills.service';
 // A3 尾：skills/installUpload（base64 zip ≤3MB 校验 + installSkillZip 落盘
 // 语义——冲突/包结构/staging 落盘断言）与 skills/stats（skillStat groupBy
 // 聚合——usedCount 全事件合计、lastUsedAt 最新 ISO、无事件 null）。
-// 磁盘扫描替身（skill-loader 不在本文件链路）；数据根指向真实临时目录。
-
-jest.mock('src/core/chat-runner.service', () => ({
-  resolveDataRoot: () => mockDataRoot,
-}));
+// 磁盘扫描替身（skill-loader 不在本文件链路）；数据根经 config 替身指向
+// 真实临时目录（TIANSHU_DATA_ROOT 前后保存/删除隔离，resolveDataRoot 不受
+// 外部 env 干扰）。
 
 let mockDataRoot: string;
+let prevDataRoot: string | undefined;
 
 /** skillRecord/skillStat 内存替身 */
 function makePrismaDouble() {
@@ -84,7 +83,11 @@ function makePrismaDouble() {
 type PrismaDouble = ReturnType<typeof makePrismaDouble>['prisma'];
 
 function makeService(prisma: PrismaDouble) {
-  return new SkillsService(prisma as never);
+  return new SkillsService(
+    prisma as never,
+    // config 替身：dataRoot 指向本套件临时目录
+    { get: () => ({ dataRoot: mockDataRoot }) } as never,
+  );
 }
 
 /** 造一个合法技能 zip buffer（根级 SKILL.md） */
@@ -98,11 +101,16 @@ function makeSkillZip(name: string, body = '# 技能\n') {
 }
 
 beforeEach(() => {
+  prevDataRoot = process.env.TIANSHU_DATA_ROOT;
+  delete process.env.TIANSHU_DATA_ROOT;
   mockDataRoot = mkdtempSync(path.join(tmpdir(), 'tianshu-skills-tail-'));
 });
 
 afterEach(() => {
   rmSync(mockDataRoot, { recursive: true, force: true });
+  if (prevDataRoot !== undefined) {
+    process.env.TIANSHU_DATA_ROOT = prevDataRoot;
+  }
 });
 
 describe('SkillsService.installUpload（A3 尾）', () => {

@@ -26,6 +26,9 @@ export interface SessionBrief {
   pinnedAt: string | null;
   /** 归属工作空间（MB-T2 分组消费；HD-A2 起列表行透传） */
   workspaceId?: number | null;
+  /** 批③（2026-11-01）：归属项目（face session/query 整行透传本就在下发，
+   *  此前未消费）——聊天主页「项目组」聚合；旧被控端/无头端缺席=无项目组 */
+  projectId?: number | null;
   /** B5 撤销批：归档撤销窗口内的暂存标记（默认视图下行不即删——窗口到点
    *  settleArchive 落定移除；撤销即清） */
   pendingArchive?: boolean;
@@ -53,13 +56,24 @@ export interface WorkspaceBrief {
   defaultModelId: number | null;
 }
 
+/** 批③（2026-11-01）：项目组概要（聊天主页项目组聚合——id/name 子集；
+ *  project 能力为桌面被控端专属，无头端恒空表） */
+export interface ProjectGroupBrief {
+  id: number;
+  name: string;
+}
+
 interface SessionsState {
   items: SessionBrief[];
   /** 工作空间概要（MB-T2 分组；拉取失败空表——分组退化为全兜底不阻断） */
   workspaces: WorkspaceBrief[];
+  /** 批③：项目组概要（project 能力才拉取；无头端恒空表=不渲染项目组） */
+  projects: ProjectGroupBrief[];
   /** 体验精修批：按需单拉工作空间概要（专家页对话式创建等入口——不连带
    *  会话列表主拉）；失败保留旧表 */
   loadWorkspaces(): Promise<void>;
+  /** 批③：重拉项目组概要（无 project 能力清表；失败保留旧表） */
+  loadProjects(): Promise<void>;
   total: number;
   page: number;
   keyword: string;
@@ -167,6 +181,7 @@ type SessionRow = {
   archivedAt?: unknown;
   pinnedAt?: unknown;
   workspaceId?: unknown;
+  projectId?: unknown;
   /** P1 未读角标批：query records 动态字段（旧端可能缺席） */
   unreadCount?: unknown;
   lastMessage?: unknown;
@@ -276,6 +291,7 @@ function toBrief(row: SessionRow): SessionBrief | null {
     ...(typeof row.workspaceId === "number"
       ? { workspaceId: row.workspaceId }
       : {}),
+    ...(typeof row.projectId === "number" ? { projectId: row.projectId } : {}),
   };
 }
 
@@ -374,7 +390,8 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
     // 时序守卫：期间已发起更新的拉取（换 keyword/重拉），旧响应丢弃
     if (token !== loadSeq) return;
     // MB-T2：覆写语义（loadFirst/重拉）时另拉空间概要（失败空表——
-    // 分组退化为全兜底，不阻断列表；loadMore 续页不重复拉）
+    // 分组退化为全兜底，不阻断列表；loadMore 续页不重复拉）；
+    // 批③：项目组概要同批顺带（fire-and-forget，project 能力才实际拉）
     if (!append) {
       const ws = await request(ENDPOINTS.workspace.query, {});
       if (token !== loadSeq) return;
@@ -384,6 +401,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
           .filter((w): w is WorkspaceBrief => w !== null);
         set({ workspaces });
       }
+      void get().loadProjects();
     }
     if (r === null) {
       // 无连接 → 置空表；网络异常/业务错 → 保守不动旧表
@@ -429,6 +447,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
   return {
     items: [],
     workspaces: [],
+    projects: [],
     total: 0,
     page: 1,
     keyword: "",
@@ -449,6 +468,31 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
           .map(toWorkspaceBrief)
           .filter((w): w is WorkspaceBrief => w !== null),
       });
+    },
+
+    // 批③：项目组概要拉取（project 能力桌面被控端专属——无能力清表防
+    // 换连残留；失败/畸形保留旧表，fire-and-forget 不阻塞会话主拉）
+    loadProjects: async () => {
+      const connId = useConnectionsStore.getState().activeConnId;
+      if (!connId) return;
+      // 可选链：旧测试替身/边界态 capabilitiesByConn 可能缺省
+      const capabilities =
+        useConnectionsStore.getState().capabilitiesByConn?.[connId];
+      if (!capabilities?.includes("project")) {
+        set({ projects: [] });
+        return;
+      }
+      const r = await request(ENDPOINTS.project.query, {});
+      if (r === null || !Array.isArray(r.data)) return;
+      const projects = r.data
+        .map((row): ProjectGroupBrief | null => {
+          const w = row as Record<string, unknown>;
+          return typeof w.id === "number" && typeof w.name === "string"
+            ? { id: w.id, name: w.name }
+            : null;
+        })
+        .filter((p): p is ProjectGroupBrief => p !== null);
+      set({ projects });
     },
 
     loadMore: () => {
@@ -700,6 +744,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
           void get().loadFirst();
           return;
         }
+        // 批③（2026-11-01）：他端写入的列表级刷新信号——loadFirst 内含会话/
+        // workspace/projects 三面重拉（workspace 删除级联会话、project 变更
+        // 连带欢迎会话/资产空间行，均须全量）
+        if (e.type === "workspace.changed" || e.type === "project.changed") {
+          void get().loadFirst();
+          return;
+        }
         if (e.type === "session.updated") {
           const { id, title, updatedAt } = e.payload;
           const badge = projectEventBadge(e.payload);
@@ -746,6 +797,6 @@ let subscribedConnId = useConnectionsStore.getState().activeConnId;
 useConnectionsStore.subscribe((s) => {
   if (s.activeConnId === subscribedConnId) return;
   subscribedConnId = s.activeConnId;
-  useSessionsStore.setState({ items: [], total: 0, page: 1 });
+  useSessionsStore.setState({ items: [], total: 0, page: 1, projects: [] });
   void useSessionsStore.getState().loadFirst();
 });

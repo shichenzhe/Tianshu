@@ -8,6 +8,7 @@ import Log from "../../commons/Log";
 import { handleUser } from "../../commons/ipc-user";
 import { projectsDir } from "../../commons/paths";
 import { revokeSession } from "../ai/file-window/granted-paths";
+import { emitProjectChanged } from "./project-change-bus";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -200,6 +201,8 @@ export default class ProjectRepository {
       workspace.id,
       userId,
     );
+    // 批③：写后广播（本地 UI 与 face tap 共用本方法——单点双路径覆盖）
+    emitProjectChanged();
     return this.toRecord(row, session.id);
   }
 
@@ -246,6 +249,7 @@ export default class ProjectRepository {
     await prisma.projectMember.deleteMany({ where: { projectId: id } });
     await prisma.projectBinding.deleteMany({ where: { projectId: id } });
     await prisma.project.delete({ where: { id } });
+    emitProjectChanged();
   }
 
   /**
@@ -266,6 +270,7 @@ export default class ProjectRepository {
       where: { id: params.id },
       data: { name: params.name, systemPrompt: params.systemPrompt },
     });
+    emitProjectChanged();
   }
 
   /**

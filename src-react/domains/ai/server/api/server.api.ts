@@ -12,6 +12,7 @@
 import { invoke, on, type IPCChannel } from "@/lib/ipc";
 import type { ChatStreamChunk } from "@/domains/ai/api/chat.api";
 import type {
+  FaceEvent,
   RemoteFileUploadInput,
   RemoteWorkspaceBrief,
   SessionPolishParams,
@@ -307,7 +308,10 @@ export type RemoteSessionEvent =
   | {
       type: "session.error";
       payload: { sessionId: number; code: string; message: string };
-    };
+    }
+  // 批③（2026-11-01）：空间/项目变更刷新信号——主进程 setEventSink 白名单
+  // 转发（electron/domains/server/ipc.ts），成员形状单源取 protocol FaceEvent
+  | Extract<FaceEvent, { type: "workspace.changed" | "project.changed" }>;
 
 export default class ServerApi {
   /** 连接清单（含运行态/能力；activeConnId 为当前粘性活动连接） */

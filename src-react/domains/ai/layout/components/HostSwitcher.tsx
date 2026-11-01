@@ -53,13 +53,19 @@ export default function HostSwitcher() {
   };
 
   // 重连全量刷新（spec §13 项 2，HD-P2c 随壳承接）：远程主机重连时
-  // 失效会话/消息缓存重取（断流漏事件不卡流式态）；本地主机不订阅
+  // 失效会话/消息缓存重取（断流漏事件不卡流式态）；本地主机不订阅。
+  // 批③（2026-11-01）：workspace/project 变更列表级刷新信号——远端被他端
+  // （移动端/另一控制端）写入时侧栏分组树即时失效
   useEffect(() => {
     if (activeHost.kind !== "remote") return;
     return onRemoteEvent(activeHost.connId, (event) => {
       if (event.type === "server.connected") {
         void queryClient.invalidateQueries({ queryKey: ["sessions"] });
         void queryClient.invalidateQueries({ queryKey: ["messages"] });
+      } else if (event.type === "workspace.changed") {
+        void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      } else if (event.type === "project.changed") {
+        void queryClient.invalidateQueries({ queryKey: ["projects"] });
       }
     });
   }, [activeHost, queryClient]);

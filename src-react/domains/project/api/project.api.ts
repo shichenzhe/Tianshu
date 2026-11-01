@@ -52,3 +52,7 @@ export default abstract class ProjectApi {
     return invoke<ProjectMemberItem[]>("project:listMembers", projectId);
   }
 }
+
+/** 项目变更事件通道（2026-11-01 批③：主进程 repo 写面创建/更新/删除后
+ *  推送——渲染层 React Query ["projects"] 前缀失效；automation 同款先例） */
+export const PROJECT_CHANGED_EVENT = "project:changed";

@@ -81,7 +81,11 @@ export function registerServerIpc(
       event.type === "session.error" ||
       event.type === "server.connected" ||
       event.type === "graph.run.updated" ||
-      event.type === "automation.changed"
+      event.type === "automation.changed" ||
+      // 批③（2026-11-01）：空间/项目变更列表级刷新信号——远程主机态侧栏
+      // 分组树失效消费（HostSwitcher onRemoteEvent 分支）
+      event.type === "workspace.changed" ||
+      event.type === "project.changed"
     ) {
       broadcast(`server:event:${connId}`, event);
     }

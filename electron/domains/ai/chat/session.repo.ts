@@ -23,6 +23,7 @@ import { getAppOptionMap, setAppOption } from "../../app-settings/option-store";
 import { summarizeLastMessage } from "@tianshu/core/last-message";
 import type { SessionLastMessage, SessionReadResult } from "@tianshu/protocol";
 import { revokeSession } from "../file-window/granted-paths";
+import { emitWorkspaceChanged } from "./workspace-change-bus";
 import type { ArtifactListItem } from "../../../../src-react/domains/ai/api/artifact.api";
 import { classifyFileType } from "../library/library.utils";
 import { PROJECT_NOT_FOUND } from "../../project/project.entity";
@@ -360,6 +361,8 @@ export class SessionRepository {
         userId,
       },
     });
+    // 批③：写后广播（本地 UI 与 face tap 共用本方法——单点双路径覆盖）
+    emitWorkspaceChanged();
     return this.toWorkspace(row);
   }
 
@@ -376,6 +379,7 @@ export class SessionRepository {
       where: { id: p.id },
       data: { name: p.name, icon: p.icon, defaultModelId: p.defaultModelId },
     });
+    emitWorkspaceChanged();
     return this.toWorkspace(row);
   }
 
@@ -393,6 +397,7 @@ export class SessionRepository {
       where: { id },
       data: { directoryPath },
     });
+    emitWorkspaceChanged();
     return this.toWorkspace(row);
   }
 
@@ -412,6 +417,7 @@ export class SessionRepository {
     for (const s of sessions) {
       await revokeSession(s.id, s.userId ?? null);
     }
+    emitWorkspaceChanged();
   }
 
   async listSessions(

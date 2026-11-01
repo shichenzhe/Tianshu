@@ -10,6 +10,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { on } from "@/lib/ipc";
 import { AUTOMATION_CHANGED_EVENT } from "@/domains/ai/automation/api/automation.api";
 import { GRAPH_CHANGED_EVENT } from "@/domains/ai/orchestration/api/orchestration.api";
+import { WORKSPACE_CHANGED_EVENT } from "@/domains/ai/api/workspace.api";
+import { PROJECT_CHANGED_EVENT } from "@/domains/project/api/project.api";
 
 export function registerQueryInvalidation(client: QueryClient): void {
   on(GRAPH_CHANGED_EVENT, () => {
@@ -17,5 +19,13 @@ export function registerQueryInvalidation(client: QueryClient): void {
   });
   on(AUTOMATION_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["automation"] });
+  });
+  // 批③（2026-11-01）：本机被控写入（移动端经 face tap 落本地库）→ 侧栏
+  // 分组树缓存失效（前缀失效覆盖 ["projects", user.id] 子 key）
+  on(WORKSPACE_CHANGED_EVENT, () => {
+    void client.invalidateQueries({ queryKey: ["workspaces"] });
+  });
+  on(PROJECT_CHANGED_EVENT, () => {
+    void client.invalidateQueries({ queryKey: ["projects"] });
   });
 }

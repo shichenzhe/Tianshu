@@ -113,4 +113,9 @@ export class WorkspaceApi {
   }
 }
 
+/** 空间变更事件通道（2026-11-01 批③：主进程 repo 写面创建/更新/删除后
+ *  推送——渲染层 React Query ["workspaces"] 失效；AUTOMATION_CHANGED_EVENT
+ *  同款跨引先例，主进程 change-bus 引本常量） */
+export const WORKSPACE_CHANGED_EVENT = "workspace:changed";
+
 export default WorkspaceApi;

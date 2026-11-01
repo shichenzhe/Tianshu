@@ -9,6 +9,8 @@ import Log from "../../commons/Log";
 import type { FaceEvent } from "@tianshu/protocol";
 import { onChatChunk } from "./chat-tap";
 import { onAutomationChanged } from "../ai/automation/automation-change-bus";
+import { onWorkspaceChanged } from "../ai/chat/workspace-change-bus";
+import { onProjectChanged } from "../project/project-change-bus";
 
 export type { FaceEvent };
 
@@ -52,5 +54,13 @@ export function ensureTapBridge(): void {
   // 刷新信号，无头端 payload 语义同源）
   onAutomationChanged((payload) =>
     publishFaceEvent({ type: "automation.changed", payload }),
+  );
+  // 批③（2026-11-01）：空间/项目变更（repo 写面单点埋点——本地 UI 与
+  // face tap 双路径覆盖）→ 列表级刷新信号外发远程控制端重拉
+  onWorkspaceChanged(() =>
+    publishFaceEvent({ type: "workspace.changed", payload: {} }),
+  );
+  onProjectChanged(() =>
+    publishFaceEvent({ type: "project.changed", payload: {} }),
   );
 }

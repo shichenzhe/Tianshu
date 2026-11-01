@@ -1041,7 +1041,7 @@ export class SessionRepository {
         blocks: true,
         createdAt: true,
       },
-      orderBy: { createdAt: "asc" },
+      orderBy: { id: "asc" },
     });
     return rows.map((row) => ({
       ...row,
@@ -1258,7 +1258,7 @@ export class SessionRepository {
           blocks: { contains: keyword },
           sessionId: { in: visibleSessions.map((s) => s.id) },
         },
-        orderBy: { createdAt: "desc" },
+        orderBy: { id: "desc" },
         take: 100,
       })
     ).map((row) => this.toMessage(row));

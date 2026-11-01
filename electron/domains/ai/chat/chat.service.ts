@@ -1174,9 +1174,11 @@ export default class ChatService {
     // 摘要轮的 streamAndPersist finally 已清注册：恢复之，摘要回填写期间
     // 注册不悬空（stop/并发语义连续）；最终清理归调用方
     this.aborts.set(sessionId, abort);
+    // id desc = 最新一条（2026-11-01 审查快修：createdAt 毫秒精度下
+    // 同毫秒双消息可能取错行，server 同款已用 id 序）
     const rows = await prisma.message.findMany({
       where: { sessionId, role: "assistant" },
-      orderBy: { createdAt: "desc" },
+      orderBy: { id: "desc" },
       take: 1,
     });
     const last = rows[0];
@@ -1429,7 +1431,7 @@ export default class ChatService {
       }
       const rows = await prisma.message.findMany({
         where: { sessionId },
-        orderBy: { createdAt: "asc" },
+        orderBy: { id: "asc" },
       });
       let targetIdx = -1;
       if (messageId !== undefined) {
@@ -1503,7 +1505,7 @@ export default class ChatService {
       }
       const rows = await prisma.message.findMany({
         where: { sessionId },
-        orderBy: { createdAt: "asc" },
+        orderBy: { id: "asc" },
       });
       const targetIdx = rows.findIndex(
         (row) => row.id === messageId && row.role === "user",
@@ -1760,6 +1762,12 @@ export default class ChatService {
           (def) =>
             def.name.startsWith("mcp__") ||
             def.name === "bash" ||
+            // browser 四件（2026-11-01 审查快修）：执行按 sessionId 解析
+            // GuestControl（browser-tools.ts），与绑定目录无涉——此前被
+            // 工作空间过滤连带剔除，未绑定目录会话失去右栏浏览器操控
+            // （server 桥版即常驻注入）；前缀式与 mcp__ 同 idiom，新增
+            // browser_* 工具自动跟进
+            def.name.startsWith("browser_") ||
             def.name === "create_skill" ||
             // 工作流五件（除 run_workflow）用户级 DB 实体不依赖工作空间
             // （WORKFLOW_NO_WORKSPACE_TOOLS 注释）——未绑目录会话经场景/
@@ -2104,7 +2112,7 @@ export default class ChatService {
           sessionId,
           ...(compacted ? { id: { gt: session.compactedUpToId ?? 0 } } : {}),
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: { id: "asc" },
         select: { role: true, blocks: true, error: true, createdAt: true },
       })
     )
@@ -2415,7 +2423,7 @@ export default class ChatService {
       // 触发，整会话全量读回 blocks 对长会话是纯浪费
       const visible = (await prisma.message.findMany({
         where: { sessionId, role: { not: "system" }, error: null },
-        orderBy: { createdAt: "asc" },
+        orderBy: { id: "asc" },
         take: 3,
         select: { blocks: true },
       })) as Array<{ blocks: string }>;

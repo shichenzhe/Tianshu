@@ -42,6 +42,7 @@ import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import {
   buildPersonalizedSystem,
   buildScenarioSystem,
+  DEFAULT_CONTEXT_WINDOW,
   estimateMessageTokens,
   estimateTokens,
   mergeParams,
@@ -1102,7 +1103,9 @@ export class ChatRunnerService {
       assistantId: session.assistantId,
       providerRow,
       merged,
-      contextWindow: modelRow.contextWindow ?? undefined,
+      // 空配置兜底 128K（2026-11-01 裁定，DEFAULT_CONTEXT_WINDOW 注释）：
+      // 截断与 usage 拆解两消费同源生效值
+      contextWindow: modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
       history,
       systemWithSummary,
       agent: {

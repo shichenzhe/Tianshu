@@ -112,6 +112,83 @@ describe("project.store", () => {
     expect(t.request).toHaveBeenCalledWith("POST", ENDPOINTS.project.query, null);
   });
 
+  it("facet 独立防迟到：挂载并发 load+loadMine 互不判过期（旧全局 reqSeq 下被丢弃 facet 永久转圈）", async () => {
+    const t = makeTransport();
+    const hubDefer = deferred<ReturnType<typeof successBody>>();
+    const tasksDefer = deferred<ReturnType<typeof successBody>>();
+    t.request.mockImplementation((_method: string, path: string) => {
+      if (path === ENDPOINTS.project.query) return hubDefer.promise;
+      if (path === ENDPOINTS.planItem.listMine) return tasksDefer.promise;
+      return Promise.resolve(successBody(null));
+    });
+    connMock.activeTransport.mockReturnValue(t);
+
+    // projects/index.tsx 挂载即并发（后发 loadMine 已在途时先发 load 的
+    // 响应到达仍应落地——全局 reqSeq 下被互判过期、hub.loading 悬挂）
+    const hubPromise = useProjectStore.getState().load();
+    const minePromise = useProjectStore.getState().loadMine();
+
+    tasksDefer.resolve(successBody([planItemDto({ id: 2 })]));
+    await minePromise;
+    hubDefer.resolve(successBody([projectDto()]));
+    await hubPromise;
+
+    const s = useProjectStore.getState();
+    expect(s.projects).toHaveLength(1);
+    expect(s.mine).toHaveLength(1);
+    expect(s.hub.loading).toBe(false);
+    expect(s.tasks.loading).toBe(false);
+    expect(s.hub.initialized).toBe(true);
+    expect(s.tasks.initialized).toBe(true);
+  });
+
+  it("工作台并发 loadPlan+loadAssets+loadStorage 互不判过期", async () => {
+    const t = makeTransport();
+    const planDefer = deferred<ReturnType<typeof successBody>>();
+    t.request.mockImplementation((_method: string, path: string) => {
+      if (path === ENDPOINTS.planItem.list) return planDefer.promise;
+      return Promise.resolve(successBody([]));
+    });
+    connMock.activeTransport.mockReturnValue(t);
+
+    // projects/[id].tsx 挂载即四联并发（plan 响应最慢后到也应落地）
+    const planPromise = useProjectStore.getState().loadPlan(1);
+    const assetsPromise = useProjectStore.getState().loadAssets(1);
+    const storagePromise = useProjectStore.getState().loadStorage(1);
+    await assetsPromise;
+    await storagePromise;
+    planDefer.resolve(successBody([]));
+    await planPromise;
+
+    const s = useProjectStore.getState();
+    expect(s.plan.loading).toBe(false);
+    expect(s.plan.initialized).toBe(true);
+    expect(s.assets.loading).toBe(false);
+    expect(s.assets.initialized).toBe(true);
+  });
+
+  it("同 facet 后发仍使先发过期：两次 load 并发，先发响应丢弃", async () => {
+    const t = makeTransport();
+    const first = deferred<ReturnType<typeof successBody>>();
+    const second = deferred<ReturnType<typeof successBody>>();
+    let call = 0;
+    t.request.mockImplementation(() => (call++ === 0 ? first.promise : second.promise));
+    connMock.activeTransport.mockReturnValue(t);
+
+    const p1 = useProjectStore.getState().load();
+    const p2 = useProjectStore.getState().load();
+    second.resolve(successBody([projectDto({ id: 9, name: "后发" })]));
+    await p2;
+    first.resolve(successBody([projectDto({ id: 1, name: "先发" })]));
+    await p1;
+
+    // 拆分不改变同资源语义：只有最新请求的响应落地
+    const s = useProjectStore.getState();
+    expect(s.projects).toHaveLength(1);
+    expect(s.projects[0]?.name).toBe("后发");
+    expect(s.hub.loading).toBe(false);
+  });
+
   it("create 走 project/create 且写后重拉 hub 列表", async () => {
     const t = makeTransport();
     t.request.mockResolvedValue(successBody(null));

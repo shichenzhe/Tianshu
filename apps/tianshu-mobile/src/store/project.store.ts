@@ -300,13 +300,44 @@ export function resolveActiveView(
   return sorted.find((view) => view.id === activeViewId) ?? sorted[0] ?? null;
 }
 
-// —— 四重防迟到门禁 + 写串行（照 library.store 同构） ——
+// —— 四重防迟到门禁 + 写串行（照 library.store 同构；reqSeq 按资源拆分
+//    照 skills.store 范式） ——
 
-let reqSeq = 0;
+/** 资源内请求序号：hub（项目列表）/ tasks（我的事项）/ detail（详情+成员）/
+ *  plan（事项三联）/ assets（资产列表+peek）/ storage（用量）/ image（资产
+ *  图预览）/ attachments（事项附件）/ write（写串行面）各自独立——项目 hub
+ *  与工作台挂载即并发 load+loadMine / loadDetail+loadPlan+loadAssets+
+ *  loadStorage 不再互相判过期（旧全局 reqSeq 下后发使先发 token 全部失效，
+ *  被丢弃 facet 的 loading 永不复位、initialized 永不置位→页面永久转圈；
+ *  单读资源拆分后图片预览/附件弹窗与列表导航交错不互判过期）；同资源内
+ *  后发仍使先发过期 */
+type ProjectResource =
+  | "hub"
+  | "tasks"
+  | "detail"
+  | "plan"
+  | "assets"
+  | "storage"
+  | "image"
+  | "attachments"
+  | "write";
+
+const reqSeqs: Record<ProjectResource, number> = {
+  hub: 0,
+  tasks: 0,
+  detail: 0,
+  plan: 0,
+  assets: 0,
+  storage: 0,
+  image: 0,
+  attachments: 0,
+  write: 0,
+};
 let writeChain: Promise<unknown> = Promise.resolve();
 let pendingWrites = 0;
 
 interface RequestToken {
+  resource: ProjectResource;
   seq: number;
   connId: string | null;
   transport: ReturnType<typeof activeTransport>;
@@ -314,7 +345,7 @@ interface RequestToken {
 
 /** 请求前置四重门禁：活动连接存在 + project 能力已协商 + transport 可用，
  *  不满足不发请求（返回 null，调用方静默返回） */
-function beginRequest(): RequestToken | null {
+function beginRequest(resource: ProjectResource): RequestToken | null {
   const connId = useConnectionsStore.getState().activeConnId;
   if (!connId) return null;
   const capabilities =
@@ -322,12 +353,12 @@ function beginRequest(): RequestToken | null {
   if (!capabilities?.includes("project")) return null;
   const transport = activeTransport();
   if (!transport) return null;
-  return { seq: ++reqSeq, connId, transport };
+  return { resource, seq: ++reqSeqs[resource], connId, transport };
 }
 
 function isCurrentRequest(token: RequestToken): boolean {
   return (
-    token.seq === reqSeq &&
+    token.seq === reqSeqs[token.resource] &&
     token.connId === useConnectionsStore.getState().activeConnId &&
     token.transport === activeTransport()
   );
@@ -372,9 +403,15 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     }
   }
 
-  /** 单读请求（不进面态：附件列表等弹窗级数据；迟到/业务错返回 null） */
-  async function fetchData(path: string, body: unknown): Promise<unknown> {
-    const token = beginRequest();
+  /** 单读请求（不进面态：附件列表等弹窗级数据；迟到/业务错返回 null；
+   *  resource 决定与哪些请求互判过期——弹窗级单读用独立资源，不与列表
+   *  加载互斥） */
+  async function fetchData(
+    resource: ProjectResource,
+    path: string,
+    body: unknown,
+  ): Promise<unknown> {
+    const token = beginRequest(resource);
     if (!token) return null;
     const result = await wireRequest("POST", path, body, token.transport);
     if (!isCurrentRequest(token)) return null;
@@ -389,7 +426,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     body: unknown,
     refresh: () => void,
   ): Promise<boolean> {
-    const token = beginRequest();
+    const token = beginRequest("write");
     if (!token) return false;
     pendingWrites += 1;
     set({ saving: true });
@@ -460,7 +497,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     saving: false,
 
     load: async () => {
-      const token = beginRequest();
+      const token = beginRequest("hub");
       if (!token) return;
       await fetchInto(
         token,
@@ -499,7 +536,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       }),
 
     loadMine: async () => {
-      const token = beginRequest();
+      const token = beginRequest("tasks");
       if (!token) return;
       await fetchInto(
         token,
@@ -521,7 +558,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     setTasksKeyword: (keyword) => set({ tasksKeyword: keyword }),
 
     loadDetail: async (projectId) => {
-      const token = beginRequest();
+      const token = beginRequest("detail");
       if (!token) return;
       set({ currentProjectId: projectId });
       patchFacet("detailFacet", { loading: true, error: null });
@@ -578,7 +615,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     loadPlan: async (projectId) => {
-      const token = beginRequest();
+      const token = beginRequest("plan");
       if (!token) return;
       set({ currentProjectId: projectId });
       patchFacet("plan", { loading: true, error: null });
@@ -663,7 +700,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       enqueueWrite(ENDPOINTS.planItem.delete, { id }, refreshPlanAfterWrite),
 
     loadAssets: async (projectId, path = []) => {
-      const token = beginRequest();
+      const token = beginRequest("assets");
       if (!token) return;
       set({ currentProjectId: projectId, folderPath: path });
       const body = path.length > 0 ? { projectId, path: path.join("/") } : { projectId };
@@ -690,7 +727,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     peekAssets: async (projectId, path = []) => {
       const body =
         path.length > 0 ? { projectId, path: path.join("/") } : { projectId };
-      const data = await fetchData(ENDPOINTS.projectAsset.list, body);
+      const data = await fetchData("assets", ENDPOINTS.projectAsset.list, body);
       return parseArray(
         data,
         (value) =>
@@ -701,9 +738,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     loadStorage: async (projectId) => {
-      const token = beginRequest();
-      if (!token) return;
-      const data = await fetchData(ENDPOINTS.projectAsset.storage, {
+      const data = await fetchData("storage", ENDPOINTS.projectAsset.storage, {
         projectId,
       });
       const storage = parseStorage(data);
@@ -732,7 +767,7 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       ),
 
     readAssetImage: async (projectId, path) => {
-      const data = await fetchData(ENDPOINTS.projectAsset.readImage, {
+      const data = await fetchData("image", ENDPOINTS.projectAsset.readImage, {
         projectId,
         path: path.join("/"),
       });
@@ -742,9 +777,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     listAttachments: async (planItemId) => {
-      const data = await fetchData(ENDPOINTS.planItem.attachmentList, {
-        planItemId,
-      });
+      const data = await fetchData(
+        "attachments",
+        ENDPOINTS.planItem.attachmentList,
+        {
+          planItemId,
+        },
+      );
       return parseArray(data, parseAttachment) ?? [];
     },
 
@@ -759,7 +798,9 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       enqueueWrite(ENDPOINTS.planItem.attachmentDelete, { id }, () => {}),
 
     resetForTest: () => {
-      reqSeq += 1;
+      for (const resource of Object.keys(reqSeqs) as ProjectResource[]) {
+        reqSeqs[resource] += 1;
+      }
       writeChain = Promise.resolve();
       pendingWrites = 0;
       set({

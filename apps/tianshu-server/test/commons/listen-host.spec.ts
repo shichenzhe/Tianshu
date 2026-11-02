@@ -59,11 +59,17 @@ describe('emitListenSecurityWarnings', () => {
     expect(warnings[0]).toContain('0.0.0.0');
   });
 
-  it('通配绑定且无 token：双告警（暴露 + 无鉴权）', () => {
-    const warnings = collectWarnings('::', undefined);
-    expect(warnings).toHaveLength(2);
+  it('安全批 S3：通配绑定且无 token → 先暴露告警再拒绝启动（fail-closed）', () => {
+    const warnings: string[] = [];
+    try {
+      emitListenSecurityWarnings('::', undefined, (m) => warnings.push(m));
+      expect.unreachable('应拒绝启动');
+    } catch (e) {
+      expect((e as Error).message).toContain('安全拒绝启动');
+    }
+    // 通配暴露告警先行（warn 回调已收集），throw 在其后
+    expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('0.0.0.0/::');
-    expect(warnings[1]).toContain('TIANSHU_TOKEN');
   });
 
   it('loopback 绑定且无 token：静默（本地开发放行语义维持）', () => {
@@ -72,10 +78,13 @@ describe('emitListenSecurityWarnings', () => {
     expect(collectWarnings('::1', undefined)).toHaveLength(0);
   });
 
-  it('非 loopback 内网地址且无 token：仅无鉴权告警', () => {
-    const warnings = collectWarnings('192.168.1.10', undefined);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain('TIANSHU_TOKEN');
+  it('安全批 S3：非 loopback 且无 token → 拒绝启动（原仅告警，无 token 放行面+对外绑定=全接口无鉴权）', () => {
+    expect(() => collectWarnings('192.168.1.10', undefined)).toThrow(
+      /安全拒绝启动/,
+    );
+    expect(() => collectWarnings('0.0.0.0', undefined)).toThrow(
+      /安全拒绝启动/,
+    );
   });
 
   it('非 loopback 地址且有 token：无告警', () => {

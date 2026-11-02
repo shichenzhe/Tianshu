@@ -33,8 +33,9 @@ export function isLoopbackAddress(hostname: string): boolean {
 /**
  * 监听安全告警（warn 回调注入以便测试）：
  * - 通配绑定（0.0.0.0/::）：公网暴露提示（有 token 也提示，绑定面本身值得知晓）
- * - TIANSHU_TOKEN 未设置且绑定非 loopback：全部接口（chat/file/web 工具面）
- *   无鉴权暴露；loopback 无 token 维持静默放行（本地开发语义）
+ * - TIANSHU_TOKEN 未设置且绑定非 loopback：**拒绝启动**（安全批 S3 升级
+ *   fail-closed——原仅告警，无 token 的放行面叠加对外绑定 = 全接口
+ *   无鉴权暴露）；loopback 无 token 维持静默放行（本地开发语义）
  */
 export function emitListenSecurityWarnings(
   hostname: string,
@@ -48,9 +49,13 @@ export function emitListenSecurityWarnings(
     );
   }
   if (!token && !isLoopbackAddress(hostname)) {
-    warn(
-      '[安全告警] TIANSHU_TOKEN 未设置且绑定地址非 loopback：' +
-        '所有接口（含 chat/file/web 工具面）处于无鉴权暴露状态，请设置 TIANSHU_TOKEN',
+    // 安全批 S3：告警升级为拒绝启动——StaticTokenGuard/BackupGuard 在
+    // 无 token 时的放行面叠加非 loopback 绑定 = 全接口无鉴权对外。
+    // 本地开发请绑定 loopback 或显式设置 token
+    throw new Error(
+      `[安全拒绝启动] TIANSHU_TOKEN 未设置且绑定地址非 loopback（${hostname}）：` +
+        '所有接口（含 chat/file/web 工具面与备份面）将以无鉴权状态对外暴露。' +
+        '请设置 TIANSHU_TOKEN，或将 config.yml app.hostname 指定为 loopback/内网地址',
     );
   }
 }

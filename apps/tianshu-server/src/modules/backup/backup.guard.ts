@@ -61,8 +61,15 @@ export class BackupGuard implements CanActivate {
       return true;
     }
     if (!bearer && !adminToken) {
-      // 未设任何 token 且请求未带凭据（本地开发）——现状回落 admin 放行；
-      // 带了凭据但注册表/admin 双未命中仍 401（垃圾 token 不静默提权）
+      // 安全批 S3（2026-11-02 审查）：未设任何 token 时无凭据请求静默
+      // 提权 admin——曾任何漏配 env 的部署，局域网任意主机无凭据即备份
+      // admin（全量数据外带面）。收敛为显式豁免门 TIANSHU_ALLOW_NO_AUTH=1
+      // （本地开发语义保留但须主动声明）；带凭据双未命中仍 401
+      if (process.env.TIANSHU_ALLOW_NO_AUTH !== '1') {
+        throw new UnauthorizedException(
+          '未配置任何备份 token（本地无鉴权开发请设置 TIANSHU_ALLOW_NO_AUTH=1）',
+        );
+      }
       req.backupIdentity = { kind: 'admin' };
       return true;
     }

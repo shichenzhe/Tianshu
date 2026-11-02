@@ -33,6 +33,7 @@
     "prisma:push:ra": "prisma db push --schema prisma/relay-admin/schema.prisma",
     "prisma:seed:ra": "ts-node prisma/relay-admin/seed.ts",
     "start:relay": "node dist/src/relay/relay-main.js",
+    "start:relay-admin": "cross-env NODE_ENV=production node dist/src/relay-admin/main.js",
     "sdk:export": "npm run build && node scripts/export-openapi.mjs",
     "sdk:generate": "npm run sdk:export && npx openapi-typescript openapi.json -o sdk/api-types.d.ts",
     "sync:core": "npm --prefix ../../packages/tianshu-protocol run build && npm --prefix ../../packages/tianshu-core run build"

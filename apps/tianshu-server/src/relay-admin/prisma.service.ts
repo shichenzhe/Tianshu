@@ -11,7 +11,10 @@ export const RA_DATABASE_URL_DEFAULT = 'file:./data/relay-admin.db';
 
 /** env 兜底：未设置时设缺省值并返回生效值。必须在 PrismaClient 构造前调用
  * （super() 前）——client 构造期即解析 datasource env，缺 env 直接抛
- * validation error，构造后再设不生效（db-url.ts 头注释时序坑同族） */
+ * validation error，构造后再设不生效（db-url.ts 头注释时序坑同族）。
+ * dist 运行（dist/src/relay-admin/main.js）时相对缺省仍锚到生成时 schema
+ * 目录（源码树 prisma/relay-admin/data/）——生产部署/dist 冒烟请显式设
+ * RA_DATABASE_URL 为绝对路径，勿依赖缺省落点 */
 export function ensureRaDatabaseUrl(): string {
   if (!process.env[RA_DATABASE_URL_ENV]) {
     process.env[RA_DATABASE_URL_ENV] = RA_DATABASE_URL_DEFAULT;

@@ -1,0 +1,86 @@
+// relay-admin 控制平面独立 schema（spec 2026-11-03 §6）：运营方数据与被控端
+// 业务库（../schema.prisma → prisma/local.db）物理隔离——独立 schema 文件、
+// 独立库文件、独立生成 client（output 见下）。表前缀 ra_，不与业务 schema
+// 任何表共用；relationMode=prisma 无外键，关联在 service 层维护（业务库同款）。
+// 建库走 db push（新库无迁移历史，业界起步惯例）；env RA_DATABASE_URL 由
+// service 层兜底设缺省 file:./data/relay-admin.db（相对本 schema 目录，
+// 即 prisma/relay-admin/data/relay-admin.db，已 gitignore）。
+// 审计字段沿用业务库惯例的简写形态：creator/updator 单列可空 String
+// （业务库 User 的 creatorId+creatorName 四元组面向 OperateContext code/name
+// 双值；本域操作者是管理员 username 单值，无 code/name 之分），时间戳
+// DateTime @default(now())/@updatedAt 与业务库同款。
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../src/relay-admin/generated/prisma"
+}
+
+datasource db {
+  provider     = "sqlite"
+  relationMode = "prisma" //不使用外键
+  url          = env("RA_DATABASE_URL")
+}
+
+// 租户用户（spec §6）：plan 决定 quota 缺省（beta 单档 maxServers=5/maxClients=10，
+// 签发 access 时写入 claims）；id 即对外 userId；tenantId = randomUUID()（建户时生成）
+model RaUser {
+  id        String   @id @default(uuid())
+  tenantId  String   @unique @map("tenant_id")
+  name      String
+  plan      String   @default("beta")
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at")
+  creator   String?
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updator   String?
+
+  @@index([status])
+  @@map("ra_user")
+}
+
+// 接入凭证 AK（spec §5.2）：id 即对外 akId（公开标识，签发侧可显式指定格式）；
+// secretHash = sha256(akSecret)（明文仅创建/重置时显示一次）；role 分离
+// server/client（泄露面隔离）；expired 非存储态——由 expireAt 动态判定
+model RaAccessKey {
+  id         String    @id @default(uuid())
+  secretHash String    @map("secret_hash")
+  role       String // "server" | "client"
+  userId     String    @map("user_id")
+  status     String    @default("active") // active | disabled
+  expireAt   DateTime  @map("expire_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  creator    String?
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  updator    String?
+
+  @@index([userId])
+  @@index([status])
+  @@index([expireAt])
+  @@map("ra_access_key")
+}
+
+// 管理操作审计（建户/发 AK/禁用/续期；renew 高频不记）——append-only，
+// 仅 createdAt（OperationLog 同款，无 updatedAt/审计人四元组）
+model RaAuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  operator  String
+  target    String
+  detail    String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([operator])
+  @@index([target])
+  @@map("ra_audit_log")
+}
+
+// 运营方管理员登录账号（P1 裁定增表）：ra_user 纯租户语义，运营方登录独立于此；
+// 审计字段留白（管理员不参与 StandardEntity 四元组，seed 单管理员起步）
+model RaAdminUser {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("ra_admin_user")
+}

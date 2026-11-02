@@ -12,6 +12,10 @@
       {
         "include": "generated",
         "outDir": "dist/src"
+      },
+      {
+        "include": "relay-admin/generated",
+        "outDir": "dist/src"
       }
     ]
   }

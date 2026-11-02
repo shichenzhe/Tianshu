@@ -1258,6 +1258,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_type",
       "show_widget",
       "library_search",
+      "search_history",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);
@@ -1312,6 +1313,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_type",
       "show_widget",
       "library_search",
+      "search_history",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);
@@ -1347,6 +1349,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
       "browser_type",
       "show_widget",
       "library_search",
+      "search_history",
       "mcp__alpha__query",
       "mcp__beta__fetch",
     ]);
@@ -2794,6 +2797,13 @@ describe("ChatService.send workspace 图片附件收编（T11 文件窗图片 ta
 });
 
 describe("ChatService 自动压缩（spec §18 项 2）", () => {
+  it("COMPACT_DIRECTIVE 含 search_history 回捞锚点指令（spec 2026-11-02：日期/路径原样保留）", () => {
+    expect(COMPACT_DIRECTIVE).toContain("search_history");
+    expect(COMPACT_DIRECTIVE).toContain("发生日期与路径保留原样");
+    // 自动压缩指令 = 前缀 + 手动指令全文（锚点增补随之继承）
+    expect(AUTO_COMPACT_DIRECTIVE).toContain("search_history");
+  });
+
   /** createChatModel 模块 mock 的可覆写入口（默认形态与 vi.mock 工厂一致） */
   const createChatModelMock = createChatModel as unknown as Mock;
   const restoreModelFactory = () =>

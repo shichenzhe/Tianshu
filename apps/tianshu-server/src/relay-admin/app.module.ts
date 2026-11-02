@@ -19,6 +19,8 @@ import { RaUsersModule } from './users/users.module';
 import { AksModule } from './aks/aks.module';
 import { TokenModule } from './token/token.module';
 import { RevocationsModule } from './revocations/revocations.module';
+import { RelayLinkModule } from './relay-link.module';
+import { StatsModule } from './stats/stats.module';
 
 /**
  * relay-admin 运营控制平面独立 AppModule（Task 9）
@@ -37,6 +39,8 @@ import { RevocationsModule } from './revocations/revocations.module';
  * Task 12 起：TokenModule（AK 换 access，@Public 协议端点）+
  * RevocationsModule（CRL 名单，@Public + internal secret 手检——两端点
  * 路由级绑 RelayProtocolFilter 直出真实状态码，不走管理面 200 信封）。
+ * Task 13 起：RelayLinkModule（@Global——kick 即时联动通道，吊销类写
+ * 操作伴行面）+ StatsModule（GET /relay-admin/stats/online 在线视图）。
  */
 @Module({
   imports: [
@@ -56,11 +60,13 @@ import { RevocationsModule } from './revocations/revocations.module';
     LogModule,
     RaPrismaModule,
     RaAuditModule,
+    RelayLinkModule,
     RaAuthModule,
     RaUsersModule,
     AksModule,
     TokenModule,
     RevocationsModule,
+    StatsModule,
     HealthModule,
   ],
   providers: [

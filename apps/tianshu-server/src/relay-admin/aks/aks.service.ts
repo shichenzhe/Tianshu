@@ -12,6 +12,7 @@ import { ErrorCodeEnum } from '../../commons/exception/error-code.enum';
 import { RaAkCreateDto } from './dto/ra-ak-create.dto';
 import { RaAkExtendDto } from './dto/ra-ak-extend.dto';
 import { RaAkDto } from './dto/ra-ak.dto';
+import { RelayLinkService } from '../relay-link.service';
 
 /** 套餐配额（spec §6：beta 单档 maxServers=5/maxClients=10；签发 access 时
  * 写入 claims 的 quota 即此值）。扩档时此处与 users DTO 的 RA_PLANS 同步增补 */
@@ -58,13 +59,16 @@ function sha256Hex(input: string): string {
  * ak.disable / ak.enable / ak.rotate-secret / ak.extend——用户级联禁用是
  * users 模块的 ak.cascade-disable 词汇，本模块不复用）。
  * isAkUsable 供 Task 12 token 端点做凭证校验（auth 热路径，不落审计——
- * spec §6「renew 高频不记」）。
+ * spec §6「renew 高频不记」）。Task 13 起 disable/rotateSecret 落库审计后
+ * 伴行 RelayLinkService.kick({ak}) 即时拆存量在线连接（enable/extend 无
+ * 吊销语义，不 kick）。
  */
 @Injectable()
 export class AksService {
   constructor(
     private readonly raPrisma: RaPrismaService,
     private readonly audit: AuditService,
+    private readonly relayLink: RelayLinkService,
   ) {}
 
   /** 签发：akId=randomUUID()、akSecret=randomBytes(32) hex、库存摘要；
@@ -122,9 +126,11 @@ export class AksService {
     return rows.map((row) => RaAkDto.create(row));
   }
 
-  /** 禁用（临时吊销，可恢复）。无 status 前件（重复禁用幂等）
-   * TODO(Task 13)：吊销 kick 即时联动——RelayLinkService.kick({ak}) 接入
-   * 本路径（失败降级 CRL 兜底，只 warn 不回滚禁用） */
+  /** 禁用（临时吊销，可恢复）。无 status 前件（重复禁用幂等）。落库后
+   *  kick({ak}) 即时拆除该 AK 的存量在线连接（Task 13 联动）——kick 在
+   *  库写之后（先有 CRL 名单来源，再做即时面；反序会在库写失败时误拆
+   *  仍有效租户的连接），失败不回滚禁用（RelayLinkService 降级契约：
+   *  只 warn 返回 null，CRL 补偿兜底） */
   async disable(akId: string, operator: string): Promise<void> {
     await this.getExisting(akId);
     await this.raPrisma.raAccessKey.update({
@@ -132,6 +138,7 @@ export class AksService {
       data: { status: 'disabled', updator: operator },
     });
     await this.audit.log('ak.disable', operator, akId);
+    await this.relayLink.kick({ ak: akId });
   }
 
   /** 恢复：fail-closed——所属用户仍禁用时拒绝（须先 users.enable 恢复用户，
@@ -143,10 +150,7 @@ export class AksService {
       where: { id: ak.userId },
     });
     if (!user) {
-      throw new BusinessException(
-        'AK 所属用户不存在',
-        ErrorCodeEnum.NOT_FOUND,
-      );
+      throw new BusinessException('AK 所属用户不存在', ErrorCodeEnum.NOT_FOUND);
     }
     if (user.status !== 'active') {
       throw new BusinessException(
@@ -163,7 +167,9 @@ export class AksService {
 
   /** 轮换 secret（泄露处置）：发新 32B 明文、旧摘要即刻替换——旧 secret
    * 在本调用返回后即 bad-secret。无 status 前件（禁用态 AK 轮换后仍禁用，
-   * 不构成放行面）。TODO(Task 13)：同 disable 接入 kick({ak}) 拆存量 */
+   * 不构成放行面）。轮换后 kick({ak}) 即时拆除旧 secret 签发的存量连接
+   * （Task 13 联动——relay 按 ak 维度记账，重连将持新 access 通过）；
+   * 失败降级同 disable（CRL 名单按 akId 命中，不依赖 secret 值） */
   async rotateSecret(
     akId: string,
     operator: string,
@@ -175,6 +181,7 @@ export class AksService {
       data: { secretHash: sha256Hex(akSecret), updator: operator },
     });
     await this.audit.log('ak.rotate-secret', operator, akId);
+    await this.relayLink.kick({ ak: akId });
     return { akId, akSecret };
   }
 

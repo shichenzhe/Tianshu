@@ -150,9 +150,9 @@
       "id": "security-command-policy",
       "mirrorPath": "electron/domains/security/command-policy.ts",
       "serverPath": "src/core/security/command-policy.ts",
-      "baselineDiff": false,
-      "baselineLines": 0,
-      "note": "命令安全判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零。2026-11-02 安全批 S4：commandPositions/WRAPPERS 包装器透传比对双份同步（server 侧整文件对齐 mirror，引号风格差异被归一化剥离）——基线过账"
+      "baselineDiff": true,
+      "baselineLines": 3,
+      "note": "命令安全判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零。2026-11-02 安全批 S4：commandPositions/WRAPPERS 包装器透传比对双份同步（server 侧整文件对齐 mirror，引号风格差异被归一化剥离）——基线过账。2026-11-02 安全批 B 批：头注释措辞与 CmdRule 本地定义（server 无 src-react 路径）形态差 3 行——基线 0→3 过账"
     },
     {
       "id": "security-file-gate",

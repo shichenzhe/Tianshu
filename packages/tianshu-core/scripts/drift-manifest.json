@@ -11,6 +11,14 @@
       "note": "工具集五件文件工具本体；server 为无头摘取版（emitPanel/commandWatchBlacklist 不移植）——有意分叉，基线守护。2026-11-01 dataRoot 收敛批（server 单侧）：trashRootOf 兜底改 env 感知 resolveDataRoot（mirror 侧无此函数，os.homedir 直拼保留）——基线 74→77 过账，分叉方向：本批改 server 侧"
     },
     {
+      "id": "agent-display-tools",
+      "mirrorPath": "electron/domains/ai/agent/display-tools.ts",
+      "serverPath": "src/core/tools/display-tools.ts",
+      "baselineDiff": true,
+      "baselineLines": 40,
+      "note": "展示工具三件（show_table/show_summary/show_chart，F2 2026-10-29 server 移植）。2026-11-02 入册：基线 40（drift 脚本归一口径；裸 diff 221 行——prettier 双仓引号风格 mirror 双引号/server 单引号 + import 面差异 mirror 常量取 src-react group-blocks/server 本地 DISPLAY_TOOL_NAMES + 文件头注释各自语境），工具名与 zod 参数三件同名同构，基线守护防继续分叉（audit 批原「display 零分叉」口径为工具名面，行级实测非零）。同批裁定：workflow 对不入册——mirror 无对应单文件（server workflow-tools.ts 为聚合形态，mirror 分散于 automation-tool 等），跨文件聚合对的行 diff 基线纯噪音"
+    },
+    {
       "id": "agent-command-tool",
       "mirrorPath": "electron/domains/ai/agent/command-tool.ts",
       "serverPath": "src/core/tools/command-tool.ts",
@@ -71,7 +79,7 @@
       "mirrorPath": "electron/domains/ai/agent/tool-registry.ts",
       "serverPath": "src/core/tools/tool-registry.ts",
       "baselineDiff": true,
-      "baselineLines": 8,
+      "baselineLines": 13,
       "note": "工具注册表"
     },
     {

@@ -61,12 +61,14 @@ describe('emitListenSecurityWarnings', () => {
 
   it('安全批 S3：通配绑定且无 token → 先暴露告警再拒绝启动（fail-closed）', () => {
     const warnings: string[] = [];
+    // jest 无 expect.unreachable：正常返回即让断言失败
+    let threw: Error | null = null;
     try {
       emitListenSecurityWarnings('::', undefined, (m) => warnings.push(m));
-      expect.unreachable('应拒绝启动');
     } catch (e) {
-      expect((e as Error).message).toContain('安全拒绝启动');
+      threw = e as Error;
     }
+    expect(threw?.message).toContain('安全拒绝启动');
     // 通配暴露告警先行（warn 回调已收集），throw 在其后
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('0.0.0.0/::');

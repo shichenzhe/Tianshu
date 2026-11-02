@@ -1,5 +1,6 @@
 /**
- * 命令安全判定引擎（SP2 spec §3，纯函数）：
+ * 命令安全判定引擎（SP2 spec §3，纯函数；自 mirror 逐字移植——安全批
+ * S4 双份同步）：
  * 优先级 程序黑名单 > 询问名单 > 放行名单 > default（WorkBuddy 同构，
  * "ask wins over allow"）。token 化为简化 shell 词法（空白分割 +
  * 成对引号剥离），不引入完整 shell 解析器——命令替换混淆由
@@ -8,7 +9,11 @@
  * 「命令位序列」——包装器（bash -c/env/nohup/…）后的命令位同样比对，
  * 堵 `bash -c 'rm …'`/`env rm …` 类首 token 伪装绕过。
  */
-import type { CmdRule } from "../../../src-react/domains/security/model/types";
+/** 命令名单规则（mirror security model 的 CmdRule 同构——server 树无
+ * src-react 路径，本地定义） */
+export interface CmdRule {
+  prefix: string[];
+}
 
 export type CommandDecision = "block" | "ask" | "allow" | "default";
 

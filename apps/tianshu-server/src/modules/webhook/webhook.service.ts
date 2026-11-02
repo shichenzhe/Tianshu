@@ -48,6 +48,7 @@ import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { PrismaService } from 'src/commons/database/prisma.service';
+import { openSecret, sealSecret } from 'src/commons/security/secret-field';
 import { runGraphToResult } from 'src/core/graph/graph-executor';
 
 const WEBHOOK_OPTION_TYPE = 'webhook';

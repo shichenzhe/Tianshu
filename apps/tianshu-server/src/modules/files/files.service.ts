@@ -24,6 +24,18 @@ import type {
   RemoteFileUploadResult,
 } from '@tianshu/protocol';
 
+/** realpath 宽松解析（file-tools 同构）：缺失段沿祖先解析——目标
+ * 可能尚不存在（读取前校验）场景下以已存在祖先为准 */
+function realpathLenient(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    const parent = path.dirname(target);
+    if (parent === target) return target;
+    return path.join(realpathLenient(parent), path.basename(target));
+  }
+}
+
 /** 图片上传上限（解码前字节；relay 单帧 4MiB 含信封/加密开销的余量） */
 const IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 
@@ -62,6 +74,13 @@ export class FilesService {
     const root = await this.workspaceRoot(workspaceId);
     const absolute = path.resolve(root, relPath);
     if (absolute !== root && !absolute.startsWith(root + path.sep)) {
+      throw new BusinessException('路径越界', 'FILES_PATH_ESCAPE');
+    }
+    // 安全批 B4：realpath 双检（symlink 跟随后复判根内——resolve 前缀
+    // 校验可被工作空间内 ln -s ~/.ssh/id_rsa x 逃逸）
+    const realRoot = realpathLenient(root);
+    const realAbs = realpathLenient(absolute);
+    if (realAbs !== realRoot && !realAbs.startsWith(realRoot + path.sep)) {
       throw new BusinessException('路径越界', 'FILES_PATH_ESCAPE');
     }
     const guarded = await readTextFileGuarded(absolute);

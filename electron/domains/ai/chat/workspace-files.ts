@@ -23,6 +23,18 @@ import path from "node:path";
 import { appDataHome } from "../../../commons/paths";
 import type { MessageBlock } from "./blocks";
 
+/** realpath 宽松解析（安全批 B4；file-tools realPathLenient 同构的
+ * async 形态）：缺失段沿祖先解析 */
+async function realpathLenient(target: string): Promise<string> {
+  try {
+    return await fs.realpath(target);
+  } catch {
+    const parent = path.dirname(target);
+    if (parent === target) return target;
+    return path.join(await realpathLenient(parent), path.basename(target));
+  }
+}
+
 export interface WorkspaceFileContent {
   kind: "text" | "image" | "webview";
   content?: string;
@@ -146,6 +158,12 @@ export async function readImageAsDataUrl(
   if (!abs.startsWith(root + path.sep)) {
     return null;
   }
+  // 安全批 B4：realpath 双检（symlink 逃逸；缺失段沿祖先解析）
+  const realRoot = await realpathLenient(root);
+  const realAbs = await realpathLenient(abs);
+  if (!realAbs.startsWith(realRoot + path.sep)) {
+    return null;
+  }
   const mime = imageMimeOf(abs);
   if (!mime) {
     return null;
@@ -180,6 +198,12 @@ export async function readImageWithinRoot(
   const root = appDataHome();
   const abs = path.resolve(root, imagePath);
   if (abs !== root && !abs.startsWith(root + path.sep)) {
+    return null;
+  }
+  // 安全批 B4：realpath 双检（symlink 逃逸）
+  const realRoot = await realpathLenient(root);
+  const realAbs = await realpathLenient(abs);
+  if (realAbs !== realRoot && !realAbs.startsWith(realRoot + path.sep)) {
     return null;
   }
   const ext = path.extname(abs).toLowerCase();

@@ -128,7 +128,8 @@ describe("ChatApi.send 远程 images 链（FA-T3 图片批）", () => {
       undefined,
       undefined,
       ["attachments/d1/a.png", "attachments/d1/b.jpg"],
-      // skill_ref 批：sessionSend 第 7 参 skillRefs（无引用时缺省）
+      // skill_ref 批：第 7 参 skillRefs / file_ref 批：第 8 参 contentRefs（无引用时缺省）
+      undefined,
       undefined,
     );
 

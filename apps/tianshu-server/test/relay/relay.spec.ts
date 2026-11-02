@@ -449,10 +449,14 @@ describe('RelayRegistry 背压与转发容错（假 socket 单元级）', () => 
     const client = new FakeSocket();
     registry.registerServer('s1', server);
     expect(registry.attachClient('s1', client)).toBe(true);
-    registry.forwardToServer('s1', { kind: 'req', id: 1 });
-    registry.forwardToServer('s1', { kind: 'req', id: 2 });
+    // 帧构造走 protocol 判别联合完整形状（req 需 method/path——单源化后
+    // 不完整帧不再是合法 RelayFrame）
+    const req = (id: number) =>
+      ({ kind: 'req', id, method: 'POST', path: 'session/query' }) as const;
+    registry.forwardToServer('s1', req(1));
+    registry.forwardToServer('s1', req(2));
     expect(server.closeCode).toBeUndefined();
-    registry.forwardToServer('s1', { kind: 'req', id: 3 }); // 积压 3 > 2
+    registry.forwardToServer('s1', req(3)); // 积压 3 > 2
     expect(server.closeCode).toBe(4002);
     expect(server.sent).toHaveLength(2);
   });

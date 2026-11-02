@@ -1334,7 +1334,7 @@ export class ChatRunnerService {
     }
   }
 
-  /** 追加消息并刷新会话时间戳（mirror SessionRepository.appendMessage 同构） */  private async appendMessage(message: {
+  /** 追加消息并刷新会话时间戳（mirror SessionRepository.appendMessage 同构） */ private async appendMessage(message: {
     sessionId: number;
     role: 'user' | 'assistant';
     blocks: string;

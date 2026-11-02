@@ -131,8 +131,14 @@ describe('ChatRunnerService run', () => {
     // seedSession fixture 硬编码 title 't'（非 schema 默认），显式造默认哨兵态
     const { session } = await seedSession(db, dirs, { title: '新会话' });
     const { runner } = makeRunner(db, dirs, [
-      { steps: [{ kind: 'text', delta: '好' }], usage: { input: 1, output: 1 } },
-      { steps: [{ kind: 'text', delta: '嗯' }], usage: { input: 1, output: 1 } },
+      {
+        steps: [{ kind: 'text', delta: '好' }],
+        usage: { input: 1, output: 1 },
+      },
+      {
+        steps: [{ kind: 'text', delta: '嗯' }],
+        usage: { input: 1, output: 1 },
+      },
     ]);
     const long = '这是一条超过二十个字符的用户提问用来验证标题截断';
 
@@ -161,7 +167,10 @@ describe('ChatRunnerService run', () => {
   it('会话标题 heuristic 兜底：手动命名会话（非默认标题）首条消息不改写', async () => {
     const { session } = await seedSession(db, dirs, { title: '手动命名' });
     const { runner } = makeRunner(db, dirs, [
-      { steps: [{ kind: 'text', delta: '好' }], usage: { input: 1, output: 1 } },
+      {
+        steps: [{ kind: 'text', delta: '好' }],
+        usage: { input: 1, output: 1 },
+      },
     ]);
     await runner.run({
       sessionId: session.id,
@@ -232,7 +241,10 @@ describe('ChatRunnerService run', () => {
     await runner.run({
       sessionId: session.id,
       content: '看图',
-      images: ['attachments/timgfeed/shot.png', 'attachments/timgfeed/gone.png'],
+      images: [
+        'attachments/timgfeed/shot.png',
+        'attachments/timgfeed/gone.png',
+      ],
       onChunk: () => {},
     });
 

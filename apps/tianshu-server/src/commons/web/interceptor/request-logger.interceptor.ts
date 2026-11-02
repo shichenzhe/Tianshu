@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
+import { createHash } from 'node:crypto';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Logger } from 'src/commons/log/logger';
 import { LoggerFactory } from 'src/commons/log/logger-factory';
@@ -106,7 +107,12 @@ export class RequestLoggerInterceptor implements NestInterceptor {
     // 获取子路径（query 中 token 打码，SSE EventSource 经 ?token= 携带凭证）
     const url = this.maskUrlToken(request.url);
     const queryParams = this.maskQueryToken(request.query);
-    const body = this.maskSensitiveData(request.body);
+    // 安全批 B6：消息载荷路径正文只记摘要——聊天/图/自动化请求体原文
+    // 落 info 级按日日志曾使 e2e 内容防护在日志面旁路失效（日志采集/
+    // 备份/运维读取即全量对话内容）；非载荷路径保持原打码记录
+    const body = this.isMessagePayloadPath(request.url)
+      ? `<payload ${JSON.stringify(request.body ?? {}).length}B 摘要 ${this.payloadDigest(request.body)}>`
+      : this.maskSensitiveData(request.body);
     const headers = this.extractHeaders(request.headers);
     const clientIp = IPUtil.getClientIP(request);
     const userAgent = request.headers['user-agent'];
@@ -120,6 +126,23 @@ export class RequestLoggerInterceptor implements NestInterceptor {
       clientIp,
       userAgent,
     };
+  }
+
+  /** 消息载荷路径判定（安全批 B6）：正文/提示词类请求体只记摘要 */
+  private isMessagePayloadPath(url: string): boolean {
+    return /\/session\/(send|editAndResend|regenerate|polish|compact)|\/graph\/(run|save)|\/automation\/(save|runNow)|\/webhook\//.test(
+      url,
+    );
+  }
+
+  /** 载荷摘要：全文 sha256 前 8 字（可区分不可还原） */
+  private payloadDigest(body: unknown): string {
+    try {
+      const json = JSON.stringify(body ?? {});
+      return createHash("sha256").update(json).digest("hex").slice(0, 8);
+    } catch {
+      return "n/a";
+    }
   }
 
   /** url 的 token 泄露面打码：query 参数值 + /webhook/ 路径段（webhook

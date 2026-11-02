@@ -57,7 +57,8 @@ describe("snapshot", () => {
       .split("\n");
     expect(listing.some((l) => l === "database/local.db")).toBe(true);
     expect(listing.some((l) => l.startsWith("skills/"))).toBe(true);
-    expect(listing.some((l) => l === ".jwt-secret")).toBe(true);
+    // 安全批 D2：.jwt-secret 出档（旧签名密钥不随档外流——恢复后自动轮换）
+    expect(listing.some((l) => l === ".jwt-secret")).toBe(false);
     expect(listing.some((l) => l.startsWith("logs/"))).toBe(false);
     expect(listing.some((l) => l.startsWith("file-history/"))).toBe(false);
     expect(result.meta.sha256).toBe(result.sha256);

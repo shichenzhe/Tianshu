@@ -56,7 +56,9 @@ interface MovedItem {
 
 /** 切换单元：备份范围内的具名目标（相对 appDataHome；恢复范围=备份范围） */
 function switchTargets(): string[] {
-  return ["database", ...BACKUP_ASSET_DIRS, ".jwt-secret"];
+  // 安全批 D2：.jwt-secret 出恢复范围（旧档含该文件也跳过——档内外流
+  // 不得复活旧签名密钥；恢复后首次访问重新生成=自动轮换）
+  return ["database", ...BACKUP_ASSET_DIRS];
 }
 
 /** 三步切换单遍：范围内逐项 旧→暂存、staging→正式；已动项（含直放置）记入账本 */
@@ -151,7 +153,8 @@ export async function createLocalSafetyCopy(
   snapshotDatabase?: SnapshotDatabase,
 ): Promise<string> {
   const outDir = path.join(tianshuRoot(), SAFETY_COPY_DIR_NAME);
-  mkdirSync(outDir, { recursive: true });
+  // 安全批 D2：本地保护副本目录 0700（含旧库全量数据）
+  mkdirSync(outDir, { recursive: true, mode: 0o700 });
   const { archivePath } = await createBackupArchive({
     tempDir,
     appVersion: "safety-copy",

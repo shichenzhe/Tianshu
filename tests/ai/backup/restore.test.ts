@@ -62,9 +62,9 @@ describe("restore", () => {
     expect(
       readFileSync(path.join(group, "skills", "s1", "SKILL.md"), "utf8"),
     ).toBe("new-skill");
-    expect(readFileSync(path.join(group, ".jwt-secret"), "utf8")).toBe(
-      "new-jwt",
-    );
+    // 安全批 D2：旧档含 .jwt-secret（模拟旧版备份）——恢复侧剔除，
+    // 不复活旧签名密钥（恢复后首次访问重新生成=自动轮换）
+    expect(existsSync(path.join(group, ".jwt-secret"))).toBe(false);
     expect(existsSync(path.join(group, "logs", "keep-or-not.log"))).toBe(true); // 范围外不动
   });
 

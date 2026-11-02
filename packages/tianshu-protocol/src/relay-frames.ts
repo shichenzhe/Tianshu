@@ -31,6 +31,23 @@ export type RelayFrame =
   | { kind: "ping" }
   | { kind: "pong" };
 
+// ---- 连接鉴权首帧（安全批 I：凭证出 URL query）----
+// token 走 upgrade query 的明文面会留存在反代/负载均衡访问日志与
+// 浏览器/中间件 URL 记录；升级完成后以首帧承载凭证（ws 帧不经访问
+// 日志）。兼容窗口期客户端双发（query 保留 + 首帧 auth），relay 侧
+// auth 优先、query 双轨受理并打弃用告警；窗口期后客户端移除 query。
+
+/** 连接鉴权首帧（relay 消费不转发；必须是该连接的第一条消息） */
+export type AuthFrame = {
+  kind: "auth";
+  /** 接入令牌（等价原 query token） */
+  token: string;
+  /** 连接角色（等价原 query role） */
+  role: "client" | "server";
+  /** 被控端注册键（仅 role=server；等价原 query connectionId） */
+  connectionId?: string;
+};
+
 // ---- E2E 扩展帧（spec 2026-10-18-relay-e2e；安全批 H 上收 protocol）----
 // 原仅 @tianshu/core e2e-crypto 导出（kind 常量）+ mirror server-face
 // relay-protocol.ts（帧类型）——移动端接入 e2e 需消费契约但不能引 core

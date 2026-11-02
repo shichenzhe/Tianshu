@@ -5,6 +5,7 @@
 // （移动端 e2e 接入——三端 wire 契约单源），此处同样 re-export。
 // **envelope 契约（T8/T9）详见包内 relay-frames.ts 头注释。**
 import type {
+  AuthFrame,
   E2eAckFrame,
   E2eHelloFrame,
   E2ESecureEnvelope,
@@ -18,9 +19,9 @@ export type { RelayFrame };
 // e2e-crypto re-export 保既有 import 路径不变）
 export type { E2eAckFrame, E2eHelloFrame, E2ESecureEnvelope };
 
-/** 本端经 ws 出口的全部帧形态（业务帧 + E2E 握手/信封） */
+/** 本端经 ws 出口的全部帧形态（业务帧 + 鉴权首帧 + E2E 握手/信封） */
 export type WireFrame =
-  RelayFrame | E2eHelloFrame | E2eAckFrame | E2ESecureEnvelope;
+  RelayFrame | AuthFrame | E2eHelloFrame | E2eAckFrame | E2ESecureEnvelope;
 
 /** req 帧最少合法形状判别（畸形帧静默丢弃，防打断其他帧处理） */
 export function isReqFrame(

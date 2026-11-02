@@ -14,6 +14,7 @@
 import http from "node:http";
 import { randomBytes } from "node:crypto";
 import prisma from "../../../commons/prisma-client";
+import { openNamedSecret, sealNamedSecret } from "../../security/option-secrets";
 import Log from "../../../commons/Log";
 import { createBoundedMap } from "../../../commons/bounded-map";
 import { renderNodePrompt } from "./graph-prompt";
@@ -229,10 +230,16 @@ export async function registerWebhook(
     create: {
       type: WEBHOOK_OPTION_TYPE,
       name,
-      value: JSON.stringify(full),
+      value:
+        (await sealNamedSecret("webhook.config", JSON.stringify(full))) ??
+        JSON.stringify(full),
       userId,
     },
-    update: { value: JSON.stringify(full) },
+    update: {
+      value:
+        (await sealNamedSecret("webhook.config", JSON.stringify(full))) ??
+        JSON.stringify(full),
+    },
   });
   // 重开旧 token 立即失效：option 行已换新值，同图内存旧条目一并清
   //（否则运行期旧 token 仍可达，轮换语义失效——重启装载前安全窗口；

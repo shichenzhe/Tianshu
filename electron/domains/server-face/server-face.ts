@@ -9,6 +9,7 @@
 import http from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import prisma from "../../commons/prisma-client";
+import { openSecretFields, sealSecretFields } from "../security/option-secrets";
 import Log from "../../commons/Log";
 import { handleRoute } from "./routes";
 import { ensureTapBridge, onFaceEvent, type FaceEvent } from "./face-events";
@@ -89,14 +90,17 @@ export async function readServerFaceConfig(): Promise<ServerFaceConfig> {
   const row = await prisma.option.findFirst({
     where: { type: OPTION_TYPE, name: OPTION_NAME },
   });
-  return row ? parseConfigValue(row.value) : { ...DEFAULT_CONFIG };
+  if (!row) return { ...DEFAULT_CONFIG };
+  // 安全批 D1：token/relayToken 透明解封（旧明文原样）
+  return openSecretFields("serverFace", parseConfigValue(row.value));
 }
 
 /** 配置落库（findFirst 定位 + update/create；type="app" 行 userId 恒 NULL） */
 export async function saveServerFaceConfig(
   next: ServerFaceConfig,
 ): Promise<void> {
-  const value = JSON.stringify(next);
+  // 安全批 D1：token/relayToken 密封落表
+  const value = JSON.stringify(await sealSecretFields("serverFace", next));
   const row = await prisma.option.findFirst({
     where: { type: OPTION_TYPE, name: OPTION_NAME },
     select: { id: true },

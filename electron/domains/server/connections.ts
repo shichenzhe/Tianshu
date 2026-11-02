@@ -16,6 +16,7 @@ import prisma from "../../commons/prisma-client";
 import Log from "../../commons/Log";
 import { DirectTransport } from "./direct-transport";
 import { RelayTransport, type RelayE2eMode } from "./relay-transport";
+import { openSecretFields, sealSecretFields } from "../security/option-secrets";
 import type { ServerEvent } from "./protocol";
 import type {
   E2eStatusChange,
@@ -114,12 +115,25 @@ export function createOptionPersistence(): ConnectionPersistence {
       const row = await prisma.option.findFirst({
         where: { type: OPTION_TYPE, name: OPTION_NAME },
       });
-      return row
-        ? parsePersisted(row.value)
-        : { connections: [], activeConnId: null };
+      if (!row) return { connections: [], activeConnId: null };
+      // 安全批 D1：token 字段透明解封（旧明文原样）
+      const shape = parsePersisted(row.value);
+      return {
+        connections: await Promise.all(
+          shape.connections.map((c) => openSecretFields("connections", c)),
+        ),
+        activeConnId: shape.activeConnId,
+      };
     },
     async save(shape: PersistedShape): Promise<void> {
-      const value = JSON.stringify(shape);
+      // 安全批 D1：token 字段密封落表（单表 dump 不再得全权凭证）
+      const sealed = {
+        ...shape,
+        connections: await Promise.all(
+          shape.connections.map((c) => sealSecretFields("connections", c)),
+        ),
+      };
+      const value = JSON.stringify(sealed);
       const row = await prisma.option.findFirst({
         where: { type: OPTION_TYPE, name: OPTION_NAME },
         select: { id: true },

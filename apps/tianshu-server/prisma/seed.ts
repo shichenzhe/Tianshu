@@ -7,7 +7,10 @@ async function main() {
   console.log('开始初始化数据库...');
 
   // 创建默认管理员账号（用户名 admin / 密码 123456，生产环境请立即修改）
-  const adminPasswordHash = await bcrypt.hash('123456', 10);
+  // 安全批 E3：随机初始口令打印到控制台一次（曾固定 '123456'）
+  const adminPassword = randomBytes(12).toString('base64url');
+  console.log('[seed] 初始管理员 admin 一次性口令:', adminPassword, '（请立即登录修改）');
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 10);
   const admin = await prisma.user.upsert({
     where: { username: 'admin' },
     update: {},

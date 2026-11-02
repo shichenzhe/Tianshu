@@ -28,10 +28,21 @@
   "reasonInvalidToken": "Invalid token",
   "reasonUnreachable": "Unreachable",
   "reasonTimeout": "Connection timed out",
+  "reasonInvalidScheme": "Relay URL must start with ws:// or wss://",
+  "reasonPublicPlaintext": "Public/domain addresses must use wss:// (credentials over plaintext ws:// can be sniffed); use a direct IP for LAN relays",
+  "e2eMode": "End-to-end encryption",
+  "e2eAuto": "Auto",
+  "e2eAutoHint": "Fall back to plaintext if handshake fails",
+  "e2eRequired": "Required",
+  "e2eRequiredHint": "Disconnect instead of plaintext fallback",
+  "fingerprint": "Fingerprint (optional, anti-MITM)",
   "stateIdle": "Idle",
   "stateConnecting": "Connecting",
   "stateConnected": "Connected",
   "stateReconnecting": "Reconnecting",
   "stateInvalidToken": "Invalid token",
-  "stateClosed": "Closed"
+  "stateClosed": "Closed",
+  "stateEncrypted": "Encrypted",
+  "stateMitmSuspect": "Fingerprint mismatch (possible MITM)",
+  "stateRequiredFailed": "Encryption handshake failed"
 }

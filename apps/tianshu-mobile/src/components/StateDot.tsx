@@ -7,8 +7,11 @@ import type { TransportState } from "@/transport/types";
  * 统一改造待后续任务） */
 export const STATE_DOT: Record<TransportState, string> = {
   connected: "#22c55e",
+  encrypted: "#22c55e",
   reconnecting: "#eab308",
   "invalid-token": "#FF3B30",
+  "mitm-suspect": "#FF3B30",
+  "required-failed": "#FF3B30",
   idle: "#8E8E93",
   connecting: "#8E8E93",
   closed: "#8E8E93",

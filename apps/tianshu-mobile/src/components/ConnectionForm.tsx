@@ -8,6 +8,7 @@ import { kebabToPascal } from "@/lib/str";
 import {
   isValidConfig,
   testConnection,
+  validateRelayUrlScheme,
   useConnectionsStore,
   type ConnectionConfig,
 } from "@/store/connections.store";
@@ -71,6 +72,11 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
   const [relayUrl, setRelayUrl] = useState(initial?.relayUrl ?? "");
   const [relayToken, setRelayToken] = useState(initial?.relayToken ?? "");
   const [connectionId, setConnectionId] = useState(initial?.connectionId ?? "");
+  // —— relay e2e（安全批 H）：模式两段 + TOFU 指纹（编辑态回填） ——
+  const [e2eMode, setE2eMode] = useState<"auto" | "required">(
+    initial?.e2eMode ?? "auto",
+  );
+  const [fingerprint, setFingerprint] = useState(initial?.fingerprint ?? "");
   const [testing, setTesting] = useState(false);
 
   const asConfig = (): ConnectionConfig => ({
@@ -83,6 +89,8 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
           relayUrl: relayUrl.trim(),
           relayToken: relayToken.trim(),
           connectionId: connectionId.trim(),
+          ...(fingerprint.trim() ? { fingerprint: fingerprint.trim() } : {}),
+          ...(e2eMode === "required" ? { e2eMode } : {}),
         }),
   });
 
@@ -100,6 +108,21 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
 
   function handleSave() {
     const cfg = asConfig();
+    // relay 地址 scheme 门禁（安全批 H；桌面批二 B7 同款）：公网/域名明文
+    // ws:// 的凭证可被链路嗅探——保存即拒，内网 IP 直连放行
+    if (cfg.mode === "relay" && cfg.relayUrl) {
+      const scheme = validateRelayUrlScheme(cfg.relayUrl);
+      if (scheme !== true) {
+        toast.error(
+          t(
+            scheme === "public-plaintext"
+              ? "connections:reasonPublicPlaintext"
+              : "connections:reasonInvalidScheme",
+          ),
+        );
+        return;
+      }
+    }
     if (!isValidConfig(cfg)) {
       toast.error(t("connections:reasonInvalidConfig"));
       return;
@@ -178,6 +201,40 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
             label={t("connections:connectionId")}
             value={connectionId}
             onChange={setConnectionId}
+          />
+          {/* e2e 模式两段（安全批 H；语义同桌面连接级开关） */}
+          <View className="mb-3">
+            <Text className="mb-1 text-[13px] text-label2 dark:text-[#EBEBF599]">
+              {t("connections:e2eMode")}
+            </Text>
+            <View className="flex-row gap-2">
+              {(["auto", "required"] as const).map((m) => (
+                <PressableButton
+                  key={m}
+                  label={t(
+                    m === "auto"
+                      ? "connections:e2eAuto"
+                      : "connections:e2eRequired",
+                  )}
+                  onPress={() => setE2eMode(m)}
+                  variant={e2eMode === m ? "filled" : "plain"}
+                  selected={e2eMode === m}
+                  className="flex-1"
+                />
+              ))}
+            </View>
+            <Text className="mt-1 text-xs text-label2 dark:text-[#EBEBF599]">
+              {t(
+                e2eMode === "auto"
+                  ? "connections:e2eAutoHint"
+                  : "connections:e2eRequiredHint",
+              )}
+            </Text>
+          </View>
+          <TextField
+            label={t("connections:fingerprint")}
+            value={fingerprint}
+            onChange={setFingerprint}
           />
         </>
       )}

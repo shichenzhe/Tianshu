@@ -1,6 +1,11 @@
-import { createServer, type RequestListener } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type RequestListener,
+  type ServerResponse,
+} from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { createPublicKey } from 'node:crypto';
+import { createPublicKey, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { RELAY_CLOSE_CODES, type AuthFrame } from '@tianshu/protocol';
@@ -57,8 +62,8 @@ export interface RelayOptions {
   authMode?: 'static' | 'jwt';
   /** jwt 模式公钥 PEM 文件（relay-admin 签发私钥的对侧） */
   authPubkeyFile?: string;
-  /** 内部端点（/internal/kick、/internal/stats）Bearer 凭证；
-   *  Task 5 消费，本任务仅入参收口 */
+  /** 内部端点（/internal/kick、/internal/stats）Bearer 凭证（Task 5）；
+   *  未配置时两端点 404 不可见（不向探测方暴露存在性） */
   internalSecret?: string;
 }
 
@@ -103,6 +108,58 @@ function createAuthenticator(options: RelayOptions): Authenticator {
  * 访问日志）；query 凭证双轨受理（老客户端兼容窗口，命中打弃用告警），
  * 窗口期后客户端侧移除 query。
  */
+/** kick 请求体尺寸上限：两字段载荷远小于此，超限即恶意/误配置 */
+const INTERNAL_BODY_LIMIT_BYTES = 64 * 1024;
+
+/** Bearer 凭证比对（时序安全——秘钥比对不泄露前缀/长度逐位时序；
+ *  长度不等直接 false 只泄露长度，等长路径走 timingSafeEqual） */
+function bearerMatches(
+  authorization: string | undefined,
+  secret: string,
+): boolean {
+  if (typeof authorization !== 'string') return false;
+  const presented = Buffer.from(authorization);
+  const expected = Buffer.from(`Bearer ${secret}`);
+  return (
+    presented.length === expected.length && timingSafeEqual(presented, expected)
+  );
+}
+
+/** 内部端点 JSON body 读取：坏 JSON / 超限 → null（调用方归一 400） */
+function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let aborted = false;
+    req.on('data', (chunk: Buffer) => {
+      if (aborted) return;
+      size += chunk.length;
+      if (size > INTERNAL_BODY_LIMIT_BYTES) {
+        aborted = true;
+        req.destroy();
+        resolve(null);
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('error', () => resolve(null));
+    req.on('end', () => {
+      if (aborted) return;
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+/** JSON 响应小工具（内部端点共用） */
+function respondJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
 export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   const authenticator = createAuthenticator(options);
   if ((options.certFile !== undefined) !== (options.keyFile !== undefined)) {
@@ -110,13 +167,67 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   }
   const registry = new RelayRegistry(options.maxBufferFrames);
   const requestListener: RequestListener = (req, res) => {
-    if (req.url?.split('?')[0] === '/health') {
+    const pathname = req.url?.split('?')[0];
+    if (pathname === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok' }));
       return;
     }
+    // 内部端点先于 404 匹配（Task 5）；未配置 secret 时不可见（404 与
+    // 未知路径同形——不向探测方暴露端点存在性）
+    if (pathname === '/internal/kick' || pathname === '/internal/stats') {
+      void handleInternalEndpoint(req, res, pathname);
+      return;
+    }
     res.writeHead(404).end();
   };
+
+  /** 内部端点分流（Task 5）：未配置 secret → 404（与未知路径同形，
+   *  不暴露存在性）；凭证不符 → 401；方法不符 → 405 */
+  async function handleInternalEndpoint(
+    req: IncomingMessage,
+    res: ServerResponse,
+    pathname: string,
+  ): Promise<void> {
+    if (!options.internalSecret) return void res.writeHead(404).end();
+    if (!bearerMatches(req.headers.authorization, options.internalSecret))
+      return void respondJson(res, 401, { error: 'unauthorized' });
+    if (pathname === '/internal/stats') return handleInternalStats(req, res);
+    return handleInternalKick(req, res);
+  }
+
+  /** GET /internal/stats：租户在线连接聚合（static 模式无记账 → 空） */
+  function handleInternalStats(req: IncomingMessage, res: ServerResponse): void {
+    if (req.method !== 'GET')
+      return void res.writeHead(405, { allow: 'GET' }).end();
+    respondJson(res, 200, { tenants: registry.tenantStats() });
+  }
+
+  /** POST /internal/kick：{tenantId?|ak?} 拆匹配在线连接（至少一维度） */
+  async function handleInternalKick(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (req.method !== 'POST')
+      return void res.writeHead(405, { allow: 'POST' }).end();
+    const body = await readJsonBody(req);
+    if (body === null || typeof body !== 'object')
+      return void respondJson(res, 400, { error: 'bad-request' });
+    const source = body as Record<string, unknown>;
+    const target = {
+      tenantId:
+        typeof source.tenantId === 'string' ? source.tenantId : undefined,
+      ak: typeof source.ak === 'string' ? source.ak : undefined,
+    };
+    if (target.tenantId === undefined && target.ak === undefined)
+      return void respondJson(res, 400, { error: 'bad-request' });
+    // socket 拆除回调：kick 语义 terminate 立断（吊销不给告别握手）；
+    // 簿记已由 kickTenant 经 notifyClose/dropServer 正常断开路径回落
+    const kicked = registry.kickTenant(target, (ws) =>
+      (ws as WebSocket).terminate(),
+    );
+    respondJson(res, 200, { kicked });
+  }
   const httpServer =
     options.certFile && options.keyFile
       ? createHttpsServer(
@@ -188,6 +299,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
       connId,
       decision.tenantId,
       decision.quota,
+      decision.ak,
     );
   }
 
@@ -197,6 +309,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     connId: string,
     tenantId?: string,
     quota?: AccessQuota,
+    ak?: string,
   ): void {
     // F4：maxPayload 超限/协议错误——ws 已自行 close(1009) 并随后 emit('error')，
     // 此处仅兜住事件防进程级未处理错误，不得 terminate（会抢跑 1009 close 帧）
@@ -208,8 +321,8 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
       registry.forget(ws);
     });
     if (role === 'server')
-      handleServerSocket(ws, connId, tenantId, quota);
-    else handleClientSocket(ws, tenantId, quota);
+      handleServerSocket(ws, connId, tenantId, quota, ak);
+    else handleClientSocket(ws, tenantId, quota, ak);
   }
 
   function handleServerSocket(
@@ -217,17 +330,23 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     connectionId: string,
     tenantId?: string,
     quota?: AccessQuota,
+    ak?: string,
   ): void {
     if (!connectionId) return void ws.close(4000, 'missing-connection-id');
     // 三闸门之一·配额（jwt 模式）：租户 server 连接达 maxServers → 4005。
-    // 防御闸已保证 tenantId 在场时 quota 形状合法，此处解引用安全
+    // 同租户重连豁免（Ruling P5）：该 connectionId 现注册已归属本租户 →
+    // 本次为顶替重连而非新增占位，闸门放行——registerServer 随即顶掉旧
+    // socket 并回落其计数，净额不变；心跳窗内半开旧连接不再把闪断重连
+    // 拒成 4005（与 client 侧 attached===target 豁免对齐）。防御闸已保证
+    // tenantId 在场时 quota 形状合法，此处解引用安全
     if (
       tenantId !== undefined &&
       quota &&
+      registry.serverTenant(connectionId) !== tenantId &&
       registry.tenantConnCount(tenantId, 'server') >= quota.maxServers
     )
       return void ws.close(RELAY_CLOSE_CODES.QUOTA_EXCEEDED, 'quota-exceeded');
-    const registered = registry.registerServer(connectionId, ws, tenantId);
+    const registered = registry.registerServer(connectionId, ws, tenantId, ak);
     // 三闸门之二·顶号：异租户注册已占 id → 4006（同租户重注册=重连顶号，
     // 现状保留）；冲突时 registry 不动现有注册，直接拆新连接
     if (registered === 'id-conflict')
@@ -246,6 +365,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     ws: WebSocket,
     tenantId?: string,
     quota?: AccessQuota,
+    ak?: string,
   ): void {
     let attached: string | null = null;
     ws.on('message', (raw) => {
@@ -278,7 +398,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
             'quota-exceeded',
           );
         }
-        const attachResult = registry.attachClient(target, ws, tenantId);
+        const attachResult = registry.attachClient(target, ws, tenantId, ak);
         if (attachResult !== 'ok') {
           // 4004/4007 拆连接前收敛 attached：F3 已对旧目标发过
           // client-gone，置空防 ws close 事件对旧目标再发一次（重复帧，
@@ -404,7 +524,7 @@ const toInt = (value: string): number => Number.parseInt(value, 10) || 0;
 // CLI 入口：node dist/src/relay/relay-main.js --port 8411 --token <t> --max-buffer-frames 200
 // TLS 可选：--cert <pem> --key <pem>（成对传入即 wss 监听；缺省 http——默认部署架构为反代终止 TLS）
 // 鉴权模式（多租户批 Task 3）：--auth-pubkey <pem> 在场即 jwt 验签（免 --token）；
-// --internal-secret <s> 内部端点凭证（Task 5 消费）
+// --internal-secret <s> 内部端点凭证（kick/stats；未配置则两端点 404 不暴露）
 if (require.main === module) {
   const options = parseCliArgs(process.argv.slice(2));
   if (!options.token && !options.authPubkeyFile) {

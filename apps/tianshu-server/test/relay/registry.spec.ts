@@ -368,6 +368,34 @@ describe('relay-main 租户三闸门接线（jwt 模式真实 ws）', () => {
     expect(client2.readyState).toBe(WebSocket.OPEN); // 漏账会误拆 4005
   });
 
+  it('配额闸同租户重连豁免（Ruling P5）：半开旧连接占满额度时同 id 重连放行，计数净额不变', async () => {
+    const token = signTenantToken({
+      tid: 'tenant-a',
+      role: 'server',
+      quota: { maxServers: 1, maxClients: 2 },
+    });
+    const first = await authedSocket(token, {
+      role: 'server',
+      connectionId: 'p5-1',
+    });
+    openedSockets.push(first);
+    // 半开语义：旧 socket 不 close（连接保持 OPEN）——心跳窗内它仍占着
+    // 唯一 server 额度；此时同租户同 id 重连不得被拒成 4005
+    const firstClosed = closeCodeOf(first);
+    const second = await authedSocket(token, {
+      role: 'server',
+      connectionId: 'p5-1',
+    });
+    openedSockets.push(second);
+    expect(second.readyState).toBe(WebSocket.OPEN); // 重连被接纳（顶替重连）
+    expect(await firstClosed).toBe(4000); // 旧连接被顶掉
+    // 计数净额仍为 1：新 id 的第三个连接应照常 4005（豁免不构成放水）
+    const third = await openSocket();
+    openedSockets.push(third);
+    sendAuth(third, token, { role: 'server', connectionId: 'p5-2' });
+    expect(await closeCodeOf(third)).toBe(RELAY_CLOSE_CODES.QUOTA_EXCEEDED);
+  });
+
   it('顶号闸：异租户注册已占 connectionId → close 4006，在册连接不受扰动', async () => {
     const tokenA = signTenantToken({ tid: 'tenant-a', role: 'server' });
     const tokenB = signTenantToken({ tid: 'tenant-b', role: 'server' });

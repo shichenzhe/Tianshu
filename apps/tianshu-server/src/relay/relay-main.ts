@@ -1,5 +1,6 @@
 import { createServer, type RequestListener } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
+import { createPublicKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { AuthFrame } from '@tianshu/protocol';
@@ -61,8 +62,16 @@ function createAuthenticator(options: RelayOptions): Authenticator {
   if (authMode === 'jwt') {
     if (!options.authPubkeyFile)
       throw new Error('relay 拒绝启动：jwt 模式需要 --auth-pubkey');
+    const publicKeyPem = readFileSync(options.authPubkeyFile, 'utf8');
+    // 启动时公钥可解析性校验：坏 PEM 若漏到运行期，verifyAccessJwt 的
+    // 归一语义会把它伪装成凭证问题——所有连接 4001 invalid-token
+    try {
+      createPublicKey(publicKeyPem);
+    } catch {
+      throw new Error('relay 拒绝启动：--auth-pubkey 不是合法公钥');
+    }
     return createJwtAuthenticator(
-      readFileSync(options.authPubkeyFile, 'utf8'),
+      publicKeyPem,
       // 吊销检查面（CRL 拉取，多租户批 Task 6 接线）：当前无吊销源
       () => false,
     );

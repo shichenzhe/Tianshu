@@ -334,6 +334,28 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
     ).rejects.toThrow('auth-pubkey');
   });
 
+  it('jwt 模式：公钥文件存在但内容非法 → 拒绝启动（坏 PEM 不得漏到运行期伪装成 4001 invalid-token）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-auth-'));
+    const bogus = join(dir, 'bogus-pub.pem');
+    writeFileSync(bogus, 'not a pem at all\n');
+    // 防 RED 形态漏监听：未修复时 startRelay 成功——关掉句柄再转断言
+    // 失败，测试进程可退出
+    const outcome = await startRelay({
+      port: 0,
+      token: '',
+      authPubkeyFile: bogus,
+    }).then(
+      (h) => h,
+      (e: Error) => e,
+    );
+    if (outcome instanceof Error)
+      expect(outcome.message).toBe('relay 拒绝启动：--auth-pubkey 不是合法公钥');
+    else {
+      await outcome.close();
+      throw new Error('坏 PEM 竟然启动成功');
+    }
+  });
+
   it('token 与公钥两者皆缺 → 拒绝启动（现状保留）', async () => {
     await expect(startRelay({ port: 0, token: '' })).rejects.toThrow('token');
   });

@@ -402,6 +402,8 @@ export default class ServerApi {
     images?: string[],
     /** skill_ref 批：技能引用名单——被控端落 SkillRefBlock 组装侧展开 */
     skillRefs?: string[],
+    /** file_ref 批：内容注入式文件引用（path+内容随块落库） */
+    contentRefs?: Array<{ path: string; content: string }>,
   ): Promise<void> {
     await requestRemote(
       "server:sessionSend",
@@ -412,6 +414,7 @@ export default class ServerApi {
         ...(assistantId != null ? { assistantId } : {}),
         ...(images != null ? { images } : {}),
         ...(skillRefs != null ? { skillRefs } : {}),
+        ...(contentRefs != null ? { contentRefs } : {}),
       },
       connId,
     );

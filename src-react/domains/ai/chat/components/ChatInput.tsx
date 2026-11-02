@@ -143,12 +143,14 @@ interface ChatInputProps {
   onRunCommand: (command: string) => void;
   /** 发送链路（错误 toast 由 ChatView toast+rethrow 负责，此处静默防双弹）；
    *  skillRefs 为技能引用名单（skill_ref 批：不再 readSkill 拼全文，落块
-   *  组装侧展开） */
+   *  组装侧展开）；contentRefs 为内容注入式文件引用（file_ref 批：path+
+   *  内容随块落库，不再拼 text 前缀） */
   onSend: (
     content: string,
     files: PendingFile[],
     overrides?: ChatModelParams,
     skillRefs?: string[],
+    contentRefs?: Array<{ path: string; content: string }>,
   ) => Promise<void>;
   onStop: () => void;
   /** 自定义占位文案（项目底栏传项目文案）；缺省沿用 chat 默认（AI 模块不变） */
@@ -531,6 +533,8 @@ export default function ChatInput({
     }
     void (async () => {
       const files: PendingFile[] = [];
+      // file_ref 批：内容注入式文件引用块化收集（path+内容随块）
+      const contentRefs: Array<{ path: string; content: string }> = [];
       const failures: string[] = [];
       for (const filePath of new Set(fileTokens)) {
         // 引用式（引用式批 2026-10-21）：agent/plan 会话的工作空间相对路径
@@ -581,10 +585,7 @@ export default function ChatInput({
                   "file:readExternalFile",
                   filePath,
                 );
-                files.push({
-                  path: filePath,
-                  content: ext.content ?? "",
-                });
+                contentRefs.push({ path: filePath, content: ext.content ?? "" });
                 continue;
               } catch {
                 failures.push(filePath);
@@ -593,7 +594,9 @@ export default function ChatInput({
             }
             failures.push(filePath);
           } else {
-            files.push({ path: filePath, content: result.content });
+            // file_ref 批：内容注入式改块化收集（内容随块落库，组装侧直取
+            // ——不再拼 text 前缀，根治空行切段泄漏）
+            contentRefs.push({ path: filePath, content: result.content });
           }
         } catch {
           failures.push(filePath);
@@ -649,10 +652,9 @@ export default function ChatInput({
             "file:readExternalFile",
             storagePath,
           );
-          files.push({
+          contentRefs.push({
             path: file.name,
             content: result.content ?? "",
-            kind: "localFile",
           });
         } catch {
           libFailures.push(file.name);
@@ -672,7 +674,7 @@ export default function ChatInput({
           t("chat:mention.tokenReadFailed", { names: failures.join(", ") }),
         );
       }
-      if (messageText.trim() === "" && files.length === 0) {
+      if (messageText.trim() === "" && files.length === 0 && contentRefs.length === 0) {
         if (commands.length === 0 || failures.length > 0) {
           // 既无正文也无可用注入(且非纯命令成功):恢复输入避免吞掉
           // (资料库/粘贴 pill 不在文本中,须随输入一并恢复)
@@ -682,11 +684,17 @@ export default function ChatInput({
         }
         return;
       }
-      // 无技能引用保持两参调用（既有 onSend 断言与调用方签名零扰动）
-      const sendCall =
-        skillRefs.length > 0
-          ? onSend(messageText, files, undefined, skillRefs)
-          : onSend(messageText, files);
+      // 无引用保持两参调用（既有 onSend 断言与调用方签名零扰动）
+      const hasRefs = skillRefs.length > 0 || contentRefs.length > 0;
+      const sendCall = hasRefs
+        ? onSend(
+            messageText,
+            files,
+            undefined,
+            skillRefs.length > 0 ? skillRefs : undefined,
+            contentRefs.length > 0 ? contentRefs : undefined,
+          )
+        : onSend(messageText, files);
       void sendCall.catch(() => {
         /* 错误提示由 onSend 链路（toast+rethrow）与持久化错误块负责。
          * 早期失败（含远程图片上传失败——裁定 2026-10-21 阻断语义）时

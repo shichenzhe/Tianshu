@@ -38,6 +38,9 @@ export interface ChatSendParams {
    *  于 text 块（消息库不存全文，组装侧 loadSkill 展开注入）；
    *  缺省走旧 text 前缀注入形态（历史兼容） */
   skillRefs?: string[];
+  /** 内容注入式文件引用（file_ref 批）：path+内容随块落库（组装侧直取
+   *  展开，渲染零泄漏）；缺省走旧 text 前缀注入形态（历史兼容） */
+  contentRefs?: Array<{ path: string; content: string }>;
 }
 
 export type ChatStreamChunk =

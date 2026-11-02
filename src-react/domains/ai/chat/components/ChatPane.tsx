@@ -173,6 +173,7 @@ export default function ChatPane({
       files: PendingFile[],
       overrides?: ChatModelParams,
       skillRefs?: string[],
+      contentRefs?: Array<{ path: string; content: string }>,
     ) => {
       if (session.id < 0 && sessionResolver) {
         const { textFiles, images } = splitImageFiles(files);
@@ -187,7 +188,7 @@ export default function ChatPane({
         appendOptimisticMessage(
           queryClient,
           resolvedId,
-          buildOptimisticUserMessage(resolvedId, finalContent, skillRefs),
+          buildOptimisticUserMessage(resolvedId, finalContent, skillRefs, contentRefs),
         );
         try {
           await ChatApi.send({
@@ -196,6 +197,9 @@ export default function ChatPane({
             overrides,
             images: [...images, ...(resolved.images ?? [])],
             ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
+            ...(contentRefs && contentRefs.length > 0
+              ? { contentRefs }
+              : {}),
           });
         } catch (e) {
           useChatStore.getState().finishStream(resolvedId);
@@ -211,7 +215,14 @@ export default function ChatPane({
       const { textFiles, images } = splitImageFiles(files);
       const injected = buildInjectedContent(content, textFiles);
       try {
-        await send(injected, undefined, overrides, images, skillRefs);
+        await send(
+          injected,
+          undefined,
+          overrides,
+          images,
+          skillRefs,
+          contentRefs,
+        );
         // 防呆：成功发出新消息后退出编辑态，避免随后的编辑重发静默截断刚发的消息
         setEditing(null);
       } catch (e) {

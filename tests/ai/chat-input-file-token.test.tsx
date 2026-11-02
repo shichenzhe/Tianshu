@@ -136,7 +136,9 @@ describe("@ 文件 token 出界回退", () => {
       "file:readExternalFile",
       "/Users/x/desktop/notes.md",
     );
-    expect(onSend.mock.calls[0][1]).toEqual([
+    // file_ref 批：内容注入式改块化（files 空、第五参 contentRefs 承载）
+    expect(onSend.mock.calls[0][1]).toEqual([]);
+    expect(onSend.mock.calls[0][4]).toEqual([
       { path: "/Users/x/desktop/notes.md", content: "FILE_CONTENT" },
     ]);
     expect(toast.warning).not.toHaveBeenCalled();
@@ -203,7 +205,9 @@ describe("@ 文件 token 出界回退", () => {
       7,
       "src/index.ts",
     );
-    expect(onSend.mock.calls[0][1]).toEqual([
+    // file_ref 批：内容注入式改块化（files 空、第五参 contentRefs 承载）
+    expect(onSend.mock.calls[0][1]).toEqual([]);
+    expect(onSend.mock.calls[0][4]).toEqual([
       { path: "src/index.ts", content: "IN_WS" },
     ]);
   });

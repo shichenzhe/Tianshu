@@ -82,7 +82,7 @@ export default class ChatApi {
    * 空 images 归一化掉（无附件时载荷与既往一致）
    */
   static async send(params: ChatSendParams): Promise<void> {
-    const { images, skillRefs, ...rest } = params;
+    const { images, skillRefs, contentRefs, ...rest } = params;
     // 远程链（FA-T3 图片批）：带 base64 的图逐张上传被控端 attachments/
     // （files/uploadImage），返回的数据根相对路径进 sessionSend.images
     // 落 ImageBlock——远端引擎 loadImage 回喂零适配。图片引用不正常
@@ -122,6 +122,7 @@ export default class ChatApi {
           undefined,
           remoteImages.length > 0 ? remoteImages : undefined,
           skillRefs && skillRefs.length > 0 ? skillRefs : undefined,
+          contentRefs && contentRefs.length > 0 ? contentRefs : undefined,
         );
       },
     );

@@ -8,6 +8,11 @@ import {
   RelayRegistry,
   type RelayFrame,
 } from './registry';
+import {
+  createJwtAuthenticator,
+  createStaticAuthenticator,
+  type Authenticator,
+} from './auth';
 
 export { DEFAULT_MAX_BUFFER_FRAMES };
 
@@ -31,11 +36,39 @@ export interface RelayOptions {
   certFile?: string;
   /** TLS 私钥 PEM（与 certFile 成对） */
   keyFile?: string;
+  /** 鉴权模式（多租户批 Task 3）：static（共享 token，现状）/ jwt
+   *  （access JWT 验签）；缺省按凭证面推断——authPubkeyFile 在场即
+   *  jwt，否则 static（此时 token 必填，缺省拒绝启动） */
+  authMode?: 'static' | 'jwt';
+  /** jwt 模式公钥 PEM 文件（relay-admin 签发私钥的对侧） */
+  authPubkeyFile?: string;
+  /** 内部端点（/internal/kick、/internal/stats）Bearer 凭证；
+   *  Task 5 消费，本任务仅入参收口 */
+  internalSecret?: string;
 }
 
 export interface RelayHandle {
   port: number;
   close(): Promise<void>;
+}
+
+/** 鉴权器构造（多租户批 Task 3）：模式推断——显式 authMode 优先，
+ *  缺省 authPubkeyFile 在场即 jwt，否则 static。static 缺 token /
+ *  jwt 缺公钥均拒绝启动（static 分支与原内联缺 token 拒绝同语义） */
+function createAuthenticator(options: RelayOptions): Authenticator {
+  const authMode =
+    options.authMode ?? (options.authPubkeyFile ? 'jwt' : 'static');
+  if (authMode === 'jwt') {
+    if (!options.authPubkeyFile)
+      throw new Error('relay 拒绝启动：jwt 模式需要 --auth-pubkey');
+    return createJwtAuthenticator(
+      readFileSync(options.authPubkeyFile, 'utf8'),
+      // 吊销检查面（CRL 拉取，多租户批 Task 6 接线）：当前无吊销源
+      () => false,
+    );
+  }
+  if (!options.token) throw new Error('relay 拒绝启动：缺少 token');
+  return createStaticAuthenticator(options.token);
 }
 
 /**
@@ -48,7 +81,7 @@ export interface RelayHandle {
  * 窗口期后客户端侧移除 query。
  */
 export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
-  if (!options.token) throw new Error('relay 拒绝启动：缺少 token');
+  const authenticator = createAuthenticator(options);
   if ((options.certFile !== undefined) !== (options.keyFile !== undefined)) {
     throw new Error('relay 拒绝启动：--cert 与 --key 必须成对提供');
   }
@@ -105,17 +138,22 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     });
   });
 
-  /** 鉴权落定分流：token/role/connectionId 校验后进既有连接处理 */
+  /** 鉴权落定分流：Authenticator 裁决后进既有连接处理（static 裁决面
+   *  与原内联校验逐字节一致——4001 invalid-token / 4000 invalid-role） */
   function admitConnection(
     ws: WebSocket,
     token: string,
     role: unknown,
     connId: string,
   ): void {
-    if (token !== options.token) return void ws.close(4001, 'invalid-token');
-    if (role !== 'server' && role !== 'client')
-      return void ws.close(4000, 'invalid-role');
-    handleConnection(ws, role, connId);
+    const decision = authenticator.admit({
+      token,
+      role,
+      connectionId: connId,
+    });
+    if (!decision.ok)
+      return void ws.close(decision.closeCode, decision.reason);
+    handleConnection(ws, decision.role, connId);
   }
 
   function handleConnection(ws: WebSocket, role: string, connId: string): void {
@@ -269,15 +307,19 @@ export function parseCliArgs(argv: string[]): RelayOptions {
       options.maxBufferFrames = toInt(value);
     else if (name === '--cert') options.certFile = value;
     else if (name === '--key') options.keyFile = value;
+    else if (name === '--auth-pubkey') options.authPubkeyFile = value;
+    else if (name === '--internal-secret') options.internalSecret = value;
   }
   return options;
 }
 const toInt = (value: string): number => Number.parseInt(value, 10) || 0;
 // CLI 入口：node dist/src/relay/relay-main.js --port 8411 --token <t> --max-buffer-frames 200
 // TLS 可选：--cert <pem> --key <pem>（成对传入即 wss 监听；缺省 http——默认部署架构为反代终止 TLS）
+// 鉴权模式（多租户批 Task 3）：--auth-pubkey <pem> 在场即 jwt 验签（免 --token）；
+// --internal-secret <s> 内部端点凭证（Task 5 消费）
 if (require.main === module) {
   const options = parseCliArgs(process.argv.slice(2));
-  if (!options.token) {
+  if (!options.token && !options.authPubkeyFile) {
     console.error('[relay] 缺少 --token，拒绝启动（公网中继必须鉴权）');
     process.exit(1);
   }

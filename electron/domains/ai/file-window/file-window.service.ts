@@ -340,7 +340,13 @@ export default class FileWindowService {
     });
     // 顶层导航白名单（同主窗）：file:// 与 dev server 放行，其余 http(s) 一律拒
     win.webContents.on("will-navigate", (event, url) => {
-      if (!shouldAllowNavigation(url, this.deps.devServerUrl || undefined)) {
+      if (
+        !shouldAllowNavigation(
+          url,
+          this.deps.devServerUrl || undefined,
+          this.deps.rendererIndex,
+        )
+      ) {
         event.preventDefault();
       }
     });

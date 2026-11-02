@@ -200,6 +200,12 @@ function main() {
   );
 
   for (const pair of manifest.pairs) {
+    // skip 判定前置：skip 条目可无 mirrorPath/serverPath（纯登记），
+    // 路径 join 对 undefined 会崩（mobile-ported-logic 条目实测）
+    if (pair.skip) {
+      console.log(`[SKIP]  ${pair.id}（${pair.note || "skip"}）`);
+      continue;
+    }
     const mirrorAbs = path.join(mirrorRoot, pair.mirrorPath);
     const serverAbs = path.join(serverRoot, pair.serverPath);
     if (!existsSync(mirrorAbs) || !existsSync(serverAbs)) {
@@ -211,10 +217,6 @@ function main() {
         .join(" ");
       console.error(`[ERROR] ${pair.id} 文件缺失 → ${missing}`);
       errorCount += 1;
-      continue;
-    }
-    if (pair.skip) {
-      console.log(`[SKIP]  ${pair.id}（${pair.note || "skip"}）`);
       continue;
     }
 

@@ -517,18 +517,23 @@ export default function SessionsScreen() {
     workspaces.forEach((w, wi) => {
       const gs = workspaceSessions[w.id];
       const open = expanded.has(w.id);
+      // 批③防御（2026-11-02 报障）：旧被控端 workspace/query 仍透出资产
+      // 空间（face 过滤修复前的端）时，组缓存会含项目会话——滤之，防
+      // 与项目组行同 key `r${id}` 重复渲染（React duplicate key 报错）
+      const groupItems = (gs?.items ?? []).filter(
+        (session) => session.projectId == null,
+      );
       entries.push({
         kind: "group",
         key: `g${w.id}`,
         wsId: w.id,
         title: w.name,
-        count: gs?.loaded ? gs.items.length : null,
+        count: gs?.loaded ? groupItems.length : null,
         open,
         creating: creatingWs === w.id,
         gapTop: wi > 0,
       });
       if (!open) return;
-      const groupItems = gs?.items ?? [];
       if (groupItems.length === 0) {
         entries.push({
           kind: "pending",

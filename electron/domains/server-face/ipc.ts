@@ -461,9 +461,13 @@ export function attachServerFace(deps: {
     // A8 写面三段（workspace-tap）：deps.workspaceRepo 在则装配
     // create/update/delete——delete 沿用 repo 硬级联语义
     workspaces: {
+      // projectId:null 过滤对齐桌面 listWorkspaces 语义（项目资产空间不进
+      // 分组树，二期 §3.2）——face 侧 HD-A1 装配时漏配，资产空间透出致
+      // 移动端项目会话同时落 workspace 组与项目组（同 key 重复渲染，
+      // 2026-11-02 报障修复）
       list: async (userId) =>
         await prisma.workspace.findMany({
-          where: { userId },
+          where: { userId, projectId: null },
           select: {
             id: true,
             name: true,

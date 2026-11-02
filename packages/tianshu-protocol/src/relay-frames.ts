@@ -48,6 +48,23 @@ export type AuthFrame = {
   connectionId?: string;
 };
 
+// ---- relay 多租户三校验点 close code（spec §4.2）----
+// WebSocket 关闭码（应用私有 4000-4999 段，续接 relay 既有 4000-4004）：
+// relay/被控端校验不过即按码断开，控制端按码分支提示。wire 契约值
+// 三端钉死于此，改值即破协议。
+
+/**
+ * relay 多租户三校验点语义化关闭码（多租户接入的三道闸门，见 spec §4.2）：
+ * - QUOTA_EXCEEDED：配额超限——每租户在线连接数超 claims.quota；
+ * - ID_CONFLICT：异租户注册已占用 connectionId（顶号防护）；
+ * - TENANT_FORBIDDEN：控制端跨租户 attach（配对授权）。
+ */
+export const RELAY_CLOSE_CODES = {
+  QUOTA_EXCEEDED: 4005,
+  ID_CONFLICT: 4006,
+  TENANT_FORBIDDEN: 4007,
+} as const;
+
 // ---- E2E 扩展帧（spec 2026-10-18-relay-e2e；安全批 H 上收 protocol）----
 // 原仅 @tianshu/core e2e-crypto 导出（kind 常量）+ mirror server-face
 // relay-protocol.ts（帧类型）——移动端接入 e2e 需消费契约但不能引 core

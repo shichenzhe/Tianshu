@@ -1,7 +1,7 @@
 # server Docker 部署治理设计
 
 日期：2026-10-31
-状态：设计定稿（用户已认可），实施待排期
+状态：已实施（2026-11-02 核实更正；commits 0cf1c707 补坑→d8db6731 Dockerfile 根 context vendor 内嵌→b4097cf0 收尾钉版自愈；原「实施待排期」状态行过时未随实施更新）
 前置：`docs/superpowers/specs/2026-10-31-server-pg-search-design.md`（PG 检索层，部署面因 Dockerfile 债务打了 caveat）
 
 ## 背景与目标

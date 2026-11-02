@@ -1,7 +1,7 @@
 # server 主库双引擎（SQLite ⇄ PostgreSQL）设计
 
 日期：2026-10-31
-状态：设计定稿（用户已认可六节设计），实施待排期
+状态：已实施（2026-11-02 核实更正；commits 3d84f733 spec→4ba11ef6 plan→8481fd94 部署面→d61e15aa e2e；原「实施待排期」状态行过时未随实施更新）
 前置：`docs/superpowers/specs/2026-10-31-server-pg-search-design.md`（检索层可配指向 PG——本批启用其「空=跟随主库引擎」预留语义）
 
 ## 背景与目标

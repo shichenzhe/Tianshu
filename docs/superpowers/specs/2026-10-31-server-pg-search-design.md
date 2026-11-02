@@ -1,7 +1,7 @@
 # 服务端检索层可配指向 PG（FTS + pgvector）设计
 
 日期：2026-10-31
-状态：设计定稿（用户已认可六节设计），实施待排期
+状态：已实施（2026-11-02 核实更正；commits 2d171e79 spec→d752598b plan→e34f396d 路由→0f7be99f e2e→f61690d0 检索跟随主库；原「实施待排期」状态行过时未随实施更新）
 前置：`docs/superpowers/specs/2026-10-30-hybrid-search-node-design.md`（hybridSearch 三模式已双端落地，检索层现状为内存 BM25 + 内存余弦）
 
 ## 背景与目标

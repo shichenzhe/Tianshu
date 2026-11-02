@@ -150,9 +150,9 @@
       "id": "security-command-policy",
       "mirrorPath": "electron/domains/security/command-policy.ts",
       "serverPath": "src/core/security/command-policy.ts",
-      "baselineDiff": true,
-      "baselineLines": 5,
-      "note": "命令安全判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零"
+      "baselineDiff": false,
+      "baselineLines": 0,
+      "note": "命令安全判定引擎；server 头注释自称逐字移植纯函数——期望 diff 趋零。2026-11-02 安全批 S4：commandPositions/WRAPPERS 包装器透传比对双份同步（server 侧整文件对齐 mirror，引号风格差异被归一化剥离）——基线过账"
     },
     {
       "id": "security-file-gate",
@@ -175,8 +175,8 @@
       "mirrorPath": "electron/domains/security/defaults.ts",
       "serverPath": "src/core/security/file-blocklist.ts",
       "baselineDiff": true,
-      "baselineLines": 156,
-      "note": "内置敏感路径清单；server 仅摘 defaults.ts 的 BUILTIN_FILE_BLOCKLIST_ALL/defaultFileBlocklist（恶意域清单与 SECURITY_DEFAULTS 其余项未移植）——子集摘取，基线必然大"
+      "baselineLines": 170,
+      "note": "内置敏感路径清单；server 仅摘 defaults.ts 的 BUILTIN_FILE_BLOCKLIST_ALL/defaultFileBlocklist（恶意域清单与 SECURITY_DEFAULTS 其余项未移植）——子集摘取，基线必然大。2026-11-02 安全批 S4：mirror defaults.ts 的 cmdAsk 默认加网络外发集（server 侧 file-blocklist 为 defaults 的摘取件、无 cmdAsk 默认面——注释明示 SECURITY_DEFAULTS 其余项未移植），增长为文件错位配对的良性差——基线过账"
     },
     {
       "id": "security-file-history-estimate",

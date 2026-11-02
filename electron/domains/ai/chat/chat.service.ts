@@ -123,10 +123,7 @@ import {
   CREATE_EXPERT_TOOL_NAME,
   UPDATE_EXPERT_TOOL_NAME,
 } from "../agent/create-expert";
-import {
-  mergeExpertSkills,
-  parseJsonStringArray,
-} from "./expert-catalog";
+import { mergeExpertSkills, parseJsonStringArray } from "./expert-catalog";
 import { buildTeamLeadSystem, parseTeamMembers } from "./expert-team";
 import { filterDisabledSkills } from "../skill/skill-sync";
 import type { ToolDefinition } from "../agent/file-tools";
@@ -1688,8 +1685,7 @@ export default class ChatService {
       onApprovalResolved: (toolName, decision, argSummary) => {
         // 决议词汇对齐审计侧：内部 denied 记 rejected（AuditDecision 与 UI i18n 词汇）
         const audited = decision === "approved" ? "approved" : "rejected";
-        const category =
-          toolName === "bash" ? "command-safety" : "file-safety";
+        const category = toolName === "bash" ? "command-safety" : "file-safety";
         this.auditSink?.({
           eventType: `${category}.${audited}`,
           decision: audited,

@@ -18,8 +18,7 @@ import {
 import type { ToolContext } from "../../electron/domains/ai/agent/file-tools";
 
 /** 便捷造 blocks JSON（text 块） */
-const textBlocks = (text: string) =>
-  JSON.stringify([{ type: "text", text }]);
+const textBlocks = (text: string) => JSON.stringify([{ type: "text", text }]);
 
 /** tool_call 块（协议必备字段 toolCallId/toolName，output string 形态） */
 const toolBlocks = (output: string, args?: unknown) =>
@@ -120,9 +119,9 @@ describe("search_history execute 查询组装", () => {
   it("query trim 后为空直接返回空文案，不触 message 查询", async () => {
     const { prisma, calls } = makeFakePrisma([{ id: 1, title: "a" }], []);
     const tool = makeHistorySearchTool(prisma);
-    await expect(
-      tool.execute(CTX(), { query: "   " }),
-    ).resolves.toBe(HISTORY_SEARCH_EMPTY);
+    await expect(tool.execute(CTX(), { query: "   " })).resolves.toBe(
+      HISTORY_SEARCH_EMPTY,
+    );
     expect(calls.message).toBeNull();
   });
 
@@ -140,9 +139,9 @@ describe("search_history execute 查询组装", () => {
   it("未命中返回空文案（含改写建议）", async () => {
     const { prisma } = makeFakePrisma([{ id: 8, title: "旧" }], []);
     const tool = makeHistorySearchTool(prisma);
-    await expect(
-      tool.execute(CTX(), { query: "不存在的内容" }),
-    ).resolves.toBe(HISTORY_SEARCH_EMPTY);
+    await expect(tool.execute(CTX(), { query: "不存在的内容" })).resolves.toBe(
+      HISTORY_SEARCH_EMPTY,
+    );
     expect(HISTORY_SEARCH_EMPTY).toContain("时间范围");
   });
 });
@@ -158,20 +157,38 @@ describe("search_history execute 结果格式化", () => {
       ],
       [
         // createdAt desc 序（findMany 返回序）：会话 9 最新在前
-        { sessionId: 9, blocks: textBlocks("端口占用是根因"), createdAt: D("2026-11-02") },
-        { sessionId: 8, blocks: textBlocks("部署方案定了用 docker"), createdAt: D("2026-10-31") },
-        { sessionId: 8, blocks: textBlocks("部署方案评审通过"), createdAt: D("2026-10-30") },
-        { sessionId: 8, blocks: textBlocks("部署方案初稿"), createdAt: D("2026-10-29") },
-        { sessionId: 8, blocks: textBlocks("第四条不再进片段"), createdAt: D("2026-10-28") },
+        {
+          sessionId: 9,
+          blocks: textBlocks("端口占用是根因"),
+          createdAt: D("2026-11-02"),
+        },
+        {
+          sessionId: 8,
+          blocks: textBlocks("部署方案定了用 docker"),
+          createdAt: D("2026-10-31"),
+        },
+        {
+          sessionId: 8,
+          blocks: textBlocks("部署方案评审通过"),
+          createdAt: D("2026-10-30"),
+        },
+        {
+          sessionId: 8,
+          blocks: textBlocks("部署方案初稿"),
+          createdAt: D("2026-10-29"),
+        },
+        {
+          sessionId: 8,
+          blocks: textBlocks("第四条不再进片段"),
+          createdAt: D("2026-10-28"),
+        },
       ],
     );
     const tool = makeHistorySearchTool(prisma);
     const out = await tool.execute(CTX(), { query: "部署方案" });
     const lines = out.split("\n");
     expect(lines[0]).toBe("历史会话命中 2 个：");
-    expect(lines[1]).toBe(
-      "- 更晚的排错（2026-11-02）：端口占用是根因",
-    );
+    expect(lines[1]).toBe("- 更晚的排错（2026-11-02）：端口占用是根因");
     expect(lines[2]).toContain("部署讨论（2026-10-31）：");
     // 三片段拼接、第四条不出现
     expect(lines[2]).toContain("初稿");
@@ -206,21 +223,29 @@ describe("search_history execute 结果格式化", () => {
           ]),
           createdAt: D("2026-11-01"),
         },
-        { sessionId: 9, blocks: textBlocks("这里有目标"), createdAt: D("2026-10-31") },
+        {
+          sessionId: 9,
+          blocks: textBlocks("这里有目标"),
+          createdAt: D("2026-10-31"),
+        },
       ],
     );
     const tool = makeHistorySearchTool(prisma);
     const out = await tool.execute(CTX(), { query: "目标" });
     // image 组：blocks LIKE 可能经 path 命中，但无片段 → 剔除
-    expect(out).toBe(
-      "历史会话命中 1 个：\n- 文会话（2026-10-31）：这里有目标",
-    );
+    expect(out).toBe("历史会话命中 1 个：\n- 文会话（2026-10-31）：这里有目标");
   });
 
   it("title null 的旧会话行回退未命名会话", async () => {
     const { prisma } = makeFakePrisma(
       [{ id: 8, title: null }],
-      [{ sessionId: 8, blocks: textBlocks("目标"), createdAt: D("2026-10-01") }],
+      [
+        {
+          sessionId: 8,
+          blocks: textBlocks("目标"),
+          createdAt: D("2026-10-01"),
+        },
+      ],
     );
     const tool = makeHistorySearchTool(prisma);
     await expect(tool.execute(CTX(), { query: "目标" })).resolves.toContain(
@@ -248,9 +273,9 @@ describe("extractSnippet 片段提取纯函数", () => {
   });
 
   it("英文大小写不敏感命中", () => {
-    expect(extractSnippet(textBlocks("we used Docker Compose here"), "docker")).toBe(
-      "we used Docker Compose here",
-    );
+    expect(
+      extractSnippet(textBlocks("we used Docker Compose here"), "docker"),
+    ).toBe("we used Docker Compose here");
   });
 
   it("text 无命中时回退 tool_call output 命中窗口", () => {

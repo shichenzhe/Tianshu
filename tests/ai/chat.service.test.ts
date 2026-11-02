@@ -1403,9 +1403,7 @@ describe("ChatService.assembleContext（项目会话能力预设）", () => {
         undefined,
         runtimeFilter,
       );
-    expect(await toolNames(mkSvc(() => ["bash"]))).not.toContain(
-      "bash",
-    );
+    expect(await toolNames(mkSvc(() => ["bash"]))).not.toContain("bash");
     // 缺席（测试不注入）：不滤（回归锚点）
     expect(await toolNames(mkSvc())).toContain("bash");
   });
@@ -1761,8 +1759,7 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(system).toContain("macro-analyst"); // 成员清单仍在（展示语义）
     // 其他工具禁用不影响铁律段（门控只对 dispatch 生效）
     const other = await assemble(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] })
-        .service,
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] }).service,
     );
     expect(other.systemWithSummary ?? "").toContain("【协作铁律】");
   });
@@ -1839,8 +1836,7 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
     expect(disabled).not.toContain("dispatch");
     // 其他工具禁用不影响注入（门控只对 dispatch 生效）
     const other = await toolNames(
-      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] })
-        .service,
+      makeSvc({ assistantId: 1 }, { runtimeFilter: () => ["bash"] }).service,
     );
     expect(other).toContain("dispatch");
   });

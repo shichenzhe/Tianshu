@@ -41,7 +41,13 @@ const argsSchema = z.object({
     .string()
     .min(1)
     .describe("自包含的检索描述：要找的内容关键词 + 已知时间范围或背景"),
-  limit: z.number().int().min(1).max(10).optional().describe("返回会话数，缺省 5"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .optional()
+    .describe("返回会话数，缺省 5"),
 });
 
 export type HistorySearchArgs = z.infer<typeof argsSchema>;
@@ -86,7 +92,9 @@ function windowAround(text: string, index: number): string {
   const start = Math.max(0, index - SNIPPET_WINDOW_CHARS / 2);
   const end = Math.min(text.length, start + SNIPPET_WINDOW_CHARS);
   return (
-    (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "")
+    (start > 0 ? "…" : "") +
+    text.slice(start, end) +
+    (end < text.length ? "…" : "")
   );
 }
 
@@ -161,7 +169,9 @@ export function formatHistorySearchResults(
       snippetsBySession.set(row.sessionId, snippets);
     }
   }
-  const groups = [...snippetsBySession.entries() as IterableIterator<[number, string[]]>]
+  const groups = [
+    ...(snippetsBySession.entries() as IterableIterator<[number, string[]]>),
+  ]
     .slice(0, limit)
     .map(
       ([sessionId, snippets]) =>
@@ -202,7 +212,10 @@ export function makeHistorySearchTool(
         .filter((s) => s.id !== ctx.sessionId)
         .map((s) => s.id);
       const rows = await prisma.message.findMany({
-        where: { blocks: { contains: trimmed }, sessionId: { in: searchableIds } },
+        where: {
+          blocks: { contains: trimmed },
+          sessionId: { in: searchableIds },
+        },
         orderBy: { createdAt: "desc" },
         take: MESSAGE_SCAN_LIMIT,
       });

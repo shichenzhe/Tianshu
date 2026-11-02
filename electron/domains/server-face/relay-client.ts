@@ -69,10 +69,10 @@ export function isE2eActive(): boolean {
   return e2eSession !== null && isRelayConnected();
 }
 
-/** role=server 握手 URL（connectionId=instanceId，relay 注册键） */
-function buildHandshakeUrl(url: string, token: string): string {
-  const joiner = url.includes("?") ? "&" : "?";
-  return `${url}${joiner}role=server&token=${encodeURIComponent(token)}&connectionId=${encodeURIComponent(FACE_INSTANCE_ID)}`;
+/** role=server 握手 URL（安全批 I：凭证出 query——鉴权走首帧 auth，
+ *  URL 只承载路径；query 凭证双轨受理是 relay 侧的老客户端兼容窗） */
+function buildHandshakeUrl(url: string): string {
+  return url;
 }
 
 function sendFrame(target: WebSocket, frame: WireFrame): void {
@@ -318,7 +318,7 @@ function connectOnce(): Promise<void> {
     const epoch = ++wsEpoch;
     let settled = false;
     let opened = false;
-    const ws = new WebSocket(buildHandshakeUrl(relayUrl, relayToken));
+    const ws = new WebSocket(buildHandshakeUrl(relayUrl));
     ws.addEventListener("open", () => {
       if (stopped) {
         ws.close(1000, "client-stop");
@@ -333,6 +333,13 @@ function connectOnce(): Promise<void> {
       attempts = 0;
       e2eSession = null; // 新连接新协商（旧会话密钥不跨连接）
       lastHelloEphemeral = null;
+      // 首帧 auth（凭证承载）→ register（元数据）——顺序即协议
+      sendFrame(ws, {
+        kind: "auth",
+        token: relayToken,
+        role: "server",
+        connectionId: FACE_INSTANCE_ID,
+      });
       sendFrame(ws, {
         kind: "register",
         instanceId: FACE_INSTANCE_ID,

@@ -26,6 +26,7 @@ CLI 参数（`--k v` 与 `--k=v` 两种形式均可）：
 | `--port` | `8411` | 监听端口；`0` = 随机端口（启动日志回显实际端口） |
 | `--token` | 无 | 接入令牌；**缺省拒绝启动**（公网中继必须鉴权） |
 | `--max-buffer-frames` | `200` | 每 socket 出向积压帧上限，超限拆连接（背压保护） |
+| `--cert` / `--key` | 无 | TLS 证书/私钥 PEM；**成对**传入即 https/wss 监听（原生 TLS 可选通道，见「TLS 部署」），缺省 http |
 
 产物路径：`dist/src/relay/relay-main.js`（`nest build` 全量编译，tsc 因 `prisma/seed.ts` 推断 rootDir=仓库根，与 Dockerfile 的 `dist/src/main.js` 同规则；`npm run start:relay` 已指向该实测路径）。运行时只需 node_modules 里的 `ws` + Node 标准库。
 
@@ -33,13 +34,15 @@ CLI 参数（`--k v` 与 `--k=v` 两种形式均可）：
 
 ## 接入协议
 
-WS 端点：`GET /ws?role=server|client&token=<t>&connectionId=<id>`
+WS 端点：`GET /ws`（连接角色与凭证经**首帧 auth**，安全批 I）
 
-- **role=server（被控端）**：连接即以 query 中的 `connectionId` 注册；首消息可发 `{kind:'register', instanceId, capabilities, name}` 元数据帧（relay 只收不转发）；此后 `res`/`event` 帧转发给已配对 client
-- **role=client（控制端）**：发 `{kind:'open', connectionId:'<目标>'}` 触发配对；此后 `req` 帧转发给 server，`res`/`event` 帧由 server 透传回来
+- **鉴权（安全批 I：凭证出 URL query）**：升级完成后第一条消息必须是 `{kind:'auth', token, role:'server'|'client', connectionId?}`（server 角色带 connectionId 即注册键）。升级 query 携带 `role`/`token`/`connectionId` 的老客户端**双轨受理**（命中打弃用告警）——query 凭证的明文面会留存在反代/负载均衡访问日志，窗口期后客户端侧移除。零凭证连接在首帧等待窗（5s）内无 auth 即 `4001`
+- **role=server（被控端）**：auth 后发 `{kind:'register', instanceId, capabilities, name}` 元数据帧（relay 只收不转发）；此后 `res`/`event` 帧转发给已配对 client
+- **role=client（控制端）**：auth 后发 `{kind:'open', connectionId:'<目标>'}` 触发配对；此后 `req` 帧转发给 server，`res`/`event` 帧由 server 透传回来
 
 | kind | 方向 | 说明 |
 | --- | --- | --- |
+| `auth` | 双向→relay | **首帧鉴权**（token/role/connectionId 全量承载，relay 只收不转发） |
 | `register` | server→relay | 可选元数据（instanceId/capabilities/name），不入转发 |
 | `open` | client→relay→server | 配对请求；relay 原样转发给 server 作为接入通知 |
 | `req` | client→relay→server | 请求帧（含 `id`，业务自定义 `method`/`payload`） |
@@ -51,7 +54,7 @@ WS 端点：`GET /ws?role=server|client&token=<t>&connectionId=<id>`
 
 | 场景 | 对端收到 | WS close code |
 | --- | --- | --- |
-| token 不符 | — | `4001 invalid-token` |
+| token 不符 / 首帧等待窗（5s）内无 auth | — | `4001 invalid-token` |
 | role 非法 / server 未带 connectionId / 旧连接被顶掉 | — | `4000` |
 | client open 的目标未注册 | `{kind:'close', reason:'not-found'}` | `4004 not-found` |
 | server 掉线 | `{kind:'close', reason:'server-gone'}` | `4003 server-gone` |
@@ -125,9 +128,22 @@ sudo systemctl daemon-reload && sudo systemctl enable --now tianshu-relay
 journalctl -u tianshu-relay -f      # 看启动端口与运行日志
 ```
 
+## TLS 部署（安全批 I）
+
+既定架构为**反代终止 TLS**（nginx/Caddy 之后跑明文 relay，见下节片段）。
+如需 relay 直露公网自管证书，`--cert`/`--key` 成对传入即原生 https/wss 监听：
+
+```bash
+npm run start:relay -- --port 8411 --token "$(openssl rand -hex 16)" \
+  --cert /etc/relay/cert.pem --key /etc/relay/key.pem
+```
+
+客户端地址用 `wss://`（各端零改动——URL 原样交给 WebSocket 实现）。证书轮换
+需重启进程（无热加载；证书管理属部署面职责）。
+
 ## nginx TLS 反代片段（wss）
 
-relay 自身不带 TLS，公网建议置于 nginx 之后：
+默认形态 relay 不开 TLS（公网建议置于 nginx 之后；原生 TLS 见上节可选项）：
 
 ```nginx
 server {

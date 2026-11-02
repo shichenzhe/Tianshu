@@ -118,11 +118,13 @@ describe("relay-transport e2e（控制端状态机）", () => {
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
 
-    // open 配对后即发 e2e-hello（临时公钥 base64）
+    // 首帧 auth（凭证承载）→ open 配对 → e2e-hello（临时公钥 base64）
     const frames = ws.frames();
-    expect(frames[0]).toMatchObject({ kind: "open", connectionId: CONNECTION_ID });
-    expect(frames[1]).toMatchObject({ kind: "e2e-hello" });
-    const hello = frames[1] as { ephemeralKey: string };
+    expect(frames[0]).toMatchObject({ kind: "auth", role: "client" });
+    expect((frames[0] as { token?: string }).token).toBe("tok");
+    expect(frames[1]).toMatchObject({ kind: "open", connectionId: CONNECTION_ID });
+    expect(frames[2]).toMatchObject({ kind: "e2e-hello" });
+    const hello = frames[2] as { ephemeralKey: string };
 
     const serverEnd = makeServerEnd(hello);
     ws.push(serverEnd.ackFrame);
@@ -154,7 +156,7 @@ describe("relay-transport e2e（控制端状态机）", () => {
     trackStates(t);
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
-    const hello = ws.frames()[1] as { ephemeralKey: string };
+    const hello = ws.frames()[2] as { ephemeralKey: string };
     ws.push(makeServerEnd(hello).ackFrame);
     await Promise.resolve();
     expect(states).toContain("mitm-suspect");
@@ -174,8 +176,8 @@ describe("relay-transport e2e（控制端状态机）", () => {
     // 无 ack，等超时
     await new Promise((r) => setTimeout(r, HANDSHAKE_MS + 30));
     const frames = ws.frames();
-    // open 降级重发（第二帧 hello、第三帧 open）
-    expect(frames[2]).toMatchObject({ kind: "open" });
+    // 序列 [auth, open, hello]；降级重发 open（第四帧）
+    expect(frames[3]).toMatchObject({ kind: "open" });
     // 降级后业务帧明文（synthConnected 的 info req 已占 id——按最后出站 req 配对）
     const reqPromise = t.request("GET", "info");
     await Promise.resolve();
@@ -207,7 +209,7 @@ describe("relay-transport e2e（控制端状态机）", () => {
     trackStates(t);
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
-    const hello = ws.frames()[1] as { ephemeralKey: string };
+    const hello = ws.frames()[2] as { ephemeralKey: string };
     ws.push(makeServerEnd(hello).ackFrame);
     await Promise.resolve();
     expect(states).toContain("encrypted");
@@ -226,7 +228,7 @@ describe("relay-transport e2e（控制端状态机）", () => {
     trackStates(t);
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
-    const hello = ws.frames()[1] as { ephemeralKey: string };
+    const hello = ws.frames()[2] as { ephemeralKey: string };
     ws.push(makeServerEnd(hello).ackFrame);
     await Promise.resolve();
     // 篡改密文
@@ -244,7 +246,7 @@ describe("relay-transport e2e（控制端状态机）", () => {
     trackStates(t);
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
-    const hello = ws.frames()[1] as { ephemeralKey: string };
+    const hello = ws.frames()[2] as { ephemeralKey: string };
     ws.push(makeServerEnd(hello).ackFrame);
     await Promise.resolve();
     const before = ws.sent.length;

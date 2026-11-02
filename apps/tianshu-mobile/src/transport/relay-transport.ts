@@ -27,6 +27,7 @@ import {
   ENDPOINTS,
   E2E_HANDSHAKE_ACK,
   E2E_SECURE_KIND,
+  type AuthFrame,
   type E2eAckFrame,
   type E2eHelloFrame,
   type E2ESecureEnvelope,
@@ -96,7 +97,9 @@ export function createRelayTransport(config: RelayConfig): Transport {
     state = s;
     states.emit(s);
   };
-  const send = (frame: RelayFrame | E2eHelloFrame | E2ESecureEnvelope) => {
+  const send = (
+    frame: RelayFrame | AuthFrame | E2eHelloFrame | E2ESecureEnvelope,
+  ) => {
     try {
       ws?.send(JSON.stringify(frame));
     } catch {
@@ -307,10 +310,12 @@ export function createRelayTransport(config: RelayConfig): Transport {
     setState(state === "idle" ? "connecting" : "reconnecting");
     lastInboundAt = Date.now();
     e2eSession = null; // 新连接新协商
-    const url = `${config.relayUrl}?role=client&token=${encodeURIComponent(config.relayToken)}`;
-    const socket = new WebSocket(url);
+    // 安全批 I：凭证出 query——鉴权走首帧 auth，URL 只承载路径
+    const socket = new WebSocket(config.relayUrl);
     ws = socket;
     socket.onopen = () => {
+      // 首帧 auth（凭证承载）→ open（配对）——顺序即协议
+      send({ kind: "auth", token: config.relayToken, role: "client" });
       send({ kind: "open", connectionId: config.connectionId });
       onPaired(socket);
     };

@@ -1,4 +1,9 @@
 import WebSocket from 'ws';
+import { Agent } from 'undici';
+import { execSync } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { waitFor } from '../support/wait-for';
 import {
   startRelay,
@@ -532,5 +537,199 @@ describe('RelayRegistry 背压与转发容错（假 socket 单元级）', () => 
       reason: 'server-gone',
     });
     expect(registry.hasServer('s1')).toBe(false);
+  });
+});
+
+describe('首帧鉴权（安全批 I：凭证出 URL query）', () => {
+  let relay: RelayHandle;
+  let openedSockets: WebSocket[];
+
+  /** 零 query 凭证裸连接（新客户端形态：凭证在首帧 auth） */
+  const openBareSocket = (): Promise<WebSocket> =>
+    new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws`);
+      ws.on('open', () => resolve(ws));
+      ws.on('error', reject);
+    });
+
+  /** 老 query 客户端连接（双轨受理形态） */
+  const openQuerySocket = (query: string): Promise<WebSocket> =>
+    new Promise((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws?${query}`);
+      ws.on('open', () => resolve(ws));
+      ws.on('error', reject);
+    });
+
+  const authFrame = (over: Record<string, unknown> = {}): string =>
+    JSON.stringify({ kind: 'auth', token: TOKEN, ...over });
+
+  const closeCode = (ws: WebSocket): Promise<number> =>
+    new Promise((resolve) => ws.on('close', (code) => resolve(code)));
+
+  beforeEach(async () => {
+    relay = await startRelay({ port: 0, token: TOKEN, authWindowMs: 150 });
+    openedSockets = [];
+  });
+
+  afterEach(async () => {
+    for (const ws of openedSockets) ws.terminate();
+    await relay.close();
+  });
+
+  /** 等鉴权分流落定：裸连接 + auth 后连接保持 OPEN（无 4001/4000） */
+  async function authedBareSocket(
+    over: Record<string, unknown>,
+  ): Promise<WebSocket> {
+    const ws = await openBareSocket();
+    ws.send(authFrame(over));
+    await new Promise((r) => setTimeout(r, 80));
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    return ws;
+  }
+
+  it('auth 首帧（server 角色）：注册配对成功，业务透传正常', async () => {
+    const server = trackFrames(
+      await authedBareSocket({ role: 'server', connectionId: 's-auth' }),
+    );
+    openedSockets.push(server.ws);
+    const client = trackFrames(await authedBareSocket({ role: 'client' }));
+    openedSockets.push(client.ws);
+    client.ws.send(JSON.stringify({ kind: 'open', connectionId: 's-auth' }));
+    await server.waitForFrame(
+      (frame) => frame.kind === 'open' && frame.connectionId === 's-auth',
+    );
+    client.ws.send(JSON.stringify({ kind: 'req', id: 1, method: 'info' }));
+    const req = await server.waitForFrame(
+      (frame) => frame.kind === 'req' && frame.id === 1,
+    );
+    expect(req.method).toBe('info');
+  });
+
+  it('auth 首帧 token 错 → close 4001（语义与 query 路径一致）', async () => {
+    const ws = await openBareSocket();
+    openedSockets.push(ws);
+    ws.send(JSON.stringify({ kind: 'auth', token: 'wrong', role: 'client' }));
+    expect(await closeCode(ws)).toBe(4001);
+  });
+
+  it('auth 首帧 role 非法 → close 4000', async () => {
+    const ws = await openBareSocket();
+    openedSockets.push(ws);
+    ws.send(authFrame({ role: 'attacker' }));
+    expect(await closeCode(ws)).toBe(4000);
+  });
+
+  it('server 角色 auth 缺 connectionId → close 4000', async () => {
+    const ws = await openBareSocket();
+    openedSockets.push(ws);
+    ws.send(authFrame({ role: 'server' }));
+    expect(await closeCode(ws)).toBe(4000);
+  });
+
+  it('双轨：query 凭证完整（老客户端）+ 首帧 register → 照常分流', async () => {
+    const server = trackFrames(
+      await openQuerySocket(`role=server&token=${TOKEN}&connectionId=s1`),
+    );
+    openedSockets.push(server.ws);
+    server.ws.send(
+      JSON.stringify({
+        kind: 'register',
+        instanceId: 's1',
+        capabilities: ['chat'],
+      }),
+    );
+    const client = trackFrames(await openQuerySocket(`role=client&token=${TOKEN}`));
+    openedSockets.push(client.ws);
+    client.ws.send(JSON.stringify({ kind: 'open', connectionId: 's1' }));
+    await server.waitForFrame((frame) => frame.kind === 'open');
+  });
+
+  it('双发兼容：query 凭证 + 首帧 auth → 连接可用（auth 帧被消费不干扰）', async () => {
+    const ws = await openQuerySocket(`role=client&token=${TOKEN}`);
+    openedSockets.push(ws);
+    ws.send(authFrame({ role: 'client' }));
+    await new Promise((r) => setTimeout(r, 250));
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+  });
+
+  it('零凭证连接窗口内静默 → 超时 close 4001', async () => {
+    const ws = await openBareSocket();
+    openedSockets.push(ws);
+    expect(await closeCode(ws)).toBe(4001);
+  });
+
+  it('auth 帧不透传：对端收不到对向的 auth 帧', async () => {
+    const server = trackFrames(
+      await openQuerySocket(`role=server&token=${TOKEN}&connectionId=s1`),
+    );
+    openedSockets.push(server.ws);
+    server.ws.send(
+      JSON.stringify({ kind: 'register', instanceId: 's1', capabilities: [] }),
+    );
+    const client = trackFrames(
+      await authedBareSocket({ role: 'client' }),
+    );
+    openedSockets.push(client.ws);
+    client.ws.send(JSON.stringify({ kind: 'open', connectionId: 's1' }));
+    await server.waitForFrame((frame) => frame.kind === 'open');
+    expect(
+      server.frames.filter((f) => (f as { kind?: string }).kind === 'auth'),
+    ).toHaveLength(0);
+  });
+});
+
+describe('relay 原生 TLS（安全批 I：--cert/--key 可选通道）', () => {
+  it('传 cert/key → https/wss 监听：健康检查走 TLS，wss 客户端可鉴权接入', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'relay-tls-'));
+    const cert = join(dir, 'cert.pem');
+    const key = join(dir, 'key.pem');
+    execSync(
+      `openssl req -x509 -newkey rsa:2048 -nodes -keyout "${key}" -out "${cert}" -days 1 -subj "/CN=127.0.0.1" -addext "subjectAltName=IP:127.0.0.1"`,
+      { stdio: 'ignore' },
+    );
+    const relay = await startRelay({
+      port: 0,
+      token: TOKEN,
+      certFile: cert,
+      keyFile: key,
+    });
+    try {
+      // /health 走 https（dispatcher 为 undici 扩展项，标准类型外 cast）
+      const health = await fetch(`https://127.0.0.1:${relay.port}/health`, {
+        dispatcher: new Agent({ connect: { rejectUnauthorized: false } }),
+      } as RequestInit);
+      expect(health.status).toBe(200);
+      // wss 客户端首帧 auth 接入（TLS 通道上协议行为不变）
+      const ws = new WebSocket(`wss://127.0.0.1:${relay.port}/ws`, {
+        rejectUnauthorized: false,
+      });
+      await new Promise<void>((resolve, reject) => {
+        ws.on('open', resolve);
+        ws.on('error', reject);
+      });
+      ws.send(JSON.stringify({ kind: 'auth', token: TOKEN, role: 'client' }));
+      await new Promise((r) => setTimeout(r, 150));
+      expect(ws.readyState).toBe(WebSocket.OPEN);
+      ws.terminate();
+    } finally {
+      await relay.close();
+    }
+  });
+
+  it('parseCliArgs：--cert/--key 解析；缺省不设（http 通道）', () => {
+    const opts = parseCliArgs([
+      '--port',
+      '9000',
+      '--token',
+      't',
+      '--cert',
+      '/a/cert.pem',
+      '--key=/a/key.pem',
+    ]);
+    expect(opts.certFile).toBe('/a/cert.pem');
+    expect(opts.keyFile).toBe('/a/key.pem');
+    const plain = parseCliArgs(['--token', 't']);
+    expect(plain.certFile).toBeUndefined();
+    expect(plain.keyFile).toBeUndefined();
   });
 });

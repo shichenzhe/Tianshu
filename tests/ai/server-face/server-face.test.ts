@@ -537,10 +537,17 @@ describe("relay 客户端（本机 ws 模拟 relay）", () => {
     try {
       await startRelayClient(relay.url, TOKEN);
       expect(relay.conns.length).toBe(1);
-      expect(relay.handshakes[0]).toContain("role=server");
-      expect(relay.handshakes[0]).toContain(`connectionId=${FACE_INSTANCE_ID}`);
+      // 安全批 I：凭证出 query——握手 URL 零凭证，鉴权走首帧 auth
+      expect(relay.handshakes[0]).not.toContain("token=");
+      expect(relay.handshakes[0]).not.toContain("role=");
 
       const conn = relay.conns[0];
+      const auth = await conn.waitForFrame((f) => f.kind === "auth");
+      expect(auth).toMatchObject({
+        token: TOKEN,
+        role: "server",
+        connectionId: FACE_INSTANCE_ID,
+      });
       const register = await conn.waitForFrame((f) => f.kind === "register");
       expect(register).toMatchObject({
         instanceId: FACE_INSTANCE_ID,
@@ -608,7 +615,8 @@ describe("relay 客户端（本机 ws 模拟 relay）", () => {
         5000,
       );
       expect(second.instanceId).toBe(FACE_INSTANCE_ID);
-      expect(relay.handshakes[1]).toContain(`connectionId=${FACE_INSTANCE_ID}`);
+      // 安全批 I：重连握手 URL 仍零凭证（鉴权恒走首帧 auth）
+      expect(relay.handshakes[1]).not.toContain("token=");
     } finally {
       await relay.close();
     }

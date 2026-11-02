@@ -188,10 +188,20 @@ export function isHeadlessRelayConnected(): boolean {
   return socket !== null && socket.readyState === WebSocket.OPEN;
 }
 
-/** role=server 握手 URL（connectionId=instanceId，relay 注册键） */
+/** role=server 握手 URL（安全批 I：凭证出 query——鉴权走首帧 auth，
+ *  URL 只承载路径；query 凭证双轨受理是 relay 侧的老客户端兼容窗） */
 function buildHandshakeUrl(): string {
-  const joiner = relayUrl.includes('?') ? '&' : '?';
-  return `${relayUrl}${joiner}role=server&token=${encodeURIComponent(relayToken)}&connectionId=${encodeURIComponent(instanceId)}`;
+  return relayUrl;
+}
+
+/** 鉴权首帧（升级后第一条消息：token/role/connectionId 全量承载） */
+function authFrame(): Record<string, unknown> {
+  return {
+    kind: 'auth',
+    token: relayToken,
+    role: 'server',
+    connectionId: instanceId,
+  };
 }
 
 function send(target: WebSocket, frame: Record<string, unknown>): void {
@@ -462,6 +472,8 @@ function connectOnce(): Promise<void> {
       attempts = 0;
       e2eSession = null; // 新连接新协商（旧会话密钥不跨连接）
       lastHelloEphemeral = null;
+      // 首帧 auth（凭证承载）→ register（元数据）——顺序即协议
+      send(ws, authFrame());
       send(ws, {
         kind: 'register',
         instanceId,

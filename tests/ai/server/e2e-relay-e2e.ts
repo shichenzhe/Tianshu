@@ -77,6 +77,7 @@ vi.mock("../../../electron/commons/prisma-client", () => ({ default: db }));
 
 import { WebSocket as WsWebSocket, WebSocketServer, type RawData } from "ws";
 import { fingerprintOf, parseStaticPair } from "@tianshu/core";
+import { openSecret } from "../../../electron/domains/security/secret-field";
 import { RelayTransport } from "../../../electron/domains/server/relay-transport";
 import type {
   E2eStatusChange,
@@ -150,11 +151,24 @@ class RelayTapProxy {
     const proxy = new RelayTapProxy(wss);
     wss.on("connection", (downstream, req) => {
       proxy.connections += 1;
-      const role =
-        new URL(req.url ?? "/", "http://tap").searchParams.get("role") ===
-        "server"
-          ? "server"
-          : "client";
+      // 安全批 I：凭证出 query 后 URL 不再携带 role——连接角色改为
+      // 首帧嗅探（auth.role 字段；register=server/open=client 兜底）
+      let role: "server" | "client" | null = null;
+      const resolveRole = (text: string): "server" | "client" => {
+        try {
+          const frame = JSON.parse(text) as { kind?: string; role?: string };
+          if (
+            frame?.kind === "auth" &&
+            (frame.role === "server" || frame.role === "client")
+          )
+            return frame.role;
+          if (frame?.kind === "register") return "server";
+          if (frame?.kind === "open") return "client";
+        } catch {
+          /* 坏帧按默认 client 记（与旧 query 缺省口径一致） */
+        }
+        return "client";
+      };
       const upstream = new WsWebSocket(`${upstreamBaseUrl}${req.url}`);
       // 上游拨号在下游握手后才起：早到的上行帧先挂账，upstream open 后
       // flush（否则 open/hello 在拨号窗内即被静默丢弃）
@@ -164,6 +178,7 @@ class RelayTapProxy {
       });
       downstream.on("message", (raw) => {
         const text = rawToText(raw);
+        if (role === null) role = resolveRole(text);
         proxy.frames.push({ role, dir: "toRelay", text });
         if (upstream.readyState === WsWebSocket.OPEN) upstream.send(text);
         else earlyFrames.push(text);
@@ -215,6 +230,10 @@ function frameKind(frame: TapFrame): unknown {
 
 /** 链路②②③④共用：kind 白名单 = 握手/信封 + 恒明文生命周期帧（§2.4） */
 const ALLOWED_FRAME_KINDS = new Set([
+  // auth=鉴权首帧（安全批 I）：token 对 relay 可见是协议固有（relay 须验
+  // 凭证）——与 query 时代等价，改善的是凭证不经反代访问日志；业务帧
+  // 仍必须全部在 e2e-secure 信封内
+  "auth",
   "e2e-hello",
   "e2e-ack",
   "e2e-secure",
@@ -377,13 +396,16 @@ function setFaceSessionTitle(title: string): void {
   });
 }
 
-/** 被控端静态对指纹（option 桩行直读——「配错指纹」链路的对照真值） */
-function faceStaticFingerprint(): string {
+/** 被控端静态对指纹（option 桩行直读——「配错指纹」链路的对照真值；
+ *  批三·B 起静态密钥行经 option-secrets 字段级信封密封，先解封再解析） */
+async function faceStaticFingerprint(): Promise<string> {
   const row = [...db.optionRows.values()].find(
     (item) => item.name === "serverFace.e2eKey",
   );
   if (!row) throw new Error("被控端静态密钥行缺失（首链路握手应已惰性生成）");
-  return fingerprintOf(parseStaticPair(row.value).publicKey);
+  const stored = await openSecret("serverFace.e2eKey", row.value);
+  if (!stored) throw new Error("静态密钥行解封失败（master-key 不可用）");
+  return fingerprintOf(parseStaticPair(stored).publicKey);
 }
 
 // —— 等待器 ——
@@ -466,7 +488,7 @@ describe("relay E2E 端到端（真 relay 子进程 + 双端真实握手栈 + �
         () => transport.e2eState === "encrypted",
       );
       // TOFU：encrypted 上报指纹 = 被控端静态对指纹（自算不信任 wire 回显）
-      expect(changes.at(-1)?.fingerprint).toBe(faceStaticFingerprint());
+      expect(changes.at(-1)?.fingerprint).toBe(await faceStaticFingerprint());
 
       // 连接级合成事件：GET info 走密文 req/res（announceConnected）
       const connected = await connectedPromise;
@@ -626,7 +648,7 @@ describe("relay E2E 端到端（真 relay 子进程 + 双端真实握手栈 + �
       );
       expect(transport.state).toBe("closed");
       // 上报指纹为对端实际值（自算），非控制端配置的错值
-      expect(changes.at(-1)?.fingerprint).toBe(faceStaticFingerprint());
+      expect(changes.at(-1)?.fingerprint).toBe(await faceStaticFingerprint());
       expect(changes.at(-1)?.fingerprint).not.toBe("deadbeefdeadbeef");
       // 后续请求即拒（mitm 态不复活）
       await expect(transport.request("GET", "info")).rejects.toThrow(

@@ -97,6 +97,7 @@ export class RelayTransport extends TransportBase {
   private readonly pingIntervalMs: number | undefined;
   private readonly deadAfterMs: number | undefined;
   private ws: WebSocket | null = null;
+  private readonly relayToken: string;
   private wsEpoch = 0;
   private attempts = 0;
   private nextRequestId = 1;
@@ -129,7 +130,8 @@ export class RelayTransport extends TransportBase {
 
   constructor(options: RelayTransportOptions) {
     super();
-    this.wsUrl = buildClientUrl(options.relayUrl, options.relayToken);
+    this.wsUrl = buildClientUrl(options.relayUrl);
+    this.relayToken = options.relayToken;
     this.connectionId = options.connectionId;
     this.expectedFingerprint = options.fingerprint || undefined;
     this.e2eHandshakeTimeoutMs =
@@ -227,6 +229,12 @@ export class RelayTransport extends TransportBase {
     this.attempts = 0;
     this.e2eSession = null;
     this.setE2eState("plaintext"); // 握手在途先按未加密（ack 后迁 encrypted）
+    // 首帧 auth（凭证承载，安全批 I）→ open（配对）——顺序即协议
+    this.sendFrame(ws, {
+      kind: "auth",
+      token: this.relayToken,
+      role: "client",
+    });
     this.sendFrame(ws, { kind: "open", connectionId: this.connectionId });
     this.setState("connected");
     this.startLiveness(ws);
@@ -603,8 +611,8 @@ export class RelayTransport extends TransportBase {
   }
 }
 
-/** role=client 握手 URL（connectionId 不在 query——经 open 帧绑定目标） */
-function buildClientUrl(relayUrl: string, token: string): string {
-  const joiner = relayUrl.includes("?") ? "&" : "?";
-  return `${relayUrl}${joiner}role=client&token=${encodeURIComponent(token)}`;
+/** role=client 握手 URL（安全批 I：凭证出 query——鉴权走首帧 auth，
+ *  URL 只承载路径；query 凭证双轨受理是 relay 侧的老客户端兼容窗） */
+function buildClientUrl(relayUrl: string): string {
+  return relayUrl;
 }

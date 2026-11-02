@@ -1,5 +1,8 @@
-import { createServer } from 'node:http';
+import { createServer, type RequestListener } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
+import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
+import type { AuthFrame } from '@tianshu/protocol';
 import {
   DEFAULT_MAX_BUFFER_FRAMES,
   RelayRegistry,
@@ -10,6 +13,8 @@ export { DEFAULT_MAX_BUFFER_FRAMES };
 
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 60_000;
+/** 首帧鉴权等待窗：窗口内无凭证（无 auth 首帧且 query 无 token）即拒 */
+const DEFAULT_AUTH_WINDOW_MS = 5_000;
 export const DEFAULT_RELAY_PORT = 8411;
 
 export interface RelayOptions {
@@ -19,6 +24,13 @@ export interface RelayOptions {
   token: string;
   /** 每 socket 出向积压帧上限，超限拆连接（慢消费者防内存膨胀） */
   maxBufferFrames?: number;
+  /** 首帧鉴权等待窗（缺省 5s；测试注入缩短） */
+  authWindowMs?: number;
+  /** TLS 证书 PEM（安全批 I：与 keyFile 成对传入即 https/wss 监听；
+   *  缺省 http——既定部署架构为反代终止 TLS，此为原生可选通道） */
+  certFile?: string;
+  /** TLS 私钥 PEM（与 certFile 成对） */
+  keyFile?: string;
 }
 
 export interface RelayHandle {
@@ -26,18 +38,39 @@ export interface RelayHandle {
   close(): Promise<void>;
 }
 
-/** 中继服务：被控端（role=server）与控制端（role=client）经 /ws 配对后帧级直转。纯 node:http + ws，不依赖 Nest。 */
+/**
+ * 中继服务：被控端（role=server）与控制端（role=client）经 /ws 配对后
+ * 帧级直转。纯 node:http(s) + ws，不依赖 Nest。
+ *
+ * 凭证面（安全批 I）：升级 query 携带 token 的明文会留存在反代/负载
+ * 均衡访问日志——鉴权首选**首帧 auth**（升级后第一条消息，ws 帧不经
+ * 访问日志）；query 凭证双轨受理（老客户端兼容窗口，命中打弃用告警），
+ * 窗口期后客户端侧移除 query。
+ */
 export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   if (!options.token) throw new Error('relay 拒绝启动：缺少 token');
+  if ((options.certFile !== undefined) !== (options.keyFile !== undefined)) {
+    throw new Error('relay 拒绝启动：--cert 与 --key 必须成对提供');
+  }
   const registry = new RelayRegistry(options.maxBufferFrames);
-  const httpServer = createServer((req, res) => {
+  const requestListener: RequestListener = (req, res) => {
     if (req.url?.split('?')[0] === '/health') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok' }));
       return;
     }
     res.writeHead(404).end();
-  });
+  };
+  const httpServer =
+    options.certFile && options.keyFile
+      ? createHttpsServer(
+          {
+            cert: readFileSync(options.certFile),
+            key: readFileSync(options.keyFile),
+          },
+          requestListener,
+        )
+      : createServer(requestListener);
   // F4：单帧上限 4MiB，超限 ws 层直接 close(1009)，防巨包打爆内存
   const wss = new WebSocketServer({
     noServer: true,
@@ -48,15 +81,62 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   httpServer.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://relay');
     if (url.pathname !== '/ws') return void socket.destroy();
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      if (url.searchParams.get('token') !== options.token)
-        return void ws.close(4001, 'invalid-token');
+    const queryToken = url.searchParams.get('token');
+    // 双轨（兼容窗口）：query 凭证完整（token 等值 + role 合法）即走原
+    // 路径立即分流——老客户端可能全程零发帧（query 即注册），不能等首帧；
+    // 命中打弃用告警，窗口期后客户端侧移除 query
+    if (queryToken === options.token && queryToken !== null) {
       const role = url.searchParams.get('role');
-      if (role !== 'server' && role !== 'client')
-        return void ws.close(4000, 'invalid-role');
-      handleConnection(ws, role, url.searchParams.get('connectionId') ?? '');
+      if (role === 'server' || role === 'client') {
+        console.warn(
+          '[relay] query 凭证已弃用（安全批 I：首帧 auth 取代）——请升级客户端',
+        );
+        return void wss.handleUpgrade(req, socket, head, (ws) =>
+          handleConnection(ws, role, url.searchParams.get('connectionId') ?? ''),
+        );
+      }
+    }
+    // 老 query 路径 token 错：立即 4001（防无效连接占用首帧等待窗）
+    if (queryToken !== null && queryToken !== options.token) {
+      return void wss.handleUpgrade(req, socket, head, (ws) =>
+        ws.close(4001, 'invalid-token'),
+      );
+    }
+    // 新路径：等首帧 auth（升级后第一条消息，凭证不经反代访问日志）
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.on('error', () => {});
+      const authTimer = setTimeout(
+        () => void ws.close(4001, 'invalid-token'),
+        options.authWindowMs ?? DEFAULT_AUTH_WINDOW_MS,
+      );
+      authTimer.unref?.();
+      ws.once('message', (raw) => {
+        clearTimeout(authTimer);
+        const first = parseFrame(decodeRaw(raw));
+        if (first?.kind !== 'auth') return void ws.close(4001, 'invalid-token');
+        const auth = first as AuthFrame;
+        admitConnection(
+          ws,
+          typeof auth.token === 'string' ? auth.token : '',
+          auth.role,
+          typeof auth.connectionId === 'string' ? auth.connectionId : '',
+        );
+      });
     });
   });
+
+  /** 鉴权落定分流：token/role/connectionId 校验后进既有连接处理 */
+  function admitConnection(
+    ws: WebSocket,
+    token: string,
+    role: unknown,
+    connId: string,
+  ): void {
+    if (token !== options.token) return void ws.close(4001, 'invalid-token');
+    if (role !== 'server' && role !== 'client')
+      return void ws.close(4000, 'invalid-role');
+    handleConnection(ws, role, connId);
+  }
 
   function handleConnection(ws: WebSocket, role: string, connId: string): void {
     // F4：maxPayload 超限/协议错误——ws 已自行 close(1009) 并随后 emit('error')，
@@ -77,7 +157,8 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     registry.registerServer(connectionId, ws);
     ws.on('message', (raw) => {
       const frame = parseFrame(decodeRaw(raw));
-      if (!frame || frame.kind === 'register') return; // register=首帧元数据
+      // register=首帧元数据；auth=鉴权层帧（畸形迟到到达也不透传）
+      if (!frame || frame.kind === 'register' || frame.kind === 'auth') return;
       registry.forwardToClients(connectionId, frame);
     });
     // F1：close 事件带身份交 registry 核验（被重注册顶掉的旧连接不拆配对）
@@ -89,6 +170,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     ws.on('message', (raw) => {
       const frame = parseFrame(decodeRaw(raw));
       if (!frame) return;
+      if (frame.kind === 'auth') return; // 鉴权层帧不转发（含迟到畸形）
       if (frame.kind === 'open') {
         const target =
           typeof frame.connectionId === 'string' ? frame.connectionId : '';
@@ -132,9 +214,9 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     return { kind: 'close', connectionId, reason };
   }
   /** 坏帧静默丢弃（防恶意/半截输入打断其他连接的转发） */
-  function parseFrame(raw: string): RelayFrame | null {
+  function parseFrame(raw: string): RelayFrame | AuthFrame | null {
     try {
-      const frame = JSON.parse(raw) as RelayFrame;
+      const frame = JSON.parse(raw) as RelayFrame | AuthFrame;
       return typeof frame?.kind === 'string' ? frame : null;
     } catch {
       return null;
@@ -205,11 +287,14 @@ export function parseCliArgs(argv: string[]): RelayOptions {
     else if (name === '--token') options.token = value;
     else if (name === '--max-buffer-frames')
       options.maxBufferFrames = toInt(value);
+    else if (name === '--cert') options.certFile = value;
+    else if (name === '--key') options.keyFile = value;
   }
   return options;
 }
 const toInt = (value: string): number => Number.parseInt(value, 10) || 0;
 // CLI 入口：node dist/src/relay/relay-main.js --port 8411 --token <t> --max-buffer-frames 200
+// TLS 可选：--cert <pem> --key <pem>（成对传入即 wss 监听；缺省 http——默认部署架构为反代终止 TLS）
 if (require.main === module) {
   const options = parseCliArgs(process.argv.slice(2));
   if (!options.token) {

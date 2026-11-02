@@ -14,7 +14,8 @@ import { HttpExceptionFilter } from '../commons/web/filter/http-exception.filter
 import { HealthModule } from '../commons/web/management/health/health.module';
 import { RaPrismaModule } from './prisma.module';
 import { RaAuthModule } from './auth/ra-auth.module';
-import { RaProbeController } from './probe.controller';
+import { RaAuditModule } from './audit/audit.module';
+import { RaUsersModule } from './users/users.module';
 
 /**
  * relay-admin 运营控制平面独立 AppModule（Task 9）
@@ -27,6 +28,8 @@ import { RaProbeController } from './probe.controller';
  * /actuator/health 复用 commons HealthModule。
  * 不引入主应用的 StaticTokenGuard（TIANSHU_TOKEN 是业务面 spawn 语义）
  * 与 OperationLog/Metrics 拦截器（业务库表依赖）。
+ * Task 10 起：RaAuditModule（审计 @Global）+ RaUsersModule（用户管理
+ * API），Task 9 的临时探针控制器已随真实路由上线删除。
  */
 @Module({
   imports: [
@@ -45,10 +48,11 @@ import { RaProbeController } from './probe.controller';
     }),
     LogModule,
     RaPrismaModule,
+    RaAuditModule,
     RaAuthModule,
+    RaUsersModule,
     HealthModule,
   ],
-  controllers: [RaProbeController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_INTERCEPTOR, useClass: RequestLoggerInterceptor },

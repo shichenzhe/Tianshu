@@ -150,12 +150,12 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
     }
   });
 
-  it('未带 JWT 访问受保护探针路由 → 401', async () => {
-    const response = await request(server).get('/relay-admin/__probe');
+  it('未带 JWT 访问受保护业务路由（users 列表）→ 401', async () => {
+    const response = await request(server).get('/relay-admin/users');
     expect(response.status).toBe(401);
   });
 
-  it('login 换 token 后访问探针 → 200 且 {code,message,data} 统一包装', async () => {
+  it('login 换 token 后访问 users 列表 → 200 且 {code,message,data} 统一包装', async () => {
     const login = await request(server)
       .post('/relay-admin/auth/login')
       .send({ username: 'admin', password: TEST_ADMIN_PASSWORD });
@@ -165,14 +165,15 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
     expect(typeof accessToken).toBe('string');
     expect(typeof login.body.data?.refreshToken).toBe('string');
 
-    const probe = await request(server)
-      .get('/relay-admin/__probe')
+    // Task 10 起探针由真实路由顶替：空库列表返回 data: []
+    const list = await request(server)
+      .get('/relay-admin/users')
       .set('Authorization', `Bearer ${accessToken}`);
-    expect(probe.status).toBe(200);
-    expect(probe.body).toEqual({
+    expect(list.status).toBe(200);
+    expect(list.body).toEqual({
       code: '2000',
       success: true,
-      data: { ok: true },
+      data: [],
       message: 'success',
     });
   });
@@ -185,7 +186,7 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
     expect(response.body.data).toBeNull();
   });
 
-  it('载荷 sub 非 ra_admin_user 行（幻影/跨域 token）→ 探针 401', async () => {
+  it('载荷 sub 非 ra_admin_user 行（幻影/跨域 token）→ users 列表 401', async () => {
     // 签名合法但 sub 不在管理员表：回查必须拒绝（操作者身份只认 ra_admin_user）
     const jwtAuthService = app.get(JwtAuthService);
     const { accessToken } = jwtAuthService.generateTokens({
@@ -195,7 +196,7 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
       roles: ['ra-admin'],
     });
     const response = await request(server)
-      .get('/relay-admin/__probe')
+      .get('/relay-admin/users')
       .set('Authorization', `Bearer ${accessToken}`);
     expect(response.status).toBe(401);
   });

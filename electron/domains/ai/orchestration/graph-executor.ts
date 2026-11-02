@@ -82,7 +82,7 @@ import {
   type NodeResult,
 } from "./graph-compiler";
 import {
-  graphHttpUrlError,
+  graphHttpUrlErrorDns,
   rrfFuse,
   tokenize,
   type FusedHit,
@@ -1160,7 +1160,7 @@ async function fetchOnce(
   // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
   // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设守卫
   // 即完整 SSRF read-back；域名形态放行（DNS 解析级分类属后续深度）
-  const urlError = graphHttpUrlError(url);
+  const urlError = await graphHttpUrlErrorDns(url);
   if (urlError !== null) {
     throw new GraphNodeFailure(
       node.id,

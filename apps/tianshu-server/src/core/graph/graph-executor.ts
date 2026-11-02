@@ -128,7 +128,7 @@ import {
   type NotifyNode,
   type RerankNode,
   type SubflowNode,
-  graphHttpUrlError,
+  graphHttpUrlErrorDns,
 } from '@tianshu/core';
 import { format as dateFnsFormat } from 'date-fns';
 import { GraphRecursionError, isNodeError } from '@langchain/langgraph';
@@ -1261,7 +1261,7 @@ async function fetchOnce(
   // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
   // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设
   // 守卫即完整 SSRF read-back（mirror 同款）
-  const urlError = graphHttpUrlError(url);
+  const urlError = await graphHttpUrlErrorDns(url);
   if (urlError !== null) {
     throw new GraphNodeFailure(
       node.id,

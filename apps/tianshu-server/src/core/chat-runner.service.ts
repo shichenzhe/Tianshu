@@ -35,6 +35,7 @@ import type { BaseChatModel } from '@langchain/core/language_models/chat_models'
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
 // 值导入（非 import type）：Nest DI 按 emitDecoratorMetadata 解析构造参数，
 // type-only 导入会退化为 Function 导致 ChatCoreModule 装配失败
+import { openSecret } from 'src/commons/security/secret-field';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 // 纯逻辑实现自 @tianshu/core 包消费（RC-T5 接入，mirror 为准——原
@@ -756,8 +757,11 @@ export class ChatRunnerService {
       {
         type: providerRow.type,
         baseUrl: providerRow.baseUrl,
-        apiKey: providerRow.apiKey ?? undefined,
-        extraHeaders: providerRow.extraHeaders,
+        // 安全批 C4：凭证密文透明解密
+        apiKey: openSecret('provider.apiKey', providerRow.apiKey) ?? undefined,
+        extraHeaders:
+          openSecret('provider.extraHeaders', providerRow.extraHeaders) ??
+          undefined,
       },
       modelRow.modelId,
     );
@@ -922,8 +926,13 @@ export class ChatRunnerService {
           {
             type: ctx.providerRow.type,
             baseUrl: ctx.providerRow.baseUrl,
-            apiKey: ctx.providerRow.apiKey ?? undefined,
-            extraHeaders: ctx.providerRow.extraHeaders,
+            // 安全批 C4：凭证密文透明解密
+            apiKey:
+              openSecret('provider.apiKey', ctx.providerRow.apiKey) ??
+              undefined,
+            extraHeaders:
+              openSecret('provider.extraHeaders', ctx.providerRow.extraHeaders) ??
+              undefined,
           },
           ctx.modelRow.modelId,
           {
@@ -1131,7 +1140,15 @@ export class ChatRunnerService {
     return {
       modelRow,
       assistantId: session.assistantId,
-      providerRow,
+      // 安全批 C4：凭证密文源头解密（ctx 消费点直接得明文）
+      providerRow: {
+        ...providerRow,
+        apiKey: openSecret('provider.apiKey', providerRow.apiKey),
+        extraHeaders: openSecret(
+          'provider.extraHeaders',
+          providerRow.extraHeaders,
+        ),
+      },
       merged,
       // 空配置兜底 128K（2026-11-01 裁定，DEFAULT_CONTEXT_WINDOW 注释）：
       // 截断与 usage 拆解两消费同源生效值

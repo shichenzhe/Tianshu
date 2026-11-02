@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Model, Prisma, Provider } from '@prisma/client';
 import { REDACTED_SECRET } from '@tianshu/protocol';
+import { openSecret, sealSecret } from 'src/commons/security/secret-field';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
@@ -88,9 +89,14 @@ export class ProviderRepository {
           type: item.type,
           baseUrl: item.baseUrl,
           // 未传（undefined）保留现值；显式传 null 才清除（F4-1）
-          apiKey: apiKey === undefined ? existing.apiKey : apiKey,
+          apiKey:
+            apiKey === undefined
+              ? existing.apiKey
+              : sealSecret("provider.apiKey", apiKey),
           extraHeaders:
-            extraHeaders === undefined ? existing.extraHeaders : extraHeaders,
+            extraHeaders === undefined
+              ? existing.extraHeaders
+              : sealSecret("provider.extraHeaders", extraHeaders),
           enabled: item.enabled ?? existing.enabled,
         },
       });
@@ -101,8 +107,11 @@ export class ProviderRepository {
         name: item.name,
         type: item.type,
         baseUrl: item.baseUrl,
-        apiKey: apiKey ?? null,
-        extraHeaders: extraHeaders ?? null,
+        apiKey: sealSecret("provider.apiKey", apiKey ?? null),
+        extraHeaders: sealSecret(
+          "provider.extraHeaders",
+          extraHeaders ?? null,
+        ),
         enabled: item.enabled ?? true,
         userId,
       },
@@ -230,7 +239,8 @@ export class ProviderRepository {
     return this.fetchUpstreamModels(provider);
   }
 
-  /** 归属校验 + 运行时信息（baseUrl/apiKey/extraHeaders/type） */
+  /** 归属校验 + 运行时信息（baseUrl/apiKey/extraHeaders/type；凭证
+   * 密文透明解密——安全批 C4） */
   private async findOwnedRuntimeInfo(providerId: number, userId: number) {
     const provider = await this.prisma.provider.findFirst({
       where: { id: providerId, userId },
@@ -238,7 +248,11 @@ export class ProviderRepository {
     if (!provider) {
       throw new BusinessException('服务商不存在', ErrorCodeEnum.NOT_FOUND);
     }
-    return provider;
+    return {
+      ...provider,
+      apiKey: openSecret('provider.apiKey', provider.apiKey),
+      extraHeaders: openSecret('provider.extraHeaders', provider.extraHeaders),
+    };
   }
 
   /** 上游 /models 拉取（openai-compatible 与 ollama 两型；其余类型

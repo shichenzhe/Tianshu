@@ -68,7 +68,5 @@ export function filterDisabledTools<T extends { name: string }>(
   disabled: Iterable<string>,
 ): T[] {
   const disabledSet = new Set([...disabled].map(canonicalToolName));
-  return defs.filter(
-    (def) => !disabledSet.has(canonicalToolName(def.name)),
-  );
+  return defs.filter((def) => !disabledSet.has(canonicalToolName(def.name)));
 }

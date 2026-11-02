@@ -454,9 +454,10 @@ export class ChatRunnerService {
         sessionId: options.sessionId,
         role: 'user',
         blocks: serializeBlocks([
-          ...(options.skillRefs ?? []).map(
-            (name): MessageBlock => ({ type: 'skill_ref', name }),
-          ),
+          ...(options.skillRefs ?? []).map((name): MessageBlock => ({
+            type: 'skill_ref',
+            name,
+          })),
           { type: 'text', text: options.content },
           ...(options.images?.length ? imageBlocksOf(options.images) : []),
         ]),
@@ -1238,9 +1239,7 @@ export class ChatRunnerService {
       ? workspaceScoped
       : // plan 组项目专属：非项目会话剔除（显式名集——2026-10-29 改名
         // 批次 todo_* 坍缩后原 plan_ 前缀过滤失效，mirror 同款修正）
-        workspaceScoped.filter(
-          (def) => !PLAN_TOOL_NAMES.includes(def.name),
-        );
+        workspaceScoped.filter((def) => !PLAN_TOOL_NAMES.includes(def.name));
     const planTools = ctx.isProjectSession
       ? makePlanTools({ prisma: this.prisma })
       : [];

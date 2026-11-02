@@ -123,9 +123,9 @@ describe('search_history execute 查询组装', () => {
   it('query trim 后为空直接返回空文案，不触 message 查询', async () => {
     const { db, calls } = makeFakeDb([{ id: 1, title: 'a' }], []);
     const tool = makeHistorySearchTool({ db });
-    await expect(
-      tool.execute(CTX(), { query: '   ' }),
-    ).resolves.toBe(HISTORY_SEARCH_EMPTY);
+    await expect(tool.execute(CTX(), { query: '   ' })).resolves.toBe(
+      HISTORY_SEARCH_EMPTY,
+    );
     expect(calls.message).toBeNull();
   });
 
@@ -143,9 +143,9 @@ describe('search_history execute 查询组装', () => {
   it('未命中返回空文案（含改写建议）', async () => {
     const { db } = makeFakeDb([{ id: 8, title: '旧' }], []);
     const tool = makeHistorySearchTool({ db });
-    await expect(
-      tool.execute(CTX(), { query: '不存在的内容' }),
-    ).resolves.toBe(HISTORY_SEARCH_EMPTY);
+    await expect(tool.execute(CTX(), { query: '不存在的内容' })).resolves.toBe(
+      HISTORY_SEARCH_EMPTY,
+    );
     expect(HISTORY_SEARCH_EMPTY).toContain('时间范围');
   });
 });
@@ -243,7 +243,13 @@ describe('search_history execute 结果格式化', () => {
   it('title null 的旧会话行回退未命名会话', async () => {
     const { db } = makeFakeDb(
       [{ id: 8, title: null }],
-      [{ sessionId: 8, blocks: textBlocks('目标'), createdAt: D('2026-10-01') }],
+      [
+        {
+          sessionId: 8,
+          blocks: textBlocks('目标'),
+          createdAt: D('2026-10-01'),
+        },
+      ],
     );
     const tool = makeHistorySearchTool({ db });
     await expect(tool.execute(CTX(), { query: '目标' })).resolves.toContain(
@@ -254,9 +260,9 @@ describe('search_history execute 结果格式化', () => {
 
 describe('extractSnippet 片段提取纯函数', () => {
   it('短文本整体为片段（换行压平）', () => {
-    expect(
-      extractSnippet(textBlocks('第一行\n第二行含目标词'), '目标词'),
-    ).toBe('第一行 第二行含目标词');
+    expect(extractSnippet(textBlocks('第一行\n第二行含目标词'), '目标词')).toBe(
+      '第一行 第二行含目标词',
+    );
   });
 
   it('长文本以命中位置为中心取窗口并加省略号，长度 ≤300', () => {
@@ -305,7 +311,9 @@ describe('extractSnippet 片段提取纯函数', () => {
   it('纯 image 消息与坏 JSON 返回 null', () => {
     expect(
       extractSnippet(
-        JSON.stringify([{ type: 'image', imagePath: 'x.png', mime: 'image/png' }]),
+        JSON.stringify([
+          { type: 'image', imagePath: 'x.png', mime: 'image/png' },
+        ]),
         'x.png',
       ),
     ).toBeNull();

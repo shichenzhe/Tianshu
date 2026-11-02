@@ -469,7 +469,14 @@ describe('RelayRegistry 背压与转发容错（假 socket 单元级）', () => 
     registry.registerServer('s1', server);
     registry.attachClient('s1', client);
     for (let i = 1; i <= 10; i++) {
-      registry.forwardToServer('s1', { kind: 'req', id: i });
+      // 帧契约单源化（0a1194a7）后 req 帧须带 method/path；本用例只
+      // 关心积压计数，占位语义即可
+      registry.forwardToServer('s1', {
+        kind: 'req',
+        id: i,
+        method: 'POST',
+        path: 'test/ping',
+      });
     }
     expect(server.closeCode).toBeUndefined();
     expect(server.sent).toHaveLength(10);
@@ -485,7 +492,12 @@ describe('RelayRegistry 背压与转发容错（假 socket 单元级）', () => 
     registry.registerServer('s1', server);
     registry.attachClient('s1', client);
     expect(() =>
-      registry.forwardToServer('s1', { kind: 'req', id: 1 }),
+      registry.forwardToServer('s1', {
+        kind: 'req',
+        id: 1,
+        method: 'POST',
+        path: 'test/ping',
+      }),
     ).not.toThrow();
     expect(server.closeCode).toBe(1011);
   });

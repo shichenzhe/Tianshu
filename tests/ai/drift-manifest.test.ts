@@ -43,10 +43,14 @@ describe("RC-T7 漂移巡检 manifest", () => {
     for (const pair of manifest.pairs!) {
       expect(typeof pair.id).toBe("string");
       expect(pair.id.length).toBeGreaterThan(0);
-      expect(typeof pair.mirrorPath).toBe("string");
-      expect(typeof pair.serverPath).toBe("string");
       expect(typeof pair.note).toBe("string");
       expect(pair.note!.length).toBeGreaterThan(0);
+      // 路径字段仅文件对条目必填：skip 登记条目（如 mobile-ported-logic
+      // 裁定记录）无单一文件对，9cf25f73 起允许缺席
+      if (!("skip" in pair)) {
+        expect(typeof pair.mirrorPath).toBe("string");
+        expect(typeof pair.serverPath).toBe("string");
+      }
     }
   });
 
@@ -76,7 +80,8 @@ describe("RC-T7 漂移巡检 manifest", () => {
   });
 
   it("mirror 侧路径全部存在", () => {
-    for (const pair of manifest.pairs!) {
+    // skip 登记条目无文件对，只校验文件对条目
+    for (const pair of manifest.pairs!.filter((p) => !("skip" in p))) {
       expect(
         existsSync(path.join(mirrorRoot, pair.mirrorPath)),
         `mirror 缺失：${pair.mirrorPath}（${pair.id}）`,
@@ -88,7 +93,7 @@ describe("RC-T7 漂移巡检 manifest", () => {
     "server 侧路径存在（server 仓缺席时 soft-skip）",
     { skipIf: !existsSync(serverRoot) },
     () => {
-      for (const pair of manifest.pairs!) {
+      for (const pair of manifest.pairs!.filter((p) => !("skip" in p))) {
         expect(
           existsSync(path.join(serverRoot, pair.serverPath)),
           `server 缺失：${pair.serverPath}（${pair.id}）`,

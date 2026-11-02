@@ -31,6 +31,7 @@ export * from "./schedule-schema";
 export * from "./graph-compiler";
 export * from "./graph-prompt";
 export * from "./graph-http-guard";
+export * from "./crypto-envelope";
 export * from "./schedule";
 // E2E-T1：relay 端到端加密核心（X25519+HKDF+GCM 信封+重放窗口，纯
 // node:crypto；信封/握手 kind 常量为跨仓单份 wire 契约）

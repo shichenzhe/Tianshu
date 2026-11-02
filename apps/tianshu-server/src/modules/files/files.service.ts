@@ -12,6 +12,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { listWorkspaceFiles, readTextFileGuarded } from '@tianshu/core';
 import { PrismaService } from 'src/commons/database/prisma.service';

@@ -38,7 +38,7 @@ describe('BackupController claim/invites/clients（多用户批）', () => {
     const res = await controller.claim({
       inviteCode: 'TS-ABCDEFGH',
       deviceName: 'imac-1',
-    });
+    }, { ip: '127.0.0.1' } as never);
     expect(registryStub.claimInvite).toHaveBeenCalledWith(
       'TS-ABCDEFGH',
       'imac-1',

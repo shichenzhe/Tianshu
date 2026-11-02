@@ -48,6 +48,18 @@ export function emitListenSecurityWarnings(
         '请确认防火墙与 TIANSHU_TOKEN 已设置，或将 config.yml app.hostname 指定为内网/回环地址',
     );
   }
+  if (
+    token !== undefined &&
+    token.length > 0 &&
+    token.length < 32 &&
+    !isLoopbackAddress(hostname)
+  ) {
+    // 安全批 F2：非 loopback 部署的 token 最短 32 字符（16hex 随机）——
+    // 短 token 在线爆破面；loopback 豁免（本地开发语义）
+    throw new Error(
+      `[安全拒绝启动] TIANSHU_TOKEN 长度不足（${token.length} < 32 字符）：非 loopback 部署须使用足够强度的 token（openssl rand -hex 32）`,
+    );
+  }
   if (!token && !isLoopbackAddress(hostname)) {
     // 安全批 S3：告警升级为拒绝启动——StaticTokenGuard/BackupGuard 在
     // 无 token 时的放行面叠加非 loopback 绑定 = 全接口无鉴权对外。

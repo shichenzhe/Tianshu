@@ -1,9 +1,13 @@
+import { FastifyRequest } from 'fastify';
+import { consumeRateLimit } from 'src/commons/security/rate-limit';
 import {
   Body,
   Controller,
   HttpCode,
+  HttpException,
   HttpStatus,
   Post,
+  Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -37,7 +41,17 @@ export class AuthController {
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
-  async login(@Body() loginDto: LoginDto): Promise<LoginResponseDto> {
+  async login(
+    @Body() loginDto: LoginDto,
+    @Req() req: FastifyRequest,
+  ): Promise<LoginResponseDto> {
+    // 安全批 F2：按 IP 退避——15 分钟窗口 10 次尝试后 429（bcrypt cost10
+    // 缓解在线爆破，弱口令仍可慢速爆破，限流收口）
+    const ip = (req.ip ?? 'unknown').toString();
+    const verdict = consumeRateLimit(`login:${ip}`, 10, 15 * 60_000);
+    if (!verdict.allowed) {
+      throw new HttpException('尝试过于频繁，请稍后再试', 429);
+    }
     return this.userService.login(loginDto);
   }
   /**

@@ -11,6 +11,7 @@ import {
   resolveFilePath,
   type WorkspaceFileContent,
 } from "./workspace-files";
+import { isExternalReadAllowed } from "./external-file-gate";
 import { listWorkspaceDir, type DirEntry } from "./workspace-dir";
 import { gitFileDiff, gitWorkingChanges } from "./git-changes";
 import {
@@ -864,7 +865,20 @@ export class SessionRepository {
     await this.assertWorkspaceOwned(workspaceId, userId);
     const workspace = await this.getWorkspace(workspaceId);
     if (!workspace?.directoryPath) throw new Error("工作空间未绑定目录");
-    return readWorkspaceFile(resolveFilePath(workspace.directoryPath, relPath));
+    // 安全批 E2：绝对路径（工作空间外）须命中授权清单——fullAccess 曾
+    // 使被 XSS 的渲染层对任意绑定空间调 (wsId, "/Users/x/.ssh/id_rsa")
+    // 即直读；相对路径仍走原通道（工作空间根内由 resolveFilePath 收口）
+    const abs = path.isAbsolute(relPath)
+      ? path.resolve(relPath)
+      : resolveFilePath(workspace.directoryPath, relPath);
+    if (
+      path.isAbsolute(relPath) &&
+      !abs.startsWith(path.resolve(workspace.directoryPath) + path.sep) &&
+      !isExternalReadAllowed(abs)
+    ) {
+      throw new Error("工作空间外路径未授权（请经文件选择器/粘贴授权）");
+    }
+    return readWorkspaceFile(abs);
   }
 
   /** DetailPanel 工作空间 tab：列目录（resolveSafePath 沙箱） */

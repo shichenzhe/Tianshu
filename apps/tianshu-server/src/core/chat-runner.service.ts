@@ -75,6 +75,7 @@ import { makeRunCommandTool } from './tools/command-tool';
 import { FILE_TOOLS } from './tools/file-tools';
 import { BROWSER_BRIDGE_TOOLS } from './tools/bridge/browser-bridge-tools';
 import { makeLibrarySearchTool } from './library/library-tools';
+import { makeHistorySearchTool } from './tools/history-search-tool';
 import { normalizeWorkspacePath } from './tools/workspace-path';
 import type { ToolDefinition } from './tools/tool-definition';
 import { WORKFLOW_TOOL_NAMES } from './tools/workflow-tools';
@@ -1251,6 +1252,9 @@ export class ChatRunnerService {
       // PL-2：library_search 资料库语义检索常驻（用户级资料库不依赖工作
       // 空间；显式注入本仓 prisma，不经 graph 运行时解析）
       makeLibrarySearchTool({ db: this.prisma }),
+      // search_history（spec 2026-11-02 移植批）：历史会话检索常驻（用户
+      // 级能力不依赖工作空间；三级裁剪兜底回捞，mirror 同批落地）
+      makeHistorySearchTool({ db: this.prisma }),
       // F1/F2（2026-10-29）：工作流六件 + 展示三件——mirror
       // filterToolsBySession 展示组/工作流组同门轻量复刻（automation/
       // coding 场景，或安装了 workflow-creator 技能）；实例自聚合 registry

@@ -17,6 +17,7 @@ import { makeRunCommandTool } from './command-tool';
 import { makeWebTools } from './web-tools';
 import { BROWSER_BRIDGE_TOOLS } from './bridge/browser-bridge-tools';
 import { LIBRARY_SEARCH_TOOL } from '../library/library-tools';
+import { HISTORY_SEARCH_TOOL } from './history-search-tool';
 import { canonicalToolName } from '@tianshu/core';
 
 const definitions: ToolDefinition[] = [
@@ -30,6 +31,9 @@ const definitions: ToolDefinition[] = [
   // 名单点名，不再须绑工作空间或 node.tools 点名；chat 会话另经
   // collectToolDefinitions 显式 prisma 注入）
   LIBRARY_SEARCH_TOOL,
+  // search_history（spec 2026-11-02 移植批）：历史会话检索常驻（用户级
+  // 能力；db 取用时解析同上——graph LLM 节点 tools:true 经 registry 获得）
+  HISTORY_SEARCH_TOOL,
 ];
 
 export const registry = {

@@ -928,10 +928,11 @@ export class ChatRunnerService {
             baseUrl: ctx.providerRow.baseUrl,
             // 安全批 C4：凭证密文透明解密
             apiKey:
-              openSecret('provider.apiKey', ctx.providerRow.apiKey) ??
+              openSecret('provider.apiKey', ctx.providerRow.apiKey ?? null) ??
               undefined,
             extraHeaders:
-              openSecret('provider.extraHeaders', ctx.providerRow.extraHeaders) ??
+              openSecret('provider.extraHeaders', ctx.providerRow.extraHeaders ?? null)
+              ??
               undefined,
           },
           ctx.modelRow.modelId,

@@ -198,8 +198,12 @@ describe("runToolCall 权限放宽", () => {
       decideCommand: () => "default",
     });
     agent.requestApproval.mockResolvedValue(true);
+    // full 态 resolveCwd 直传不限定：cwd 必须显式给。漏传会继承 vitest
+    // 进程 cwd（仓库根），真身 git reset --hard 即重置当前仓库——
+    // 2026-10-24 起一周「未提交改动被周期性 reset 吃掉」的实锤根因
     await runToolCall(runCommandDef, agent, "c3", {
       command: "git reset --hard",
+      cwd: "/tmp/ws",
     });
     expect(agent.requestApproval).toHaveBeenCalled();
   });

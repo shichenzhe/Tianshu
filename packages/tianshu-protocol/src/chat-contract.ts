@@ -113,13 +113,30 @@ export interface SkillRefBlock {
   name: string;
 }
 
+/**
+ * 文件内容引用块（user 消息，file_ref 批）：内容注入式文件引用的落块
+ * 形态——**内容随块落库**（发送侧已按授权门读到的文本原样入块，组装侧
+ * 直接展开 `[引用文件 path]\n<内容>`，零重读零 TOCTOU——消息库体积与
+ * 旧 text 前缀注入形态持平）。根治渲染层从扁平 text 逆推的空行切段泄漏
+ * （与 skill_ref 同构范式：块化即渲染无歧义）；引用式（路径行 + AI 自读
+ * 指示，无空行问题）维持 text 前缀形态不动。
+ */
+export interface FileRefBlock {
+  type: "file_ref";
+  /** 文件路径（展示与注入前缀标识；卡片预览走既有文件通道） */
+  path: string;
+  /** 文件文本内容（发送侧授权读取的结果；空文件为空串） */
+  content: string;
+}
+
 export type MessageBlock =
   | TextBlock
   | ThinkingBlock
   | UsageBlock
   | ToolCallBlock
   | ImageBlock
-  | SkillRefBlock;
+  | SkillRefBlock
+  | FileRefBlock;
 
 /** 审批应答（移动端 spec §4.1）：批准/拒绝挂起的 write 工具调用；
  *  remember=true 时被控端写工作空间级工具记忆（toolPermission 持久行，

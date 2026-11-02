@@ -43,6 +43,8 @@ function isValidBlock(block: unknown): block is MessageBlock {
       return typeof b.imagePath === "string" && typeof b.mime === "string";
     case "skill_ref":
       return typeof b.name === "string";
+    case "file_ref":
+      return typeof b.path === "string" && typeof b.content === "string";
     default:
       return false;
   }
@@ -155,6 +157,14 @@ export async function blocksToModelMessages(
           body != null
             ? `[引用技能 ${block.name}]\n${body}`
             : `[引用技能 ${block.name}]（内容读取失败）`,
+      });
+    } else if (block.type === "file_ref") {
+      // 内容随块落库（发送侧授权读取的结果）——组装侧直接展开旧注入
+      // 前缀口径，零重读零 TOCTOU（与 skill_ref 的 loader 范式差异：
+      // 文件读取有授权门时序且内容发送时已在手，重读无收益有风险）
+      parts.push({
+        type: "text",
+        text: `[引用文件 ${block.path}]\n${block.content}`,
       });
     } else if (block.type === "image") {
       const dataUrl =

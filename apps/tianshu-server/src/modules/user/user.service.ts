@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import { Logger } from '../../commons/log/logger';
 import { LoggerFactory } from '../../commons/log/logger-factory';
 import { JwtAuthService } from '../../commons/auth/jwt-auth.service';
@@ -198,7 +199,7 @@ export class UserService {
   async resetPassword(
     id: string,
     operateContext: OperateContext,
-  ): Promise<void> {
+  ): Promise<{ tempPassword: string }> {
     // 检查用户是否存在
     const user = await this.userRepository.getById(id);
     if (!user) {
@@ -206,12 +207,16 @@ export class UserService {
     }
 
     // 加密新密码
-    const newPasswordHash = await PasswordEncryptUtil.encode('123456');
+    // 安全批 E3：随机一次性口令（曾固定 '123456'——知晓者可立即登录；
+    // 随机口令随响应返回一次，管理员转达后用户首登改密）
+    const tempPassword = randomBytes(12).toString('base64url');
+    const newPasswordHash = await PasswordEncryptUtil.encode(tempPassword);
     const updateUserPasswordEntity = new UserChangePasswordEntity({
       passwordHash: newPasswordHash,
     });
     updateUserPasswordEntity.onUpdated(operateContext);
     await this.userRepository.changePassword(id, updateUserPasswordEntity);
+    return { tempPassword };
   }
 
   /**

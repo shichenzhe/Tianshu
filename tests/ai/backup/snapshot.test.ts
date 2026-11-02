@@ -15,7 +15,17 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("electron", () => ({ app: { isPackaged: true } }), { virtual: true });
+vi.mock("electron", () => ({
+  // 安全批：密封链引 safeStorage（降级形态——master-key 走 hex 路径）
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+    decryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+  }, app: { isPackaged: true } }), { virtual: true });
 // paths.ts 的 appDataHome 依赖 electron app.isPackaged——vi.mock 后走 app/ 分组
 
 const { createBackupArchive, BACKUP_ASSET_DIRS } =

@@ -8,7 +8,17 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const appMock = vi.hoisted(() => ({ isPackaged: false }));
-vi.mock("electron", () => ({ app: appMock }));
+vi.mock("electron", () => ({
+  // 安全批：密封链引 safeStorage（降级形态——master-key 走 hex 路径）
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+    decryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+  }, app: appMock }));
 vi.mock("../../../electron/commons/Log", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

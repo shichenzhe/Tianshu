@@ -58,14 +58,12 @@ management:
       - '127.0.0.1'
       - '::1'
       - '192.168.1.0/24' # 示例：局域网段
-    tokens: # 允许的Bearer tokens
-      - 'your-secret-token-here'
-    users: # Basic认证用户
-      - username: 'admin'
-        password: 'admin123'
-        roles: ['ACTUATOR_ADMIN']
-      - username: 'monitor'
-        password: 'monitor123'
+    tokens: # 允许的Bearer tokens（部署时替换：openssl rand -hex 32）
+      # - 'your-secret-token-here'  # 安全批 E3：样例凭证注释化
+    users: # Basic认证用户（部署时自行配置——安全批 E3 样例弱口令注释化）
+      # - username: 'admin'
+      #   password: '<set-at-deploy>'
+      #   roles: ['ACTUATOR_ADMIN']
 
 # 接口文档
 swagger:
@@ -109,12 +107,10 @@ auth:
     refreshExpiresIn: '12h'
 
   basic:
-    users:
-      - username: 'guest'
-        password: 'guest'
-      - username: 'user'
-        password: 'user123'
-        roles: ['user']
+    users: # 安全批 E3：样例弱口令注释化——defaultStrategy=jwt 时不生效，启用 basic 前必须自行配置
+      # - username: '<set-at-deploy>'
+      #   password: '<set-at-deploy>'
+      #   roles: ['user']
   oauth2:
 
 # 天枢桌面端联动配置

@@ -13,6 +13,7 @@ import {
   generateStaticPair,
   parseStaticPair,
   serializeStaticPair,
+  shouldRenew,
   type E2EKeyPair,
   type E2ESecureEnvelope,
   type E2ESession,
@@ -35,6 +36,13 @@ import {
  *   则不带——StaticTokenGuard 本地放行）；relay 层接入由 relayToken 把关
  * - 启动入口：main.ts 检测 TIANSHU_RELAY_URL/TIANSHU_RELAY_TOKEN 或 CLI
  *   --relay-url/--relay-token（resolveRelayLaunch）
+ * - AK 凭证通道（Task 14，spec §5.4）：TIANSHU_RELAY_TOKEN 缺席而
+ *   TIANSHU_RELAY_ADMIN_URL/AK_ID/AK_SECRET 三要素齐备（CLI 同名参优先）
+ *   时走 AK 模式——启动先 Basic 换 access（401 = AK 失效：干净启动失败 /
+ *   续期粘滞断连不重连；网络失败 30s 起退避封顶 10min），内存
+ *   {token,expiresAt,maxAgeSec} + 每 10min 巡检 shouldRenew（core 单源）
+ *   低频换新；auth 首帧发帧时读当前 access（续期后重连即用新 token）。
+ *   static token 显式在场则 AK 机制整体旁路（零漂移）
  * - E2E（spec 2026-10-18-relay-e2e §2.2/§3.2，E2E-T2；mirror server-face
  *   relay-client 同构对偶）：收 e2e-hello（明文）→ 派生会话密钥（静态
  *   私钥+对向临时公钥，connectionId=instanceId 绑定）→ 回 e2e-ack（静态
@@ -47,6 +55,13 @@ import {
  */
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
+/** 续期巡检间隔（spec §5.4：低频巡检，shouldRenew 真值才换） */
+const RENEW_CHECK_INTERVAL_MS = 10 * 60 * 1000;
+/** 换 access 退避：30s 起、指数翻倍封顶 10min（网络/服务异常用） */
+const AK_RETRY_BASE_MS = 30_000;
+const AK_RETRY_MAX_MS = 10 * 60 * 1000;
+/** 单次 token 请求超时（挂死请求按瞬态失败进退避，不卡死巡检循环） */
+const AK_REQUEST_TIMEOUT_MS = 30_000;
 
 /** inject 派发 + EventBus 取用所需最小 app 面（NestFastifyApplication 结构
  * 满足；testing module 出来的 INestApplication（FastifyAdapter 实例）运行
@@ -83,16 +98,31 @@ interface OptionStore {
   };
 }
 
+/** AK 凭证三要素（Task 14：relay-admin token 端点消费面） */
+export interface RelayAkCredentials {
+  /** relay-admin 基址（token 端点 = {adminUrl}/relay-admin/token） */
+  adminUrl: string;
+  akId: string;
+  akSecret: string;
+}
+
 export interface HeadlessRelayOptions {
   app: HeadlessRelayApp;
   relayUrl: string;
-  relayToken: string;
+  /** static relay 凭证（与 ak 二选一——同传时 static 优先零漂移） */
+  relayToken?: string;
+  /** AK 凭证（无 relayToken 时启用 AK 模式：Basic 换 access + 低频续期） */
+  ak?: RelayAkCredentials;
   /** inject 派发注入的 Bearer（缺省 env TIANSHU_TOKEN；未设不带） */
   bearerToken?: string;
   /** E2E 模式（缺省 auto；main.ts 读 config tianshu.relay.e2e） */
   e2eMode?: RelayE2eMode;
   pingIntervalMs?: number;
   deadAfterMs?: number;
+  /** 续期巡检间隔（缺省 10min；测试注入） */
+  renewCheckIntervalMs?: number;
+  /** 换 access 退避基数（缺省 30s 封顶 10min；测试注入） */
+  akRetryBaseMs?: number;
 }
 
 /** req 帧最少合法形状判别（畸形帧静默丢弃，防打断其他帧处理） */
@@ -138,6 +168,15 @@ let e2eMode: RelayE2eMode = 'auto';
 // 忽略；合法重协商/新控制端恒新临时钥不受影响。与 e2eSession 同点清
 // （重连/判死/停启即弃，属当前连接的协商记忆）。
 let lastHelloEphemeral: Buffer | null = null;
+// AK 凭证通道态（Task 14）：static token 缺席且 AK 三要素在场时启用。
+// access 只存内存（进程重启重换）；akAccess 由 ensureAccess/续期循环
+// 单点写入，auth 首帧经 currentRelayToken() 发帧时取值
+let akConfig: RelayAkCredentials | null = null;
+let akAccess: AkAccess | null = null;
+let renewTimer: NodeJS.Timeout | null = null;
+let renewCheckIntervalMs: number | undefined;
+let akRetryBaseMs: number | undefined;
+let akRetryAttempts = 0;
 
 /** option 表访问（app 容器解析 PrismaService；缺容器原语时 null 降级） */
 function optionStore(): OptionStore | null {
@@ -194,11 +233,17 @@ function buildHandshakeUrl(): string {
   return relayUrl;
 }
 
+/** 当前鉴权凭证（发帧时取值）：AK 模式读内存 access（续期换新后即新值
+ * ——非启动时快照），static 模式读启动配置 relayToken */
+function currentRelayToken(): string {
+  return akAccess?.token ?? relayToken;
+}
+
 /** 鉴权首帧（升级后第一条消息：token/role/connectionId 全量承载） */
 function authFrame(): Record<string, unknown> {
   return {
     kind: 'auth',
-    token: relayToken,
+    token: currentRelayToken(),
     role: 'server',
     connectionId: instanceId,
   };
@@ -547,23 +592,221 @@ function forceReconnect(reason: string): void {
   scheduleReconnect();
 }
 
-/** 启动 relay 客户端（幂等：重启先拆旧连接与订阅） */
+// ---------------------------------------------------------------------------
+// AK 凭证通道（Task 14，spec §5.4 消费侧）
+// ---------------------------------------------------------------------------
+
+/** access 三元组（内存态——T12 RaTokenIssuedResult 的客户端对偶） */
+interface AkAccess {
+  token: string;
+  expiresAt: number;
+  maxAgeSec: number;
+}
+
+/** token 端点统一信封（管理面 ResponseInterceptor 包装 {code,message,data}；
+ * 四端只消费 data 三元组） */
+interface TokenEnvelope {
+  data?: {
+    accessToken?: unknown;
+    expiresAt?: unknown;
+    maxAgeSec?: unknown;
+  };
+}
+
+/** 401（AK 失效——disabled/expired/bad-secret）专属错误类：粘滞终局，
+ * 不进退避重试（启动侧干净失败、续期侧断连不重连） */
+class AkCredentialInvalidError extends Error {
+  constructor() {
+    super('AK 凭证失效（disabled/expired），relay 客户端未启动或已断开');
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 换 access 退避延迟：base 起指数翻倍封顶 10min（attempt 从 1 起） */
+function akRetryDelayMs(attempt: number): number {
+  const base = akRetryBaseMs ?? AK_RETRY_BASE_MS;
+  return Math.min(base * 2 ** (attempt - 1), AK_RETRY_MAX_MS);
+}
+
+/** AK → access 换发（T12 端点）：POST {adminUrl}/relay-admin/token +
+ * Basic base64(akId:akSecret)；成功读统一信封 data 三元组。401 = AK
+ * 失效（告警日志单点在此发出）；网络/超时/非 401 异常状态/信封畸形均按
+ * 瞬态抛 Error，由调用方退避重试 */
+async function requestAccess(
+  config: RelayAkCredentials,
+): Promise<AkAccess> {
+  const authorization = `Basic ${Buffer.from(
+    `${config.akId}:${config.akSecret}`,
+  ).toString('base64')}`;
+  let response: Response;
+  try {
+    response = await fetch(
+      `${config.adminUrl.replace(/\/+$/, '')}/relay-admin/token`,
+      {
+        method: 'POST',
+        headers: { authorization },
+        signal: AbortSignal.timeout(AK_REQUEST_TIMEOUT_MS),
+      },
+    );
+  } catch (error) {
+    throw new Error(`token 端点不可达（${config.adminUrl}）: ${String(error)}`);
+  }
+  if (response.status === 401) {
+    console.error(
+      '[relay-client] AK 凭证失效（disabled/expired），需运营方恢复或换发',
+    );
+    throw new AkCredentialInvalidError();
+  }
+  if (!response.ok) {
+    throw new Error(`token 端点异常状态 ${response.status}`);
+  }
+  const payload = (await response
+    .json()
+    .catch(() => null)) as TokenEnvelope | null;
+  const data = payload?.data;
+  if (
+    !data ||
+    typeof data.accessToken !== 'string' ||
+    !data.accessToken ||
+    typeof data.expiresAt !== 'number' ||
+    typeof data.maxAgeSec !== 'number'
+  ) {
+    throw new Error('token 端点响应形状非法（缺 data 三元组）');
+  }
+  return {
+    token: data.accessToken,
+    expiresAt: data.expiresAt,
+    maxAgeSec: data.maxAgeSec,
+  };
+}
+
+/** 启动期换 access：循环退避直至成功（401 直接抛——干净启动失败）。
+ * 停止/重启接手（akConfig 换人或置空）即放弃——迟到的成功不落地 */
+async function ensureAccess(): Promise<void> {
+  const config = akConfig;
+  if (!config) throw new Error('AK 凭证未配置');
+  let attempt = 0;
+  for (;;) {
+    if (stopped || akConfig !== config) {
+      throw new Error('relay 客户端已停止或重启，放弃换取 access');
+    }
+    try {
+      akAccess = await requestAccess(config);
+      console.log('[relay-client] 已换取 relay access token');
+      return;
+    } catch (error) {
+      if (error instanceof AkCredentialInvalidError) throw error;
+      attempt += 1;
+      const delay = akRetryDelayMs(attempt);
+      console.warn(`[relay-client] 换取 access 失败，${delay}ms 后重试:`, error);
+      await sleep(delay);
+    }
+  }
+}
+
+function stopRenewLoop(): void {
+  if (renewTimer) {
+    clearTimeout(renewTimer);
+    renewTimer = null;
+  }
+}
+
+/** 排下一轮巡检（unref——10min 节奏不持活进程） */
+function scheduleRenewTick(): void {
+  if (!akConfig) return;
+  const interval = renewCheckIntervalMs ?? RENEW_CHECK_INTERVAL_MS;
+  renewTimer = setTimeout(() => {
+    renewTimer = null;
+    void renewTick();
+  }, interval);
+  renewTimer.unref?.();
+}
+
+/** 巡检换新失败（瞬态）退避重排（连接不受影响） */
+function scheduleRenewRetry(cause: unknown): void {
+  akRetryAttempts += 1;
+  const delay = akRetryDelayMs(akRetryAttempts);
+  console.warn(`[relay-client] access 续期失败，${delay}ms 后重试:`, cause);
+  renewTimer = setTimeout(() => {
+    renewTimer = null;
+    void renewTick();
+  }, delay);
+  renewTimer.unref?.();
+}
+
+/** 续期巡检：shouldRenew（core 单源）真值才换新。换新成功只更新内存
+ * （存量连接不拆——D5 语义：access 到期只拦新连接）；401 = AK 失效 →
+ * 粘滞终局：断开 relay 且不再重连（重连只会复现同一终局——移动端
+ * invalid-token 粘滞同构）；网络失败退避重试且不动连接 */
+async function renewTick(): Promise<void> {
+  const config = akConfig;
+  if (!config || !akAccess) return;
+  if (!shouldRenew(akAccess.expiresAt, akAccess.maxAgeSec, Date.now())) {
+    scheduleRenewTick();
+    return;
+  }
+  try {
+    const access = await requestAccess(config);
+    // 停止/重启竞态：迟到的换新不落地（新启动自带自己的首轮换发）
+    if (stopped || akConfig !== config) return;
+    akAccess = access;
+    akRetryAttempts = 0;
+    console.log('[relay-client] access token 已续期');
+    scheduleRenewTick();
+  } catch (error) {
+    if (stopped || akConfig !== config) return;
+    if (error instanceof AkCredentialInvalidError) {
+      stopHeadlessRelay();
+      return;
+    }
+    scheduleRenewRetry(error);
+  }
+}
+
+/** 启动 relay 客户端（幂等：重启先拆旧连接与订阅）。鉴权双模：static
+ * token（relayToken）或 AK 凭证（ak——先换 access 再连）；两者同传
+ * static 优先（零漂移：AK 机制整体不跑） */
 export async function startHeadlessRelay(
   options: HeadlessRelayOptions,
 ): Promise<void> {
   stopHeadlessRelay();
-  if (!options.relayUrl || !options.relayToken) {
-    throw new Error('relay 客户端启动需 relayUrl 与 relayToken');
+  if (!options.relayUrl || (!options.relayToken && !options.ak)) {
+    throw new Error('relay 客户端启动需 relayUrl 与 relayToken（或 AK 凭证）');
+  }
+  stopped = false;
+  attempts = 0;
+  renewCheckIntervalMs = options.renewCheckIntervalMs;
+  akRetryBaseMs = options.akRetryBaseMs;
+  // static 优先零漂移：relayToken 显式在场时 AK 整体旁路（即使 ak 同传）
+  const ak = options.relayToken ? undefined : options.ak;
+  if (ak) {
+    akConfig = ak;
+    akAccess = null;
+    akRetryAttempts = 0;
+    try {
+      // 换到 access 才连（401 = AK 失效 → 干净启动失败，不进连接/重连
+      // 循环；网络失败在 ensureAccess 内退避重试）
+      await ensureAccess();
+    } catch (error) {
+      // 本轮启动已被停止/重启接手（akConfig 换人）时不动新状态
+      if (akConfig === ak) stopHeadlessRelay();
+      throw error;
+    }
+    scheduleRenewTick();
+  } else {
+    akConfig = null;
+    akAccess = null;
   }
   app = options.app;
   relayUrl = options.relayUrl;
-  relayToken = options.relayToken;
+  relayToken = options.relayToken ?? '';
   bearerToken = options.bearerToken ?? process.env.TIANSHU_TOKEN ?? undefined;
   e2eMode = options.e2eMode ?? 'auto';
   pingIntervalMs = options.pingIntervalMs;
   deadAfterMs = options.deadAfterMs;
-  stopped = false;
-  attempts = 0;
   e2eSession = null;
   lastHelloEphemeral = null;
   // 事件外推：仅当前已连接时发（断线窗口丢弃，控制端重连后全量刷新兜底）
@@ -582,6 +825,10 @@ export async function startHeadlessRelay(
 
 export function stopHeadlessRelay(): void {
   stopped = true;
+  stopRenewLoop();
+  akConfig = null;
+  akAccess = null;
+  akRetryAttempts = 0;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -603,25 +850,61 @@ export function stopHeadlessRelay(): void {
   }
 }
 
-/** CLI/环境驱动解析（main.ts 调用）：CLI 优先于环境变量；两者齐备才启动
- * （缺任一返回 null——relay 接入必须鉴权，不半启动） */
+/** CLI/环境驱动解析（main.ts 调用）：CLI 优先于环境变量；鉴权双模——
+ * static token（TIANSHU_RELAY_TOKEN）或 AK 三要素
+ * （TIANSHU_RELAY_ADMIN_URL/AK_ID/AK_SECRET），齐备才启动（缺任一
+ * 返回 null——relay 接入必须鉴权，不半启动）；两者同传 static 优先 */
+export interface RelayLaunchConfig {
+  relayUrl: string;
+  /** static 凭证（AK 模式缺省——鉴权走换发的 access） */
+  relayToken?: string;
+  /** AK 凭证（无 static token 且三要素齐备时在场） */
+  ak?: RelayAkCredentials;
+}
+
 export function resolveRelayLaunch(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
-): { relayUrl: string; relayToken: string } | null {
+): RelayLaunchConfig | null {
   const cli = parseRelayCliArgs(argv);
   const relayUrl = cli.relayUrl ?? env.TIANSHU_RELAY_URL ?? '';
   const relayToken = cli.relayToken ?? env.TIANSHU_RELAY_TOKEN ?? '';
-  if (!relayUrl || !relayToken) return null;
-  return { relayUrl, relayToken };
+  if (!relayUrl) return null;
+  // static 优先（零漂移）：token 显式在场即纯 static 模式，AK 链不解析
+  if (relayToken) return { relayUrl, relayToken };
+  const ak = resolveAkCredentials(cli, env);
+  if (!ak) return null;
+  return { relayUrl, ak };
+}
+
+/** AK 三要素解析（与 relayUrl/relayToken 同款 CLI > env 逐参链；三要素
+ * 须齐备——部分配置不构成 AK 模式） */
+function resolveAkCredentials(
+  cli: ReturnType<typeof parseRelayCliArgs>,
+  env: NodeJS.ProcessEnv,
+): RelayAkCredentials | null {
+  const adminUrl = cli.relayAdminUrl ?? env.TIANSHU_RELAY_ADMIN_URL ?? '';
+  const akId = cli.relayAkId ?? env.TIANSHU_RELAY_AK_ID ?? '';
+  const akSecret = cli.relayAkSecret ?? env.TIANSHU_RELAY_AK_SECRET ?? '';
+  if (!adminUrl || !akId || !akSecret) return null;
+  return { adminUrl, akId, akSecret };
 }
 
 /** `--k v` 与 `--k=v` 双形式（relay-main parseCliArgs 同口径） */
 function parseRelayCliArgs(argv: string[]): {
   relayUrl?: string;
   relayToken?: string;
+  relayAdminUrl?: string;
+  relayAkId?: string;
+  relayAkSecret?: string;
 } {
-  const parsed: { relayUrl?: string; relayToken?: string } = {};
+  const parsed: {
+    relayUrl?: string;
+    relayToken?: string;
+    relayAdminUrl?: string;
+    relayAkId?: string;
+    relayAkSecret?: string;
+  } = {};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     const equalIndex = arg.indexOf('=');
@@ -632,6 +915,9 @@ function parseRelayCliArgs(argv: string[]): {
     if (equalIndex === -1) i += 1;
     if (name === '--relay-url') parsed.relayUrl = value;
     else if (name === '--relay-token') parsed.relayToken = value;
+    else if (name === '--relay-admin-url') parsed.relayAdminUrl = value;
+    else if (name === '--relay-ak-id') parsed.relayAkId = value;
+    else if (name === '--relay-ak-secret') parsed.relayAkSecret = value;
   }
   return parsed;
 }

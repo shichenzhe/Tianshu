@@ -20,6 +20,7 @@ import {
   createStaticAuthenticator,
   type Authenticator,
 } from './auth';
+import { createCrlStore, type CrlStore } from './crl';
 
 export { DEFAULT_MAX_BUFFER_FRAMES };
 
@@ -65,6 +66,17 @@ export interface RelayOptions {
   /** 内部端点（/internal/kick、/internal/stats）Bearer 凭证（Task 5）；
    *  未配置时两端点 404 不可见（不向探测方暴露存在性） */
   internalSecret?: string;
+  /** CRL 控制平面基址（Task 6，spec §4.4）：jwt 模式下在场即创建吊销
+   *  名单拉取（GET {crlAdminUrl}/relay-admin/revocations，Bearer
+   *  internalSecret），名单命中即拒新连接；需与 internalSecret 成对，
+   *  缺省拒绝启动。未配置则无吊销检查面（现状）。static 模式不启用 */
+  crlAdminUrl?: string;
+  /** CRL fail-close 阈值（Task 6）：连续拉取失败 N 次后拒**新**连接
+   *  （存量不拆，spec §5.3/§5.4 停机语义）；缺省 0=fail-static（维持
+   *  名单，永不拒新） */
+  crlFailCloseAfter?: number;
+  /** CRL 拉取周期 ms（缺省 45s；测试注入缩短） */
+  crlIntervalMs?: number;
 }
 
 export interface RelayHandle {
@@ -72,12 +84,38 @@ export interface RelayHandle {
   close(): Promise<void>;
 }
 
+/** 鉴权模式推断（多租户批 Task 3）：显式 authMode 优先，缺省
+ *  authPubkeyFile 在场即 jwt，否则 static */
+function resolveAuthMode(options: RelayOptions): 'static' | 'jwt' {
+  return options.authMode ?? (options.authPubkeyFile ? 'jwt' : 'static');
+}
+
+/** CRL store 构造（Task 6）：jwt 模式且 crlAdminUrl 在场才创建——static
+ *  模式单租户无吊销语义，配置在场也不启用；jwt+crl 但缺 internalSecret
+ *  拒绝启动（吊销面静默失效是安全错配，不得无声降级为「配而不查」） */
+function createCrlStoreIfConfigured(
+  options: RelayOptions,
+): CrlStore | undefined {
+  if (resolveAuthMode(options) !== 'jwt' || !options.crlAdminUrl)
+    return undefined;
+  if (!options.internalSecret)
+    throw new Error('relay 拒绝启动：--crl-admin-url 需要 --internal-secret');
+  return createCrlStore({
+    adminUrl: options.crlAdminUrl,
+    internalSecret: options.internalSecret,
+    intervalMs: options.crlIntervalMs,
+    failCloseAfter: options.crlFailCloseAfter,
+  });
+}
+
 /** 鉴权器构造（多租户批 Task 3）：模式推断——显式 authMode 优先，
  *  缺省 authPubkeyFile 在场即 jwt，否则 static。static 缺 token /
  *  jwt 缺公钥均拒绝启动（static 分支与原内联缺 token 拒绝同语义） */
-function createAuthenticator(options: RelayOptions): Authenticator {
-  const authMode =
-    options.authMode ?? (options.authPubkeyFile ? 'jwt' : 'static');
+function createAuthenticator(
+  options: RelayOptions,
+  crlStore?: CrlStore,
+): Authenticator {
+  const authMode = resolveAuthMode(options);
   if (authMode === 'jwt') {
     if (!options.authPubkeyFile)
       throw new Error('relay 拒绝启动：jwt 模式需要 --auth-pubkey');
@@ -91,8 +129,10 @@ function createAuthenticator(options: RelayOptions): Authenticator {
     }
     return createJwtAuthenticator(
       publicKeyPem,
-      // 吊销检查面（CRL 拉取，多租户批 Task 6 接线）：当前无吊销源
-      () => false,
+      // 吊销检查面（Task 6 CRL）：store 在场即查名单；未配置恒 false
+      //（现状）。箭头包裹保持方法与宿主对象绑定（unbound-method 规避
+      // 仅为静态确定性——store 方法本为闭包实现，不依赖 this）
+      crlStore ? (t) => crlStore.isRevoked(t) : () => false,
     );
   }
   if (!options.token) throw new Error('relay 拒绝启动：缺少 token');
@@ -161,7 +201,10 @@ function respondJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
-  const authenticator = createAuthenticator(options);
+  // CRL 先于鉴权器构造（jwt 分支注入 isRevoked）；坏配置（配了
+  // adminUrl 缺 secret）在监听前拒绝启动，不留半启动态
+  const crlStore = createCrlStoreIfConfigured(options);
+  const authenticator = createAuthenticator(options, crlStore);
   if ((options.certFile !== undefined) !== (options.keyFile !== undefined)) {
     throw new Error('relay 拒绝启动：--cert 与 --key 必须成对提供');
   }
@@ -197,7 +240,10 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   }
 
   /** GET /internal/stats：租户在线连接聚合（static 模式无记账 → 空） */
-  function handleInternalStats(req: IncomingMessage, res: ServerResponse): void {
+  function handleInternalStats(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): void {
     if (req.method !== 'GET')
       return void res.writeHead(405, { allow: 'GET' }).end();
     respondJson(res, 200, { tenants: registry.tenantStats() });
@@ -281,13 +327,17 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     role: unknown,
     connId: string,
   ): void {
+    // fail-close 闸（Task 6，spec §5.3/§5.4）：CRL 连续拉取失败达阈值
+    // → 新连接全拒（4001，与凭证失败同归因不外泄细节）；存量连接不经
+    // 此路径——停机语义只拒新不拆旧
+    if (crlStore?.isNewConnDenied())
+      return void ws.close(4001, 'invalid-token');
     const decision = authenticator.admit({
       token,
       role,
       connectionId: connId,
     });
-    if (!decision.ok)
-      return void ws.close(decision.closeCode, decision.reason);
+    if (!decision.ok) return void ws.close(decision.closeCode, decision.reason);
     // jwt 防御闸：tenantId 在场而 quota 畸形（缺失/字段非正数）→ 与验签
     // 失败同归 4001；tenantId 缺失按 static 语义旁路（设计内行为，
     // 不因此拒绝）——static 裁决 tenantId 恒缺省，本闸零参与
@@ -320,8 +370,7 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
       lastPong.delete(ws);
       registry.forget(ws);
     });
-    if (role === 'server')
-      handleServerSocket(ws, connId, tenantId, quota, ak);
+    if (role === 'server') handleServerSocket(ws, connId, tenantId, quota, ak);
     else handleClientSocket(ws, tenantId, quota, ak);
   }
 
@@ -483,9 +532,12 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
       resolve();
     });
   });
+  // CRL 拉取随服务就绪启动（unref 不阻退出；close 时 stop）
+  crlStore?.start();
   return {
     port: (httpServer.address() as { port: number }).port,
     close: async () => {
+      crlStore?.stop();
       clearInterval(sweep);
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
@@ -517,6 +569,9 @@ export function parseCliArgs(argv: string[]): RelayOptions {
     else if (name === '--key') options.keyFile = value;
     else if (name === '--auth-pubkey') options.authPubkeyFile = value;
     else if (name === '--internal-secret') options.internalSecret = value;
+    else if (name === '--crl-admin-url') options.crlAdminUrl = value;
+    else if (name === '--crl-fail-close')
+      options.crlFailCloseAfter = toInt(value);
   }
   return options;
 }
@@ -525,6 +580,9 @@ const toInt = (value: string): number => Number.parseInt(value, 10) || 0;
 // TLS 可选：--cert <pem> --key <pem>（成对传入即 wss 监听；缺省 http——默认部署架构为反代终止 TLS）
 // 鉴权模式（多租户批 Task 3）：--auth-pubkey <pem> 在场即 jwt 验签（免 --token）；
 // --internal-secret <s> 内部端点凭证（kick/stats；未配置则两端点 404 不暴露）
+// CRL 吊销名单（Task 6，jwt 模式）：--crl-admin-url <url> 控制平面基址（周期拉
+// /relay-admin/revocations，需 --internal-secret 成对）；--crl-fail-close <n> 连续
+// 失败 n 次后拒新连接（缺省 0=fail-static 维持名单）
 if (require.main === module) {
   const options = parseCliArgs(process.argv.slice(2));
   if (!options.token && !options.authPubkeyFile) {

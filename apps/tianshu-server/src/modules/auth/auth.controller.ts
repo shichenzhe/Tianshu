@@ -42,21 +42,33 @@ export class AuthController {
   }
   /**
    * 刷新访问令牌
+   *
+   * 幻影用户防护（2026-11-02）：端点 @Public，此前仅验签即原样续签
+   * ——用户删除后 refresh 令牌可无限续命。发新凭证的标准对齐 login
+   * （用户存在 + isActive），无效即 401；存量 accessToken 到期自然
+   * 出局，续签断供。
    */
   @Post('refresh')
   @Public()
-  refreshToken(@Body() refreshTokenDto: TokenRefreshDto): TokenDto {
+  async refreshToken(
+    @Body() refreshTokenDto: TokenRefreshDto,
+  ): Promise<TokenDto> {
+    let payload;
     try {
       // 验证刷新令牌
-      const payload = this.jwtAuthService.verifyToken(
-        refreshTokenDto.refreshToken,
-      );
-
-      // 生成新的访问令牌和刷新令牌
-      return this.jwtAuthService.generateTokens(payload);
+      payload = this.jwtAuthService.verifyToken(refreshTokenDto.refreshToken);
     } catch {
       throw new UnauthorizedException('登录会话已过期：令牌无效或已过期');
     }
+
+    // 回查用户存在且启用（发新凭证对齐 login 标准）
+    const user = await this.userService.getById(payload.sub);
+    if (!user || !user.isActive) {
+      throw new UnauthorizedException('登录会话已过期：用户不存在或已禁用');
+    }
+
+    // 生成新的访问令牌和刷新令牌
+    return this.jwtAuthService.generateTokens(payload);
   }
 
   /**

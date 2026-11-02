@@ -18,7 +18,7 @@ vi.mock("electron", () => {
 
 // prisma-client 模块加载有副作用（建目录/连库），测试整体 mock 掉
 const prismaMocks = vi.hoisted(() => ({
-  user: { findFirst: vi.fn(), update: vi.fn() },
+  user: { findFirst: vi.fn(), update: vi.fn(), findUnique: vi.fn() },
 }));
 vi.mock("../../../electron/commons/prisma-client", () => ({
   default: prismaMocks,
@@ -26,13 +26,20 @@ vi.mock("../../../electron/commons/prisma-client", () => ({
 
 import UserRepository from "../../../electron/domains/user/user.repo";
 import { hashPassword } from "../../../electron/domains/user/password";
-import { verifyUserId } from "../../../electron/commons/ipc-user";
+import {
+  generateUserToken,
+  verifyUserId,
+} from "../../../electron/commons/ipc-user";
+import { getJwtSecret } from "../../../electron/commons/jwt-secret";
+import * as jwt from "jsonwebtoken";
 
 const repo = new UserRepository();
 
 describe("UserRepository.login", () => {
   beforeEach(() => {
     prismaMocks.user.findFirst.mockReset();
+    // login 契约用例不触发用户存在性回查，缺省存在以防串扰
+    prismaMocks.user.findUnique.mockResolvedValue({ id: 7 });
   });
 
   it("用户不存在时返回 null，不抛异常", async () => {
@@ -73,6 +80,39 @@ describe("UserRepository.login", () => {
 
     expect(auth?.id).toBe(7);
     expect(auth?.username).toBe("alice");
-    expect(verifyUserId(auth?.token as string)).toBe(7);
+    await expect(verifyUserId(auth?.token as string)).resolves.toBe(7);
+  });
+});
+
+describe("UserRepository.verifyToken（前端路由守卫通道）", () => {
+  beforeEach(() => {
+    prismaMocks.user.findUnique.mockReset();
+  });
+
+  it("签名有效且用户存在时返回解码 payload", async () => {
+    prismaMocks.user.findUnique.mockResolvedValue({ id: 5 });
+    const token = generateUserToken({ id: 5, username: "alice" });
+    const decoded = (await repo.verifyToken(token)) as { id: number };
+    expect(decoded?.id).toBe(5);
+  });
+
+  it("签名有效但用户数据已不存在时返回 null（幻影用户防护）", async () => {
+    // 场景：user 表数据消失后残留 token——守卫通道必须判失效，
+    // 前端 MainLayout 据此 reset 并踢回登录页
+    prismaMocks.user.findUnique.mockResolvedValue(null);
+    const token = generateUserToken({ id: 5, username: "alice" });
+    await expect(repo.verifyToken(token)).resolves.toBeNull();
+  });
+
+  it("未签 id 的旧版 token 返回 null", async () => {
+    const legacy = jwt.sign({ username: "alice" }, getJwtSecret(), {
+      expiresIn: "1h",
+    });
+    await expect(repo.verifyToken(legacy)).resolves.toBeNull();
+  });
+
+  it("签名无效的 token 返回 null", async () => {
+    const token = generateUserToken({ id: 5, username: "alice" });
+    await expect(repo.verifyToken(`${token}x`)).resolves.toBeNull();
   });
 });

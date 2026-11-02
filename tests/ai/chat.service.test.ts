@@ -149,6 +149,8 @@ const assembleReads = vi.hoisted(() => ({
 
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
+    // verifyUserId 用户存在性回查（幻影用户防护批）接线需过
+    user: { findUnique: async () => ({ id: 1 }) },
     message: {
       findMany: (args?: MessageFindManyArgs) =>
         prismaStub.messageFindMany(args),

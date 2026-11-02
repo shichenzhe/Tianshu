@@ -9,6 +9,7 @@ import { BasicAuthGuard } from './guard/basic-auth.guard';
 import { IAuthConfig } from './interface/auth.interface';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtAuthService } from './jwt-auth.service';
+import { PrismaModule } from '../database/prisma.module';
 /**
  * 认证模块配置选项
  */
@@ -43,6 +44,10 @@ export class AuthModule {
         PassportModule.register({
           defaultStrategy: options.defaultStrategy || 'jwt',
         }),
+        // JwtStrategy 回查 user 表（幻影用户防护）依赖 PrismaService——
+        // 显式声明而非赌装配方 import 了 @Global PrismaModule（e2e 最小
+        // 装配 test-app 即无它）；@Global 模块重复 import 无副作用
+        PrismaModule,
         JwtModule.registerAsync({
           imports: [ConfigModule],
           useFactory: (configService: ConfigService) => {

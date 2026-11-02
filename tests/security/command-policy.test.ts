@@ -33,6 +33,23 @@ describe("programBasename", () => {
 });
 
 describe("decideCommand 优先级矩阵", () => {
+  it("安全批 S4：包装器透传黑名单——命令位序列全比对（bash -c/env/nohup 后真身同样拦）", () => {
+    const rules = {
+      programBlacklist: ["rm"],
+      cmdAsk: [],
+      cmdAllow: [],
+    };
+    // 首 token 直命中（既有语义）
+    expect(decideCommand("rm x", rules)).toBe("block");
+    // 包装器透传：env/nohup/bash -c 词法化后的命令位命中
+    expect(decideCommand("env rm x", rules)).toBe("block");
+    expect(decideCommand("nohup rm x", rules)).toBe("block");
+    expect(decideCommand("bash -c rm -rf x", rules)).toBe("block");
+    expect(decideCommand("sudo /bin/rm x", rules)).toBe("block");
+    // 非命令位的 token 文本不误伤：echo rm（rm 是参数）不拦
+    expect(decideCommand("echo rm", rules)).toBe("default");
+    expect(decideCommand("git push", rules)).toBe("default");
+  });
   it("程序黑名单：首 token 基名命中 → block（路径形态同样命中）", () => {
     expect(decideCommand("rm -rf /tmp/x", rules())).toBe("block");
     expect(decideCommand("/usr/bin/rm -rf x", rules())).toBe("block");

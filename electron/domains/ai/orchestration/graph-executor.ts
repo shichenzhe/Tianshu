@@ -81,7 +81,12 @@ import {
   type NodeHandler,
   type NodeResult,
 } from "./graph-compiler";
-import { rrfFuse, tokenize, type FusedHit } from "@tianshu/core";
+import {
+  graphHttpUrlError,
+  rrfFuse,
+  tokenize,
+  type FusedHit,
+} from "@tianshu/core";
 import { normalizeWorkspacePath } from "../agent/workspace-path";
 import type { AgentStreamOptions } from "../agent/tool-gate";
 import { classifyError } from "../chat/error-classify";
@@ -1150,6 +1155,17 @@ async function fetchOnce(
     // TS TypedArray 泛型差异（Uint8Array<ArrayBufferLike> 不协变
     // BodyInit 的 <ArrayBuffer>）；运行时 fetch 完全接受，显式收口
     init.body = body as BodyInit;
+  }
+  // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
+  // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设守卫
+  // 即完整 SSRF read-back；域名形态放行（DNS 解析级分类属后续深度）
+  const urlError = graphHttpUrlError(url);
+  if (urlError !== null) {
+    throw new GraphNodeFailure(
+      node.id,
+      "http_url_blocked",
+      `HTTP 节点 URL 被安全守卫拒绝（${urlError}）：${url}`,
+    );
   }
   let response: Response;
   try {

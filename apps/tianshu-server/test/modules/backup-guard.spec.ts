@@ -90,14 +90,25 @@ describe('BackupGuard 双身份', () => {
     expect(new BackupGuard(registryStub as never).canActivate(c)).toBe(true);
     expect(identityOf(c)).toBeUndefined();
   });
-  it('未设任何 token（本地开发）→ admin identity 放行（现状回落）', async () => {
+  it('安全批 S3：未设任何 token 且无凭据 → 默认 401；显式 TIANSHU_ALLOW_NO_AUTH=1 才回落 admin（本地开发豁免门）', async () => {
     delete process.env.TIANSHU_BACKUP_TOKEN;
     delete process.env.TIANSHU_TOKEN;
+    delete process.env.TIANSHU_ALLOW_NO_AUTH;
     registryStub.findClientByToken.mockResolvedValue(undefined);
-    const c = ctx(undefined);
     await expect(
-      new BackupGuard(registryStub as never).canActivate(c),
-    ).resolves.toBe(true);
-    expect(identityOf(c)).toEqual({ kind: 'admin' });
+      new BackupGuard(registryStub as never).canActivate(ctx(undefined)),
+    ).rejects.toThrow(/TIANSHU_ALLOW_NO_AUTH/);
+
+    // 显式豁免门开启：本地开发回落 admin 保留
+    process.env.TIANSHU_ALLOW_NO_AUTH = '1';
+    try {
+      const c = ctx(undefined);
+      await expect(
+        new BackupGuard(registryStub as never).canActivate(c),
+      ).resolves.toBe(true);
+      expect(identityOf(c)).toEqual({ kind: 'admin' });
+    } finally {
+      delete process.env.TIANSHU_ALLOW_NO_AUTH;
+    }
   });
 });

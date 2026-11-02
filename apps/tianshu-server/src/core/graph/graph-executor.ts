@@ -128,6 +128,7 @@ import {
   type NotifyNode,
   type RerankNode,
   type SubflowNode,
+  graphHttpUrlError,
 } from '@tianshu/core';
 import { format as dateFnsFormat } from 'date-fns';
 import { GraphRecursionError, isNodeError } from '@langchain/langgraph';
@@ -1256,6 +1257,17 @@ async function fetchOnce(
     // TS TypedArray 泛型差异（Uint8Array<ArrayBufferLike> 不协变
     // BodyInit 的 <ArrayBuffer>）；运行时 fetch 完全接受，显式收口
     init.body = body as BodyInit;
+  }
+  // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
+  // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设
+  // 守卫即完整 SSRF read-back（mirror 同款）
+  const urlError = graphHttpUrlError(url);
+  if (urlError !== null) {
+    throw new GraphNodeFailure(
+      node.id,
+      'http_url_blocked',
+      `HTTP 节点 URL 被安全守卫拒绝（${urlError}）：${url}`,
+    );
   }
   let response: Response;
   try {

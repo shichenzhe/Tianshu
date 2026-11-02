@@ -76,12 +76,31 @@ describe("handleWindowOpen（SP5 裁定 3：恒拒内开窗）", () => {
     vi.mocked(getNetworkGate).mockReturnValue(null);
     expect(handleWindowOpen("https://any.com")).toBe("external");
   });
+  it("安全批 S1：非 http(s) 协议一律 deny（不交系统处理器，域门不参与判定）", () => {
+    const blocked = mockGate(() => ({ ok: true }));
+    // file:// 按扩展名关联程序执行 / ms-msdt: 等系统协议 / 自定义 scheme
+    expect(handleWindowOpen("file:///C:/Users/x/evil.html")).toBe("deny");
+    expect(handleWindowOpen("smb://host/share")).toBe("deny");
+    expect(handleWindowOpen("ms-msdt:foo")).toBe("deny");
+    expect(handleWindowOpen("not-a-url")).toBe("deny");
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(blocked).not.toHaveBeenCalled();
+  });
 });
 
 describe("shouldAllowNavigation", () => {
-  it("仅 file:// 与 dev server 放行；http(s) 远程一律拒", () => {
+  it("file:// 仅渲染入口精确匹配；dev server 放行；http(s) 远程一律拒", () => {
+    // 安全批 S1：file:// 前缀全放行曾使磁盘植入 HTML 可拿 IPC 桥——
+    // 收窄到应用自身渲染入口（pathToFileURL 归一比较）
+    expect(
+      shouldAllowNavigation("file:///app/dist/index.html", undefined, "/app/dist/index.html"),
+    ).toBe(true);
+    expect(
+      shouldAllowNavigation("file:///app/dist/evil.html", undefined, "/app/dist/index.html"),
+    ).toBe(false);
+    // 未提供入口路径（fail-closed）与旧语义 file:// 全放行不再成立
     expect(shouldAllowNavigation("file:///app/index.html", undefined)).toBe(
-      true,
+      false,
     );
     expect(
       shouldAllowNavigation("http://localhost:5173/x", "http://localhost:5173"),

@@ -110,6 +110,19 @@ export class RelayTransport extends TransportBase {
   private ephemeralPrivate: Buffer | null = null;
   private e2eHandshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly e2eMode: RelayE2eMode;
+  /** 安全批 S2：明文降级通知器（单例安装，Application 接 auditLogService
+   *  ——穿构造链需三层装配，单例安装为项目惯用 installX 同款） */
+  private static degradedNotifier:
+    | ((info: { connectionId: string; relayUrl: string }) => void)
+    | null = null;
+
+  /** 装配明文降级审计出口（安全审查 2026-11-02：auto 降级曾仅 UI 橙标，
+   *  恶意 relay 扣发握手帧即可静默强制降级——降级必须留痕审计链） */
+  static installDegradedNotifier(
+    fn: (info: { connectionId: string; relayUrl: string }) => void,
+  ): void {
+    RelayTransport.degradedNotifier = fn;
+  }
   /** 握手落定门闩：request 先等落定再发——明文 req 不得撞进对端已建会话 */
   private e2eSettled: Promise<void> = Promise.resolve();
   private settleE2e: (() => void) | null = null;
@@ -261,6 +274,12 @@ export class RelayTransport extends TransportBase {
         return;
       }
       Log.warn("relay e2e 握手无 ack，降级明文承载（旧版被控端兼容，§2.4）");
+      // 安全批 S2：降级事件入安全审计链（此后该连接全部业务帧明文过
+      // relay——需可审计回溯）
+      RelayTransport.degradedNotifier?.({
+        connectionId: this.connectionId,
+        relayUrl: this.wsUrl,
+      });
       this.sendFrame(ws, { kind: "open", connectionId: this.connectionId });
       this.settleE2eHandshake();
     }, this.e2eHandshakeTimeoutMs);

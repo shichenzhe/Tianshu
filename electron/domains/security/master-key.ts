@@ -1,0 +1,108 @@
+/**
+ * 桌面凭证主密钥管理（安全审查 2026-11-02 三批 C2）：
+ * 随机 32B 主密钥经 Electron safeStorage（OS keychain：macOS Keychain /
+ * Windows DPAPI / Linux libsecret）加密后落 option 表 `security.masterKey`；
+ * 运行时解密缓存。凭证值用主密钥经 @tianshu/core crypto-envelope
+ * AES-256-GCM 加密落库——库文件/备份档外流时凭证为密文。
+ *
+ * 降级链：safeStorage 不可用（Linux 无 keychain 服务等）→ 主密钥明文
+ * 落 option 表（仍有 enc:v1 信封——挡"拿到库文件"不挡"拿到同机用户
+ * 上下文"；与现状明文凭证相比仍是收紧）。
+ */
+import { safeStorage } from "electron";
+import { randomBytes } from "node:crypto";
+import prisma from "../../commons/prisma-client";
+import { masterKeyFromHex, type MasterKey } from "@tianshu/core";
+
+const OPTION_KEY = "security.masterKey";
+/** option 表 name/type 列口径（与 connections 的 serverConnections 行同款） */
+const OPTION_NAME = "security";
+const OPTION_TYPE = "app";
+
+let cached: MasterKey | null | undefined;
+
+/** 主密钥明文形态是否直接落库（safeStorage 不可用的降级标记） */
+let degradedPlaintext = false;
+
+async function readOptionValue(): Promise<string | null> {
+  const row = await prisma.option.findFirst({
+    where: { name: OPTION_NAME, type: OPTION_TYPE },
+    select: { value: true },
+  });
+  return row?.value ?? null;
+}
+
+async function writeOptionValue(value: string): Promise<void> {
+  const row = await prisma.option.findFirst({
+    where: { name: OPTION_NAME, type: OPTION_TYPE },
+    select: { id: true },
+  });
+  if (row) {
+    await prisma.option.update({ where: { id: row.id }, data: { value } });
+  } else {
+    await prisma.option.create({
+      data: { name: OPTION_NAME, type: OPTION_TYPE, value },
+    });
+  }
+}
+
+/**
+ * 取主密钥（首次调用加载/生成并缓存）：
+ * - 无行：生成随机 32B，safeStorage 可用则加密后 base64 落表，否则 hex
+ *   明文落表（降级标记）
+ * - 有行：safeStorage 密文解密 / hex 明文直取
+ * 返回 null = 完全不可用（safeStorage 有行但解密失败——keychain 数据
+ * 损坏或系统迁移；此时凭证读写走明文兼容，不阻断业务）
+ */
+export async function getMasterKey(): Promise<MasterKey | null> {
+  if (cached !== undefined) return cached;
+  const stored = await readOptionValue();
+  if (stored === null) {
+    const fresh = randomBytes(32);
+    if (safeStorage.isEncryptionAvailable()) {
+      const wrapped = safeStorage.encryptString(fresh.toString("hex"));
+      await writeOptionValue(`ss:v1:${wrapped.toString("base64")}`);
+    } else {
+      degradedPlaintext = true;
+      await writeOptionValue(`hex:v1:${fresh.toString("hex")}`);
+    }
+    cached = fresh;
+    return cached;
+  }
+  if (stored.startsWith("ss:v1:")) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      // keychain 在生成后失效（Linux 服务卸载等）——旧密文不可解
+      cached = null;
+      return cached;
+    }
+    try {
+      const hex = safeStorage.decryptString(
+        Buffer.from(stored.slice("ss:v1:".length), "base64"),
+      );
+      cached = masterKeyFromHex(hex);
+      return cached;
+    } catch {
+      cached = null;
+      return cached;
+    }
+  }
+  if (stored.startsWith("hex:v1:")) {
+    degradedPlaintext = true;
+    cached = masterKeyFromHex(stored.slice("hex:v1:".length));
+    return cached;
+  }
+  // 未知形态（未来版本写入）——按不可用处理
+  cached = null;
+  return cached;
+}
+
+/** 降级状态查询（诊断/日志用） */
+export function isMasterKeyDegraded(): boolean {
+  return degradedPlaintext;
+}
+
+/** 测试隔离：清缓存 */
+export function resetMasterKeyCacheForTest(): void {
+  cached = undefined;
+  degradedPlaintext = false;
+}

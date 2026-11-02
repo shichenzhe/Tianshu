@@ -243,7 +243,7 @@ const PLAN_MODE_INSTRUCTION =
  * 轮，末条 assistant 文本回填 summary/compactedUpToId）
  */
 const COMPACT_DIRECTIVE =
-  '请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。';
+  '请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,关键事项的发生日期与路径保留原样(供 search_history 检索回捞),舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。';
 
 /** 润色补全指令（A9 批自 mirror chat.service.ts STYLE_PROMPTS 移植；给模型
  *  看，不进 i18n；未知 style 回退 professional 与桌面缺省口径一致） */

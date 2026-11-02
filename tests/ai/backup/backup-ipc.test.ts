@@ -9,12 +9,17 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  encryptBackupArchive,
+  isEncryptedBackupArchive,
+} from "../../../packages/tianshu-core/src/backup-archive-crypto";
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;
 
@@ -713,6 +718,91 @@ describe("backup 本地链路（无服务端）", () => {
     await expect(call("backup:restore:local")).rejects.toThrow(
       /备份档案校验失败.*ustar/,
     );
+    expect(ctx.calls).toEqual([]);
+  });
+
+  // —— 口令加密档（安全审查 2026-11-02 剩余待办 1）——
+
+  /** 真加密档案替身：core encryptBackupArchive 真身包裹 ustar tar.gz */
+  async function encryptedArchiveStub(pass: string): Promise<{
+    file: string;
+    plain: Buffer;
+  }> {
+    const dir = mkdtempSync(path.join(dataRoot, "local-encrypted-"));
+    const file = path.join(dir, "encrypted.tsbak");
+    const plain = ustarTarGz();
+    const plainPath = path.join(dir, "plain.tar.gz");
+    writeFileSync(plainPath, plain);
+    await encryptBackupArchive(pass, plainPath, file);
+    return { file, plain };
+  }
+
+  it("backup:create:local 带口令：产物为 tsbak:v1 密文档；返回密文 sha256/大小；无明文残留目标", async () => {
+    const { deps } = makeDeps(DIRECT);
+    const tempDirs: string[] = [];
+    const bytes = "SECRET-PLAIN-ARCHIVE";
+    deps.archive = realArchiveStub(tempDirs, bytes);
+    const destDir = mkdtempSync(path.join(dataRoot, "local-dest-"));
+    const dest = path.join(destDir, "enc-backup.tsbak");
+    deps.pickSavePath = vi.fn(async () => dest);
+    registerBackupIpc(deps);
+    const result = (await call("backup:create:local", "我的口令")) as {
+      destPath: string;
+      fileSize: number;
+      sha256: string;
+    };
+    expect(isEncryptedBackupArchive(dest)).toBe(true);
+    // 返回值语义：最终落盘（密文）文档自身的哈希与大小
+    expect(result.destPath).toBe(dest);
+    expect(result.fileSize).toBe(statSync(dest).size);
+    expect(result.sha256).toBe(
+      createHash("sha256").update(readFileSync(dest)).digest("hex"),
+    );
+    // 密文不含明文片段（假加密防护）
+    expect(readFileSync(dest).includes("SECRET-PLAIN-ARCHIVE")).toBe(false);
+    // 临时区 finally 清理照旧
+    expect(tempDirs).toHaveLength(1);
+    expect(existsSync(tempDirs[0])).toBe(false);
+  });
+
+  it("backup:restore:local 密文档+正确口令：解密后走完整恢复链；restore 收到明文 tar.gz", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const { file, plain } = await encryptedArchiveStub("口令X");
+    deps.pickArchivePath = vi.fn(async () => file);
+    // 覆写 restore 替身：调用时即捕获档案内容（解密临时区在 handler
+    // finally 清理，事后读路径必 ENOENT）
+    let restoredBytes: Buffer | null = null;
+    deps.restore = vi.fn(async (archivePath: string) => {
+      ctx.calls.push("restore");
+      restoredBytes = readFileSync(archivePath);
+    });
+    registerBackupIpc(deps);
+    const result = await call("backup:restore:local", "口令X");
+    expect(result).toEqual({ relaunchRequired: true });
+    // 恢复链顺序不变；restore 替身收到的档案内容 = 原明文（解密真实发生）
+    expect(ctx.calls).toEqual(["disconnect", "safety", "restore"]);
+    expect(restoredBytes!.equals(plain)).toBe(true);
+  });
+
+  it("backup:restore:local 密文档+错口令：断库前拦截抛「口令错误」；零损伤", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const { file } = await encryptedArchiveStub("正确口令");
+    deps.pickArchivePath = vi.fn(async () => file);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local", "错误口令")).rejects.toThrow(
+      /口令错误/,
+    );
+    expect(ctx.calls).toEqual([]);
+    expect(deps.safety).not.toHaveBeenCalled();
+    expect(deps.restore).not.toHaveBeenCalled();
+  });
+
+  it("backup:restore:local 密文档+未传口令：明确提示需要口令（非「校验失败」误报）", async () => {
+    const { deps, ctx } = makeDeps(DIRECT);
+    const { file } = await encryptedArchiveStub("有口令的档");
+    deps.pickArchivePath = vi.fn(async () => file);
+    registerBackupIpc(deps);
+    await expect(call("backup:restore:local")).rejects.toThrow(/口令/);
     expect(ctx.calls).toEqual([]);
   });
 });

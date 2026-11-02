@@ -14,7 +14,7 @@ import { safeStorage } from "electron";
 /** safeStorage 可用性（缺 export 的测试替身/异常环境按不可用降级） */
 function safeStorageAvailable(): boolean {
   try {
-    return safeStorageAvailable();
+    return safeStorage.isEncryptionAvailable();
   } catch {
     return false;
   }
@@ -119,8 +119,22 @@ export async function getMasterKey(): Promise<MasterKey | null> {
     }
   }
   if (stored.startsWith("hex:v1:")) {
+    const key = masterKeyFromHex(stored.slice("hex:v1:".length));
+    // 读时升级：存量明文形态 + safeStorage 现已可用（批外 bug 修复前
+    // 生成的行）→ 包裹写回 ss:v1（密钥值不变，既有 enc:v1 凭证零影响；
+    // 写失败维持降级读取不阻断——密钥本身仍有效）
+    if (safeStorageAvailable() && key) {
+      const wrapped = safeStorage.encryptString(key.toString("hex"));
+      const persisted = await writeOptionValue(
+        `ss:v1:${wrapped.toString("base64")}`,
+      );
+      if (persisted) {
+        cached = key;
+        return cached;
+      }
+    }
     degradedPlaintext = true;
-    cached = masterKeyFromHex(stored.slice("hex:v1:".length));
+    cached = key;
     return cached;
   }
   // 未知形态（未来版本写入）——按不可用处理

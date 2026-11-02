@@ -45,6 +45,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -96,6 +104,13 @@ export default function BackupGroup() {
   const [restarting, setRestarting] = useState(false);
   // 本地档案恢复二次确认弹窗开关（选择档案在主进程对话框内完成）
   const [localRestoreConfirm, setLocalRestoreConfirm] = useState(false);
+  // 本地导出口令弹窗（口令加密批）：口令+确认口令，留空=不加密；
+  // 两框一致才可导出（口令手滑=档永久不可解，二次输入防误）
+  const [exportPassOpen, setExportPassOpen] = useState(false);
+  const [exportPass, setExportPass] = useState("");
+  const [exportPassConfirm, setExportPassConfirm] = useState("");
+  // 本地恢复口令（加密档填写；明文档留空）
+  const [restorePass, setRestorePass] = useState("");
   // 申领表单（未配 backupToken 的连接显示；成功即自动回填并刷新连接态）
   const [inviteCode, setInviteCode] = useState("");
   const [deviceName, setDeviceName] = useState("");
@@ -319,15 +334,16 @@ export default function BackupGroup() {
   };
 
   /** 备份到本地（无服务端）：主进程弹保存对话框（取消返回 null 静默）；
-   *  不依赖连接——未配主机也可用 */
-  const createLocalBackup = async () => {
+   *  不依赖连接——未配主机也可用。口令可选（口令加密批）：传入即档级
+   *  加密（scrypt+AES-256-GCM），留空维持明文档（旧档兼容） */
+  const createLocalBackup = async (passphrase?: string) => {
     if (busy) return;
     setBusy("create:local");
     setProgress({ phase: "packing", current: 0, total: 0 });
     try {
       const result = await invoke<
         { destPath: string; fileSize: number } | null
-      >("backup:create:local");
+      >("backup:create:local", passphrase);
       if (result) {
         toast.success(
           t("settings:backupLocalCreatedToast", {
@@ -344,7 +360,15 @@ export default function BackupGroup() {
     }
   };
 
-  /** 本地档案恢复确认执行：选择器取消返回 null 静默；成功置重启横条 */
+  /** 导出口令弹窗确认：两框一致才可达（弹窗侧禁用兜底）；关闭并执行 */
+  const confirmExportPassphrase = async () => {
+    const pass = exportPass.trim() || undefined;
+    setExportPassOpen(false);
+    await createLocalBackup(pass);
+  };
+
+  /** 本地档案恢复确认执行：选择器取消返回 null 静默；成功置重启横条；
+   *  加密档口令随行（错口令由主进程在断库前拦截并透传文案） */
   const confirmLocalRestore = async () => {
     if (busy) return;
     setBusy("restore:local");
@@ -352,6 +376,7 @@ export default function BackupGroup() {
     try {
       const result = await invoke<{ relaunchRequired: boolean } | null>(
         "backup:restore:local",
+        restorePass.trim() || undefined,
       );
       if (result) {
         setRelaunchPending(true);
@@ -363,6 +388,7 @@ export default function BackupGroup() {
       setBusy(null);
       setProgress(null);
       setLocalRestoreConfirm(false);
+      setRestorePass("");
     }
   };
 
@@ -479,7 +505,11 @@ export default function BackupGroup() {
             size="sm"
             className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
             disabled={busy !== null}
-            onClick={() => void createLocalBackup()}
+            onClick={() => {
+              setExportPass("");
+              setExportPassConfirm("");
+              setExportPassOpen(true);
+            }}
           >
             {busy === "create:local" && (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -834,7 +864,8 @@ export default function BackupGroup() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* 本地档案恢复二次确认（档案在主进程对话框内选择；保护副本/重启语义同远端） */}
+      {/* 本地档案恢复二次确认（档案在主进程对话框内选择；保护副本/重启语义同远端）；
+          口令框供加密档填写（口令加密批），明文档留空 */}
       <AlertDialog
         open={localRestoreConfirm}
         onOpenChange={setLocalRestoreConfirm}
@@ -848,6 +879,23 @@ export default function BackupGroup() {
               {t("settings:backupLocalRestoreConfirmBody")}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <Label
+              className="text-sm font-normal"
+              htmlFor="backup-restore-passphrase"
+            >
+              {t("settings:backupRestorePassphraseLabel")}
+            </Label>
+            <Input
+              id="backup-restore-passphrase"
+              type="password"
+              className="h-8 font-normal"
+              value={restorePass}
+              onChange={(e) => setRestorePass(e.target.value)}
+              aria-label={t("settings:backupRestorePassphraseLabel")}
+              disabled={busy !== null}
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={busy !== null}>
               {t("common:cancel")}
@@ -858,6 +906,88 @@ export default function BackupGroup() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 本地导出口令弹窗（口令加密批）：留空=不加密；两框一致才可导出 */}
+      <Dialog
+        open={exportPassOpen}
+        onOpenChange={(open) => {
+          setExportPassOpen(open);
+          if (!open) {
+            setExportPass("");
+            setExportPassConfirm("");
+          }
+        }}
+      >
+        <DialogContent className="rounded-lg border-border/50 shadow-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {t("settings:backupPassphraseTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {t("settings:backupPassphraseDesc")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label
+                className="text-sm font-normal"
+                htmlFor="backup-export-passphrase"
+              >
+                {t("settings:backupPassphraseLabel")}
+              </Label>
+              <Input
+                id="backup-export-passphrase"
+                type="password"
+                className="h-8 font-normal"
+                value={exportPass}
+                onChange={(e) => setExportPass(e.target.value)}
+                aria-label={t("settings:backupPassphraseLabel")}
+                disabled={busy !== null}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label
+                className="text-sm font-normal"
+                htmlFor="backup-export-passphrase-confirm"
+              >
+                {t("settings:backupPassphraseRepeatLabel")}
+              </Label>
+              <Input
+                id="backup-export-passphrase-confirm"
+                type="password"
+                className="h-8 font-normal"
+                value={exportPassConfirm}
+                onChange={(e) => setExportPassConfirm(e.target.value)}
+                aria-label={t("settings:backupPassphraseRepeatLabel")}
+                disabled={busy !== null}
+              />
+            </div>
+            {exportPass.trim() !== "" && exportPass !== exportPassConfirm && (
+              <p className="text-xs text-destructive">
+                {t("settings:backupPassphraseMismatch")}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              disabled={busy !== null}
+              onClick={() => setExportPassOpen(false)}
+            >
+              {t("common:cancel")}
+            </Button>
+            <Button
+              disabled={
+                busy !== null || (exportPass.trim() !== "" && exportPass !== exportPassConfirm)
+              }
+              onClick={() => void confirmExportPassphrase()}
+            >
+              {t("settings:backupPassphraseAction")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 删除二次确认 */}
       <AlertDialog

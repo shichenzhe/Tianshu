@@ -1,10 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "commonjs",
-    // node10 弃用屏蔽（TS 5.9 起报 TS5107；与 core 包同口径——TS7 真移除前再迁）
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "5.0",
+    "module": "nodenext",
     "strict": true,
     "declaration": true,
     "outDir": "dist",

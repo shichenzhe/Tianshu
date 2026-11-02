@@ -45,7 +45,7 @@ export interface ServerFaceConfig {
   /** relay 客户端（配了 url+token 才随启用拉起） */
   relayUrl?: string;
   relayToken?: string;
-  /** relay E2E 模式（缺省 auto；见 FaceE2eMode） */
+  /** relay E2E 模式（缺省 required——安全批 J 收敛；见 FaceE2eMode） */
   e2e?: FaceE2eMode;
 }
 

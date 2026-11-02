@@ -690,8 +690,9 @@ describe("IPC：serverFace:status / setEnabled 扩 e2e 字段", () => {
       e2eFingerprint: string;
       e2eActive: boolean;
     };
-    // 默认 auto；status 查询即惰性生成静态对（设置面指纹带外传递入口）
-    expect(status.e2eMode).toBe("auto");
+    // 安全批 J：缺省收敛 required（移动端已接 e2e，拒明文为默认姿态）；
+    // status 查询即惰性生成静态对（设置面指纹带外传递入口）
+    expect(status.e2eMode).toBe("required");
     expect(status.e2ePublicKey).toMatch(/^[A-Za-z0-9+/]{43}=$/);
     expect(status.e2eFingerprint).toMatch(/^[0-9a-f]{16}$/);
     expect(fingerprintOf(status.e2ePublicKey)).toBe(status.e2eFingerprint);

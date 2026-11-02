@@ -81,28 +81,8 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   httpServer.on('upgrade', (req, socket, head) => {
     const url = new URL(req.url ?? '/', 'http://relay');
     if (url.pathname !== '/ws') return void socket.destroy();
-    const queryToken = url.searchParams.get('token');
-    // 双轨（兼容窗口）：query 凭证完整（token 等值 + role 合法）即走原
-    // 路径立即分流——老客户端可能全程零发帧（query 即注册），不能等首帧；
-    // 命中打弃用告警，窗口期后客户端侧移除 query
-    if (queryToken === options.token && queryToken !== null) {
-      const role = url.searchParams.get('role');
-      if (role === 'server' || role === 'client') {
-        console.warn(
-          '[relay] query 凭证已弃用（安全批 I：首帧 auth 取代）——请升级客户端',
-        );
-        return void wss.handleUpgrade(req, socket, head, (ws) =>
-          handleConnection(ws, role, url.searchParams.get('connectionId') ?? ''),
-        );
-      }
-    }
-    // 老 query 路径 token 错：立即 4001（防无效连接占用首帧等待窗）
-    if (queryToken !== null && queryToken !== options.token) {
-      return void wss.handleUpgrade(req, socket, head, (ws) =>
-        ws.close(4001, 'invalid-token'),
-      );
-    }
-    // 新路径：等首帧 auth（升级后第一条消息，凭证不经反代访问日志）
+    // 安全批 J：query 凭证双轨窗口关闭——四端客户端已全部切换首帧 auth
+    //（批 I 起 URL 零凭证），query 一律无视；升级后只等首帧 auth 窗
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.on('error', () => {});
       const authTimer = setTimeout(

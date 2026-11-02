@@ -57,8 +57,9 @@ export class TianshuSecurityConfig {
   }
 }
 
-/** relay E2E 模式（spec 2026-10-18-relay-e2e §2.4 降级语义）：auto 缺省
- * （未握手明文兼容旧控制端）/ required（拒明文业务帧）/ off（忽略 hello） */
+/** relay E2E 模式（spec 2026-10-18-relay-e2e §2.4 降级语义）：required
+ * 缺省（安全批 J 收敛——移动端已接 e2e，拒明文业务帧为默认姿态）/
+ * auto（未握手明文兼容旧控制端）/ off（忽略 hello） */
 export type RelayE2eMode = 'auto' | 'required' | 'off';
 
 /**
@@ -69,7 +70,7 @@ export class TianshuRelayConfig {
 
   static getDefault(): TianshuRelayConfig {
     const defaultConfig = new TianshuRelayConfig();
-    defaultConfig.e2e = 'auto';
+    defaultConfig.e2e = 'required';
     return defaultConfig;
   }
 }

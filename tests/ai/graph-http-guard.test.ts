@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { graphHttpUrlError } from "../../packages/tianshu-core/src/graph-http-guard";
+import {
+  graphHttpUrlError,
+  graphHttpUrlErrorDns,
+} from "../../packages/tianshu-core/src/graph-http-guard";
 
 /**
  * 图 HTTP 节点 URL 守卫（安全批 S5）：协议白名单 + 字面 IP 分类。
@@ -11,6 +14,18 @@ describe("graphHttpUrlError", () => {
     expect(graphHttpUrlError("http://8.8.8.8/dns")).toBeNull();
     expect(graphHttpUrlError("https://example.com:8443/x?a=b")).toBeNull();
   });
+
+describe('graphHttpUrlErrorDns（安全批 F1：DNS 解析级分类）', () => {
+  it('解析到私网 IP 的域名拒（localtest.me → 127.0.0.1 标准解析）', async () => {
+    const r = await graphHttpUrlErrorDns('http://localtest.me/x');
+    expect(r).toContain('禁止');
+  }, 10_000);
+  it('公网域名放行；字面 IP 直达字面层；NXDOMAIN 放行', async () => {
+    expect(await graphHttpUrlErrorDns('https://api.example.com/v1')).toBeNull();
+    expect(await graphHttpUrlErrorDns('http://127.0.0.1:3000/')).toContain('禁止');
+    expect(await graphHttpUrlErrorDns('http://nonexistent-xyz-a1b2.invalid/')).toBeNull();
+  }, 15_000);
+});
 
   it("协议白名单：非 http(s) 拒（file/ftp/无协议裸串）", () => {
     expect(graphHttpUrlError("file:///etc/passwd")).toContain("http(s)");

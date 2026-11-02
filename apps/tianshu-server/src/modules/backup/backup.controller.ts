@@ -1,7 +1,10 @@
+import { FastifyRequest } from 'fastify';
+import { consumeRateLimit } from 'src/commons/security/rate-limit';
 import {
   Body,
   Controller,
   HttpCode,
+  HttpException,
   HttpStatus,
   Param,
   Post,
@@ -341,7 +344,14 @@ export class BackupController {
     },
     required: ['clientId', 'clientToken'],
   })
-  claim(@Body() dto: ClaimDto) {
+  claim(@Body() dto: ClaimDto, @Req() req: FastifyRequest) {
+    // 安全批 F2：邀请码爆破退避——15 分钟 10 次（一次性码有熵，但无限
+    // 流时可无限尝试）
+    const ip = (req.ip ?? 'unknown').toString();
+    const verdict = consumeRateLimit(`claim:${ip}`, 10, 15 * 60_000);
+    if (!verdict.allowed) {
+      throw new HttpException('尝试过于频繁，请稍后再试', 429);
+    }
     return this.registry.claimInvite(dto.inviteCode, dto.deviceName);
   }
 

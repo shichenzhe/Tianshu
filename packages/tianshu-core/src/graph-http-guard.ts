@@ -1,5 +1,5 @@
 /**
- * 图编排 HTTP 节点 URL 守卫（安全审查 2026-11-02 S5，纯函数零依赖）：
+ * 图编排 HTTP 节点 URL 守卫（安全审查 2026-11-02 S5 + 尾批 F1 DNS 解析级）：
  * 协议白名单（http/https）+ 字面 IP 分类拦截（环回/链路本地/私网/
  * CGNAT/保留段 + 云 metadata 主机名 + 十进制/十六进制 IP 编码形态）。
  *
@@ -14,6 +14,7 @@
  * 不反向依赖 electron，注释锚定）。
  */
 import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
 
 const METADATA_HOSTS = new Set([
   "169.254.169.254",
@@ -81,6 +82,15 @@ function ipv4OfLong(n: number): string {
  * （执行器转为节点失败，消息进失败详情供图作者排障）
  */
 export function graphHttpUrlError(rawUrl: string): string | null {
+  return literalGraphHttpUrlError(rawUrl);
+}
+
+/**
+ * 字面判定（同步）：协议白名单 + metadata 主机 + localhost + 字面/编码
+ * IP 分类——域名形态返回 null（交由 DNS 级判定收口）。签名与行为同
+ * S5 批原函数（存量调用方零改动）。
+ */
+function literalGraphHttpUrlError(rawUrl: string): string | null {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -106,6 +116,42 @@ export function graphHttpUrlError(rawUrl: string): string | null {
   }
   if (isBlockedEncodedIp(host)) {
     return "数字编码 IP（环回/私网段）禁止访问";
+  }
+  return null;
+}
+
+/**
+ * DNS 解析级判定（安全批 F1）：域名解析到环回/私网/链路本地 IP 即拒
+ * ——防「解析到内网的域名」绕过字面清单（internal.corp → 10.0.0.5、
+ * DNS rebinding 基础面）。解析失败放行（功能可用优先——可达性属运行
+ * 时关注面）；多记录任一命中即拒。
+ */
+export async function graphHttpUrlErrorDns(
+  rawUrl: string,
+): Promise<string | null> {
+  const literal = literalGraphHttpUrlError(rawUrl);
+  if (literal !== null) return literal;
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return "非法 URL";
+  }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (isIP(host) !== 0) return null; // 字面 IP 已由字面层判定
+  try {
+    const records = await lookup(host, { all: true });
+    for (const { address } of records) {
+      const family = isIP(address);
+      const blocked =
+        (family === 4 && isBlockedIpv4(address)) ||
+        (family === 6 && isBlockedIpv6(address));
+      if (blocked) {
+        return `域名解析到内网/环回地址（${host} → ${address}）禁止访问`;
+      }
+    }
+  } catch {
+    // 解析失败（NXDOMAIN/超时）——放行，fetch 自身会失败并如实报错
   }
   return null;
 }

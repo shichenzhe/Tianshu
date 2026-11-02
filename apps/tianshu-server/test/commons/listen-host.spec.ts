@@ -53,7 +53,7 @@ describe('地址分类', () => {
 
 describe('emitListenSecurityWarnings', () => {
   it('通配绑定 0.0.0.0：公网暴露告警（有 token 也提示绑定面）', () => {
-    const warnings = collectWarnings('0.0.0.0', 'secret-token');
+    const warnings = collectWarnings('0.0.0.0', 'a'.repeat(32));
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('[安全告警]');
     expect(warnings[0]).toContain('0.0.0.0');
@@ -90,6 +90,6 @@ describe('emitListenSecurityWarnings', () => {
   });
 
   it('非 loopback 地址且有 token：无告警', () => {
-    expect(collectWarnings('192.168.1.10', 'secret-token')).toHaveLength(0);
+    expect(collectWarnings('192.168.1.10', 'a'.repeat(32))).toHaveLength(0);
   });
 });

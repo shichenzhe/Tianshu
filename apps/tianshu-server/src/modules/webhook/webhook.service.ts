@@ -255,9 +255,13 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
       create: {
         type: WEBHOOK_OPTION_TYPE,
         name,
-        value: JSON.stringify(full),
+        value: sealSecret('webhook.config', JSON.stringify(full)) ??
+          JSON.stringify(full),
       },
-      update: { value: JSON.stringify(full) },
+      update: {
+        value: sealSecret('webhook.config', JSON.stringify(full)) ??
+          JSON.stringify(full),
+      },
     });
     // 重开旧 token 立即失效：option 行已换新值，同图内存旧条目一并清
     //（否则运行期旧 token 仍可达，轮换语义失效——重启装载前安全窗口；
@@ -298,7 +302,9 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     if (!row) {
       return null;
     }
-    const config = parseConfigValue(row.value);
+    const config = parseConfigValue(
+      openSecret('webhook.config', row.value) ?? row.value,
+    );
     this.registrations.set(config.token, {
       ...config,
       graphId,
@@ -463,7 +469,9 @@ export class WebhookService implements OnModuleInit, OnModuleDestroy {
     for (const row of rows) {
       const matched = /^graph:(\d+)$/.exec(row.name);
       if (matched) {
-        const config = parseConfigValue(row.value);
+        const config = parseConfigValue(
+          openSecret('webhook.config', row.value) ?? row.value,
+        );
         this.registrations.set(config.token, {
           ...config,
           graphId: Number(matched[1]),

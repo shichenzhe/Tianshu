@@ -122,9 +122,15 @@ export class RequestLoggerInterceptor implements NestInterceptor {
     };
   }
 
-  /** url query 的 token 参数值打码（保留参数名与其余参数） */
+  /** url 的 token 泄露面打码：query 参数值 + /webhook/ 路径段（webhook
+   *  token 是 URL path 的一部分，2026-11-02 审查曾整段明文落按日日志） */
   private maskUrlToken(url: string): string {
-    return url.replace(/([?&])token=[^&]*/gi, `$1token=${MASKED_VALUE}`);
+    let masked = url.replace(/([?&])token=[^&]*/gi, `$1token=${MASKED_VALUE}`);
+    masked = masked.replace(
+      /(\/webhook\/)[a-f0-9]{16,}/gi,
+      `$1${MASKED_VALUE}`,
+    );
+    return masked;
   }
 
   /** query 对象的 token 键值打码（浅层：token 只出现在顶层） */

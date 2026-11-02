@@ -3,12 +3,13 @@ import { createServer as createHttpsServer } from 'node:https';
 import { createPublicKey } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
-import type { AuthFrame } from '@tianshu/protocol';
+import { RELAY_CLOSE_CODES, type AuthFrame } from '@tianshu/protocol';
 import {
   DEFAULT_MAX_BUFFER_FRAMES,
   RelayRegistry,
   type RelayFrame,
 } from './registry';
+import type { AccessQuota } from './jwt-eddsa';
 import {
   createJwtAuthenticator,
   createStaticAuthenticator,
@@ -22,6 +23,19 @@ const HEARTBEAT_TIMEOUT_MS = 60_000;
 /** 首帧鉴权等待窗：窗口内无凭证（无 auth 首帧且 query 无 token）即拒 */
 const DEFAULT_AUTH_WINDOW_MS = 5_000;
 export const DEFAULT_RELAY_PORT = 8411;
+
+/** jwt 防御闸形状核验（Task 4）：verifyAccessJwt 不对 tid/quota 作 wire
+ *  保证——签名合法但载荷畸形的 token 不得带无配额租户进闸门（后续
+ *  quota.maxServers 解引用会炸）。quota 缺失或字段非正数即畸形 */
+function isUsableQuota(quota: AccessQuota | undefined): boolean {
+  return (
+    quota !== undefined &&
+    Number.isFinite(quota.maxServers) &&
+    quota.maxServers > 0 &&
+    Number.isFinite(quota.maxClients) &&
+    quota.maxClients > 0
+  );
+}
 
 export interface RelayOptions {
   /** 监听端口；0 = 随机端口（实际端口经返回值与启动日志暴露） */
@@ -148,7 +162,8 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
   });
 
   /** 鉴权落定分流：Authenticator 裁决后进既有连接处理（static 裁决面
-   *  与原内联校验逐字节一致——4001 invalid-token / 4000 invalid-role） */
+   *  与原内联校验逐字节一致——4001 invalid-token / 4000 invalid-role）。
+   *  多租户批 Task 4：裁决携带 tenantId/quota 透传至连接处理做三闸门 */
   function admitConnection(
     ws: WebSocket,
     token: string,
@@ -162,10 +177,27 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     });
     if (!decision.ok)
       return void ws.close(decision.closeCode, decision.reason);
-    handleConnection(ws, decision.role, connId);
+    // jwt 防御闸：tenantId 在场而 quota 畸形（缺失/字段非正数）→ 与验签
+    // 失败同归 4001；tenantId 缺失按 static 语义旁路（设计内行为，
+    // 不因此拒绝）——static 裁决 tenantId 恒缺省，本闸零参与
+    if (decision.tenantId !== undefined && !isUsableQuota(decision.quota))
+      return void ws.close(4001, 'invalid-token');
+    handleConnection(
+      ws,
+      decision.role,
+      connId,
+      decision.tenantId,
+      decision.quota,
+    );
   }
 
-  function handleConnection(ws: WebSocket, role: string, connId: string): void {
+  function handleConnection(
+    ws: WebSocket,
+    role: string,
+    connId: string,
+    tenantId?: string,
+    quota?: AccessQuota,
+  ): void {
     // F4：maxPayload 超限/协议错误——ws 已自行 close(1009) 并随后 emit('error')，
     // 此处仅兜住事件防进程级未处理错误，不得 terminate（会抢跑 1009 close 帧）
     ws.on('error', () => {});
@@ -175,13 +207,31 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
       lastPong.delete(ws);
       registry.forget(ws);
     });
-    if (role === 'server') handleServerSocket(ws, connId);
-    else handleClientSocket(ws);
+    if (role === 'server')
+      handleServerSocket(ws, connId, tenantId, quota);
+    else handleClientSocket(ws, tenantId, quota);
   }
 
-  function handleServerSocket(ws: WebSocket, connectionId: string): void {
+  function handleServerSocket(
+    ws: WebSocket,
+    connectionId: string,
+    tenantId?: string,
+    quota?: AccessQuota,
+  ): void {
     if (!connectionId) return void ws.close(4000, 'missing-connection-id');
-    registry.registerServer(connectionId, ws);
+    // 三闸门之一·配额（jwt 模式）：租户 server 连接达 maxServers → 4005。
+    // 防御闸已保证 tenantId 在场时 quota 形状合法，此处解引用安全
+    if (
+      tenantId !== undefined &&
+      quota &&
+      registry.tenantConnCount(tenantId, 'server') >= quota.maxServers
+    )
+      return void ws.close(RELAY_CLOSE_CODES.QUOTA_EXCEEDED, 'quota-exceeded');
+    const registered = registry.registerServer(connectionId, ws, tenantId);
+    // 三闸门之二·顶号：异租户注册已占 id → 4006（同租户重注册=重连顶号，
+    // 现状保留）；冲突时 registry 不动现有注册，直接拆新连接
+    if (registered === 'id-conflict')
+      return void ws.close(RELAY_CLOSE_CODES.ID_CONFLICT, 'id-conflict');
     ws.on('message', (raw) => {
       const frame = parseFrame(decodeRaw(raw));
       // register=首帧元数据；auth=鉴权层帧（畸形迟到到达也不透传）
@@ -192,7 +242,11 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     ws.on('close', () => registry.dropServer(connectionId, ws, 'server-gone'));
   }
 
-  function handleClientSocket(ws: WebSocket): void {
+  function handleClientSocket(
+    ws: WebSocket,
+    tenantId?: string,
+    quota?: AccessQuota,
+  ): void {
     let attached: string | null = null;
     ws.on('message', (raw) => {
       const frame = parseFrame(decodeRaw(raw));
@@ -208,11 +262,36 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
             ws,
             closeFrame(attached, 'client-gone'),
           );
-        if (!registry.attachClient(target, ws)) {
-          // 4004 拆连接前收敛 attached：F3 已对旧目标发过 client-gone，
-          // 置空防 ws close 事件对旧目标再发一次（重复帧，server 侧幂等
-          // 消费契约此前靠被控端自兜——T11/T12 契约注记收敛于此）
+        // 三闸门之一·配额（jwt 模式）：租户 client 配对达 maxClients →
+        // 4005。重开已配对目标（attached===target）不增连接数，旁路防
+        // 自拒（计数已含本连接的 1 条）
+        if (
+          tenantId !== undefined &&
+          quota &&
+          attached !== target &&
+          registry.tenantConnCount(tenantId, 'client') >= quota.maxClients
+        ) {
           attached = null;
+          sendDirect(ws, closeFrame(target, 'quota-exceeded'));
+          return void ws.close(
+            RELAY_CLOSE_CODES.QUOTA_EXCEEDED,
+            'quota-exceeded',
+          );
+        }
+        const attachResult = registry.attachClient(target, ws, tenantId);
+        if (attachResult !== 'ok') {
+          // 4004/4007 拆连接前收敛 attached：F3 已对旧目标发过
+          // client-gone，置空防 ws close 事件对旧目标再发一次（重复帧，
+          // server 侧幂等消费契约此前靠被控端自兜——T11/T12 契约注记收敛于此）
+          attached = null;
+          if (attachResult === 'forbidden') {
+            // 三闸门之三·attach 授权：跨租户配对 → 4007
+            sendDirect(ws, closeFrame(target, 'tenant-forbidden'));
+            return void ws.close(
+              RELAY_CLOSE_CODES.TENANT_FORBIDDEN,
+              'tenant-forbidden',
+            );
+          }
           sendDirect(ws, closeFrame(target, 'not-found'));
           return void ws.close(4004, 'not-found');
         }

@@ -130,6 +130,9 @@ export class MetricsInterceptor implements NestInterceptor {
       /\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi,
       '/:uuid',
     );
+    // 安全批 B2：长十六进制段折叠（webhook 48-hex token 曾整段进
+    // prometheus uri label——监控系统等于收集全部触发凭证）
+    url = url.replace(/\/[a-f0-9]{16,}/gi, '/:hex');
 
     return url || 'unknown';
   }

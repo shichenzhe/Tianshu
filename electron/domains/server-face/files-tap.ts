@@ -9,9 +9,22 @@
  */
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import path from "node:path";
 
 import { listWorkspaceFiles, readTextFileGuarded } from "@tianshu/core";
+
+/** realpath 宽松解析（安全批 B4；file-tools realPathLenient 同构）：
+ * 缺失段沿祖先解析 */
+function realPathLenient(target: string): string {
+  try {
+    return realpathSync(target);
+  } catch {
+    const parent = path.dirname(target);
+    if (parent === target) return target;
+    return path.join(realPathLenient(parent), path.basename(target));
+  }
+}
 import prisma from "../../commons/prisma-client";
 import { appDataHome, attachmentsDir } from "../../commons/paths";
 import type { ServerFaceFiles } from "./deps";
@@ -56,6 +69,12 @@ export function createFilesFace(): ServerFaceFiles {
       const root = await workspaceRootOf(userId, workspaceId);
       const absolute = path.resolve(root, relPath);
       if (absolute !== root && !absolute.startsWith(root + path.sep)) {
+        throw new FaceFilesError("FILES_PATH_ESCAPE", "路径越界");
+      }
+      // 安全批 B4：realpath 双检（symlink 逃逸——files.service 同款）
+      const realRoot = realPathLenient(root);
+      const realAbs = realPathLenient(absolute);
+      if (realAbs !== realRoot && !realAbs.startsWith(realRoot + path.sep)) {
         throw new FaceFilesError("FILES_PATH_ESCAPE", "路径越界");
       }
       const guarded = await readTextFileGuarded(absolute);

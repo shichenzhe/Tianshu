@@ -91,6 +91,7 @@ import { createMemoryFace } from "./domains/server-face/memory-tap";
 import { loadPersonalization } from "./domains/ai/personalization/personalization.repo";
 import { serverConnections } from "./domains/server/connections";
 import { RelayTransport } from "./domains/server/relay-transport";
+import { installTerminalAuditSink } from "./domains/ai/terminal/terminal-ipc";
 import { registerBackupIpc, type BackupIpcDeps } from "./domains/backup/ipc";
 import { createBackupFace } from "./domains/server-face/backup-tap";
 const __filename = fileURLToPath(import.meta.url);
@@ -312,6 +313,8 @@ export default class Application {
     // 网络安全门（SP5）：单例安装——policyProvider 保持同步（undici dispatch
     // 同步路径）：TTL 内用豁免域缓存，过期由异步刷新。声明先于 SecurityService
     // 与代理生命周期函数：init 尾部即触 onConfigChange，晚声明会 TDZ ReferenceError
+    // 安全批 B5：终端会话创建入审计链（terminal 面曾零审计）
+    installTerminalAuditSink((event) => auditLogService.append(event));
     // 安全批 S2：relay e2e 明文降级入审计链（auditLogService 已在作用域）
     RelayTransport.installDegradedNotifier(({ connectionId, relayUrl }) =>
       auditLogService.append({

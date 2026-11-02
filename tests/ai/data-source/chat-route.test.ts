@@ -139,7 +139,8 @@ describe("ChatApi 远程主机（适配器映射）", () => {
       4,
       undefined,
       undefined,
-      // skill_ref 批：sessionSend 第 7 参 skillRefs（无引用时缺省）
+      // skill_ref 批：第 7 参 skillRefs / file_ref 批：第 8 参 contentRefs（无引用时缺省）
+      undefined,
       undefined,
     );
 
@@ -148,6 +149,7 @@ describe("ChatApi 远程主机（适配器映射）", () => {
       9,
       "再发",
       "c1",
+      undefined,
       undefined,
       undefined,
       undefined,

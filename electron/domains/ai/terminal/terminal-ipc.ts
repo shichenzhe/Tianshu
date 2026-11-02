@@ -17,6 +17,24 @@ function senderOf(event: IpcMainInvokeEvent) {
   };
 }
 
+/** 安全审计出口（安全批 B5）：Application 装配接 auditLogService——
+ * 穿构造链成本高，用静态安装（RelayTransport.installDegradedNotifier 同款） */
+let auditSink: ((event: {
+  eventType: string;
+  decision: "allowed";
+  detail: Record<string, unknown>;
+}) => void) | null = null;
+
+export function installTerminalAuditSink(
+  fn: (event: {
+    eventType: string;
+    decision: "allowed";
+    detail: Record<string, unknown>;
+  }) => void,
+): void {
+  auditSink = fn;
+}
+
 export function registerTerminalIpc(): void {
   const factory: PtyFactory = (file, args, opts) => {
     // rolldown 外部化 + CJS 互操作：具名导入经 require 取（同 better-sqlite3 处理口径）
@@ -49,6 +67,13 @@ export function registerTerminalIpc(): void {
   handleUser("terminal:create", (event, _userId, cwd: string) => {
     // 渲染端 DetailPanel cwd 空串（无工作空间目录）落家目录
     const cwdSafe = typeof cwd === "string" && cwd ? cwd : os.homedir();
+    // 安全批 B5：终端创建入审计链——terminal 面曾零审计零权限门，
+    // 渲染层 XSS 即经此任意执行命令（比 bash 工具更省事）
+    auditSink?.({
+      eventType: "terminal.created",
+      decision: "allowed",
+      detail: { cwd: cwdSafe.slice(0, 200) },
+    });
     return manager.create(senderOf(event), cwdSafe);
   });
 

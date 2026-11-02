@@ -260,6 +260,40 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
     expect(readPersistedShape().connections).toEqual([]);
   });
 
+  it("安全批 S2：relay 新建缺省 required；存量更新不动原值；显式 auto 尊重", async () => {
+    const registry = newRegistry();
+    const relayBase = {
+      name: "中继",
+      mode: "relay" as const,
+      relayUrl: "ws://127.0.0.1:1/ws",
+      relayToken: "t",
+      connectionId: "inst-1",
+    };
+    // 新建不带 e2eMode：缺省 required（direct 连接无 e2e 面，不注入）
+    await registry.saveConnection({ ...relayBase, id: "c-new" });
+    expect(
+      readPersistedShape().connections.find((c) => c.id === "c-new"),
+    ).toMatchObject({ e2eMode: "required" });
+
+    // 显式 auto 的新建：尊重用户选择
+    await registry.saveConnection({ ...relayBase, id: "c-auto", e2eMode: "auto" });
+    expect(
+      readPersistedShape().connections.find((c) => c.id === "c-auto"),
+    ).toMatchObject({ e2eMode: "auto" });
+
+    // 存量更新（同 id 重存、不带 e2eMode）：全量替换语义下字段丢失
+    // （回落运行时 auto），但不会被缺省强置 required——存量连接不会
+    // 因本批改动而「升级加密要求」破坏既有可用性
+    await registry.saveConnection({ ...relayBase, id: "c-auto", name: "改名" });
+    expect(
+      readPersistedShape().connections.find((c) => c.id === "c-auto"),
+    ).toMatchObject({ name: "改名" });
+    expect(
+      readPersistedShape().connections.find((c) => c.id === "c-auto")
+        ?.e2eMode,
+    ).toBeUndefined();
+  });
+
   it("配置校验：缺 id/名称、非法 mode、direct 缺 baseUrl、relay 缺三元组拒绝", async () => {
     const registry = newRegistry();
     await expect(

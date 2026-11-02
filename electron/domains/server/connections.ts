@@ -295,6 +295,17 @@ export class ConnectionRegistry {
   ): Promise<{ activeConnId: string | null; connections: ConnectionView[] }> {
     const config = validateConfig(raw);
     const shape = await this.persistence.load();
+    // 安全批 S2：新建 relay 连接（此前无同 id 行）e2e 缺省 required——auto
+    // 的 2s 握手超时静默降级可被恶意 relay 单方面触发（扣发握手帧）；
+    // 存量连接保持原值不动（旧无 e2e 被控端兼容由用户显式改 auto）；
+    // direct 连接无 e2e 面，不注入
+    if (
+      config.mode === "relay" &&
+      config.e2eMode === undefined &&
+      !shape.connections.some((c) => c.id === config.id)
+    ) {
+      config.e2eMode = "required";
+    }
     const rest = shape.connections.filter((c) => c.id !== config.id);
     await this.persistence.save({
       connections: [...rest, config],

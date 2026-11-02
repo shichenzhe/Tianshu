@@ -1273,10 +1273,16 @@ export default class ChatService {
       role: "user",
       blocks: serializeBlocks([
         // skill_ref 批：引用块前置（组装侧 loadSkill 展开注入，消息库
-        // 只存技能名不膨胀）；正文照旧 text 块
+        // 只存技能名不膨胀）；file_ref 批：内容注入式文件引用块化（内容
+        // 随块——core 组装侧直取展开旧前缀口径，渲染零泄漏）；正文 text 块
         ...(params.skillRefs ?? []).map((name) => ({
           type: "skill_ref" as const,
           name,
+        })),
+        ...(params.contentRefs ?? []).map((ref) => ({
+          type: "file_ref" as const,
+          path: ref.path,
+          content: ref.content,
         })),
         { type: "text", text: params.content },
         ...imageBlocks,

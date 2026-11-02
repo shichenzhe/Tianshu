@@ -109,12 +109,14 @@ describe("⚡技能 token 发送（skill_ref 批）", () => {
       send(textarea, "⚡demo-skill ⚡demo-skill 帮我处理");
     });
     await waitFor(() => expect(onSend).toHaveBeenCalled());
-    // 名单去重 + 正文保留 token 原样（files 无 skill 注入项）
+    // 名单去重 + 正文保留 token 原样（files 无 skill 注入项；file_ref 批
+    // 后引用态恒五参调用——contentRefs 缺省 undefined）
     expect(onSend).toHaveBeenCalledWith(
       "⚡demo-skill ⚡demo-skill 帮我处理",
       [],
       undefined,
       ["demo-skill"],
+      undefined,
     );
     // 不再触发技能全文读取（readSkill 通道零调用）
     expect(invokeMock).not.toHaveBeenCalledWith(

@@ -86,6 +86,9 @@ interface StreamState {
     /** skill_ref 批：技能引用名单——落 SkillRefBlock（被控端组装侧
      *  展开；省「手机拉全文再上行」双程流量） */
     skillRefs?: string[],
+    /** file_ref 批：内容注入式文件引用（ask 回退 files.read 结果——
+     *  path+内容随块落库，渲染零泄漏） */
+    contentRefs?: Array<{ path: string; content: string }>,
   ): Promise<boolean>;
   /** 末条 assistant 原位重跑（MB-T3）：受理即置流态，chunk 链收口 */
   regenerate(sessionId: number): Promise<boolean>;
@@ -314,6 +317,7 @@ export const useStreamStore = create<StreamState>((set, get) => {
       images,
       assistantId,
       skillRefs,
+      contentRefs,
     ) => {
       // MB-T1：发送时上传（选图仅暂存——弃发不浪费）。图片引用不正常
       // （任一上传失败/回包畸形）即阻断发送（裁定 2026-10-21：明确图片
@@ -351,7 +355,12 @@ export const useStreamStore = create<StreamState>((set, get) => {
         }));
         return false;
       }
-      const optimistic = buildOptimisticUserMessage(sessionId, content, skillRefs);
+      const optimistic = buildOptimisticUserMessage(
+        sessionId,
+        content,
+        skillRefs,
+        contentRefs,
+      );
       const entry = get().bySession[sessionId] ?? blankSession();
       set((s) => ({
         bySession: {
@@ -380,6 +389,9 @@ export const useStreamStore = create<StreamState>((set, get) => {
         ...(imagePaths.length > 0 ? { images: imagePaths } : {}),
         ...(skillRefs != null && skillRefs.length > 0
           ? { skillRefs }
+          : {}),
+        ...(contentRefs != null && contentRefs.length > 0
+          ? { contentRefs }
           : {}),
       });
       if (r.ok) return true;

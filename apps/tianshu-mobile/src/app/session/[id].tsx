@@ -993,12 +993,15 @@ export default function SessionScreen() {
               // （无头端 chat-runner ask → []），回退内容注入（files/read
               // 拉全文——读失败该引用跳过并提示，对齐桌面「读失败不阻断
               // 发送」口径）；技能引用 skill_ref 批改名单直传落块（不再
-              // skills/read 拉全文——被控端组装侧展开，根治空行切段泄漏）
+              // skills/read 拉全文——被控端组装侧展开，根治空行切段泄漏）；
+              // ask 回退的文件内容 file_ref 批同样块化（contentRefs 承载，
+              // 不再拼 text 前缀）
               const refs: Array<{
                 path: string;
                 content: string;
                 kind?: "skill" | "fileRef";
               }> = [];
+              const contentRefs: Array<{ path: string; content: string }> = [];
               const askMode = (modeOverride ?? entry?.sessionMode) === "ask";
               const failedRefs: string[] = [];
               for (const path of fileRefs) {
@@ -1016,16 +1019,16 @@ export default function SessionScreen() {
                   const text = (r.data as { content?: unknown } | null)
                     ?.content;
                   if (typeof text === "string") {
-                    refs.push({ path, content: text });
+                    contentRefs.push({ path, content: text });
                     continue;
                   }
                 }
                 failedRefs.push(path);
               }
               // 本地文件（添加文件对齐批）：内容已在选择时读入，直接并入
-              // 注入块（[引用文件 name] 前缀——对齐桌面 pickAndRead 语义）
+              // file_ref 块（file_ref 批——不再拼 text 前缀）
               for (const file of localFiles) {
-                refs.push({ path: file.name, content: file.content });
+                contentRefs.push({ path: file.name, content: file.content });
               }
               if (failedRefs.length > 0) {
                 toast.warning(
@@ -1038,7 +1041,7 @@ export default function SessionScreen() {
               // 注入前缀必须随消息上行（LT-T4 至今死变量 bug：injected
               // 算出却仍传 content——文件内容从未进过模型，「会话识别
               // 不到文件」根因；乐观消息同 PC 口径带前缀）；技能名单
-              // 经 skillRefs 第六参随行落块
+              // skillRefs 与文件内容 contentRefs 随行落块
               const accepted = await useStreamStore
                 .getState()
                 .startSend(
@@ -1048,6 +1051,7 @@ export default function SessionScreen() {
                   pendingImages.length > 0 ? pendingImages : undefined,
                   expertId ?? undefined,
                   skillRefs.length > 0 ? skillRefs : undefined,
+                  contentRefs.length > 0 ? contentRefs : undefined,
                 );
               if (accepted) {
                 setPendingImages([]);

@@ -98,6 +98,20 @@ describe.each(IMPLS)(
       expect(parseBlocks('[{"type":"skill_ref","name":42}]')).toEqual([]);
     });
 
+    it("file_ref 块往返一致（file_ref 批新块型——内容随块）", () => {
+      const blocks = [
+        { type: "file_ref", path: "docs/需求.md", content: "# 需求\n\n正文" },
+      ];
+      expect(parseBlocks(serializeBlocks(blocks))).toEqual(blocks);
+    });
+
+    it("file_ref 块缺 path/content 或非字符串被过滤", () => {
+      expect(parseBlocks('[{"type":"file_ref","content":"x"}]')).toEqual([]);
+      expect(
+        parseBlocks('[{"type":"file_ref","path":"a.md","content":1}]'),
+      ).toEqual([]);
+    });
+
     it("混合数组仅保留合法块", () => {
       const json = JSON.stringify([
         { type: "text", text: "ok" },
@@ -250,6 +264,34 @@ describe("blocksToModelMessages image 块转换（主进程实现，LangChain �
       "user",
     );
     expect(noLoader[0]?.content).toBe("[引用技能 any]（内容读取失败）");
+  });
+
+  it("file_ref 块展开为旧注入前缀口径（内容随块直取，含空行内容完整保留）", async () => {
+    const messages = await blocksToModelMessages(
+      [
+        {
+          type: "file_ref",
+          path: "docs/需求.md",
+          content: "# 需求\n\n第一段\n\n第二段",
+        },
+        { type: "text", text: "按这个改" },
+      ],
+      "user",
+    );
+    expect(messages[0]).toBeInstanceOf(HumanMessage);
+    const content = messages[0]?.content as string;
+    // 前缀口径逐字同旧注入；块内空行完整保留（泄漏根治点：内容不再
+    // 进 text，渲染层无从拆错）
+    expect(content).toContain("[引用文件 docs/需求.md]\n# 需求\n\n第一段");
+    expect(content.indexOf("[引用文件")).toBeLessThan(
+      content.indexOf("按这个改"),
+    );
+    // assistant 侧同展开（内容随块无读失败面，无 user 限定必要）
+    const assistant = await blocksToModelMessages(
+      [{ type: "file_ref", path: "a.txt", content: "x" }],
+      "assistant",
+    );
+    expect(assistant[0]?.content).toBe("[引用文件 a.txt]\nx");
   });
 
   it("tool_call 块 → AIMessage.tool_calls + ToolMessage（T3-3 LangChain 回喂形态）", async () => {

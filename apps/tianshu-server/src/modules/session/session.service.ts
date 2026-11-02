@@ -535,6 +535,10 @@ export class SessionService {
         content: dto.content,
         images: dto.images,
         skillRefs: dto.skillRefs,
+        contentRefs: dto.contentRefs?.map((ref) => ({
+          path: ref.path,
+          content: ref.content,
+        })),
         assistantId: dto.assistantId,
         modelId: dto.modelId,
         onChunk: (chunk) => this.publishChunk(dto.sessionId, chunk),

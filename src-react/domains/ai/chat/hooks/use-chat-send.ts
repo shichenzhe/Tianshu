@@ -138,6 +138,7 @@ export function useChatSend(sessionId: number) {
       overrides?: ChatModelParams,
       images?: ChatSendImage[],
       skillRefs?: string[],
+      contentRefs?: Array<{ path: string; content: string }>,
     ) => {
       startStream(sessionId);
       // 乐观插入：chat:send 要等整轮流结束才 resolve（后端 send 内
@@ -148,7 +149,7 @@ export function useChatSend(sessionId: number) {
       appendOptimisticMessage(
         queryClient,
         sessionId,
-        buildOptimisticUserMessage(sessionId, content, skillRefs),
+        buildOptimisticUserMessage(sessionId, content, skillRefs, contentRefs),
       );
       try {
         await ChatApi.send({
@@ -158,6 +159,7 @@ export function useChatSend(sessionId: number) {
           overrides,
           images,
           ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
+          ...(contentRefs && contentRefs.length > 0 ? { contentRefs } : {}),
         });
       } catch (e) {
         // 早期失败（会话不存在/并发请求/未选模型）时用户消息可能已落库，失效重取

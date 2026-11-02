@@ -15,6 +15,7 @@ export function buildOptimisticUserMessage(
   sessionId: number,
   content: string,
   skillRefs?: string[],
+  contentRefs?: Array<{ path: string; content: string }>,
 ): MessageRecord {
   return {
     id: -Date.now(),
@@ -24,6 +25,11 @@ export function buildOptimisticUserMessage(
       ...(skillRefs ?? []).map((name) => ({
         type: "skill_ref" as const,
         name,
+      })),
+      ...(contentRefs ?? []).map((ref) => ({
+        type: "file_ref" as const,
+        path: ref.path,
+        content: ref.content,
       })),
       ...(content ? [{ type: "text" as const, text: content }] : []),
     ]),

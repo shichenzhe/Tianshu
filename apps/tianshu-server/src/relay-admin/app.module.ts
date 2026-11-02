@@ -16,6 +16,7 @@ import { RaPrismaModule } from './prisma.module';
 import { RaAuthModule } from './auth/ra-auth.module';
 import { RaAuditModule } from './audit/audit.module';
 import { RaUsersModule } from './users/users.module';
+import { AksModule } from './aks/aks.module';
 
 /**
  * relay-admin 运营控制平面独立 AppModule（Task 9）
@@ -29,7 +30,8 @@ import { RaUsersModule } from './users/users.module';
  * 不引入主应用的 StaticTokenGuard（TIANSHU_TOKEN 是业务面 spawn 语义）
  * 与 OperationLog/Metrics 拦截器（业务库表依赖）。
  * Task 10 起：RaAuditModule（审计 @Global）+ RaUsersModule（用户管理
- * API），Task 9 的临时探针控制器已随真实路由上线删除。
+ * API），Task 9 的临时探针控制器已随真实路由上线删除。Task 11 起：
+ * AksModule（AK 生命周期——签发/禁用/轮换/续期 + isAkUsable 服务面）。
  */
 @Module({
   imports: [
@@ -51,6 +53,7 @@ import { RaUsersModule } from './users/users.module';
     RaAuditModule,
     RaAuthModule,
     RaUsersModule,
+    AksModule,
     HealthModule,
   ],
   providers: [

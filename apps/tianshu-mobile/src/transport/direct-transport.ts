@@ -78,13 +78,13 @@ export function createDirectTransport(config: DirectConfig): Transport {
     closeSignal = abort;
     try {
       // SSE 事件端点 "/event"（GET 资源不在 ENDPOINTS 表，spec §4.1 注记）
-      const res = await fetch(
-        `${config.baseUrl}/event?token=${encodeURIComponent(config.token)}`,
-        {
-          headers: headers(),
-          signal: abort.signal,
-        },
-      );
+      // 安全批 B1：token 只走 Authorization header（服务端 ?token= 通道为
+      // 无 header 的 EventSource 保留——fetch 能带 header，query 冗余只会
+      // 落中间反代/网关的访问日志）
+      const res = await fetch(`${config.baseUrl}/event`, {
+        headers: headers(),
+        signal: abort.signal,
+      });
       if (closed) return; // 建流在途被 close()：勿再动状态机（防 closed 倒退）
       if (res.status === 401) {
         clearLiveness();

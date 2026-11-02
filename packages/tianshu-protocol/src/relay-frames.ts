@@ -1,7 +1,8 @@
 /**
- * relay 隧道帧（spec §3.3；RC-T1 收编单份）——与 tianshu-server
- * src/relay/registry.ts 的 RelayFrame 同构（该侧为透传形态：kind 联合 +
- * 索引签名；本侧为判别联合精确形态，帧面保持兼容，改动必须双仓同步）。
+ * relay 隧道帧（spec §3.3；RC-T1 收编单份）——唯一 wire 契约定义：
+ * tianshu-server src/relay/registry.ts 已单源引用本类型（2026-11-01
+ * 收敛——原该侧六值宽松联合与 ping/pong 分叉，protocol 加 kind 无
+ * 编译反馈）。
  *
  * **envelope 契约（T8/T9 契约注记 → 双仓钉死）**：
  * - req 帧负载与直连 HTTP 同构：{method:"GET"|"POST", path:"session/query"

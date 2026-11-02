@@ -1,23 +1,17 @@
 import type { WebSocket } from 'ws';
+import type { RelayFrame } from '@tianshu/protocol';
+
+// 老 import 链（relay-main 等）经本模块取型保持不变
+export type { RelayFrame } from '@tianshu/protocol';
 
 /** 有界缓冲默认值：积压超过该帧数即拆连接（慢消费者防内存膨胀） */
 export const DEFAULT_MAX_BUFFER_FRAMES = 200;
 
-/**
- * 中继帧：kind 判别，其余字段透传（relay 不解释业务负载）。
- * req: client→server；res/event: server→client；open/close: 配对生命周期；
- * register: server 首帧元数据（instanceId/capabilities/name），不入转发。
- */
-export type RelayFrameKind =
-  'open' | 'close' | 'req' | 'res' | 'event' | 'register';
-
-export interface RelayFrame {
-  kind: RelayFrameKind;
-  connectionId?: string;
-  id?: number;
-  reason?: string;
-  [key: string]: unknown;
-}
+/** 中继帧类型单源自 @tianshu/protocol（判别联合含 ping/pong 活性帧）：
+ *  曾本地定义六值宽松联合（无 ping/pong）——wire 契约双份分叉，
+ *  protocol 加 kind 时 server 无编译反馈（2026-11-01 审查架构债项）。
+ *  relay 为透传面不解释业务负载，转发逻辑不依赖 kind 白名单
+ *  （relay-main 的 kind !== 'register' 兜底），联合收窄零行为变化 */
 
 /** registry 依赖的最小 socket 面（ws.WebSocket 结构满足；单测可注入假 socket） */
 export interface PeerSocket {

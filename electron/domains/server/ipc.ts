@@ -4,6 +4,9 @@
 // invalid-token）+ 编排区遥控
 // （GA-T8：graph/* 五端点 + automation/* 四端点同款透传，九端点面——
 // 启停走 automation/save 全量 enabled 字段，无 toggle 端点，Ruling 12）。
+// remoteHandler 端点路径全引 ENDPOINTS 常量（2026-11-01 审查架构债收敛：
+// 43 处字面量改名只能运行时 4040 发现——键漂移编译期红，server-face
+// routes.ts 同款口径）。
 // 事件桥（Transport onEvent → 渲染层）：
 // - message.chunk → `server:chunk:<connId>:<sessionId>`（chunk 载荷）
 // - session.updated / session.error / server.connected / graph.run.updated /
@@ -18,6 +21,7 @@
 // session 类通道末参可选 connId：显式指定即透传该连接并切换活动连接（粘性），
 // 省略走当前活动连接（activeConnId，注册表维护、option 持久化）。
 import { BrowserWindow, ipcMain } from "electron";
+import { ENDPOINTS } from "@tianshu/protocol";
 import {
   localServerStatus,
   serverConnections,
@@ -105,160 +109,160 @@ export function registerServerIpc(
   ipcMain.handle("server:localStatus", () => localServerStatus());
   ipcMain.handle(
     "server:sessionList",
-    remoteHandler(registry, "session/query"),
+    remoteHandler(registry, ENDPOINTS.session.query),
   );
   ipcMain.handle(
     "server:sessionGet",
-    remoteHandler(registry, "session/getById"),
+    remoteHandler(registry, ENDPOINTS.session.getById),
   );
-  ipcMain.handle("server:sessionSend", remoteHandler(registry, "session/send"));
+  ipcMain.handle("server:sessionSend", remoteHandler(registry, ENDPOINTS.session.send));
   ipcMain.handle(
     "server:sessionAbort",
-    remoteHandler(registry, "session/abort"),
+    remoteHandler(registry, ENDPOINTS.session.abort),
   );
   ipcMain.handle(
     "server:sessionCreate",
-    remoteHandler(registry, "session/create"),
+    remoteHandler(registry, ENDPOINTS.session.create),
   );
   ipcMain.handle(
     "server:sessionDelete",
-    remoteHandler(registry, "session/delete"),
+    remoteHandler(registry, ENDPOINTS.session.delete),
   );
   // 审批应答（T17）：approve 透传——4040=已被处理/已失效，渲染层 Banner
   // 内联提示（与移动端同协议）
   ipcMain.handle(
     "server:sessionApprove",
-    remoteHandler(registry, "session/approve"),
+    remoteHandler(registry, ENDPOINTS.session.approve),
   );
   // —— 模型面（会话指定模型配套）：provider 查/存透传——headless 有
   // save 端点（upsert 数组语义，密钥脱敏回显），desktop 被控面 provider
   // 只读（无 save 路由，调用将 404——UI 按 headless 判定隐藏编辑表单） ——
   ipcMain.handle(
     "server:providerQuery",
-    remoteHandler(registry, "provider/query"),
+    remoteHandler(registry, ENDPOINTS.provider.query),
   );
   ipcMain.handle(
     "server:providerSave",
-    remoteHandler(registry, "provider/save"),
+    remoteHandler(registry, ENDPOINTS.provider.save),
   );
   // —— 模型面打磨（FA 批）：删除/测试/上游拉取 + 会话重命名 + 专家列表 ——
   ipcMain.handle(
     "server:providerDelete",
-    remoteHandler(registry, "provider/delete"),
+    remoteHandler(registry, ENDPOINTS.provider.delete),
   );
   ipcMain.handle(
     "server:providerTest",
-    remoteHandler(registry, "provider/test"),
+    remoteHandler(registry, ENDPOINTS.provider.test),
   );
   ipcMain.handle(
     "server:providerFetchModels",
-    remoteHandler(registry, "provider/fetchModels"),
+    remoteHandler(registry, ENDPOINTS.provider.fetchModels),
   );
   ipcMain.handle(
     "server:sessionUpdate",
-    remoteHandler(registry, "session/update"),
+    remoteHandler(registry, ENDPOINTS.session.update),
   );
   ipcMain.handle(
     "server:sessionRegenerate",
-    remoteHandler(registry, "session/regenerate"),
+    remoteHandler(registry, ENDPOINTS.session.regenerate),
   );
   // —— 聊天面板对齐（CU 批）：编辑重发 + 权限模式（get/set 合一） ——
   ipcMain.handle(
     "server:sessionEditResend",
-    remoteHandler(registry, "session/editAndResend"),
+    remoteHandler(registry, ENDPOINTS.session.editAndResend),
   );
   ipcMain.handle(
     "server:sessionAccessMode",
-    remoteHandler(registry, "session/accessMode"),
+    remoteHandler(registry, ENDPOINTS.session.accessMode),
   );
   // —— P1 尾未读角标：已读推进透传（session/read，与移动端上报同语义） ——
-  ipcMain.handle("server:sessionRead", remoteHandler(registry, "session/read"));
+  ipcMain.handle("server:sessionRead", remoteHandler(registry, ENDPOINTS.session.read));
   // —— 会话内工具批（A9）：压缩 202 受理 + 润色同步透传（两端被控面
   //  session/compact、session/polish 齐备——修复前缺注册致远程恒走
   //  本地通道） ——
   ipcMain.handle(
     "server:sessionCompact",
-    remoteHandler(registry, "session/compact"),
+    remoteHandler(registry, ENDPOINTS.session.compact),
   );
   ipcMain.handle(
     "server:sessionPolish",
-    remoteHandler(registry, "session/polish"),
+    remoteHandler(registry, ENDPOINTS.session.polish),
   );
   // —— 文件面（FA-T3，spec 2026-10-20）：files 三端点透传 ——
-  ipcMain.handle("server:filesList", remoteHandler(registry, "files/list"));
-  ipcMain.handle("server:filesRead", remoteHandler(registry, "files/read"));
+  ipcMain.handle("server:filesList", remoteHandler(registry, ENDPOINTS.files.list));
+  ipcMain.handle("server:filesRead", remoteHandler(registry, ENDPOINTS.files.read));
   ipcMain.handle(
     "server:filesUploadImage",
-    remoteHandler(registry, "files/uploadImage"),
+    remoteHandler(registry, ENDPOINTS.files.uploadImage),
   );
   // —— 对齐批（AL）：上下文用量 + 技能面 ——
   ipcMain.handle(
     "server:sessionUsage",
-    remoteHandler(registry, "session/usage"),
+    remoteHandler(registry, ENDPOINTS.session.usage),
   );
-  ipcMain.handle("server:skillsQuery", remoteHandler(registry, "skills/query"));
-  ipcMain.handle("server:skillsRead", remoteHandler(registry, "skills/read"));
+  ipcMain.handle("server:skillsQuery", remoteHandler(registry, ENDPOINTS.skills.query));
+  ipcMain.handle("server:skillsRead", remoteHandler(registry, ENDPOINTS.skills.read));
   ipcMain.handle(
     "server:skillsSetEnabled",
-    remoteHandler(registry, "skills/setEnabled"),
+    remoteHandler(registry, ENDPOINTS.skills.setEnabled),
   );
   ipcMain.handle(
     "server:assistantQuery",
-    remoteHandler(registry, "assistant/query"),
+    remoteHandler(registry, ENDPOINTS.assistant.query),
   );
   ipcMain.handle(
     "server:workspaceList",
-    remoteHandler(registry, "workspace/query"),
+    remoteHandler(registry, ENDPOINTS.workspace.query),
   );
   // —— 编排区遥控（GA-T8）：graph 五端点 + automation 四端点（同款透传） ——
-  ipcMain.handle("server:graphQuery", remoteHandler(registry, "graph/query"));
-  ipcMain.handle("server:graphSave", remoteHandler(registry, "graph/save"));
-  ipcMain.handle("server:graphDelete", remoteHandler(registry, "graph/delete"));
-  ipcMain.handle("server:graphRun", remoteHandler(registry, "graph/run"));
+  ipcMain.handle("server:graphQuery", remoteHandler(registry, ENDPOINTS.graph.query));
+  ipcMain.handle("server:graphSave", remoteHandler(registry, ENDPOINTS.graph.save));
+  ipcMain.handle("server:graphDelete", remoteHandler(registry, ENDPOINTS.graph.delete));
+  ipcMain.handle("server:graphRun", remoteHandler(registry, ENDPOINTS.graph.run));
   ipcMain.handle(
     "server:graphRunAbort",
-    remoteHandler(registry, "graph/runAbort"),
+    remoteHandler(registry, ENDPOINTS.graph.runAbort),
   );
   ipcMain.handle(
     "server:automationQuery",
-    remoteHandler(registry, "automation/query"),
+    remoteHandler(registry, ENDPOINTS.automation.query),
   );
   ipcMain.handle(
     "server:automationSave",
-    remoteHandler(registry, "automation/save"),
+    remoteHandler(registry, ENDPOINTS.automation.save),
   );
   ipcMain.handle(
     "server:automationDelete",
-    remoteHandler(registry, "automation/delete"),
+    remoteHandler(registry, ENDPOINTS.automation.delete),
   );
   ipcMain.handle(
     "server:automationRunNow",
-    remoteHandler(registry, "automation/runNow"),
+    remoteHandler(registry, ENDPOINTS.automation.runNow),
   );
   // —— webhook 配置遥控（WH 消费端批）：无头端 graph/webhook/* 三端点
   // 同款透传（enable 重开换 token；路径带 graph/ 前缀是 WH 批安全裁定
   // ——管理面不落 /webhook/ 触发面守卫豁免前缀） ——
   ipcMain.handle(
     "server:webhookEnable",
-    remoteHandler(registry, "graph/webhook/enable"),
+    remoteHandler(registry, ENDPOINTS.webhook.enable),
   );
   ipcMain.handle(
     "server:webhookDisable",
-    remoteHandler(registry, "graph/webhook/disable"),
+    remoteHandler(registry, ENDPOINTS.webhook.disable),
   );
   ipcMain.handle(
     "server:webhookStatus",
-    remoteHandler(registry, "graph/webhook/status"),
+    remoteHandler(registry, ENDPOINTS.webhook.status),
   );
   // —— ui-drive（UD-T2，spec §3.3）：被控桌面端 UI 驱动三端点透传
   // （openSession 配控制端按钮；notify/openRoute 协议端点供外部/调试，
   // spec §6 假设 2 不配 UI——通道面齐备按需调用） ——
   ipcMain.handle(
     "server:uiOpenSession",
-    remoteHandler(registry, "ui/openSession"),
+    remoteHandler(registry, ENDPOINTS.ui.openSession),
   );
-  ipcMain.handle("server:uiNotify", remoteHandler(registry, "ui/notify"));
-  ipcMain.handle("server:uiOpenRoute", remoteHandler(registry, "ui/openRoute"));
+  ipcMain.handle("server:uiNotify", remoteHandler(registry, ENDPOINTS.ui.notify));
+  ipcMain.handle("server:uiOpenRoute", remoteHandler(registry, ENDPOINTS.ui.openRoute));
   // —— 桥审批应答（TB-T2，spec §4.2）：渲染层审批卡 → 主进程收敛挂起审批
   // （命中消费返回 true；未知/已超时返回 false——渲染层示 stale） ——
   ipcMain.handle("server:bridgeDecision", (_event, raw) => {

@@ -323,7 +323,10 @@ export class LibraryService {
     }
     const buffer = Buffer.from(cleaned, 'base64');
     if (buffer.length > UPLOAD_MAX_BYTES) {
-      throw new BusinessException('文件超过 3MB 上限', 'LIBRARY_UPLOAD_INVALID');
+      throw new BusinessException(
+        '文件超过 3MB 上限',
+        'LIBRARY_UPLOAD_INVALID',
+      );
     }
     try {
       const row = await this.repo.uploadFileBuffer(

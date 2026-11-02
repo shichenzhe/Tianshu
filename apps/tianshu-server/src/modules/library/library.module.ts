@@ -52,7 +52,10 @@ import { LibraryService } from './library.service';
           db: prisma,
           onSkip: (reason, detail) =>
             logFactory.create('LibraryVectorize').warn(reason, {
-              detail: typeof detail === 'object' ? JSON.stringify(detail) : String(detail),
+              detail:
+                typeof detail === 'object'
+                  ? JSON.stringify(detail)
+                  : String(detail),
             }),
         }),
       inject: [LibraryDiskRepository, PrismaService, LoggerFactory],

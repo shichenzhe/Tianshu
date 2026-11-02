@@ -244,8 +244,9 @@ describe('LibraryService 元数据面', () => {
         userId: 5,
         name: { contains: 'Readme' },
       });
-      expect((sqliteWhere as { name?: { mode?: unknown } }).name).not
-        .toHaveProperty('mode');
+      expect(
+        (sqliteWhere as { name?: { mode?: unknown } }).name,
+      ).not.toHaveProperty('mode');
     } finally {
       if (OLD === undefined) {
         delete process.env.TIANSHU_DB_URL;
@@ -535,9 +536,9 @@ describe('LibraryService 上传面 uploadFile', () => {
       parentId: folder.id,
     });
     expect(item.parentId).toBe(folder.id);
-    expect(
-      existsSync(path.join(libraryRoot, String(item.id), 'in.txt')),
-    ).toBe(true);
+    expect(existsSync(path.join(libraryRoot, String(item.id), 'in.txt'))).toBe(
+      true,
+    );
   });
 
   it('超限拒：解码 >3MB → LIBRARY_UPLOAD_INVALID（建行前拦截）', async () => {
@@ -563,7 +564,8 @@ describe('LibraryService 上传面 uploadFile', () => {
       svc.uploadFile({ name: 'x.txt', base64: 'abc' }), // 长度 % 4 ≠ 0
       'LIBRARY_UPLOAD_INVALID',
     );
-    await expectBiz(svc.uploadFile({ name: 'x.txt', base64: '  ' }),
+    await expectBiz(
+      svc.uploadFile({ name: 'x.txt', base64: '  ' }),
       'LIBRARY_UPLOAD_INVALID',
     );
   });
@@ -572,7 +574,10 @@ describe('LibraryService 上传面 uploadFile', () => {
     const { prisma } = makePrismaDouble();
     const svc = makeService(prisma);
     await expectBiz(
-      svc.uploadFile({ name: '???', base64: Buffer.from('x').toString('base64') }),
+      svc.uploadFile({
+        name: '???',
+        base64: Buffer.from('x').toString('base64'),
+      }),
       'LIBRARY_UPLOAD_INVALID',
     );
   });

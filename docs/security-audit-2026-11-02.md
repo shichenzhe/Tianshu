@@ -38,37 +38,27 @@ P1-A 通道白名单漏登记 / mobile skill_ref 渲染缺口 / drift 脚本 ski
 | 批三·B（连接 token + 备份面） | 5411d827 | 2 |
 | 尾批 E（dataSource/读取收敛/弱默认） | 598d0023 | 3 |
 | 尾批 F（DNS 级 SSRF/速率限制/server 对齐） | fecb84a3 | 4 |
+| 批 G（备份档口令加密 + master-key 递归 bug 随修） | 1d7630e4 | 剩余待办 1 |
+| 批 H（移动端 relay e2e @noble 路线 + token 迁 secure-store） | 10b80659 | 剩余待办 2 |
+| 批 I（relay TLS 可选项 + 首帧鉴权双轨） | ad272143 + 0ad95c21 | 剩余待办 3 |
 
-## 三、剩余待办（3 项——均需 UI/依赖/协议层裁定）
+## 三、剩余待办（3 项——已全部落地，2026-11-02 收口）
 
-### 1. 备份档口令加密
+### 1. 备份档口令加密（✅ 批 G，1d7630e4）
 
-**现状**：备份档（tar.gz）内的凭证字段已加密（批三信封），但消息内容、技能等仍为明文；档文件本身无加密。
+core 新增 `backup-archive-crypto`（scrypt N=2^16 自描述档头 + AES-256-GCM 档级流式加密，`tsbak:v1` 头 + AAD 绑头行 + 错误二分）；本地导出/恢复链接入（口令可选，旧明文档零迁移）；导出口令弹窗（两次一致防手滑）+ 恢复弹窗口令框；随修 `master-key.ts` safeStorageAvailable 递归 bug（恒 false 致 OS keychain 保护从未生效）+ 存量 hex:v1 读时升级。
 
-**方案**：导出 UI 增加口令输入 → scrypt 派生密钥 → AES-256-GCM 档级加密；恢复侧对应解密。`.jwt-secret` 已出档（恢复后自动轮换）。
+### 2. 移动端 relay 接入 e2e（✅ 批 H，10b80659）
 
-**依赖**：桌面端导出/恢复 UI 配合（backup/ipc.ts + 设置面板）。
+Expo Go 流程下 react-native-quick-crypto 不可行（需 dev build），走纯 JS：`@noble/curves/ciphers/hashes` + expo-crypto 随机源；mobile 本地 Uint8Array 第二实现（wire 与 node 原实现字节级兼容，交叉向量测试锁定互操作）；relay-transport 补完整握手/信封/auto-required/TOFU 状态机（蓝本桌面 E2E-T3）；连接 token 迁 expo-secure-store（AsyncStorage 只存剥离形态，旧档自动迁移）；表单补 ws:// scheme 门禁（B7 同款）。e2e wire 契约上收 @tianshu/protocol（三端单源）。**被控端可收敛全局 required 的约束已解除**（后续独立裁定）。
 
-### 2. 移动端 relay 接入 e2e
+### 3. relay 原生 TLS + 凭证出 URL query（✅ 批 I，ad272143 + 0ad95c21）
 
-**现状**：移动端 relay-transport 未实现 X25519 握手与 AES-GCM 信封——业务帧全明文过 relay（桌面端已实现，协议在 @tianshu/core e2e-crypto.ts 单源）。
-
-**方案选型（需裁定）**：
-- A. react-native-quick-crypto（原生模块，性能好，需 prebuild/Expo config plugin）
-- B. 纯 JS 实现（tweetnacl-js X25519 + AES-GCM JS 填充，无原生依赖但性能受限）
-
-**附带**：移动端连接 token 从 AsyncStorage 迁移 expo-secure-store（需安装依赖）。
-
-**注意**：移动端未接 e2e 前，被控端默认不可收敛为全局 required（会断移动端连接）。
-
-### 3. relay 原生 TLS + 凭证出 URL query
-
-**现状**：relay 进程纯 node:http 无 TLS（批二已做控制端拒绝公网明文 ws://——域名与公网 IP 的 ws:// 保存被拒，loopback/私网 IP 放行）；token/connectionId 在 upgrade URL query。
-
-**方案**：relay 增加 TLS 监听（证书配置面）；凭证改首帧鉴权或 header（wire 协议变更——需旧客户端兼容窗口）。
-
-**依赖**：relay 部署面裁定（当前假设是反代终止 TLS；如需原生 TLS 需证书管理设计）。
+- TLS：`--cert/--key` 成对传入即 https/wss 监听（客户端零改动）；既定架构仍为反代终止 TLS，原生通道为可选项；README-relay 补 TLS 部署一节
+- 首帧鉴权：升级后首条消息 `{kind:'auth',token,role,connectionId}` 承载凭证（ws 帧不经反代访问日志）；query 双轨受理（老客户端兼容窗口，命中打弃用告警）；零凭证 5s 首帧窗超时 4001；四客户端构造点全部切换（URL 零凭证）；4001/4000 语义不变
+- **升级注意**：新版客户端（桌面/无头/移动）需 relay 同步升级到批 I 版本（老 relay 只认 query 凭证会 4001 拒新客户端）；老客户端在双轨窗口内不受影响
+- 随修两预存坏损：两共享包 tsconfig node10 在 TS 5.9.3 下拒编译（build 失败曾被管道 exit code 掩盖；0ad95c21 以 ignoreDeprecations=5.0 屏蔽，TS7 前需再迁移）；server `prisma/seed.ts` randomBytes 未 import
 
 ## 四、验证基线
 
-修复全程三端测试保持全绿：桌面 Vitest exit 0 + tsc 干净；server 89 suite / 892 用例；mobile 692 用例 + tsc；drift 55 对 0 告警。
+三批收口时全绿：桌面 Vitest 4719 用例 + tsc/typecheck 干净；server 89 suite / 902 用例；mobile 714 用例 + tsc；relay 四链路 e2e 4/4（真 relay 子进程 + 双端真实握手栈 + 抓帧 proxy）；prettier 全过；drift 0 新增告警。

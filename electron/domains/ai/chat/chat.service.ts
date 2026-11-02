@@ -102,6 +102,10 @@ import {
   makeLibrarySearchTool,
 } from "../agent/library-search-tool";
 import {
+  HISTORY_SEARCH_TOOL_NAME,
+  makeHistorySearchTool,
+} from "../agent/history-search-tool";
+import {
   makeShowChartTool,
   makeShowSummaryTool,
   makeShowTableTool,
@@ -174,6 +178,9 @@ registerTools([makeWidgetTool()]);
 // library_search（2026-11-01 审查余项⑨）：chat 模型检索资料库（文件名
 // 关键词，用户级能力无工作空间依赖——无工作空间白名单成员）
 registerTools([makeLibrarySearchTool()]);
+// search_history（spec 2026-11-02）：chat 模型检索历史会话——三级裁剪
+// 均单向有损，本工具兜底回捞（用户级能力无工作空间依赖——同白名单）
+registerTools([makeHistorySearchTool(prisma)]);
 // show_table/show_summary：工作流查询结果的消息流渲染卡（demo 切片
 // 2026-10-28）。门控进展示组（tool-groups，与工作流组同门），未开工作流
 // 语境的会话不注入；未绑定目录的会话被 collectToolDefinitions 的无工作
@@ -195,7 +202,7 @@ registerTools([
 
 /** /compact 摘要指令:让模型基于全量历史输出可独立携带的上下文摘要 */
 export const COMPACT_DIRECTIVE =
-  "请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。";
+  "请把以上对话压缩为一份简洁的上下文摘要,供后续对话直接引用:保留关键事实、已做的决定、未决事项、重要的文件路径/引用与代码要点,关键事项的发生日期与路径保留原样(供 search_history 检索回捞),舍弃寒暄与过程细节。直接输出摘要正文,不要任何前言。";
 
 /**
  * 自动压缩指令（spec §18 项 2）：COMPACT_DIRECTIVE 加「[自动压缩]」前缀
@@ -1772,6 +1779,9 @@ export default class ChatService {
             // library_search（审查余项⑨）：资料库用户级能力，未绑定目录
             // 会话同权检索
             def.name === LIBRARY_SEARCH_TOOL_NAME ||
+            // search_history（spec 2026-11-02）：历史会话检索用户级能力，
+            // 未绑定目录会话同权（对当前会话零访问经 ctx.sessionId 排除）
+            def.name === HISTORY_SEARCH_TOOL_NAME ||
             // browser 四件（2026-11-01 审查快修）：执行按 sessionId 解析
             // GuestControl（browser-tools.ts），与绑定目录无涉——此前被
             // 工作空间过滤连带剔除，未绑定目录会话失去右栏浏览器操控

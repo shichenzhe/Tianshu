@@ -13,6 +13,8 @@ import { ipcMain as ipcMainMock } from "electron";
 import { generateUserToken } from "../../electron/commons/ipc-user";
 
 const prismaStub = vi.hoisted(() => ({
+  // verifyUserId 用户存在性回查（幻影用户防护批）接线需过
+  user: { findUnique: vi.fn(async () => ({})) },
   workspace: {
     count: vi.fn(async () => 1),
     findFirst: vi.fn(async () => ({})),

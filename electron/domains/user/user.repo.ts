@@ -8,6 +8,7 @@ import {
   generateUserToken,
   getJwtSecret,
   handleUser,
+  UserTokenPayload,
 } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
 import { hashPassword, isHashedPassword, verifyPassword } from "./password";
@@ -242,17 +243,29 @@ export default class UserRepository {
   }
 
   /**
-   * 验证JWT token
+   * 验证JWT token（前端路由守卫通道）
+   *
+   * 有效性 = 签名 + payload 含 id + user 表中用户仍存在（幻影用户防护，
+   * 同 verifyUserId 语义）：任一不满足返回 null，前端据此踢回登录页。
    * @param token JWT token
    * @returns 解码后的用户信息或null
    */
   async verifyToken(token: string): Promise<unknown> {
+    let payload: UserTokenPayload;
     try {
-      return jwt.verify(token, getJwtSecret());
+      payload = jwt.verify(token, getJwtSecret()) as UserTokenPayload;
     } catch (error) {
       console.error("Token验证失败:", error);
       return null;
     }
+    if (typeof payload.id !== "number") {
+      return null;
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { id: true },
+    });
+    return user ? payload : null;
   }
 
   /**

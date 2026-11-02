@@ -23,7 +23,10 @@ vi.mock("electron", () => ({
   },
 }));
 
-vi.mock("../../../electron/commons/prisma-client", () => ({ default: {} }));
+// verifyUserId 用户存在性回查（幻影用户防护批）接线需过，其余无 prisma 方法触达
+vi.mock("../../../electron/commons/prisma-client", () => ({
+  default: { user: { findUnique: vi.fn(async () => ({ id: 1 })) } },
+}));
 
 // 写盘纯函数 mock（真实写盘已在 media-export.test.ts 覆盖；此处断言接线
 // 传参即可，parse/sanitize 保留真身——defaultPath 清洗断言依赖真实现）

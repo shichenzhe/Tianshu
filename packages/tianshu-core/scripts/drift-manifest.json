@@ -236,6 +236,20 @@
       "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。2026-11-01 skill_ref 批：isValidBlock 双改遵守（skill_ref 分支两份同步，双实现 describe.each 测试钉），diff 增长全部来自 core 侧 blocksToModelMessages 专属段的 skill_ref 展开 + SkillBodyLoader 扩展——基线 84→99 过账"
     },
     {
+      "id": "mobile-blocks",
+      "mirrorPath": "src-react/domains/ai/chat/model/blocks.ts",
+      "serverPath": "../../apps/tianshu-mobile/src/logic/blocks.ts",
+      "baselineLines": 0,
+      "note": "mobile 渲染端 blocks 三件套与 src-react model/blocks.ts 逐字同构双份（mobile 脱离 @tianshu/core 经 protocol 类型本地实现——langChain peer 不进 metro bundle 的既有分叉）。2026-11-01 审查架构债：blocks 实为三份拷贝（core 单源+渲染双份）且 mobile 份零守护，新块型靠注释纪律三改（skill_ref 批已实践）——入册 tolerance=0 单侧改动即告警（chat-blocks 对同款强度）；serverPath 相对 serverRoot 跨 app 指回（../../apps/ 同 chat-blocks 的 ../../packages/ 先例）",
+      "tolerance": 0,
+      "baselineDiff": true
+    },
+    {
+      "id": "mobile-ported-logic",
+      "skip": true,
+      "note": "mobile 其余三份移植逻辑（plan-view.ts ↔ src-react plan-view-engine.ts / widget-srcdoc.ts ↔ src-react widget 宿主组件内联段 / file-refs.ts ↔ src-react file-ref-lines.ts）——移植改写非逐字同构（平台差异：RN 无 DOM/iframe srcdoc 场景不同），行数基线守护弱价值（2026-11-01 审查架构债 A2 裁定：仅 blocks 三件套逐字同构入册 mobile-blocks 对 tolerance=0，移植三份登记存在性不入比对；file-refs 的空行切段泄漏根因已由 skill_ref 批块化根治，历史消息拆卡保留兜底）"
+    },
+    {
       "id": "security-events-shape",
       "mirrorPath": "src-react/domains/security/model/types.ts",
       "serverPath": "src/core/tools/security-events.ts",

@@ -1,6 +1,7 @@
 import { shell } from "electron";
 import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
+import { openSecret, sealSecret } from "../../security/secret-field";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import { McpManager, parseMcpRow } from "../agent/mcp-manager";
 import { syncParamsChanged } from "../../../../src-react/domains/ai/mcp/lib/mcp-json";
@@ -34,16 +35,16 @@ export class McpRepository {
     this.registerIpcHandlers();
   }
 
-  private toRecord(row: McpServerRow): McpServerRecord {
+  private async toRecord(row: McpServerRow): Promise<McpServerRecord> {
     return {
       id: row.id,
       name: row.name,
       transport: row.transport as McpServerRecord["transport"],
       command: row.command ?? undefined,
       args: row.args ?? undefined,
-      env: row.env ?? undefined,
+      env: (await openSecret("mcp.env", row.env)) ?? undefined,
       url: row.url ?? undefined,
-      headers: row.headers ?? undefined,
+      headers: (await openSecret("mcp.headers", row.headers)) ?? undefined,
       enabled: row.enabled,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -89,12 +90,14 @@ export class McpRepository {
   }
 
   async list(userId: number): Promise<McpServerRecord[]> {
-    return (
-      await this.prismaClient.mcpServer.findMany({
-        where: { userId },
-        orderBy: { createdAt: "asc" },
-      })
-    ).map((row) => this.toRecord(row));
+    return Promise.all(
+      (
+        await this.prismaClient.mcpServer.findMany({
+          where: { userId },
+          orderBy: { createdAt: "asc" },
+        })
+      ).map((row) => this.toRecord(row)),
+    );
   }
 
   async create(
@@ -107,9 +110,9 @@ export class McpRepository {
         transport: p.transport,
         command: p.command,
         args: p.args,
-        env: p.env,
+        env: await sealSecret("mcp.env", p.env ?? null),
         url: p.url,
-        headers: p.headers,
+        headers: await sealSecret("mcp.headers", p.headers ?? null),
         enabled: p.enabled,
         userId,
       },
@@ -137,9 +140,9 @@ export class McpRepository {
         transport: p.transport,
         command: p.command,
         args: p.args,
-        env: p.env,
+        env: await sealSecret("mcp.env", p.env ?? null),
         url: p.url,
-        headers: p.headers,
+        headers: await sealSecret("mcp.headers", p.headers ?? null),
         enabled: p.enabled,
       },
     });
@@ -250,9 +253,9 @@ export class McpRepository {
             // （对齐 McpServerDialog 编辑态清空传 null 的差量语义）
             command: entry.command ?? null,
             args: entry.args ?? null,
-            env: entry.env ?? null,
+            env: await sealSecret("mcp.env", entry.env ?? null),
             url: entry.url ?? null,
-            headers: entry.headers ?? null,
+            headers: await sealSecret("mcp.headers", entry.headers ?? null),
             enabled: existing.enabled,
           },
           userId,

@@ -1,5 +1,6 @@
 import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
+import { openSecret, sealSecret } from "../../security/secret-field";
 import { testConnection, type TestConnectionResult } from "./connectivity";
 import type {
   ProviderCreateParams,
@@ -18,12 +19,14 @@ export class ProviderRepository {
     this.registerIpcHandlers();
   }
 
-  private toRecord(row: ProviderRow): ProviderRecord {
+  private async toRecord(row: ProviderRow): Promise<ProviderRecord> {
     return {
       ...row,
       type: row.type as ProviderType,
-      apiKey: row.apiKey ?? undefined,
-      extraHeaders: row.extraHeaders ?? undefined,
+      apiKey: (await openSecret("provider.apiKey", row.apiKey)) ?? undefined,
+      extraHeaders:
+        (await openSecret("provider.extraHeaders", row.extraHeaders)) ??
+        undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -59,17 +62,19 @@ export class ProviderRepository {
   }
 
   async list(userId: number): Promise<ProviderRecord[]> {
-    return (
-      await prisma.provider.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-      })
-    ).map((row) => this.toRecord(row));
+    return Promise.all(
+      (
+        await prisma.provider.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+        })
+      ).map((row) => this.toRecord(row)),
+    );
   }
 
   async getById(id: number, userId: number): Promise<ProviderRecord | null> {
     const row = await prisma.provider.findFirst({ where: { id, userId } });
-    return row ? this.toRecord(row) : null;
+    return row ? await this.toRecord(row) : null;
   }
 
   async create(
@@ -81,8 +86,11 @@ export class ProviderRepository {
         name: p.name,
         type: p.type,
         baseUrl: p.baseUrl,
-        apiKey: p.apiKey,
-        extraHeaders: p.extraHeaders,
+        apiKey: await sealSecret("provider.apiKey", p.apiKey ?? null),
+        extraHeaders: await sealSecret(
+          "provider.extraHeaders",
+          p.extraHeaders ?? null,
+        ),
         // 服务商级默认上下文窗口（2026-11-01）：null/undefined 皆存 null
         // （三层兜底语义在组装侧，DB 只存显式值）
         contextWindow: p.contextWindow ?? null,
@@ -90,7 +98,7 @@ export class ProviderRepository {
         userId,
       },
     });
-    return this.toRecord(row);
+    return await this.toRecord(row);
   }
 
   async update(
@@ -104,14 +112,17 @@ export class ProviderRepository {
         name: p.name,
         type: p.type,
         baseUrl: p.baseUrl,
-        apiKey: p.apiKey,
-        extraHeaders: p.extraHeaders,
+        apiKey: await sealSecret("provider.apiKey", p.apiKey ?? null),
+        extraHeaders: await sealSecret(
+          "provider.extraHeaders",
+          p.extraHeaders ?? null,
+        ),
         // null=清空（undefined=不修改，与 apiKey/extraHeaders 同语义）
         contextWindow: p.contextWindow,
         enabled: p.enabled,
       },
     });
-    return this.toRecord(row);
+    return await this.toRecord(row);
   }
 
   async delete(id: number, userId: number): Promise<void> {
@@ -155,8 +166,10 @@ export class ProviderRepository {
     return {
       type: row.type,
       baseUrl: row.baseUrl,
-      apiKey: row.apiKey ?? undefined,
-      extraHeaders: row.extraHeaders ?? undefined,
+      apiKey: (await openSecret("provider.apiKey", row.apiKey)) ?? undefined,
+      extraHeaders:
+        (await openSecret("provider.extraHeaders", row.extraHeaders)) ??
+        undefined,
     };
   }
 }

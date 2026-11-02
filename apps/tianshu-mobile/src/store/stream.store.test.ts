@@ -396,6 +396,44 @@ describe("stream store", () => {
     expect(last?.[2]).toEqual({ sessionId: 7, content: "普通" });
   });
 
+  it("startSend contentRefs（file_ref 批）：path+内容随 body 上行 + 乐观消息前置 FileRefBlock", async () => {
+    transport.request.mockImplementation(async (_m: string, path: string) =>
+      path === ENDPOINTS.session.getById
+        ? ok(detail(historyMsgs))
+        : ok({ accepted: true }, 202),
+    );
+    await useStreamStore.getState().loadHistory(7);
+    transport.request.mockClear();
+
+    const accepted = await useStreamStore.getState().startSend(
+      7,
+      "看这个文件",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [{ path: "docs/需求.md", content: "# 需求\n\n正文" }],
+    );
+    expect(accepted).toBe(true);
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      ENDPOINTS.session.send,
+      {
+        sessionId: 7,
+        content: "看这个文件",
+        contentRefs: [{ path: "docs/需求.md", content: "# 需求\n\n正文" }],
+      },
+    );
+
+    // 乐观消息与落库同构：file_ref 块（含空行内容完整保留——渲染侧
+    // 卡片化，气泡零泄漏）
+    const e = useStreamStore.getState().bySession[7];
+    expect(e?.history.at(-1)?.blocks).toEqual([
+      { type: "file_ref", path: "docs/需求.md", content: "# 需求\n\n正文" },
+      { type: "text", text: "看这个文件" },
+    ]);
+  });
+
   it("startSend 业务错：乐观消息回滚 + 流态置错 + 解锁，返回 false", async () => {
     transport.request.mockResolvedValue(ok(detail(historyMsgs)));
     await useStreamStore.getState().loadHistory(7);

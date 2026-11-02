@@ -6,6 +6,7 @@ import { useColorScheme } from "nativewind";
 
 import type { MessageBlock } from "@/logic/blocks";
 import { splitFileRefPrefix } from "@/logic/file-refs";
+import type { FileRefBlock, SkillRefBlock } from "@tianshu/protocol";
 import { RECOMMEND_TOOL_NAME, WIDGET_TOOL_NAME } from "@/logic/group-blocks";
 import { AppIcon } from "@/components/AppIcon";
 import { MarkdownLite } from "@/components/MarkdownLite";
@@ -152,6 +153,11 @@ function BlockView({
       );
     case "image":
       return <MessageImage block={block} />;
+    // 引用块（skill_ref/file_ref）：user 消息卡片区渲染（气泡内跳过
+    // 防重复）；历史 text 前缀消息仍走 splitFileRefPrefix 拆卡兜底
+    case "skill_ref":
+    case "file_ref":
+      return null;
   }
 }
 
@@ -241,6 +247,25 @@ export const MessageItem = memo(function MessageItem({
         entering={entering}
         style={{ marginBottom: 12, alignItems: "flex-end" }}
       >
+        {blocks
+          .filter(
+            (block): block is SkillRefBlock =>
+              block.type === "skill_ref",
+          )
+          .map((block, index) => (
+            <SkillRefCard key={`sr-${index}-${block.name}`} name={block.name} />
+          ))}
+        {blocks
+          .filter(
+            (block): block is FileRefBlock => block.type === "file_ref",
+          )
+          .map((block, index) => (
+            <MessageFileRef
+              key={`fr-${index}-${block.path}`}
+              path={block.path}
+              workspaceId={workspaceId}
+            />
+          ))}
         {refs.map((ref, index) =>
           ref.kind === "skill" ? (
             <SkillRefCard key={`${index}-${ref.path}`} name={ref.path} />

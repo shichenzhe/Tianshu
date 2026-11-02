@@ -102,6 +102,9 @@ export interface ChatRunnerRunOptions {
    *  消息库不存全文，组装侧 loadSkill 展开注入（控制端省「拉全文再
    *  上行」双程流量） */
   skillRefs?: string[];
+  /** 内容注入式文件引用（file_ref 批）：path+内容随块落库（组装侧直取
+   *  展开旧前缀口径，渲染零泄漏） */
+  contentRefs?: Array<{ path: string; content: string }>;
   /** 请求级助手覆盖（写进会话当前值，会话记住上次选择） */
   assistantId?: number;
   /** 请求级模型覆盖（写进会话当前值，会话记住上次选择——mirror setSessionModel 同语义） */
@@ -449,7 +452,8 @@ export class ChatRunnerService {
       }
       // 用户消息立即落库（FA-T1 起 images 落 ImageBlock——控制端经
       // files/uploadImage 上传后的数据根相对路径，回喂走 loadImage 链；
-      // skill_ref 批：引用块前置，组装侧 loadSkill 展开）
+      // skill_ref 批：引用块前置，组装侧 loadSkill 展开；file_ref 批：
+      // 内容注入式文件引用块化，内容随块组装侧直取）
       await this.appendMessage({
         sessionId: options.sessionId,
         role: 'user',
@@ -458,6 +462,13 @@ export class ChatRunnerService {
             type: 'skill_ref',
             name,
           })),
+          ...(options.contentRefs ?? []).map(
+            (ref): MessageBlock => ({
+              type: 'file_ref',
+              path: ref.path,
+              content: ref.content,
+            }),
+          ),
           { type: 'text', text: options.content },
           ...(options.images?.length ? imageBlocksOf(options.images) : []),
         ]),

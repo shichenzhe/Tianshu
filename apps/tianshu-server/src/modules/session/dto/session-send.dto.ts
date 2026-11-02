@@ -1,12 +1,27 @@
+import { Type } from 'class-transformer';
 import {
   IsArray,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+/** 内容注入式文件引用项（file_ref 批：path+内容随块落库） */
+export class ContentRefItemDto {
+  @ApiProperty({ description: '文件路径（注入前缀标识/卡片展示）' })
+  @IsNotEmpty({ message: '引用路径不能为空' })
+  @IsString({ message: '引用路径必须是字符串' })
+  path: string;
+
+  @ApiProperty({ description: '文件文本内容（发送侧授权读取结果）' })
+  @IsString({ message: '引用内容必须是字符串' })
+  content: string;
+}
 
 /**
  * 发送消息DTO（spec §3.1：{sessionId, content, images?, assistantId?,
@@ -42,6 +57,18 @@ export class SessionSendDto {
   @IsArray({ message: '技能引用必须是数组' })
   @IsString({ each: true, message: '技能引用名必须是字符串' })
   skillRefs?: string[];
+
+  @ApiProperty({
+    description: '内容注入式文件引用（file_ref 批：path+内容随块落库）',
+    required: false,
+    type: [ContentRefItemDto],
+  })
+  @IsOptional()
+  @IsArray({ message: '文件引用必须是数组' })
+  @IsObject({ each: true, message: '文件引用项必须是对象' })
+  @ValidateNested({ each: true })
+  @Type(() => ContentRefItemDto)
+  contentRefs?: ContentRefItemDto[];
 
   @ApiProperty({
     description: '助手（请求级覆盖，写回会话当前值）',

@@ -463,6 +463,7 @@ export class ChatRunnerService {
         ]),
         assistantId: options.assistantId ?? session.assistantId ?? undefined,
       });
+      await this.autotitleIfDefault(options.sessionId, options.content);
       await this.streamAndPersist(options.sessionId, userId, abort, options);
     } catch (error) {
       // 早期失败（会话不存在/未选模型等）也要清理注册，避免映射表泄漏；
@@ -1309,8 +1310,31 @@ export class ChatRunnerService {
     );
   }
 
-  /** 追加消息并刷新会话时间戳（mirror SessionRepository.appendMessage 同构） */
-  private async appendMessage(message: {
+  /**
+   * 会话标题 heuristic 兜底（2026-11-02，mirror SessionRepository
+   * .autotitleIfDefault 同构）：无头端不移植 AI 标题生成，默认标题时以
+   * 首条 user 消息前 20 字改写；非默认标题（手动改名）不动——哨兵即
+   * 保护（mirror 双哨兵因有 AI 精修层，本仓单层单哨兵）。title-updated
+   * 类 chunk 不发（ChatStreamChunk 无 title 事件，协议不为此扩型——
+   * 控制端经 session 列表拉取见新标题）
+   */
+  private async autotitleIfDefault(
+    sessionId: number,
+    content: string,
+  ): Promise<void> {
+    const session = await this.prisma.sessionRecord.findUnique({
+      where: { id: sessionId },
+      select: { title: true },
+    });
+    if (session?.title === '新会话') {
+      await this.prisma.sessionRecord.update({
+        where: { id: sessionId },
+        data: { title: content.slice(0, 20) },
+      });
+    }
+  }
+
+  /** 追加消息并刷新会话时间戳（mirror SessionRepository.appendMessage 同构） */  private async appendMessage(message: {
     sessionId: number;
     role: 'user' | 'assistant';
     blocks: string;

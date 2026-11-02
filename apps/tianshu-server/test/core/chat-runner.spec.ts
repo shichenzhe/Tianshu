@@ -127,6 +127,53 @@ describe('ChatRunnerService run', () => {
     expect(messages[1].error).toBeNull();
   });
 
+  it('会话标题 heuristic 兜底（2026-11-02）：默认标题改写为首条 user 消息前 20 字；第二轮不改写（mirror autotitleIfDefault 同构）', async () => {
+    // seedSession fixture 硬编码 title 't'（非 schema 默认），显式造默认哨兵态
+    const { session } = await seedSession(db, dirs, { title: '新会话' });
+    const { runner } = makeRunner(db, dirs, [
+      { steps: [{ kind: 'text', delta: '好' }], usage: { input: 1, output: 1 } },
+      { steps: [{ kind: 'text', delta: '嗯' }], usage: { input: 1, output: 1 } },
+    ]);
+    const long = '这是一条超过二十个字符的用户提问用来验证标题截断';
+
+    await runner.run({
+      sessionId: session.id,
+      content: long,
+      onChunk: () => {},
+    });
+    let row = await db.prisma.sessionRecord.findUnique({
+      where: { id: session.id },
+    });
+    expect(row?.title).toBe(long.slice(0, 20));
+
+    // 第二轮：标题已非默认哨兵 → 不改写
+    await runner.run({
+      sessionId: session.id,
+      content: '第二轮不该覆盖标题',
+      onChunk: () => {},
+    });
+    row = await db.prisma.sessionRecord.findUnique({
+      where: { id: session.id },
+    });
+    expect(row?.title).toBe(long.slice(0, 20));
+  });
+
+  it('会话标题 heuristic 兜底：手动命名会话（非默认标题）首条消息不改写', async () => {
+    const { session } = await seedSession(db, dirs, { title: '手动命名' });
+    const { runner } = makeRunner(db, dirs, [
+      { steps: [{ kind: 'text', delta: '好' }], usage: { input: 1, output: 1 } },
+    ]);
+    await runner.run({
+      sessionId: session.id,
+      content: '这条消息不该触发标题改写',
+      onChunk: () => {},
+    });
+    const row = await db.prisma.sessionRecord.findUnique({
+      where: { id: session.id },
+    });
+    expect(row?.title).toBe('手动命名');
+  });
+
   it('FA-T1 images：user 消息 blocks 含 text+image 块（imagePath 原样/mime 按扩展名）；越界前缀拒', async () => {
     const { session } = await seedSession(db, dirs);
     const { runner } = makeRunner(db, dirs, [

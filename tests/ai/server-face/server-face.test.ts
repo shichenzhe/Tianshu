@@ -535,6 +535,14 @@ describe("relay 客户端（本机 ws 模拟 relay）", () => {
   it("注册 + req→res 配对 + tap 事件帧（envelope 与 HTTP 同构）", async () => {
     const relay = await startFakeRelay();
     try {
+      // 本用例测路由/envelope 语义非 e2e：显式 auto（安全批 J 后缺省
+      // required——明文 req 在 required 下被拒，路由无从而测）
+      db.optionRows.set(db.optionRows.size + 1, {
+        id: db.optionRows.size + 1,
+        type: "app",
+        name: "serverFace",
+        value: JSON.stringify({ enabled: true, e2e: "auto" }),
+      });
       await startRelayClient(relay.url, TOKEN);
       expect(relay.conns.length).toBe(1);
       // 安全批 I：凭证出 query——握手 URL 零凭证，鉴权走首帧 auth

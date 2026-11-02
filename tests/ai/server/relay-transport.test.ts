@@ -89,12 +89,20 @@ class FakeControlledEnd {
 
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(
-        `ws://127.0.0.1:${this.port}/ws?role=server&token=${RELAY_TOKEN}` +
-          `&connectionId=${this.connectionId}`,
-      );
+      // 安全批 J：query 双轨已关——首帧 auth 承载凭证，URL 零凭证
+      const ws = new WebSocket(`ws://127.0.0.1:${this.port}/ws`);
       this.ws = ws;
-      ws.addEventListener("open", () => resolve());
+      ws.addEventListener("open", () => {
+        ws.send(
+          JSON.stringify({
+            kind: "auth",
+            token: RELAY_TOKEN,
+            role: "server",
+            connectionId: this.connectionId,
+          }),
+        );
+        resolve();
+      });
       ws.addEventListener("error", () => reject(new Error("假被控端连接失败")));
       ws.addEventListener("message", (event) =>
         this.onFrame(String(event.data)),

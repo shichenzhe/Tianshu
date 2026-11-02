@@ -196,7 +196,7 @@ async function faceStatus(): Promise<unknown> {
     relayToken: config.relayToken ?? "",
     relayConnected: isRelayConnected(),
     instanceId: FACE_INSTANCE_ID,
-    ...(await e2eStatus(config.e2e ?? "auto")),
+    ...(await e2eStatus(config.e2e ?? "required")),
   };
 }
 

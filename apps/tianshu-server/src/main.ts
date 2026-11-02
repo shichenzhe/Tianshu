@@ -132,8 +132,9 @@ async function bootstrap() {
     await startHeadlessRelay({
       app,
       ...relayLaunch,
-      // E2E 模式（config tianshu.relay.e2e，缺省 auto；E2E-T2）
-      e2eMode: tianshuConfig.relay?.e2e ?? 'auto',
+      // E2E 模式（config tianshu.relay.e2e，缺省 required——安全批 J
+      // 收敛：移动端已接 e2e，拒明文业务帧为默认姿态；E2E-T2）
+      e2eMode: tianshuConfig.relay?.e2e ?? 'required',
     }).catch((error: unknown) => {
         console.error('[relay-client] 启动失败（HTTP 面不受影响）:', error);
       },

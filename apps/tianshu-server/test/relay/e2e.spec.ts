@@ -98,15 +98,17 @@ function trackFrames(ws: WebSocket): TrackedSocket {
   };
 }
 
-/** 控制端（role=client）连 relay 并 open 配对到本进程 instanceId */
+/** 控制端（role=client）连 relay 并 open 配对到本进程 instanceId
+ *  （安全批 J：query 双轨已关——首帧 auth 承载凭证，URL 零凭证） */
 async function connectControl(port: number): Promise<TrackedSocket> {
-  const ws = new WebSocket(
-    `ws://127.0.0.1:${port}/ws?role=client&token=${encodeURIComponent(RELAY_TOKEN)}`,
-  );
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
   await new Promise<void>((resolve, reject) => {
     ws.once('open', () => resolve());
     ws.once('error', (error) => reject(error));
   });
+  ws.send(
+    JSON.stringify({ kind: 'auth', token: RELAY_TOKEN, role: 'client' }),
+  );
   ws.send(JSON.stringify({ kind: 'open', connectionId: instanceId }));
   return trackFrames(ws);
 }

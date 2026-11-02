@@ -52,7 +52,7 @@ let offFaceEvents: (() => void) | null = null;
 // E2E 会话态：属当前连接（重连/判死即弃——新连接新协商）；模式缓存随
 // startRelayClient 装载 + 每次握手实时读（设置面改模式无需重启即生效）
 let e2eSession: E2ESession | null = null;
-let e2eMode: FaceE2eMode = "auto";
+let e2eMode: FaceE2eMode = "required";
 // 重放 hello 防护（EE 终审 F1）：本连接 epoch 内最近一次受理 hello 的临时
 // 公钥。重放字节相同的 hello 会以相同临时钥重派生同密钥+新会话对象（重放
 // 窗/前缀钉归零）→ 既往密文 req 可重执行——故相同临时公钥的 hello 直接
@@ -160,7 +160,7 @@ async function handleE2eHello(raw: unknown): Promise<void> {
   // 模式实时读：设置面切换 required/off 无需重启 relay 客户端即生效。
   // 读取失败只放弃本次 hello（记日志）——「hello 处理永不拆连接」不变量
   try {
-    e2eMode = (await readServerFaceConfig()).e2e ?? "auto";
+    e2eMode = (await readServerFaceConfig()).e2e ?? "required";
   } catch (e) {
     Log.error("relay e2e 模式读取失败，忽略本次 hello", e);
     return;
@@ -429,7 +429,7 @@ export async function startRelayClient(
   e2eSession = null;
   lastHelloEphemeral = null;
   // 模式随启动装载（握手时再实时读刷新——设置面改模式即生效）
-  e2eMode = (await readServerFaceConfig()).e2e ?? "auto";
+  e2eMode = (await readServerFaceConfig()).e2e ?? "required";
   ensureTapBridge();
   offFaceEvents = onFaceEvent((event) => {
     // 仅当前已连接时发事件帧：断线窗口丢弃（控制端重连后全量刷新兜底）

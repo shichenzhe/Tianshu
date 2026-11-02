@@ -86,10 +86,24 @@ describe('relay 配对转发（真实 ws 双客户端）', () => {
   let relay: RelayHandle;
   let openedSockets: WebSocket[];
 
+  /** 连接 helper：签名保留 query 串（历史形态），实现已切换首帧 auth——
+   *  安全批 J 起 relay 无视 query，凭证经 auth 首帧承载 */
   const openRelaySocket = (query: string): Promise<WebSocket> =>
     new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws?${query}`);
-      ws.on('open', () => resolve(ws));
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws`);
+      ws.on('open', () => {
+        const params = new URLSearchParams(query);
+        const connectionId = params.get('connectionId');
+        ws.send(
+          JSON.stringify({
+            kind: 'auth',
+            token: params.get('token') ?? '',
+            role: params.get('role') ?? '',
+            ...(connectionId ? { connectionId } : {}),
+          }),
+        );
+        resolve(ws);
+      });
       ws.on('error', reject);
     });
 
@@ -211,10 +225,24 @@ describe('relay 健壮性（not-found/close 通知/背压）', () => {
   let relay: RelayHandle;
   let openedSockets: WebSocket[];
 
+  /** 连接 helper：签名保留 query 串（历史形态），实现已切换首帧 auth——
+   *  安全批 J 起 relay 无视 query，凭证经 auth 首帧承载 */
   const openRelaySocket = (query: string): Promise<WebSocket> =>
     new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws?${query}`);
-      ws.on('open', () => resolve(ws));
+      const ws = new WebSocket(`ws://127.0.0.1:${relay.port}/ws`);
+      ws.on('open', () => {
+        const params = new URLSearchParams(query);
+        const connectionId = params.get('connectionId');
+        ws.send(
+          JSON.stringify({
+            kind: 'auth',
+            token: params.get('token') ?? '',
+            role: params.get('role') ?? '',
+            ...(connectionId ? { connectionId } : {}),
+          }),
+        );
+        resolve(ws);
+      });
       ws.on('error', reject);
     });
 
@@ -626,25 +654,16 @@ describe('首帧鉴权（安全批 I：凭证出 URL query）', () => {
     expect(await closeCode(ws)).toBe(4000);
   });
 
-  it('双轨：query 凭证完整（老客户端）+ 首帧 register → 照常分流', async () => {
-    const server = trackFrames(
-      await openQuerySocket(`role=server&token=${TOKEN}&connectionId=s1`),
+  it('query 双轨已关闭：query 凭证 + 首帧 register（老客户端形态）→ 立即 4001', async () => {
+    const ws = await openQuerySocket(`role=server&token=${TOKEN}&connectionId=s1`);
+    openedSockets.push(ws);
+    ws.send(
+      JSON.stringify({ kind: 'register', instanceId: 's1', capabilities: [] }),
     );
-    openedSockets.push(server.ws);
-    server.ws.send(
-      JSON.stringify({
-        kind: 'register',
-        instanceId: 's1',
-        capabilities: ['chat'],
-      }),
-    );
-    const client = trackFrames(await openQuerySocket(`role=client&token=${TOKEN}`));
-    openedSockets.push(client.ws);
-    client.ws.send(JSON.stringify({ kind: 'open', connectionId: 's1' }));
-    await server.waitForFrame((frame) => frame.kind === 'open');
+    expect(await closeCodeOf(ws)).toBe(4001);
   });
 
-  it('双发兼容：query 凭证 + 首帧 auth → 连接可用（auth 帧被消费不干扰）', async () => {
+  it('query 残留无害：query URL + 首帧 auth → auth 受理（query 被无视）', async () => {
     const ws = await openQuerySocket(`role=client&token=${TOKEN}`);
     openedSockets.push(ws);
     ws.send(authFrame({ role: 'client' }));
@@ -660,7 +679,7 @@ describe('首帧鉴权（安全批 I：凭证出 URL query）', () => {
 
   it('auth 帧不透传：对端收不到对向的 auth 帧', async () => {
     const server = trackFrames(
-      await openQuerySocket(`role=server&token=${TOKEN}&connectionId=s1`),
+      await authedBareSocket({ role: 'server', connectionId: 's1' }),
     );
     openedSockets.push(server.ws);
     server.ws.send(

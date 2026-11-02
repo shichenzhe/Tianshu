@@ -34,9 +34,9 @@ CLI 参数（`--k v` 与 `--k=v` 两种形式均可）：
 
 ## 接入协议
 
-WS 端点：`GET /ws`（连接角色与凭证经**首帧 auth**，安全批 I）
+WS 端点：`GET /ws`（连接角色与凭证经**首帧 auth**，安全批 I/J）
 
-- **鉴权（安全批 I：凭证出 URL query）**：升级完成后第一条消息必须是 `{kind:'auth', token, role:'server'|'client', connectionId?}`（server 角色带 connectionId 即注册键）。升级 query 携带 `role`/`token`/`connectionId` 的老客户端**双轨受理**（命中打弃用告警）——query 凭证的明文面会留存在反代/负载均衡访问日志，窗口期后客户端侧移除。零凭证连接在首帧等待窗（5s）内无 auth 即 `4001`
+- **鉴权（安全批 I：凭证出 URL query；批 J：query 双轨窗口关闭）**：升级完成后第一条消息必须是 `{kind:'auth', token, role:'server'|'client', connectionId?}`（server 角色带 connectionId 即注册键）。query 携带凭证已不再受理（批 I 曾设双轨兼容窗口，四端客户端随批 I 全部切换后于批 J 关闭）——query 凭证的明文面会留存在反代/负载均衡访问日志。零凭证/首帧非 auth 连接在首帧等待窗（5s）内即 `4001`
 - **role=server（被控端）**：auth 后发 `{kind:'register', instanceId, capabilities, name}` 元数据帧（relay 只收不转发）；此后 `res`/`event` 帧转发给已配对 client
 - **role=client（控制端）**：auth 后发 `{kind:'open', connectionId:'<目标>'}` 触发配对；此后 `req` 帧转发给 server，`res`/`event` 帧由 server 透传回来
 
@@ -54,7 +54,7 @@ WS 端点：`GET /ws`（连接角色与凭证经**首帧 auth**，安全批 I）
 
 | 场景 | 对端收到 | WS close code |
 | --- | --- | --- |
-| token 不符 / 首帧等待窗（5s）内无 auth | — | `4001 invalid-token` |
+| token 不符 / 首帧等待窗（5s）内无 auth 或首帧非 auth | — | `4001 invalid-token` |
 | role 非法 / server 未带 connectionId / 旧连接被顶掉 | — | `4000` |
 | client open 的目标未注册 | `{kind:'close', reason:'not-found'}` | `4004 not-found` |
 | server 掉线 | `{kind:'close', reason:'server-gone'}` | `4003 server-gone` |

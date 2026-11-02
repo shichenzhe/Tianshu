@@ -328,6 +328,7 @@ async function runPhaseOne(
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-graph-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
         // DB 真隔离（回归修复 2026-10-27，同 e2e-smoke）：TIANSHU_DB_URL 才是
@@ -654,6 +655,7 @@ async function runPhaseTwo(
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-graph-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
         // DB 真隔离（回归修复 2026-10-27，同 e2e-smoke）：TIANSHU_DB_URL 才是

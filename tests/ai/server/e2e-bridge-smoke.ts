@@ -490,6 +490,7 @@ async function main(): Promise<number> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-bridge-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
       },
     );

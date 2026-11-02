@@ -552,6 +552,7 @@ async function runDirect(model: ModelChoice): Promise<void> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
         // DB 真隔离（回归修复 2026-10-27）：库落点 env 是 TIANSHU_DB_URL——
@@ -618,6 +619,7 @@ async function runRelay(model: ModelChoice): Promise<void> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
         // DB 真隔离（回归修复 2026-10-27）：库落点 env 是 TIANSHU_DB_URL——

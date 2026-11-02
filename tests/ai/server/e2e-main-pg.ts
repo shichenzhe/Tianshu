@@ -363,6 +363,7 @@ async function main(): Promise<number> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
         SEARCH_DB_URL: "",
@@ -547,6 +548,7 @@ async function main(): Promise<number> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
         SEARCH_DB_URL: "",
@@ -675,6 +677,7 @@ async function main(): Promise<number> {
       {
         NODE_ENV: "e2e",
         TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
         SEARCH_DB_URL: "",

@@ -102,13 +102,26 @@ async function bootstrap() {
     TianshuConfig.getDefault(),
   );
   if (tianshuConfig.handshake) {
+    // 安全批 B3：token 仅在桌面 spawn 场景（env 标记）随握手行下发——
+    // 独立部署（docker/pm2/systemd）stdout 进容器日志/journald/日志
+    // 聚合平台，主凭证明文落日志 = 任何读日志者直得 TIANSHU_TOKEN；
+    // 非 spawn 场景握手行只含端口与 instanceId（连接信息仍有，
+    // token 走部署侧自有配置）
+    const spawnTokenDownlink = process.env.TIANSHU_HANDSHAKE_TOKEN === '1';
     console.log(
       `TIANSHU_HANDSHAKE ${JSON.stringify({
         port: appConfig.port,
-        token: process.env.TIANSHU_TOKEN ?? '',
+        ...(spawnTokenDownlink
+          ? { token: process.env.TIANSHU_TOKEN ?? '' }
+          : {}),
         instanceId,
       })}`,
     );
+    if (!spawnTokenDownlink && process.env.TIANSHU_TOKEN) {
+      console.warn(
+        '[安全告警] TIANSHU_TOKEN 已设置但握手行未下发 token（非桌面 spawn 场景）：连接方请自行配置 token，本行不含凭证',
+      );
+    }
   }
 
   // 无头端 relay 客户端（CLI --relay-url/--relay-token 或 TIANSHU_RELAY_URL/

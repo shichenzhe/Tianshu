@@ -630,7 +630,11 @@ export async function startLocalServer(
   }
   supervisor = new ServerSupervisor();
   const token = randomBytes(24).toString("hex");
-  const env: Record<string, string> = { TIANSHU_TOKEN: token };
+  // 安全批 B3：标记握手行可下发 token（server 侧仅此场景含凭证）
+  const env: Record<string, string> = {
+    TIANSHU_TOKEN: token,
+    TIANSHU_HANDSHAKE_TOKEN: "1",
+  };
   const info = await supervisor.start({
     command: resolved.command,
     args: resolved.args,

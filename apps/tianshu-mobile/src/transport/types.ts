@@ -6,7 +6,14 @@ export type TransportState =
   | "connected"
   | "reconnecting"
   | "invalid-token"
-  | "closed";
+  | "closed"
+  // —— relay e2e 扩展（安全批 H）——
+  /** connected 的加密后继态：e2e 握手落定，业务帧走信封 */
+  | "encrypted"
+  /** 终局（粘滞）：已存指纹与被控端 ack 不符——疑似中间人，断链不重连 */
+  | "mitm-suspect"
+  /** 终局（粘滞）：e2eMode=required 握手无 ack，拒明文降级断链 */
+  | "required-failed";
 
 export interface TransportRequestResult {
   status: number;

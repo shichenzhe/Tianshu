@@ -12,6 +12,11 @@ export interface ConnectionConfig {
   relayUrl?: string;
   relayToken?: string;
   connectionId?: string;
+  /** relay e2e 模式（安全批 H）：auto（缺省）=握手无 ack 降级明文；
+   *  required=拒降级直接断开。direct 连接忽略 */
+  e2eMode?: "auto" | "required";
+  /** 已存被控端 e2e 指纹（TOFU 首连空缺省；ack 不匹配即断 mitm-suspect） */
+  fingerprint?: string;
 }
 
 export type TestResult =
@@ -23,10 +28,56 @@ export function isValidConfig(c: ConnectionConfig): boolean {
   return Boolean(c.relayUrl && c.relayToken && c.connectionId);
 }
 
-export function createTransport(c: ConnectionConfig): Transport {
+/** activate 层注入钩子（TOFU 指纹回填——store 写回 config 并持久化） */
+export interface CreateTransportHooks {
+  onFingerprintPinned?: (fingerprint: string) => void;
+}
+
+/**
+ * relay 地址 scheme 校验（安全批 H；桌面批二 B7 同款判定）：
+ * - wss:// 任意地址放行；
+ * - ws:// 仅 loopback/私网**字面 IP** 放行（内网直连场景；域名一律视为
+ *   公网——无 DNS 解析，与桌面侧一致）；
+ * - 其余 scheme 拒。
+ * 返回 true=放行；"public-plaintext"=公网明文拒绝；"invalid-scheme"=非 ws(s)。
+ */
+export function validateRelayUrlScheme(
+  relayUrl: string,
+): true | "public-plaintext" | "invalid-scheme" {
+  if (!/^wss?:\/\//.test(relayUrl)) return "invalid-scheme";
+  if (relayUrl.startsWith("wss://")) return true;
+  let host = "";
+  try {
+    host = new URL(relayUrl).hostname.toLowerCase();
+  } catch {
+    return "invalid-scheme";
+  }
+  const isPrivateLiteral =
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    /^127\./.test(host) ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+  return isPrivateLiteral ? true : "public-plaintext";
+}
+
+export function createTransport(
+  c: ConnectionConfig,
+  hooks?: CreateTransportHooks,
+): Transport {
   return c.mode === "direct"
     ? createDirectTransport({ baseUrl: c.baseUrl!, token: c.token! })
-    : createRelayTransport({ relayUrl: c.relayUrl!, relayToken: c.relayToken!, connectionId: c.connectionId! });
+    : createRelayTransport({
+        relayUrl: c.relayUrl!,
+        relayToken: c.relayToken!,
+        connectionId: c.connectionId!,
+        ...(c.e2eMode ? { e2eMode: c.e2eMode } : {}),
+        ...(c.fingerprint ? { fingerprint: c.fingerprint } : {}),
+        ...(hooks?.onFingerprintPinned
+          ? { onFingerprintPinned: hooks.onFingerprintPinned }
+          : {}),
+      });
 }
 
 export function classifyTestFailure(r: TransportRequestResult): Exclude<TestResult, { ok: true }>["reason"] {

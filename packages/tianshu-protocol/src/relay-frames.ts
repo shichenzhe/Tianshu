@@ -30,3 +30,40 @@ export type RelayFrame =
   // 收 ping 回 pong
   | { kind: "ping" }
   | { kind: "pong" };
+
+// ---- E2E 扩展帧（spec 2026-10-18-relay-e2e；安全批 H 上收 protocol）----
+// 原仅 @tianshu/core e2e-crypto 导出（kind 常量）+ mirror server-face
+// relay-protocol.ts（帧类型）——移动端接入 e2e 需消费契约但不能引 core
+// （langChain peer 依赖不进 metro bundle），wire 契约三端单源在此。
+// core e2e-crypto 转为 re-export 本处常量（运行时实现仍在 core）。
+
+/** E2E 握手帧 kind（明文经 relay 照转发）——跨仓单份 wire 契约 */
+export const E2E_HANDSHAKE_HELLO = "e2e-hello";
+export const E2E_HANDSHAKE_ACK = "e2e-ack";
+/** 密文信封帧 kind（包装一切后续业务帧） */
+export const E2E_SECURE_KIND = "e2e-secure";
+/** 接收端滑动窗口宽度（计数器记忆数） */
+export const E2E_REPLAY_WINDOW = 64;
+
+/** E2E 握手帧（wire 明文形态；控制端 → 被控端） */
+export type E2eHelloFrame = {
+  kind: "e2e-hello";
+  /** 控制端临时公钥（base64 32B） */
+  ephemeralKey: string;
+  /** 控制端已存指纹（TOFU 空=首连；被控端不校验，控制端对 ack 核对） */
+  expectedFingerprint?: string;
+};
+
+/** E2E 应答帧（静态公钥 base64 + 指纹 hex16；被控端 → 控制端） */
+export type E2eAckFrame = {
+  kind: "e2e-ack";
+  staticKey: string;
+  fingerprint: string;
+};
+
+/** 密文信封（n=12B nonce，ct=密文+16B GCM tag，均 base64） */
+export type E2ESecureEnvelope = {
+  kind: "e2e-secure";
+  n: string;
+  ct: string;
+};

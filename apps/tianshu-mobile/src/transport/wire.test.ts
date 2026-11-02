@@ -18,6 +18,21 @@ vi.mock("@react-native-async-storage/async-storage", () => {
   };
 });
 
+// —— expo-secure-store 替身（安全批 H：connections.store 顶层 import；真身
+// 拉 react-native Flow 语法 node 环境不可解析，同上断链口径） ——
+vi.mock("expo-secure-store", () => {
+  const storage = new Map<string, string>();
+  return {
+    setItemAsync: vi.fn(async (key: string, value: string) => {
+      storage.set(key, value);
+    }),
+    getItemAsync: vi.fn(async (key: string) => storage.get(key) ?? null),
+    deleteItemAsync: vi.fn(async (key: string) => {
+      storage.delete(key);
+    }),
+  };
+});
+
 // —— transport 工厂替身：阻断 connections.store → connection → direct/relay
 // → expo/fetch → react-native（Flow 语法 node 环境不可解析）的传递链，
 // 照 connections.store.test.ts 做法 ——

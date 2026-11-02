@@ -17,11 +17,16 @@ import { ACTION_DANGER } from "@/theme/colors";
 import type { TransportState } from "@/transport/types";
 import { wireRequest } from "@/transport/wire";
 
-/** 六态 → 色点（语义状态色：绿/黄/红/灰，非主题色，主题切换不变） */
+/** 九态 → 色点（语义状态色：绿/黄/红/灰，非主题色，主题切换不变）；
+ *  encrypted=绿（connected 的加密后继）、mitm-suspect/required-failed=红
+ *  （终局告警，安全批 H） */
 const STATE_DOT: Record<TransportState, string> = {
   connected: "#22c55e",
+  encrypted: "#22c55e",
   reconnecting: "#eab308",
   "invalid-token": "#FF3B30",
+  "mitm-suspect": "#FF3B30",
+  "required-failed": "#FF3B30",
   idle: "#8E8E93",
   connecting: "#8E8E93",
   closed: "#8E8E93",

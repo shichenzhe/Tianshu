@@ -28,10 +28,21 @@
   "reasonInvalidToken": "令牌无效",
   "reasonUnreachable": "无法连接",
   "reasonTimeout": "连接超时",
+  "reasonInvalidScheme": "中继地址必须以 ws:// 或 wss:// 开头",
+  "reasonPublicPlaintext": "公网/域名地址必须使用 wss://（明文 ws:// 的凭证可被链路嗅探）；内网 relay 请用 IP 直连",
+  "e2eMode": "端到端加密",
+  "e2eAuto": "自动",
+  "e2eAutoHint": "握手失败时降级明文",
+  "e2eRequired": "强制",
+  "e2eRequiredHint": "握手失败即断开，不走明文",
+  "fingerprint": "指纹（可选，防中间人）",
   "stateIdle": "未连接",
   "stateConnecting": "连接中",
   "stateConnected": "已连接",
   "stateReconnecting": "重连中",
   "stateInvalidToken": "令牌无效",
-  "stateClosed": "已断开"
+  "stateClosed": "已断开",
+  "stateEncrypted": "已加密",
+  "stateMitmSuspect": "指纹不符（疑似中间人）",
+  "stateRequiredFailed": "加密握手失败"
 }

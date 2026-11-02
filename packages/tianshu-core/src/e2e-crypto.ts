@@ -27,15 +27,21 @@ import {
   randomBytes,
   type KeyObject,
 } from "node:crypto";
-
-/** 握手帧 kind（spec §2.2，明文经 relay 照转发）——跨仓单份 */
-export const E2E_HANDSHAKE_HELLO = "e2e-hello";
-export const E2E_HANDSHAKE_ACK = "e2e-ack";
-/** 密文信封帧 kind（spec §2.3，包装一切后续业务帧） */
-export const E2E_SECURE_KIND = "e2e-secure";
-
-/** 接收端滑动窗口宽度（计数器记忆数；窗口语义见 {@link createE2ESession}） */
-export const E2E_REPLAY_WINDOW = 64;
+// wire 契约单源在 @tianshu/protocol（安全批 H 上收——移动端不能消费
+// core（langChain peer 不进 metro bundle），三端常量/帧类型单源在协议包；
+// 运行时密码学实现仍在 core，此处 re-export 保既有三方消费 import 不变）
+export {
+  E2E_HANDSHAKE_ACK,
+  E2E_HANDSHAKE_HELLO,
+  E2E_REPLAY_WINDOW,
+  E2E_SECURE_KIND,
+} from "@tianshu/protocol";
+import {
+  E2E_REPLAY_WINDOW,
+  E2E_SECURE_KIND,
+  type E2ESecureEnvelope,
+} from "@tianshu/protocol";
+export type { E2ESecureEnvelope } from "@tianshu/protocol";
 
 /** 原始 X25519 密钥对（公/私钥均为 32B 原始字节） */
 export type E2EKeyPair = {
@@ -51,13 +57,6 @@ export type E2ESessionKeys = {
 
 /** 会话角色：client=控制端（临时对持有方），server=被控端（静态对持有方） */
 export type E2ERole = "client" | "server";
-
-/** 密文信封（n=12B nonce，ct=密文+16B GCM tag，均 base64） */
-export type E2ESecureEnvelope = {
-  kind: "e2e-secure";
-  n: string;
-  ct: string;
-};
 
 /** 派生入参：二选一半区——被控端持（临时公钥+静态私钥），控制端持（临时私钥+静态公钥） */
 export type E2EDeriveKeys =

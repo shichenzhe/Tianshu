@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 import type { ServerEvent } from "@tianshu/protocol";
 import { createTransport, isValidConfig, type ConnectionConfig } from "../transport/connection";
@@ -6,6 +7,32 @@ import { Emitter, type Transport, type TransportState } from "../transport/types
 
 /** 持久化 key（对齐桌面 option 表存档语义：整块 JSON 读写） */
 const STORAGE_KEY = "tianshu-mobile.connections";
+
+/** 连接凭证 secure-store key（安全批 H：token 迁出 AsyncStorage——
+ *  AsyncStorage 明文落盘在越狱/备份提取面下不可信，凭证走钥匙串） */
+const secureKeyFor = (connId: string): string => `tianshu-mobile.token.${connId}`;
+
+/** 凭证字段取值（direct=token / relay=relayToken——剥离与回填对称） */
+function secretOf(cfg: ConnectionConfig): string | undefined {
+  return cfg.mode === "direct" ? cfg.token : cfg.relayToken;
+}
+
+/** 持久化剥离形态（凭证字段整体剔除，非置 undefined） */
+function sanitizedForDisk(cfg: ConnectionConfig): ConnectionConfig {
+  if (cfg.mode === "direct") {
+    const { token: _token, ...rest } = cfg;
+    return rest as ConnectionConfig;
+  }
+  const { relayToken: _relayToken, ...rest } = cfg;
+  return rest as ConnectionConfig;
+}
+
+/** 凭证回填（内存态完整形态） */
+function withSecret(cfg: ConnectionConfig, secret: string): ConnectionConfig {
+  return cfg.mode === "direct"
+    ? { ...cfg, token: secret }
+    : { ...cfg, relayToken: secret };
+}
 
 interface PersistedConnections {
   connections: ConnectionConfig[];
@@ -60,12 +87,24 @@ function teardown(id: string | null | undefined): void {
   });
 }
 
-/** fire-and-forget 持久化：写失败不阻塞交互，下次 save 覆盖重试 */
+/** fire-and-forget 持久化：写失败不阻塞交互，下次 save 覆盖重试。
+ *  凭证拆 secure-store（按连接 key），AsyncStorage 只落剥离形态 */
 function persist(): void {
   const { configs, activeConnId } = useConnectionsStore.getState();
+  for (const cfg of configs) {
+    const secret = secretOf(cfg);
+    if (secret !== undefined) {
+      void SecureStore.setItemAsync(secureKeyFor(cfg.id), secret).catch(() => {
+        /* 静默：下次 persist 重试 */
+      });
+    }
+  }
   void AsyncStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ connections: configs, activeConnId } satisfies PersistedConnections),
+    JSON.stringify({
+      connections: configs.map(sanitizedForDisk),
+      activeConnId,
+    } satisfies PersistedConnections),
   ).catch(() => {
     /* 静默：quota/IO 失败无需上抛 */
   });
@@ -84,15 +123,37 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<PersistedConnections>;
+      if (!Array.isArray(parsed.connections)) return;
+      // 凭证回填：旧档内嵌 token（安全批 H 前形态）就地迁 secure-store 并
+      // 标记覆写；新档（剥离形态）按 key 从 secure-store 取回
+      let migrated = false;
+      const configs = await Promise.all(
+        parsed.connections.map(async (c) => {
+          const embedded = secretOf(c);
+          if (embedded !== undefined) {
+            migrated = true;
+            await SecureStore.setItemAsync(secureKeyFor(c.id), embedded).catch(
+              () => undefined,
+            );
+          }
+          const secret =
+            embedded ??
+            (await SecureStore.getItemAsync(secureKeyFor(c.id)).catch(
+              () => null,
+            ));
+          return secret !== null && secret !== undefined
+            ? withSecret(c, secret)
+            : c;
+        }),
+      );
       // 坏档自愈：缺必填字段的条目过滤掉；激活 id 指向被滤条目则一并清
-      const configs = Array.isArray(parsed.connections)
-        ? parsed.connections.filter(isValidConfig)
-        : [];
+      const valid = configs.filter(isValidConfig);
       const saved = parsed.activeConnId ?? null;
       set({
-        configs,
-        activeConnId: saved && configs.some((c) => c.id === saved) ? saved : null,
+        configs: valid,
+        activeConnId: saved && valid.some((c) => c.id === saved) ? saved : null,
       });
+      if (migrated) persist(); // 覆写剥离版（secure 侧重复写无害）
     } catch {
       // 损坏存档按空注册表对待（下次 save 覆写自愈）
     }
@@ -110,6 +171,8 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
 
   remove: (id) => {
     teardown(id);
+    // secure 凭证随配置删除（不留孤儿密钥；fire-and-forget 同 persist 口径）
+    void SecureStore.deleteItemAsync(secureKeyFor(id)).catch(() => undefined);
     set((s) => {
       const states = { ...s.states };
       delete states[id];
@@ -122,12 +185,25 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
     persist();
   },
 
-  /** 激活/重激活：恒拆旧建新（含同 id——save 改配置后再 activate 即热重连） */
+  /** 激活/重激活：恒拆旧建新（含同 id——save 改配置后再 activate 即热重连）；
+   *  relay 连接注入 TOFU 指纹回填钩子（encrypted 落定且 config 未带指纹时
+   *  写回 config.fingerprint 并持久化——下次连接起强制校验） */
   activate: (id) => {
     const cfg = get().configs.find((c) => c.id === id);
     if (!cfg) return;
     teardown(get().activeConnId);
-    const transport = createTransport(cfg);
+    const transport = createTransport(cfg, {
+      onFingerprintPinned: (fp) => {
+        const current = get().configs.find((c) => c.id === id);
+        if (!current || current.fingerprint) return; // 已有指纹不覆写
+        set((s) => ({
+          configs: s.configs.map((c) =>
+            c.id === id ? { ...c, fingerprint: fp } : c,
+          ),
+        }));
+        persist();
+      },
+    });
     const unsubState = transport.onState((s) =>
       set((prev) => ({ states: { ...prev.states, [id]: s } })),
     );
@@ -180,5 +256,9 @@ export function useConnectionCapabilities(connId: string | null): string[] | nul
 // store 创建即恢复存档（void：fire-and-forget，异常在 load 内消化）
 void useConnectionsStore.getState().load();
 
-export { testConnection, isValidConfig } from "../transport/connection";
+export {
+  testConnection,
+  isValidConfig,
+  validateRelayUrlScheme,
+} from "../transport/connection";
 export type { ConnectionConfig, TestResult } from "../transport/connection";

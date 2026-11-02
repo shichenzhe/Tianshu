@@ -174,6 +174,25 @@ describe('RequestLoggerInterceptor 凭据脱敏', () => {
     expect(responseBody!.data.clientId).toBe('imac-1');
   });
 
+  it('AK 签发/轮换响应打码（Task 11 复审）：包装响应 data.akSecret 整值 ***，akId 保留', async () => {
+    // POST /relay-admin/aks 与 /rotate-secret 响应经 ResponseInterceptor 包装
+    // 后 tap 侧看到的形状——akSecret 为 32B hex 长期凭证（spec §5.2「明文
+    // 仅签发/轮换回显一次」不变量：按日轮转日志面同样不得落盘，
+    // clientToken 2026-10-28 批同款镜像）
+    const plain = 'a'.repeat(64);
+    const { responseLog, responseBody } = await runOnce(
+      { method: 'POST', url: '/relay-admin/aks', headers: {} },
+      {
+        code: '2000',
+        success: true,
+        data: { akId: '0d9f5a11-0000-4000-8000-000000000000', akSecret: plain },
+      },
+    );
+    expect(responseLog.response).not.toContain(plain);
+    expect(responseBody!.data.akSecret).toBe('***');
+    expect(responseBody!.data.akId).toBe('0d9f5a11-0000-4000-8000-000000000000');
+  });
+
   it('请求体 apiKey 打码（provider/save upsert 携带明文密钥）', async () => {
     const { requestLog } = await runOnce(
       {

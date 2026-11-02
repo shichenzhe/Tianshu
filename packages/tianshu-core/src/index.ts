@@ -32,6 +32,9 @@ export * from "./graph-compiler";
 export * from "./graph-prompt";
 export * from "./graph-http-guard";
 export * from "./crypto-envelope";
+// 备份档口令加密（安全审查 2026-11-02 剩余待办 1）：scrypt 派生 +
+// AES-256-GCM 档级流式加密，tsbak:v1 自描述头（旧明文档零迁移兼容）
+export * from "./backup-archive-crypto";
 export * from "./schedule";
 // E2E-T1：relay 端到端加密核心（X25519+HKDF+GCM 信封+重放窗口，纯
 // node:crypto；信封/握手 kind 常量为跨仓单份 wire 契约）

@@ -342,11 +342,14 @@ describe("relay E2E 握手与信封（被控端，默认 auto 模式）", () => 
         data: { records: [], total: 0 },
       });
 
-      // 密钥持久化：option 行已落（serializeStaticPair 前缀形态）
+      // 密钥持久化：option 行已落（批三·B 起经 option-secrets 字段级
+      // 信封密封——enc:v1: 包裹 serializeStaticPair 的
+      // tianshu-e2e-static-v1: 序列化；master-key 在本测试替身环境降级
+      // hex 降级链，openSecret 仍可解回）
       const keyRow = [...db.optionRows.values()].find(
         (row) => row.name === E2E_KEY_OPTION_NAME,
       );
-      expect(keyRow?.value).toMatch(/^tianshu-e2e-static-v1:/);
+      expect(keyRow?.value).toMatch(/^enc:v1:/);
     } finally {
       await relay.close();
     }

@@ -27,6 +27,11 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import prisma from "../../commons/prisma-client";
 import { tianshuRoot } from "../../commons/paths";
 import type { BackupListResult, BackupMeta } from "@tianshu/protocol";
+import {
+  decryptBackupArchive,
+  encryptBackupArchive,
+  isEncryptedBackupArchive,
+} from "@tianshu/core";
 import { publishFaceEvent } from "../server-face/face-events";
 import { BackupClient } from "./backup-client";
 import { verifyTarGzIntegrity } from "./ustar-tar";
@@ -224,15 +229,18 @@ async function defaultPickArchivePath(): Promise<string | null> {
 }
 
 /**
- * 本地导出完整链（无服务端）：数据根临时区打包 → copyFileSync 到用户
- * 目标（跨卷安全——目标常为外置盘/网络盘）→ 落盘字节 sha256 对拍
- * （spec §3.3 完整性闸门同口径；不符删目标坏档不留假备份）。进度仅
+ * 本地导出完整链（无服务端）：数据根临时区打包 → 落盘到用户目标 →
+ * sha256 对拍（spec §3.3 完整性闸门同口径；不符删目标坏档不留假备份）。
+ * 口令可选（安全审查 2026-11-02 剩余待办 1）：传入即档级加密
+ * （scrypt+AES-256-GCM，tsbak:v1 自描述头——旧明文档零迁移可恢复）；
+ * 此时代价与对拍口径切换为密文档（GCM 认证另置完整性防线）。进度仅
  * packing 一相（无上传相）。
  */
 export async function createBackupLocal(
   destPath: string,
   deps: BackupIpcDeps,
   emit: BackupEmit,
+  passphrase?: string,
 ): Promise<{ destPath: string; fileSize: number; sha256: string }> {
   const tempDir = mkdtempSync(path.join(tianshuRoot(), ".backup-local-"));
   try {
@@ -242,10 +250,23 @@ export async function createBackupLocal(
       tempDir,
       appVersion: (deps.appVersion ?? app.getVersion)(),
     });
-    // 异步 copy（GB 级档案 + 慢速目标盘不冻结主进程事件环）
-    await copyFile(archive.archivePath, destPath);
+    let expectedSha: string;
+    if (passphrase) {
+      // 档级加密：密文直接写目标（函数内部临时文件+rename，认证通过
+      // 才落位）；返回值为密文档自身哈希（对拍口径=落盘密文）
+      const { sha256 } = await encryptBackupArchive(
+        passphrase,
+        archive.archivePath,
+        destPath,
+      );
+      expectedSha = sha256;
+    } else {
+      // 异步 copy（GB 级档案 + 慢速目标盘不冻结主进程事件环）
+      await copyFile(archive.archivePath, destPath);
+      expectedSha = archive.meta.sha256;
+    }
     const sha256 = await hashFile(destPath);
-    if (sha256 !== archive.meta.sha256) {
+    if (sha256 !== expectedSha) {
       try {
         rmSync(destPath, { force: true });
       } catch {
@@ -253,7 +274,9 @@ export async function createBackupLocal(
       }
       throw new Error("备份校验失败：sha256 不匹配");
     }
-    return { destPath, fileSize: archive.meta.fileSize, sha256 };
+    // 返回值统一为最终落盘文档的口径（加密时=密文大小，明文时=档大小）
+    const fileSize = statSync(destPath).size;
+    return { destPath, fileSize, sha256 };
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -326,10 +349,15 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
 
   // —— 本地链路（无服务端）：不碰连接注册表，选择器取消返回 null ——
 
-  ipcMain.handle("backup:create:local", async () => {
+  ipcMain.handle("backup:create:local", async (_e, passphrase?: string) => {
     const destPath = await (deps.pickSavePath ?? defaultPickSavePath)();
     if (!destPath) return null;
-    return createBackupLocal(destPath, deps, emit);
+    return createBackupLocal(
+      destPath,
+      deps,
+      emit,
+      passphrase ? String(passphrase) : undefined,
+    );
   });
 
   // —— 多用户扩展（spec 2026-10-28 §2）：claim 申领 + 管理面五通道 ——
@@ -412,8 +440,10 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
   );
 
   // 本地档案恢复（无服务端）：存在性与档案预检都在断库前拦截——预检 =
-  // verifyTarGzIntegrity（gzip CRC 全量 + ustar 魔数，替代远端 sha256 闸门）
-  ipcMain.handle("backup:restore:local", async () => {
+  // verifyTarGzIntegrity（gzip CRC 全量 + ustar 魔数，替代远端 sha256 闸门）；
+  // 口令档（tsbak:v1）先解密到数据根临时区再走预检+恢复链（断库前拦截
+  // 口令错误/未传口令——零损伤），解密产物密文不落目标盘（只读介质安全）
+  ipcMain.handle("backup:restore:local", async (_e, passphrase?: string) => {
     const picked = await (deps.pickArchivePath ?? defaultPickArchivePath)();
     if (!picked) return null;
     // TOCTOU/坏路径统一收敛为「不存在」（不抛裸 ENOENT）
@@ -424,7 +454,21 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
       isRegularFile = false;
     }
     if (!isRegularFile) throw new Error(`备份档案不存在：${picked}`);
-    await verifyTarGzIntegrity(picked);
-    return runRestoreChain(picked, deps, emit);
+    if (!isEncryptedBackupArchive(picked)) {
+      await verifyTarGzIntegrity(picked);
+      return runRestoreChain(picked, deps, emit);
+    }
+    if (!passphrase) {
+      throw new Error("该备份档已加密，恢复需要提供导出时设置的口令");
+    }
+    const tempDir = mkdtempSync(path.join(tianshuRoot(), ".backup-decrypt-"));
+    try {
+      const plainPath = path.join(tempDir, "backup.tar.gz");
+      await decryptBackupArchive(String(passphrase), picked, plainPath);
+      await verifyTarGzIntegrity(plainPath);
+      return await runRestoreChain(plainPath, deps, emit);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 }

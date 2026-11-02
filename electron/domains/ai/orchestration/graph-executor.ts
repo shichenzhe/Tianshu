@@ -87,6 +87,7 @@ import {
   tokenize,
   type FusedHit,
 } from "@tianshu/core";
+import { openSecret } from "../../security/secret-field";
 import { normalizeWorkspacePath } from "../agent/workspace-path";
 import type { AgentStreamOptions } from "../agent/tool-gate";
 import { classifyError } from "../chat/error-classify";
@@ -3998,10 +3999,21 @@ function makeDatabaseNodeHandler(
         await resolveDataSource({
           dataSourceId: node.dataSourceId,
           userId: ctx.userId,
-          lookup: (id, owner) =>
-            prisma.dataSourceConfig.findFirst({
+          lookup: async (id, owner) => {
+            // 安全批 E1：数据源 password 密文透明解密（裸配置节点不走此路径）
+            const row = await prisma.dataSourceConfig.findFirst({
               where: { id, userId: owner },
-            }),
+            });
+            return row
+              ? {
+                  ...row,
+                  password: await openSecret(
+                    "dataSource.password",
+                    row.password,
+                  ),
+                }
+              : null;
+          },
         }),
         node.id,
       );

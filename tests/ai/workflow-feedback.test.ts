@@ -7,7 +7,17 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
+vi.mock("electron", () => ({
+  // 安全批：密封链引 safeStorage（降级形态——master-key 走 hex 路径）
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+    decryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+  }, ipcMain: { handle: vi.fn() } }));
 
 import {
   formatGraphIssues,

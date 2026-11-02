@@ -9,7 +9,17 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("electron", () => ({ shell: {}, ipcMain: { handle: vi.fn() } }));
+vi.mock("electron", () => ({
+  // 安全批：密封链引 safeStorage（降级形态——master-key 走 hex 路径）
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+    decryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+  }, shell: {}, ipcMain: { handle: vi.fn() } }));
 vi.mock("../../electron/domains/ai/agent/tool-registry", () => ({
   registry: { find: vi.fn(() => undefined) },
 }));

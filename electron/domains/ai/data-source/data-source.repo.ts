@@ -6,6 +6,7 @@
  */
 import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
+import { sealSecret, openSecret } from "../../security/secret-field";
 import { isPgEngine, toPgClientConfig } from "./connection-config";
 import type {
   DataSourceCreateParams,
@@ -123,7 +124,10 @@ export class DataSourceRepository {
         port: p.port ?? 5432,
         database: p.database.trim(),
         username: p.username.trim(),
-        password: p.password?.trim() ? p.password : null,
+        // 安全批 E1：密码密封落库（读侧只判存在性，无需解密）
+        password: p.password?.trim()
+          ? await sealSecret("dataSource.password", p.password)
+          : null,
         ssl: p.ssl ?? false,
         userId,
       },
@@ -144,7 +148,14 @@ export class DataSourceRepository {
         ...(p.port !== undefined ? { port: p.port } : {}),
         ...(p.database !== undefined ? { database: p.database.trim() } : {}),
         ...(p.username !== undefined ? { username: p.username.trim() } : {}),
-        ...(p.password !== undefined ? { password: p.password ?? null } : {}),
+        ...(p.password !== undefined
+          ? {
+              // 安全批 E1：同 create 密封；清空路径 null 透传
+              password: p.password?.trim()
+                ? await sealSecret("dataSource.password", p.password)
+                : p.password ?? null,
+            }
+          : {}),
         ...(p.ssl !== undefined ? { ssl: p.ssl } : {}),
       },
     });
@@ -168,7 +179,13 @@ export class DataSourceRepository {
     }
     const { Client } = await import("pg");
     const startedAt = Date.now();
-    const client = new Client(toPgClientConfig(row, TEST_TIMEOUT_MS));
+    // 安全批 E1：连通性测试读侧透明解密
+    const client = new Client(
+      toPgClientConfig(
+        { ...row, password: await openSecret("dataSource.password", row.password) },
+        TEST_TIMEOUT_MS,
+      ),
+    );
     try {
       await client.connect();
       await client.query("SELECT 1");

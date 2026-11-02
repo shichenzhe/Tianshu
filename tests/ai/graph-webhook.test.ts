@@ -30,6 +30,7 @@ vi.mock("../../electron/commons/prisma-client", () => {
     );
   return {
     default: {
+      __filterOf: filterOf,
       option: {
         findFirst: vi.fn(
           async ({ where }: { where: Record<string, unknown> }) =>
@@ -166,8 +167,10 @@ beforeAll(async () => {
         if (where.name === "webhook.port") {
           return { value: String(webhookPort) };
         }
-        const rows = await Promise.resolve(null);
-        return rows;
+        // 安全批 D1：security.masterKey 行走内存仓库（解封依赖同一主密钥，
+        // 返回 null 会导致每次 getMasterKey 重新生成 → 解封失败）
+        const lookup = (prisma as unknown as { __filterOf: (w: Record<string, unknown>) => unknown[] }).__filterOf;
+        return lookup(where)[0] ?? null;
       },
     ) as never;
 });

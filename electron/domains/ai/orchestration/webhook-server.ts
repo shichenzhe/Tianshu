@@ -298,7 +298,10 @@ export async function getWebhookRegistration(
   if (!row) {
     return null;
   }
-  const config = parseConfigValue(row.value);
+  // 安全批 D1：token 密文透明解封（await——async 函数）
+  const config = parseConfigValue(
+    (await openNamedSecret("webhook.config", row.value)) ?? row.value,
+  );
   registrations.set(config.token, { ...config, graphId, userId });
   const bound = await ensureWebhookServer();
   return {
@@ -315,7 +318,11 @@ async function reloadRegistrations(): Promise<void> {
   for (const row of rows) {
     const matched = /^graph:(\d+)$/.exec(row.name);
     if (matched && row.userId !== null) {
-      const config = parseConfigValue(row.value);
+      // 安全批 D1 补丁：reload 路径同款解封（getWebhookRegistration 已封
+      // 而 reload 漏——重启装载读密封值解析失败致全部 token 失效 404）
+      const config = parseConfigValue(
+        (await openNamedSecret("webhook.config", row.value)) ?? row.value,
+      );
       registrations.set(config.token, {
         ...config,
         graphId: Number(matched[1]),

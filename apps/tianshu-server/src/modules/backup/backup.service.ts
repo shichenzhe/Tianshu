@@ -99,7 +99,8 @@ export class BackupService {
       throw new BusinessException('分块数至少为 1', 'BACKUP_BAD_SEQ');
     }
     const id = randomUUID();
-    mkdirSync(this.dir(id), { recursive: true });
+    // 安全批 D2：备份目录 0700（档内含全库快照——对话内容等）
+    mkdirSync(this.dir(id), { recursive: true, mode: 0o700 });
     // 显式挑选字段落 meta（非 spread req）——owner 一律自 identity 注入，
     // 客户端自报 owner 等多余字段不透传落盘（spread 穿透已关）
     const meta: BackupMeta = {
@@ -115,7 +116,9 @@ export class BackupService {
       ...(req.deviceName !== undefined ? { deviceName: req.deviceName } : {}),
       owner: this.ownerOf(identity),
     };
-    writeFileSync(this.metaPath(id), JSON.stringify(meta, null, 2));
+    writeFileSync(this.metaPath(id), JSON.stringify(meta, null, 2), {
+      mode: 0o600,
+    });
     this.cursor.set(id, 0);
     return { id };
   }

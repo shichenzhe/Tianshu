@@ -17,6 +17,17 @@ vi.mock("electron", () => ({
   app: { isPackaged: false },
   ipcMain: { handle: vi.fn() },
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  // 安全批 D1：persistence 密封链引 safeStorage（测试环境不可用→
+  // master-key 走 hex 降级，密封语义仍真实执行）
+  safeStorage: {
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+    decryptString: () => {
+      throw new Error("safeStorage unavailable in test");
+    },
+  },
 }));
 vi.mock("../../../electron/commons/Log", () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -86,8 +97,10 @@ function resetOptionTable(): void {
 }
 
 function readPersistedShape(): PersistedShape {
-  expect(optionRows).toHaveLength(1);
-  return JSON.parse(optionRows[0].value) as PersistedShape;
+  // 安全批 D1：security.masterKey 行与连接行并存——按 name 定位连接行
+  const row = optionRows.find((r) => r.name === "serverConnections");
+  expect(row).toBeDefined();
+  return JSON.parse(row!.value) as PersistedShape;
 }
 
 const DIRECT_CONFIG: ConnectionConfig = {
@@ -250,7 +263,11 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
       mode: "direct",
       state: "idle",
     });
-    expect(readPersistedShape().connections[0]).toEqual(DIRECT_CONFIG);
+    // 安全批 D1：token 密封落表（enc:v1: 前缀 + base64；其余字段原样）
+    const persisted = readPersistedShape().connections[0] as typeof DIRECT_CONFIG & { token: string };
+    expect(persisted.id).toBe(DIRECT_CONFIG.id);
+    expect(persisted.token).toMatch(/^enc:v1:/);
+    expect(persisted.token).not.toContain(DIRECT_CONFIG.token);
 
     await registry.activate("conn-1");
     expect(readPersistedShape().activeConnId).toBe("conn-1");

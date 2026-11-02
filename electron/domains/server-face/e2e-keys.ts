@@ -6,6 +6,7 @@
 // 存储损坏（畸形前缀/长度/公私不匹配）自愈重生成——指纹随更，控制端
 // expectedFingerprint 校验不匹配断开，属显式密钥轮换语义。
 import prisma from "../../commons/prisma-client";
+import { openNamedSecret, sealNamedSecret } from "../security/option-secrets";
 import Log from "../../commons/Log";
 import {
   generateStaticPair,
@@ -33,7 +34,10 @@ export async function readE2eStaticPair(): Promise<E2EKeyPair | null> {
   });
   if (!row) return null;
   try {
-    return parseStaticPair(row.value);
+    // 安全批 D1：私钥密文透明解封（旧明文原样）
+    const opened = await openNamedSecret("serverFace.e2eKey", row.value);
+    if (opened === null) return null;
+    return parseStaticPair(opened);
   } catch (e) {
     Log.warn("serverFace e2eKey 存储损坏，将重生成（指纹随更）", e);
     return null;
@@ -46,7 +50,12 @@ export async function ensureE2eStaticPair(): Promise<E2EKeyPair> {
   const existing = await readE2eStaticPair();
   if (existing) return existing;
   const pair = generateStaticPair();
-  const value = serializeStaticPair(pair);
+  // 安全批 D1：私钥密封落表
+  const sealed = await sealNamedSecret(
+    "serverFace.e2eKey",
+    serializeStaticPair(pair),
+  );
+  const value = sealed ?? serializeStaticPair(pair);
   const rowId = await findKeyRowId();
   if (rowId) {
     await prisma.option.update({ where: { id: rowId }, data: { value } });

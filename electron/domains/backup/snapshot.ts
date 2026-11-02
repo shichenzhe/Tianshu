@@ -4,7 +4,8 @@
  * sha256 + BackupCreateRequest meta。快照函数注入化：vitest（node ABI）
  * 不可加载 better-sqlite3，替身注入（保留策略批先例）。
  * 排除项（logs/file-history 等）按构造保证：只收 allowlist 资产目录 +
- * database + .jwt-secret，其余再生产物天然不进档。
+ * database（安全批 D2：.jwt-secret 已出档——档内外流不得复活旧签名
+ * 密钥，恢复后首次访问重新生成=自动轮换），其余再生产物天然不进档。
  */
 import { createHash } from "node:crypto";
 import {
@@ -141,14 +142,10 @@ function collectEntries(dbSnapshot: string): TarEntry[] {
   for (const dir of BACKUP_ASSET_DIRS) {
     if (existsSyncSafe(assetRoots[dir])) walk(assetRoots[dir], dir, entries);
   }
-  const secret = jwtSecretPath();
-  if (existsSyncSafe(secret)) {
-    entries.push({
-      relPath: ".jwt-secret",
-      absPath: secret,
-      size: statSync(secret).size,
-    });
-  }
+  // 安全批 D2：.jwt-secret 不入备份档——档内外流即旧签名密钥复活
+  // （恢复侧若解到该文件也跳过：restore.ts allowlist 已同步剔除；
+  // 恢复后 JWT 面按新装语义由首次访问重新生成密钥=自动轮换）
+  void jwtSecretPath;
   return entries;
 }
 

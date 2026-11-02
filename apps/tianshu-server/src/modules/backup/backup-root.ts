@@ -17,6 +17,7 @@ export function resolveBackupRoot(dataRoot?: string): string {
         dataRoot ?? resolveDataRoot('~/.tianshu-server'),
         'backups',
       );
-  mkdirSync(root, { recursive: true });
+  // 安全批 D2：备份根 0700（同机其他用户不可读）
+  mkdirSync(root, { recursive: true, mode: 0o700 });
   return root;
 }

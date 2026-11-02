@@ -383,8 +383,8 @@
       "mirrorPath": "electron/domains/ai/orchestration/webhook-server.ts",
       "serverPath": "src/modules/webhook/webhook.service.ts",
       "baselineDiff": true,
-      "baselineLines": 515,
-      "note": "入站 webhook（GA-T7）：语义重写非逐字——mirror 本地 http server（127.0.0.1:27400）收敛为 Nest 控制器+应用生命周期，22 条语义对照见 GA-T7 报告——基线必然大"
+      "baselineLines": 525,
+      "note": "入站 webhook（GA-T7）：语义重写非逐字——mirror 本地 http server（127.0.0.1:27400）收敛为 Nest 控制器+应用生命周期，22 条语义对照见 GA-T7 报告——基线必然大。2026-11-02 安全批 D1：mirror webhook-server token 密封（sealNamedSecret/openNamedSecret 注入）单侧——server 侧 webhook.service 的 token 存储路径不同（DB 列非 option 行），密封接入随 server 侧后续批——基线 515→525 过账"
     },
     {
       "id": "personalization-repo-read",

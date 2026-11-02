@@ -194,6 +194,31 @@ function validateConfig(raw: unknown): ConnectionConfig {
     if (!/^wss?:\/\//.test(candidate.relayUrl!)) {
       throw new Error("中继模式 relayUrl 必须是 ws(s):// 地址");
     }
+    // 安全批 B7：公网明文 ws:// 拒绝——relay 全凭证（relayToken/
+    // connectionId）走 upgrade URL query，公网明文链路被动嗅探即得
+    // 全权凭证（被控端对 req 自动注入 TIANSHU_TOKEN Bearer）。仅放行
+    // loopback/localhost 与私网字面 IP 的 ws://（家庭内网 relay）；域名
+    // 与公网形态要求 wss://（错误信息指明改法）
+    if (candidate.relayUrl!.startsWith("ws://")) {
+      let host = "";
+      try {
+        host = new URL(candidate.relayUrl!).hostname.toLowerCase();
+      } catch {
+        /* 下方判定兜底 */
+      }
+      const isPrivateLiteral =
+        host === "localhost" ||
+        host.endsWith(".localhost") ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+      if (!isPrivateLiteral) {
+        throw new Error(
+          "公网/域名地址必须使用 wss://（明文 ws:// 的凭证可被链路嗅探）；内网 relay 请用 IP 直连或部署 TLS",
+        );
+      }
+    }
     config.relayUrl = candidate.relayUrl;
     config.relayToken = candidate.relayToken;
     config.connectionId = candidate.connectionId;

@@ -260,6 +260,59 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
     expect(readPersistedShape().connections).toEqual([]);
   });
 
+  it("安全批 B7：公网/域名明文 ws:// 拒绝；内网字面 IP 与 localhost 放行", async () => {
+    const registry = newRegistry();
+    const relayBase = {
+      name: "中继",
+      mode: "relay" as const,
+      relayToken: "t",
+      connectionId: "inst-1",
+    };
+    // 域名与公网 IP 的 ws:// 拒（凭证走 URL query 可被嗅探）
+    await expect(
+      registry.saveConnection({
+        ...relayBase,
+        id: "c-x1",
+        relayUrl: "ws://relay.example.com/ws",
+      }),
+    ).rejects.toThrow(/wss/);
+    await expect(
+      registry.saveConnection({
+        ...relayBase,
+        id: "c-x2",
+        relayUrl: "ws://8.8.8.8/ws",
+      }),
+    ).rejects.toThrow(/wss/);
+    // 十六进制编码 IP（0x7f000001）被 Node URL 归一为 127.0.0.1
+    // （loopback）——按 loopback 语义放行（非绕过：归一后判定）
+    await expect(
+      registry.saveConnection({
+        ...relayBase,
+        id: "c-x3",
+        relayUrl: "ws://0x7f000001/ws",
+      }),
+    ).resolves.toBeDefined();
+    // 内网字面 IP 与 localhost 放行
+    for (const relayUrl of [
+      "ws://127.0.0.1:8080/ws",
+      "ws://localhost:8080/ws",
+      "ws://192.168.1.5:8080/ws",
+      "ws://10.0.0.2:8080/ws",
+    ]) {
+      await expect(
+        registry.saveConnection({ ...relayBase, id: "c-ok", relayUrl }),
+      ).resolves.toBeDefined();
+    }
+    // wss:// 任意形态放行
+    await expect(
+      registry.saveConnection({
+        ...relayBase,
+        id: "c-wss",
+        relayUrl: "wss://relay.example.com/ws",
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it("安全批 S2：relay 新建缺省 required；存量更新不动原值；显式 auto 尊重", async () => {
     const registry = newRegistry();
     const relayBase = {

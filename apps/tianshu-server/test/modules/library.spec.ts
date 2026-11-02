@@ -127,9 +127,13 @@ function makePrismaDouble() {
 
 type PrismaDouble = ReturnType<typeof makePrismaDouble>['prisma'];
 
-function makeService(prisma: PrismaDouble) {
+function makeService(
+  prisma: PrismaDouble,
+  vectorizeDeps: ConstructorParameters<typeof LibraryService>[1] = {},
+) {
   return new LibraryService(
     new LibraryDiskRepository(prisma as never, libraryRoot),
+    vectorizeDeps,
   );
 }
 
@@ -808,5 +812,66 @@ describe('toLibraryItemDto 路径剔除', () => {
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
     });
+  });
+});
+
+describe('向量化入库接线（spec 2026-11-02-library-vectorize-server-design）', () => {
+  /** 全注入 vectorize deps：embed/upsert/deleteSource 全 spy，db 恒有模型 */
+  function makeVectorizeDeps() {
+    const upserts: string[] = [];
+    const deletedSources: string[] = [];
+    const deps = {
+      db: { model: { findFirst: async () => ({ id: 9 }) } },
+      embed: async (_modelId: number, texts: string[]) =>
+        texts.map(() => [1, 0.5]),
+      upsert: async (params: { sourceName: string }) => {
+        upserts.push(params.sourceName);
+      },
+      deleteSource: async (
+        _userId: number,
+        _collection: string,
+        sourceName: string,
+      ) => {
+        deletedSources.push(sourceName);
+      },
+    } as ConstructorParameters<typeof LibraryService>[1];
+    return { deps, upserts, deletedSources };
+  }
+
+  it('writeContent 写成功后触发向量化（fire-and-forget：flush 一拍后 upsert 到位）', async () => {
+    const { prisma } = makePrismaDouble();
+    const v = makeVectorizeDeps();
+    const service = makeService(prisma, v.deps);
+    const file = await service.createFile('笔记.md', null);
+    await service.writeContent(file.id, '要被向量的正文内容');
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(v.upserts).toEqual(['笔记.md']);
+  });
+
+  it('uploadFile 文本文件触发向量化；png 二进制不触发（isTextualContent 拦截）', async () => {
+    const { prisma } = makePrismaDouble();
+    const v = makeVectorizeDeps();
+    const service = makeService(prisma, v.deps);
+    await service.uploadFile({
+      name: '文档.md',
+      base64: Buffer.from('md 正文', 'utf8').toString('base64'),
+    });
+    await service.uploadFile({
+      name: '图.png',
+      base64: Buffer.from('fakepng', 'utf8').toString('base64'),
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(v.upserts).toEqual(['文档.md']);
+  });
+
+  it('rename/delete 后清旧名向量块（防孤儿检索）', async () => {
+    const { prisma } = makePrismaDouble();
+    const v = makeVectorizeDeps();
+    const service = makeService(prisma, v.deps);
+    const file = await service.createFile('旧名.md', null);
+    await service.rename(file.id, '新名.md');
+    expect(v.deletedSources).toEqual(['旧名.md']);
+    await service.delete([file.id]);
+    expect(v.deletedSources).toEqual(['旧名.md', '新名.md']);
   });
 });

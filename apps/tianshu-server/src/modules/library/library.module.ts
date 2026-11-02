@@ -38,7 +38,25 @@ import { LibraryService } from './library.service';
         ),
       inject: [PrismaService, LoggerFactory, ConfigService],
     },
-    LibraryService,
+    // LibraryService 工厂化（2026-11-02 向量化批）：vectorize deps 显式
+    // 装配（prisma 查缺省 embedding 模型 + onWarn 观测日志）——构造可选
+    // 参若走 Nest 自动 DI 会按类型 token 解析失败，工厂先例同 repo
+    {
+      provide: LibraryService,
+      useFactory: (
+        repo: LibraryDiskRepository,
+        prisma: PrismaService,
+        logFactory: LoggerFactory,
+      ) =>
+        new LibraryService(repo, {
+          db: prisma,
+          onSkip: (reason, detail) =>
+            logFactory.create('LibraryVectorize').warn(reason, {
+              detail: typeof detail === 'object' ? JSON.stringify(detail) : String(detail),
+            }),
+        }),
+      inject: [LibraryDiskRepository, PrismaService, LoggerFactory],
+    },
   ],
 })
 export class LibraryModule {}

@@ -16,6 +16,7 @@ import { rankBm25, type FusedHit } from '@tianshu/core';
 import { graphExecutorRuntime } from './executor-runtime';
 import {
   countCollectionPg,
+  deleteSourceChunksPg,
   isPgSearchConfigured,
   searchChunksPg,
   searchFtsPg,
@@ -192,5 +193,20 @@ export async function countCollection(
   }
   return graphExecutorRuntime().db.vectorChunk.count({
     where: { userId, collection },
+  });
+}
+
+/** 条目级块清理（spec 2026-11-02 资料库向量化批）：library delete/rename
+ *  后清旧 sourceName 块防孤儿检索（upsert 语义只覆盖同名的写路径） */
+export async function deleteSourceChunks(
+  userId: number,
+  collection: string,
+  sourceName: string,
+): Promise<void> {
+  if (isPgSearchConfigured()) {
+    return deleteSourceChunksPg(userId, collection, sourceName);
+  }
+  await graphExecutorRuntime().db.vectorChunk.deleteMany({
+    where: { userId, collection, sourceName },
   });
 }

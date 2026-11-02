@@ -360,3 +360,23 @@ export async function countCollectionPg(
     throw toPgError(e);
   }
 }
+
+/** 条目级块清理（vector-store deleteSourceChunks 的 PG 实现，spec
+ * 2026-11-02 资料库向量化批）：delete/rename 后清旧 sourceName 块 */
+export async function deleteSourceChunksPg(
+  userId: number,
+  collection: string,
+  sourceName: string,
+): Promise<void> {
+  try {
+    await ensureSearchPg();
+    await (
+      await getPool()
+    ).query(
+      `DELETE FROM ${VECTOR_CHUNK_PG} WHERE user_id = $1 AND collection = $2 AND source_name = $3`,
+      [userId, collection, sourceName],
+    );
+  } catch (e) {
+    throw toPgError(e);
+  }
+}

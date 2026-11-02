@@ -25,6 +25,12 @@ import {
   LibraryDiskRepository,
   type LibraryItem,
 } from 'src/core/library/library-disk.repository';
+import {
+  LIBRARY_VECTOR_COLLECTION,
+  vectorizeLibraryContent,
+  type LibraryVectorizeDeps,
+} from 'src/core/library/library-vectorize';
+import { deleteSourceChunks } from 'src/core/graph/vector-store';
 
 /** readImage 图片上限（对齐 mirror library-tap/workspace-files
  *  IMAGE_READ_LIMIT 与 face image 端点 10MB 口径；文本仍 512KiB） */
@@ -71,7 +77,40 @@ export function toLibraryItemDto(item: LibraryItem): LibraryItemDto {
 
 @Injectable()
 export class LibraryService {
-  constructor(private readonly repo: LibraryDiskRepository) {}
+  constructor(
+    private readonly repo: LibraryDiskRepository,
+    /** 向量化依赖（spec 2026-11-02：module 工厂注入 prisma/onWarn，测试
+     *  注入 fake embed/upsert/deleteSource；缺省动态解析 graph 运行时） */
+    private readonly vectorizeDeps: LibraryVectorizeDeps = {},
+  ) {}
+
+  /** 写后向量化（fire-and-forget）：上传/写内容响应不被 embedding 往返
+   *  拖慢；skip/失败经 onSkip 观测（重建面 = 重写自动 + graph 节点手动） */
+  private vectorizeAfterWrite(row: LibraryItem, content: string): void {
+    void vectorizeLibraryContent(this.vectorizeDeps, {
+      userId: COMPANION_USER_ID,
+      sourceName: row.name,
+      content,
+      mimeType: row.mimeType,
+      fileType: row.fileType,
+    }).catch((e: unknown) =>
+      this.vectorizeDeps.onSkip?.('library_vectorize_unexpected', e),
+    );
+  }
+
+  /** 条目级孤儿块清理（delete/rename 后；await 防孤儿检索窗口）。
+   *  deps.deleteSource 注入面（测试替身；缺省 vector-store 真身含 PG 路由） */
+  private async clearSourceChunks(sourceName: string): Promise<void> {
+    try {
+      await (this.vectorizeDeps.deleteSource ?? deleteSourceChunks)(
+        COMPANION_USER_ID,
+        LIBRARY_VECTOR_COLLECTION,
+        sourceName,
+      );
+    } catch {
+      // 清块失败不炸删除/改名主面（孤儿块检索侧有回退，重跑可清）
+    }
+  }
 
   /** 行校验：不存在 LIBRARY_NOT_FOUND（存在性不泄露，同 repo mustGet
    *  口径）；非文件 LIBRARY_NOT_FILE（folder 无磁盘实体 / link 无内容
@@ -158,9 +197,12 @@ export class LibraryService {
   }
 
   async rename(id: number, name: string): Promise<LibraryItemDto> {
-    return toLibraryItemDto(
-      await this.repo.rename(id, name, COMPANION_USER_ID),
-    );
+    const before = await this.repo.get(id, COMPANION_USER_ID);
+    const row = await this.repo.rename(id, name, COMPANION_USER_ID);
+    if (before?.name && before.name !== row.name) {
+      await this.clearSourceChunks(before.name);
+    }
+    return toLibraryItemDto(row);
   }
 
   async move(ids: number[], targetParentId: number | null): Promise<null> {
@@ -168,7 +210,16 @@ export class LibraryService {
   }
 
   async delete(ids: number[]): Promise<null> {
-    return this.repo.delete(ids, COMPANION_USER_ID);
+    // 先取行名（file 才可能有向量块；folder/link 清块零行无害不细分）
+    const rows = await Promise.all(
+      ids.map((id) => this.repo.get(id, COMPANION_USER_ID)),
+    );
+    const names = rows
+      .filter((row): row is LibraryItem => row !== null && row.kind === 'file')
+      .map((row) => row.name);
+    const result = await this.repo.delete(ids, COMPANION_USER_ID);
+    await Promise.all(names.map((name) => this.clearSourceChunks(name)));
+    return result;
   }
 
   async subtreeCount(id: number): Promise<number> {
@@ -232,9 +283,13 @@ export class LibraryService {
       throw new BusinessException('超过 512KB 上限', 'LIBRARY_TOO_LARGE');
     }
     try {
-      return toLibraryItemDto(
-        await this.repo.writeFileContent(id, content, COMPANION_USER_ID),
+      const row = await this.repo.writeFileContent(
+        id,
+        content,
+        COMPANION_USER_ID,
       );
+      this.vectorizeAfterWrite(row, content);
+      return toLibraryItemDto(row);
     } catch (error) {
       if (error instanceof BusinessException) throw error;
       throw new BusinessException('写入失败', 'LIBRARY_WRITE_FAILED');
@@ -271,14 +326,16 @@ export class LibraryService {
       throw new BusinessException('文件超过 3MB 上限', 'LIBRARY_UPLOAD_INVALID');
     }
     try {
-      return toLibraryItemDto(
-        await this.repo.uploadFileBuffer(
-          buffer,
-          input.name,
-          parentId,
-          COMPANION_USER_ID,
-        ),
+      const row = await this.repo.uploadFileBuffer(
+        buffer,
+        input.name,
+        parentId,
+        COMPANION_USER_ID,
       );
+      // 文本判定在 vectorize 内（utf8 解码对白名单文本型无损；二进制
+      // buffer 解码串被 isTextualContent 拦下）
+      this.vectorizeAfterWrite(row, buffer.toString('utf8'));
+      return toLibraryItemDto(row);
     } catch (error) {
       if (error instanceof BusinessException) throw error;
       if (error instanceof Error && error.message === '名称无效') {

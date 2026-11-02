@@ -193,6 +193,29 @@ describe('RequestLoggerInterceptor 凭据脱敏', () => {
     expect(responseBody!.data.akId).toBe('0d9f5a11-0000-4000-8000-000000000000');
   });
 
+  it('token 换发响应打码（Task 12）：包装响应 data.accessToken 整值 ***（camelCase 命中既有 accesstoken 键），expiresAt/maxAgeSec 保留', async () => {
+    // POST /relay-admin/token 成功响应经 ResponseInterceptor 包装后 tap 侧
+    // 看到的形状——accessToken 为 30d access JWT（spec §5.3），凭证不落
+    // 按日轮转日志（脱敏键白名单小写比较，'accesstoken' 覆盖 camelCase 键）
+    const plain = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.cGF5bG9hZA.signature';
+    const { responseLog, responseBody } = await runOnce(
+      { method: 'POST', url: '/relay-admin/token', headers: {} },
+      {
+        code: '2000',
+        success: true,
+        data: {
+          accessToken: plain,
+          expiresAt: 1790000000000,
+          maxAgeSec: 2592000,
+        },
+      },
+    );
+    expect(responseLog.response).not.toContain(plain);
+    expect(responseBody!.data.accessToken).toBe('***');
+    expect(responseBody!.data.maxAgeSec).toBe(2592000);
+    expect(responseBody!.data.expiresAt).toBe(1790000000000);
+  });
+
   it('请求体 apiKey 打码（provider/save upsert 携带明文密钥）', async () => {
     const { requestLog } = await runOnce(
       {

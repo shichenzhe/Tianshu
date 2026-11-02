@@ -17,6 +17,8 @@ import { RaAuthModule } from './auth/ra-auth.module';
 import { RaAuditModule } from './audit/audit.module';
 import { RaUsersModule } from './users/users.module';
 import { AksModule } from './aks/aks.module';
+import { TokenModule } from './token/token.module';
+import { RevocationsModule } from './revocations/revocations.module';
 
 /**
  * relay-admin 运营控制平面独立 AppModule（Task 9）
@@ -32,6 +34,9 @@ import { AksModule } from './aks/aks.module';
  * Task 10 起：RaAuditModule（审计 @Global）+ RaUsersModule（用户管理
  * API），Task 9 的临时探针控制器已随真实路由上线删除。Task 11 起：
  * AksModule（AK 生命周期——签发/禁用/轮换/续期 + isAkUsable 服务面）。
+ * Task 12 起：TokenModule（AK 换 access，@Public 协议端点）+
+ * RevocationsModule（CRL 名单，@Public + internal secret 手检——两端点
+ * 路由级绑 RelayProtocolFilter 直出真实状态码，不走管理面 200 信封）。
  */
 @Module({
   imports: [
@@ -54,6 +59,8 @@ import { AksModule } from './aks/aks.module';
     RaAuthModule,
     RaUsersModule,
     AksModule,
+    TokenModule,
+    RevocationsModule,
     HealthModule,
   ],
   providers: [

@@ -205,9 +205,12 @@ export class AksService {
 
   /** 凭证可用性判定（Task 12 token 端点消费）。失败 reason 语义：
    * not-found（akId 不存在，含 relationMode=prisma 无外键下的属主悬空行）/
-   * disabled / expired（expireAt 动态判定，非存储态）/ bad-secret（sha256
-   * 摘要常时比较）。成功路径回带 userId/role/quota（quota 自属主 user.plan
-   * 查 PLAN_QUOTA，未知 plan 降级 beta——见 PLAN_QUOTA 头注释裁定） */
+   * disabled（AK 禁用，**或属主用户被禁用**——纵深闸：正常路径
+   * users.disable 已级联禁用 AK，此处兜住直插库/级联中断的旁路状态，
+   * T11 复审带进 T12 的裁定）/ expired（expireAt 动态判定，非存储态）/
+   * bad-secret（sha256 摘要常时比较）。成功路径回带 userId/role/quota
+   * （quota 自属主 user.plan 查 PLAN_QUOTA，未知 plan 降级 beta——见
+   * PLAN_QUOTA 头注释裁定） */
   async isAkUsable(akId: string, secretPlain: string): Promise<AkUsableResult> {
     const ak = await this.raPrisma.raAccessKey.findUnique({
       where: { id: akId },
@@ -229,6 +232,9 @@ export class AksService {
     });
     if (!user) {
       return { ok: false, reason: 'not-found' };
+    }
+    if (user.status !== 'active') {
+      return { ok: false, reason: 'disabled' };
     }
     return {
       ok: true,

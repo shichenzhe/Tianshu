@@ -7,8 +7,10 @@
  *   shouldRenew 真（剩 <50%，@tianshu/core 单源）→ POST
  *   {adminUrl}/relay-admin/token（Basic akId:akSecret，T12 契约）换新后
  *   首帧 auth token=新 access，换新记录回写 SecureStore；
- * - 换新 401 → invalid-token 粘滞（不连、不重试——复用 4001 语义面，
- *   连接页红点提示重贴 AK）；无存量+网络失败同归 invalid-token；
+ * - 换新 401 按 data.reason 分支（四端同构）：disabled/expired/bad-secret
+ *   → invalid-token 粘滞（不连、不重试——复用 4001 语义面，连接页红点
+ *   提示重贴 AK）；无 body（代理质询、中间盒）/not-found → 瞬态降级
+ *   存量照常连；无存量+网络失败同归 invalid-token；
  * - 换新网络失败 + 存量未过期 → 降级照常连；
  * - 换 AK（akId 变更）→ 存量作废重换（防旧租户 access 复用）；
  * - 顶替竞态（T15 教训携带）：激活切换后迟到的换新成功不踩新状态；
@@ -242,6 +244,27 @@ describe("relay 连接 AK 凭证——连接前续期", () => {
     expect(useConnectionsStore.getState().selectActive()).toBeNull();
     await settle(80);
     expect(fetchMock).toHaveBeenCalledTimes(1); // 粘滞：零重试
+  });
+
+  it("换新 401 无 body（代理质询/中间盒）→ 瞬态：降级存量照常连（非 invalid-ak 粘滞）", async () => {
+    seedAccess(0.3); // 剩 30%：shouldRenew 真但未过期（降级可用）
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      json: async () => {
+        throw new SyntaxError("Unexpected end of JSON input");
+      },
+    });
+    const s = useConnectionsStore.getState();
+    s.save(akRelayCfg);
+    s.activate("r1");
+    await settle();
+
+    // 瞬态不落 invalid-token 粘滞态：降级用未过期存量照常建连
+    expect(useConnectionsStore.getState().states["r1"]).not.toBe("invalid-token");
+    const ws = FakeWebSocket.instances.at(-1)!;
+    ws.onopen?.();
+    expect((ws.frames()[0] as { token: string }).token).toBe("access-stored");
   });
 
   it("换新网络失败 + 存量未过期 → 降级照常连（auth=存量 access）", async () => {

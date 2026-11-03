@@ -5,8 +5,11 @@
 //   循环）：存量新鲜直用零 admin 请求；缺失/剩<50%/换绑 → POST token
 //   端点换新；换新瞬态失败且存量未过期降级照常连；换发 access 消费于
 //   relay 首帧 auth（token=access，非 AK 凭证本身）
-// - 401 / 无存量+换新失败 → 连接态 invalid-token 粘滞（复用既有凭证
-//   失效呈现面；请求路径不自动重试，save 重建自愈）
+// - 401 按 data.reason 分支（四端同构）：disabled/expired/bad-secret →
+//   invalid-token 粘滞（复用既有凭证失效呈现面；请求路径不自动重试，
+//   save 重建自愈）；无 body（代理质询）/not-found（库重建窗口）→ 瞬态
+//   （降级存量或 unavailable——下次请求/激活重建自愈）；无存量+换新
+//   失败 → 同 invalid-token 呈现
 // - 顶替守卫（T15 fix-round 教训）：换发 await 窗口内 save 顶掉旧配置
 //   → 迟到结果不落地（不装 stale transport、不踩新配置）
 // - admin 桩：node:http 最小行为（记录 Basic 出示 + 可编程响应序列）；
@@ -50,6 +53,9 @@ import {
   resolveRelayAccessToken,
   type RelayAkCredentials,
 } from "../../../electron/domains/server/relay-ak";
+import Log from "../../../electron/commons/Log";
+
+const logError = vi.mocked(Log.error);
 
 // —— relay 桩（ws WebSocketServer——接受任意 auth，记录首帧）——
 
@@ -149,9 +155,32 @@ function accessEnvelope(token: string, remainingMs: number): AdminResponse {
   };
 }
 
+/** T12 契约：真 401 信封必带 data.reason（粘滞集命中才凭证失效） */
 const unauthorized = (): AdminResponse => ({
   status: 401,
-  body: { code: "4010", success: false, data: null, message: "AK 已被禁用" },
+  body: {
+    code: "4010",
+    success: false,
+    data: { reason: "disabled" },
+    message: "AK 已被禁用",
+  },
+});
+
+/** 无 body 的 401（代理质询/中间盒特征——非 relay-admin 凭证失效面） */
+const unauthorizedBodyless = (): AdminResponse => ({
+  status: 401,
+  body: undefined,
+});
+
+/** 401 信封带指定 reason（not-found=库重建窗口/akId 漂移中间态） */
+const unauthorizedReason = (reason: string): AdminResponse => ({
+  status: 401,
+  body: {
+    code: "4010",
+    success: false,
+    data: { reason },
+    message: `stub reason: ${reason}`,
+  },
 });
 
 async function startFakeAdmin(
@@ -617,6 +646,32 @@ describe("resolveRelayAccessToken（短连接收口——T16 移动端语义同�
       const renewed = await resolveRelayAccessToken("mod-renew", creds(admin.url));
       expect(renewed).toEqual({ ok: true, accessToken: "m-new" });
       expect(admin.requests.length).toBe(2);
+    } finally {
+      await admin.kill();
+    }
+  }, 8_000);
+
+  it("401 无 body / not-found（代理质询/库重建窗口）→ 瞬态非 invalid-ak：后续解析自愈（无凭证失效告警）", async () => {
+    logError.mockClear();
+    const admin = await startFakeAdmin((index) => {
+      if (index === 0) return unauthorizedBodyless();
+      if (index === 1) return unauthorizedReason("not-found");
+      return accessEnvelope("m-heal", REMAIN_FULL_MS);
+    });
+    try {
+      clearRelayAccess("mod-401-transient");
+      // 无 body 与 not-found 的 401 均瞬态（无存量 → unavailable，非
+      // invalid-ak 粘滞）——下次请求/激活重建自愈（连接占位可重试语义）
+      const first = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      expect(first.ok).toBe(false);
+      expect(first.ok === false && first.reason).toBe("unavailable");
+      const second = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      expect(second.ok === false && second.reason).toBe("unavailable");
+      // admin 恢复后重试成功（瞬态不封死重试面）
+      const healed = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      expect(healed).toEqual({ ok: true, accessToken: "m-heal" });
+      expect(admin.requests.length).toBe(3);
+      expect(logError).not.toHaveBeenCalled(); // 瞬态路径不发凭证失效告警
     } finally {
       await admin.kill();
     }

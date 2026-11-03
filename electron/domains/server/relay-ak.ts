@@ -7,8 +7,11 @@
 //   Basic akId:akSecret → data 三元组）换新；
 // - 换新瞬态失败（网络/非 401/信封畸形）且存量未过期 → 降级用存量照常连
 //   （连接期内 relay 校验兜底）；
-// - 401（AK disabled/expired/bad-secret）/ 无可用存量 → 失败面（调用方
-//   置连接 invalid-token 粘滞态——复用既有凭证失效呈现面，save 重建自愈）。
+// - 401 按 data.reason 分支（四端同构）：disabled/expired/bad-secret /
+//   无可用存量 → 失败面（调用方置连接 invalid-token 粘滞态——复用既有
+//   凭证失效呈现面，save 重建自愈）；not-found（库重建窗口/akId 漂移
+//   中间态）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态（降级
+//   存量或 unavailable——下次请求/激活重建自愈）。
 // shouldRenew 自 @tianshu/core 单源（主进程 alias 直引源码——本域
 // relay-transport.ts 同款，桌面主进程可直引 core 无需双份）；access 内存
 // 态不落盘（进程重启重换，与 T15 被控端口径一致）。
@@ -67,13 +70,31 @@ export interface RelayAkIo {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
+/** 401 粘滞凭证失效 reason 集（四端同构分类）：T12 data.reason 命中才是
+ * AK 凭证失效粘滞终局；not-found（库重建窗口/akId 配置漂移中间态——
+ * 恢复后可自愈）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态
+ * 处理——粘滞会误报"凭证失效"并封死健康连接的重建面 */
+const AK_INVALID_401_REASONS = new Set(["disabled", "expired", "bad-secret"]);
+
+/** 401 信封 → 粘滞凭证失效判定（data.reason ∈ 粘滞集；无 body/未知
+ * reason → false 按瞬态） */
+function isAkInvalid401(payload: unknown): boolean {
+  const reason = (
+    payload as { data?: { reason?: unknown } } | null
+  )?.data?.reason;
+  return typeof reason === "string" && AK_INVALID_401_REASONS.has(reason);
+}
+
 type RequestOutcome =
   | { ok: true; record: StoredRelayAccess }
   | { ok: false; reason: "invalid-ak" | "transient"; message: string };
 
 /** 单次换发（T12 契约）：POST {adminUrl}/relay-admin/token + Basic 头；
- * 401 = AK 失效（告警日志单点在此发出）；网络/超时/非 401 异常状态/信封
- * 畸形均按瞬态（调用方降级存量或失败收口） */
+ * 401 按 data.reason 分支（四端同构）：disabled/expired/bad-secret =
+ * AK 失效粘滞终局（告警日志单点在此发出）；not-found（库重建窗口/
+ * akId 漂移中间态）与 body 缺失/不可解析（代理质询、中间盒 401）按
+ * 瞬态；网络/超时/非 401 异常状态/信封畸形同样瞬态（调用方降级存量
+ * 或失败收口） */
 async function requestAccess(
   creds: RelayAkCredentials,
   io?: RelayAkIo,
@@ -103,13 +124,24 @@ async function requestAccess(
     };
   }
   if (response.status === 401) {
-    Log.error(
-      "[server] relay AK 凭证失效（disabled/expired/bad-secret），需换发后重配",
-    );
+    const payload = await response.json().catch(() => null);
+    if (isAkInvalid401(payload)) {
+      Log.error(
+        "[server] relay AK 凭证失效（disabled/expired/bad-secret），需换发后重配",
+      );
+      return {
+        ok: false,
+        reason: "invalid-ak",
+        message: "AK 凭证失效（401）——请在连接配置中更新 AK 三要素",
+      };
+    }
+    // not-found 或无 body（代理质询/中间盒）——瞬态：降级存量或收口
+    // unavailable（下次请求/激活重建自愈），不落 invalid-ak 粘滞
     return {
       ok: false,
-      reason: "invalid-ak",
-      message: "AK 凭证失效（401）——请在连接配置中更新 AK 三要素",
+      reason: "transient",
+      message:
+        "token 端点 401（not-found 或无 body——代理质询/中间盒），按瞬态处理",
     };
   }
   if (!response.ok) {

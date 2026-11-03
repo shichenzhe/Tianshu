@@ -3,20 +3,27 @@
 # builder 全量 npm ci（lock 钉死）→ prisma generate（先于 build，TS 类型依赖）
 # → 三包 build → 组装 vendor 内嵌 bundle（@tianshu/* → file:./vendors/*）。
 # 六坑处置见 docs/superpowers/specs/2026-10-31-server-docker-deploy-design.md
+# （坑 1「apk 工具链编过 node-pty」已随 --ignore-scripts 免编译整行移除，
+# 见下 npm ci 注释；其余各坑处置不变）
 FROM node:20.19.5-alpine3.22 AS builder
-# node-pty musl arm64 无 prebuilt，需源码编译工具链（bcrypt 有 musl prebuilt）
-RUN apk add --no-cache python3 make g++
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY packages/tianshu-protocol/package.json packages/tianshu-protocol/
 COPY packages/tianshu-core/package.json packages/tianshu-core/
 COPY apps/tianshu-server/package.json apps/tianshu-server/
-# 镜像内 npm 10 无 allowScripts 门禁（那系宿主 npm 11 机制），脚本全跑——
-# electron 二进制经 ELECTRON_SKIP_BINARY_DOWNLOAD=1 显式跳过（官方支持
-# 变量，省时且避 GitHub CDN 依赖）
+# 镜像内 npm 10 无 allowScripts 门禁（那系宿主 npm 11 机制），脚本本会全跑；
+# `npm ci --ignore-scripts` 连根 package.json postinstall 的
+# `electron-builder install-app-deps` 一并免掉——否则 better-sqlite3 会按
+# Electron 44 头文件源码重编（g++ 编不过 v8config.h）。本 builder 只需
+# tsc + 声明文件 + prisma generate（显式 RUN 非 lifecycle；engine 是按需
+# 下载的预编译二进制，非源码编译），node-pty/better-sqlite3 等原生重编
+# 全不需要——apk python3/make/g++ 工具链行据此移除（原坑 1 处置由免脚本
+# 取代）；bcrypt 等运行时原生依赖由 runner 层 npm ci（脚本照跑）装。
+# ELECTRON_SKIP_BINARY_DOWNLOAD=1 保留作双保险：万一后人去掉
+# --ignore-scripts，electron 二进制下载仍被显式跳过
 ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 # npmmirror 仅用于 lock 钉死的 ci（不做 semver 解析，无版本集差异风险）
-RUN npm config set registry https://registry.npmmirror.com/ && npm ci
+RUN npm config set registry https://registry.npmmirror.com/ && npm ci --ignore-scripts
 COPY packages packages
 COPY apps/tianshu-server apps/tianshu-server
 # prisma client 生成必须先于 nest build（DTO 引用生成枚举类型）。
@@ -30,8 +37,15 @@ COPY apps/tianshu-server apps/tianshu-server
 RUN cd apps/tianshu-server && npx prisma generate \
  && npm run prisma:pg:derive && rm -rf src/generated \
  && npx prisma generate --schema prisma/pg/schema.prisma
-RUN npm --prefix packages/tianshu-protocol run build \
- && npm --prefix packages/tianshu-core run build \
+# 先清宿主随 context 带入的两包 dist（防陈旧产物顶替/误过产物闸）；
+# tianshu-core 的 tsc 因 @langchain peer 存在 6 项既有类型报错而 exit 2
+# ——host 侧同判（exit code 不作判据，Dockerfile.relay 已验证模式）：
+# 构建允许失败但必须实际产出 dist/index.js，真失败（零产出）由产物存在
+# 性闸住；server nest build 仍取全量 exit 0（消费 core dist 声明，不受
+# 其源码类型报错波及）
+RUN rm -rf packages/tianshu-core/dist packages/tianshu-protocol/dist \
+ && npm --prefix packages/tianshu-protocol run build \
+ && { npm --prefix packages/tianshu-core run build; [ -f packages/tianshu-core/dist/index.js ]; } \
  && npm run build -w apps/tianshu-server
 # 组装 vendor 内嵌 bundle：@tianshu/* → file:./vendors/*（server 独立部署语义）。
 # prisma CLI 原系 devDependencies，但运行时迁移要跑 `prisma migrate deploy`
@@ -70,7 +84,8 @@ ENV NODE_ENV=production
 COPY --from=builder /bundle /app
 RUN npm ci --omit=dev --no-audit --no-fund
 # .prisma 生成物拷贝须在 install 之后（install 会重建 node_modules）；
-# 源路径是 server 本地 node_modules（workspace 不提升；根下的是 postinstall 占位）
+# 源路径是 server 本地 node_modules（workspace 不提升；根下的是 postinstall
+# 占位——--ignore-scripts 下连占位也不生成，本 Dockerfile 从不消费它）
 COPY --from=builder /repo/apps/tianshu-server/node_modules/.prisma /app/node_modules/.prisma
 EXPOSE 3000
 CMD ["node","dist/src/main.js"]

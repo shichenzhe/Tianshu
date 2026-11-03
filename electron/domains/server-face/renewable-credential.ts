@@ -2,8 +2,11 @@
 // tianshu-server relay-client（T14）语义的桌面被控端同构实现——AK 三要素
 // （adminUrl/akId/akSecret）→ relay-admin token 端点（T12 契约）Basic 换
 // access；内存三元组（进程重启重换，不落盘）+ 10min 巡检 shouldRenew
-// （@tianshu/core 单源）低频换新。401 = AK 失效粘滞终局（启动侧干净失败
-// / 续期侧经 onStaleInvalid 断开不重连——重连只会复现同一终局）；网络/
+// （@tianshu/core 单源）低频换新。401 按 data.reason 分支（四端同构）：
+// disabled/expired/bad-secret = AK 失效粘滞终局（启动侧干净失败
+// / 续期侧经 onStaleInvalid 断开不重连——重连只会复现同一终局）；
+// not-found（库重建窗口/akId 漂移中间态）与 body 缺失/不可解析（代理
+// 质询、中间盒 401）按瞬态退避；网络/
 // 非 401 异常态 30s 起指数退避封顶 10min。mobile/桌面控制端（Task 16/17）
 // 无法共享 electron 侧文件——各自实现但语义对齐本模块。
 import Log from "../../commons/Log";
@@ -30,7 +33,7 @@ export interface RenewableCredentialOptions {
   renewCheckIntervalMs?: number;
   /** 换 access 退避基数（缺省 30s 封顶 10min；测试注入） */
   akRetryBaseMs?: number;
-  /** 续期侧 401（AK 失效）粘滞终局回调：调用方断开 relay 且不再重连 */
+  /** 续期侧粘滞集 401（AK 失效）终局回调：调用方断开 relay 且不再重连 */
   onStaleInvalid?: () => void;
 }
 
@@ -38,8 +41,8 @@ export interface RenewableCredential {
   /** 当前 access（未换发/已停止 null——auth 首帧发帧时取值：续期换新
    *  后即新值，非启动时快照） */
   currentToken(): string | null;
-  /** 启动期换 access：循环退避直至成功；401 直接抛（干净启动失败，
-   *  绝不无凭证连接）；实例 stop（停用/被新实例顶替）即放弃 */
+  /** 启动期换 access：循环退避直至成功；粘滞集 401 直接抛（干净启动
+   *  失败，绝不无凭证连接）；实例 stop（停用/被新实例顶替）即放弃 */
   ensureAccess(): Promise<void>;
   /** 起续期巡检循环（幂等） */
   startRenewLoop(): void;
@@ -64,11 +67,26 @@ interface TokenEnvelope {
   };
 }
 
+/** 401 粘滞凭证失效 reason 集（四端同构分类）：T12 data.reason 命中才是
+ * AK 凭证失效粘滞终局；not-found（库重建窗口/akId 配置漂移中间态——
+ * 恢复后可自愈）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态
+ * 退避——粘滞会误报"凭证失效"并拆断健康连接 */
+const AK_INVALID_401_REASONS = new Set(["disabled", "expired", "bad-secret"]);
+
+/** 401 信封 → 粘滞凭证失效判定（data.reason ∈ 粘滞集；无 body/未知
+ * reason → false 按瞬态） */
+function isAkInvalid401(payload: unknown): boolean {
+  const reason = (
+    payload as { data?: { reason?: unknown } } | null
+  )?.data?.reason;
+  return typeof reason === "string" && AK_INVALID_401_REASONS.has(reason);
+}
+
 /** 401（AK 失效——disabled/expired/bad-secret）专属错误类：粘滞终局，
  * 不进退避重试（启动侧干净失败、续期侧断开不重连） */
 class AkCredentialInvalidError extends Error {
   constructor() {
-    super("AK 凭证失效（disabled/expired），relay 客户端未启动或已断开");
+    super("AK 凭证失效（disabled/expired/bad-secret），relay 客户端未启动或已断开");
   }
 }
 
@@ -82,9 +100,11 @@ function akRetryDelayMs(base: number, attempt: number): number {
 }
 
 /** AK → access 换发（T12 端点）：POST {adminUrl}/relay-admin/token +
- * Basic base64(akId:akSecret)；成功读统一信封 data 三元组。401 = AK
- * 失效（告警日志单点在此发出）；网络/超时/非 401 异常状态/信封畸形均按
- * 瞬态抛 Error，由调用方退避重试 */
+ * Basic base64(akId:akSecret)；成功读统一信封 data 三元组。401 按
+ * data.reason 分支（四端同构）：disabled/expired/bad-secret = AK 失效
+ * 粘滞终局（告警日志单点在此发出）；not-found（库重建窗口/akId 漂移
+ * 中间态）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态抛 Error
+ * 退避；网络/超时/非 401 异常状态/信封畸形同样瞬态 */
 async function requestAccess(config: RelayAkCredentials): Promise<AkAccess> {
   const authorization = `Basic ${Buffer.from(
     `${config.akId}:${config.akSecret}`,
@@ -103,10 +123,16 @@ async function requestAccess(config: RelayAkCredentials): Promise<AkAccess> {
     throw new Error(`token 端点不可达（${config.adminUrl}）: ${String(e)}`);
   }
   if (response.status === 401) {
-    Log.error(
-      "[server-face] AK 凭证失效（disabled/expired），需运营方恢复或换发",
+    const payload = await response.json().catch(() => null);
+    if (isAkInvalid401(payload)) {
+      Log.error(
+        "[server-face] AK 凭证失效（disabled/expired/bad-secret），需运营方恢复或换发",
+      );
+      throw new AkCredentialInvalidError();
+    }
+    throw new Error(
+      "token 端点 401（not-found 或无 body——代理质询/中间盒），按瞬态退避",
     );
-    throw new AkCredentialInvalidError();
   }
   if (!response.ok) {
     throw new Error(`token 端点异常状态 ${response.status}`);
@@ -172,8 +198,9 @@ export function createRenewableCredential(
 
   /** 续期巡检：shouldRenew（core 单源）真值才换新。换新成功只更新内存
    * （存量连接不拆——D5 语义：access 到期只拦新连接，auth 首帧发帧时经
-   * currentToken() 取新值）；401 = AK 失效 → 粘滞终局：停巡检 + 交调用方
-   * 断开且不再重连；网络失败退避重试且不动连接 */
+   * currentToken() 取新值）；401 粘滞集（disabled/expired/bad-secret）→
+   * AK 失效粘滞终局：停巡检 + 交调用方断开且不再重连；瞬态 401
+   * （not-found/代理质询）与网络失败同走退避重试且不动连接 */
   async function renewTick(): Promise<void> {
     if (stopped || !access) return;
     if (!shouldRenew(access.expiresAt, access.maxAgeSec, Date.now())) {

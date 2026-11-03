@@ -14,7 +14,7 @@ server Dockerfile 是独立仓时代产物（subtree 前史）：`COPY package*.
 
 | # | 坑 | 处置 |
 |---|---|---|
-| 1 | builder 全量 `npm ci` 装到桌面原生模块（node-pty musl arm64 无 prebuilt）→ node-gyp 失败 | builder 加 `apk add python3 make g++`（bcrypt 有 musl prebuilt/白名单允许脚本；electron 二进制被 allowScripts 白名单机制天然跳过） |
+| 1 | builder 全量 `npm ci` 装到桌面原生模块（node-pty musl arm64 无 prebuilt）→ node-gyp 失败 | builder 加 `apk add python3 make g++`（bcrypt 有 musl prebuilt/白名单允许脚本；electron 二进制被 allowScripts 白名单机制天然跳过）<br>**2026-11-03 后续**：主 Dockerfile（834d24cd）已改 `npm ci --ignore-scripts`，工具链行整行移除——builder 免全部原生重编（prisma engine 为预编译二进制），见 Dockerfile 头注释；Dockerfile.relay 同款 |
 | 2 | npmmirror 版本集与官方 registry 不同步（`@langchain/langgraph-sdk@~1.12.9` ETARGET） | builder 的 `npm ci` 走 npmmirror（lock 钉死不解析，安全）；runner/bundle lock 生成走**官方源**（semver 解析场景） |
 | 3 | runner `npm ci` 需 lock 而 bundle 无 lock | builder 内 bundle 目录 `npm install --package-lock-only --omit=dev`（官方源）生成 lock 随 bundle 交付，runner 换 `npm ci`（确定性），lock 留镜像可审计 |
 | 4 | `prisma generate` 必须先于 `nest build`（TS 类型依赖生成物） | 层序：generate → build |

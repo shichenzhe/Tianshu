@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { generateKeyPairSync } from 'node:crypto';
 import {
   createJwtAuthenticator,
   createStaticAuthenticator,
@@ -126,6 +127,21 @@ describe('jwt 鉴权器', () => {
     );
   });
 
+  it('tid 缺失/空串/非字符串 → 4001（畸形载荷 fail-closed：正常签发恒带 tid，缺失即畸形——终审 Minor #3 更新 T4 旁路 ruling）', () => {
+    const auth = createJwtAuthenticator(keys.publicKeyPem, neverRevoked);
+    const withoutTid: Partial<AccessClaims> = { ...baseClaims };
+    delete withoutTid.tid;
+    const malformed: AccessClaims[] = [
+      withoutTid as AccessClaims,
+      { ...baseClaims, tid: '' },
+      { ...baseClaims, tid: 42 as unknown as string },
+    ];
+    for (const claims of malformed)
+      expect(
+        auth.admit({ token: sign(claims), role: 'client', connectionId: '' }),
+      ).toEqual({ ok: false, closeCode: 4001, reason: 'invalid-token' });
+  });
+
   it('isRevoked 命中 tid → 4001（与验签失败同归因，不外泄细节）', () => {
     const auth = createJwtAuthenticator(
       keys.publicKeyPem,
@@ -217,6 +233,22 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
     },
     keys.privateKeyPem,
   );
+  // A1（终审 Minor #3）：tid 缺失的畸形载荷（合法签名）——正常签发
+  // （relay-admin token.service）恒带 tid，缺失即畸形 → 首帧 fail-closed
+  const noTidClaims: Partial<AccessClaims> = {
+    iss: 'tianshu-relay',
+    sub: 'conn-client-no-tid',
+    role: 'client',
+    ak: 'ak_live_000456',
+    quota: { maxServers: 3, maxClients: 10 },
+    iat: nowSec(),
+    exp: nowSec() + 600,
+    jti: 'jti-0004',
+  };
+  const noTidToken = signAccessJwt(
+    noTidClaims as AccessClaims,
+    keys.privateKeyPem,
+  );
 
   let relay: RelayHandle;
   let pubkeyFile: string;
@@ -258,6 +290,17 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
 
   const closeCodeOf = (ws: WebSocket): Promise<number> =>
     new Promise((resolve) => ws.on('close', (code) => resolve(code)));
+
+  /** 有界等待 close：窗内未 close → null（畸形载荷被放行的 RED 形态下
+   *  连接保持 OPEN——null 失败比挂死等 close 的超时更快更指向） */
+  const closeCodeWithin = (ws: WebSocket, ms: number): Promise<number | null> =>
+    new Promise((resolve) => {
+      const timer = setTimeout(() => resolve(null), ms);
+      ws.on('close', (code) => {
+        clearTimeout(timer);
+        resolve(code);
+      });
+    });
 
   /** 首帧 auth 后等待裁决落定：放行则保持 OPEN（80ms 内无 4001/4000） */
   async function authedSocket(
@@ -322,6 +365,13 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
     expect(await closeCodeOf(ws)).toBe(4001);
   });
 
+  it('jwt 模式：tid 缺失的合法签名 token → 4001（畸形载荷不得按 static 语义旁路租户闸——终审 Minor #3）', async () => {
+    const ws = await openSocketOn(relay.port);
+    openedSockets.push(ws);
+    sendAuth(ws, noTidToken, { role: 'client' });
+    expect(await closeCodeWithin(ws, 400)).toBe(4001);
+  });
+
   it('jwt 模式：token 不再是启动必要条件（token 留空可启动）', async () => {
     const own = await startRelay({ port: 0, token: '', authPubkeyFile: pubkeyFile });
     expect(own.port).toBeGreaterThan(0);
@@ -334,26 +384,64 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
     ).rejects.toThrow('auth-pubkey');
   });
 
-  it('jwt 模式：公钥文件存在但内容非法 → 拒绝启动（坏 PEM 不得漏到运行期伪装成 4001 invalid-token）', async () => {
+  /** 启动期拒绝断言（A2 终审 Minor #8）：Error → 断言消息；句柄（RED
+   *  漏监听形态）→ 关句柄再转失败，防泄漏监听挂住测试进程退出 */
+  async function expectBootRefused(
+    pubkeyContent: string,
+    expectedMessage: string,
+  ): Promise<void> {
     const dir = mkdtempSync(join(tmpdir(), 'relay-auth-'));
-    const bogus = join(dir, 'bogus-pub.pem');
-    writeFileSync(bogus, 'not a pem at all\n');
-    // 防 RED 形态漏监听：未修复时 startRelay 成功——关掉句柄再转断言
-    // 失败，测试进程可退出
+    const file = join(dir, 'relay-pub.pem');
+    writeFileSync(file, pubkeyContent);
     const outcome = await startRelay({
       port: 0,
       token: '',
-      authPubkeyFile: bogus,
+      authPubkeyFile: file,
     }).then(
       (h) => h,
       (e: Error) => e,
     );
-    if (outcome instanceof Error)
-      expect(outcome.message).toBe('relay 拒绝启动：--auth-pubkey 不是合法公钥');
+    if (outcome instanceof Error) expect(outcome.message).toBe(expectedMessage);
     else {
       await outcome.close();
-      throw new Error('坏 PEM 竟然启动成功');
+      throw new Error(`竟启动成功（期望：${expectedMessage}）`);
     }
+  }
+
+  it('jwt 模式：公钥文件存在但内容非法 → 拒绝启动（坏 PEM 不得漏到运行期伪装成 4001 invalid-token）', async () => {
+    await expectBootRefused(
+      'not a pem at all\n',
+      'relay 拒绝启动：--auth-pubkey 不是合法公钥',
+    );
+  });
+
+  it('jwt 模式：RSA 公钥 PEM → 拒绝启动（verifyAccessJwt 固定 EdDSA，非 Ed25519 公钥漏到运行期 = 全员 4001 伪装凭证失败）', async () => {
+    const { publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    await expectBootRefused(
+      publicKey.export({ type: 'spki', format: 'pem' }).toString(),
+      'relay 拒绝启动：--auth-pubkey 不是 Ed25519 公钥（当前解析为 rsa）',
+    );
+  });
+
+  it('jwt 模式：误传 Ed25519 私钥 PEM → 拒绝启动（createPublicKey 会从私钥提出 ed25519 公钥、类型检查拦不住——签发私钥不得落在 relay 侧）', async () => {
+    await expectBootRefused(
+      keys.privateKeyPem,
+      'relay 拒绝启动：--auth-pubkey 是私钥 PEM——只接受 Ed25519 公钥（签发私钥不得落在 relay 侧）',
+    );
+  });
+
+  it('jwt 模式：合法 Ed25519 公钥 → 启动正常（类型白名单不误伤正配）', async () => {
+    const own = generateEd25519KeyPems();
+    const dir = mkdtempSync(join(tmpdir(), 'relay-auth-'));
+    const file = join(dir, 'relay-pub.pem');
+    writeFileSync(file, own.publicKeyPem);
+    const handle = await startRelay({
+      port: 0,
+      token: '',
+      authPubkeyFile: file,
+    });
+    expect(handle.port).toBeGreaterThan(0);
+    await handle.close();
   });
 
   it('token 与公钥两者皆缺 → 拒绝启动（现状保留）', async () => {

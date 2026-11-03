@@ -258,12 +258,13 @@ describe('relay-main 租户三闸门接线（jwt 模式真实 ws）', () => {
     expect(await closeCodeOf(ws)).toBe(4001);
   });
 
-  it('jwt tid 缺失 → 按 static 语义旁路（设计内行为，不因此拒绝）', async () => {
-    const ws = await authedSocket(
-      signTenantToken({ tid: undefined, role: 'client' }),
-      { role: 'client' },
-    );
-    expect(ws.readyState).toBe(WebSocket.OPEN);
+  it('jwt tid 缺失 → 4001 fail-closed（终审 Minor #3 更新 T4 旁路 ruling：正常签发恒带 tid，畸形载荷不得旁路租户闸）', async () => {
+    const ws = await openSocket();
+    openedSockets.push(ws);
+    sendAuth(ws, signTenantToken({ tid: undefined, role: 'client' }), {
+      role: 'client',
+    });
+    expect(await closeCodeOf(ws)).toBe(4001);
   });
 
   it('配额闸（server）：租户 server 连接达 maxServers → 后续注册 close 4005', async () => {

@@ -8,8 +8,8 @@
 // 改任一侧的阈值语义必须双侧同步评审。
 //
 // 与 T14/T15（常驻端）的差异：移动端短连接无常驻续期循环——每次连接前
-// 就地收口（resolveRelayAccessToken）：剩 >50% 直用零 admin 请求；缺失或
-// 剩 <50% 换新；换新瞬态失败且存量未过期降级照常连；401 / 无可用凭证
+// 就地收口（resolveRelayAccessToken）：剩 >50% 直用零 admin 请求；缺失、
+// 剩 <50% 或换绑/换控制平面换新；换新瞬态失败且存量未过期降级照常连；401 / 无可用凭证
 // 报失效（调用方呈 invalid-token 粘滞态——复用 relay close 4001 语义面，
 // 连接页提示重贴 AK）。
 import * as SecureStore from "expo-secure-store";
@@ -28,6 +28,9 @@ export interface RelayAkCredentials {
 export interface StoredRelayAccess {
   /** 签发该 access 的 akId（凭证换绑即作废——防旧租户 access 被新 AK 复用） */
   akId: string;
+  /** 签发该 access 的 relay-admin 基址（换控制平面即作废——同 connId 同
+   *  akId 换 adminUrl 后不复用旧 admin 签发的 access，重换覆盖旧档） */
+  adminUrl: string;
   accessToken: string;
   /** 过期时刻（epoch ms——T12 契约 data.expiresAt） */
   expiresAt: number;
@@ -68,7 +71,9 @@ function basicAuthHeader(akId: string, akSecret: string): string {
 
 const accessKeyFor = (connId: string) => `tianshu-mobile.relay-access.${connId}`;
 
-/** 读取存量 access（坏档/形状不符按无存量对待） */
+/** 读取存量 access（坏档/形状不符按无存量对待）。
+ *  adminUrl 有意不做形状校验：旧版档案缺该字段时由此放行，由 usable 的
+ *  全等判定（undefined !== string）自然作废重换——迁移即自愈，无需搬档 */
 export async function loadRelayAccess(
   connId: string,
 ): Promise<StoredRelayAccess | null> {
@@ -164,6 +169,7 @@ async function requestAccess(
       ok: true,
       record: {
         akId: creds.akId,
+        adminUrl: creds.adminUrl,
         accessToken: data.accessToken,
         expiresAt: data.expiresAt,
         maxAgeSec: data.maxAgeSec,
@@ -178,8 +184,8 @@ async function requestAccess(
 
 /**
  * 连接前 access 收口（短连接语义：调用方在每次建连前调用，无常驻循环）：
- * - 存量新鲜（且 akId 未变）→ 直用，零 admin 请求；
- * - 缺失/该换（shouldRenew）/换绑 → 换新并回写 SecureStore；
+ * - 存量新鲜（且 akId/adminUrl 未变）→ 直用，零 admin 请求；
+ * - 缺失/该换（shouldRenew）/换绑/换控制平面 → 换新并回写 SecureStore；
  * - 换新 401 → invalid-ak（调用方呈 invalid-token 态提示重贴 AK）；
  * - 换新瞬态失败且存量未过期 → 降级用存量（连接期内 relay 校验兜底）；
  * - 无可用存量 → unavailable（不能无凭证连接）。
@@ -191,8 +197,14 @@ export async function resolveRelayAccessToken(
 ): Promise<RelayAccessOutcome> {
   const now = Date.now();
   const stored = await loadRelayAccess(connId);
-  // akId 不匹配的存量视同没有（换绑后旧租户 access 不可复用）
-  const usable = stored !== null && stored.akId === creds.akId ? stored : null;
+  // akId 或 adminUrl 不匹配的存量视同没有（换绑/换控制平面后旧 admin 签发
+  // 的 access 不可复用——需向当前 admin 重新换发）
+  const usable =
+    stored !== null &&
+    stored.akId === creds.akId &&
+    stored.adminUrl === creds.adminUrl
+      ? stored
+      : null;
   if (usable !== null && !shouldRenew(usable.expiresAt, usable.maxAgeSec, now)) {
     return { ok: true, accessToken: usable.accessToken };
   }

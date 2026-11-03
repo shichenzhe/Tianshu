@@ -2,8 +2,8 @@
 // 消费侧）。与 server-face/renewable-credential.ts（T15 被控端常驻）分域
 // 不互引：控制端是短连接语义（同 T16 移动端）——无常驻续期循环，每次
 // 建连前就地收口 resolveRelayAccessToken：
-// - 存量新鲜（shouldRenew 假、akId 未变）直用，零 admin 请求；
-// - 缺失/剩<50%/换绑 → POST {adminUrl}/relay-admin/token（T12 契约：
+// - 存量新鲜（shouldRenew 假、akId/adminUrl 未变）直用，零 admin 请求；
+// - 缺失/剩<50%/换绑/换控制平面 → POST {adminUrl}/relay-admin/token（T12 契约：
 //   Basic akId:akSecret → data 三元组）换新；
 // - 换新瞬态失败（网络/非 401/信封畸形）且存量未过期 → 降级用存量照常连
 //   （连接期内 relay 校验兜底）；
@@ -24,10 +24,13 @@ export interface RelayAkCredentials {
   akSecret: string;
 }
 
-/** 换发所得 access 记录（内存态——T12 data 三元组 + 签发 akId） */
+/** 换发所得 access 记录（内存态——T12 data 三元组 + 签发 akId/adminUrl） */
 interface StoredRelayAccess {
   /** 签发该 access 的 akId（凭证换绑即作废——防旧租户 access 被新 AK 复用） */
   akId: string;
+  /** 签发该 access 的 relay-admin 基址（换控制平面即作废——同 connId 同
+   *  akId 换 adminUrl 后不复用旧 admin 签发的 access，重换覆盖旧档） */
+  adminUrl: string;
   accessToken: string;
   /** 过期时刻（epoch ms——T12 契约 data.expiresAt） */
   expiresAt: number;
@@ -137,6 +140,7 @@ async function requestAccess(
     ok: true,
     record: {
       akId: creds.akId,
+      adminUrl: creds.adminUrl,
       accessToken: data.accessToken,
       expiresAt: data.expiresAt,
       maxAgeSec: data.maxAgeSec,
@@ -146,8 +150,9 @@ async function requestAccess(
 
 /**
  * 建连前 access 收口（短连接语义：调用方在每次建连前调用，无常驻循环）。
- * 顶替竞态防线：存量记录随记 akId——换发迟到落地只写本 akId 名下，换绑
- * 后的下次解析视旧存量为无（T15 fix-round 教训在本端的等价收口）。
+ * 顶替竞态防线：存量记录随记 akId/adminUrl——换发迟到落地只写本 akId/
+ * adminUrl 名下，换绑/换控制平面后的下次解析视旧存量为无（T15 fix-round
+ * 教训在本端的等价收口）。
  */
 export async function resolveRelayAccessToken(
   connId: string,
@@ -156,8 +161,14 @@ export async function resolveRelayAccessToken(
 ): Promise<RelayAccessOutcome> {
   const now = Date.now();
   const stored = accessStore.get(connId) ?? null;
-  // akId 不匹配的存量视同没有（换绑后旧租户 access 不可复用）
-  const usable = stored !== null && stored.akId === creds.akId ? stored : null;
+  // akId 或 adminUrl 不匹配的存量视同没有（换绑/换控制平面后旧 admin 签发
+  // 的 access 不可复用——需向当前 admin 重新换发）
+  const usable =
+    stored !== null &&
+    stored.akId === creds.akId &&
+    stored.adminUrl === creds.adminUrl
+      ? stored
+      : null;
   if (usable !== null && !shouldRenew(usable.expiresAt, usable.maxAgeSec, now)) {
     return { ok: true, accessToken: usable.accessToken };
   }

@@ -369,6 +369,49 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
     }
   }, 15_000);
 
+  it("换控制平面：同 connId 同 akId 改 adminUrl → 存量作废，向新 admin 换发（终审 Minor 9）", async () => {
+    const relay = await startFakeRelay();
+    const adminOld = await startFakeAdmin(() =>
+      accessEnvelope("access-old-admin", REMAIN_FULL_MS),
+    );
+    const adminNew = await startFakeAdmin(() =>
+      accessEnvelope("access-new-admin", REMAIN_FULL_MS),
+    );
+    try {
+      const registry = newRegistry();
+      const id = "conn-admin-url";
+      await registry.saveConnection(
+        akRelayConfig(id, adminOld.url, relay.url),
+      );
+      await registry.activate(id);
+      await vi.waitFor(() => expect(adminOld.requests.length).toBe(1));
+      await vi.waitFor(() => expect(relay.conns.length).toBe(1));
+      expect(
+        (await relay.conns[0].waitForFrame((f) => f.kind === "auth")).token,
+      ).toBe("access-old-admin");
+
+      // 改 config 的 adminUrl（akId 不变）→ 旧 admin 签发的 access 不复用
+      await registry.saveConnection(
+        akRelayConfig(id, adminNew.url, relay.url),
+      );
+      await registry.activate(id);
+      await vi.waitFor(() => expect(adminNew.requests.length).toBe(1), {
+        timeout: 6000,
+      });
+      await vi.waitFor(() => expect(relay.conns.length).toBe(2), {
+        timeout: 6000,
+      });
+      expect(
+        (await relay.conns[1].waitForFrame((f) => f.kind === "auth")).token,
+      ).toBe("access-new-admin");
+      expect(adminOld.requests.length).toBe(1); // 旧 admin 不再被请求
+    } finally {
+      await relay.close();
+      await adminOld.kill();
+      await adminNew.kill();
+    }
+  }, 15_000);
+
   it("无存量 + admin 不可达 → 凭证失效态（不能无凭证连接）", async () => {
     const relay = await startFakeRelay();
     const deadPort = await reservePort();

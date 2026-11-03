@@ -120,12 +120,18 @@ const okTokenResponse = (accessToken: string) => ({
   }),
 });
 
-/** 本地存量 access 记录播种：remainRatio=剩余寿命占比（0~1） */
-function seedAccess(remainRatio: number, akId = "ak-1"): void {
+/** 本地存量 access 记录播种：remainRatio=剩余寿命占比（0~1）；adminUrl
+ *  随记（缓存键成员——与 config 不符即作废），缺省对齐 akRelayCfg */
+function seedAccess(
+  remainRatio: number,
+  akId = "ak-1",
+  adminUrl = akRelayCfg.adminUrl!,
+): void {
   secureMock.storage.set(
     ACCESS_KEY,
     JSON.stringify({
       akId,
+      adminUrl,
       accessToken: "access-stored",
       expiresAt: Date.now() + MAX_AGE_SEC * 1000 * remainRatio,
       maxAgeSec: MAX_AGE_SEC,
@@ -288,6 +294,54 @@ describe("relay 连接 AK 凭证——连接前续期", () => {
     const ws = FakeWebSocket.instances.at(-1)!;
     ws.onopen?.();
     expect((ws.frames()[0] as { token: string }).token).toBe("access-ak2");
+  });
+
+  it("换控制平面（adminUrl 变更、akId 不变）→ 存量作废重换，向新 admin 换发", async () => {
+    seedAccess(0.9, "ak-1", "http://old-admin.example.com"); // 新鲜但旧 admin 签发
+    fetchMock.mockResolvedValueOnce(okTokenResponse("access-new-admin"));
+    const s = useConnectionsStore.getState();
+    s.save(akRelayCfg); // config 的 adminUrl 与存量不符（akId 未变）
+    s.activate("r1");
+    await settle();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:8412/relay-admin/token");
+    const ws = FakeWebSocket.instances.at(-1)!;
+    ws.onopen?.();
+    expect((ws.frames()[0] as { token: string }).token).toBe("access-new-admin");
+    // 旧档被覆盖：adminUrl 随记新值（同 adminUrl 后续直用零请求）
+    const rec = JSON.parse(secureMock.storage.get(ACCESS_KEY)!) as {
+      adminUrl: string;
+      accessToken: string;
+    };
+    expect(rec).toMatchObject({
+      adminUrl: "http://127.0.0.1:8412",
+      accessToken: "access-new-admin",
+    });
+  });
+
+  it("旧版无 adminUrl 的存量档案 → 等值判定自然不成立，重新换发（迁移面）", async () => {
+    // 升级前持久化的记录没有 adminUrl 字段：usable 全等 undefined !== string
+    secureMock.storage.set(
+      ACCESS_KEY,
+      JSON.stringify({
+        akId: "ak-1",
+        accessToken: "access-legacy",
+        expiresAt: Date.now() + MAX_AGE_SEC * 1000,
+        maxAgeSec: MAX_AGE_SEC,
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(okTokenResponse("access-migrated"));
+    const s = useConnectionsStore.getState();
+    s.save(akRelayCfg);
+    s.activate("r1");
+    await settle();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1); // 不复用旧档（即便剩满寿）
+    const ws = FakeWebSocket.instances.at(-1)!;
+    ws.onopen?.();
+    expect((ws.frames()[0] as { token: string }).token).toBe("access-migrated");
   });
 
   it("顶替竞态：换新在途时切换激活，迟到成功不建连不踩新状态（T15 教训）", async () => {

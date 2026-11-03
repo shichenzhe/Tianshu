@@ -3,7 +3,9 @@
  * backupToken（备份专用 token，多用户批：可选，申领成功自动回填）/
  * relay=relayUrl+relayToken+connectionId+fingerprint+e2eMode——E2E 指纹可选
  * 空=TOFU 首连回填、E2E 模式 auto/required（required=握手无 ack 拒降级断开，
- * E2E-T4/T3 审查），E2E-T3/T4），必填与 URL 形态校验（与主进程
+ * E2E-T4/T3 审查），E2E-T3/T4 + AK 凭证三要素（多租户 T17：adminUrl/
+ * akId/akSecret 与中继令牌二选一，static 在场优先零 AK 请求；akSecret 与
+ * direct token 同口径掩码显示），必填与 URL 形态校验（与主进程
  * validateConfig 同口径——渲染层先拦，主进程兜底），「测试连接」用当前表单
  * 草稿走临时 transport（不落库）；保存走 server:connectionSave。
  */
@@ -52,6 +54,10 @@ interface ConnectionDraft {
   relayUrl: string;
   relayToken: string;
   connectionId: string;
+  /** AK 凭证三要素（多租户 T17）：与中继令牌二选一，static 优先 */
+  adminUrl: string;
+  akId: string;
+  akSecret: string;
   fingerprint: string;
   e2eMode: ConnectionE2eMode;
 }
@@ -66,6 +72,9 @@ const EMPTY_DRAFT: ConnectionDraft = {
   relayUrl: "",
   relayToken: "",
   connectionId: "",
+  adminUrl: "",
+  akId: "",
+  akSecret: "",
   fingerprint: "",
   e2eMode: "auto",
 };
@@ -82,12 +91,15 @@ function draftFrom(initial: ConnectionConfig | null): ConnectionDraft {
     relayUrl: initial.relayUrl ?? "",
     relayToken: initial.relayToken ?? "",
     connectionId: initial.connectionId ?? "",
+    adminUrl: initial.adminUrl ?? "",
+    akId: initial.akId ?? "",
+    akSecret: initial.akSecret ?? "",
     fingerprint: initial.fingerprint ?? "",
     e2eMode: initial.e2eMode ?? "auto",
   };
 }
 
-/** 按表单草稿组装连接配置（token/fingerprint 可选透传——指纹归一小写） */
+/** 按表单草稿组装连接配置（token/fingerprint/AK 可选透传——指纹归一小写） */
 function draftToConfig(draft: ConnectionDraft): ConnectionConfig {
   const config: ConnectionConfig = {
     id: draft.id,
@@ -105,6 +117,11 @@ function draftToConfig(draft: ConnectionDraft): ConnectionConfig {
     config.relayToken = draft.relayToken.trim();
     config.connectionId = draft.connectionId.trim();
     config.e2eMode = draft.e2eMode;
+    // AK 三要素逐字段保留（static 在场时主进程短路不消费；部分填写由
+    // 校验门禁提示补全）
+    if (draft.adminUrl.trim()) config.adminUrl = draft.adminUrl.trim();
+    if (draft.akId.trim()) config.akId = draft.akId.trim();
+    if (draft.akSecret.trim()) config.akSecret = draft.akSecret.trim();
     if (draft.fingerprint.trim()) {
       config.fingerprint = draft.fingerprint.trim().toLowerCase();
     }
@@ -126,8 +143,20 @@ function validateDraft(
     if (!/^wss?:\/\//.test(draft.relayUrl.trim())) {
       return t("ai:server.connection.errors.relayUrlInvalid");
     }
-    if (!draft.relayToken.trim()) {
-      return t("ai:server.connection.errors.relayTokenRequired");
+    // 凭证面（多租户 T17）：static 令牌或 AK 三要素二选一（static 优先，
+    // 在场即免 AK 完整性）；AK 管理端地址形态与主进程同口径
+    const adminUrl = draft.adminUrl.trim();
+    const akId = draft.akId.trim();
+    const akSecret = draft.akSecret.trim();
+    const akPresentCount = [adminUrl, akId, akSecret].filter(Boolean).length;
+    if (!draft.relayToken.trim() && akPresentCount === 0) {
+      return t("ai:server.connection.errors.credentialRequired");
+    }
+    if (!draft.relayToken.trim() && akPresentCount < 3) {
+      return t("ai:server.connection.errors.akTripleRequired");
+    }
+    if (adminUrl && !/^https?:\/\//.test(adminUrl)) {
+      return t("ai:server.connection.errors.adminUrlInvalid");
     }
     if (!draft.connectionId.trim()) {
       return t("ai:server.connection.errors.connectionIdRequired");
@@ -385,6 +414,55 @@ export function ConnectionDialog({
                   )}
                 />
               </div>
+              {/* AK 凭证三要素（多租户 T17）：换发短效 access 连接；与中继
+                  令牌二选一，static 在场零 AK 请求；akSecret 与 direct token
+                  同口径掩码 */}
+              <p className="pt-2.5 text-xs font-medium text-muted-foreground">
+                {t("ai:server.connection.groupAk")}
+              </p>
+              <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-2.5">
+                <Label
+                  htmlFor="conn-admin-url"
+                  className="whitespace-nowrap text-right"
+                >
+                  {t("ai:server.connection.adminUrl")}
+                </Label>
+                <Input
+                  id="conn-admin-url"
+                  data-testid="conn-admin-url"
+                  value={draft.adminUrl}
+                  onChange={(e) => patch({ adminUrl: e.target.value })}
+                  placeholder="https://relay-admin.example.com"
+                />
+                <Label
+                  htmlFor="conn-ak-id"
+                  className="whitespace-nowrap text-right"
+                >
+                  {t("ai:server.connection.akId")}
+                </Label>
+                <Input
+                  id="conn-ak-id"
+                  data-testid="conn-ak-id"
+                  value={draft.akId}
+                  onChange={(e) => patch({ akId: e.target.value })}
+                />
+                <Label
+                  htmlFor="conn-ak-secret"
+                  className="whitespace-nowrap text-right"
+                >
+                  {t("ai:server.connection.akSecret")}
+                </Label>
+                <Input
+                  id="conn-ak-secret"
+                  data-testid="conn-ak-secret"
+                  type="password"
+                  value={draft.akSecret}
+                  onChange={(e) => patch({ akSecret: e.target.value })}
+                />
+              </div>
+              <p className="text-[10px] leading-relaxed text-muted-foreground/80">
+                {t("ai:server.connection.akHint")}
+              </p>
               {/* E2E（E2E-T3/T4）：指纹空=TOFU 首连回填；mode required=
                   握手无 ack 拒降级断开 */}
               <p className="pt-2.5 text-xs font-medium text-muted-foreground">

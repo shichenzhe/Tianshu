@@ -6,6 +6,12 @@
 // 配置纠正后 save 重建 transport 自愈）+ 本地无头端启停（Supervisor，
 // spawn 解析 resolveLocalServerCommand——dev=<dir>/dist/src/main.js 真
 // node；打包态不内嵌，startLocalServer 前置拒绝）。
+// relay AK 凭证（T17 多租户）：连接配置增 adminUrl/akId/akSecret（与
+// relayToken 并存 static 优先）；建连前 relay-ak.resolveRelayAccessToken
+// 短连接换发（首帧 auth token=换发 access）；401/无存量+换新失败 →
+// invalid-token 粘滞（复用既有凭证失效呈现面）。建链收口自此 async——
+// 换发 await 窗口内配置被 save/delete 顶替（epoch 前移）即放弃迟到结果
+// （T15 fix-round 顶替竞态教训）。
 // 活动连接（activeConnId）：注册表维护并持久化；session 类 IPC 既可显式
 // 携带 connId（透传+切换活动连接，粘性），也可省略走当前活动连接。
 import { app } from "electron";
@@ -16,13 +22,20 @@ import prisma from "../../commons/prisma-client";
 import Log from "../../commons/Log";
 import { DirectTransport } from "./direct-transport";
 import { RelayTransport, type RelayE2eMode } from "./relay-transport";
+import {
+  akTriplePresent,
+  clearRelayAccess,
+  resolveRelayAccessToken,
+} from "./relay-ak";
 import { openSecretFields, sealSecretFields } from "../security/option-secrets";
 import type { ServerEvent } from "./protocol";
-import type {
-  E2eStatusChange,
-  Transport,
-  TransportE2eState,
-  TransportState,
+import {
+  TransportBase,
+  type TransportRequestResult,
+  type E2eStatusChange,
+  type Transport,
+  type TransportE2eState,
+  type TransportState,
 } from "./transport";
 import { ServerSupervisor, type HandshakeInfo } from "./supervisor";
 
@@ -54,6 +67,11 @@ export interface ConnectionConfig {
    * 断开——spec §2.4 控制端配置级开关，E2E-T4/T3 审查；无 off：不建 relay
    * 连接即得等价语义） */
   e2eMode?: RelayE2eMode;
+  /** relay AK 凭证三要素（多租户 T17）：与 relayToken 并存时 static 优先
+   *  （在场零 AK 请求）；建连前经 relay-ak 换发短效 access 作首帧 auth */
+  adminUrl?: string;
+  akId?: string;
+  akSecret?: string;
   local?: boolean;
 }
 
@@ -106,6 +124,9 @@ interface TransportEntry {
   state: ConnectionRuntimeState;
   e2e: TransportE2eState;
   capabilities: string[];
+  /** AK 凭证失效占位标记（T17）：invalid-ak=粘滞（重配经 save 自愈）；
+   * unavailable=瞬态（下次请求/激活重建自愈） */
+  akFailure?: "invalid-ak" | "unavailable";
 }
 
 /** option 表持久化（server-face 配置同款 findFirst + update/create） */
@@ -200,12 +221,10 @@ function validateConfig(raw: unknown): ConnectionConfig {
     }
     config.baseUrl = candidate.baseUrl.replace(/\/+$/, "");
   } else {
-    for (const field of ["relayUrl", "relayToken", "connectionId"] as const) {
-      if (typeof candidate[field] !== "string" || !candidate[field]) {
-        throw new Error(`中继模式缺少 ${field}`);
-      }
+    if (typeof candidate.relayUrl !== "string" || !candidate.relayUrl) {
+      throw new Error("中继模式缺少 relayUrl");
     }
-    if (!/^wss?:\/\//.test(candidate.relayUrl!)) {
+    if (!/^wss?:\/\//.test(candidate.relayUrl)) {
       throw new Error("中继模式 relayUrl 必须是 ws(s):// 地址");
     }
     // 安全批 B7：公网明文 ws:// 拒绝——relay 全凭证（relayToken/
@@ -213,10 +232,10 @@ function validateConfig(raw: unknown): ConnectionConfig {
     // 全权凭证（被控端对 req 自动注入 TIANSHU_TOKEN Bearer）。仅放行
     // loopback/localhost 与私网字面 IP 的 ws://（家庭内网 relay）；域名
     // 与公网形态要求 wss://（错误信息指明改法）
-    if (candidate.relayUrl!.startsWith("ws://")) {
+    if (candidate.relayUrl.startsWith("ws://")) {
       let host = "";
       try {
-        host = new URL(candidate.relayUrl!).hostname.toLowerCase();
+        host = new URL(candidate.relayUrl).hostname.toLowerCase();
       } catch {
         /* 下方判定兜底 */
       }
@@ -234,7 +253,38 @@ function validateConfig(raw: unknown): ConnectionConfig {
       }
     }
     config.relayUrl = candidate.relayUrl;
-    config.relayToken = candidate.relayToken;
+    // 凭证面（T17 多租户）：static relayToken 或 AK 三要素二选一——
+    // static 在场即短路（零 AK 请求，AK 字段仅透传不校验完整性）
+    const hasStaticToken =
+      typeof candidate.relayToken === "string" && candidate.relayToken !== "";
+    const akFields = ["adminUrl", "akId", "akSecret"] as const;
+    const akPresentCount = akFields.filter(
+      (field) =>
+        typeof candidate[field] === "string" && candidate[field] !== "",
+    ).length;
+    if (!hasStaticToken) {
+      if (akPresentCount === 0) {
+        throw new Error(
+          "中继模式缺少 relayToken 或 AK 凭证（adminUrl/akId/akSecret 三要素）",
+        );
+      }
+      if (akPresentCount < 3) {
+        throw new Error("AK 凭证需 adminUrl/akId/akSecret 三要素齐备");
+      }
+      if (!/^https?:\/\//.test(candidate.adminUrl!)) {
+        throw new Error("AK 管理端地址必须是 http(s):// 地址");
+      }
+    }
+    if (hasStaticToken) config.relayToken = candidate.relayToken;
+    for (const field of akFields) {
+      const value = candidate[field];
+      if (typeof value === "string" && value.trim()) {
+        config[field] = value.trim();
+      }
+    }
+    if (typeof candidate.connectionId !== "string" || !candidate.connectionId) {
+      throw new Error("中继模式缺少 connectionId");
+    }
     config.connectionId = candidate.connectionId;
     // E2E 指纹（可选）：16 位十六进制，大小写归一（fingerprintOf 恒小写）
     if (
@@ -290,11 +340,38 @@ const defaultTransportFactory: TransportFactory = (config) =>
         token: config.token ?? "",
       });
 
+/** AK 凭证失效占位 transport（T17）：无凭证不裸连 relay（鉴权语义），
+ * request 一律抛失效错误；注册表以 invalid-token 粘滞态呈现（复用既有
+ * 凭证失效呈现面），save 重建自愈；unavailable（瞬态）由下次请求重建
+ * 自愈、invalid-ak 仅显式激活/保存重试 */
+class StaleRelayCredentialTransport extends TransportBase {
+  constructor(private readonly failureMessage: string) {
+    super();
+    this.setState("closed");
+  }
+
+  async request(
+    _method: "GET" | "POST",
+    _path: string,
+    _body?: unknown,
+  ): Promise<TransportRequestResult> {
+    throw new Error(this.failureMessage);
+  }
+
+  close(): void {
+    /* 占位无资源 */
+  }
+}
+
 export class ConnectionRegistry {
   private readonly persistence: ConnectionPersistence;
   private readonly transportFactory: TransportFactory;
   private readonly testTimeoutMs: number;
   private readonly entries = new Map<string, TransportEntry>();
+  /** 建连在途任务（T17：AK 换发使建链 async——同 id 并发请求单飞合流） */
+  private readonly creating = new Map<string, Promise<Transport>>();
+  /** 连接配置世代（T17：save/delete/closeAll 顶替在望建连——迟到结果不落地） */
+  private readonly entryEpochs = new Map<string, number>();
   private eventSink: ((connId: string, event: ServerEvent) => void) | null =
     null;
 
@@ -364,6 +441,8 @@ export class ConnectionRegistry {
       activeConnId: shape.activeConnId === id ? null : shape.activeConnId,
     });
     this.closeEntry(id);
+    // AK 存量 access 随连接清除（不留孤儿凭证——重建后重新换发）
+    clearRelayAccess(id);
     return this.list();
   }
 
@@ -377,13 +456,18 @@ export class ConnectionRegistry {
       connections: shape.connections,
       activeConnId: id,
     });
+    // AK 失效占位（T17）：显式激活即重试换发（用户动作，一次 admin 请求
+    // 可接受——区别于请求路径 invalid-ak 粘滞不自动重试）
+    const existing = this.entries.get(id);
+    if (existing?.akFailure) this.closeEntry(id);
     void this.transportFor(id, shape.connections).catch(() => {
       /* 建链失败由 transport 自身重连兜底；错误在请求路径暴露 */
     });
   }
 
   /** 连接连通性测试：临时 transport → GET info（direct 立即请求；relay
-   * 先等 ws open）；401/4010 → invalid-token（T13 F1 裁定落点） */
+   * 先等 ws open）；401/4010 → invalid-token（T13 F1 裁定落点）；AK 模式
+   * 同换新（401 → invalid-token；无可用凭证 → unreachable，T16 同口径） */
   async test(raw: unknown): Promise<TestConnectionResult> {
     let config: ConnectionConfig;
     try {
@@ -395,7 +479,19 @@ export class ConnectionRegistry {
         message: e instanceof Error ? e.message : String(e),
       };
     }
-    const transport = this.transportFactory(config);
+    const credential = await this.resolveRelayCredential(config);
+    if (!credential.ok) {
+      return {
+        ok: false,
+        reason: credential.reason === "invalid-ak" ? "invalid-token" : "unreachable",
+        message: credential.message,
+      };
+    }
+    const transport = this.transportFactory(
+      credential.relayToken
+        ? { ...config, relayToken: credential.relayToken }
+        : config,
+    );
     try {
       const info = await this.withTimeout(
         this.requestInfo(transport, config),
@@ -502,6 +598,9 @@ export class ConnectionRegistry {
   }
 
   private closeEntry(id: string): void {
+    // 世代前移：顶替在期建连（T15 fix-round 教训——AK 换发 await 窗口内
+    // save/delete 后，迟到的旧配置建连结果不落地）
+    this.entryEpochs.set(id, (this.entryEpochs.get(id) ?? 0) + 1);
     const entry = this.entries.get(id);
     if (!entry) return;
     this.entries.delete(id);
@@ -521,16 +620,63 @@ export class ConnectionRegistry {
     connections: ConnectionConfig[],
   ): Promise<Transport> {
     const existing = this.entries.get(id);
-    if (existing) return existing.transport;
+    if (existing) {
+      // AK 失效占位重试语义（T17）：unavailable（瞬态）由下一次请求重建
+      // 自愈（admin 恢复后无需人工干预）；invalid-ak 粘滞（请求路径不自动
+      // 重试——每请求打 admin 刷 401 无意义，重配经 save/激活自愈）
+      if (existing.akFailure !== "unavailable") return existing.transport;
+      this.closeEntry(id);
+    }
+    const inflight = this.creating.get(id);
+    if (inflight) return inflight;
+    const task = this.buildTransportEntry(id, connections);
+    this.creating.set(id, task);
+    try {
+      return await task;
+    } finally {
+      this.creating.delete(id);
+    }
+  }
+
+  /** 建连收口（T17 起异步：AK 凭证换发先行——static relayToken 在场即
+   * 短路零 AK 请求；换发失败不裸连，落 invalid-token 占位态）。同 id 并
+   * 发经 creating 单飞合流；换发 await 窗口内配置被顶替（epoch 前移）即
+   * 放弃迟到结果 */
+  private async buildTransportEntry(
+    id: string,
+    connections: ConnectionConfig[],
+  ): Promise<Transport> {
     const config = connections.find((c) => c.id === id);
     if (!config) throw new Error(`连接不存在：${id}`);
-    const transport = this.transportFactory(config);
+    const epochAtStart = this.entryEpochs.get(id) ?? 0;
+    const credential = await this.resolveRelayCredential(config);
+    // 顶替守卫（T15 fix-round 教训）：换发挂起窗口（≤30s）内 save/delete
+    // 顶掉本轮——迟到结果不落地（不装 stale transport、不踩新配置）
+    if (epochAtStart !== (this.entryEpochs.get(id) ?? 0)) {
+      throw new Error("连接配置已变更，请重试");
+    }
+    const transport = credential.ok
+      ? this.transportFactory(
+          credential.relayToken
+            ? { ...config, relayToken: credential.relayToken }
+            : config,
+        )
+      : new StaleRelayCredentialTransport(credential.message);
     const entry: TransportEntry = {
       transport,
       state: mapTransportState(transport.state),
       e2e: transport.e2eState,
       capabilities: [],
     };
+    if (!credential.ok) {
+      entry.state = "invalid-token";
+      entry.akFailure = credential.reason;
+      Log.warn(
+        "relay AK 凭证不可用，连接置 invalid-token（保存/激活重建自愈）",
+        id,
+        credential.message,
+      );
+    }
     this.entries.set(id, entry);
     transport.onState((state) => {
       if (entry.state === "invalid-token" && state !== "connected") return;
@@ -551,10 +697,45 @@ export class ConnectionRegistry {
       }
       this.eventSink?.(id, event);
     });
-    if (config.mode === "relay" && transport.state !== "connected") {
+    if (
+      credential.ok &&
+      config.mode === "relay" &&
+      transport.state !== "connected"
+    ) {
       await this.waitForConnected(transport);
     }
     return transport;
+  }
+
+  /** relay 凭证收口（T17）：static relayToken 优先（在场即短路——零 AK
+   * 请求）；AK 三要素走 relay-ak 建连前换发（401 / 无存量+换新失败 →
+   * 失败面，调用方呈 invalid-token 态）；direct 无凭证面直通 */
+  private async resolveRelayCredential(
+    config: ConnectionConfig,
+  ): Promise<
+    | { ok: true; relayToken: string }
+    | { ok: false; reason: "invalid-ak" | "unavailable"; message: string }
+  > {
+    if (config.mode !== "relay") return { ok: true, relayToken: "" };
+    if (config.relayToken) {
+      return { ok: true, relayToken: config.relayToken };
+    }
+    if (!akTriplePresent(config)) {
+      // validateConfig 已收口凭证面；此处防御兜底（不裸连）
+      return {
+        ok: false,
+        reason: "unavailable",
+        message: "relay 连接缺少凭证（relayToken 或 AK 三要素）",
+      };
+    }
+    const outcome = await resolveRelayAccessToken(config.id, {
+      adminUrl: config.adminUrl!,
+      akId: config.akId!,
+      akSecret: config.akSecret!,
+    });
+    return outcome.ok
+      ? { ok: true, relayToken: outcome.accessToken }
+      : { ok: false, reason: outcome.reason, message: outcome.message };
   }
 
   /** relay 首请求兜底：等 ws open（connected）或超窗放行（由 request 自身

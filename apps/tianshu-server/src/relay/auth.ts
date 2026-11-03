@@ -39,11 +39,14 @@ export function createStaticAuthenticator(token: string): Authenticator {
   };
 }
 
-/** jwt 鉴权器：EdDSA 验签 + 吊销回调 + 角色白名单。角色取（已签名的）
- *  claims 而非首帧自报——帧 role 是未签名输入，token 才是凭证本体；
- *  白名单为签发面失守的运行时兜底（verify 的类型还原不作 wire 保证）。
- *  吊销命中与验签失败同归 invalid-token（不区分原因，报文细节不外泄
- *  给探测方——与 verifyAccessJwt 的归一语义一致） */
+/** jwt 鉴权器：EdDSA 验签 + tid fail-closed + 吊销回调 + 角色白名单。
+ *  角色取（已签名的）claims 而非首帧自报——帧 role 是未签名输入，token
+ *  才是凭证本体；白名单为签发面失守的运行时兜底（verify 的类型还原
+ *  不作 wire 保证）。tid 缺失/非非空字符串 = 畸形载荷 → 拒（终审
+ *  Minor #3，更新 T4 旁路 ruling：正常签发恒带 tid，缺失即畸形，
+ *  fail-closed 与 relay-main 的 quota 防御门同款逻辑）。吊销命中与
+ *  验签失败同归 invalid-token（不区分原因，报文细节不外泄给探测方
+ *  ——与 verifyAccessJwt 的归一语义一致） */
 export function createJwtAuthenticator(
   publicKeyPem: string,
   isRevoked: (t: { tid?: string; ak?: string }) => boolean,
@@ -52,6 +55,10 @@ export function createJwtAuthenticator(
     admit({ token }) {
       const claims = verifyAccessJwt(token, publicKeyPem);
       if (!claims)
+        return { ok: false, closeCode: 4001, reason: 'invalid-token' };
+      // tid fail-closed：畸形载荷先拒，不进吊销检查（同归 4001，次序
+      // 只影响 isRevoked 是否被无 tid 咨询）
+      if (typeof claims.tid !== 'string' || claims.tid === '')
         return { ok: false, closeCode: 4001, reason: 'invalid-token' };
       if (isRevoked({ tid: claims.tid, ak: claims.ak }))
         return { ok: false, closeCode: 4001, reason: 'invalid-token' };

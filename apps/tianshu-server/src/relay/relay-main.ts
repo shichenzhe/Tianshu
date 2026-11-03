@@ -5,7 +5,7 @@ import {
   type ServerResponse,
 } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
-import { createPublicKey, timingSafeEqual } from 'node:crypto';
+import { createPublicKey, timingSafeEqual, type KeyObject } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { RELAY_CLOSE_CODES, type AuthFrame } from '@tianshu/protocol';
@@ -121,13 +121,29 @@ function createAuthenticator(
     if (!options.authPubkeyFile)
       throw new Error('relay 拒绝启动：jwt 模式需要 --auth-pubkey');
     const publicKeyPem = readFileSync(options.authPubkeyFile, 'utf8');
+    // 误传私钥 PEM（终审 Minor #8）：createPublicKey 对私钥会提取出对应
+    // 公钥（Ed25519 私钥提出的仍是 ed25519 公钥），类型检查拦不住——
+    // 但签发私钥落在 relay 侧本身就是错配（只该存 relay-admin），按
+    // PEM 头文本直接拒
+    if (publicKeyPem.includes('PRIVATE KEY'))
+      throw new Error(
+        'relay 拒绝启动：--auth-pubkey 是私钥 PEM——只接受 Ed25519 公钥（签发私钥不得落在 relay 侧）',
+      );
     // 启动时公钥可解析性校验：坏 PEM 若漏到运行期，verifyAccessJwt 的
     // 归一语义会把它伪装成凭证问题——所有连接 4001 invalid-token
+    let publicKey: KeyObject;
     try {
-      createPublicKey(publicKeyPem);
+      publicKey = createPublicKey(publicKeyPem);
     } catch {
       throw new Error('relay 拒绝启动：--auth-pubkey 不是合法公钥');
     }
+    // 算法白名单（终审 Minor #8）：verifyAccessJwt 固定 EdDSA，误配 RSA
+    // 公钥漏到运行期 = 全员 4001 伪装凭证失败——启动期直接拒并给出
+    // 实际解析类型
+    if (publicKey.asymmetricKeyType !== 'ed25519')
+      throw new Error(
+        `relay 拒绝启动：--auth-pubkey 不是 Ed25519 公钥（当前解析为 ${publicKey.asymmetricKeyType}）`,
+      );
     return createJwtAuthenticator(
       publicKeyPem,
       // 吊销检查面（Task 6 CRL）：store 在场即查名单；未配置恒 false
@@ -350,8 +366,9 @@ export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
     });
     if (!decision.ok) return void ws.close(decision.closeCode, decision.reason);
     // jwt 防御闸：tenantId 在场而 quota 畸形（缺失/字段非正数）→ 与验签
-    // 失败同归 4001；tenantId 缺失按 static 语义旁路（设计内行为，
-    // 不因此拒绝）——static 裁决 tenantId 恒缺省，本闸零参与
+    // 失败同归 4001。tid 缺失已在 jwt 鉴权器 fail-closed（终审 Minor #3，
+    // 更新 T4 旁路 ruling）——jwt 裁决 tenantId 恒为非空字符串，本闸只防
+    // quota 形状畸形；static 裁决 tenantId 恒缺省，本闸零参与
     if (decision.tenantId !== undefined && !isUsableQuota(decision.quota))
       return void ws.close(4001, 'invalid-token');
     handleConnection(

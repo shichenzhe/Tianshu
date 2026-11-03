@@ -17,6 +17,13 @@
 // 态——pong 按来帧通道回）、open/close（relay 配对生命周期，relay 侧消费
 // 生成）。降级语义（§2.4）：auto 缺省（未握手明文兼容旧控制端）；required
 // 拒明文业务帧（断开）；off 忽略 hello（完全旧版）。
+// AK 凭证通道（Task 15，spec §5.4 消费侧）：static token 缺席而
+// adminUrl/akId/akSecret 三要素齐备时走 AK 模式（renewable-credential
+// 模块）——启动先 Basic 换 access（401 = AK 失效：干净启动失败 / 续期
+// 粘滞断连不重连；网络失败 30s 起退避封顶 10min），内存三元组 + 10min
+// 巡检续期；auth 首帧发帧时读当前 access（续期后重连即用新 token）。
+// static token 显式在场则 AK 机制整体旁路（零漂移——解析层短路 +
+// 本层装配守卫 + currentRelayToken 回退三重）。
 // WS 实现用 Node 22+/Electron 44 主进程全局 WebSocket（undici 客户端，
 // 零新增运行时依赖）；测试侧模拟 relay 用 ws 库（devDependencies）。
 import Log from "../../commons/Log";
@@ -36,6 +43,11 @@ import {
   type E2ESecureEnvelope,
   type E2ESession,
 } from "@tianshu/core";
+import {
+  createRenewableCredential,
+  type RelayAkCredentials,
+  type RenewableCredential,
+} from "./renewable-credential";
 
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
@@ -59,9 +71,19 @@ let e2eMode: FaceE2eMode = "required";
 // 忽略；合法重协商/新控制端恒新临时钥不受影响。与 e2eSession 同点清（重连
 // /判死/停启即弃，属当前连接的协商记忆）。
 let lastHelloEphemeral: Buffer | null = null;
+// AK 凭证通道态（Task 15）：static token 缺席且 AK 三要素在场时由
+// startRelayClient 创建；access 只存内存（renewable-credential 单点
+// 写入），auth 首帧经 currentRelayToken() 发帧时取值
+let akCredential: RenewableCredential | null = null;
 
 export function isRelayConnected(): boolean {
   return socket !== null && socket.readyState === WebSocket.OPEN;
+}
+
+/** 当前鉴权凭证（发帧时取值）：AK 模式读内存 access（续期换新后即新值
+ *  ——非启动时快照），static 模式读启动配置 relayToken（static 优先） */
+function currentRelayToken(): string {
+  return akCredential?.currentToken() ?? relayToken;
 }
 
 /** 当前连接是否已建立 E2E 会话（设置面状态点；明文承载时 false） */
@@ -333,10 +355,11 @@ function connectOnce(): Promise<void> {
       attempts = 0;
       e2eSession = null; // 新连接新协商（旧会话密钥不跨连接）
       lastHelloEphemeral = null;
-      // 首帧 auth（凭证承载）→ register（元数据）——顺序即协议
+      // 首帧 auth（凭证承载——AK 模式发帧时读当前 access，续期换新后
+      // 重连即用新 token）→ register（元数据）——顺序即协议
       sendFrame(ws, {
         kind: "auth",
-        token: relayToken,
+        token: currentRelayToken(),
         role: "server",
         connectionId: FACE_INSTANCE_ID,
       });
@@ -413,14 +436,31 @@ function forceReconnect(reason: string): void {
   scheduleReconnect();
 }
 
-/** 启动 relay 客户端（幂等：重启换目标先拆旧连接与订阅） */
+/** 启动可选参数：AK 凭证模式 + 续期节奏（测试注入） */
+export interface RelayClientOptions {
+  /** AK 凭证（Task 15）：无 static token 时启用 AK 模式（Basic 换
+   *  access + 低频续期）；token 在场则整体旁路（零漂移） */
+  ak?: RelayAkCredentials;
+  /** 续期巡检间隔（缺省 10min；测试注入） */
+  renewCheckIntervalMs?: number;
+  /** 换 access 退避基数（缺省 30s 封顶 10min；测试注入） */
+  akRetryBaseMs?: number;
+}
+
+/** 启动 relay 客户端（幂等：重启换目标先拆旧连接与订阅）。鉴权双模：
+ * static token 或 AK 凭证（先换 access 再连——绝不无凭证连接）；
+ * 两者同传 static 优先（零漂移：AK 机制整体不跑） */
 export async function startRelayClient(
   url: string,
   token: string,
+  options: RelayClientOptions = {},
 ): Promise<void> {
   stopRelayClient();
-  if (!url || !token) {
-    throw new Error("relay 客户端启动需 url 与 token");
+  // static 优先零漂移（装配层守卫）：token 显式在场时 AK 整体不跑
+  // （即使 ak 同传——ipc 解析层已短路，此处双保险）
+  const ak = token ? undefined : options.ak;
+  if (!url || (!token && !ak)) {
+    throw new Error("relay 客户端启动需 url 与 token（或 AK 凭证）");
   }
   relayUrl = url;
   relayToken = token;
@@ -428,6 +468,30 @@ export async function startRelayClient(
   attempts = 0;
   e2eSession = null;
   lastHelloEphemeral = null;
+  if (ak) {
+    const credential = createRenewableCredential(ak, {
+      ...(options.renewCheckIntervalMs !== undefined
+        ? { renewCheckIntervalMs: options.renewCheckIntervalMs }
+        : {}),
+      ...(options.akRetryBaseMs !== undefined
+        ? { akRetryBaseMs: options.akRetryBaseMs }
+        : {}),
+      // 续期侧 401（AK 失效）粘滞终局：断开且不再重连（重连只会复现
+      // 同一终局）；告警单点在 renewable-credential
+      onStaleInvalid: () => stopRelayClient(),
+    });
+    akCredential = credential;
+    try {
+      // 换到 access 才连（401 = AK 失效 → 干净启动失败，不进连接/重连
+      // 循环；网络失败在 ensureAccess 内退避重试）
+      await credential.ensureAccess();
+    } catch (e) {
+      // 本轮启动已被停止/重启接手（akCredential 换人）时不动新状态
+      if (akCredential === credential) stopRelayClient();
+      throw e;
+    }
+    credential.startRenewLoop();
+  }
   // 模式随启动装载（握手时再实时读刷新——设置面改模式即生效）
   e2eMode = (await readServerFaceConfig()).e2e ?? "required";
   ensureTapBridge();
@@ -446,6 +510,9 @@ export async function startRelayClient(
 
 export function stopRelayClient(): void {
   stopped = true;
+  // AK 续期循环收口（计时器清零——停用/退出/粘滞失效均无泄漏）
+  akCredential?.stop();
+  akCredential = null;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;

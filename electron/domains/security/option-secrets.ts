@@ -4,7 +4,7 @@
  * 时加密。信封复用 @tianshu/core crypto-envelope（C1）+ 桌面主密钥。
  *
  * 覆盖：connections 行（token/backupToken/relayToken）、serverFace 行
- * （token/relayToken）、serverFace.e2eKey 行（静态私钥）、
+ * （token/relayToken/akSecret）、serverFace.e2eKey 行（静态私钥）、
  * webhook:<graphId> 行（每图 token）。
  */
 import { openSecret, sealSecret } from "./secret-field";
@@ -14,6 +14,7 @@ const CONNECTION_SECRET_FIELDS = [
   "token",
   "backupToken",
   "relayToken",
+  "akSecret",
 ] as const;
 
 /** 任意 JSON 对象的敏感字段密封（深度 1——这些行均为扁平结构）；泛型

@@ -1,8 +1,12 @@
 /**
- * relay 凭据续期判断（relay 多租户 spec §5.4）：纯函数零依赖，四端共享
- * 单源（tianshu-server relay-client / 桌面 server-face / 移动端
- * relay-transport / 桌面控制端 transport）——各端凭据缓存侧以同一阈值
- * 决定何时向 relay 换发 access token，避免四端各自实现漂移。
+ * relay 凭据续期判断（relay 多租户 spec §5.4）：纯函数零依赖，续期阈值
+ * 单源——各端凭据缓存侧以同一阈值决定何时向控制平面换发 access token，
+ * 避免各端自行实现漂移。直接消费方（import 本包）：tianshu-server
+ * relay-client、mirror 桌面被控面 server-face（renewable-credential）、
+ * mirror 桌面控制端 server 域（relay-ak，主进程 alias 直引源码）。
+ * 移动端**非直接消费**：@tianshu/core 的 langChain peer 不进 metro
+ * bundle（e2e-crypto 同款裁定），双份移植在 apps/tianshu-mobile/
+ * src/transport/relay-ak.ts，语义由其测试对本文件源码交叉锁定防漂移。
  */
 
 /**

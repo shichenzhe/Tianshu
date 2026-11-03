@@ -1,0 +1,71 @@
+# apps/tianshu-server/Dockerfile.relay
+# relay 多租户镜像（spec 2026-11-03 §9「relay 部署产物独立」）：公共 relay
+# 服务器零业务代码——最终层仅 5 个 relay 运行时 js（relay-client/ws-liveness
+# 是被控端件，不入镜像）+ @tianshu/protocol 常量包（RELAY_CLOSE_CODES 运行
+# 时值依赖，纯常量零依赖）+ ws。
+# 构建（monorepo 根 context，与主 Dockerfile 同法）：
+#   docker build -f apps/tianshu-server/Dockerfile.relay -t tianshu-relay .
+# 运行（多租户 jwt 模式；单租户 static 传 --token 即可）：
+#   docker run -d -p 8411:8411 -v /etc/relay:/keys:ro tianshu-relay \
+#     --port 8411 --auth-pubkey /keys/relay-access.pub.pem \
+#     --internal-secret "$INTERNAL_SECRET"
+#
+# builder 复用主 Dockerfile 全量构建路径（六坑处置见 docs/superpowers/specs/
+# 2026-10-31-server-docker-deploy-design.md），只为产出 dist/src/relay/*.js。
+# 与主 Dockerfile 的两处刻意差异：
+# 1. `npm ci --ignore-scripts`：根 package.json postinstall 的
+#    `electron-builder install-app-deps` 会把 better-sqlite3 对 Electron 44
+#    头文件源码重编（debian g++12 编不过 v8config.h）——relay 编译型 builder
+#    只需 tsc + 声明文件，node-pty/better-sqlite3 等原生重编全部不需要；
+#    prisma engine 由 `npx prisma generate` 按需自下（非 lifecycle 脚本）
+# 2. 免 python3/make/g++ 工具链（无源码编译步骤）
+FROM node:22-slim AS builder
+WORKDIR /repo
+COPY package.json package-lock.json ./
+COPY packages/tianshu-protocol/package.json packages/tianshu-protocol/
+COPY packages/tianshu-core/package.json packages/tianshu-core/
+COPY apps/tianshu-server/package.json apps/tianshu-server/
+# 镜像内 npm 10 无 allowScripts 门禁（宿主 npm 11 机制），脚本本会全跑；
+# --ignore-scripts 连根 postinstall 一并免掉（见上注释）；npmmirror 仅用于
+# lock 钉死的 ci（不做 semver 解析，无版本集差异风险）
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
+RUN npm config set registry https://registry.npmmirror.com/ && npm ci --ignore-scripts
+COPY packages packages
+COPY apps/tianshu-server apps/tianshu-server
+# prisma client 生成先于 nest build（DTO 引用生成枚举类型）；派生 PG 变体
+# 同主 Dockerfile（本镜像运行时不含 prisma，仅满足全量 tsc 编译依赖）
+RUN cd apps/tianshu-server && npx prisma generate \
+ && npm run prisma:pg:derive && rm -rf src/generated \
+ && npx prisma generate --schema prisma/pg/schema.prisma
+# 先清宿主随 context 带入的两包 dist（防陈旧产物顶替）；tianshu-core 的
+# tsc 因 @langchain peer 存在 6 项既有类型报错而 exit 2——host 侧同样以
+# 「dist 照常产出」为准（exit code 不作判据，主 Dockerfile 自 langchain
+# 升级后同此语义）：构建允许失败但必须实际产出 dist/index.js，真失败
+# （零产出）由产物存在性闸住
+RUN rm -rf packages/tianshu-core/dist packages/tianshu-protocol/dist \
+ && npm --prefix packages/tianshu-protocol run build \
+ && { npm --prefix packages/tianshu-core run build; [ -f packages/tianshu-core/dist/index.js ]; } \
+ && npm run build -w apps/tianshu-server
+# relay bundle 组装：ws 按实际提升位取（根提升或 server 本地二选一）
+RUN mkdir -p /relay-bundle/relay /relay-bundle/node_modules/@tianshu/protocol \
+ && cp apps/tianshu-server/dist/src/relay/relay-main.js \
+       apps/tianshu-server/dist/src/relay/registry.js \
+       apps/tianshu-server/dist/src/relay/auth.js \
+       apps/tianshu-server/dist/src/relay/jwt-eddsa.js \
+       apps/tianshu-server/dist/src/relay/crl.js \
+       /relay-bundle/relay/ \
+ && cp -r packages/tianshu-protocol/dist /relay-bundle/node_modules/@tianshu/protocol/ \
+ && cp packages/tianshu-protocol/package.json /relay-bundle/node_modules/@tianshu/protocol/ \
+ && WS_DIR="node_modules/ws" \
+ && if [ -d apps/tianshu-server/node_modules/ws ]; then WS_DIR="apps/tianshu-server/node_modules/ws"; fi \
+ && cp -r "$WS_DIR" /relay-bundle/node_modules/ws
+
+FROM node:22-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /relay-bundle /app
+# 镜像内置文件对全员可读；relay 无落盘写面，以非特权 node 用户运行
+# （主业务镜像沿用 root 缺省，本公共中继面收紧一档）
+USER node
+EXPOSE 8411
+ENTRYPOINT ["node", "relay/relay-main.js"]

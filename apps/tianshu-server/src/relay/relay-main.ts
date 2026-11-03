@@ -46,7 +46,8 @@ function isUsableQuota(quota: AccessQuota | undefined): boolean {
 export interface RelayOptions {
   /** 监听端口；0 = 随机端口（实际端口经返回值与启动日志暴露） */
   port: number;
-  /** 接入令牌；缺省拒绝启动（公网中继必须鉴权） */
+  /** 接入令牌；缺省拒绝启动（公网中继必须鉴权）；与 authPubkeyFile
+   *  严格互斥——同传拒绝启动（spec §4.1） */
   token: string;
   /** 每 socket 出向积压帧上限，超限拆连接（慢消费者防内存膨胀） */
   maxBufferFrames?: number;
@@ -201,6 +202,16 @@ function respondJson(res: ServerResponse, status: number, body: unknown): void {
 }
 
 export async function startRelay(options: RelayOptions): Promise<RelayHandle> {
+  // 双鉴权通道严格互斥（spec §4.1，终审 fix）：两凭证面同传时缺省推断
+  // 静默选 jwt、static token 被无视——运营员从 static 迁移时 unit 文件
+  // 残留 --token 会全员 4001 且无线索；显式 authMode 亦不豁免（在场即
+  // 互斥事实）。置于一切构造之前：options 直调与 CLI 路径（CLI 经
+  // parseCliArgs 只解析不校验，最终都落本函数）同覆盖
+  if (options.token && options.authPubkeyFile) {
+    throw new Error(
+      'relay 拒绝启动：--token 与 --auth-pubkey 互斥，请只保留一种鉴权方式',
+    );
+  }
   // CRL 先于鉴权器构造（jwt 分支注入 isRevoked）；坏配置（配了
   // adminUrl 缺 secret）在监听前拒绝启动，不留半启动态
   const crlStore = createCrlStoreIfConfigured(options);
@@ -578,7 +589,8 @@ export function parseCliArgs(argv: string[]): RelayOptions {
 const toInt = (value: string): number => Number.parseInt(value, 10) || 0;
 // CLI 入口：node dist/src/relay/relay-main.js --port 8411 --token <t> --max-buffer-frames 200
 // TLS 可选：--cert <pem> --key <pem>（成对传入即 wss 监听；缺省 http——默认部署架构为反代终止 TLS）
-// 鉴权模式（多租户批 Task 3）：--auth-pubkey <pem> 在场即 jwt 验签（免 --token）；
+// 鉴权模式（多租户批 Task 3）：--auth-pubkey <pem> 在场即 jwt 验签（免 --token；与
+// --token 严格互斥——同传拒绝启动，spec §4.1）；
 // --internal-secret <s> 内部端点凭证（kick/stats；未配置则两端点 404 不暴露）
 // CRL 吊销名单（Task 6，jwt 模式）：--crl-admin-url <url> 控制平面基址（周期拉
 // /relay-admin/revocations，需 --internal-secret 成对）；--crl-fail-close <n> 连续

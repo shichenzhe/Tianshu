@@ -6,6 +6,7 @@ import {
   Post,
   UseFilters,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../../commons/auth/decorator/public.decorator';
 import { ErrorCodeEnum } from '../../commons/exception/error-code.enum';
 import { RelayProtocolException } from '../protocol/relay-protocol.exception';
@@ -48,6 +49,7 @@ function parseBasicAuthorization(
  * data.reason（协议端点不做管理面 HTTP 200 包装，四端续期循环按状态码
  * 分支）；高频不落审计（spec §6）。
  */
+@ApiTags('relay-admin/token')
 @Controller('relay-admin/token')
 @UseFilters(RelayProtocolFilter)
 export class TokenController {

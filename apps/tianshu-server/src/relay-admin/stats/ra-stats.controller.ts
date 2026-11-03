@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { RelayLinkService } from '../relay-link.service';
 
 /** stats/online 响应形状：relayStats 为 relay /internal/stats 载荷原样
@@ -23,6 +24,7 @@ export interface RelayOnlineView {
  * 前端可据此提示视图新鲜度）。两种情形共用同一 unreachable 形状，
  * 不细分原因（运维排障走 relay-link warn 日志，非 API 面）。
  */
+@ApiTags('relay-admin/stats')
 @Controller('relay-admin/stats')
 export class RaStatsController {
   constructor(private readonly relayLink: RelayLinkService) {}

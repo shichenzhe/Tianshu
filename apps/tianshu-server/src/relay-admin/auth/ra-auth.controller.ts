@@ -7,6 +7,7 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { FastifyRequest } from 'fastify';
 import { consumeRateLimit } from '../../commons/security/rate-limit';
 import { Public } from '../../commons/auth/decorator/public.decorator';
@@ -22,6 +23,7 @@ const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60_000;
  * relay-admin 管理员认证端点（Task 9）
  * 路由前缀 /relay-admin/* 为 CRL 拉取约定（relay 侧 crlAdminUrl 拼接）。
  */
+@ApiTags('relay-admin/auth')
 @Controller('relay-admin/auth')
 export class RaAuthController {
   constructor(private readonly raAuthService: RaAuthService) {}

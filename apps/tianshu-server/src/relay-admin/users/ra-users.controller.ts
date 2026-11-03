@@ -7,6 +7,7 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AccessContext } from '../../commons/auth/decorator/access-context.decorator';
 import { OperateContext } from '../../commons/entity/operate-context.entity';
 import { RaUsersService, RaUserCreatedResult } from './ra-users.service';
@@ -21,6 +22,7 @@ import { RaUserDto } from './dto/ra-user.dto';
  * 与 brief「@Roles(admin) 可见全量」语义一致；待引入第二角色时再挂
  * RolesGuard 分档（当前 RolesGuard 校验体在业务端为空实现，挂上仅仪式）。
  */
+@ApiTags('relay-admin/users')
 @Controller('relay-admin/users')
 export class RaUsersController {
   constructor(private readonly raUsersService: RaUsersService) {}

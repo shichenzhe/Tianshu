@@ -19,7 +19,10 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
   let ra: RaTestApp;
 
   beforeAll(async () => {
-    ra = await createRaTestApp({ tmpPrefix: 'relay-admin-bootstrap-' });
+    ra = await createRaTestApp({
+      tmpPrefix: 'relay-admin-bootstrap-',
+      withSwagger: true,
+    });
   });
 
   afterAll(async () => {
@@ -84,5 +87,22 @@ describe('relay-admin bootstrap（Task 9：鉴权/统一包装/health）', () =>
     expect(response.body).toEqual(
       expect.objectContaining({ status: 'ok' }),
     );
+  });
+
+  it('Swagger 操作台挂载（spec §6）：/api-docs UI 200 + /api-docs-json 含管理面路由', async () => {
+    // 终审 fix：spec §6 承诺「Swagger /api-docs 即 beta 操作台（不做前端
+    // 页面）」——README-relay 8412/api-docs 同款；swagger 11 的 setup 在
+    // 精确路径直出 UI HTML（无 302），json 端点为 {path}-json
+    const ui = await request(ra.server).get('/api-docs');
+    expect(ui.status).toBe(200);
+    expect(ui.text).toContain('swagger');
+
+    const json = await request(ra.server).get('/api-docs-json');
+    expect(json.status).toBe(200);
+    expect(json.body.openapi).toBeDefined();
+    // 路由已入文档（@ApiTags 分组）——抽 users/token/revocations 三面代表
+    expect(json.body.paths['/relay-admin/users']).toBeDefined();
+    expect(json.body.paths['/relay-admin/token']).toBeDefined();
+    expect(json.body.paths['/relay-admin/revocations']).toBeDefined();
   });
 });

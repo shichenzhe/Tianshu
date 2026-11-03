@@ -27,7 +27,7 @@ CLI 参数（`--k v` 与 `--k=v` 两种形式均可）：
 | `--token` | 无 | 接入令牌；**缺省拒绝启动**（公网中继必须鉴权） |
 | `--max-buffer-frames` | `200` | 每 socket 出向积压帧上限，超限拆连接（背压保护） |
 | `--cert` / `--key` | 无 | TLS 证书/私钥 PEM；**成对**传入即 https/wss 监听（原生 TLS 可选通道，见「TLS 部署」），缺省 http |
-| `--auth-pubkey` 等 | 无 | 多租户 jwt 模式参数（`--auth-pubkey` / `--internal-secret` / `--crl-admin-url` / `--crl-fail-close`），见「多租户部署（beta）」 |
+| `--auth-pubkey` 等 | 无 | 多租户 jwt 模式参数（`--auth-pubkey` / `--internal-secret` / `--crl-admin-url` / `--crl-fail-close`），见「多租户部署（beta）」；`--auth-pubkey` 与 `--token` **互斥**（同传拒绝启动） |
 
 产物路径：`dist/src/relay/relay-main.js`（`nest build` 全量编译，tsc 因 `prisma/seed.ts` 推断 rootDir=仓库根，与 Dockerfile 的 `dist/src/main.js` 同规则；`npm run start:relay` 已指向该实测路径）。运行时只需 node_modules 里的 `ws` + Node 标准库。
 

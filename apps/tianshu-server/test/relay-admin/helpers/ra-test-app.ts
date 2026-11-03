@@ -17,8 +17,20 @@ import { join } from 'node:path';
 import request from 'supertest'; // esModuleInterop 开启后 export= 不可命名空间直调
 import * as bcrypt from 'bcrypt';
 import { RaAppModule } from 'src/relay-admin/app.module';
+import { setupRaSwagger } from 'src/relay-admin/swagger';
 import { PrismaClient } from 'src/relay-admin/generated/prisma';
 import { RaPrismaService } from 'src/relay-admin/prisma.service';
+
+// @fastify/static 在 jest 沙箱内不可加载：@nestjs/swagger v11 挂载 UI 资产
+// 经 FastifyAdapter.useStaticAssets 惰性 require 该包，其嵌套依赖
+// content-disposition 为 ESM-only，jest29 的 CJS 沙箱首个 require 即抛
+// Unexpected token 'export'（Nest PackageLoader 误报「包缺失」后炸
+// worker）。生产不受影响——node>=20.19 靠 require(esm) 正常加载（主应用
+// Swagger 同链路）。withSwagger 测试只断言 UI HTML / -json 端点（内存
+// 生成，不经静态资产），登记 no-op 插件 mock 即可；该包仅 useStaticAssets
+// 惰性 require（无 import 期加载方），本语句虽在 import 提升后执行，
+// 仍先于一切真实 require 生效
+jest.mock('@fastify/static', () => async () => {});
 
 /** 测试管理员口令（seed 时写入 bcrypt 摘要；base64url 16+ 字符满足 DTO 校验） */
 export const RA_TEST_ADMIN_USERNAME = 'admin';
@@ -46,11 +58,14 @@ export interface RaTestApp {
  * 起一套 relay-admin 应用：临时目录 + RA 库 db push + 已知口令管理员
  * seed + RaAppModule 整树 + 与 src/relay-admin/main.ts 同款全局管道
  * （transform + 隐式类型转换）。extraEnv 在模块编译前生效（client 构造
- * 期解析 env 的时序与生产一致），销毁时统一还原。
+ * 期解析 env 的时序与生产一致），销毁时统一还原。withSwagger 时按生产
+ * 入口同款挂载 Swagger 操作台（app.init 前注册路由——fastify ready 后
+ * 不再受理新路由）。
  */
 export async function createRaTestApp(opts: {
   tmpPrefix: string;
   extraEnv?: (tmpRoot: string) => Record<string, string | undefined>;
+  withSwagger?: boolean;
 }): Promise<RaTestApp> {
   // RA 库指向临时文件（client 构造期解析 env——须先于 Test 模块编译）
   const tmpRoot = mkdtempSync(join(tmpdir(), opts.tmpPrefix));
@@ -110,6 +125,7 @@ export async function createRaTestApp(opts: {
         transformOptions: { enableImplicitConversion: true },
       }),
     );
+    if (opts.withSwagger) setupRaSwagger(app);
     await app.init();
     await (app.getHttpAdapter().getInstance() as FastifyInstance).ready();
 

@@ -8,6 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AccessContext } from '../../commons/auth/decorator/access-context.decorator';
 import { OperateContext } from '../../commons/entity/operate-context.entity';
 import { AksService, RaAkIssuedResult } from './aks.service';
@@ -22,6 +23,7 @@ import { RaAkDto } from './dto/ra-ak.dto';
  * 入口唯一主体是 ra_admin_user 管理员）。isAkUsable 无 HTTP 面：Task 12
  * token 端点（Basic AK 鉴权，不走管理员 JWT）在服务层消费。
  */
+@ApiTags('relay-admin/aks')
 @Controller('relay-admin/aks')
 export class AksController {
   constructor(private readonly aksService: AksService) {}

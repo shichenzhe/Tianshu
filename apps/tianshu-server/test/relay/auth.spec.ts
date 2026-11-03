@@ -360,6 +360,25 @@ describe('relay-main 鉴权模式接线（真实 ws）', () => {
     await expect(startRelay({ port: 0, token: '' })).rejects.toThrow('token');
   });
 
+  it('token 与 authPubkeyFile 同传 → 拒绝启动（spec §4.1 双模式严格互斥，不得静默选 jwt）', async () => {
+    // 终审 fix：此前缺省推断 jwt 静默胜出、static token 被忽略——运营员
+    // 从 static 迁移时 unit 文件残留 --token 会全员 4001 且无线索
+    await expect(
+      startRelay({ port: 0, token: TOKEN, authPubkeyFile: pubkeyFile }),
+    ).rejects.toThrow(
+      'relay 拒绝启动：--token 与 --auth-pubkey 互斥，请只保留一种鉴权方式',
+    );
+    // 显式 authMode 也不豁免（两凭证面在场即互斥事实，与模式声明无关）
+    await expect(
+      startRelay({
+        port: 0,
+        token: TOKEN,
+        authPubkeyFile: pubkeyFile,
+        authMode: 'static',
+      }),
+    ).rejects.toThrow('互斥');
+  });
+
   it('显式 authMode=static：行为不变（错 token 4001 / 对 token 放行）', async () => {
     const own = await startRelay({
       port: 0,

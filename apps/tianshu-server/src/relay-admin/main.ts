@@ -14,6 +14,7 @@ import {
   resolveListenHostname,
 } from '../commons/web/listen-host';
 import { shutdownAndExit } from '../commons/web/shutdown';
+import { setupRaSwagger } from './swagger';
 
 /** 缺省监听端口（spec 2026-11-03：relay 面板 8410 / 控制面 8412） */
 export const RA_DEFAULT_PORT = 8412;
@@ -23,7 +24,9 @@ export const RA_DEFAULT_PORT = 8412;
  * 平行的第二 HTTP 入口（start:relay 同款多入口形态）。全局管道与主应用
  * main.ts 同构：ValidationPipe（transform + 隐式转换）+ 统一包装拦截器 +
  * 异常过滤器（在 RaAppModule 经 APP_* 装配）；鉴权为全局 JWT 守卫。
- * 主应用特有的 swagger/握手/compression/relay 客户端均不进入本入口。
+ * Swagger 操作台已挂载（spec §6：/api-docs 即 beta 操作台，终审 fix——
+ * 独立标题不读主应用 swagger 配置段，见 swagger.ts）；主应用特有的
+ * 握手/compression/relay 客户端不进入本入口。
  */
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -40,6 +43,10 @@ async function bootstrap() {
     }),
   );
   app.enableCors();
+  // Swagger beta 操作台（spec §6）：listen 前挂载（与主应用 initSwagger
+  // 同一时序）；@Public 端点（login/token/revocations）在 UI 内可直试，
+  // 受保护端点经 Authorize 填管理员 JWT
+  setupRaSwagger(app);
 
   const configService = app.get(ConfigService);
   const appConfig = configService.get<AppConfig>('app', AppConfig.getDefault());

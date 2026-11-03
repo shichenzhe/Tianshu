@@ -5,6 +5,7 @@ import {
   HttpStatus,
   UseFilters,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import { Public } from '../../commons/auth/decorator/public.decorator';
@@ -51,6 +52,7 @@ function bearerMatches(
  * 部署（LB 后多进程）不保证全局单调**——beta 单实例语义，relay 侧仅作
  * 观测不据此门控（crl.ts 头注释同款口径）。
  */
+@ApiTags('relay-admin/revocations')
 @Controller('relay-admin/revocations')
 @UseFilters(RelayProtocolFilter)
 export class RevocationsController {

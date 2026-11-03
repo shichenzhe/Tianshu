@@ -72,6 +72,10 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
   const [relayUrl, setRelayUrl] = useState(initial?.relayUrl ?? "");
   const [relayToken, setRelayToken] = useState(initial?.relayToken ?? "");
   const [connectionId, setConnectionId] = useState(initial?.connectionId ?? "");
+  // —— relay AK 凭证（多租户 T16）：与中继令牌二选一，static 优先 ——
+  const [adminUrl, setAdminUrl] = useState(initial?.adminUrl ?? "");
+  const [akId, setAkId] = useState(initial?.akId ?? "");
+  const [akSecret, setAkSecret] = useState(initial?.akSecret ?? "");
   // —— relay e2e（安全批 H）：模式两段 + TOFU 指纹（编辑态回填） ——
   const [e2eMode, setE2eMode] = useState<"auto" | "required">(
     initial?.e2eMode ?? "auto",
@@ -89,6 +93,10 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
           relayUrl: relayUrl.trim(),
           relayToken: relayToken.trim(),
           connectionId: connectionId.trim(),
+          // AK 三要素逐字段保留（部分填写由 isValidConfig 门禁提示补全）
+          ...(adminUrl.trim() ? { adminUrl: adminUrl.trim() } : {}),
+          ...(akId.trim() ? { akId: akId.trim() } : {}),
+          ...(akSecret.trim() ? { akSecret: akSecret.trim() } : {}),
           ...(fingerprint.trim() ? { fingerprint: fingerprint.trim() } : {}),
           ...(e2eMode === "required" ? { e2eMode } : {}),
         }),
@@ -202,6 +210,27 @@ export function ConnectionForm({ initial, defaultMode, onDone }: Props) {
             value={connectionId}
             onChange={setConnectionId}
           />
+          {/* AK 凭证三要素（多租户 T16）：换发短效 access 连接；与中继令牌
+              二选一，static 在场零 AK 请求 */}
+          <TextField
+            label={t("connections:adminUrl")}
+            value={adminUrl}
+            onChange={setAdminUrl}
+          />
+          <TextField
+            label={t("connections:akId")}
+            value={akId}
+            onChange={setAkId}
+          />
+          <TextField
+            label={t("connections:akSecret")}
+            value={akSecret}
+            onChange={setAkSecret}
+            secure
+          />
+          <Text className="-mt-1 mb-3 text-xs text-label2 dark:text-[#EBEBF599]">
+            {t("connections:akHint")}
+          </Text>
           {/* e2e 模式两段（安全批 H；语义同桌面连接级开关） */}
           <View className="mb-3">
             <Text className="mb-1 text-[13px] text-label2 dark:text-[#EBEBF599]">

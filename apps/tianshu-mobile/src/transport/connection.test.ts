@@ -22,8 +22,14 @@ vi.mock("expo-crypto", () => {
 
 // —— transport 工厂替身：阻断 connection → direct/relay → expo/fetch →
 // react-native（Flow 语法 node 环境不可解析）传递链（wire.test.ts 同款）——
+// relay-ak 真身经 e2e-crypto/expo-secure-store 链亦需替身
 vi.mock("./direct-transport", () => ({ createDirectTransport: vi.fn() }));
 vi.mock("./relay-transport", () => ({ createRelayTransport: vi.fn() }));
+vi.mock("expo-secure-store", () => ({
+  setItemAsync: vi.fn(async () => undefined),
+  getItemAsync: vi.fn(async () => null),
+  deleteItemAsync: vi.fn(async () => undefined),
+}));
 
 import { validateRelayUrlScheme } from "./connection";
 

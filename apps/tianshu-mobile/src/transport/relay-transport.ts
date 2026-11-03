@@ -314,7 +314,11 @@ export function createRelayTransport(config: RelayConfig): Transport {
     const socket = new WebSocket(config.relayUrl);
     ws = socket;
     socket.onopen = () => {
-      // 首帧 auth（凭证承载）→ open（配对）——顺序即协议
+      // 首帧 auth（凭证承载）→ open（配对）——顺序即协议。token 可为
+      // static relayToken 或 AK 换发的短效 access（多租户 T16：调用方
+      // 连接前经 relay-ak resolveRelayAccessToken 收口后注入 relayToken
+      // 字段）；短连接无常驻续期——重连沿用连接时凭证，access 真过期由
+      // relay close 4001 → invalid-token 粘滞兜底（下次 activate 重换）
       send({ kind: "auth", token: config.relayToken, role: "client" });
       send({ kind: "open", connectionId: config.connectionId });
       onPaired(socket);

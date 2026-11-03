@@ -83,44 +83,12 @@ function bytesEquals(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-const B64_ALPHABET =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 
-/** base64（标准字母表+padding）——传输层 hello/ack 公钥编码复用 */
-export function bytesToB64(bytes: Uint8Array): string {
-  let out = "";
-  for (let i = 0; i < bytes.length; i += 3) {
-    const b0 = bytes[i];
-    const b1 = i + 1 < bytes.length ? bytes[i + 1] : 0;
-    const b2 = i + 2 < bytes.length ? bytes[i + 2] : 0;
-    out += B64_ALPHABET[b0 >> 2];
-    out += B64_ALPHABET[((b0 & 3) << 4) | (b1 >> 4)];
-    out += i + 1 < bytes.length ? B64_ALPHABET[((b1 & 15) << 2) | (b2 >> 6)] : "=";
-    out += i + 2 < bytes.length ? B64_ALPHABET[b2 & 63] : "=";
-  }
-  return out;
-}
-
-/** base64 解码（无效字符抛错）——传输层 ack 公钥解码复用 */
-export function b64ToBytes(s: string): Uint8Array {
-  const clean = s.endsWith("=") ? s.slice(0, s.indexOf("=")) : s;
-  const out = new Uint8Array(Math.floor((clean.length * 3) / 4));
-  let acc = 0;
-  let bits = 0;
-  let offset = 0;
-  for (const ch of clean) {
-    const v = B64_ALPHABET.indexOf(ch);
-    if (v === -1) throw new Error("e2e: invalid base64");
-    acc = (acc << 6) | v;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out[offset++] = (acc >> bits) & 0xff;
-    }
-  }
-  return offset === out.length ? out : out.subarray(0, offset);
-}
+// base64 实现收编单份至 ./b64（T16：relay-ak 复用且不引 expo 链）；
+// 对外 re-export 保持既有 import 面不变
+export { bytesToB64, b64ToBytes } from "./b64";
+import { bytesToB64, b64ToBytes } from "./b64";
 
 function toHexLower(bytes: Uint8Array): string {
   let out = "";

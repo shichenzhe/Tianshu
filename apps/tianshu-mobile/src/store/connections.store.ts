@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { create } from "zustand";
 import type { ServerEvent } from "@tianshu/protocol";
+import {
+  akTriplePresent,
+  clearRelayAccess,
+  resolveRelayAccessToken,
+} from "../transport/relay-ak";
 import { createTransport, isValidConfig, type ConnectionConfig } from "../transport/connection";
 import { Emitter, type Transport, type TransportState } from "../transport/types";
 
@@ -11,6 +16,10 @@ const STORAGE_KEY = "tianshu-mobile.connections";
 /** 连接凭证 secure-store key（安全批 H：token 迁出 AsyncStorage——
  *  AsyncStorage 明文落盘在越狱/备份提取面下不可信，凭证走钥匙串） */
 const secureKeyFor = (connId: string): string => `tianshu-mobile.token.${connId}`;
+
+/** relay AK 密钥 secure-store key（多租户 T16：akSecret 与 token 同口径，
+ *  剥离 AsyncStorage；access 换发记录的 key 归 relay-ak 模块自理） */
+const akSecretKeyFor = (connId: string): string => `tianshu-mobile.ak-secret.${connId}`;
 
 /** 凭证字段取值（direct=token / relay=relayToken——剥离与回填对称） */
 function secretOf(cfg: ConnectionConfig): string | undefined {
@@ -23,7 +32,7 @@ function sanitizedForDisk(cfg: ConnectionConfig): ConnectionConfig {
     const { token: _token, ...rest } = cfg;
     return rest as ConnectionConfig;
   }
-  const { relayToken: _relayToken, ...rest } = cfg;
+  const { relayToken: _relayToken, akSecret: _akSecret, ...rest } = cfg;
   return rest as ConnectionConfig;
 }
 
@@ -32,6 +41,11 @@ function withSecret(cfg: ConnectionConfig, secret: string): ConnectionConfig {
   return cfg.mode === "direct"
     ? { ...cfg, token: secret }
     : { ...cfg, relayToken: secret };
+}
+
+/** AK 密钥回填（内存态完整形态） */
+function withAkSecret(cfg: ConnectionConfig, akSecret: string): ConnectionConfig {
+  return { ...cfg, akSecret };
 }
 
 interface PersistedConnections {
@@ -88,7 +102,9 @@ function teardown(id: string | null | undefined): void {
 }
 
 /** fire-and-forget 持久化：写失败不阻塞交互，下次 save 覆盖重试。
- *  凭证拆 secure-store（按连接 key），AsyncStorage 只落剥离形态 */
+ *  凭证拆 secure-store（按连接 key），AsyncStorage 只落剥离形态。
+ *  字段移除即清键（undefined 分支）：防陈旧凭证在下次 load 回填——
+ *  尤其 static token 移除切 AK 后，陈旧 token 回填会反压 AK 通道（static 优先） */
 function persist(): void {
   const { configs, activeConnId } = useConnectionsStore.getState();
   for (const cfg of configs) {
@@ -97,6 +113,22 @@ function persist(): void {
       void SecureStore.setItemAsync(secureKeyFor(cfg.id), secret).catch(() => {
         /* 静默：下次 persist 重试 */
       });
+    } else {
+      void SecureStore.deleteItemAsync(secureKeyFor(cfg.id)).catch(
+        () => undefined,
+      );
+    }
+    if (cfg.mode !== "relay") continue;
+    if (cfg.akSecret !== undefined) {
+      void SecureStore.setItemAsync(akSecretKeyFor(cfg.id), cfg.akSecret).catch(
+        () => {
+          /* 静默：下次 persist 重试 */
+        },
+      );
+    } else {
+      void SecureStore.deleteItemAsync(akSecretKeyFor(cfg.id)).catch(
+        () => undefined,
+      );
     }
   }
   void AsyncStorage.setItem(
@@ -109,6 +141,11 @@ function persist(): void {
     /* 静默：quota/IO 失败无需上抛 */
   });
 }
+
+/** 激活代际（顶替守卫，T15 教训携带）：每次 activate 递增；AK 换新在途
+ *  时被切换激活/移除的连接，其迟到回调凭「代际失配或已非激活项」就地
+ *  收场——不建连、不回写状态，不踩新激活 */
+let activationEpoch = 0;
 
 export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
   configs: [],
@@ -125,7 +162,8 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
       const parsed = JSON.parse(raw) as Partial<PersistedConnections>;
       if (!Array.isArray(parsed.connections)) return;
       // 凭证回填：旧档内嵌 token（安全批 H 前形态）就地迁 secure-store 并
-      // 标记覆写；新档（剥离形态）按 key 从 secure-store 取回
+      // 标记覆写；新档（剥离形态）按 key 从 secure-store 取回。akSecret 同
+      // 口径（多租户 T16——正经档恒剥离，内嵌分支仅防手工/导入档）
       let migrated = false;
       const configs = await Promise.all(
         parsed.connections.map(async (c) => {
@@ -141,9 +179,26 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
             (await SecureStore.getItemAsync(secureKeyFor(c.id)).catch(
               () => null,
             ));
-          return secret !== null && secret !== undefined
-            ? withSecret(c, secret)
-            : c;
+          const embeddedAk = c.mode === "relay" ? c.akSecret : undefined;
+          if (embeddedAk !== undefined) {
+            migrated = true;
+            await SecureStore.setItemAsync(akSecretKeyFor(c.id), embeddedAk).catch(
+              () => undefined,
+            );
+          }
+          const akSecret =
+            embeddedAk ??
+            (c.mode === "relay"
+              ? await SecureStore.getItemAsync(akSecretKeyFor(c.id)).catch(
+                  () => null,
+                )
+              : null);
+          let out =
+            secret !== null && secret !== undefined ? withSecret(c, secret) : c;
+          if (akSecret !== null && akSecret !== undefined) {
+            out = withAkSecret(out, akSecret);
+          }
+          return out;
         }),
       );
       // 坏档自愈：缺必填字段的条目过滤掉；激活 id 指向被滤条目则一并清
@@ -171,8 +226,11 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
 
   remove: (id) => {
     teardown(id);
-    // secure 凭证随配置删除（不留孤儿密钥；fire-and-forget 同 persist 口径）
+    // secure 凭证随配置删除（不留孤儿密钥；fire-and-forget 同 persist 口径）；
+    // AK 密钥与换发记录一并清（多租户 T16）
     void SecureStore.deleteItemAsync(secureKeyFor(id)).catch(() => undefined);
+    void SecureStore.deleteItemAsync(akSecretKeyFor(id)).catch(() => undefined);
+    void clearRelayAccess(id);
     set((s) => {
       const states = { ...s.states };
       delete states[id];
@@ -187,50 +245,76 @@ export const useConnectionsStore = create<ConnectionsState>((set, get) => ({
 
   /** 激活/重激活：恒拆旧建新（含同 id——save 改配置后再 activate 即热重连）；
    *  relay 连接注入 TOFU 指纹回填钩子（encrypted 落定且 config 未带指纹时
-   *  写回 config.fingerprint 并持久化——下次连接起强制校验） */
+   *  写回 config.fingerprint 并持久化——下次连接起强制校验）；
+   *  AK 模式（relay 缺 static token 且三要素齐备——static 优先解析短路）：
+   *  连接前 resolveRelayAccessToken 换新收口，401/无可用凭证 → 不连、
+   *  states 落 invalid-token 粘滞态（复用 relay close 4001 语义面——连接页
+   *  红点提示重贴 AK） */
   activate: (id) => {
     const cfg = get().configs.find((c) => c.id === id);
     if (!cfg) return;
     teardown(get().activeConnId);
-    const transport = createTransport(cfg, {
-      onFingerprintPinned: (fp) => {
-        const current = get().configs.find((c) => c.id === id);
-        if (!current || current.fingerprint) return; // 已有指纹不覆写
-        set((s) => ({
-          configs: s.configs.map((c) =>
-            c.id === id ? { ...c, fingerprint: fp } : c,
-          ),
-        }));
-        persist();
-      },
-    });
-    const unsubState = transport.onState((s) =>
-      set((prev) => ({ states: { ...prev.states, [id]: s } })),
-    );
-    // server.connected 就地写能力缓存（先于 eventSink 下发）：连接级合成
-    // 事件恒先于业务事件到达，消费端读缓存即免页面级 GET info 直查
-    const unsubEvent = transport.onEvent((e) => {
-      if (e.type === "server.connected") {
-        set((prev) => ({
-          capabilitiesByConn: {
-            ...prev.capabilitiesByConn,
-            [id]: e.payload.capabilities,
-          },
-        }));
-      }
-      eventSink.emit(e);
-    });
-    transports.set(id, {
-      transport,
-      dispose: () => {
-        unsubState();
-        unsubEvent();
-      },
-    });
-    // 两工厂构造即同步进入 connecting（先于上方订阅发射）——初值对齐现实，
-    // 后续发射（connected/reconnecting/...）覆写
-    set((s) => ({ activeConnId: id, states: { ...s.states, [id]: "connecting" } }));
-    persist();
+    const epoch = ++activationEpoch;
+    const finish = (transportCfg: ConnectionConfig) => {
+      const transport = createTransport(transportCfg, {
+        onFingerprintPinned: (fp) => {
+          const current = get().configs.find((c) => c.id === id);
+          if (!current || current.fingerprint) return; // 已有指纹不覆写
+          set((s) => ({
+            configs: s.configs.map((c) =>
+              c.id === id ? { ...c, fingerprint: fp } : c,
+            ),
+          }));
+          persist();
+        },
+      });
+      const unsubState = transport.onState((s) =>
+        set((prev) => ({ states: { ...prev.states, [id]: s } })),
+      );
+      // server.connected 就地写能力缓存（先于 eventSink 下发）：连接级合成
+      // 事件恒先于业务事件到达，消费端读缓存即免页面级 GET info 直查
+      const unsubEvent = transport.onEvent((e) => {
+        if (e.type === "server.connected") {
+          set((prev) => ({
+            capabilitiesByConn: {
+              ...prev.capabilitiesByConn,
+              [id]: e.payload.capabilities,
+            },
+          }));
+        }
+        eventSink.emit(e);
+      });
+      transports.set(id, {
+        transport,
+        dispose: () => {
+          unsubState();
+          unsubEvent();
+        },
+      });
+      // 两工厂构造即同步进入 connecting（先于上方订阅发射）——初值对齐现实，
+      // 后续发射（connected/reconnecting/...）覆写
+      set((s) => ({ activeConnId: id, states: { ...s.states, [id]: "connecting" } }));
+      persist();
+    };
+    if (cfg.mode === "relay" && !cfg.relayToken && akTriplePresent(cfg)) {
+      // 换新期间即呈 connecting（不悬空）；迟到结果凭代际/激活项守卫落地
+      set((s) => ({ activeConnId: id, states: { ...s.states, [id]: "connecting" } }));
+      persist();
+      void resolveRelayAccessToken(cfg.id, {
+        adminUrl: cfg.adminUrl!,
+        akId: cfg.akId!,
+        akSecret: cfg.akSecret!,
+      }).then((outcome) => {
+        if (epoch !== activationEpoch || get().activeConnId !== id) return;
+        if (!outcome.ok) {
+          set((s) => ({ states: { ...s.states, [id]: "invalid-token" } }));
+          return;
+        }
+        finish({ ...cfg, relayToken: outcome.accessToken });
+      });
+      return;
+    }
+    finish(cfg);
   },
 
   selectActive: () => {

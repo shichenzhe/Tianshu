@@ -17,7 +17,7 @@
 
 ---
 
-### Task A: relay 鉴权面两项加固（server 侧，同域合并）
+### Task 1: relay 鉴权面两项加固（server 侧，同域合并）
 
 **Files:**
 - Modify: `apps/tianshu-server/src/relay/auth.ts`（jwt admit 补 tid 校验）
@@ -36,7 +36,7 @@
 - [ ] **Step 4: `cd apps/tianshu-server && npx jest test/relay/` 全绿（static 回归）+ `npx jest test/relay-admin/` 全绿**
 - [ ] **Step 5: commit** `fix(relay): 鉴权加固——无 tid token fail-closed + pubkey 限定 Ed25519（终审 Minor 3/8）`
 
-### Task B: access 缓存键补 adminUrl（mirror + mobile 两端）
+### Task 2: access 缓存键补 adminUrl（mirror + mobile 两端）
 
 **Files:**
 - Modify: `electron/domains/server/relay-ak.ts`（StoredRelayAccess 补 adminUrl + usable 检查匹配）

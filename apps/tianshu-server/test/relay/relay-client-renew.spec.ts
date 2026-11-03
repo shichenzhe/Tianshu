@@ -11,7 +11,9 @@ import {
  * relay-client AK 凭证通道（Task 14，spec §5.4 消费侧）：
  * - AK 模式启动：ensureAccess 先于连接（未换到 access 不连 relay），
  *   首帧 auth token=access（Basic 头与 token 端点契约锁定）
- * - 启动网络失败 → 退避重试；401 → 干净启动失败（reject + 零连接）
+ * - 启动网络失败 → 退避重试；401 按 data.reason 分支（四端同构）：
+ *   disabled/expired/bad-secret → 干净启动失败（reject + 零连接）；
+ *   not-found（库重建窗口）/ 无 body（代理质询、中间盒）→ 瞬态退避重试
  * - shouldRenew 真值 → 低频巡检换新 → 内存 access 更新（重连后的
  *   auth 帧读当前 access——getter 语义）；换新后 shouldRenew 假不再换
  * - 续期 401（AK 失效）→ 断开 relay + 粘滞不再重连 + 告警日志
@@ -159,6 +161,31 @@ function tokenUnauthorized(): Response {
   } as unknown as Response;
 }
 
+/** 无 JSON body 的 401（代理质询/中间盒特征——非 relay-admin 凭证失效面） */
+function tokenUnauthorizedBodyless(): Response {
+  return {
+    status: 401,
+    ok: false,
+    json: async () => {
+      throw new SyntaxError('Unexpected end of JSON input');
+    },
+  } as unknown as Response;
+}
+
+/** 401 信封带指定 reason（T12 全集：not-found=库重建窗口/akId 漂移中间态） */
+function tokenUnauthorizedReason(reason: string): Response {
+  return {
+    status: 401,
+    ok: false,
+    json: async () => ({
+      code: '4010',
+      success: false,
+      data: { reason },
+      message: `stub reason: ${reason}`,
+    }),
+  } as unknown as Response;
+}
+
 function expectedBasicHeader(credentials: RelayAkCredentials): string {
   return `Basic ${Buffer.from(
     `${credentials.akId}:${credentials.akSecret}`,
@@ -279,10 +306,42 @@ describe('relay-client AK 凭证通道', () => {
     await sleep(200);
     expect(relay.connections).toHaveLength(0);
     expect(errorSpy).toHaveBeenCalledWith(
-      '[relay-client] AK 凭证失效（disabled/expired），需运营方恢复或换发',
+      '[relay-client] AK 凭证失效（disabled/expired/bad-secret），需运营方恢复或换发',
     );
     errorSpy.mockRestore();
     await relay.close();
+  });
+
+  it('启动 401 无 body / not-found（代理质询/库重建窗口）→ 瞬态退避重试后成功才连（非粘滞、无凭证失效告警）', async () => {
+    const relay = await startFakeRelay();
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    fetchMock
+      .mockResolvedValueOnce(tokenUnauthorizedBodyless())
+      .mockResolvedValueOnce(tokenUnauthorizedReason('not-found'))
+      .mockResolvedValueOnce(tokenOk('access-1', Date.now() + 30 * DAY_MS));
+    try {
+      await startHeadlessRelay({
+        app: fakeApp(),
+        relayUrl: `ws://127.0.0.1:${relay.port}/ws`,
+        ak: AK,
+        pingIntervalMs: 60_000,
+        deadAfterMs: 60_000,
+        akRetryBaseMs: 80,
+        renewCheckIntervalMs: 60_000,
+      });
+      // 两轮瞬态 401 均退避重试（第三发成功），不粘滞启动失败
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      const auth = await relay.connections[0].waitForFrame(
+        (f) => f.kind === 'auth',
+      );
+      expect(auth.token).toBe('access-1');
+      expect(errorSpy).not.toHaveBeenCalledWith(
+        '[relay-client] AK 凭证失效（disabled/expired/bad-secret），需运营方恢复或换发',
+      );
+    } finally {
+      errorSpy.mockRestore();
+      await relay.close();
+    }
   });
 
   it('shouldRenew 真值 → 巡检换新且内存 access 更新（重连后 auth 帧用新 token）；换新后不再换', async () => {
@@ -339,7 +398,7 @@ describe('relay-client AK 凭证通道', () => {
     await sleep(3_500);
     expect(relay.connections).toHaveLength(1);
     expect(errorSpy).toHaveBeenCalledWith(
-      '[relay-client] AK 凭证失效（disabled/expired），需运营方恢复或换发',
+      '[relay-client] AK 凭证失效（disabled/expired/bad-secret），需运营方恢复或换发',
     );
     errorSpy.mockRestore();
     await relay.close();

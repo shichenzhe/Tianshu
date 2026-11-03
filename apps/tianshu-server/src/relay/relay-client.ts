@@ -38,8 +38,10 @@ import {
  *   --relay-url/--relay-token（resolveRelayLaunch）
  * - AK 凭证通道（Task 14，spec §5.4）：TIANSHU_RELAY_TOKEN 缺席而
  *   TIANSHU_RELAY_ADMIN_URL/AK_ID/AK_SECRET 三要素齐备（CLI 同名参优先）
- *   时走 AK 模式——启动先 Basic 换 access（401 = AK 失效：干净启动失败 /
- *   续期粘滞断连不重连；网络失败 30s 起退避封顶 10min），内存
+ *   时走 AK 模式——启动先 Basic 换 access（401 按 data.reason 分支：
+ *   disabled/expired/bad-secret = AK 失效——干净启动失败/续期粘滞断连
+ *   不重连；not-found/无 body = 代理质询、库重建窗口——瞬态退避；网络
+ *   失败 30s 起退避封顶 10min），内存
  *   {token,expiresAt,maxAgeSec} + 每 10min 巡检 shouldRenew（core 单源）
  *   低频换新；auth 首帧发帧时读当前 access（续期后重连即用新 token）。
  *   static token 显式在场则 AK 机制整体旁路（零漂移）
@@ -613,11 +615,26 @@ interface TokenEnvelope {
   };
 }
 
+/** 401 粘滞凭证失效 reason 集（四端同构分类）：T12 data.reason 命中才是
+ * AK 凭证失效粘滞终局；not-found（库重建窗口/akId 配置漂移中间态——
+ * 恢复后可自愈）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态
+ * 退避——粘滞会误报"凭证失效"并拆断健康连接 */
+const AK_INVALID_401_REASONS = new Set(['disabled', 'expired', 'bad-secret']);
+
+/** 401 信封 → 粘滞凭证失效判定（data.reason ∈ 粘滞集；无 body/未知
+ * reason → false 按瞬态） */
+function isAkInvalid401(payload: unknown): boolean {
+  const reason = (
+    payload as { data?: { reason?: unknown } } | null
+  )?.data?.reason;
+  return typeof reason === 'string' && AK_INVALID_401_REASONS.has(reason);
+}
+
 /** 401（AK 失效——disabled/expired/bad-secret）专属错误类：粘滞终局，
  * 不进退避重试（启动侧干净失败、续期侧断连不重连） */
 class AkCredentialInvalidError extends Error {
   constructor() {
-    super('AK 凭证失效（disabled/expired），relay 客户端未启动或已断开');
+    super('AK 凭证失效（disabled/expired/bad-secret），relay 客户端未启动或已断开');
   }
 }
 
@@ -632,9 +649,11 @@ function akRetryDelayMs(attempt: number): number {
 }
 
 /** AK → access 换发（T12 端点）：POST {adminUrl}/relay-admin/token +
- * Basic base64(akId:akSecret)；成功读统一信封 data 三元组。401 = AK
- * 失效（告警日志单点在此发出）；网络/超时/非 401 异常状态/信封畸形均按
- * 瞬态抛 Error，由调用方退避重试 */
+ * Basic base64(akId:akSecret)；成功读统一信封 data 三元组。401 按
+ * data.reason 分支（四端同构）：disabled/expired/bad-secret = AK 失效
+ * 粘滞终局（告警日志单点在此发出）；not-found（库重建窗口/akId 漂移
+ * 中间态）与 body 缺失/不可解析（代理质询、中间盒 401）按瞬态抛 Error
+ * 退避；网络/超时/非 401 异常状态/信封畸形同样瞬态 */
 async function requestAccess(
   config: RelayAkCredentials,
 ): Promise<AkAccess> {
@@ -655,10 +674,16 @@ async function requestAccess(
     throw new Error(`token 端点不可达（${config.adminUrl}）: ${String(error)}`);
   }
   if (response.status === 401) {
-    console.error(
-      '[relay-client] AK 凭证失效（disabled/expired），需运营方恢复或换发',
+    const payload = await response.json().catch(() => null);
+    if (isAkInvalid401(payload)) {
+      console.error(
+        '[relay-client] AK 凭证失效（disabled/expired/bad-secret），需运营方恢复或换发',
+      );
+      throw new AkCredentialInvalidError();
+    }
+    throw new Error(
+      'token 端点 401（not-found 或无 body——代理质询/中间盒），按瞬态退避',
     );
-    throw new AkCredentialInvalidError();
   }
   if (!response.ok) {
     throw new Error(`token 端点异常状态 ${response.status}`);
@@ -683,7 +708,7 @@ async function requestAccess(
   };
 }
 
-/** 启动期换 access：循环退避直至成功（401 直接抛——干净启动失败）。
+/** 启动期换 access：循环退避直至成功（粘滞集 401 直接抛——干净启动失败）。
  * 停止/重启接手（akConfig 换人或置空）即放弃——迟到的成功不落地 */
 async function ensureAccess(): Promise<void> {
   const config = akConfig;
@@ -738,9 +763,10 @@ function scheduleRenewRetry(cause: unknown): void {
 }
 
 /** 续期巡检：shouldRenew（core 单源）真值才换新。换新成功只更新内存
- * （存量连接不拆——D5 语义：access 到期只拦新连接）；401 = AK 失效 →
- * 粘滞终局：断开 relay 且不再重连（重连只会复现同一终局——移动端
- * invalid-token 粘滞同构）；网络失败退避重试且不动连接 */
+ * （存量连接不拆——D5 语义：access 到期只拦新连接）；401 粘滞集
+ * （disabled/expired/bad-secret）→ AK 失效粘滞终局：断开 relay 且不再
+ * 重连（重连只会复现同一终局——移动端 invalid-token 粘滞同构）；瞬态
+ * 401（not-found/代理质询）与网络失败同走退避重试且不动连接 */
 async function renewTick(): Promise<void> {
   const config = akConfig;
   if (!config || !akAccess) return;

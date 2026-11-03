@@ -6,7 +6,9 @@
 //   startRelayClient 装配层守卫双层）
 // - 续期循环（T14 语义同构）：shouldRenew 真值换新（10min 巡检测试注入
 //   短间隔）；续期换新后断线重连用新 token（auth 首帧读当前值）；续期
-//   401 = AK 失效粘滞终局（断开 + 告警 + 不再重连）；启动 401 干净失败
+//   401 按 data.reason 分支（四端同构）——disabled/expired/bad-secret =
+//   AK 失效粘滞终局（断开 + 告警 + 不再重连），not-found（库重建窗口）/
+//   无 body（代理质询）= 瞬态退避（连接不拆、无告警）；启动 401 干净失败
 //   不连 relay；瞬态失败退避重试；stop 清理续期计时器（停用无泄漏）
 // - admin 桩：node:http 最小行为（记录 Basic 出示 + 可编程响应序列）
 import http from "node:http";
@@ -248,9 +250,32 @@ function accessEnvelope(token: string, remainingMs: number): AdminResponse {
   };
 }
 
+/** T12 契约：真 401 信封必带 data.reason（粘滞集命中才凭证失效） */
 const unauthorized = (): AdminResponse => ({
   status: 401,
-  body: { code: "4010", success: false, data: null, message: "AK 已被禁用" },
+  body: {
+    code: "4010",
+    success: false,
+    data: { reason: "disabled" },
+    message: "AK 已被禁用",
+  },
+});
+
+/** 无 body 的 401（代理质询/中间盒特征——非 relay-admin 凭证失效面） */
+const unauthorizedBodyless = (): AdminResponse => ({
+  status: 401,
+  body: undefined,
+});
+
+/** 401 信封带指定 reason（not-found=库重建窗口/akId 漂移中间态） */
+const unauthorizedReason = (reason: string): AdminResponse => ({
+  status: 401,
+  body: {
+    code: "4010",
+    success: false,
+    data: { reason },
+    message: `stub reason: ${reason}`,
+  },
 });
 
 async function startFakeAdmin(
@@ -526,13 +551,45 @@ describe("AK 续期循环（T14 语义同构）", () => {
       // 续期 401 → 连接被断开 + face 日志告警（单点在换发模块）
       await waitClosed(conn.ws);
       expect(logError).toHaveBeenCalledWith(
-        expect.stringContaining("AK 凭证失效（disabled/expired）"),
+        expect.stringContaining("AK 凭证失效（disabled/expired/bad-secret）"),
       );
       expect(isRelayConnected()).toBe(false);
 
       // 等过重连退避首窗（基数 1s）：无新连接——粘滞不重连
       await new Promise((resolve) => setTimeout(resolve, 1300));
       expect(relay.conns.length).toBe(1);
+    } finally {
+      await relay.close();
+      await admin.close();
+    }
+  });
+
+  it("续期 401 无 body / not-found（代理质询/库重建窗口）→ 瞬态退避：连接不拆、无凭证失效告警，退避后换新成功", async () => {
+    const relay = await startFakeRelay();
+    const admin = await startFakeAdmin((index) => {
+      if (index === 0) return accessEnvelope("a1", REMAIN_SHORT_MS);
+      if (index === 1) return unauthorizedBodyless();
+      if (index === 2) return unauthorizedReason("not-found");
+      return accessEnvelope("a2", REMAIN_FULL_MS);
+    });
+    try {
+      await startRelayClient(relay.url, "", {
+        ak: akCreds(admin.url),
+        renewCheckIntervalMs: 60,
+        akRetryBaseMs: 60,
+      });
+      const conn = relay.conns[0];
+      expect((await conn.waitForFrame((f) => f.kind === "auth")).token).toBe(
+        "a1",
+      );
+
+      // 两轮瞬态 401 均退避重试（第四发成功换新）——连接全程未拆
+      await waitFor(() => admin.requests.length >= 4);
+      expect(isRelayConnected()).toBe(true);
+      expect(relay.conns.length).toBe(1);
+      expect(logError).not.toHaveBeenCalledWith(
+        expect.stringContaining("AK 凭证失效"),
+      );
     } finally {
       await relay.close();
       await admin.close();
@@ -548,7 +605,7 @@ describe("AK 续期循环（T14 语义同构）", () => {
       ).rejects.toThrow(/AK 凭证失效/);
       expect(relay.conns.length).toBe(0); // 未进连接/重连循环
       expect(logError).toHaveBeenCalledWith(
-        expect.stringContaining("AK 凭证失效（disabled/expired）"),
+        expect.stringContaining("AK 凭证失效（disabled/expired/bad-secret）"),
       );
     } finally {
       await relay.close();

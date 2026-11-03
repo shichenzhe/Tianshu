@@ -26,7 +26,13 @@ export default defineConfig({
   test: {
     // tsx：React 组件交互测试（如 tests/ai/edit-bar.test.tsx，
     // 文件内以 @vitest-environment jsdom 指定 DOM 环境）
-    include: ["scripts/**/*.test.mjs", "tests/**/*.test.{mjs,ts,tsx}"],
+    include: [
+      "scripts/**/*.test.mjs",
+      "tests/**/*.test.{mjs,ts,tsx}",
+      // 共享包单测（packages/*/src 内与源码同目录；构建侧由各包
+      // tsconfig exclude 挡在 dist 外）
+      "packages/*/src/**/*.test.ts",
+    ],
     // 全局隔离数据根（tests/setup.ts）：防 jwt-secret 等落盘副作用写真实 ~/.tianshu
     setupFiles: ["tests/setup.ts"],
   },

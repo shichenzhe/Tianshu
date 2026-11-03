@@ -1,7 +1,7 @@
 // 被控面 HTTP 服务面（server-face spec §6.1 / T12）：node:http 承载
 // 直连控制端——GET /info、GET /event（SSE）、POST session/*（路由表分发）。
 // 默认关（option 表 type="app" name="serverFace" JSON {enabled,port,token,
-// host,relayUrl,relayToken}，缺省 0.0.0.0——被控面消费者是远程控制端，
+// host,relayUrl,relayToken,akId,akSecret,adminUrl}，缺省 0.0.0.0——被控面消费者是远程控制端，
 // 本机进程走 IPC 不经 HTTP 面，仅本机监听无人可连；与 tianshu-server
 // DEFAULT_LISTEN_HOSTNAME 同口径）；token 未配置即拒绝启动
 // （不裸奔）；鉴权 Bearer 与 ?token= 双口径（EventSource 不能带 header，
@@ -42,9 +42,17 @@ export interface ServerFaceConfig {
   port: number;
   token: string;
   host: string;
-  /** relay 客户端（配了 url+token 才随启用拉起） */
+  /** relay 客户端（配了 url+token 或 url+AK 三要素才随启用拉起） */
   relayUrl?: string;
   relayToken?: string;
+  /** relay AK 凭证三要素（Task 15，spec §5.4）：与 relayUrl+relayToken
+   *  并存，static token 在场时 AK 机制整体旁路（零漂移）；三要素齐备
+   *  才构成 AK 模式（换 access + 10min 巡检续期，见 renewable-credential） */
+  akId?: string;
+  /** 与 relayToken 同敏感级：落库经 option-secrets 密封 */
+  akSecret?: string;
+  /** relay-admin 基址（token 端点 = {adminUrl}/relay-admin/token） */
+  adminUrl?: string;
   /** relay E2E 模式（缺省 required——安全批 J 收敛；见 FaceE2eMode） */
   e2e?: FaceE2eMode;
 }
@@ -76,6 +84,15 @@ function parseConfigValue(value: string): ServerFaceConfig {
         : {}),
       ...(typeof parsed.relayToken === "string" && parsed.relayToken
         ? { relayToken: parsed.relayToken }
+        : {}),
+      ...(typeof parsed.akId === "string" && parsed.akId
+        ? { akId: parsed.akId }
+        : {}),
+      ...(typeof parsed.akSecret === "string" && parsed.akSecret
+        ? { akSecret: parsed.akSecret }
+        : {}),
+      ...(typeof parsed.adminUrl === "string" && parsed.adminUrl
+        ? { adminUrl: parsed.adminUrl }
         : {}),
       ...(E2E_MODES.includes(parsed.e2e as FaceE2eMode)
         ? { e2e: parsed.e2e as FaceE2eMode }

@@ -481,7 +481,7 @@ describe('RelayRegistry 背压与转发容错（假 socket 单元级）', () => 
     const server = new FakeSocket();
     const client = new FakeSocket();
     registry.registerServer('s1', server);
-    expect(registry.attachClient('s1', client)).toBe(true);
+    expect(registry.attachClient('s1', client)).toBe('ok');
     // 帧构造走 protocol 判别联合完整形状（req 需 method/path——单源化后
     // 不完整帧不再是合法 RelayFrame）
     const req = (id: number) =>

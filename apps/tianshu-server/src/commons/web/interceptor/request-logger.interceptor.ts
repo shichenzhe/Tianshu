@@ -32,6 +32,10 @@ const SENSITIVE_VALUE_KEYS = new Set([
   // 为长期设备凭据（与 accesstoken/refreshtoken 后缀命名同款）——「明文
   // 仅 claim 回显一次」不变量在日志面同样成立，不落按日轮转日志
   'clienttoken',
+  // relay 多租户（spec 2026-11-03 §5.2）：aks 签发/rotate-secret 包装响应
+  // data.akSecret 为 32B hex 长期凭证（GitHub PAT 同级）——「明文仅本次
+  // 响应返回一次」不变量在日志面同样成立（clienttoken 先例同款镜像）
+  'aksecret',
   // 口令面（复审补）：/auth/login 请求体 password、改密 DTO 三键、
   // user query 响应 passwordHash（bcrypt 摘要亦不落日志）
   'password',

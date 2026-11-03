@@ -5887,6 +5887,23 @@
           "id"
         ]
       },
+      "ContentRefItemDto": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "文件路径（注入前缀标识/卡片展示）"
+          },
+          "content": {
+            "type": "string",
+            "description": "文件文本内容（发送侧授权读取结果）"
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ]
+      },
       "SessionSendDto": {
         "type": "object",
         "properties": {
@@ -5903,6 +5920,20 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "skillRefs": {
+            "description": "技能引用名单（skill_ref 批：落 SkillRefBlock 组装侧展开）",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contentRefs": {
+            "description": "内容注入式文件引用（file_ref 批：path+内容随块落库）",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContentRefItemDto"
             }
           },
           "assistantId": {
@@ -6772,7 +6803,7 @@
           },
           "keyword": {
             "type": "string",
-            "description": "名称关键词（includes 大小写敏感，内存过滤）"
+            "description": "名称关键词（contains 下推 DB；大小写不敏感——双引擎统一）"
           }
         },
         "required": [
@@ -6830,9 +6861,19 @@
           },
           "inputs": {
             "type": "object",
-            "description": "输入变量（inputSchema 键值；缺省空）",
+            "description": "输入变量（inputSchema 键值；缺省空）——typed 值（number/boolean）经入口归一为原生类型（D 批共享 normalizeGraphInputs）",
             "additionalProperties": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                }
+              ]
             }
           },
           "workspaceId": {
@@ -7307,7 +7348,7 @@
           },
           "keyword": {
             "type": "string",
-            "description": "任务名关键词（includes 大小写敏感，内存过滤）"
+            "description": "任务名关键词（contains 下推 DB；大小写不敏感——双引擎统一）"
           }
         },
         "required": [

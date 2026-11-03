@@ -20,5 +20,8 @@
       ]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  // 包内同目录单测（如 relay-credential.test.ts）不进 dist（同
+  // tianshu-protocol；vitest 侧由根 vitest.config include 直纳）
+  "exclude": ["src/**/*.test.ts"]
 }

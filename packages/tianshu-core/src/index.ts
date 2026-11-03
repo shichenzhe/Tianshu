@@ -39,6 +39,8 @@ export * from "./schedule";
 // E2E-T1：relay 端到端加密核心（X25519+HKDF+GCM 信封+重放窗口，纯
 // node:crypto；信封/握手 kind 常量为跨仓单份 wire 契约）
 export * from "./e2e-crypto";
+// relay 多租户（spec §5.4）：access token 续期阈值判断纯函数，四端共享
+export * from "./relay-credential";
 // PL-1：个性化 prompt 拼接 + config 纯常量段入包（server 读侧与 chat
 // system 注入同源消费；option 行解析 fromAppOptions 含 option-store
 // 依赖留消费方，不随行）

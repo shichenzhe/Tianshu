@@ -15,12 +15,31 @@
 //   反证）
 // ④ 指纹不匹配：控制端配错指纹 → ack 即断开 + mitm-suspect + 不再重连
 //   （proxy 连接数不增），上报指纹为对端实际值（自算不信任 wire 回显）
+// ⑤-⑩ jwt 多租户链路（Task 18，spec 2026-11-03-relay-multitenant）：另起
+//   真 relay 子进程于 jwt 模式（--auth-pubkey 测试密钥 + --internal-secret），
+//   测试内以生产同源 jwt-eddsa 模块（apps/tianshu-server 源直引）签发双租户
+//   access，raw ws 双端观测 close code 与帧转发——
+// ⑤ 双租户隔离：A-client attach B-server → close 4007（tenant-forbidden）
+// ⑥ 顶号：B-server 注册 A 已占 connectionId → close 4006（id-conflict）
+// ⑦ 配额：quota.maxServers=1 第二个 server 连接 → close 4005
+// ⑧ kick：POST /internal/kick {tenantId} → 本租户在线连接被拆、他租户
+//   与租户记账无扰
+// ⑨ CRL：stub 控制平面名单命中某 ak → 该 ak 新连接 4001、存量连接不断
+// ⑩ 存量长寿命：access TTL 到期只拦新连接（4001）、存量配对双向照转发
+//   （spec §5.3——relay 不存 exp、不定时拆连接）
 // 运行：npm run test:e2e:relayE2E（文件名无 .test. 段不进 vitest 常规集，
 // vitest.relay-e2e.config.ts 独立 include——e2e-ui-smoke 同款机制）。
 // 环境依赖：apps/tianshu-server 已 npm run build（dist 产物）；缺失即 fail
 // fast 并提示（与 e2e-smoke 对产物存在性的假设一致，如实记录见任务报告）。
 import { spawn, type ChildProcess } from "node:child_process";
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from "node:http";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -76,7 +95,14 @@ const db = vi.hoisted(() => {
 vi.mock("../../../electron/commons/prisma-client", () => ({ default: db }));
 
 import { WebSocket as WsWebSocket, WebSocketServer, type RawData } from "ws";
+import { RELAY_CLOSE_CODES } from "@tianshu/protocol";
 import { fingerprintOf, parseStaticPair } from "@tianshu/core";
+import {
+  generateEd25519KeyPems,
+  signAccessJwt,
+  type AccessClaims,
+  type AccessQuota,
+} from "../../../apps/tianshu-server/src/relay/jwt-eddsa";
 import { openSecret } from "../../../electron/domains/security/secret-field";
 import { RelayTransport } from "../../../electron/domains/server/relay-transport";
 import type {
@@ -111,6 +137,8 @@ const RELAY_ENTRY = path.join(
   "relay-main.js",
 );
 const RELAY_TOKEN = "e2e-relay-token";
+/** jwt 链路内部端点凭证（/internal/kick、/internal/stats 与 CRL 拉取同源） */
+const JWT_INTERNAL_SECRET = "e2e-internal-secret";
 const RELAY_BOOT_TIMEOUT_MS = 20_000;
 /** 链路④「不再重连」观察窗：覆盖一个默认退避周期（1s 起） */
 const NO_RECONNECT_WATCH_MS = 1_600;
@@ -249,19 +277,21 @@ const ALLOWED_FRAME_KINDS = new Set([
 interface RealRelay {
   child: ChildProcess;
   baseUrl: string;
+  port: number;
 }
 
-async function spawnRealRelay(): Promise<RealRelay> {
+/** 以给定 CLI 参数起真 relay 子进程并等 listening 行（static/jwt 链路共用
+ *  同一启动面，仅参数不同） */
+async function spawnRelayProcess(args: string[]): Promise<RealRelay> {
   if (!fs.existsSync(RELAY_ENTRY)) {
     throw new Error(
       `真 relay 产物缺失：${RELAY_ENTRY}——tianshu-server 仓先 npm run build（E2E 环境依赖，见文件头注）`,
     );
   }
-  const child = spawn(
-    process.execPath,
-    [RELAY_ENTRY, "--port", "0", "--token", RELAY_TOKEN],
-    { cwd: SERVER_DIR, stdio: ["ignore", "pipe", "pipe"] },
-  );
+  const child = spawn(process.execPath, [RELAY_ENTRY, ...args], {
+    cwd: SERVER_DIR,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   let stderrTail = "";
   const port = await new Promise<number>((resolve, reject) => {
     const timer = setTimeout(
@@ -296,7 +326,12 @@ async function spawnRealRelay(): Promise<RealRelay> {
       );
     });
   });
-  return { child, baseUrl: `ws://127.0.0.1:${port}` };
+  return { child, baseUrl: `ws://127.0.0.1:${port}`, port };
+}
+
+/** static 模式（现状四链路）：共享 token 鉴权 */
+async function spawnRealRelay(): Promise<RealRelay> {
+  return spawnRelayProcess(["--port", "0", "--token", RELAY_TOKEN]);
 }
 
 async function stopRealRelay(child: ChildProcess): Promise<void> {
@@ -447,6 +482,312 @@ function trackE2eChanges(transport: Transport): E2eStatusChange[] {
   const changes: E2eStatusChange[] = [];
   transport.onE2eState((change) => changes.push(change));
   return changes;
+}
+
+// —— jwt 多租户链路辅助（Task 18）——
+
+/** jwt 链路 relay 句柄：子进程 + 双协议入口（ws 升级 / 内部端点 http） */
+interface JwtRelay {
+  child: ChildProcess;
+  wsUrl: string;
+  httpUrl: string;
+}
+
+/** relay 侧帧的最小观测面（kind + 透传字段原样记录） */
+type WireFrame = { kind: string } & Record<string, unknown>;
+
+/** raw ws 对端：直连 relay（不经 tap proxy——本组观测 close code 与帧
+ *  转发，不采集 relay 视野全帧），帧与 close 事件全记录 */
+interface RawPeer {
+  ws: WsWebSocket;
+  frames: WireFrame[];
+  /** ws close 事件（code/reason），一次性 settle */
+  closeInfo: Promise<{ code: number; reason: string }>;
+}
+
+function rawConnect(relayWsUrl: string): Promise<RawPeer> {
+  return new Promise((resolve, reject) => {
+    const ws = new WsWebSocket(relayWsUrl);
+    const frames: WireFrame[] = [];
+    let settleClose!: (info: { code: number; reason: string }) => void;
+    const closeInfo = new Promise<{ code: number; reason: string }>(
+      (resolveClose) => {
+        settleClose = resolveClose;
+      },
+    );
+    let opened = false;
+    ws.on("open", () => {
+      opened = true;
+      resolve({ ws, frames, closeInfo });
+    });
+    ws.on("error", (error: Error) => {
+      if (!opened) reject(error);
+    });
+    ws.on("message", (raw) => {
+      try {
+        const frame = JSON.parse(rawToText(raw)) as WireFrame;
+        if (typeof frame?.kind === "string") frames.push(frame);
+      } catch {
+        /* 非 JSON 帧忽略（本链路 relay 只发 JSON） */
+      }
+    });
+    ws.on("close", (code: number, reason: Buffer) => {
+      settleClose({ code, reason: reason.toString("utf8") });
+    });
+  });
+}
+
+/** 首帧 auth（与 RelayTransport/relay-client 同构——凭证承载 + 角色 +
+ *  注册键；connectionId 仅 server 角色携带，对齐真实双端） */
+function sendAuth(
+  peer: RawPeer,
+  token: string,
+  role: "server" | "client",
+  connectionId?: string,
+): void {
+  const frame: Record<string, unknown> = { kind: "auth", token, role };
+  if (role === "server") frame.connectionId = connectionId;
+  peer.ws.send(JSON.stringify(frame));
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`withTimeout 超时：${label}`)),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+/** 等本端收到首个匹配帧（帧到达即同步入账，轮询即可） */
+async function waitForFrame(
+  peer: RawPeer,
+  predicate: (frame: WireFrame) => boolean,
+  label: string,
+  timeoutMs = 5_000,
+): Promise<WireFrame> {
+  await waitFor(label, () => peer.frames.some(predicate), timeoutMs);
+  return peer.frames.find(predicate) as WireFrame;
+}
+
+/** 等 ws close 并断言 code（多租户三闸门的 wire 契约观察点） */
+async function expectCloseCode(
+  peer: RawPeer,
+  code: number,
+  label: string,
+): Promise<void> {
+  const info = await withTimeout(peer.closeInfo, 5_000, `${label} 等待关闭`);
+  expect(info.code, `${label} close code（reason=${info.reason}）`).toBe(code);
+}
+
+/** waitFor 的异步谓词版（内部端点轮询——谓词含网络往返） */
+async function waitForAsync(
+  label: string,
+  predicate: () => Promise<boolean>,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() > deadline) throw new Error(`waitFor 超时：${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+}
+
+type TenantStat = { tenantId: string; servers: number; clients: number };
+
+/** 轮询 GET /internal/stats 至断言命中——server 注册 / client 配对的
+ *  确定性同步点（首帧 auth 无回执，以记账为凭），顺带钉死内部端点租户
+ *  簿记接线 */
+async function waitTenantStats(
+  relay: JwtRelay,
+  matches: (tenants: TenantStat[]) => boolean,
+  label: string,
+): Promise<void> {
+  await waitForAsync(label, async () => {
+    try {
+      const res = await fetch(`${relay.httpUrl}/internal/stats`, {
+        headers: { authorization: `Bearer ${JWT_INTERNAL_SECRET}` },
+      });
+      const body = (await res.json()) as { tenants?: TenantStat[] };
+      return matches(body.tenants ?? []);
+    } catch {
+      return false; // relay 启动窗内的瞬时失败按未命中重试
+    }
+  });
+}
+
+/** jwt 链路配对装配：server 首帧 auth 注册（stats 记账可见为准）→
+ *  client auth + open（server 收到转发 open 帧即配对成立） */
+async function pairOverRelay(
+  relay: JwtRelay,
+  connectionId: string,
+  serverToken: string,
+  clientToken: string,
+  tenantId: string,
+): Promise<{ server: RawPeer; client: RawPeer }> {
+  const server = await rawConnect(relay.wsUrl);
+  sendAuth(server, serverToken, "server", connectionId);
+  await waitTenantStats(
+    relay,
+    (tenants) =>
+      tenants.some((item) => item.tenantId === tenantId && item.servers >= 1),
+    `${tenantId} server 注册记账`,
+  );
+  const client = await rawConnect(relay.wsUrl);
+  sendAuth(client, clientToken, "client");
+  client.ws.send(JSON.stringify({ kind: "open", connectionId }));
+  await waitForFrame(
+    server,
+    (frame) => frame.kind === "open",
+    `server 收 open（${connectionId}）`,
+  );
+  return { server, client };
+}
+
+/** 配对后的双向转发验证：client 发 req（id 全局唯一）→ server 收到 →
+ *  回 res → client 收到——jwt 链路的业务帧转发面（明文 req/res 直转，
+ *  加密封装属链路①-④ 的既有覆盖面） */
+let rawReqSeq = 0;
+async function roundtripFrames(
+  pair: { server: RawPeer; client: RawPeer },
+  label: string,
+): Promise<void> {
+  rawReqSeq += 1;
+  const id = rawReqSeq;
+  pair.client.ws.send(
+    JSON.stringify({ kind: "req", id, method: "GET", path: "info" }),
+  );
+  await waitForFrame(
+    pair.server,
+    (frame) => frame.kind === "req" && frame.id === id,
+    `${label}：server 收 req#${id}`,
+  );
+  pair.server.ws.send(
+    JSON.stringify({ kind: "res", id, status: 200, body: { via: label } }),
+  );
+  await waitForFrame(
+    pair.client,
+    (frame) => frame.kind === "res" && frame.id === id,
+    `${label}：client 收 res#${id}`,
+  );
+}
+
+/** CRL 名单应用收敛探针：auth 后即收 4001 = 名单已应用（目标态）；
+ *  存活（300ms 无 close）= 未应用，探针拆断重试。名单落地是 refresh()
+ *  的异步 continuation，「stub 响应已回」≠「已应用」，以拒新本身为
+ *  收敛点 */
+async function eventuallyRejectedAtAuth(
+  relayWsUrl: string,
+  token: string,
+  label: string,
+): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    const probe = await rawConnect(relayWsUrl);
+    sendAuth(probe, token, "client");
+    const code = await Promise.race([
+      probe.closeInfo.then((info) => info.code),
+      new Promise<number>((resolve) => setTimeout(() => resolve(0), 300)),
+    ]);
+    probe.ws.terminate();
+    // 4001 invalid-token：CRL 命中与凭证失败同归因（不区分原因）
+    if (code === 4001) return;
+    if (Date.now() > deadline)
+      throw new Error(`等待 4001 超时（${label}，末次探针 code=${code}）`);
+  }
+}
+
+/** CRL 控制平面 stub（Task 12 契约形状 {epoch, revokedAk, revokedTenant}）：
+ *  首次响应挂起至 release()——「存量先建、名单后到」的时序控制器（relay
+ *  冷启动立即首拉而周期缺省 45s 不可等，故以挂起首响应构造名单落地前
+ *  的窗口；单次拉取超时 5s，挂起窗须在其内） */
+class CrlAdminStub {
+  requests = 0;
+  responsesSent = 0;
+  private readonly revokedAk: string[];
+  private readonly server: HttpServer;
+  private readonly firstReleased: Promise<void>;
+  private releaseFirst: () => void = () => {};
+
+  private constructor(server: HttpServer, revokedAk: string[]) {
+    this.server = server;
+    this.revokedAk = revokedAk;
+    this.firstReleased = new Promise((resolve) => {
+      this.releaseFirst = resolve;
+    });
+  }
+
+  static async start(revokedAk: string[]): Promise<CrlAdminStub> {
+    const holder: { stub?: CrlAdminStub } = {};
+    const server = createHttpServer((req, res) => {
+      void holder.stub?.handle(req, res);
+    });
+    const stub = new CrlAdminStub(server, revokedAk);
+    holder.stub = stub;
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", () => resolve()),
+    );
+    return stub;
+  }
+
+  private async handle(
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> {
+    if (req.url?.split("?")[0] !== "/relay-admin/revocations") {
+      res.writeHead(404).end();
+      return;
+    }
+    if (req.headers.authorization !== `Bearer ${JWT_INTERNAL_SECRET}`) {
+      res.writeHead(403).end();
+      return;
+    }
+    this.requests += 1;
+    if (this.requests === 1) await this.firstReleased;
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(
+      JSON.stringify({
+        epoch: 1,
+        revokedAk: this.revokedAk,
+        revokedTenant: [],
+      }),
+    );
+    this.responsesSent += 1;
+  }
+
+  /** 放行挂起的首拉响应（名单自此对 relay 可见） */
+  release(): void {
+    this.releaseFirst();
+  }
+
+  get url(): string {
+    const { port } = this.server.address() as { port: number };
+    return `http://127.0.0.1:${port}`;
+  }
+
+  async close(): Promise<void> {
+    this.release(); // 兜底放行挂起响应，防句柄滞留
+    this.server.closeAllConnections?.();
+    await new Promise<void>((resolve) => this.server.close(() => resolve()));
+  }
+}
+
+function closePeers(peers: RawPeer[]): void {
+  for (const peer of peers) peer.ws.terminate();
 }
 
 // —— 场景 ——
@@ -663,6 +1004,410 @@ describe("relay E2E 端到端（真 relay 子进程 + 双端真实握手栈 + �
       expect(transport.state).toBe("closed");
     } finally {
       transport.close();
+    }
+  }, 20_000);
+});
+
+describe("relay E2E 多租户 jwt 链路（真 relay 子进程 + 测试内签发 EdDSA access）", () => {
+  let jwtKeys: { publicKeyPem: string; privateKeyPem: string };
+  let keyDir: string;
+
+  beforeAll(() => {
+    // 生产同源签发栈（relay-admin 侧模块，源码直引）：测试持私钥签发，
+    // 子进程 relay（dist 产物）持公钥验签——真跨进程 EdDSA 往返
+    jwtKeys = generateEd25519KeyPems();
+    keyDir = fs.mkdtempSync(path.join(os.tmpdir(), "tianshu-relay-jwt-"));
+    fs.writeFileSync(path.join(keyDir, "auth-pub.pem"), jwtKeys.publicKeyPem);
+  });
+
+  afterAll(() => {
+    fs.rmSync(keyDir, { recursive: true, force: true });
+  });
+
+  /** jwt 模式起 relay（--auth-pubkey 测试公钥 + --internal-secret） */
+  function spawnJwtRelay(extraArgs: string[] = []): Promise<JwtRelay> {
+    return spawnRelayProcess([
+      "--port",
+      "0",
+      "--auth-pubkey",
+      path.join(keyDir, "auth-pub.pem"),
+      "--internal-secret",
+      JWT_INTERNAL_SECRET,
+      ...extraArgs,
+    ]).then(({ child, baseUrl, port }) => ({
+      child,
+      wsUrl: `${baseUrl}/ws`,
+      httpUrl: `http://127.0.0.1:${port}`,
+    }));
+  }
+
+  /** 测试内签发 access JWT（缺省 10 分钟 TTL / 配额 5×5） */
+  function issueAccess(params: {
+    tid: string;
+    role: "server" | "client";
+    ak?: string;
+    quota?: AccessQuota;
+    ttlSec?: number;
+  }): string {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const claims: AccessClaims = {
+      iss: "tianshu-relay",
+      sub: `e2e-${params.tid}`,
+      tid: params.tid,
+      role: params.role,
+      ak: params.ak ?? `ak-${randomUUID().slice(0, 8)}`,
+      quota: params.quota ?? { maxServers: 5, maxClients: 5 },
+      iat: nowSec,
+      exp: nowSec + (params.ttlSec ?? 600),
+      jti: randomUUID(),
+    };
+    return signAccessJwt(claims, jwtKeys.privateKeyPem);
+  }
+
+  it("jwt⑤ 双租户隔离：A-client attach B-server → close 4007", async () => {
+    const relay = await spawnJwtRelay();
+    const peers: RawPeer[] = [];
+    try {
+      const connectionId = "e2e-jwt-tenant-b";
+      const pair = await pairOverRelay(
+        relay,
+        connectionId,
+        issueAccess({ tid: "tenant-b", role: "server", ak: "ak-b1" }),
+        issueAccess({ tid: "tenant-b", role: "client", ak: "ak-b2" }),
+        "tenant-b",
+      );
+      peers.push(pair.server, pair.client);
+
+      // A 租户控制端（自身凭证合法、目标属他租户）：open B 被控端 → 4007
+      const aClient = await rawConnect(relay.wsUrl);
+      peers.push(aClient);
+      sendAuth(
+        aClient,
+        issueAccess({ tid: "tenant-a", role: "client", ak: "ak-a1" }),
+        "client",
+      );
+      aClient.ws.send(JSON.stringify({ kind: "open", connectionId }));
+      // 拆连接前先收 tenant-forbidden close 帧（sendDirect 即时回执）
+      const closeFrame = await waitForFrame(
+        aClient,
+        (frame) => frame.kind === "close",
+        "A-client 收 tenant-forbidden close 帧",
+      );
+      expect(closeFrame.reason).toBe("tenant-forbidden");
+      await expectCloseCode(
+        aClient,
+        RELAY_CLOSE_CODES.TENANT_FORBIDDEN,
+        "A-client 跨租户 attach",
+      );
+
+      // B 配对无扰：A 的 open 未透传给 B 被控端（仍只见 B-client 一帧）
+      expect(
+        pair.server.frames.filter((frame) => frame.kind === "open"),
+      ).toHaveLength(1);
+      // 记账面：A-client 未成功 attach 不入账，仅 tenant-b 一行
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.length === 1 &&
+          tenants[0].tenantId === "tenant-b" &&
+          tenants[0].servers === 1 &&
+          tenants[0].clients === 1,
+        "4007 后记账仅 tenant-b",
+      );
+      await roundtripFrames(pair, "隔离被拒后 B 租户往返");
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
+    }
+  }, 20_000);
+
+  it("jwt⑥ 顶号：B-server 注册 A 已占 connectionId → close 4006", async () => {
+    const relay = await spawnJwtRelay();
+    const peers: RawPeer[] = [];
+    try {
+      const connectionId = "e2e-jwt-occupied";
+      const aServer = await rawConnect(relay.wsUrl);
+      peers.push(aServer);
+      sendAuth(
+        aServer,
+        issueAccess({ tid: "tenant-a", role: "server", ak: "ak-a1" }),
+        "server",
+        connectionId,
+      );
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.some(
+            (item) => item.tenantId === "tenant-a" && item.servers === 1,
+          ),
+        "A server 注册记账",
+      );
+
+      // B 租户被控端抢注同 connectionId → 4006（现有注册不动、B 不入账）
+      const bServer = await rawConnect(relay.wsUrl);
+      peers.push(bServer);
+      sendAuth(
+        bServer,
+        issueAccess({ tid: "tenant-b", role: "server", ak: "ak-b1" }),
+        "server",
+        connectionId,
+      );
+      await expectCloseCode(
+        bServer,
+        RELAY_CLOSE_CODES.ID_CONFLICT,
+        "B 抢注他租户 connectionId",
+      );
+      expect(aServer.ws.readyState).toBe(WsWebSocket.OPEN);
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.length === 1 &&
+          tenants[0].tenantId === "tenant-a" &&
+          tenants[0].servers === 1,
+        "4006 后记账仍仅 tenant-a",
+      );
+
+      // A 仍是注册方：A-client 照常配对 + 双向转发
+      const aClient = await rawConnect(relay.wsUrl);
+      peers.push(aClient);
+      sendAuth(
+        aClient,
+        issueAccess({ tid: "tenant-a", role: "client", ak: "ak-a2" }),
+        "client",
+      );
+      aClient.ws.send(JSON.stringify({ kind: "open", connectionId }));
+      await waitForFrame(
+        aServer,
+        (frame) => frame.kind === "open",
+        "A-client 配对 open",
+      );
+      await roundtripFrames(
+        { server: aServer, client: aClient },
+        "顶号被拒后 A 配对往返",
+      );
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
+    }
+  }, 20_000);
+
+  it("jwt⑦ 配额：quota.maxServers=1 时第二个 server 连接 → close 4005", async () => {
+    const relay = await spawnJwtRelay();
+    const peers: RawPeer[] = [];
+    try {
+      const quota: AccessQuota = { maxServers: 1, maxClients: 5 };
+      const first = await rawConnect(relay.wsUrl);
+      peers.push(first);
+      sendAuth(
+        first,
+        issueAccess({ tid: "tenant-a", role: "server", ak: "ak-a1", quota }),
+        "server",
+        "e2e-jwt-quota-1",
+      );
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.some(
+            (item) => item.tenantId === "tenant-a" && item.servers === 1,
+          ),
+        "首个 server 占位记账",
+      );
+
+      // 同租户第二个 server 连接（不同 connectionId=新增占位）→ 4005
+      const second = await rawConnect(relay.wsUrl);
+      peers.push(second);
+      sendAuth(
+        second,
+        issueAccess({ tid: "tenant-a", role: "server", ak: "ak-a1b", quota }),
+        "server",
+        "e2e-jwt-quota-2",
+      );
+      await expectCloseCode(
+        second,
+        RELAY_CLOSE_CODES.QUOTA_EXCEEDED,
+        "第二 server 连接超配额",
+      );
+
+      // 首个连接无扰：client 配对与往返照常（maxClients=5 未触顶）
+      const client = await rawConnect(relay.wsUrl);
+      peers.push(client);
+      sendAuth(
+        client,
+        issueAccess({ tid: "tenant-a", role: "client", ak: "ak-a2", quota }),
+        "client",
+      );
+      client.ws.send(
+        JSON.stringify({ kind: "open", connectionId: "e2e-jwt-quota-1" }),
+      );
+      await waitForFrame(
+        first,
+        (frame) => frame.kind === "open",
+        "配额内 client 配对 open",
+      );
+      await roundtripFrames({ server: first, client }, "4005 后配额内配对往返");
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
+    }
+  }, 20_000);
+
+  it("jwt⑧ kick：POST /internal/kick 拆本租户在线连接、他租户无扰", async () => {
+    const relay = await spawnJwtRelay();
+    const peers: RawPeer[] = [];
+    try {
+      const pairA = await pairOverRelay(
+        relay,
+        "e2e-jwt-kick-a",
+        issueAccess({ tid: "tenant-a", role: "server", ak: "ak-a1" }),
+        issueAccess({ tid: "tenant-a", role: "client", ak: "ak-a2" }),
+        "tenant-a",
+      );
+      const pairB = await pairOverRelay(
+        relay,
+        "e2e-jwt-kick-b",
+        issueAccess({ tid: "tenant-b", role: "server", ak: "ak-b1" }),
+        issueAccess({ tid: "tenant-b", role: "client", ak: "ak-b2" }),
+        "tenant-b",
+      );
+      peers.push(pairA.server, pairA.client, pairB.server, pairB.client);
+      await roundtripFrames(pairA, "kick 前 A 往返");
+      await roundtripFrames(pairB, "kick 前 B 往返");
+
+      const res = await fetch(`${relay.httpUrl}/internal/kick`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${JWT_INTERNAL_SECRET}`,
+        },
+        body: JSON.stringify({ tenantId: "tenant-a" }),
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ kicked: 2 });
+
+      // A 双腿被拆：server 先收 kicked close 帧（notifyClose 通知）再
+      // terminate；client 无告别帧直拆——两者均以 close 事件为凭
+      await waitForFrame(
+        pairA.server,
+        (frame) => frame.kind === "close" && frame.reason === "kicked",
+        "A-server 收 kicked close 帧",
+      );
+      await withTimeout(pairA.server.closeInfo, 5_000, "A-server 拆除");
+      await withTimeout(pairA.client.closeInfo, 5_000, "A-client 拆除");
+
+      // B 无扰 + 记账回落：stats 只剩 tenant-b 一行
+      await roundtripFrames(pairB, "kick 后 B 往返");
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.length === 1 &&
+          tenants[0].tenantId === "tenant-b" &&
+          tenants[0].servers === 1 &&
+          tenants[0].clients === 1,
+        "kick 后记账回落仅 tenant-b",
+      );
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
+    }
+  }, 20_000);
+
+  it("jwt⑨ CRL：名单命中 ak 拒新连接 4001、存量连接不断", async () => {
+    const crl = await CrlAdminStub.start(["ak-revoked"]);
+    const relay = await spawnJwtRelay(["--crl-admin-url", crl.url]);
+    const peers: RawPeer[] = [];
+    try {
+      // 首拉挂起窗内建立存量配对（ak-revoked 此刻不在名单，正常准入）
+      const pair = await pairOverRelay(
+        relay,
+        "e2e-jwt-crl-x",
+        issueAccess({ tid: "tenant-x", role: "server", ak: "ak-revoked" }),
+        issueAccess({ tid: "tenant-x", role: "client", ak: "ak-x2" }),
+        "tenant-x",
+      );
+      peers.push(pair.server, pair.client);
+      await roundtripFrames(pair, "吊销前往返");
+
+      // 放行首拉 → 名单落地 → 该 ak 的新连接 4001（探针重试至拒）
+      crl.release();
+      await waitFor("CRL 首拉响应送达", () => crl.responsesSent >= 1);
+      await eventuallyRejectedAtAuth(
+        relay.wsUrl,
+        issueAccess({ tid: "tenant-x", role: "client", ak: "ak-revoked" }),
+        "吊销 ak 新连接",
+      );
+
+      // 存量零扰动：既有配对仍双向转发（CRL 只在 admit 消费，不拆存量）
+      await roundtripFrames(pair, "吊销后存量往返");
+
+      // 名单外 ak 新连接照常放行（不扩大打击面）
+      const cleanServer = await rawConnect(relay.wsUrl);
+      peers.push(cleanServer);
+      sendAuth(
+        cleanServer,
+        issueAccess({ tid: "tenant-y", role: "server", ak: "ak-clean" }),
+        "server",
+        "e2e-jwt-crl-clean",
+      );
+      await waitTenantStats(
+        relay,
+        (tenants) =>
+          tenants.some(
+            (item) => item.tenantId === "tenant-y" && item.servers === 1,
+          ),
+        "名单外 ak 放行记账",
+      );
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
+      await crl.close();
+    }
+  }, 20_000);
+
+  it("jwt⑩ 存量长寿命：access TTL 到期只拦新连接、存量双向照转发（§5.3）", async () => {
+    const relay = await spawnJwtRelay();
+    const peers: RawPeer[] = [];
+    try {
+      const ttlSec = 2;
+      const serverToken = issueAccess({
+        tid: "tenant-a",
+        role: "server",
+        ak: "ak-a1",
+        ttlSec,
+      });
+      const clientToken = issueAccess({
+        tid: "tenant-a",
+        role: "client",
+        ak: "ak-a2",
+        ttlSec,
+      });
+      const pair = await pairOverRelay(
+        relay,
+        "e2e-jwt-longevity",
+        serverToken,
+        clientToken,
+        "tenant-a",
+      );
+      peers.push(pair.server, pair.client);
+      await roundtripFrames(pair, "TTL 窗内往返");
+
+      // 等 TTL 过线（exp 在签发秒边界 +2s，实际 2-3s 内到期，等 3.5s 必过）
+      await new Promise((resolve) =>
+        setTimeout(resolve, ttlSec * 1000 + 1_500),
+      );
+
+      // 存量契约：连接不拆、双向照转发（relay 不存 exp、不定时拆连接）
+      expect(pair.server.ws.readyState).toBe(WsWebSocket.OPEN);
+      expect(pair.client.ws.readyState).toBe(WsWebSocket.OPEN);
+      await roundtripFrames(pair, "TTL 过线后存量往返");
+
+      // 新连接持同 token（此刻已过期）→ 4001——TTL 只拦新连接/重连
+      const stale = await rawConnect(relay.wsUrl);
+      peers.push(stale);
+      sendAuth(stale, serverToken, "server", "e2e-jwt-stale-reconnect");
+      await expectCloseCode(stale, 4001, "过期 token 新连接");
+    } finally {
+      closePeers(peers);
+      await stopRealRelay(relay.child);
     }
   }, 20_000);
 });

@@ -4,9 +4,12 @@
 // （ipc-channels 白名单两通道；系统级开关无用户态语义，走裸 ipcMain.handle，
 // Log/webhook 先例同款）；③ 按 option 持久化配置恢复服务面与 relay 客户端。
 // setEnabled 兼收 boolean（旧形态，纯启停）与配置对象 {enabled, port?,
-// host?, relayUrl?, relayToken?, regenerateToken?}（spec §13 项 1 被控面
-// 设置 UI——字段合并落库后应用；启用时无 token 自动生成——spec §3.4
-// 「服务面默认关闭，开启时生成」；非法载荷回落只读 status 快照）。
+// host?, relayUrl?, relayToken?, akId?, akSecret?, adminUrl?, e2e?,
+// regenerateToken?}（spec §13 项 1 被控面设置 UI——字段合并落库后应用；
+// 启用时无 token 自动生成——spec §3.4「服务面默认关闭，开启时生成」；
+// 非法载荷回落只读 status 快照）。relay 鉴权双模（Task 15）：static
+// token（relayToken）或 AK 三要素（akId/akSecret/adminUrl）——token
+// 在场 static 优先零漂移。
 import { randomBytes } from "node:crypto";
 import { app, ipcMain } from "electron";
 import prisma from "../../commons/prisma-client";
@@ -63,6 +66,7 @@ import {
   startRelayClient,
   stopRelayClient,
 } from "./relay-client";
+import type { RelayAkCredentials } from "./renewable-credential";
 import { ensureE2eStaticPair } from "./e2e-keys";
 import { FACE_CAPABILITIES, FACE_INSTANCE_ID, FACE_NAME } from "./face-info";
 import { getReportedActiveUser, reportActiveUser } from "./active-user";
@@ -76,12 +80,16 @@ interface SetFacePayload {
   host?: string;
   relayUrl?: string;
   relayToken?: string;
+  /** relay AK 凭证三要素（Task 15：与 relayToken 并存，static 优先） */
+  akId?: string;
+  akSecret?: string;
+  adminUrl?: string;
   e2e?: FaceE2eMode;
   regenerateToken?: boolean;
 }
 
 /** 载荷解析：boolean 直通；对象形态校验 enabled 必填 + port 形态
- * （host/relay 字符串形态，e2e 三值枚举，真值收敛交给 parseConfigValue）；
+ * （host/relay/AK 字符串形态，e2e 三值枚举，真值收敛交给 parseConfigValue）；
  * 不合法 → null */
 function parseSetPayload(raw: unknown): SetFacePayload | null {
   if (typeof raw === "boolean") return { enabled: raw };
@@ -98,7 +106,9 @@ function parseSetPayload(raw: unknown): SetFacePayload | null {
   ) {
     return null;
   }
-  const pickString = (key: "host" | "relayUrl" | "relayToken") =>
+  const pickString = (
+    key: "host" | "relayUrl" | "relayToken" | "akId" | "akSecret" | "adminUrl",
+  ) =>
     typeof candidate[key] === "string"
       ? { [key]: candidate[key] as string }
       : {};
@@ -108,6 +118,9 @@ function parseSetPayload(raw: unknown): SetFacePayload | null {
     ...pickString("host"),
     ...pickString("relayUrl"),
     ...pickString("relayToken"),
+    ...pickString("akId"),
+    ...pickString("akSecret"),
+    ...pickString("adminUrl"),
     ...(candidate.e2e !== undefined &&
     ["auto", "required", "off"].includes(candidate.e2e)
       ? { e2e: candidate.e2e }
@@ -116,10 +129,40 @@ function parseSetPayload(raw: unknown): SetFacePayload | null {
   };
 }
 
+/** relay 启动参数（resolveRelayStart 产物——startRelayClient 直传形状） */
+interface RelayStart {
+  url: string;
+  token: string;
+  ak?: RelayAkCredentials;
+}
+
+/** relay 鉴权解析（Task 15，解析层短路——static 优先零漂移）：
+ * relayToken 在场即纯 static 模式（AK 链整体不跑，零 AK 请求）；
+ * 否则 relayUrl + AK 三要素（adminUrl/akId/akSecret）齐备才构成 AK
+ * 模式；url 缺席/不成对/缺要素 → null（不连 relay——部分配置不半启动） */
+function resolveRelayStart(config: ServerFaceConfig): RelayStart | null {
+  if (!config.relayUrl) return null;
+  if (config.relayToken) {
+    return { url: config.relayUrl, token: config.relayToken };
+  }
+  if (config.adminUrl && config.akId && config.akSecret) {
+    return {
+      url: config.relayUrl,
+      token: "",
+      ak: {
+        adminUrl: config.adminUrl,
+        akId: config.akId,
+        akSecret: config.akSecret,
+      },
+    };
+  }
+  return null;
+}
+
 /** 应用配置并启停：启用→按配置起服务面（端口/host 变更热重载——
- * ensureServerFace 对不一致先停后起）+（relay url+token 成对时）relay
- * 客户端（startRelayClient 幂等换目标）；停用/relay 不成对→双停。
- * 返回 status 快照（渲染层立即回显状态点） */
+ * ensureServerFace 对不一致先停后起）+ relay 客户端（static url+token
+ * 成对或 url+AK 三要素齐备时；startRelayClient 幂等换目标）；停用/
+ * relay 鉴权不成对→双停。返回 status 快照（渲染层立即回显状态点） */
 async function setEnabled(payload: SetFacePayload): Promise<unknown> {
   const config = await readServerFaceConfig();
   const next: ServerFaceConfig = {
@@ -131,6 +174,9 @@ async function setEnabled(payload: SetFacePayload): Promise<unknown> {
     ...(payload.relayToken !== undefined
       ? { relayToken: payload.relayToken }
       : {}),
+    ...(payload.akId !== undefined ? { akId: payload.akId } : {}),
+    ...(payload.akSecret !== undefined ? { akSecret: payload.akSecret } : {}),
+    ...(payload.adminUrl !== undefined ? { adminUrl: payload.adminUrl } : {}),
     ...(payload.e2e !== undefined ? { e2e: payload.e2e } : {}),
     // 主动重生成，或无 token 开启：自动生成（spec §3.4；ensureServerFace
     // 对空 token 拒启兜底，双保险）
@@ -141,10 +187,11 @@ async function setEnabled(payload: SetFacePayload): Promise<unknown> {
   await saveServerFaceConfig(next);
   if (next.enabled) {
     const port = await ensureServerFace();
-    if (next.relayUrl && next.relayToken) {
-      await startRelayClient(next.relayUrl, next.relayToken).catch((e) =>
-        Log.error("relay 客户端启动失败（HTTP 面不受影响）", e),
-      );
+    const relayStart = resolveRelayStart(next);
+    if (relayStart) {
+      await startRelayClient(relayStart.url, relayStart.token, {
+        ...(relayStart.ak ? { ak: relayStart.ak } : {}),
+      }).catch((e) => Log.error("relay 客户端启动失败（HTTP 面不受影响）", e));
     } else {
       stopRelayClient();
     }
@@ -194,6 +241,12 @@ async function faceStatus(): Promise<unknown> {
     // relayToken 随 status 回传（设置 UI 回显编辑；本机配置项，与 face
     // token 同敏感级，渲染层可见口径一致）
     relayToken: config.relayToken ?? "",
+    // relay AK 三字段（Task 15）：akId/adminUrl 公开；akSecret 与
+    // relayToken 同敏感级同口径回传（本机配置项；落库侧 option-secrets
+    // 密封）
+    akId: config.akId ?? "",
+    akSecret: config.akSecret ?? "",
+    adminUrl: config.adminUrl ?? "",
     relayConnected: isRelayConnected(),
     instanceId: FACE_INSTANCE_ID,
     ...(await e2eStatus(config.e2e ?? "required")),
@@ -569,14 +622,18 @@ export function attachServerFace(deps: {
   ipcMain.handle("serverFace:reportActiveUser", (_event, userId: unknown) => {
     reportActiveUser(typeof userId === "number" ? userId : null);
   });
-  // 启动恢复：option 开着（且 token 已配）即拉起服务面与 relay 客户端；
+  // 启动恢复：option 开着（且 token 已配）即拉起服务面与 relay 客户端
+  // （鉴权双模同 setEnabled：static url+token 成对或 url+AK 三要素齐备）；
   // 失败仅日志（端口占用等下次 setEnabled/重启重试），不阻断应用启动
   void readServerFaceConfig()
     .then(async (config) => {
       if (!config.enabled) return;
       await ensureServerFace();
-      if (config.relayUrl && config.relayToken) {
-        await startRelayClient(config.relayUrl, config.relayToken);
+      const relayStart = resolveRelayStart(config);
+      if (relayStart) {
+        await startRelayClient(relayStart.url, relayStart.token, {
+          ...(relayStart.ak ? { ak: relayStart.ak } : {}),
+        });
       }
     })
     .catch((e) => Log.error("serverFace 启动恢复失败", e));

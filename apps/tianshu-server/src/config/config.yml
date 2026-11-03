@@ -83,6 +83,9 @@ response:
     - /actuator/metrics
     - /actuator/metrics/config
     - /actuator/metrics/reset
+    # CRL 名单直出 {epoch, revokedAk, revokedTenant}（relay 侧 crl.ts
+    # parseList 读顶层双数组——统一包装会破坏 Task 6/12 契约）
+    - /relay-admin/revocations
 
 # 日志配置
 log:
@@ -127,3 +130,14 @@ tianshu:
     accessMode: default
   # 是否启用与桌面端的握手
   handshake: true
+
+# relay-admin 控制平面配置（多租户批 spec 2026-11-03 §6/§9；仅 relay-admin
+# 独立入口消费，主应用忽略本段）。env RA_RELAY_BASE_URL / RA_INTERNAL_SECRET
+# 优先于本段（JWT_SECRET 同款纪律）
+relayAdmin:
+  # relay 本体地址（Task 13 kick/stats 联动消费；缺省指向本机缺省端口）
+  relayBaseUrl: 'http://127.0.0.1:8410'
+  # internal secret 已外移 .env 的 RA_INTERNAL_SECRET（不入 config.yml——
+  # 与 relay 本体 --internal-secret 是同一秘密的两半，运营方双机各持）：
+  # 未配置时 /relay-admin/revocations fail-closed 503
+  # internalSecret: '<set-at-deploy: openssl rand -hex 32>'

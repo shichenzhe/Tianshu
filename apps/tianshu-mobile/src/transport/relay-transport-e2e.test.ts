@@ -7,6 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as nodeE2E from "../../../../packages/tianshu-core/src/e2e-crypto";
+import { FakeWebSocket } from "../testing/fake-websocket";
 
 vi.mock("expo-crypto", () => {
   const { webcrypto } = require("node:crypto");
@@ -19,39 +20,6 @@ vi.mock("expo-crypto", () => {
       webcrypto.getRandomValues(new Uint8Array(n)),
   };
 });
-
-/** RN WebSocket 替身：记录出站帧，允许测试注入服务端帧/生命周期事件 */
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  sent: string[] = [];
-  onopen: (() => void) | null = null;
-  onmessage: ((ev: { data: string }) => void) | null = null;
-  onclose: ((ev: { code?: number }) => void) | null = null;
-  onerror: (() => void) | null = null;
-  closed = false;
-
-  constructor(public url: string) {
-    FakeWebSocket.instances.push(this);
-  }
-
-  send(data: string): void {
-    this.sent.push(data);
-  }
-
-  close(): void {
-    this.closed = true;
-    this.onclose?.({ code: 1000 });
-  }
-
-  /** 测试辅助：服务端推帧 */
-  push(frame: unknown): void {
-    this.onmessage?.({ data: JSON.stringify(frame) });
-  }
-
-  frames(): unknown[] {
-    return this.sent.map((s) => JSON.parse(s));
-  }
-}
 
 import {
   createRelayTransport,

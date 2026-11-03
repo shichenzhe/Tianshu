@@ -19,6 +19,12 @@ prisma/local.db
 # Prisma 客户端生成产物（prisma:generate:pg 独立 output，不入库）
 src/generated/
 
+# relay-admin 独立生成 client（prisma:generate:ra 独立 output，不入库）
+src/relay-admin/generated/
+
+# relay-admin 独立库落点（缺省 file:./data/relay-admin.db，相对 schema 目录）
+prisma/relay-admin/data/
+
 # Logs
 logs
 *.log

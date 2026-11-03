@@ -53,6 +53,11 @@ export interface ConnectionConfig {
   relayUrl?: string;
   relayToken?: string;
   connectionId?: string;
+  /** relay AK 凭证三要素（多租户 T17）：与 relayToken 并存时 static 优先
+   *  （在场零 AK 请求）；建连前主进程换发短效 access 作首帧 auth */
+  adminUrl?: string;
+  akId?: string;
+  akSecret?: string;
   /** 被控端 E2E 指纹（hex16；空=TOFU 首连回填。仅 relay 模式） */
   fingerprint?: string;
   /** 连接级 E2E 模式（ConnectionE2eMode；仅 relay 模式） */

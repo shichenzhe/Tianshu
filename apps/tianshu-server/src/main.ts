@@ -124,9 +124,13 @@ async function bootstrap() {
     }
   }
 
-  // 无头端 relay 客户端（CLI --relay-url/--relay-token 或 TIANSHU_RELAY_URL/
-  // TIANSHU_RELAY_TOKEN；缺任一不启动——relay 接入必须鉴权）：register 后
-  // req 帧 → inject 内部派发、EventBus → event 帧（见 relay/relay-client.ts）
+  // 无头端 relay 客户端（鉴权双模，resolveRelayLaunch 解析）：static
+  // token（CLI --relay-url/--relay-token 或 TIANSHU_RELAY_URL/
+  // TIANSHU_RELAY_TOKEN）或 AK 三要素（TIANSHU_RELAY_ADMIN_URL/
+  // TIANSHU_RELAY_AK_ID/TIANSHU_RELAY_AK_SECRET，CLI 同名参优先——启动
+  // 先 Basic 换 access + 低频续期，见 relay/relay-client.ts）；static
+  // 在场优先；缺任一不启动——relay 接入必须鉴权。register 后 req 帧 →
+  // inject 内部派发、EventBus → event 帧
   const relayLaunch = resolveRelayLaunch(process.argv.slice(2));
   if (relayLaunch) {
     await startHeadlessRelay({

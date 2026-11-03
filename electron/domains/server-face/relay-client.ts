@@ -486,10 +486,17 @@ export async function startRelayClient(
       // 循环；网络失败在 ensureAccess 内退避重试）
       await credential.ensureAccess();
     } catch (e) {
-      // 本轮启动已被停止/重启接手（akCredential 换人）时不动新状态
-      if (akCredential === credential) stopRelayClient();
+      // 顶替竞态：新启动已接管（旧 credential 换人）——迟到失败静默收场
+      // （不产生伪"启动失败"日志、不动新状态）
+      if (akCredential !== credential) return;
+      stopRelayClient();
       throw e;
     }
+    // 迟到成功守卫（与 catch 对称）：ensureAccess 挂起窗口（≤30s fetch）
+    // 内被新启动顶替时就地收场——否则旧调用续跑会覆盖新启动的 e2eMode
+    // 与事件订阅（offFaceEvents 覆盖=旧订阅孤儿化双订阅、事件帧重复发
+    // 送）并与其抢连接
+    if (akCredential !== credential) return;
     credential.startRenewLoop();
   }
   // 模式随启动装载（握手时再实时读刷新——设置面改模式即生效）

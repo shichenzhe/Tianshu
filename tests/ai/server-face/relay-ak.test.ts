@@ -93,6 +93,7 @@ import {
   stopRelayClient,
 } from "../../../electron/domains/server-face/relay-client";
 import { attachServerFace } from "../../../electron/domains/server-face/ipc";
+import { emitChatChunk } from "../../../electron/domains/server-face/chat-tap";
 import type { SessionRecord } from "../../../src-react/domains/ai/api/session.api";
 
 const logError = vi.mocked(Log.error);
@@ -594,6 +595,65 @@ describe("AK 续期循环（T14 语义同构）", () => {
       await new Promise((resolve) => setTimeout(resolve, 250));
       expect(admin.requests.length).toBe(countAtStop);
       expect(relay.conns.length).toBe(1); // 停用不重连
+    } finally {
+      await relay.close();
+      await admin.close();
+    }
+  });
+
+  it("顶替竞态：旧启动的换发迟到成功不踩新启动状态（无双订阅/无第二连接）", async () => {
+    const relay = await startFakeRelay();
+    // 旧启动的首个换发请求挂起（受控放行），新启动的换发立即成功
+    const staleResponse = (() => {
+      let release!: (out: AdminResponse) => void;
+      const held = new Promise<AdminResponse>((resolve) => {
+        release = resolve;
+      });
+      return { held, release };
+    })();
+    const admin = await startFakeAdmin((index) =>
+      index === 0
+        ? staleResponse.held
+        : accessEnvelope("access-new", REMAIN_FULL_MS),
+    );
+    // 事件帧断言需明文承载：e2e auto（required 未握手丢出站业务帧）
+    db.optionRows.set(1, {
+      id: 1,
+      type: "app",
+      name: "serverFace",
+      value: JSON.stringify({ enabled: false, e2e: "auto" }),
+    });
+    try {
+      // 旧启动：卡在 ensureAccess 的换发 fetch 上（≤30s AbortSignal 窗口）
+      const staleStart = startRelayClient(relay.url, "", {
+        ak: akCreds(admin.url),
+        renewCheckIntervalMs: 60,
+      });
+      await waitFor(() => admin.requests.length >= 1);
+
+      // 新启动接管（stopRelayClient 停旧 credential → 换发→ 连接）
+      await startRelayClient(relay.url, "", {
+        ak: akCreds(admin.url),
+        renewCheckIntervalMs: 60_000,
+      });
+      expect(relay.conns.length).toBe(1);
+      expect(
+        (await relay.conns[0].waitForFrame((f) => f.kind === "auth")).token,
+      ).toBe("access-new");
+
+      // 放行旧换发（迟到成功）：旧启动须就地收场——不开第二连接
+      staleResponse.release(accessEnvelope("access-stale", REMAIN_FULL_MS));
+      await staleStart;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(relay.conns.length).toBe(1);
+
+      // 事件订阅唯一：一次 face 事件恰一帧（双订阅=同帧重复发送）
+      emitChatChunk(1, { type: "text-delta", text: "竞" });
+      await relay.conns[0].waitForFrame((f) => f.kind === "event");
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(
+        relay.conns[0].frames.filter((f) => f.kind === "event").length,
+      ).toBe(1);
     } finally {
       await relay.close();
       await admin.close();

@@ -71,7 +71,7 @@ mirror/                              # 纯壳：只留仓级事物
 
 - `name: tianshu-desktop`、`version: 0.1.0`、`private: true`、`type: module`、`main: dist-electron/main.js`；
 - **`dependencies` 六包集合原样照搬**：`@modelcontextprotocol/sdk`、`better-sqlite3`、`mermaid`、`moment`、`node-pty`、`pg`——
-  **互锁铁律立此存照**：desktop `dependencies` ≡ vite 主进程 external 白名单互锁集合（electron-builder 装 prod 依赖，打包态 require 才可解析；vite.config.ts external 列表与该集合互锁，golden 契约口径不变，只是读包从根换成 desktop）；
+  **互锁铁律立此存照**：desktop `dependencies` ≡ vite 主进程 external 白名单互锁集合（electron-builder 装 prod 依赖，打包态 require 才可解析；vite.config.ts external 列表与该集合互锁，golden 契约口径不变，只是读包从根换成 desktop；终审注记：严格为 ⊇ 关系——mermaid 在 dependencies 而 external 列表未列，渲染层打包内联，系基线既有不对称，本批原样保留）；
 - 其余全部现根 devDependencies 跟随迁入（electron、electron-builder、langchain 栈、react 栈、vite 栈、vitest 等）；**摘除 `expo-router`**（根 tsconfig extends expo 时代的残留，桌面代码无 import，实证见附录 A-10）；
 - scripts：`dev`/`build`/`typecheck`/`typecheck:witness`/`lint`/`test`/7 条 `test:e2e:*`/`init` 原文随迁（命令体不变，cwd 变为 desktop 自身）；另加 `rebuild:native: electron-builder install-app-deps`（postinstall 回退方案用，见假设 A1）。
 

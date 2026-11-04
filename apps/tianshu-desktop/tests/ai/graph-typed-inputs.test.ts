@@ -1,9 +1,9 @@
 // tests/ai/graph-typed-inputs.test.ts
 /**
  * typed 输入执行链（切片 D2）：
- * - db-client typed 参数：number/boolean 原生抵达驱动绑定（better-sqlite3
- *   为 Electron ABI，vitest 不可加载——仓内「两路替身法」先例，stub 捕获
- *   绑定值断言归一逻辑：boolean → 1/0）
+ * - db-client typed 参数：number/boolean 原生抵达驱动绑定（真库经
+ *   .native-node node-ABI 副本可跑——2026-11-04 双 ABI 根治；本文件沿用
+ *   仓内「两路替身法」先例，stub 捕获绑定值断言归一逻辑：boolean → 1/0）
  * - run_workflow 入口归一：typed inputs 原样直达 launch（number 保型）、
  *   required 缺参结构化回喂、enum 越界回喂、未声明键丢弃
  * - normalizeGraphInputs 空声明直通（旧图 inputSchema 未声明仍可透传）
@@ -21,8 +21,9 @@ vi.mock("electron", () => ({
       throw new Error("safeStorage unavailable in test");
     },
   }, ipcMain: { handle: vi.fn() } }));
-// better-sqlite3 原生模块为 Electron ABI（vitest/Node 不可加载——仓内
-// 「两路替身法」先例）：stub 只断言绑定值形态（toSqliteValue 归一逻辑）
+// better-sqlite3 真库经 .native-node node-ABI 副本可跑（2026-11-04 双 ABI
+// 根治）；本文件沿用「两路替身法」先例：stub 只断言绑定值形态（toSqliteValue
+// 归一逻辑）
 vi.mock("better-sqlite3", () => {
   class DatabaseStub {
     static lastBind: unknown[] = [];

@@ -38,26 +38,28 @@ import { executeGraphRun } from "../../electron/domains/ai/orchestration/graph-e
 
 let workspaceDir: string;
 
-/** better-sqlite3 二进制随 Electron ABI（149）编译，系统 Node（147）加载
- * 失败——真跑用例仅 Electron ABI 宿主可跑（先例 graph-nodes-extra
- * .test.ts 的 database 组），其余宿主跳过而非误报 */
-const sqliteNative = (() => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const D = require("better-sqlite3");
-    const probe = new D(":memory:");
-    probe.close();
-    return true;
-  } catch {
-    return false;
-  }
-})();
+/** better-sqlite3 探测：动态 import 经 vitest alias 命中 .native-node 的
+ * node-ABI 副本，系统 node 宿主亦可真跑（2026-11-04 双 ABI 根治）；副本
+ * 缺失/坏时优雅跳过而非误报。裸 require 不经 alias——必打到主树 Electron
+ * ABI 被 catch 吞成 skip */
+let sqliteNative = false;
+try {
+  const mod = await import("better-sqlite3");
+  const D = ((mod as { default?: unknown }).default ??
+    mod) as typeof import("better-sqlite3");
+  const probe = new D(":memory:");
+  probe.close();
+  sqliteNative = true;
+} catch {
+  sqliteNative = false;
+}
 
 const beforeAllHook = async () => {
   workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "tianshu-dbpage-"));
   // 2500 行源表：2 个满页（1000/页）+ 1 个半页 → 第 3 轮读尽、第 4 轮空页 DONE
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Database = require("better-sqlite3");
+  const mod = await import("better-sqlite3");
+  const Database = ((mod as { default?: unknown }).default ??
+    mod) as typeof import("better-sqlite3");
   const db = new Database(path.join(workspaceDir, "app.db"));
   db.exec("CREATE TABLE records (id INTEGER PRIMARY KEY, name TEXT)");
   const insert = db.prepare("INSERT INTO records (name) VALUES (?)");

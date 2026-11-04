@@ -30,3 +30,6 @@ dist-ssr
 *.sw?
 
 /generated/prisma
+
+# 双 ABI 根治：node-ABI better-sqlite3 副本（setup-native-node.mjs 装配）
+.native-node

@@ -255,3 +255,6 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 - 硬件加速已禁用
 - 构建时自动复制 `script` 与 `docs/update-log.md` 到 `dist-electron`（Prisma 客户端随主进程打包内联）
 - tianshu-server 独立部署（`node dist/src/main.js` / Dockerfile），桌面端安装包**不内嵌**（2026-10-27 拆除内嵌裁定）；本地无头端仅 dev 态（spawn 兄弟仓产物，`startLocalServer` 通道保留经 IPC/脚本可达，打包态前置拒绝）；monorepo 内路径，无兄弟仓依赖
+- 双 ABI 常备（2026-11-04 双 ABI 根治）：主 node_modules 的 better-sqlite3 常驻 Electron ABI 供 dev/打包；`apps/tianshu-desktop/.native-node/` 装同版本 node-ABI 副本供 vitest 经 alias 消费
+- **勿再手动 `npm rebuild better-sqlite3` 来回切换 ABI**——两端互不覆盖，rebuild 反而破坏另一端
+- 副本装配随根 postinstall 自动跑；失败（或缺失）时跑 `npm run setup:native-node` 修复后再跑真库测试

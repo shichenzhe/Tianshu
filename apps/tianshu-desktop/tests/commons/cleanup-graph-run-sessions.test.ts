@@ -3,8 +3,9 @@
  * 删图 run 会话+消息、run.sessionId 置 null；prompt 型 run graphId 恒 null
  * 不入集合（findMany/updateMany where 双重 graphId 非空前提保证）。幂等：
  * 清后判据不再命中（二跑零删除）。
- * 真库在本机不可行（better-sqlite3 为 Electron ABI，Node 下加载即崩），
- * 替身法同 ensure-graph-run-node.test.ts 先例：mock PrismaClient 依赖。
+ * 真库经 .native-node node-ABI 副本可跑（2026-11-04 双 ABI 根治，先例
+ * graph-db-page.test.ts）；本文件沿用替身法先例：mock PrismaClient 依赖，
+ * 断言焦点在清理语义而非引擎行为。
  * （brief 原稿整模块 mock prisma-client 会连被测函数一起替身掉，且顶层
  * prismaMock 进 hoisted 工厂 TDZ 报错——按现场最小适配接线，断言逐字保留。）
  */

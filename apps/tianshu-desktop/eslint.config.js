@@ -1,3 +1,4 @@
+// 规则层与根 eslint.config.js（packages/* 用）保持同步（两份同改）。
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -15,9 +16,6 @@ export default defineConfig([
       "release",
       "electron/infrastructure/prisma",
       "electron/generated",
-      // apps/* 子项目各有独立 lint 体系（server 单引号风格 / mobile RN 规则），
-      // 根规则只管桌面端与 packages/*，误扫必红（CI lint 步骤三平台连坐）
-      "apps",
     ],
   },
   // ESLint 10 flat config: 直接引用 js.configs.recommended 对象，

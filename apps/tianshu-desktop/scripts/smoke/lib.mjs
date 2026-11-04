@@ -158,10 +158,15 @@ export async function firstWindow(app) {
 /** 拉起驱动用 Electron 实例（dev 无单实例锁，与 vite 插件自己的实例并存，SQLite WAL 双进程可接受） */
 async function launchApp(port) {
   const { _electron } = loadPlaywright();
+  // workspace 化后 electron hoist 至根 node_modules——REPO/node_modules/electron
+  // 直拼不再成立，经 node 解析规则定位包根；.bin 回退由包根同层推导
+  const electronDir = path.dirname(
+    createRequire(path.join(REPO, "package.json")).resolve(
+      "electron/package.json",
+    ),
+  );
   const darwinBin = path.join(
-    REPO,
-    "node_modules",
-    "electron",
+    electronDir,
     "dist",
     "Electron.app",
     "Contents",
@@ -171,7 +176,7 @@ async function launchApp(port) {
   const app = await _electron.launch({
     executablePath: fs.existsSync(darwinBin)
       ? darwinBin
-      : path.join(REPO, "node_modules", ".bin", "electron"),
+      : path.join(path.dirname(electronDir), ".bin", "electron"),
     args: [REPO],
     env: {
       ...process.env,

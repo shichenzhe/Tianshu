@@ -39,7 +39,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 // —— 路径与超时常量（五脚本同值单源；TIANSHU_SERVER_DIR 覆盖优先） ——
 
-export const MIRROR_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+export { MIRROR_ROOT } from "../../lib/paths.ts";
 export const SERVER_DIR =
   process.env.TIANSHU_SERVER_DIR ??
   path.resolve(MIRROR_ROOT, "apps/tianshu-server");

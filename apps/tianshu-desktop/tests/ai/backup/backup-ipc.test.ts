@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   encryptBackupArchive,
   isEncryptedBackupArchive,
-} from "../../../packages/tianshu-core/src/backup-archive-crypto";
+} from "../../../../../packages/tianshu-core/src/backup-archive-crypto";
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;
 

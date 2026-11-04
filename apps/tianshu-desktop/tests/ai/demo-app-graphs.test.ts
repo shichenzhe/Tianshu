@@ -16,9 +16,9 @@ import { validateGraph } from "../../src-react/domains/ai/orchestration/api/grap
 import {
   normalizeGraphInputs,
   parseInputSchema,
-} from "../../packages/tianshu-core/src/graph-inputs";
+} from "../../../../packages/tianshu-core/src/graph-inputs";
 
-const DEMO_DIR = fileURLToPath(new URL("../../docs/demo-app", import.meta.url));
+const DEMO_DIR = fileURLToPath(new URL("../../../../docs/demo-app", import.meta.url));
 
 interface DemoBundle {
   name: string;

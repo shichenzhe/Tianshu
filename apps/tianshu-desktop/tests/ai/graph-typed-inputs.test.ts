@@ -44,8 +44,8 @@ vi.mock("better-sqlite3", () => {
 
 import { runDatabaseQuery } from "../../electron/domains/ai/orchestration/db-client";
 import { makeRunWorkflowTool } from "../../electron/domains/ai/orchestration/create-workflow";
-import { normalizeGraphInputs } from "../../packages/tianshu-core/src/graph-inputs";
-import { validateGraph } from "../../packages/tianshu-core/src/graph-schema";
+import { normalizeGraphInputs } from "../../../../packages/tianshu-core/src/graph-inputs";
+import { validateGraph } from "../../../../packages/tianshu-core/src/graph-schema";
 
 /** stub 捕获的最近一次绑定值 */
 // eslint-disable-next-line import/order

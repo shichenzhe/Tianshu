@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   graphHttpUrlError,
   graphHttpUrlErrorDns,
-} from "../../packages/tianshu-core/src/graph-http-guard";
+} from "../../../../packages/tianshu-core/src/graph-http-guard";
 
 /**
  * 图 HTTP 节点 URL 守卫（安全批 S5）：协议白名单 + 字面 IP 分类。

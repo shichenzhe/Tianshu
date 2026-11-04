@@ -9,13 +9,8 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { MIRROR_ROOT as mirrorRoot } from "../lib/paths";
 
-const mirrorRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-);
 const scriptsDir = path.join(mirrorRoot, "packages", "tianshu-core", "scripts");
 const manifestPath = path.join(scriptsDir, "drift-manifest.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {

@@ -125,7 +125,7 @@ import { FACE_INSTANCE_ID } from "../../../electron/domains/server-face/face-inf
 import { emitChatChunk } from "../../../electron/domains/server-face/chat-tap";
 import type { SessionRecord } from "../../../src-react/domains/ai/api/session.api";
 
-const MIRROR_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+import { MIRROR_ROOT } from "../../lib/paths.ts";
 const SERVER_DIR =
   process.env.TIANSHU_SERVER_DIR ??
   path.resolve(MIRROR_ROOT, "apps/tianshu-server");

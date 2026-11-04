@@ -53,7 +53,7 @@ import {
   isMasterKeyDegraded,
   resetMasterKeyCacheForTest,
 } from "../../electron/domains/security/master-key";
-import { masterKeyFromHex } from "../../packages/tianshu-core/src/crypto-envelope";
+import { masterKeyFromHex } from "../../../../packages/tianshu-core/src/crypto-envelope";
 
 describe("master-key（safeStorage 可用性 + 读时升级）", () => {
   beforeEach(() => {

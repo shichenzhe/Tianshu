@@ -12,11 +12,11 @@ import {
   graphJsonSchema,
   inputFieldSchema,
   validateGraph,
-} from "../../packages/tianshu-core/src/graph-schema";
+} from "../../../../packages/tianshu-core/src/graph-schema";
 import {
   normalizeGraphInputs,
   parseInputSchema,
-} from "../../packages/tianshu-core/src/graph-inputs";
+} from "../../../../packages/tianshu-core/src/graph-inputs";
 
 const graphOf = (inputSchema: unknown) => ({
   version: 1,

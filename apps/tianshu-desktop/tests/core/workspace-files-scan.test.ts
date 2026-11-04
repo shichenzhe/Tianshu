@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   listWorkspaceFiles,
   readTextFileGuarded,
-} from "../../packages/tianshu-core/src/workspace-files-scan";
+} from "../../../../packages/tianshu-core/src/workspace-files-scan";
 
 describe("listWorkspaceFiles", () => {
   it("相对路径枚举：排除 node_modules/dist/点开头，/ 分隔", async () => {

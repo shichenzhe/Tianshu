@@ -18,13 +18,14 @@ vi.mock("../../../electron/commons/Log", () => ({
 }));
 
 import { RelayTransport } from "../../../electron/domains/server/relay-transport";
+import { MIRROR_ROOT } from "../../lib/paths.ts";
 import type { ServerEvent } from "../../../electron/domains/server/protocol";
 
 const RELAY_TOKEN = "relay-token";
 /** tianshu-server 仓根（monorepo apps/ 下；可用 TIANSHU_SERVER_DIST 覆盖） */
 const TS_ROOT = process.env.TIANSHU_SERVER_DIST
   ? path.resolve(process.env.TIANSHU_SERVER_DIST)
-  : path.resolve(import.meta.dirname, "../../..", "apps/tianshu-server");
+  : path.resolve(MIRROR_ROOT, "apps/tianshu-server");
 const RELAY_ENTRY = path.join(TS_ROOT, "dist/src/relay/relay-main.js");
 const hasRelay = fs.existsSync(RELAY_ENTRY);
 

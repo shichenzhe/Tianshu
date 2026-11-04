@@ -4,7 +4,7 @@ import {
   encryptField,
   isEncryptedField,
   masterKeyFromHex,
-} from "../../packages/tianshu-core/src/crypto-envelope";
+} from "../../../../packages/tianshu-core/src/crypto-envelope";
 
 /** 凭证静态加密信封（三批 C1）：AES-256-GCM + 前缀标识 + AAD 字段绑定 */
 describe("crypto-envelope", () => {

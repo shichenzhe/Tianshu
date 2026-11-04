@@ -8,7 +8,7 @@ import {
   decryptBackupArchive,
   encryptBackupArchive,
   isEncryptedBackupArchive,
-} from "../../../packages/tianshu-core/src/backup-archive-crypto";
+} from "../../../../../packages/tianshu-core/src/backup-archive-crypto";
 
 /** 备份档口令加密（安全审查 2026-11-02 剩余待办 1）：
  *  scrypt 派生 + AES-256-GCM 档级加密；`tsbak:v1:` 自描述头——

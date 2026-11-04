@@ -27,7 +27,7 @@ import { ToolMessage, type BaseMessage } from "@langchain/core/messages";
 import {
   canonicalToolName,
   TOOL_NAME_ALIASES,
-} from "../../packages/tianshu-core/src/tool-alias";
+} from "../../../../packages/tianshu-core/src/tool-alias";
 import {
   filterDisabledTools,
   registerTools,

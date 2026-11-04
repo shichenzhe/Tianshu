@@ -9,11 +9,11 @@ export default defineConfig({
       // alias 登记之一）
       "@tianshu/protocol": path.resolve(
         import.meta.dirname,
-        "packages/tianshu-protocol/src",
+        "../../packages/tianshu-protocol/src",
       ),
       "@tianshu/core": path.resolve(
         import.meta.dirname,
-        "packages/tianshu-core/src",
+        "../../packages/tianshu-core/src",
       ),
     },
   },
@@ -29,9 +29,8 @@ export default defineConfig({
     include: [
       "scripts/**/*.test.mjs",
       "tests/**/*.test.{mjs,ts,tsx}",
-      // 共享包单测（packages/*/src 内与源码同目录；构建侧由各包
-      // tsconfig exclude 挡在 dist 外）
-      "packages/*/src/**/*.test.ts",
+      // 共享包单测（packages/*/src）归根源跑：vitest.packages.config.ts
+      //（根 test:packages——include 不写越界 ../.. glob）
     ],
     // 全局隔离数据根（tests/setup.ts）：防 jwt-secret 等落盘副作用写真实 ~/.tianshu
     setupFiles: ["tests/setup.ts"],

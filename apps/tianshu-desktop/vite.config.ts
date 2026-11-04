@@ -23,7 +23,7 @@ function syncElectronAssets() {
   );
 
   tryCopySync(
-    path.resolve(__dirname, "./docs/update-log.md"),
+    path.resolve(__dirname, "../../docs/update-log.md"),
     path.resolve(distElectronDir, "./docs/update-log.md"),
   );
 
@@ -55,9 +55,12 @@ export default defineConfig(() => {
         // main.vite.resolve.alias 再登记一份（顶层 alias 不传递）
         "@tianshu/protocol": path.resolve(
           __dirname,
-          "packages/tianshu-protocol/src",
+          "../../packages/tianshu-protocol/src",
         ),
-        "@tianshu/core": path.resolve(__dirname, "packages/tianshu-core/src"),
+        "@tianshu/core": path.resolve(
+          __dirname,
+          "../../packages/tianshu-core/src",
+        ),
       },
     },
     build: {
@@ -88,11 +91,11 @@ export default defineConfig(() => {
                 // 传递到此，缺一即 main 构建解析失败）
                 "@tianshu/protocol": path.resolve(
                   __dirname,
-                  "packages/tianshu-protocol/src",
+                  "../../packages/tianshu-protocol/src",
                 ),
                 "@tianshu/core": path.resolve(
                   __dirname,
-                  "packages/tianshu-core/src",
+                  "../../packages/tianshu-core/src",
                 ),
               },
             },

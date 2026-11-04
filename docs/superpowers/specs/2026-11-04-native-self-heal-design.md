@@ -50,7 +50,7 @@
 | A3 | 段 b 版本不一致（app 旧版） | 版本比对不过即跳级，绝不动主树 |
 | A4 | postinstall 整链 `|| echo` 吞掉 rebuild:native 的真实失败 | 维持现状语义（rebuild:native 历史上就是 warn 域；编排脚本的段级报告才是权威） |
 
-## 3. Task 1: setup:native 编排脚本落地
+### Task 1: setup:native 编排脚本落地
 
 **Files:**
 - Create: `apps/tianshu-desktop/scripts/setup-native-all.mjs`

@@ -30,7 +30,7 @@ better-sqlite3 的 bindings 按包自身路径定位 `.node` 文件——独立 
 | A3 | CI 三平台 postinstall 装副本成功（prebuild-install node 资产全平台） | push 后矩阵绿 |
 | A4 | `@prisma/adapter-better-sqlite3` 的 require 被 vitest alias 捕获（vite alias 作用于依赖图全域） | 同 A2 门禁（真库用例即走 adapter） |
 
-## 4. 任务（单任务）
+### Task 1: 双 ABI 根治落地（副本装配 + alias + CI）
 
 **Files:**
 - Create: `apps/tianshu-desktop/scripts/setup-native-node.mjs`

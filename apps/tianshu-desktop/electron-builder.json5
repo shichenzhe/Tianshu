@@ -1,0 +1,53 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "com.scz.tianshu",
+  // monorepo 分家后 electron 由 npm workspaces 提升到根 node_modules，
+  // projectDir 下无 node_modules/electron，electron-builder 无法从安装产物
+  // 自动解析版本（install-app-deps 与打包同走此路径）；显式钉住，升级
+  // electron 时须同步此处（锁文件口径 node_modules/electron 实装版本）
+  electronVersion: "44.1.1",
+  asar: true,
+  compression: "maximum",
+  electronLanguages: ["zh-CN", "en-US"],
+  afterPack: "electron/after-pack.cjs",
+  productName: "天枢",
+  copyright: "Copyright © 2026 hjx",
+  directories: {
+    output: "release/${version}"
+  },
+  files: ["dist", "dist-electron"],
+  // 留空则禁用自动更新；配置方法见 docs/update-server.md
+  publish: {
+    provider: "generic",
+    url: ""
+  },
+  mac: {
+    target: ["dmg"],
+    artifactName: "Tianshu-Mac-${version}-Installer.${ext}",
+    icon: "public/pc_logo.png"
+  },
+  win: {
+    target: [
+      {
+        target: "nsis",
+        arch: ["x64"]
+      }
+    ],
+    artifactName: "Tianshu-Windows-${version}-Setup.${ext}",
+    icon: "public/pc_logo.ico",
+    requestedExecutionLevel: "asInvoker"
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
+    createDesktopShortcut: true,
+    createStartMenuShortcut: true
+  },
+  linux: {
+    target: ["AppImage"],
+    artifactName: "Tianshu-Linux-${version}.${ext}"
+  }
+}

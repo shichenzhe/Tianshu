@@ -31,27 +31,29 @@ jobs:
         run: npm run typecheck
       - name: Build (renderer + main)
         run: npx vite build
+        working-directory: apps/tianshu-desktop
       # postinstall 的 install-app-deps 已按 Electron ABI 编好原生模块（各平台
       # runner 工具链已实证可编），此处直接打包；--publish never = 只打不传，
       # generic publish url 为空由我们统一走 upload/Release
       - name: Package (electron-builder)
         run: npx electron-builder --publish never
+        working-directory: apps/tianshu-desktop
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Tianshu-${{ runner.os }}
           path: |
-            release/**/*.dmg
-            release/**/*.exe
-            release/**/*.AppImage
+            apps/tianshu-desktop/release/**/*.dmg
+            apps/tianshu-desktop/release/**/*.exe
+            apps/tianshu-desktop/release/**/*.AppImage
       - name: Attach to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/**/*.dmg
-            release/**/*.exe
-            release/**/*.AppImage
-            release/**/latest*.yml
+            apps/tianshu-desktop/release/**/*.dmg
+            apps/tianshu-desktop/release/**/*.exe
+            apps/tianshu-desktop/release/**/*.AppImage
+            apps/tianshu-desktop/release/**/latest*.yml
 
   # Android APK：debug 签名起步（expo 模板 release 构型默认 signingConfig
   # debug，出 release 优化 bundle + debug 证书，可独立安装分发；正式分发

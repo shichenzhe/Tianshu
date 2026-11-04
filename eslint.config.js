@@ -1,3 +1,7 @@
+// 根 lint 只管 packages/* 与根级脚本：桌面端迁 apps/tianshu-desktop 后
+// 自带同规则 config；server/mobile 子项目各有独立 lint 体系（server 单引号
+// 风格 / mobile RN 规则），误扫必红（CI lint 步骤三平台连坐）。
+// 规则层与 apps/tianshu-desktop/eslint.config.js 保持同步（两份同改）。
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -7,21 +11,8 @@ import prettierPlugin from "eslint-plugin-prettier";
 
 export default defineConfig([
   {
-    ignores: [
-      "node_modules",
-      "dist",
-      "dist-electron",
-      "public",
-      "release",
-      "electron/infrastructure/prisma",
-      "electron/generated",
-      // apps/* 子项目各有独立 lint 体系（server 单引号风格 / mobile RN 规则），
-      // 根规则只管桌面端与 packages/*，误扫必红（CI lint 步骤三平台连坐）
-      "apps",
-    ],
+    ignores: ["node_modules", "dist", "**/dist", "apps"],
   },
-  // ESLint 10 flat config: 直接引用 js.configs.recommended 对象，
-  // 不再使用 "js/recommended" 字符串 extends（插件需在同一 config 对象内注册）
   js.configs.recommended,
   tseslint.configs.recommended,
   {

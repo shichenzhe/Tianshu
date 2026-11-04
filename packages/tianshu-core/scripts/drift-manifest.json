@@ -4,7 +4,7 @@
   "pairs": [
     {
       "id": "agent-file-tools",
-      "mirrorPath": "electron/domains/ai/agent/file-tools.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/file-tools.ts",
       "serverPath": "src/core/tools/file-tools.ts",
       "baselineDiff": true,
       "baselineLines": 77,
@@ -12,7 +12,7 @@
     },
     {
       "id": "agent-display-tools",
-      "mirrorPath": "electron/domains/ai/agent/display-tools.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/display-tools.ts",
       "serverPath": "src/core/tools/display-tools.ts",
       "baselineDiff": true,
       "baselineLines": 40,
@@ -20,7 +20,7 @@
     },
     {
       "id": "agent-command-tool",
-      "mirrorPath": "electron/domains/ai/agent/command-tool.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/command-tool.ts",
       "serverPath": "src/core/tools/command-tool.ts",
       "baselineDiff": true,
       "baselineLines": 49,
@@ -28,7 +28,7 @@
     },
     {
       "id": "automation-event-bus",
-      "mirrorPath": "electron/domains/ai/automation/automation-event-bus.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-event-bus.ts",
       "serverPath": "src/modules/automation/automation-event-bus.ts",
       "baselineDiff": true,
       "baselineLines": 66,
@@ -36,7 +36,7 @@
     },
     {
       "id": "agent-web-tools",
-      "mirrorPath": "electron/domains/ai/agent/web-tools.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/web-tools.ts",
       "serverPath": "src/core/tools/web-tools.ts",
       "baselineDiff": true,
       "baselineLines": 25,
@@ -44,7 +44,7 @@
     },
     {
       "id": "agent-plan-tools",
-      "mirrorPath": "electron/domains/ai/agent/plan-tools.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/plan-tools.ts",
       "serverPath": "src/core/tools/plan-tools.ts",
       "baselineDiff": true,
       "baselineLines": 19,
@@ -52,7 +52,7 @@
     },
     {
       "id": "agent-skill-loader",
-      "mirrorPath": "electron/domains/ai/agent/skill-loader.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/skill-loader.ts",
       "serverPath": "src/core/tools/skill-loader.ts",
       "baselineDiff": true,
       "baselineLines": 2,
@@ -60,7 +60,7 @@
     },
     {
       "id": "agent-skill-prompt",
-      "mirrorPath": "electron/domains/ai/agent/skill-prompt.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/skill-prompt.ts",
       "serverPath": "src/core/skill-prompt.ts",
       "baselineDiff": true,
       "baselineLines": 6,
@@ -68,7 +68,7 @@
     },
     {
       "id": "agent-tool-gate",
-      "mirrorPath": "electron/domains/ai/agent/tool-gate.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/tool-gate.ts",
       "serverPath": "src/core/tools/tool-gate.ts",
       "baselineDiff": true,
       "baselineLines": 187,
@@ -76,7 +76,7 @@
     },
     {
       "id": "agent-tool-registry",
-      "mirrorPath": "electron/domains/ai/agent/tool-registry.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/tool-registry.ts",
       "serverPath": "src/core/tools/tool-registry.ts",
       "baselineDiff": true,
       "baselineLines": 13,
@@ -84,7 +84,7 @@
     },
     {
       "id": "agent-workspace-path",
-      "mirrorPath": "electron/domains/ai/agent/workspace-path.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/workspace-path.ts",
       "serverPath": "src/core/tools/workspace-path.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -92,7 +92,7 @@
     },
     {
       "id": "agent-create-skill",
-      "mirrorPath": "electron/domains/ai/agent/create-skill.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/create-skill.ts",
       "serverPath": "src/core/tools/create-skill.ts",
       "baselineDiff": true,
       "baselineLines": 23,
@@ -100,7 +100,7 @@
     },
     {
       "id": "agent-approval",
-      "mirrorPath": "electron/domains/ai/agent/approval.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/approval.ts",
       "serverPath": "src/core/tools/approval.ts",
       "baselineDiff": true,
       "baselineLines": 10,
@@ -108,7 +108,7 @@
     },
     {
       "id": "agent-permission-mode",
-      "mirrorPath": "electron/domains/ai/agent/permission-mode.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/permission-mode.ts",
       "serverPath": "src/core/tools/permission-mode.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -116,7 +116,7 @@
     },
     {
       "id": "agent-read-skill",
-      "mirrorPath": "electron/domains/ai/agent/read-skill.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/read-skill.ts",
       "serverPath": "src/core/tools/read-skill.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -124,7 +124,7 @@
     },
     {
       "id": "agent-browser-bridge-tools",
-      "mirrorPath": "electron/domains/ai/agent/browser-tools.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/agent/browser-tools.ts",
       "serverPath": "src/core/tools/bridge/browser-bridge-tools.ts",
       "baselineDiff": true,
       "baselineLines": 159,
@@ -132,7 +132,7 @@
     },
     {
       "id": "security-ssrf-hosts",
-      "mirrorPath": "electron/domains/security/ssrf-hosts.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/ssrf-hosts.ts",
       "serverPath": "src/core/tools/ssrf-hosts.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -140,7 +140,7 @@
     },
     {
       "id": "security-command-gate",
-      "mirrorPath": "electron/domains/security/command-gate.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/command-gate.ts",
       "serverPath": "src/core/security/command-gate.ts",
       "baselineDiff": true,
       "baselineLines": 19,
@@ -148,7 +148,7 @@
     },
     {
       "id": "security-command-policy",
-      "mirrorPath": "electron/domains/security/command-policy.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/command-policy.ts",
       "serverPath": "src/core/security/command-policy.ts",
       "baselineDiff": true,
       "baselineLines": 3,
@@ -156,7 +156,7 @@
     },
     {
       "id": "security-file-gate",
-      "mirrorPath": "electron/domains/security/file-gate.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/file-gate.ts",
       "serverPath": "src/core/security/file-gate.ts",
       "baselineDiff": true,
       "baselineLines": 9,
@@ -164,7 +164,7 @@
     },
     {
       "id": "security-file-policy",
-      "mirrorPath": "electron/domains/security/file-policy.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/file-policy.ts",
       "serverPath": "src/core/security/file-policy.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -172,7 +172,7 @@
     },
     {
       "id": "security-file-blocklist",
-      "mirrorPath": "electron/domains/security/defaults.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/defaults.ts",
       "serverPath": "src/core/security/file-blocklist.ts",
       "baselineDiff": true,
       "baselineLines": 170,
@@ -180,7 +180,7 @@
     },
     {
       "id": "security-file-history-estimate",
-      "mirrorPath": "electron/domains/security/file-history.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/file-history.ts",
       "serverPath": "src/core/security/file-history-estimate.ts",
       "baselineDiff": true,
       "baselineLines": 147,
@@ -188,7 +188,7 @@
     },
     {
       "id": "skill-archive",
-      "mirrorPath": "electron/domains/ai/skill/skill-archive.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/skill/skill-archive.ts",
       "serverPath": "src/core/tools/skill-archive.ts",
       "baselineDiff": true,
       "baselineLines": 25,
@@ -196,7 +196,7 @@
     },
     {
       "id": "langchain-tool-adapter",
-      "mirrorPath": "electron/domains/ai/orchestration/langchain-tool-adapter.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/langchain-tool-adapter.ts",
       "serverPath": "src/core/tools/langchain-tool-adapter.ts",
       "baselineDiff": true,
       "baselineLines": 8,
@@ -204,7 +204,7 @@
     },
     {
       "id": "langchain-model-factory",
-      "mirrorPath": "electron/domains/ai/orchestration/langchain-model-factory.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/langchain-model-factory.ts",
       "serverPath": "src/core/provider/model-factory.ts",
       "baselineDiff": true,
       "baselineLines": 24,
@@ -212,7 +212,7 @@
     },
     {
       "id": "chat-context-usage",
-      "mirrorPath": "electron/domains/ai/chat/context-usage.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/chat/context-usage.ts",
       "serverPath": "src/core/context-usage.ts",
       "baselineDiff": true,
       "baselineLines": 12,
@@ -220,7 +220,7 @@
     },
     {
       "id": "chat-expert-catalog",
-      "mirrorPath": "electron/domains/ai/chat/expert-catalog.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/chat/expert-catalog.ts",
       "serverPath": "src/core/expert-catalog.ts",
       "baselineDiff": true,
       "baselineLines": 6,
@@ -228,7 +228,7 @@
     },
     {
       "id": "chat-blocks",
-      "mirrorPath": "src-react/domains/ai/chat/model/blocks.ts",
+      "mirrorPath": "apps/tianshu-desktop/src-react/domains/ai/chat/model/blocks.ts",
       "serverPath": "../../packages/tianshu-core/src/blocks.ts",
       "baselineDiff": true,
       "baselineLines": 105,
@@ -237,7 +237,7 @@
     },
     {
       "id": "mobile-blocks",
-      "mirrorPath": "src-react/domains/ai/chat/model/blocks.ts",
+      "mirrorPath": "apps/tianshu-desktop/src-react/domains/ai/chat/model/blocks.ts",
       "serverPath": "../../apps/tianshu-mobile/src/logic/blocks.ts",
       "baselineLines": 0,
       "note": "mobile 渲染端 blocks 三件套与 src-react model/blocks.ts 逐字同构双份（mobile 脱离 @tianshu/core 经 protocol 类型本地实现——langChain peer 不进 metro bundle 的既有分叉）。2026-11-01 审查架构债：blocks 实为三份拷贝（core 单源+渲染双份）且 mobile 份零守护，新块型靠注释纪律三改（skill_ref 批已实践）——入册 tolerance=0 单侧改动即告警（chat-blocks 对同款强度）；serverPath 相对 serverRoot 跨 app 指回（../../apps/ 同 chat-blocks 的 ../../packages/ 先例）",
@@ -251,7 +251,7 @@
     },
     {
       "id": "security-events-shape",
-      "mirrorPath": "src-react/domains/security/model/types.ts",
+      "mirrorPath": "apps/tianshu-desktop/src-react/domains/security/model/types.ts",
       "serverPath": "src/core/tools/security-events.ts",
       "baselineDiff": true,
       "baselineLines": 69,
@@ -259,7 +259,7 @@
     },
     {
       "id": "prisma-schema",
-      "mirrorPath": "prisma/schema.prisma",
+      "mirrorPath": "apps/tianshu-desktop/prisma/schema.prisma",
       "serverPath": "prisma/schema.prisma",
       "baselineDiff": true,
       "baselineLines": null,
@@ -268,7 +268,7 @@
     },
     {
       "id": "graph-executor",
-      "mirrorPath": "electron/domains/ai/orchestration/graph-executor.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph-executor.ts",
       "serverPath": "src/core/graph/graph-executor.ts",
       "baselineDiff": true,
       "baselineLines": 339,
@@ -276,7 +276,7 @@
     },
     {
       "id": "graph-inflight",
-      "mirrorPath": "electron/domains/ai/orchestration/graph-inflight.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph-inflight.ts",
       "serverPath": "src/core/graph/graph-inflight.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -284,7 +284,7 @@
     },
     {
       "id": "graph-db-client",
-      "mirrorPath": "electron/domains/ai/orchestration/db-client.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/db-client.ts",
       "serverPath": "src/core/graph/db-client.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -292,7 +292,7 @@
     },
     {
       "id": "graph-vector-store",
-      "mirrorPath": "electron/domains/ai/orchestration/vector-store.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/vector-store.ts",
       "serverPath": "src/core/graph/vector-store.ts",
       "baselineDiff": true,
       "baselineLines": 36,
@@ -300,7 +300,7 @@
     },
     {
       "id": "graph-acs3-sign",
-      "mirrorPath": "electron/domains/ai/orchestration/acs3-sign.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/acs3-sign.ts",
       "serverPath": "src/core/graph/acs3-sign.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -308,7 +308,7 @@
     },
     {
       "id": "graph-doc-extract",
-      "mirrorPath": "electron/domains/ai/orchestration/doc-extract.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/doc-extract.ts",
       "serverPath": "src/core/graph/doc-extract.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -316,7 +316,7 @@
     },
     {
       "id": "automation-runner",
-      "mirrorPath": "electron/domains/ai/automation/automation-runner.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-runner.ts",
       "serverPath": "src/modules/automation/automation-runner.ts",
       "baselineDiff": true,
       "baselineLines": 188,
@@ -324,7 +324,7 @@
     },
     {
       "id": "automation-scheduler",
-      "mirrorPath": "electron/domains/ai/automation/automation-scheduler.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-scheduler.ts",
       "serverPath": "src/modules/automation/automation-scheduler.ts",
       "baselineDiff": true,
       "baselineLines": 127,
@@ -332,7 +332,7 @@
     },
     {
       "id": "automation-inflight",
-      "mirrorPath": "electron/domains/ai/automation/automation-inflight.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-inflight.ts",
       "serverPath": "src/modules/automation/automation-inflight.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -340,7 +340,7 @@
     },
     {
       "id": "automation-stat",
-      "mirrorPath": "electron/domains/ai/automation/automation-stat.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-stat.ts",
       "serverPath": "src/modules/automation/automation-stat.ts",
       "baselineDiff": true,
       "baselineLines": 3,
@@ -348,7 +348,7 @@
     },
     {
       "id": "automation-inline-tokens",
-      "mirrorPath": "src-react/domains/ai/chat/lib/inline-tokens.ts",
+      "mirrorPath": "apps/tianshu-desktop/src-react/domains/ai/chat/lib/inline-tokens.ts",
       "serverPath": "src/modules/automation/inline-tokens.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -356,7 +356,7 @@
     },
     {
       "id": "automation-resolve-attachments",
-      "mirrorPath": "electron/domains/ai/automation/resolve-attachments.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/resolve-attachments.ts",
       "serverPath": "src/modules/automation/resolve-attachments.ts",
       "baselineDiff": true,
       "baselineLines": 62,
@@ -364,7 +364,7 @@
     },
     {
       "id": "graph-repository",
-      "mirrorPath": "electron/domains/ai/orchestration/graph.repo.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph.repo.ts",
       "serverPath": "src/modules/graph/graph.repository.ts",
       "baselineDiff": true,
       "baselineLines": 672,
@@ -372,7 +372,7 @@
     },
     {
       "id": "automation-repository",
-      "mirrorPath": "electron/domains/ai/automation/automation.repo.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation.repo.ts",
       "serverPath": "src/modules/automation/automation.repository.ts",
       "baselineDiff": true,
       "baselineLines": 486,
@@ -380,7 +380,7 @@
     },
     {
       "id": "webhook-service",
-      "mirrorPath": "electron/domains/ai/orchestration/webhook-server.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/webhook-server.ts",
       "serverPath": "src/modules/webhook/webhook.service.ts",
       "baselineDiff": true,
       "baselineLines": 529,
@@ -388,7 +388,7 @@
     },
     {
       "id": "personalization-repo-read",
-      "mirrorPath": "electron/domains/ai/personalization/personalization.repo.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/personalization/personalization.repo.ts",
       "serverPath": "src/core/personalization.ts",
       "baselineDiff": true,
       "baselineLines": 106,
@@ -396,7 +396,7 @@
     },
     {
       "id": "personalization-config-parse",
-      "mirrorPath": "electron/domains/ai/personalization/personalization.config.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/personalization/personalization.config.ts",
       "serverPath": "src/core/personalization.ts",
       "baselineDiff": true,
       "baselineLines": 40,
@@ -404,7 +404,7 @@
     },
     {
       "id": "library-repository-search",
-      "mirrorPath": "electron/domains/ai/library/library.repo.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library.repository.ts",
       "baselineDiff": true,
       "baselineLines": 674,
@@ -412,7 +412,7 @@
     },
     {
       "id": "automation-retention",
-      "mirrorPath": "electron/domains/ai/automation/automation-retention.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-retention.ts",
       "serverPath": "src/modules/automation/automation-retention.ts",
       "baselineDiff": true,
       "baselineLines": 36,
@@ -420,7 +420,7 @@
     },
     {
       "id": "security-command-risk",
-      "mirrorPath": "electron/domains/security/command-risk.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/security/command-risk.ts",
       "serverPath": "src/core/security/command-risk.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -428,7 +428,7 @@
     },
     {
       "id": "library-utils",
-      "mirrorPath": "electron/domains/ai/library/library.utils.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/library/library.utils.ts",
       "serverPath": "src/core/library/library.utils.ts",
       "baselineDiff": false,
       "baselineLines": 0,
@@ -436,7 +436,7 @@
     },
     {
       "id": "library-disk-repository",
-      "mirrorPath": "electron/domains/ai/library/library.repo.ts",
+      "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library-disk.repository.ts",
       "baselineDiff": true,
       "baselineLines": 153,

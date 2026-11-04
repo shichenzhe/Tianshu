@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 天枢（Tianshu）——Electron + Prisma + TypeScript + React 跨平台桌面应用（北斗第一星，意为"核心枢纽"；基于 shu-electron-starter 脚手架模板）。
 
-**monorepo（三仓合一）**：本仓为根，`apps/tianshu-server`（NestJS 无头服务端）与 `apps/tianshu-mobile`（Expo/RN 移动控制端）经 git subtree 并入（完整历史保留，`git log --graph` 可溯）；npm workspaces 管理（根 package.json `workspaces: ["apps/*", "packages/*"]`），三端共享 `packages/*` 协议与核心逻辑包。
+**monorepo（三端 apps/* 对称）**：`apps/tianshu-desktop`（桌面端）/ `apps/tianshu-server`（NestJS 无头服务端）/ `apps/tianshu-mobile`（Expo/RN 移动控制端）三端对称布局——server 与 mobile 经 git subtree 并入（完整历史保留，`git log --graph` 可溯）；根目录为纯 workspace 壳（workspaces + overrides + allowScripts + postinstall + 委托脚本 + 工具链 devDeps），npm workspaces 管理（根 package.json `workspaces: ["apps/*", "packages/*"]`），三端共享 `packages/*` 协议与核心逻辑包。
 
 ## 开发命令
+
+**根委托**：`dev` / `build` / `typecheck` / `test` / `init` / `test:e2e:*` 均委托 `-w apps/tianshu-desktop`（在 `apps/tianshu-desktop` 内直跑等价）；`lint` 为两段（根 `eslint .` 管 packages + 委托桌面端 lint）。根级脚本另持 `test:packages`、`check:drift`、`postinstall`。
 
 ```bash
 # 开发调试
@@ -17,8 +19,11 @@ npm run dev
 # 构建（TypeScript 编译 + Vite 构建 + Electron 打包）
 npm run build
 
-# 单元测试（Vitest）
+# 单元测试（Vitest；根 test 先跑桌面端单测再跑 test:packages）
 npm run test
+
+# packages 共享包单测（根源码直跑，vitest.packages.config.ts）
+npm run test:packages
 
 # Lint / 类型检查
 npm run lint
@@ -31,7 +36,7 @@ npm run test:e2e:bridge
 npm run test:e2e:ui
 npm run test:e2e:relayE2E
 
-# 双份文件漂移巡检（mirror ↔ apps/tianshu-server 仍双份文件基线守护）
+# 双份文件漂移巡检（apps/tianshu-desktop ↔ apps/tianshu-server 仍双份文件基线守护）
 npm run check:drift
 ```
 
@@ -52,6 +57,8 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 **首次安装**：需要全局安装 `node-gyp`：`npm i -g node-gyp`
 
 ## 代码架构
+
+**路径基准**：本文件中的桌面端路径（`electron/`、`src-react/`、`prisma/`、`tests/`、`scripts/` 等）均相对 `apps/tianshu-desktop/`，下文不再逐处标注。
 
 ### 主进程/渲染进程分离
 
@@ -75,7 +82,7 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 
 - **packages/tianshu-protocol** - 三端共享协议包（纯类型 + 常量：chunk/blocks/send 契约、中继帧、事件与能力常量，零运行时依赖）
 - **packages/tianshu-core** - 三端共享核心逻辑包（chat 纯函数实现：blocks 序列化、历史截断/工具输出瘦身、参数合并、错误分类、时间/场景上下文、chunk 归一、runChatStream 工具循环；peer 依赖 @langchain/*）
-- 消费方式：mirror 桌面端经 alias 直引 `packages/*/src` 源码（vite 顶层 + 主进程、vitest、tsconfig paths 各自登记）；apps/tianshu-server 与 apps/tianshu-mobile 经 workspace 依赖（package.json 里 `"@tianshu/*": "*"`，npm 不支持 yarn/pnpm 的 `workspace:` 协议字面量，名称命中 workspace 即自动链接）消费 `dist` 产物——链接由根 `npm install` 维护；改包源码后须重建 dist（server 侧 `npm run sync:core`，即依次 build 两共享包；或根 `npm --prefix packages/tianshu-core run build`），链接直读、重启即生效；合并含 packages/ 变更的分支后，主树需 `npm --prefix packages/tianshu-core run build`（或 server 侧 sync:core）刷新 dist——worktree 各自构建不回写主树，主树 dist 滞后会致 server jest 的 @tianshu/core 解析失败
+- 消费方式：desktop（apps/tianshu-desktop）经 alias 直引 `packages/*/src` 源码（vite 顶层 + 主进程、vitest、tsconfig paths 各自登记）；apps/tianshu-server 与 apps/tianshu-mobile 经 workspace 依赖（package.json 里 `"@tianshu/*": "*"`，npm 不支持 yarn/pnpm 的 `workspace:` 协议字面量，名称命中 workspace 即自动链接）消费 `dist` 产物——链接由根 `npm install` 维护；改包源码后须重建 dist（server 侧 `npm run sync:core`，即依次 build 两共享包；或根 `npm --prefix packages/tianshu-core run build`），链接直读、重启即生效；合并含 packages/ 变更的分支后，主树需 `npm --prefix packages/tianshu-core run build`（或 server 侧 sync:core）刷新 dist——worktree 各自构建不回写主树，主树 dist 滞后会致 server jest 的 @tianshu/core 解析失败
 - 仍双份未收编文件（有意分叉/暂保留）由 `npm run check:drift` 守护：基线 manifest 在 `packages/tianshu-core/scripts/drift-manifest.json`（serverRoot 指向 `apps/tianshu-server`，monorepo 内相对路径），差异行数增长超容差 exit 1，基线变化用 `npm run check:drift -- --rebase` 重置并人工复核
 
 ### IPC 通信

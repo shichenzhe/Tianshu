@@ -1,0 +1,64 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "preserve",
+    "lib": [
+      "ES2020",
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "module": "ESNext",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "customConditions": [
+      "react-native"
+    ],
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@/*": [
+        "./src-react/*"
+      ],
+      "@tianshu/protocol": [
+        "../../packages/tianshu-protocol/src"
+      ],
+      "@tianshu/core": [
+        "../../packages/tianshu-core/src"
+      ],
+      "@tianshu/core/*": [
+        "../../packages/tianshu-core/src/*"
+      ]
+    }
+  },
+  "include": [
+    "src-react/**/*.ts",
+    "src-react/**/*.tsx",
+    "src-react/**/*.d.ts",
+    "electron"
+  ],
+  "exclude": [
+    "${configDir}/node_modules",
+    "${configDir}/babel.config.js",
+    "${configDir}/metro.config.js",
+    "${configDir}/jest.config.js",
+    "${configDir}/android",
+    "${configDir}/ios"
+  ],
+  "references": [
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ]
+}

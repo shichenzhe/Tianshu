@@ -1,15 +1,12 @@
 node_modules
 **/node_modules
-dist-electron
-src-react
-tests
 docs
 .superpowers
 .claude
 .git
 *.md
 apps/tianshu-mobile
-release
+apps/tianshu-desktop
 coverage
 **/local.db*
 **/.env

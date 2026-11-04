@@ -42,6 +42,7 @@ jobs:
         run: npm run test
       - name: Build (renderer + main)
         run: npx vite build
+        working-directory: apps/tianshu-desktop
 
   # apps/tianshu-server 经 subtree 并入，其 .github/workflows/ci.yml 在根仓
   # 是死配置（GitHub Actions 只认仓库根的 workflows/），等价 job 在此透出

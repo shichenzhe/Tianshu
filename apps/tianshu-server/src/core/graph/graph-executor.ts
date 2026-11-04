@@ -129,6 +129,7 @@ import {
   type RerankNode,
   type SubflowNode,
   graphHttpUrlErrorDns,
+  type GraphHttpUrlPolicy,
 } from '@tianshu/core';
 import { format as dateFnsFormat } from 'date-fns';
 import { GraphRecursionError, isNodeError } from '@langchain/langgraph';
@@ -216,6 +217,27 @@ export interface GraphRunParams {
 
 /** server 日志面（授权面 2 环境适配：mirror commons/Log → Nest Logger） */
 const logger = new Logger('graph-executor');
+
+/**
+ * HTTP 节点 URL 守卫策略 seam（逃生口 2026-11-04）：缺省空 policy =
+ * 严拦现状（S5/F1 语义零变化）；chat-core.module 装配 config.yml
+ * tianshu.graph 段闭包实时读（installSecurityGates / command-gate
+ * install+gate 读出口同款先例）。mirror 桌面端不走 seam——执行器
+ * 直接传 allowPrivateNetwork: true（本机全权裁定）。
+ */
+let httpUrlPolicy: () => GraphHttpUrlPolicy = () => ({});
+
+/** 守卫策略装配（graph-executor 模块单例；缺省严拦不装配即现状） */
+export function installGraphHttpUrlPolicy(
+  policy: () => GraphHttpUrlPolicy,
+): void {
+  httpUrlPolicy = policy;
+}
+
+/** 守卫策略读出口（装配单测断言面；产线仅内部消费） */
+export function currentGraphHttpUrlPolicy(): GraphHttpUrlPolicy {
+  return httpUrlPolicy();
+}
 
 /** 依赖注入 seam：测试经模块 mock 替换三件，产线取真实实现 */
 export interface GraphExecutorDeps {
@@ -1260,8 +1282,10 @@ async function fetchOnce(
   }
   // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
   // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设
-  // 守卫即完整 SSRF read-back（mirror 同款）
-  const urlError = await graphHttpUrlErrorDns(url);
+  // 守卫即完整 SSRF read-back（mirror 同款）。逃生口 2026-11-04：
+  // 部署态经 config.yml tianshu.graph 段（allowlist / allowPrivateNetwork
+  // 白名单化放开，缺省严拦；协议/metadata/链路本地硬边界不随 policy）
+  const urlError = await graphHttpUrlErrorDns(url, httpUrlPolicy());
   if (urlError !== null) {
     throw new GraphNodeFailure(
       node.id,

@@ -271,7 +271,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph-executor.ts",
       "serverPath": "src/core/graph/graph-executor.ts",
       "baselineDiff": true,
-      "baselineLines": 339,
+      "baselineLines": 352,
       "note": "图执行器（GA-T4 副本，executor 4095→4314 行）：授权面 7 条+环境适配——prisma→运行时句柄、Electron 副作用→钩子、事件出口 graph.run.updated、automation-runner 断环摘取段尾部追加；逐 hunk 改造点登记见 server 文件头注释——基线必然大。PL-3 裁定（PL-T2 concern ①）：断环摘取段 collectTools 无工作空间白名单加入 library_search（mirror 无该工具，server 独有偏离，头注释改造点 9）。随行支撑件 executor-runtime.ts（GraphRunStore 类型+进程级 install/accessor）为 server 新建、无 mirror 单文件对应（类型散在 mirror graph.repo/graph-executor），不入比对。2026-10-28 去会话化同批双改（Task 3+6）：旧 session/message 双份段（createGraphSession/writeNodeMessages/writeNodeFailure）拆除、节点详情落 graphRunNode——基线 231→219（旧段 server 侧 this.prisma 前缀行本就多差 12 行，拆除后回落）；残余 2 行 = prisma→runtime 句柄（db.graphRunNode.create）授权差异。2026-10-29 切片 B：mirror 独有数据源引用解析（dataSourceId → 元库 dataSourceConfig，datasource-resolver.ts 桌面单份随行件不入比对）+ db-client ssl 透传（两份同改，db-client 对仍 0 差异）——executor 内 handler 装配段 +36 行基线过账。2026-10-29 切片 D：mirror 独有 typed 输入链（GraphRunParams/state inputs 放宽 GraphInputValue + database 参数单一 input 引用原生直通 DIRECT_INPUT_REF）——+29 行基线过账；D2 收尾 prettier 折行再 +15。2026-10-29 切片 F：server 侧 typed 输入链补齐（GraphRunParams/state inputs 放宽对齐 mirror D 批——修 D 批只改 core 未同步 server 注解的编译债）+ DIRECT_INPUT_REF 参数原生直通同构 + resolveAutomationPermissions toolPermission 查表注入（F3）——基线 302→314 过账。2026-10-31 rerank 节点批（T2 mirror 888053cb 对段移植双份同步）：基线 217→231，增量 14 = traceSuccess payload 两处 server 惯用 hug 形（mirror 断行 6 行 vs server 4 行，2×6=12）+ parseExtraHeaders 动态 import 路径分叉（../provider/provider-runtime → ../provider/model-factory，先例 embedTexts，-1/+1=2）；handler 其余段归一化后逐行同形（引号/注释/import 块均被归一化剥离）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 314→328：分支基线 314 不含 HEAD 线 rerank/hybridSearch 批的分叉增量 14（hug 形+import 路径——两线并行各自过账，合并后叠加），hybridSearch/rerank handler 与数据源/typed 输入落位同文件互不复用段，逐段语义并立无逻辑漂移。2026-11-02 尾批 E1：dataSourceConfig password 密封读侧解密（lookup 注入点）+ S5 HTTP 节点 URL 守卫单侧——基线 329→339 过账（mirror 单侧，server 侧同款随后续批对齐）"
     },
     {
@@ -383,7 +383,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/webhook-server.ts",
       "serverPath": "src/modules/webhook/webhook.service.ts",
       "baselineDiff": true,
-      "baselineLines": 529,
+      "baselineLines": 525,
       "note": "入站 webhook（GA-T7）：语义重写非逐字——mirror 本地 http server（127.0.0.1:27400）收敛为 Nest 控制器+应用生命周期，22 条语义对照见 GA-T7 报告——基线必然大。2026-11-02 安全批 D1：mirror webhook-server token 密封（sealNamedSecret/openNamedSecret 注入）单侧——server 侧 webhook.service 的 token 存储路径不同（DB 列非 option 行），密封接入随 server 侧后续批——基线 515→525 过账。2026-11-02 尾批 D1/E1 补丁：读侧解封 await 修正 + reload 解封补——基线 525→529 过账（mirror 单侧）"
     },
     {

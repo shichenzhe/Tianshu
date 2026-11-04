@@ -14,6 +14,8 @@ export class TianshuConfig {
   security?: TianshuSecurityConfig;
   // relay 客户端配置（E2E-T2：端到端加密模式）
   relay?: TianshuRelayConfig;
+  // 图编排 HTTP 节点守卫策略（逃生口 2026-11-04）
+  graph?: TianshuGraphConfig;
   // 是否启用与桌面端的握手
   handshake: boolean;
 
@@ -25,6 +27,7 @@ export class TianshuConfig {
     defaultConfig.bridge = TianshuBridgeConfig.getDefault();
     defaultConfig.security = TianshuSecurityConfig.getDefault();
     defaultConfig.relay = TianshuRelayConfig.getDefault();
+    defaultConfig.graph = TianshuGraphConfig.getDefault();
     defaultConfig.handshake = true;
     return defaultConfig;
   }
@@ -72,6 +75,26 @@ export class TianshuRelayConfig {
     const defaultConfig = new TianshuRelayConfig();
     defaultConfig.e2e = 'required';
     return defaultConfig;
+  }
+}
+
+/**
+ * 图编排 HTTP 节点守卫策略（config.yml `tianshu.graph` 段，逃生口
+ * 2026-11-04）：缺省严拦（安全审查 S5/F1 语义零变化）——桌面端 mirror
+ * 本机全放开不消费本段；server 部署态显式登记才放行。协议白名单/
+ * metadata 三元组/链路本地段为硬边界，白名单与放开开关均不豁免
+ */
+export class TianshuGraphConfig {
+  /** 整体放开内网（环回/私网/CGNAT + DNS 解析级内网；内网部署可一键） */
+  allowPrivateNetwork: boolean;
+  /** 显式放行清单：精确 IP / 精确域名 / IPv4 CIDR（192.168.1.0/24） */
+  allowlist: string[];
+
+  static getDefault(): TianshuGraphConfig {
+    const config = new TianshuGraphConfig();
+    config.allowPrivateNetwork = false;
+    config.allowlist = [];
+    return config;
   }
 }
 

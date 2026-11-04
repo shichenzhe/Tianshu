@@ -138,6 +138,19 @@ describe("HTTP 节点执行", () => {
     expect(traceOf()[0].outputPreview).toContain('{"ok":true}');
   });
 
+  it("内网 URL 放行（2026-11-04 桌面端裁定：执行器传 allowPrivateNetwork——本用例锁定接线防回归）", async () => {
+    fetchMock.mockResolvedValue(respond(200, "pong"));
+    const out = await executeGraphRun(
+      httpGraph(
+        [httpNode("call", { url: "http://127.0.0.1:18411/health" })],
+        [{ from: "call", to: "END" }],
+      ),
+    );
+    expect(out).toBe("success");
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:18411/health");
+  });
+
   it("POST json：body 变量替换 + 缺省 Content-Type；显式头优先", async () => {
     fetchMock.mockResolvedValue(respond(201, "created"));
     const out = await executeGraphRun(

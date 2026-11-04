@@ -6,6 +6,8 @@
  * 此前全仓无调用方——命令/文件黑名单（已自 mirror 逐字移植）运行时全部
  * fail-open；本模块 onModuleInit 以 config tianshu.security 段装配两门
  * （缺省 sandboxEnabled=true，内置敏感路径保护即生效），闭包实时读配置。
+ * HTTP 节点守卫策略（逃生口 2026-11-04）同宿主装配：tianshu.graph 段
+ * → installGraphHttpUrlPolicy（缺省严拦，见 graph-executor seam 注释）。
  */
 import { Injectable, Module, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,6 +15,7 @@ import { join } from 'node:path';
 import { PrismaModule } from 'src/commons/database/prisma.module';
 import type { TianshuConfig } from 'src/commons/config/tianshu-config.entity';
 import { TianshuConfig as TianshuConfigEntity } from 'src/commons/config/tianshu-config.entity';
+import { installGraphHttpUrlPolicy } from 'src/core/graph/graph-executor';
 import {
   ChatRunnerService,
   CHAT_RUNNER_DEPS,
@@ -60,11 +63,35 @@ export function installSecurityGates(configService: ConfigService): void {
 
 const TianshuSecurityDefault = TianshuConfigEntity.getDefault().security!;
 
+/**
+ * 图编排 HTTP 节点守卫策略装配（逃生口 2026-11-04）：config.yml
+ * tianshu.graph 段闭包实时读——缺省严拦（allowPrivateNetwork=false +
+ * 空 allowlist），部署方显式登记才放行（协议/metadata/链路本地硬边界
+ * 不随策略，见 core graph-http-guard 头注释）
+ */
+export function installGraphHttpGuardPolicy(
+  configService: ConfigService,
+): void {
+  const graphDefault = TianshuConfigEntity.getDefault().graph!;
+  installGraphHttpUrlPolicy(() => {
+    const graph =
+      configService.get<TianshuConfig>(
+        'tianshu',
+        TianshuConfigEntity.getDefault(),
+      ).graph ?? graphDefault;
+    return {
+      allowPrivateNetwork: graph.allowPrivateNetwork,
+      allowlist: graph.allowlist,
+    };
+  });
+}
+
 @Injectable()
 class SecurityGateInstaller implements OnModuleInit {
   constructor(private readonly configService: ConfigService) {}
   onModuleInit(): void {
     installSecurityGates(this.configService);
+    installGraphHttpGuardPolicy(this.configService);
   }
 }
 

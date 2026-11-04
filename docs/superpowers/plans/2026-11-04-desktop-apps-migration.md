@@ -502,58 +502,35 @@ grep -rnE '(^|[^./])\.\./\.\./(packages|docs)/' apps/tianshu-desktop/tests/ || e
 
 Expected: `无残留`（`[^./]` 前置排除四/五层已修路径的尾段命中——裸 `\.\./\.\./packages/` 会匹配一切 ≥2 层路径，属自败门禁）。
 
-- [ ] **Step 6: 门禁验证**
+- [ ] **Step 6: manifest 前缀（原 Task 3 Step 1 并入——drift-manifest.test 在 desktop 套件内，其"mirror 侧路径存在"断言依赖本步，tests 门禁不可能先行独立转绿；裁定单 commit 保绿）**
+
+```bash
+perl -pi -e 's{("mirrorPath":\s*")((?!apps/tianshu-desktop/)[^"]+")}{${1}apps/tianshu-desktop/$2}g' packages/tianshu-core/scripts/drift-manifest.json
+```
+
+（负向前瞻保证幂等可重入；仅改字符串值。）
+
+- [ ] **Step 7: 门禁验证**
 
 ```bash
 npm run test -w apps/tianshu-desktop
+npm run check:drift
 ```
 
-Expected: desktop 全单测集绿（relay-transport 等依赖 server dist 的用例在 dist 缺席时按 `hasRelay` 跳过属正常）。
+Expected: desktop 全单测集绿（relay 依赖 server dist 的用例按 `hasRelay` 跳过属正常）；check:drift 全对 `[OK]`（基线不动）+ peer 双 OK。
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit（原 T2/T3 并批）**
 
 ```bash
 git add -A
-git commit -m "refactor(desktop-tests): 仓根定位单源 tests/lib/paths + 相对导入层级修正（tests 下沉两级 +2 层）"
+git commit -m "refactor(desktop-tests,drift): 仓根定位单源 tests/lib/paths + 相对导入层级修正 + drift manifest 镜像路径前缀（tests 门禁依赖并批落地）"
 ```
 
 ---
 
-### Task 3: drift manifest 镜像路径前缀（commit ③-2）
+### Task 3: drift manifest 镜像路径前缀 —— 已并入 Task 2（排序缺陷裁定）
 
-**Files:**
-- Modify: `packages/tianshu-core/scripts/drift-manifest.json`（54 条 mirrorPath 加前缀）
-
-**Interfaces:**
-- Consumes: Task 1 的搬迁结果（mirrorPath 指向的新位置）。
-- Produces: `npm run check:drift` 恢复全绿（54 对 + peer 双查）。
-
-- [ ] **Step 1: 批量前缀**
-
-```bash
-perl -pi -e 's{("mirrorPath": ")(electron/|src-react/|prisma/)}{$1apps/tianshu-desktop/$2}g' packages/tianshu-core/scripts/drift-manifest.json
-```
-
-- [ ] **Step 2: 门禁验证**
-
-```bash
-npm run check:drift
-```
-
-Expected: 54 对全 `[OK]`（基线行数与容差不变——归一化 diff 与路径无关）；peer @langchain 双 OK；exit 0。
-
-```bash
-npx vitest run --root apps/tianshu-desktop tests/ai/drift-manifest.test.ts
-```
-
-（若 vitest CLI 文件参数形态不符，用 `cd apps/tianshu-desktop && npx vitest run tests/ai/drift-manifest.test.ts`。）Expected: PASS（manifest 结构 + 路径存在性断言绿）。
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add packages/tianshu-core/scripts/drift-manifest.json
-git commit -m "chore(drift): manifest 镜像路径批量加 apps/tianshu-desktop/ 前缀（54 对，基线不动）"
-```
+**裁定（2026-11-04 执行期）**：drift-manifest.test.ts 属 desktop vitest 套件，Task 2 的门禁依赖本任务的 manifest 前缀改动——原独立排序不可行。manifest 前缀（perl 幂等版）与 check:drift 门禁已并入 Task 2 Steps 6-8，单 commit 保绿。本任务不再单独派发；其验证口径（check:drift 全 OK + drift-manifest.test 绿）由 Task 2 门禁覆盖。
 
 ---
 

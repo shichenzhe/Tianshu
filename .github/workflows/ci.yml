@@ -28,12 +28,6 @@ jobs:
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      # postinstall 的 install-app-deps 会把 better-sqlite3 编成 Electron ABI(149)，
-      # vitest 跑在 node 22(ABI 127) 下加载即炸——Test 前按 node ABI 重装
-      # （prebuild-install 有 node-v127 全平台资产，秒级；routes 等真库用例依赖）
-      - name: Rebuild better-sqlite3 (node ABI)
-        if: matrix.os != 'windows-latest'
-        run: npm rebuild better-sqlite3
       # Windows 测试适配为独立批：存量 ~54 用例平台假设（chmod 600 权限位/
       # SIGTERM 退出语义/路径分隔符正则）在 win32 不可满足，属测试假设非产品
       # 缺陷；lint/typecheck/build 的 Windows 覆盖保留

@@ -15,6 +15,13 @@ export default defineConfig({
         import.meta.dirname,
         "../../packages/tianshu-core/src",
       ),
+      // 双 ABI 根治（2026-11-04-abi-dual-copy）：vitest 全依赖图（含
+      // @prisma/adapter-better-sqlite3 的 require）改吃 .native-node 的
+      // node-ABI 副本；主 node_modules 常驻 Electron ABI 供 dev/打包
+      "better-sqlite3": path.resolve(
+        __dirname,
+        ".native-node/node_modules/better-sqlite3",
+      ),
     },
   },
   // tsconfig 为 jsx: preserve（生产由 @vitejs/plugin-react 转换），vitest 独立

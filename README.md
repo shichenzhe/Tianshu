@@ -90,27 +90,30 @@
 
 ## 🧱 架构
 
+三端 `apps/*` 对称布局（桌面端 / 无头服务端 / 移动端），仓库根为纯 workspace 壳（workspaces + 委托脚本 + 工具链）：
+
 ```
-├── electron/               # 主进程
-│   ├── Application.ts      # 启动入口与 IPC 接线
-│   ├── commons/            # 日志 / Prisma / IPC 工具
-│   ├── infrastructure/     # 版本化 SQL 迁移脚本
-│   └── domains/            # 业务域：ai / project / option / user / app-settings /
-│                           #       security / server / server-face（entity + repo）
-├── src-react/              # 渲染进程
-│   ├── components/         # shadcn/ui 公共组件
-│   ├── domains/            # 业务域前端（api / views / components / store）
-│   ├── i18n/               # zh-CN / en-US 翻译
-│   └── routes/ lib/ styles/
-├── apps/                   # 子应用（git subtree 并入，npm workspaces 管理）
-│   ├── tianshu-server/     # 无头服务端（NestJS）
-│   └── tianshu-mobile/     # 移动控制端（Expo / React Native）
-├── packages/               # 三端共享包
-│   ├── tianshu-protocol/   # 协议与常量（纯类型，零运行时依赖）
-│   └── tianshu-core/       # 共享核心逻辑（chat 工具循环、blocks 序列化、E2E 加密）
-├── prisma/schema.prisma    # 数据模型
-├── tests/                  # Vitest 单测
-└── scripts/                # 脚手架脚本（init 等）
+├── apps/                             # 三端子应用（npm workspaces 管理；server / mobile 经 git subtree 并入）
+│   ├── tianshu-desktop/              # 桌面端（Electron + React）
+│   │   ├── electron/                 # 主进程
+│   │   │   ├── Application.ts        # 启动入口与 IPC 接线
+│   │   │   ├── commons/              # 日志 / Prisma / IPC 工具
+│   │   │   ├── infrastructure/       # 版本化 SQL 迁移脚本
+│   │   │   └── domains/              # 业务域：ai / project / option / user / app-settings /
+│   │   │                             #       security / server / server-face（entity + repo）
+│   │   ├── src-react/                # 渲染进程
+│   │   │   ├── components/           # shadcn/ui 公共组件
+│   │   │   ├── domains/              # 业务域前端（api / views / components / store）
+│   │   │   ├── i18n/                 # zh-CN / en-US 翻译
+│   │   │   └── routes/ lib/ styles/
+│   │   ├── prisma/schema.prisma      # 数据模型
+│   │   ├── tests/                    # Vitest 单测
+│   │   └── scripts/                  # 脚手架脚本（init 等）
+│   ├── tianshu-server/               # 无头服务端（NestJS）
+│   └── tianshu-mobile/               # 移动控制端（Expo / React Native）
+└── packages/                         # 三端共享包
+    ├── tianshu-protocol/             # 协议与常量（纯类型，零运行时依赖）
+    └── tianshu-core/                 # 共享核心逻辑（chat 工具循环、blocks 序列化、E2E 加密）
 ```
 
 **技术栈**：Electron 44 · React 19 · TypeScript 5.9 · Vite 8 · Prisma 7 + SQLite (better-sqlite3) · Tailwind CSS 4 · shadcn/ui + Radix · Zustand · React Query · React Router 7 · LangChain（@langchain/core + Anthropic / OpenAI / Gemini / Ollama）· MCP SDK · NestJS（无头端）· Vitest
@@ -149,7 +152,7 @@ npm run check:drift # 双仓漂移巡检（与 tianshu-server 仍双份文件的
 
 | 端 | 开发启动 | 编译 / 产物 |
 | --- | --- | --- |
-| 桌面端（根） | `npm run dev` | `npm run build`（Electron 安装包；tianshu-server 独立部署，不内嵌） |
+| 桌面端 `apps/tianshu-desktop` | `npm run dev` | `npm run build`（Electron 安装包；tianshu-server 独立部署，不内嵌） |
 | 无头服务端 `apps/tianshu-server` | `npm run start:dev -w apps/tianshu-server`（NestJS watch） | `npm run build -w apps/tianshu-server`（`dist/`；独立部署 `start:prod` / Dockerfile） |
 | 移动控制端 `apps/tianshu-mobile` | `npm run start -w apps/tianshu-mobile`（Expo；`android` / `ios` 子命令挂模拟器） | —（经 Expo / EAS 发布） |
 | 共享包 `packages/*` | 桌面端经 alias 直引源码，即改即用 | 改包后 `npm --prefix packages/tianshu-core run build` 重建 dist（server / mobile 消费） |

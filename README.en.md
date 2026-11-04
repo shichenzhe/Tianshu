@@ -90,27 +90,30 @@
 
 ## 🧱 Architecture
 
+Three apps sit symmetrically under `apps/*` (desktop / headless server / mobile), with the repo root as a pure workspace shell (workspaces + delegating scripts + toolchain):
+
 ```
-├── electron/               # Main process
-│   ├── Application.ts      # Bootstrap & IPC wiring
-│   ├── commons/            # Logging, Prisma, IPC utils
-│   ├── infrastructure/     # Versioned SQL migrations
-│   └── domains/            # Domains: ai / project / option / user / app-settings /
-│                           #       security / server / server-face (entity + repo)
-├── src-react/              # Renderer process
-│   ├── components/         # Shared UI components (shadcn/ui)
-│   ├── domains/            # Frontend domains (api / views / components / store)
-│   ├── i18n/               # zh-CN / en-US translations
-│   └── routes/ lib/ styles/
-├── apps/                   # Sub-apps (merged via git subtree, npm workspaces)
-│   ├── tianshu-server/     # Headless server (NestJS)
-│   └── tianshu-mobile/     # Mobile control app (Expo / React Native)
-├── packages/               # Packages shared across all three apps
-│   ├── tianshu-protocol/   # Protocol & constants (pure types, zero runtime deps)
-│   └── tianshu-core/       # Shared core logic (chat tool loop, blocks serialization, E2E crypto)
-├── prisma/schema.prisma    # Data model
-├── tests/                  # Unit tests (Vitest)
-└── scripts/                # Scaffold scripts (init, …)
+├── apps/                             # Three apps (npm workspaces; server / mobile merged via git subtree)
+│   ├── tianshu-desktop/              # Desktop app (Electron + React)
+│   │   ├── electron/                 # Main process
+│   │   │   ├── Application.ts        # Bootstrap & IPC wiring
+│   │   │   ├── commons/              # Logging, Prisma, IPC utils
+│   │   │   ├── infrastructure/       # Versioned SQL migrations
+│   │   │   └── domains/              # Domains: ai / project / option / user / app-settings /
+│   │   │                             #       security / server / server-face (entity + repo)
+│   │   ├── src-react/                # Renderer process
+│   │   │   ├── components/           # Shared UI components (shadcn/ui)
+│   │   │   ├── domains/              # Frontend domains (api / views / components / store)
+│   │   │   ├── i18n/                 # zh-CN / en-US translations
+│   │   │   └── routes/ lib/ styles/
+│   │   ├── prisma/schema.prisma      # Data model
+│   │   ├── tests/                    # Unit tests (Vitest)
+│   │   └── scripts/                  # Scaffold scripts (init, …)
+│   ├── tianshu-server/               # Headless server (NestJS)
+│   └── tianshu-mobile/               # Mobile control app (Expo / React Native)
+└── packages/                         # Packages shared across all three apps
+    ├── tianshu-protocol/             # Protocol & constants (pure types, zero runtime deps)
+    └── tianshu-core/                 # Shared core logic (chat tool loop, blocks serialization, E2E crypto)
 ```
 
 **Tech stack**: Electron 44 · React 19 · TypeScript 5.9 · Vite 8 · Prisma 7 + SQLite (better-sqlite3) · Tailwind CSS 4 · shadcn/ui + Radix · Zustand · React Query · React Router 7 · LangChain (@langchain/core + Anthropic / OpenAI / Gemini / Ollama) · MCP SDK · NestJS (headless server) · Vitest
@@ -149,7 +152,7 @@ Dev & build for the three apps and shared packages (run from the repo root; `-w`
 
 | App | Dev | Build / output |
 | --- | --- | --- |
-| Desktop (root) | `npm run dev` | `npm run build` (Electron installer; tianshu-server deploys independently — not embedded) |
+| Desktop `apps/tianshu-desktop` | `npm run dev` | `npm run build` (Electron installer; tianshu-server deploys independently — not embedded) |
 | Headless server `apps/tianshu-server` | `npm run start:dev -w apps/tianshu-server` (NestJS watch) | `npm run build -w apps/tianshu-server` (`dist/`; deploy standalone via `start:prod` / Dockerfile) |
 | Mobile control app `apps/tianshu-mobile` | `npm run start -w apps/tianshu-mobile` (Expo; `android` / `ios` subcommands attach emulators) | — (ship via Expo / EAS) |
 | Shared packages `packages/*` | Desktop reads source via aliases — no build needed | After changes, `npm --prefix packages/tianshu-core run build` rebuilds dist (consumed by server / mobile) |

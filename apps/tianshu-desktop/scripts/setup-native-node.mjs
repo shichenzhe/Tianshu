@@ -55,12 +55,14 @@ execFileSync(
 );
 
 // 装配自检：副本必须在系统 node 下可加载（node-ABI）；失败即非零退出，
-// 让 postinstall 的 warn 段与 setup:native-node 修复入口接手
+// 让 postinstall 的 warn 段与 setup:native-node 修复入口接手。必须构造
+// 实例才有效——v12 的 addon 在 Database 构造时才懒加载，裸 require 对
+// 「.node 缺失/错 ABI」都会假绿
 execFileSync(
   "node",
   [
     "-e",
-    `require(${JSON.stringify(path.join(targetDir, "node_modules", "better-sqlite3"))}); console.log("[setup-native-node] 副本 node-ABI 自检通过")`,
+    `require(${JSON.stringify(path.join(targetDir, "node_modules", "better-sqlite3"))})(":memory:"); console.log("[setup-native-node] 副本 node-ABI 自检通过")`,
   ],
   { stdio: "inherit" },
 );

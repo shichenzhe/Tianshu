@@ -119,13 +119,16 @@ execFileSync(
   { stdio: "inherit", cwd: repoRoot },
 );
 
-// 装配自检：副本必须在系统 node 下可加载（node-ABI）；失败即非零退出，
-// 让 postinstall 的 warn 段与 setup:native-node 修复入口接手
+// 装配自检：副本必须在系统 node 下**构造实例**成功（v12 addon 在 Database
+// 构造时懒加载，裸 require 对缺 .node/错 ABI 均假绿——终审 R1 教训）；
+// 失败即非零退出，让 postinstall 的 warn 段与 setup:native-node 修复入口接手
 execFileSync("node", [
   "-e",
-  `require(${JSON.stringify(path.join(targetDir, "node_modules", "better-sqlite3"))}); console.log("[setup-native-node] 副本 node-ABI 自检通过")`,
+  `require(${JSON.stringify(path.join(targetDir, "node_modules", "better-sqlite3"))})(":memory:"); console.log("[setup-native-node] 副本 node-ABI 自检通过")`,
 ]);
 ```
+
+**执行期勘误（入册）**：①自检原文字面为裸 require，因 v12 懒加载防不住坏副本态，713ef9c0 已改构造实例（上文已同步）；②Step 5 配对证明同样须构造实例（bare require 主树也 OK）；③终审 C1：vitest 模块域 `require()` 不经 vite alias——测试内裸 require better-sqlite3 的探测会静默 skip，d205663f 已把两处探测改 `await import`；④I1 落地为三落点探测（win 同层/POSIX shim realpath/lib），单公式版在 homebrew 布局 ENOENT。
 
 **ci.yml 删除块（old，整块删）：**
 

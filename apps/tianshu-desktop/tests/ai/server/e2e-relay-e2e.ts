@@ -102,7 +102,7 @@ import {
   signAccessJwt,
   type AccessClaims,
   type AccessQuota,
-} from "../../../apps/tianshu-server/src/relay/jwt-eddsa";
+} from "../../../../../apps/tianshu-server/src/relay/jwt-eddsa";
 import { openSecret } from "../../../electron/domains/security/secret-field";
 import { RelayTransport } from "../../../electron/domains/server/relay-transport";
 import type {

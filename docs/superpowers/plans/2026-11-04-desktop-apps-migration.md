@@ -482,23 +482,25 @@ import { MIRROR_ROOT as mirrorRoot } from "../lib/paths";
 
 `tests/ai/server/e2e-graph-search-pg.ts` 无需改（`MIRROR_ROOT` 经 `./e2e-helpers.ts` import；改完 grep 确认：`grep -n "MIRROR_ROOT" tests/ai/server/e2e-graph-search-pg.ts` 应显示来自 e2e-helpers 的 import）。
 
-- [ ] **Step 4: 批量修相对导入层数（在 apps/tianshu-desktop 下执行；三层级先行）**
+- [ ] **Step 4: 批量修相对导入层数（在 apps/tianshu-desktop 下执行；引号锚定）**
+
+引号锚定（`"` 前缀确保只命中「恰好 N 层」的导入——≥N 层的已修路径不含该锚定形态，故顺序无关、可重入）：
 
 ```bash
 cd apps/tianshu-desktop
-perl -pi -e 's{\.\./\.\./\.\./packages/}{../../../../../packages/}g' $(grep -rl '\.\./\.\./\.\./packages/' tests/)
-perl -pi -e 's{\.\./\.\./packages/}{../../../../packages/}g' $(grep -rl '\.\./\.\./packages/' tests/)
-perl -pi -e 's{\.\./\.\./docs/}{../../../../docs/}g' $(grep -rl '\.\./\.\./docs/' tests/)
+perl -pi -e 's{"\.\./\.\./\.\./packages/}{"../../../../../packages/}g' $(grep -rl '"\.\./\.\./\.\./packages/' tests/)
+perl -pi -e 's{"\.\./\.\./packages/}{"../../../../packages/}g' $(grep -rl '"\.\./\.\./packages/' tests/)
+perl -pi -e 's{"\.\./\.\./docs/}{"../../../../docs/}g' $(grep -rl '"\.\./\.\./docs/' tests/)
 cd ../..
 ```
 
-- [ ] **Step 5: 残留核验**
+- [ ] **Step 5: 残留核验（rtk 环境下结论以原生命令复核为准）**
 
 ```bash
-grep -rnE '\.\./\.\./(packages|docs)/' apps/tianshu-desktop/tests/ || echo "无残留"
+grep -rnE '(^|[^./])\.\./\.\./(packages|docs)/' apps/tianshu-desktop/tests/ || echo "无残留"
 ```
 
-Expected: `无残留`（四/五层级路径不含两层级子串，不会被误报）。
+Expected: `无残留`（`[^./]` 前置排除四/五层已修路径的尾段命中——裸 `\.\./\.\./packages/` 会匹配一切 ≥2 层路径，属自败门禁）。
 
 - [ ] **Step 6: 门禁验证**
 

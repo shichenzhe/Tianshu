@@ -39,6 +39,15 @@ const mainBinaryPath = path.join(
 );
 const rootRequire = createRequire(path.join(repoRoot, "package.json"));
 
+/** 从根解析依赖（createRequire，防依赖嵌套化后硬编码路径失配）；失败返回 null */
+const resolveFromRoot = (request) => {
+  try {
+    return rootRequire.resolve(request);
+  } catch {
+    return null;
+  }
+};
+
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const log = (message) => console.log(`${TAG} ${message}`);
 
@@ -96,7 +105,9 @@ const stage1 = () => {
 
   // 验：v12 addon 在构造时才懒加载，必须 new Database 才探得出 ABI（裸
   // require 对缺 .node/错 ABI 均假绿）。报文中第一处 NODE_MODULE_VERSION 数字
-  // 即二进制目标 ABI。
+  // 即二进制目标 ABI。前提假设：系统 node ABI ≠ electron ABI（今日 147≠149）；
+  // 未来若撞号，「系统 node 可加载」将不再能区分 node-ABI，本探针会恒判不健康
+  // 并走瀑布——届时需引入 electron 本体探针替代判分（防排查困惑，先行注记）。
   const probeMain = () => {
     const res = spawnSync(
       process.execPath,
@@ -187,8 +198,15 @@ const stage1 = () => {
   };
 
   // 修 c：源码编译（A1 实证形态：cwd=desktop + -o better-sqlite3 + build/ 先清）
-  const healFromSource = () => {
-    const rebuildCli = path.join(
+  const resolveRebuildCli = () => {
+    const direct = resolveFromRoot("@electron/rebuild/lib/cli.js");
+    if (direct) return direct;
+    // 包 exports 图只透出 ./lib/main.js——经包入口定位同层 cli.js（bin 即 lib/cli.js）
+    const entry = resolveFromRoot("@electron/rebuild");
+    const sibling = entry && path.join(path.dirname(entry), "cli.js");
+    if (sibling && fs.existsSync(sibling)) return sibling;
+    // 终极降级：按根 node_modules 布局直拼，防解析全面失效时段 c 静默跳级
+    const legacy = path.join(
       repoRoot,
       "node_modules",
       "@electron",
@@ -196,8 +214,14 @@ const stage1 = () => {
       "lib",
       "cli.js",
     );
-    if (!fs.existsSync(rebuildCli)) {
-      log(`未找到 @electron/rebuild（${rebuildCli}），无法源码编译`);
+    return fs.existsSync(legacy) ? legacy : null;
+  };
+  const healFromSource = () => {
+    const rebuildCli = resolveRebuildCli();
+    if (!rebuildCli) {
+      log(
+        "未找到 @electron/rebuild（createRequire 解析与降级直拼均失败），无法源码编译",
+      );
       return false;
     }
     fs.rmSync(path.join(mainSqliteDir, "build"), {
@@ -292,33 +316,74 @@ const stage2 = () => {
 const stage3 = () => {
   const name = "段3 mobile 本地 nativewind";
   const mobileNodeModules = path.join(mobileDir, "node_modules") + path.sep;
+  const declaredRange =
+    (readJson(path.join(mobileDir, "package.json")).dependencies || {})
+      .nativewind || "*";
   // 验必须在子进程里 resolve：同进程二次 resolve 会命中 Module._pathCache，
-  // 修复前「解析到根 hoisted 副本」的结果会把修复后的复验也污染成本地缺失
+  // 修复前「解析到根 hoisted 副本」的结果会把修复后的复验也污染成本地缺失。
+  // nativewind 与 react-native-css-interop 双探——恢复脚本头注：两者实体必须
+  // 同在 mobile 本地树，缺一即真机 99.9% 卡死
   const resolveLocal = () => {
     const res = spawnSync(
       process.execPath,
       [
         "-e",
-        `try { console.log(require.resolve(${JSON.stringify("nativewind/package.json")}, { paths: [${JSON.stringify(mobileDir)}] })); } catch { console.log("UNRESOLVED"); }`,
+        `for (const m of ["nativewind", "react-native-css-interop"]) { try { console.log(m + "=" + require.resolve(m + "/package.json", { paths: [${JSON.stringify(mobileDir)}] })); } catch { console.log(m + "=UNRESOLVED"); } }`,
       ],
       { encoding: "utf8", timeout: 60000 },
     );
-    const resolved = (res.stdout || "").trim();
-    if (!resolved || resolved === "UNRESOLVED") return null;
-    return resolved.startsWith(mobileNodeModules) ? resolved : null;
+    const pick = (mod) => {
+      const line = (res.stdout || "")
+        .split("\n")
+        .find((l) => l.startsWith(`${mod}=`));
+      const resolved = line ? line.slice(mod.length + 1).trim() : "";
+      if (!resolved || resolved === "UNRESOLVED") return null;
+      return resolved.startsWith(mobileNodeModules) ? resolved : null;
+    };
+    return {
+      nativewind: pick("nativewind"),
+      cssInterop: pick("react-native-css-interop"),
+    };
   };
-  if (resolveLocal()) {
+  // semver 陈旧校验（终审 I-1）：还原旧链无条件跑 restore 时的版本语义——本地
+  // 幸存副本不满足声明 range（升级依赖但副本幸存场景）也算不健康，交恢复脚本
+  // 重拉；判定异常按脚本自身口径（2>/dev/null || yes）放行不拦
+  const satisfiesDeclared = (resolved) => {
+    try {
+      return rootRequire("semver").satisfies(
+        readJson(resolved).version,
+        declaredRange,
+      );
+    } catch {
+      return true;
+    }
+  };
+  const healthy = (local) =>
+    !!local.nativewind &&
+    !!local.cssInterop &&
+    satisfiesDeclared(local.nativewind);
+  const describeGap = (local) => {
+    if (!local.nativewind) return "nativewind 未解析到本地树";
+    if (!local.cssInterop) return "react-native-css-interop 未解析到本地树";
+    if (!satisfiesDeclared(local.nativewind)) {
+      return `本地 nativewind ${readJson(local.nativewind).version} 不满足声明 ${declaredRange}`;
+    }
+    return "";
+  };
+  const local = resolveLocal();
+  if (healthy(local)) {
     return {
       name,
       status: "OK",
-      note: "本地树在位（require.resolve 落 mobile node_modules），未动",
+      note: "本地树在位（nativewind+css-interop 双探过且版本满足声明），未动",
     };
   }
+  log(`验：不健康——${describeGap(local)}`);
   if (process.platform === "win32") {
     return {
       name,
       status: "WARN",
-      note: "本地树缺失且 win32 无 bash 恢复脚本——手动跑 restore-local-nativewind 的等价步骤",
+      note: "本地树缺失/陈旧且 win32 无 bash 恢复脚本——手动跑 restore-local-nativewind 的等价步骤",
     };
   }
   const res = spawnSync(
@@ -334,18 +399,18 @@ const stage3 = () => {
     ],
     { stdio: "inherit" },
   );
-  const resolved = resolveLocal();
-  if (res.status === 0 && resolved) {
+  const after = resolveLocal();
+  if (res.status === 0 && healthy(after)) {
     return {
       name,
       status: "OK",
-      note: `restore 后已归位：${path.dirname(path.dirname(resolved))}`,
+      note: `restore 后已归位：${path.dirname(path.dirname(after.nativewind))}（nativewind ${readJson(after.nativewind).version}）`,
     };
   }
   return {
     name,
     status: "FAIL",
-    note: `恢复后仍不健康（脚本退出码 ${res.status}，解析${resolved ? "通过" : "未落在本地树"}）`,
+    note: `恢复后仍不健康（脚本退出码 ${res.status}，${describeGap(after) || "解析未落在本地树"}）`,
   };
 };
 

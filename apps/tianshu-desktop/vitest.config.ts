@@ -19,7 +19,7 @@ export default defineConfig({
       // @prisma/adapter-better-sqlite3 的 require）改吃 .native-node 的
       // node-ABI 副本；主 node_modules 常驻 Electron ABI 供 dev/打包
       "better-sqlite3": path.resolve(
-        __dirname,
+        import.meta.dirname,
         ".native-node/node_modules/better-sqlite3",
       ),
     },

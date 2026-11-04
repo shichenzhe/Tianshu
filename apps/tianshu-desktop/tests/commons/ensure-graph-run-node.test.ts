@@ -2,8 +2,8 @@
  * 图运行节点详情表（图执行留痕去会话化 2026-10-28）：ensureGraphRunNodeTable
  * 启动幂等建表 + runId 索引（不走 v1 快照，同 artifact/monitor 先例——指纹
  * 变化会触发旧库 drop 重建）。
- * 真库用例在本机不可行（better-sqlite3 为 Electron ABI，Node 下加载即崩），
- * 按 brief 预案替身：mock $executeRawUnsafe 断言两跑各发两条幂等 DDL 且不抛。
+ * 真库经 .native-node node-ABI 副本可跑（2026-11-04 双 ABI 根治）；本文件
+ * 按 brief 预案沿用替身：mock $executeRawUnsafe 断言两跑各发两条幂等 DDL 且不抛。
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

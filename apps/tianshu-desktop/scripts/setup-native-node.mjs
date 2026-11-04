@@ -14,7 +14,33 @@ import { fileURLToPath } from "node:url";
 const desktopDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const repoRoot = path.resolve(desktopDir, "..", "..");
 const targetDir = path.join(desktopDir, ".native-node");
-const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
+
+// Windows 的 npm 是 npm.cmd——CVE-2024-27980 收紧后无 shell spawn 直接
+// EINVAL（.cmd 三元是死码），统一改经 node 自身跑 npm-cli.js。按宿主布局
+// 探测：官方 win 包 node_modules 与 node.exe 同层；POSIX shim（homebrew/
+// nvm）bin 下的 npm 软链 realpath 直达 cli；official POSIX 包在
+// ../lib/node_modules
+const resolveNpmCli = () => {
+  const nodeBin = path.dirname(fs.realpathSync(process.execPath));
+  const direct = path.join(nodeBin, "node_modules", "npm", "bin", "npm-cli.js");
+  if (fs.existsSync(direct)) return direct;
+  const shim = path.join(nodeBin, "npm");
+  if (fs.existsSync(shim)) {
+    const real = fs.realpathSync(shim);
+    if (path.basename(real) === "npm-cli.js") return real;
+  }
+  const posix = path.join(
+    nodeBin,
+    "..",
+    "lib",
+    "node_modules",
+    "npm",
+    "bin",
+    "npm-cli.js",
+  );
+  if (fs.existsSync(posix)) return posix;
+  throw new Error("未能定位 npm-cli.js——请检查 node 安装布局");
+};
 const mainVersion = JSON.parse(
   fs.readFileSync(
     path.join(repoRoot, "node_modules", "better-sqlite3", "package.json"),
@@ -41,8 +67,9 @@ fs.writeFileSync(
 
 console.log(`[setup-native-node] better-sqlite3@${mainVersion} → ${targetDir}`);
 execFileSync(
-  npmCmd,
+  process.execPath,
   [
+    resolveNpmCli(),
     "install",
     "--prefix",
     targetDir,

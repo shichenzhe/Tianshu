@@ -1,10 +1,10 @@
 // tests/ai/automation-retention.test.ts
 // parseRunRetention 纯函数全边界 + trimAutomationRuns SQL 行为验证。
 //
-// 真库直连在 vitest 不可行：better-sqlite3 原生二进制按 Electron ABI 编译
-// （NODE_MODULE_VERSION 149），vitest 跑在系统 Node（147）require 即崩
-// （monitor-table.test.ts 因此 mock 掉 adapter，全仓无一真库单测先例）。
-// 改用 node:sqlite（Node 内置零原生依赖）构建 RetentionDb 测试替身：
+// 真库经 .native-node node-ABI 副本可跑（2026-11-04 双 ABI 根治；旧状态：
+// 原生二进制按 Electron ABI 编译，vitest 跑系统 Node require 即崩，彼时
+// 全仓无一真库单测先例）。本文件沿用 node:sqlite（Node 内置零原生依赖）
+// 构建的 RetentionDb 测试替身：
 // $executeRawUnsafe 原样执行被测模块产出的 SQL——窗口函数、taskId NULL
 // 分组、参数绑定均由真 SQLite 引擎验证；updateMany/deleteMany 按
 // trimAutomationRuns 实际使用的 where 形状做参数化翻译。

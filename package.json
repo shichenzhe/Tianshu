@@ -28,7 +28,8 @@
     "check:drift": "node packages/tianshu-core/scripts/check-drift.mjs",
     "init": "npm run init -w apps/tianshu-desktop",
     "setup:native-node": "node apps/tianshu-desktop/scripts/setup-native-node.mjs",
-    "postinstall": "npm run rebuild:native -w apps/tianshu-desktop && (bash apps/tianshu-mobile/scripts/restore-local-nativewind.sh || echo '[warn] nativewind 本地树恢复失败——下次移动端真机若卡 99.9%,手动重跑该脚本') && (node apps/tianshu-desktop/scripts/setup-native-node.mjs || echo '[warn] node-ABI 副本装配失败——真库测试前先跑 npm run setup:native-node')"
+    "setup:native": "node apps/tianshu-desktop/scripts/setup-native-all.mjs",
+    "postinstall": "npm run rebuild:native -w apps/tianshu-desktop && node apps/tianshu-desktop/scripts/setup-native-all.mjs || echo '[warn] 原生自愈未全成——跑 npm run setup:native 看分级报告'"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

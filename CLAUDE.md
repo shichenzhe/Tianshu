@@ -258,3 +258,4 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 - 双 ABI 常备（2026-11-04 双 ABI 根治）：主 node_modules 的 better-sqlite3 常驻 Electron ABI 供 dev/打包；`apps/tianshu-desktop/.native-node/` 装同版本 node-ABI 副本供 vitest 经 alias 消费
 - **勿再手动 `npm rebuild better-sqlite3` 来回切换 ABI**——两端互不覆盖，rebuild 反而破坏另一端
 - 副本装配随根 postinstall 自动跑；失败（或缺失）时跑 `npm run setup:native-node` 修复后再跑真库测试
+- 原生自愈（2026-11-04）：postinstall 末段 `setup:native` 三件套一次验齐/修好（主树 Electron ABI 瀑布修：冷缓存→本机 app asar→源码编译；node-ABI 副本；mobile nativewind 本地树），任一失败非零退出+分级报告，手动修复入口 `npm run setup:native`

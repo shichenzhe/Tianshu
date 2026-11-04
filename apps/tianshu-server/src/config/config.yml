@@ -131,6 +131,17 @@ tianshu:
   # 是否启用与桌面端的握手
   handshake: true
 
+  # 图编排 HTTP 节点守卫策略（逃生口 2026-11-04；缺省严拦=安全审查
+  # S5/F1 语义；协议/metadata/链路本地为硬边界不可豁免）
+  graph:
+    # 整体放开内网访问（环回/私网/CGNAT + 域名解析到内网；内网部署可一键）
+    allowPrivateNetwork: false
+    # 显式放行清单：精确 IP / 精确域名 / IPv4 CIDR
+    # allowlist:
+    #   - '127.0.0.1'
+    #   - 'jira6.app.hd123.cn'
+    #   - '192.168.1.0/24'
+
 # relay-admin 控制平面配置（多租户批 spec 2026-11-03 §6/§9；仅 relay-admin
 # 独立入口消费，主应用忽略本段）。env RA_RELAY_BASE_URL / RA_INTERNAL_SECRET
 # 优先于本段（JWT_SECRET 同款纪律）

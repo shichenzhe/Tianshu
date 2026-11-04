@@ -1159,8 +1159,12 @@ async function fetchOnce(
   }
   // 安全批 S5：URL 守卫（协议白名单 + 环回/私网/链路本地字面 IP +
   // metadata 段）——节点 URL 可被 webhook 输入/LLM 输出模板化，不设守卫
-  // 即完整 SSRF read-back；域名形态放行（DNS 解析级分类属后续深度）
-  const urlError = await graphHttpUrlErrorDns(url);
+  // 即完整 SSRF read-back。2026-11-04 裁定：桌面端=用户本人机器，内网
+  // 全权（allowPrivateNetwork 放行；协议/metadata/链路本地硬边界仍在，
+  // server 部署态经 config.yml tianshu.graph 段显式登记）
+  const urlError = await graphHttpUrlErrorDns(url, {
+    allowPrivateNetwork: true,
+  });
   if (urlError !== null) {
     throw new GraphNodeFailure(
       node.id,

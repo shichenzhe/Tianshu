@@ -448,10 +448,11 @@ export const MIRROR_ROOT = path.resolve(
 
 - [ ] **Step 3: 五处 MIRROR_ROOT 手算收敛**
 
-`tests/ai/server/e2e-helpers.ts`（行 42，原 `export const MIRROR_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");`）改为再导出：
+`tests/ai/server/e2e-helpers.ts`（行 42，原 `export const MIRROR_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");`）改为 import + 再导出（**纯 re-export 不建本地绑定**，:45 的 `path.resolve(MIRROR_ROOT, ...)` 消费点会 ReferenceError，必须两行式）：
 
 ```ts
-export { MIRROR_ROOT } from "../../lib/paths.ts";
+import { MIRROR_ROOT } from "../../lib/paths.ts";
+export { MIRROR_ROOT };
 ```
 
 （e2e 约定 node strip-types 直跑，相对导入带 `.ts` 扩展名。）

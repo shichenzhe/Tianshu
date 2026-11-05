@@ -18,6 +18,10 @@ export interface LlmCallEventInput {
   inputTokens: number;
   outputTokens: number;
   durationMs?: number | null;
+  /** 元信息 JSON 串（专家团可观测性批 2026-11-05）：成员补全行携带
+   *  {kind:"member", member, round}；列由桌面 ensureMonitorTables 幂等
+   *  补建，server 侧 schema 无此列不传（可选字段缺席不落） */
+  meta?: string;
 }
 
 export interface ToolCallEventInput {

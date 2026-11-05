@@ -14,7 +14,11 @@ import {
   ChatRunnerService,
   resolveDataRoot,
 } from 'src/core/chat-runner.service';
-import type { ChatStreamChunk, SessionReadResult } from '@tianshu/protocol';
+import type {
+  ChatStreamChunk,
+  SessionReadResult,
+  SessionUsageBreakdown,
+} from '@tianshu/protocol';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { SessionRepository, SessionSummaryRecord } from './session.repository';
@@ -374,16 +378,9 @@ export class SessionService {
     }
   }
 
-  /** 上下文用量拆解（session/usage；未配模型/会话缺失返回 null） */
-  async usage(sessionId: number): Promise<{
-    system: number;
-    tools: number;
-    messages: number;
-    mcp: number;
-    skills: number;
-    total: number;
-    contextWindow: number | null;
-  } | null> {
+  /** 上下文用量拆解（session/usage；未配模型/会话缺失返回 null）——
+   *  协议单源 @tianshu/protocol（2026-11-05 起含截断提示/成员调度可选字段） */
+  async usage(sessionId: number): Promise<SessionUsageBreakdown | null> {
     const session = await this.sessionRepository.findById(
       sessionId,
       COMPANION_USER_ID,

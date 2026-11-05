@@ -58,6 +58,7 @@ export type LlmCallEventMinAggregateOutputType = {
   inputTokens: number | null
   outputTokens: number | null
   durationMs: number | null
+  meta: string | null
   createdAt: Date | null
 }
 
@@ -71,6 +72,7 @@ export type LlmCallEventMaxAggregateOutputType = {
   inputTokens: number | null
   outputTokens: number | null
   durationMs: number | null
+  meta: string | null
   createdAt: Date | null
 }
 
@@ -84,6 +86,7 @@ export type LlmCallEventCountAggregateOutputType = {
   inputTokens: number
   outputTokens: number
   durationMs: number
+  meta: number
   createdAt: number
   _all: number
 }
@@ -121,6 +124,7 @@ export type LlmCallEventMinAggregateInputType = {
   inputTokens?: true
   outputTokens?: true
   durationMs?: true
+  meta?: true
   createdAt?: true
 }
 
@@ -134,6 +138,7 @@ export type LlmCallEventMaxAggregateInputType = {
   inputTokens?: true
   outputTokens?: true
   durationMs?: true
+  meta?: true
   createdAt?: true
 }
 
@@ -147,6 +152,7 @@ export type LlmCallEventCountAggregateInputType = {
   inputTokens?: true
   outputTokens?: true
   durationMs?: true
+  meta?: true
   createdAt?: true
   _all?: true
 }
@@ -247,6 +253,7 @@ export type LlmCallEventGroupByOutputType = {
   inputTokens: number
   outputTokens: number
   durationMs: number | null
+  meta: string | null
   createdAt: Date
   _count: LlmCallEventCountAggregateOutputType | null
   _avg: LlmCallEventAvgAggregateOutputType | null
@@ -283,6 +290,7 @@ export type llmCallEventWhereInput = {
   inputTokens?: Prisma.IntFilter<"llmCallEvent"> | number
   outputTokens?: Prisma.IntFilter<"llmCallEvent"> | number
   durationMs?: Prisma.IntNullableFilter<"llmCallEvent"> | number | null
+  meta?: Prisma.StringNullableFilter<"llmCallEvent"> | string | null
   createdAt?: Prisma.DateTimeFilter<"llmCallEvent"> | Date | string
 }
 
@@ -296,6 +304,7 @@ export type llmCallEventOrderByWithRelationInput = {
   inputTokens?: Prisma.SortOrder
   outputTokens?: Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
+  meta?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -312,6 +321,7 @@ export type llmCallEventWhereUniqueInput = Prisma.AtLeast<{
   inputTokens?: Prisma.IntFilter<"llmCallEvent"> | number
   outputTokens?: Prisma.IntFilter<"llmCallEvent"> | number
   durationMs?: Prisma.IntNullableFilter<"llmCallEvent"> | number | null
+  meta?: Prisma.StringNullableFilter<"llmCallEvent"> | string | null
   createdAt?: Prisma.DateTimeFilter<"llmCallEvent"> | Date | string
 }, "id">
 
@@ -325,6 +335,7 @@ export type llmCallEventOrderByWithAggregationInput = {
   inputTokens?: Prisma.SortOrder
   outputTokens?: Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
+  meta?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.llmCallEventCountOrderByAggregateInput
   _avg?: Prisma.llmCallEventAvgOrderByAggregateInput
@@ -346,6 +357,7 @@ export type llmCallEventScalarWhereWithAggregatesInput = {
   inputTokens?: Prisma.IntWithAggregatesFilter<"llmCallEvent"> | number
   outputTokens?: Prisma.IntWithAggregatesFilter<"llmCallEvent"> | number
   durationMs?: Prisma.IntNullableWithAggregatesFilter<"llmCallEvent"> | number | null
+  meta?: Prisma.StringNullableWithAggregatesFilter<"llmCallEvent"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"llmCallEvent"> | Date | string
 }
 
@@ -358,6 +370,7 @@ export type llmCallEventCreateInput = {
   inputTokens: number
   outputTokens: number
   durationMs?: number | null
+  meta?: string | null
   createdAt?: Date | string
 }
 
@@ -371,6 +384,7 @@ export type llmCallEventUncheckedCreateInput = {
   inputTokens: number
   outputTokens: number
   durationMs?: number | null
+  meta?: string | null
   createdAt?: Date | string
 }
 
@@ -383,6 +397,7 @@ export type llmCallEventUpdateInput = {
   inputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   outputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  meta?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -396,6 +411,7 @@ export type llmCallEventUncheckedUpdateInput = {
   inputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   outputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  meta?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -409,6 +425,7 @@ export type llmCallEventCreateManyInput = {
   inputTokens: number
   outputTokens: number
   durationMs?: number | null
+  meta?: string | null
   createdAt?: Date | string
 }
 
@@ -421,6 +438,7 @@ export type llmCallEventUpdateManyMutationInput = {
   inputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   outputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  meta?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -434,6 +452,7 @@ export type llmCallEventUncheckedUpdateManyInput = {
   inputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   outputTokens?: Prisma.IntFieldUpdateOperationsInput | number
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  meta?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -447,6 +466,7 @@ export type llmCallEventCountOrderByAggregateInput = {
   inputTokens?: Prisma.SortOrder
   outputTokens?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
+  meta?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -471,6 +491,7 @@ export type llmCallEventMaxOrderByAggregateInput = {
   inputTokens?: Prisma.SortOrder
   outputTokens?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
+  meta?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -484,6 +505,7 @@ export type llmCallEventMinOrderByAggregateInput = {
   inputTokens?: Prisma.SortOrder
   outputTokens?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
+  meta?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -510,6 +532,7 @@ export type llmCallEventSelect<ExtArgs extends runtime.Types.Extensions.Internal
   inputTokens?: boolean
   outputTokens?: boolean
   durationMs?: boolean
+  meta?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["llmCallEvent"]>
 
@@ -523,6 +546,7 @@ export type llmCallEventSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   inputTokens?: boolean
   outputTokens?: boolean
   durationMs?: boolean
+  meta?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["llmCallEvent"]>
 
@@ -536,6 +560,7 @@ export type llmCallEventSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.
   inputTokens?: boolean
   outputTokens?: boolean
   durationMs?: boolean
+  meta?: boolean
   createdAt?: boolean
 }, ExtArgs["result"]["llmCallEvent"]>
 
@@ -549,10 +574,11 @@ export type llmCallEventSelectScalar = {
   inputTokens?: boolean
   outputTokens?: boolean
   durationMs?: boolean
+  meta?: boolean
   createdAt?: boolean
 }
 
-export type llmCallEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "scene" | "modelId" | "sessionId" | "graphId" | "inputTokens" | "outputTokens" | "durationMs" | "createdAt", ExtArgs["result"]["llmCallEvent"]>
+export type llmCallEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "scene" | "modelId" | "sessionId" | "graphId" | "inputTokens" | "outputTokens" | "durationMs" | "meta" | "createdAt", ExtArgs["result"]["llmCallEvent"]>
 
 export type $llmCallEventPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "llmCallEvent"
@@ -567,6 +593,7 @@ export type $llmCallEventPayload<ExtArgs extends runtime.Types.Extensions.Intern
     inputTokens: number
     outputTokens: number
     durationMs: number | null
+    meta: string | null
     createdAt: Date
   }, ExtArgs["result"]["llmCallEvent"]>
   composites: {}
@@ -1000,6 +1027,7 @@ export interface llmCallEventFieldRefs {
   readonly inputTokens: Prisma.FieldRef<"llmCallEvent", 'Int'>
   readonly outputTokens: Prisma.FieldRef<"llmCallEvent", 'Int'>
   readonly durationMs: Prisma.FieldRef<"llmCallEvent", 'Int'>
+  readonly meta: Prisma.FieldRef<"llmCallEvent", 'String'>
   readonly createdAt: Prisma.FieldRef<"llmCallEvent", 'DateTime'>
 }
     

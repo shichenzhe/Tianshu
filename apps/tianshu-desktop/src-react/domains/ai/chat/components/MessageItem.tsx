@@ -39,6 +39,7 @@ import TableViewCard from "./TableViewCard";
 import SummaryCard from "./SummaryCard";
 import ChartViewCard from "./ChartViewCard";
 import ConfirmFormCard from "./ConfirmFormCard";
+import MemberReportCard from "./MemberReportCard";
 import PseudoToolCallNotice from "./PseudoToolCallNotice";
 import { MessageImage } from "./MessageImage";
 import MessageFileRef from "./MessageFileRef";
@@ -510,6 +511,11 @@ function MessageItemImpl({
             defaultOpen={streaming}
           />
         )}
+        {/* 成员报告卡（memberReport 块分流，专家团可观测性批）：面板与
+            最终回答之间的正文位折叠卡——多轮 dispatch 的成员观点可审计 */}
+        {grouped.memberReports.map((report, index) => (
+          <MemberReportCard key={`member-report-${index}`} item={report} />
+        ))}
         {grouped.texts.map((block, index) => {
           // 块级命中序号 = 消息序号基 + 块前累计（同一份位置级集合前缀和）
           const blockIdx = textBlockIdx.get(block);

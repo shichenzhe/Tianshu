@@ -112,6 +112,31 @@ describe.each(IMPLS)(
       ).toEqual([]);
     });
 
+    it("memberReport 块往返一致（专家团可观测性批新块型）", () => {
+      const blocks = [
+        {
+          type: "memberReport",
+          memberName: "顾大局",
+          task: "看宏观",
+          content: "宏观结论",
+          round: 1,
+        },
+      ];
+      expect(parseBlocks(serializeBlocks(blocks))).toEqual(blocks);
+    });
+
+    it("memberReport 块缺必备字段或类型不符被过滤", () => {
+      expect(parseBlocks('[{"type":"memberReport"}]')).toEqual([]);
+      expect(
+        parseBlocks('[{"type":"memberReport","memberName":"顾大局"}]'),
+      ).toEqual([]);
+      expect(
+        parseBlocks(
+          '[{"type":"memberReport","memberName":"顾大局","task":"t","content":"c","round":"1"}]',
+        ),
+      ).toEqual([]);
+    });
+
     it("混合数组仅保留合法块", () => {
       const json = JSON.stringify([
         { type: "text", text: "ok" },
@@ -325,5 +350,14 @@ describe("blocksToModelMessages image 块转换（主进程实现，LangChain �
       name: "read",
       content: "内容",
     });
+  });
+
+  it("memberReport 块不回喂模型（dispatch tool_call 的 output 已携带同文，防双份）", async () => {
+    const messages = await blocksToModelMessages([
+      { type: "memberReport", memberName: "顾大局", task: "t", content: "成员结论", round: 1 },
+      { type: "text", text: "最终回答" },
+    ]);
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.content).toBe("最终回答");
   });
 });

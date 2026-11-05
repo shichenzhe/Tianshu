@@ -49,6 +49,11 @@ const prismaStub = {
     blocks: string;
     error: string | null;
   }>,
+  /** llmCallEvent.findMany 读通道（成员调度累计，可观测性批）：默认空集
+   *  （无成员调用会话不携带 member 字段），成员用量测试覆写返回值 */
+  llmCallEventFindMany: vi.fn(
+    async (_args?: unknown) => [] as Array<{ inputTokens: number; outputTokens: number }>,
+  ),
   /**
    * message.findMany 读通道：模拟 prisma 查询语义（where 过滤 / orderBy /
    * take / select 投影），守卫测试断言查询参数用；无参形态退化为全量返回。
@@ -151,6 +156,10 @@ vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     // verifyUserId 用户存在性回查（幻影用户防护批）接线需过
     user: { findUnique: async () => ({ id: 1 }) },
+    // 成员调度累计（可观测性批 getUsageBreakdown meta 行聚合读通道）
+    llmCallEvent: {
+      findMany: (args?: unknown) => prismaStub.llmCallEventFindMany(args),
+    },
     message: {
       findMany: (args?: MessageFindManyArgs) =>
         prismaStub.messageFindMany(args),
@@ -1891,6 +1900,48 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
       contextWindow: 65536,
     });
     expect(await usageWindow()).toBe(65536);
+  });
+
+  it("成员调度累计（可观测性批）：llmCallEvent meta 行聚合为 member 字段；无行不携带", async () => {
+    const usageOf = async () =>
+      await (
+        makeSvc({ assistantId: null, userId: 1 }).service as unknown as {
+          getUsageBreakdown: (
+            sessionId: number,
+            userId: number,
+          ) => Promise<{
+            truncated?: boolean;
+            truncatedMessages?: number;
+            member?: { calls: number; inputTokens: number; outputTokens: number };
+          } | null>;
+        }
+      ).getUsageBreakdown(1, 1);
+    // 无成员调用：不携带 member（其余字段照常）
+    prismaStub.llmCallEventFindMany.mockResolvedValueOnce([]);
+    const empty = await usageOf();
+    expect(empty?.member).toBeUndefined();
+    expect(typeof empty?.truncated).toBe("boolean");
+    // 两行成员埋点 → calls/tokens 累加
+    prismaStub.llmCallEventFindMany.mockResolvedValueOnce([
+      { inputTokens: 100, outputTokens: 40 },
+      { inputTokens: 30, outputTokens: 10 },
+    ]);
+    const withMember = await usageOf();
+    expect(withMember?.member).toEqual({
+      calls: 2,
+      inputTokens: 130,
+      outputTokens: 50,
+    });
+    // 查询口径：scene=chat + 会话归属 + meta 非空（成员补全埋点行）
+    expect(prismaStub.llmCallEventFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          scene: "chat",
+          sessionId: 1,
+          meta: { not: null },
+        },
+      }),
+    );
   });
 });
 

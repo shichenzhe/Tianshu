@@ -1492,7 +1492,9 @@
     "noLimit": "Used {{used}} / --",
     "tooltip": "{{percent}}% · {{used}}/{{limit}} context used",
     "overflow": "Text too long — trim it or switch models",
-    "unavailable": "No data (no model configured or session missing)"
+    "unavailable": "No data (no model configured or session missing)",
+    "truncated": "{{count}} early message(s) trimmed (out of window, not sent next turn)",
+    "member": "Member dispatch: {{calls}} calls · {{tokens}} tokens (not in main window)"
   },
   "artifacts": {
     "open": "Artifacts panel",
@@ -1753,5 +1755,8 @@
     "defaultTitle": "Chart",
     "loading": "Generating chart…",
     "empty": "No data"
+  },
+  "memberReport": {
+    "title": "Member {{member}} · Round {{round}}"
   }
 }

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { computeUsageBreakdown } from "../../electron/domains/ai/chat/context-usage";
+import {
+  computeUsageBreakdown,
+  summarizeMemberUsage,
+} from "../../electron/domains/ai/chat/context-usage";
 import { buildSystemPrompt } from "../../electron/domains/ai/agent/skill-prompt";
 import type { SkillInfo } from "../../electron/domains/ai/agent/skill-loader";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
@@ -83,6 +86,57 @@ describe("上下文用量拆解", () => {
     });
     expect(result.messages).toBeLessThan(2000);
     expect(result.messages).toBeGreaterThan(0);
+  });
+
+  it("截断丢失提示（chat-core §6 项 5）：超窗硬截时 truncated 为真并给出被裁条数", () => {
+    const longHistory = Array.from({ length: 20 }, () => msg("t".repeat(200)));
+    const result = computeUsageBreakdown({
+      systemWithSummary: undefined,
+      skills: [],
+      toolDefinitions: [],
+      history: longHistory,
+      contextWindow: 500,
+      params: {},
+    });
+    expect(result.truncated).toBe(true);
+    // reserve 4096 > 窗口 500 → budget=1，keep-at-least-one 仅保末条 → 裁 19
+    expect(result.truncatedMessages).toBe(19);
+  });
+
+  it("未超窗/未配置窗口时 truncated 为假（前缀稳定零裁）", () => {
+    const within = computeUsageBreakdown({
+      systemWithSummary: "x",
+      skills: [],
+      toolDefinitions: [],
+      history: [msg("a"), msg("b")],
+      contextWindow: 131072,
+      params: {},
+    });
+    expect(within.truncated).toBe(false);
+    expect(within.truncatedMessages).toBe(0);
+    const noWindow = computeUsageBreakdown({
+      systemWithSummary: "x",
+      skills: [],
+      toolDefinitions: [],
+      history: [msg("a")],
+      contextWindow: null,
+      params: {},
+    });
+    expect(noWindow.truncated).toBe(false);
+  });
+
+  it("summarizeMemberUsage（成员调度累计聚合）：空集零值、多行累加", () => {
+    expect(summarizeMemberUsage([])).toEqual({
+      calls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+    expect(
+      summarizeMemberUsage([
+        { inputTokens: 100, outputTokens: 40 },
+        { inputTokens: 30, outputTokens: 10 },
+      ]),
+    ).toEqual({ calls: 2, inputTokens: 130, outputTokens: 50 });
   });
 
   it("contextWindow 未配置时返回 null 分母且不截断", () => {

@@ -32,6 +32,16 @@ interface Breakdown {
   skills: number;
   total: number;
   contextWindow: number | null;
+  /** 截断丢失提示（chat-core §6 项 5，2026-11-05）：下次请求组装硬截已发生 */
+  truncated?: boolean;
+  /** 被裁出的消息条数 */
+  truncatedMessages?: number;
+  /** 成员调度累计（专家团可观测性批：llmCallEvent meta 行真实发生量） */
+  member?: {
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+  };
 }
 
 interface ContextUsageButtonProps {
@@ -275,6 +285,28 @@ export default function ContextUsageButton({
                 );
               })}
             </ul>
+            {/* 截断丢失提示（chat-core §6 项 5）：硬截静默发生 → 透出被裁
+                早期上下文（amber 与本文件风险色档一致） */}
+            {breakdown.truncated && (
+              <p className="mt-2 text-xs text-amber-500">
+                {t("chat:usage.truncated", {
+                  count: breakdown.truncatedMessages ?? 0,
+                })}
+              </p>
+            )}
+            {/* 成员调度累计（专家团可观测性批）：真实发生量——独立于五类
+                估算（不计入环形占比，成员上下文不占主对话窗口） */}
+            {breakdown.member && breakdown.member.calls > 0 && (
+              <div className="mt-2 rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                {t("chat:usage.member", {
+                  calls: breakdown.member.calls,
+                  tokens: formatTokens(
+                    breakdown.member.inputTokens +
+                      breakdown.member.outputTokens,
+                  ),
+                })}
+              </div>
+            )}
           </>
         )}
       </PopoverContent>

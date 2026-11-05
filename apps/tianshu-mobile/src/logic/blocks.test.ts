@@ -66,6 +66,31 @@ describe("blocks 序列化（src/logic/blocks）", () => {
     ).toEqual([]);
   });
 
+  it("memberReport 块往返一致（专家团可观测性批新块型，桌面产块远端历史回看）", () => {
+    const blocks: MessageBlock[] = [
+      {
+        type: "memberReport",
+        memberName: "顾大局",
+        task: "看宏观",
+        content: "宏观结论",
+        round: 1,
+      },
+    ];
+    expect(parseBlocks(serializeBlocks(blocks))).toEqual(blocks);
+  });
+
+  it("memberReport 块缺必备字段或类型不符被过滤", () => {
+    expect(parseBlocks('[{"type":"memberReport"}]')).toEqual([]);
+    expect(
+      parseBlocks('[{"type":"memberReport","memberName":"顾大局"}]'),
+    ).toEqual([]);
+    expect(
+      parseBlocks(
+        '[{"type":"memberReport","memberName":"顾大局","task":"t","content":"c","round":"1"}]',
+      ),
+    ).toEqual([]);
+  });
+
   it("混合数组仅保留合法块", () => {
     const json = JSON.stringify([
       { type: "text", text: "ok" },

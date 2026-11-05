@@ -43,6 +43,11 @@ export interface ContextUsageBreakdown {
   total: number;
   /** 模型上限（未配置为 null，前端显示 --） */
   contextWindow: number | null;
+  /** 下次请求组装时硬截已发生（earliest 消息被裁出窗口——chat-core §6
+   *  项 5 截断丢失提示，2026-11-05 mirror 同构） */
+  truncated: boolean;
+  /** 被裁出的消息条数（truncated 时 > 0） */
+  truncatedMessages: number;
 }
 
 interface ComputeUsageParams {
@@ -84,17 +89,21 @@ export function computeUsageBreakdown(
   const mcp = toolDefinitionTokens(params.toolDefinitions.filter(isMcp));
   // 解析一次复用 + 旧轮工具输出瘦身（spec §18 项 1）：与 runChatStream
   // 回喂组装同口径——展示的是下次请求实际占用的上下文
-  const messages = truncateHistory(
-    trimHistoryToolOutputs(params.history),
-    params.contextWindow ?? undefined,
-    {
-      reserveTokens: estimateReserveTokens(
-        params.params.maxTokens,
-        params.systemWithSummary,
-        params.toolDefinitions,
-      ),
-    },
-  ).reduce((sum, m) => sum + estimateMessageTokens(m.blocks), 0);
+  const trimmed = trimHistoryToolOutputs(params.history);
+  const kept = truncateHistory(trimmed, params.contextWindow ?? undefined, {
+    reserveTokens: estimateReserveTokens(
+      params.params.maxTokens,
+      params.systemWithSummary,
+      params.toolDefinitions,
+    ),
+  });
+  const messages = kept.reduce(
+    (sum, m) => sum + estimateMessageTokens(m.blocks),
+    0,
+  );
+  // 截断丢失提示（chat-core §6 项 5，mirror 同构）：硬截静默发生 → 面板
+  // 透出「已裁早期上下文」——kept 少于 trimmed 的条数即被裁消息数
+  const truncatedMessages = trimmed.length - kept.length;
   const total = system + tools + messages + mcp + skills;
   return {
     system,
@@ -104,5 +113,7 @@ export function computeUsageBreakdown(
     skills,
     total,
     contextWindow: params.contextWindow,
+    truncated: truncatedMessages > 0,
+    truncatedMessages,
   };
 }

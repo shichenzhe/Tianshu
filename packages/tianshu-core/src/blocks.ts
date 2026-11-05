@@ -45,6 +45,13 @@ function isValidBlock(block: unknown): block is MessageBlock {
       return typeof b.name === "string";
     case "file_ref":
       return typeof b.path === "string" && typeof b.content === "string";
+    case "memberReport":
+      return (
+        typeof b.memberName === "string" &&
+        typeof b.task === "string" &&
+        typeof b.content === "string" &&
+        typeof b.round === "number"
+      );
     default:
       return false;
   }

@@ -633,7 +633,10 @@ export interface SessionPolishResult {
 export type SessionAccessMode = "default" | "full";
 
 /** session/usage 结果（上下文用量五类拆解——本地 ContextUsageBreakdown
- * 同构；未配模型/会话缺失为 null 前端灰态） */
+ * 同构；未配模型/会话缺失为 null 前端灰态）。2026-11-05 专家团可观测性批：
+ * truncated/truncatedMessages（截断丢失提示，chat-core §6 项 5）与 member
+ * （成员调度累计，桌面被控端专有——server 无 dispatch 恒缺席）为增量可选
+ * 字段，旧端/无数据不携带 */
 export interface SessionUsageBreakdown {
   system: number;
   tools: number;
@@ -642,6 +645,19 @@ export interface SessionUsageBreakdown {
   skills: number;
   total: number;
   contextWindow: number | null;
+  /** 下次请求组装时硬截已发生（earliest 消息被裁出窗口） */
+  truncated?: boolean;
+  /** 被裁出的消息条数（truncated 时 > 0） */
+  truncatedMessages?: number;
+  /** 本会话成员调度累计（llmCallEvent meta 行聚合——真实发生量） */
+  member?: SessionMemberUsage;
+}
+
+/** 成员调度累计用量（专家团可观测性批） */
+export interface SessionMemberUsage {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 /** skills/query 列表项（联想候选＋启停管理子菜单；enabled=全局启停） */

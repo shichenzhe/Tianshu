@@ -45,6 +45,7 @@ import {
 import { trimHistoryToolOutputs } from "./tool-output-trim";
 import {
   computeUsageBreakdown,
+  summarizeMemberUsage,
   type ContextUsageBreakdown,
 } from "./context-usage";
 import {
@@ -114,6 +115,8 @@ import { confirmForms } from "../agent/confirm-registry";
 import {
   DISPATCH_MEMBER_TOOL_NAME,
   makeDispatchMemberTool,
+  makeMemberCallRecorder,
+  withMemberReportBlocks,
   type DispatchMemberDeps,
   type DispatchMemberModelTextFn,
 } from "../agent/dispatch-member-tool";
@@ -1927,7 +1930,9 @@ export default class ChatService {
    * 实现，handover-summary defaultModelText 同构（createChatModel +
    * LangChain invoke 非流式补全、超时熔断）；120s——成员单轮任务重于交接
    * 摘要（30s），子 agent 独立分析可深推理。deps 透传的会话中止信号与
-   * 超时兜底组合（先到先断：用户停止即断，无外部信号时仅 120s 熔断）
+   * 超时兜底组合（先到先断：用户停止即断，无外部信号时仅 120s 熔断）。
+   * 可观测性批（2026-11-05）：usage_metadata 在场时经 onUsage 回报
+   * （成员补全 token 进 llmCallEvent 的数据源；无元数据不报不造假）
    */
   private memberModelText(
     modelRow: { modelId: string },
@@ -1938,7 +1943,7 @@ export default class ChatService {
       extraHeaders?: string | null;
     },
   ): DispatchMemberModelTextFn {
-    return async ({ system, prompt, abortSignal }) => {
+    return async ({ system, prompt, abortSignal, onUsage }) => {
       const chat = createChatModel(
         {
           type: providerRow.type,
@@ -1956,6 +1961,17 @@ export default class ChatService {
             : AbortSignal.timeout(120_000),
         },
       );
+      const usage = aiMessage.usage_metadata;
+      if (
+        onUsage &&
+        typeof usage?.input_tokens === "number" &&
+        typeof usage?.output_tokens === "number"
+      ) {
+        onUsage({
+          inputTokens: usage.input_tokens,
+          outputTokens: usage.output_tokens,
+        });
+      }
       return aiMessageContentToText(aiMessage.content);
     };
   }
@@ -2130,12 +2146,20 @@ export default class ChatService {
       }
       const result = await run.result;
 
+      // 成员产出落块（可观测性批，experts §6 P1）：done 态 dispatch 工具块
+      // 后插 memberReport（成员名/任务/产出/轮次）——成员观点来源事后可审
+      // 计（回喂不受影响：memberReport 不进 blocksToModelMessages 正文）
+      const finalBlocks = withMemberReportBlocks(
+        result.blocks,
+        ctx.team?.members ?? [],
+      );
+
       // 持久化 assistant 消息（中断也保留已生成部分）
-      if (result.blocks.length > 0 || result.errorCode) {
+      if (finalBlocks.length > 0 || result.errorCode) {
         await this.sessions.appendMessage({
           sessionId,
           role: "assistant",
-          blocks: serializeBlocks(result.blocks),
+          blocks: serializeBlocks(finalBlocks),
           modelId: ctx.modelId,
           assistantId: ctx.session.assistantId ?? undefined,
           error: result.errorMessage,
@@ -2143,8 +2167,8 @@ export default class ChatService {
         } satisfies AppendMessageParams);
       }
       // 监控埋点（spec §4.1 #1）：落库时提取 usage（H7a 同款「落库时提取」；
-      // 错误轮次/中止无 usage 块不写）
-      const usage = usageFromBlocks(result.blocks);
+      // 错误轮次/中止无 usage 块不写）；成员补全另有 meta 行（onMemberCall）
+      const usage = usageFromBlocks(finalBlocks);
       if (usage) {
         void recordLlmCall(prisma, {
           userId,
@@ -2410,12 +2434,21 @@ export default class ChatService {
       toolGate,
       /** 专家团调度注入面（二期 T3）：team 助手且成员非空时
        *  dispatch 的 deps（成员集 + memberModelText 装配）；
-       *  abortSignal 由 streamAndPersist 调用点随当次流补入 */
+       *  abortSignal 由 streamAndPersist 调用点随当次流补入；
+       *  onMemberCall（可观测性批 2026-11-05）：成员补全进 llmCallEvent
+       *  （meta 携带成员名/轮次——此前 memberModelText 直连 chat.invoke
+       *  绕过埋点，专家团会话真实成本不可见） */
       team:
         teamMembers.length > 0
           ? {
               members: teamMembers,
               modelText: this.memberModelText(modelRow, providerRuntimeRow),
+              onMemberCall: makeMemberCallRecorder({
+                prisma,
+                userId: session.userId ?? null,
+                sessionId,
+                modelId,
+              }),
             }
           : null,
       baseSystem,
@@ -2425,7 +2458,10 @@ export default class ChatService {
 
   /**
    * 上下文用量拆解（chat:usage）：与下次请求同口径组装并按五类估算
-   * token 占比；会话缺失/未配模型返回 null（前端灰态）
+   * token 占比；会话缺失/未配模型返回 null（前端灰态）。
+   * 可观测性批（2026-11-05）：truncated 截断标志透出（已裁早期上下文
+   * 提示）；member 为成员调度累计（llmCallEvent meta 行——真实发生量，
+   * 独立于五类估算，无成员调用的会话不携带）
    */
   async getUsageBreakdown(
     sessionId: number,
@@ -2445,18 +2481,28 @@ export default class ChatService {
               ctx.toolGate,
               this.allowExpertRecommend(ctx),
             );
-      return computeUsageBreakdown({
-        systemWithSummary: ctx.systemWithSummary,
-        skills: ctx.skills,
-        toolDefinitions,
-        history: ctx.history,
-        // 三层生效值（provider 窗口批）：截断按它执行，面板显示同源
-        contextWindow: this.effectiveContextWindow(
-          ctx.modelRow,
-          ctx.providerRow,
-        ),
-        params: ctx.merged,
+      // 成员调度累计：meta 非空行即成员补全埋点（当前唯一 meta 写入面）
+      const memberRows = await prisma.llmCallEvent.findMany({
+        where: { scene: "chat", sessionId, meta: { not: null } },
+        select: { inputTokens: true, outputTokens: true },
       });
+      return {
+        ...computeUsageBreakdown({
+          systemWithSummary: ctx.systemWithSummary,
+          skills: ctx.skills,
+          toolDefinitions,
+          history: ctx.history,
+          // 三层生效值（provider 窗口批）：截断按它执行，面板显示同源
+          contextWindow: this.effectiveContextWindow(
+            ctx.modelRow,
+            ctx.providerRow,
+          ),
+          params: ctx.merged,
+        }),
+        ...(memberRows.length > 0
+          ? { member: summarizeMemberUsage(memberRows) }
+          : {}),
+      };
     } catch {
       return null;
     }

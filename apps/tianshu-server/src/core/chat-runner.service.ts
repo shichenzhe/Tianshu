@@ -870,6 +870,9 @@ export class ChatRunnerService {
     skills: number;
     total: number;
     contextWindow: number | null;
+    /** 截断丢失提示（chat-core §6 项 5，2026-11-05）：session/usage 透出 */
+    truncated: boolean;
+    truncatedMessages: number;
   } | null> {
     try {
       const uid = userId ?? COMPANION_USER_ID;
@@ -883,9 +886,11 @@ export class ChatRunnerService {
           : estimateTokens(JSON.stringify(this.collectToolDefinitions(ctx)));
       // messages 经截断+工具输出瘦身（2026-11-01 审查批补齐，与
       // computeUsageBreakdown/mirror 同口径——此前原样求和可超窗，与
-      // 自家 core/context-usage.ts 的「下次请求实际占用」语义相悖）
-      const messages = truncateHistory(
-        trimHistoryToolOutputs(ctx.history),
+      // 自家 core/context-usage.ts 的「下次请求实际占用」语义相悖）；
+      // 截断丢失提示（2026-11-05）：kept 少于 trimmed 的条数即被裁消息数
+      const trimmed = trimHistoryToolOutputs(ctx.history);
+      const kept = truncateHistory(
+        trimmed,
         ctx.contextWindow ?? undefined,
         {
           reserveTokens: estimateReserveTokens(
@@ -894,7 +899,12 @@ export class ChatRunnerService {
             ctx.mode === 'ask' ? [] : this.collectToolDefinitions(ctx),
           ),
         },
-      ).reduce((sum, row) => sum + estimateMessageTokens(row.blocks), 0);
+      );
+      const truncatedMessages = trimmed.length - kept.length;
+      const messages = kept.reduce(
+        (sum, row) => sum + estimateMessageTokens(row.blocks),
+        0,
+      );
       return {
         system,
         tools,
@@ -903,6 +913,8 @@ export class ChatRunnerService {
         skills: 0,
         total: system + tools + messages,
         contextWindow: ctx.contextWindow ?? null,
+        truncated: truncatedMessages > 0,
+        truncatedMessages,
       };
     } catch {
       return null;

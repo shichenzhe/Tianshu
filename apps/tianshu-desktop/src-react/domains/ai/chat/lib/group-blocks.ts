@@ -134,6 +134,15 @@ export interface ConfirmFormPanelItem {
   output?: string;
 }
 
+/** 成员报告条目（memberReport 块分流，专家团可观测性批）：成员补全产出的
+ *  正文位折叠卡（MemberReportCard 呈现），独立于思考面板 */
+export interface MemberReportPanelItem {
+  memberName: string;
+  task: string;
+  content: string;
+  round: number;
+}
+
 export interface GroupedBlocks {
   /** 全部 thinking 块按序以空行拼接 */
   thinkingText: string;
@@ -150,6 +159,8 @@ export interface GroupedBlocks {
   charts: ChartPanelItem[];
   /** confirm_form 工具块（消息流内确认卡，不进思考面板） */
   confirmForms: ConfirmFormPanelItem[];
+  /** memberReport 块（消息流正文位折叠卡，专家团可观测性批） */
+  memberReports: MemberReportPanelItem[];
   texts: TextBlock[];
   usage?: UsageBlock;
   /** thinking 或 tool_call 存在任一即为 true（面板渲染门槛） */
@@ -165,6 +176,7 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
   const summaries: SummaryPanelItem[] = [];
   const charts: ChartPanelItem[] = [];
   const confirmForms: ConfirmFormPanelItem[] = [];
+  const memberReports: MemberReportPanelItem[] = [];
   const texts: TextBlock[] = [];
   let usage: UsageBlock | undefined;
 
@@ -288,6 +300,15 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
       case "usage":
         usage = block;
         break;
+      case "memberReport":
+        // 成员报告分流消息流正文位（折叠卡）；不进思考面板、不抬面板门槛
+        memberReports.push({
+          memberName: block.memberName,
+          task: block.task,
+          content: block.content,
+          round: block.round,
+        });
+        break;
     }
   }
 
@@ -300,6 +321,7 @@ export function groupBlocks(blocks: MessageBlock[]): GroupedBlocks {
     summaries,
     charts,
     confirmForms,
+    memberReports,
     texts,
     usage,
     hasProcess:

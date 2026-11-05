@@ -10,6 +10,7 @@ import type { FileRefBlock, SkillRefBlock } from "@tianshu/protocol";
 import { RECOMMEND_TOOL_NAME, WIDGET_TOOL_NAME } from "@/logic/group-blocks";
 import { AppIcon } from "@/components/AppIcon";
 import { MarkdownLite } from "@/components/MarkdownLite";
+import { MemberReportCard } from "@/components/MemberReportCard";
 import { MessageFileRef } from "@/components/MessageFileRef";
 import { SkillRefCard } from "@/components/SkillRefCard";
 import { MessageImage } from "@/components/MessageImage";
@@ -158,6 +159,9 @@ function BlockView({
     case "skill_ref":
     case "file_ref":
       return null;
+    // 成员报告（专家团可观测性批）：折叠卡（点按展开产出全文）
+    case "memberReport":
+      return <MemberReportCard block={block} />;
   }
 }
 

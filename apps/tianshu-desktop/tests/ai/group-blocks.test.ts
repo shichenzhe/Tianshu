@@ -51,6 +51,37 @@ describe("groupBlocks 过程/结论分组", () => {
     expect(grouped.hasProcess).toBe(false);
   });
 
+  it("memberReport 块收集进 memberReports（保序），不计入 hasProcess", () => {
+    const grouped = groupBlocks([
+      {
+        type: "memberReport",
+        memberName: "顾大局",
+        task: "看宏观",
+        content: "宏观结论",
+        round: 1,
+      },
+      { type: "text", text: "最终回答" },
+      {
+        type: "memberReport",
+        memberName: "严守仓",
+        task: "查风险",
+        content: "风险结论",
+        round: 2,
+      },
+    ]);
+    expect(grouped.memberReports).toEqual([
+      {
+        memberName: "顾大局",
+        task: "看宏观",
+        content: "宏观结论",
+        round: 1,
+      },
+      { memberName: "严守仓", task: "查风险", content: "风险结论", round: 2 },
+    ]);
+    // 成员报告独立于思考面板（正文位折叠卡），不抬面板渲染门槛
+    expect(grouped.hasProcess).toBe(false);
+  });
+
   it("含过程块时 hasProcess 为 true", () => {
     expect(groupBlocks([{ type: "thinking", text: "想一想" }]).hasProcess).toBe(
       true,

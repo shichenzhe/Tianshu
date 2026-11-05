@@ -100,3 +100,39 @@ describe("MessageItem assistant 头像列", () => {
     expect(container.textContent).toContain("回复内容");
   });
 });
+
+describe("MessageItem memberReport 折叠卡（专家团可观测性批）", () => {
+  afterEach(cleanup);
+
+  it("memberReport 块渲染成员报告折叠卡（成员名/任务可见）", () => {
+    const { container } = render(
+      createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        createElement(MessageItem, {
+          message: {
+            ...base,
+            blocks: JSON.stringify([
+              { type: "text", text: "主理人结论" },
+              {
+                type: "memberReport",
+                memberName: "顾大局",
+                task: "看宏观",
+                content: "宏观结论",
+                round: 1,
+              },
+            ]),
+          } as MessageRecord,
+        }),
+      ),
+    );
+    // i18n mock 不做插值：头部 key + 任务摘要（成员名经 t 插值不在直出文本）
+    expect(container.textContent).toContain("chat:memberReport.title");
+    expect(container.textContent).toContain("看宏观");
+    // 折叠卡存在（details 元素；collapsed 态内容仍在 DOM，仅视觉隐藏）
+    expect(container.querySelector("details")).toBeTruthy();
+    expect(container.textContent).toContain("宏观结论");
+    // 正文与折叠卡并存
+    expect(container.textContent).toContain("主理人结论");
+  });
+});

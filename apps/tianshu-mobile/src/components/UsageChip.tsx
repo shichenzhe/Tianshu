@@ -99,6 +99,23 @@ export function UsageChip({
                 })
               : t("usageTotal", { total: usageShort(usage.total) })}
           </Text>
+          {/* 截断丢失提示（chat-core §6 项 5）：硬截静默发生 → 透出被裁早期上下文 */}
+          {usage.truncated && (
+            <Text className="mt-1 text-xs text-amber-500">
+              {t("usageTruncated", { count: usage.truncatedMessages ?? 0 })}
+            </Text>
+          )}
+          {/* 成员调度累计（专家团可观测性批）：远端为被控桌面时可能携带 */}
+          {usage.member != null && usage.member.calls > 0 && (
+            <Text className="mt-1 text-xs text-label2 dark:text-[#EBEBF599]">
+              {t("usageMember", {
+                calls: usage.member.calls,
+                tokens: usageShort(
+                  usage.member.inputTokens + usage.member.outputTokens,
+                ),
+              })}
+            </Text>
+          )}
         </View>
       </DetailSheet>
     </>

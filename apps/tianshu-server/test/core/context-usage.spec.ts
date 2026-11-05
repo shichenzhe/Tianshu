@@ -83,6 +83,32 @@ describe('上下文用量拆解', () => {
     expect(result.messages).toBeGreaterThan(0);
   });
 
+  it('截断丢失提示（chat-core §6 项 5，mirror 同构）：超窗硬截 truncated 为真并给出被裁条数', () => {
+    const longHistory = Array.from({ length: 20 }, () => msg('t'.repeat(200)));
+    const result = computeUsageBreakdown({
+      systemWithSummary: undefined,
+      skills: [],
+      toolDefinitions: [],
+      history: longHistory,
+      contextWindow: 500,
+      params: {},
+    });
+    expect(result.truncated).toBe(true);
+    // reserve 4096 > 窗口 500 → budget=1，keep-at-least-one 仅保末条 → 裁 19
+    expect(result.truncatedMessages).toBe(19);
+    // 未超窗对照：前缀稳定零裁
+    const within = computeUsageBreakdown({
+      systemWithSummary: 'x',
+      skills: [],
+      toolDefinitions: [],
+      history: [msg('a'), msg('b')],
+      contextWindow: 131072,
+      params: {},
+    });
+    expect(within.truncated).toBe(false);
+    expect(within.truncatedMessages).toBe(0);
+  });
+
   it('contextWindow 未配置时返回 null 分母且不截断', () => {
     const history = Array.from({ length: 50 }, () => msg('t'.repeat(200)));
     const result = computeUsageBreakdown({

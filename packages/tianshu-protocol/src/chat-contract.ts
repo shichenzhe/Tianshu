@@ -132,6 +132,25 @@ export interface FileRefBlock {
   content: string;
 }
 
+/**
+ * 专家团成员产出块（assistant 消息，专家团可观测性批 2026-11-05）：
+ * dispatch 成员补全的结构化留痕——落库落卡可审计，但**不回喂模型**
+ * （dispatch tool_call 块的 output 已携带同文作为 tool-result 回喂，
+ * 此处再进正文会双份）。增量可选块型：老端遇未知块型经 isValidBlock
+ * 丢弃不炸。
+ */
+export interface MemberReportBlock {
+  type: "memberReport";
+  /** 成员名（展示用；args.member id 经成员清单解析，缺席回退 id 原文） */
+  memberName: string;
+  /** 本轮交给成员的任务描述（dispatch args.task） */
+  task: string;
+  /** 成员产出原文 */
+  content: string;
+  /** 当次请求内第几次成员调度（1 起） */
+  round: number;
+}
+
 export type MessageBlock =
   | TextBlock
   | ThinkingBlock
@@ -139,7 +158,8 @@ export type MessageBlock =
   | ToolCallBlock
   | ImageBlock
   | SkillRefBlock
-  | FileRefBlock;
+  | FileRefBlock
+  | MemberReportBlock;
 
 /** 审批应答（移动端 spec §4.1）：批准/拒绝挂起的 write 工具调用；
  *  remember=true 时被控端写工作空间级工具记忆（toolPermission 持久行，

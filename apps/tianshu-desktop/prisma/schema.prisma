@@ -499,6 +499,7 @@ model llmCallEvent {
   inputTokens  Int
   outputTokens Int
   durationMs   Int? // 流式轮次耗时
+  meta         String? // 元信息 JSON（专家团可观测性批：成员补全 {kind,member,round}；server 侧 schema 无此列）
   createdAt    DateTime @default(now())
 
   @@index([userId, createdAt]) // 聚合主查询路径

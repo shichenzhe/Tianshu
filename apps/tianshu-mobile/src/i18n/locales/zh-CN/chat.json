@@ -169,5 +169,10 @@
   "handoverUntitled": "未命名待办",
   "handoverTitleLabel": "待办标题",
   "handoverSummaryLabel": "交接摘要（可编辑）",
-  "handoverDone": "已创建项目待办"
+  "handoverDone": "已创建项目待办",
+  "usageTruncated": "已裁 {{count}} 条早期消息（超出窗口，不进入下次请求）",
+  "usageMember": "成员调度：{{calls}} 次调用 · {{tokens}} token",
+  "memberReportTitle": "成员 {{member}} · 第 {{round}} 轮",
+  "memberReportExpand": "展开",
+  "memberReportCollapse": "收起"
 }

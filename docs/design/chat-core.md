@@ -355,8 +355,15 @@ union（对齐 Vercel AI SDK UIMessage 形态的设计取向）：
    checkpoint（工具写盘副作用无法随 regenerate 回滚——仅 file-history 备份兜底）。
 4. **text/thinking 块无 id**：流中不可局部修订（对比 AI SDK part id / Anthropic
    content_block index），未来做「工具结果内联进后续文本」或块级重渲染需先补协议。
-5. **截断后无「丢失上下文」提示**：硬截静默发生，用户不知 earliest 消息被裁
-   （可用量拆解已有数据，仅差 UI 提示）；压缩同理只有摘要段注入无显式标记 chunk。
+5. ✅ **已落地（批6，2026-11-05）截断后「丢失上下文」提示**：~~硬截静默
+   发生，用户不知 earliest 消息被裁~~——`computeUsageBreakdown`
+   （desktop `context-usage.ts` 与 server `core/context-usage.ts` 同构）
+   在与下次请求同口径组装时比较 trim 后/截断后条数，新增
+   `truncated/truncatedMessages` 透出；桌面 `context-usage-button.tsx`
+   与移动端 `UsageChip` 均渲染「已裁 N 条早期消息」警示行；协议
+   `SessionUsageBreakdown` 增量可选字段（server `session/usage` 与桌面
+   被控面 session/usage 桥自动携带）。压缩显式标记 chunk 仍未做（仅
+   摘要段注入）。
 6. **检索增强缺失**：截断/压缩均为有损，未配合 `search_history` 工具做「截断前
    先回捞」的分级策略（工具已存在，未与截断联动）。
 7. **多消息并发恢复的边界**：快照恢复依赖单会话单流假设（aborts 按 sessionId 键），

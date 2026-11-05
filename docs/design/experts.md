@@ -215,7 +215,7 @@ model mcpServer {
         dispatch({member:"editor", task:"审校角度评估..."})   // 与上并发
       第 2 轮 AI 输出 1 个 dispatch（第二阶段，context=上轮产出原文）
       第 3 轮 AI 汇总输出 → 面向用户的最终回答（铁律 #3/#4）
-  → streamAndPersist 落库（成员产出不落库不外显——改进点见 §6 P1）
+  → streamAndPersist 落库（成员产出经 memberReport 块落库落卡——§6 P1 已落地 2026-11-05）
 ```
 
 **已知边界（如实）**：无头服务端 chat-runner **不移植**专家团调度（`apps/tianshu-server/src/core/chat-runner.service.ts` 头注释「专家目录与专家团（recommend_expert/dispatch）不移植」）——远程会话绑定 team 专家时仅以主理人 systemPrompt 作普通单专家 base（L1125 `buildModeSystem(mode, assistantRow?.systemPrompt, skills)`），无铁律段无 dispatch 工具；server 亦不做 `mergeExpertSkills` 专家附带技能并入（桌面独有，尽管 server 保留同名 `expert-catalog.ts` 双份）。移动端因此对远程 team 专家只能编辑定义，不能体验调度。
@@ -333,9 +333,9 @@ model mcpServer {
 
 按优先级排列，均结合现状给落点（**不含 stdio MCP 写面——已裁定不做**）：
 
-**P1 专家团可观测性缺口**。`memberModelText`（chat.service.ts L1850）直接 `chat.invoke`，绕过 `recordLlmCall/recordToolCall` 埋点——成员调用的 token 消耗不进 `/module/ai/monitor` 用量监控（llmCallEvent/toolCallEvent 表无记录），也不进 `getUsageBreakdown` 五类拆解（system/tools/messages/mcp/skills 均不含成员上下文与成员补全输出），专家团会话的真实成本对用户不可见。建议：dispatch execute 内补 `recordLlmCall`（成员名/轮次作元信息）+ dispatch 本身记 `recordToolCall`；用量面板（`context-usage-button.tsx`）增设「成员调度」分类。改动集中在 dispatch-member-tool 的 deps 注入面，不动主循环，风险低。
+**P1 ✅ 专家团可观测性缺口（已落地，2026-11-05 专家团可观测性批）**。~~`memberModelText`（chat.service.ts L1850）直接 `chat.invoke`，绕过 `recordLlmCall/recordToolCall` 埋点~~——现 dispatch execute 内 `onMemberCall` 埋点：成员补全经 `makeMemberCallRecorder`（dispatch-member-tool.ts）落 `llmCallEvent`（新 `meta` 列 JSON 携带 `{kind:"member", member, round}`，`ensureMonitorTables` 幂等补列；usage_metadata 缺席不记不造假 0 token；dispatch 工具调用本身本就走 runToolCall 通用 toolStats 进 toolCallEvent）；用量面板（`context-usage-button.tsx`）增设「成员调度」行——`getUsageBreakdown` 聚合本会话 meta 行真实累计（独立于五类估算，不计入环形占比）。改动集中在 dispatch-member-tool 的 deps 注入面，不动主循环。
 
-**P1 成员调度过程不可见**。成员产出「不落库不外显」（dispatch-member-tool 头注释），用户只看到主理人最终回答——多轮 dispatch 期间界面无进度感，事后无法审计成员观点来源（对照 Claude Code 子代理可见性差距明显）。建议：成员产出以专用 block 型（如 `memberReport`）落进当轮 assistant 消息 blocks（`chat/blocks.ts` 与 server `logic/blocks.ts` 双份同改——历史教训：新块型必须双改），前端折叠卡渲染（`AgentProgress`/`ToolCallCard` 先例）；须同步 `@tianshu/protocol` chunk/blocks 契约与移动端 blocks 逻辑。
+**P1 ✅ 成员调度过程不可见（已落地，2026-11-05 专家团可观测性批）**。~~成员产出「不落库不外显」~~——现成员产出以专用块型 `memberReport`（`@tianshu/protocol` `MemberReportBlock`：memberName/task/content/round）落进当轮 assistant 消息 blocks（`withMemberReportBlocks` 纯函数在 streamAndPersist 落库前按 done 态 dispatch 工具块逐个后插；**不回喂模型**——dispatch tool_call 的 output 已携带同文作 tool-result，再进正文会双份）。isValidBlock 三份同改（core `blocks.ts` + 桌面渲染端 `model/blocks.ts` + 移动端 `logic/blocks.ts`——RC-T3 后 server 无本地 blocks.ts，经 core dist 消费；drift chat-blocks/mobile-blocks 对 0 差异佐证）；前端折叠卡 `MemberReportCard`（桌面 ToolCallCard 折叠容器语言 + 移动端 Pressable 折叠先例）；块型增量可选，老端遇未知块型经 isValidBlock 丢弃不炸。
 
 **P2 成员能力升级为受限 subagent**。当前成员零工具（纯文本人设单轮），「先查资料再分析」类任务无法自营，主理人只能自己代查再贴给成员。建议：dispatch 增可选只读工具子集（library_search/search_history/web 摘要类），仍单轮、仍非流式、工具白名单经专家表单配置（默认空保持现状）；对齐 Claude Code subagent 的 tools 字段语义，而不引入独立上下文管理与并行编排状态。注意 120s 熔断需随工具调用重估。
 

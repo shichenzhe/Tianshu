@@ -27,6 +27,21 @@ export interface ContextUsageBreakdown {
   /** 生效模型上限（三层兜底 model>provider>131072 后恒有值；类型保留 null
    *  供纯函数直测与未来无模型语境，生产调用侧不再出现 null） */
   contextWindow: number | null;
+  /** 下次请求组装时硬截已发生（earliest 消息被裁出窗口——chat-core §6
+   *  项 5 截断丢失提示，2026-11-05） */
+  truncated: boolean;
+  /** 被裁出的消息条数（truncated 时 > 0） */
+  truncatedMessages: number;
+  /** 成员调度累计（可观测性批：llmCallEvent meta 行聚合——真实发生量，
+   *  独立于五类估算；无成员调用的会话不携带） */
+  member?: MemberUsageSummary;
+}
+
+/** 成员调度累计用量（专家团可观测性批） */
+export interface MemberUsageSummary {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 interface ComputeUsageParams {
@@ -68,17 +83,21 @@ export function computeUsageBreakdown(
   const mcp = toolDefinitionTokens(params.toolDefinitions.filter(isMcp));
   // 解析一次复用 + 旧轮工具输出瘦身（spec §18 项 1）：与 runChatStream
   // 回喂组装同口径——展示的是下次请求实际占用的上下文
-  const messages = truncateHistory(
-    trimHistoryToolOutputs(params.history),
-    params.contextWindow ?? undefined,
-    {
-      reserveTokens: estimateReserveTokens(
-        params.params.maxTokens,
-        params.systemWithSummary,
-        params.toolDefinitions,
-      ),
-    },
-  ).reduce((sum, m) => sum + estimateMessageTokens(m.blocks), 0);
+  const trimmed = trimHistoryToolOutputs(params.history);
+  const kept = truncateHistory(trimmed, params.contextWindow ?? undefined, {
+    reserveTokens: estimateReserveTokens(
+      params.params.maxTokens,
+      params.systemWithSummary,
+      params.toolDefinitions,
+    ),
+  });
+  const messages = kept.reduce(
+    (sum, m) => sum + estimateMessageTokens(m.blocks),
+    0,
+  );
+  // 截断丢失提示（chat-core §6 项 5）：硬截静默发生 → 面板透出「已裁早期
+  // 上下文」——kept 少于 trimmed 的条数即被裁消息数（同口径组装天然可得）
+  const truncatedMessages = trimmed.length - kept.length;
   const total = system + tools + messages + mcp + skills;
   return {
     system,
@@ -88,5 +107,22 @@ export function computeUsageBreakdown(
     skills,
     total,
     contextWindow: params.contextWindow,
+    truncated: truncatedMessages > 0,
+    truncatedMessages,
   };
+}
+
+/** 成员调度用量聚合（可观测性批）：llmCallEvent meta 行（成员补全埋点）
+ *  的本会话累计——真实发生量非估算 */
+export function summarizeMemberUsage(
+  rows: Array<{ inputTokens: number; outputTokens: number }>,
+): MemberUsageSummary {
+  return rows.reduce<MemberUsageSummary>(
+    (sum, row) => ({
+      calls: sum.calls + 1,
+      inputTokens: sum.inputTokens + row.inputTokens,
+      outputTokens: sum.outputTokens + row.outputTokens,
+    }),
+    { calls: 0, inputTokens: 0, outputTokens: 0 },
+  );
 }

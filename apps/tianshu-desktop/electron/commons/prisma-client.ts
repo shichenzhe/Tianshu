@@ -94,9 +94,20 @@ export async function ensureMonitorTables(): Promise<void> {
       inputTokens INTEGER NOT NULL,
       outputTokens INTEGER NOT NULL,
       durationMs INTEGER,
+      meta TEXT,
       createdAt DATETIME NOT NULL
     )
   `);
+  // meta 列补建（专家团可观测性批 2026-11-05，ensureProviderColumns 先例）：
+  // CREATE TABLE IF NOT EXISTS 不补列，旧库经 pragma 判缺席后 ALTER
+  const llmColumns = await prisma.$queryRawUnsafe<
+    Array<{ name: string }>
+  >("SELECT name FROM pragma_table_info('llmCallEvent')");
+  if (!llmColumns.some((col) => col.name === "meta")) {
+    await prisma.$executeRawUnsafe(
+      "ALTER TABLE llmCallEvent ADD COLUMN meta TEXT",
+    );
+  }
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS toolCallEvent (
       id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,

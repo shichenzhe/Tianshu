@@ -1492,7 +1492,9 @@
     "noLimit": "已使用 {{used}} / --",
     "tooltip": "{{percent}}% · {{used}}/{{limit}} 上下文已使用",
     "overflow": "文本过长，请截断或更换模型",
-    "unavailable": "暂无数据（未配置模型或会话不存在）"
+    "unavailable": "暂无数据（未配置模型或会话不存在）",
+    "truncated": "已裁 {{count}} 条早期消息（超出窗口，不进入下次请求）",
+    "member": "成员调度：{{calls}} 次调用 · {{tokens}} token（不计入主窗口）"
   },
   "artifacts": {
     "open": "产物面板",
@@ -1753,5 +1755,8 @@
     "defaultTitle": "图表",
     "loading": "图表生成中…",
     "empty": "暂无数据"
+  },
+  "memberReport": {
+    "title": "成员 {{member}} · 第 {{round}} 轮"
   }
 }

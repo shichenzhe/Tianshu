@@ -215,8 +215,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/chat/context-usage.ts",
       "serverPath": "src/core/context-usage.ts",
       "baselineDiff": true,
-      "baselineLines": 12,
-      "note": "上下文用量拆解；server 版类型收敛 ToolDefinitionLike/SkillSummary（RC-T5 裁定双保留入巡检）"
+      "baselineLines": 30,
+      "note": "上下文用量拆解；server 版类型收敛 ToolDefinitionLike/SkillSummary（RC-T5 裁定双保留入巡检）。2026-11-05 专家团可观测性批：双端同构加 truncated/truncatedMessages（截断丢失提示，chat-core §6 项 5）；member 调度累计（MemberUsageSummary/summarizeMemberUsage）为 mirror 单侧新增（server 无 dispatch 无成员调用面）——基线 12→30 过账"
     },
     {
       "id": "chat-expert-catalog",
@@ -231,9 +231,9 @@
       "mirrorPath": "apps/tianshu-desktop/src-react/domains/ai/chat/model/blocks.ts",
       "serverPath": "../../packages/tianshu-core/src/blocks.ts",
       "baselineDiff": true,
-      "baselineLines": 105,
+      "baselineLines": 106,
       "tolerance": 0,
-      "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。2026-11-01 skill_ref 批：isValidBlock 双改遵守（skill_ref 分支两份同步，双实现 describe.each 测试钉），diff 增长全部来自 core 侧 blocksToModelMessages 专属段的 skill_ref 展开 + SkillBodyLoader 扩展——基线 84→99 过账。2026-11-02 file_ref 批：isValidBlock 双改遵守（file_ref 分支两份同步），增长全部来自 core 侧 blocksToModelMessages 专属段 file_ref 展开块（内容随块直取，无 loader）——基线 99→105 过账"
+      "note": "渲染端 blocks 三件套（serializeBlocks/isValidBlock/parseBlocks）与 core 包同名实现逐字同构——新块型必须双改 isValidBlock；core 侧另有 blocksToModelMessages 主进程专属段。mirror 仓内对：serverPath 经 ../../packages/ 相对 serverRoot（apps/tianshu-server）指回本仓 packages/（monorepo 三仓合一后路径约定）。守护强度：tolerance=0，任何单侧改动（含小 case 漏改）即告警。基线 84 源于 core 侧 blocksToModelMessages 专属段——两侧同步修改同构内容时 diff 回落基线不告警（正确语义）。2026-11-01 skill_ref 批：isValidBlock 双改遵守（skill_ref 分支两份同步，双实现 describe.each 测试钉），diff 增长全部来自 core 侧 blocksToModelMessages 专属段的 skill_ref 展开 + SkillBodyLoader 扩展——基线 84→99 过账。2026-11-02 file_ref 批：isValidBlock 双改遵守（file_ref 分支两份同步），增长全部来自 core 侧 blocksToModelMessages 专属段 file_ref 展开块（内容随块直取，无 loader）——基线 99→105 过账。2026-11-05 memberReport 批：isValidBlock 双改遵守（memberReport 分支 core/渲染端/移动端三份同步，mobile-blocks 对 0 差异佐证），增长 1 行来自渲染端 re-export 清单的 MemberReportBlock（多行 re-export 不入剥除规则）——基线 105→106 过账"
     },
     {
       "id": "mobile-blocks",

@@ -3405,6 +3405,7 @@ export const LlmCallEventScalarFieldEnum = {
   inputTokens: 'inputTokens',
   outputTokens: 'outputTokens',
   durationMs: 'durationMs',
+  meta: 'meta',
   createdAt: 'createdAt'
 } as const
 

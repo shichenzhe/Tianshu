@@ -27,8 +27,10 @@ vi.mock("@prisma/adapter-better-sqlite3", () => ({
 }));
 
 // $executeRawUnsafe 捕获数组 + 四张事件表 deleteMany spy（模块工厂提升，
-// 须经 vi.hoisted 先于工厂创建）
+// 须经 vi.hoisted 先于工厂创建）；pragmaRows 控制 pragma_table_info 回值
+// （meta 列补建分支测试：缺席 [] / 在场 [{name:"meta"}]）
 const executeRawCalls = vi.hoisted(() => [] as unknown[]);
+const pragmaRows = vi.hoisted(() => ({ rows: [] as unknown[] }));
 const deleteManySpies = vi.hoisted(() => ({
   skillStat: vi.fn(async () => ({ count: 0 })),
   automationStat: vi.fn(async () => ({ count: 0 })),
@@ -38,8 +40,8 @@ const deleteManySpies = vi.hoisted(() => ({
 
 vi.mock("../../electron/generated/prisma/client", () => ({
   PrismaClient: class MockPrismaClient {
-    // 顶层 WAL/NORMAL PRAGMA 调用的空实现
-    $queryRawUnsafe = vi.fn(async () => []);
+    // 顶层 WAL/NORMAL PRAGMA 调用的空实现；meta 列补建的 pragma 判定共用
+    $queryRawUnsafe = vi.fn(async () => pragmaRows.rows);
     $executeRawUnsafe = vi.fn(async (sql: string) => {
       executeRawCalls.push(sql);
       return 0;
@@ -53,6 +55,7 @@ vi.mock("../../electron/generated/prisma/client", () => ({
 
 beforeEach(() => {
   executeRawCalls.length = 0;
+  pragmaRows.rows = [];
   for (const spy of Object.values(deleteManySpies)) spy.mockClear();
 });
 
@@ -73,6 +76,25 @@ describe("ensureMonitorTables", () => {
     expect(
       sqls.filter((s) => s.includes("CREATE INDEX IF NOT EXISTS")),
     ).toHaveLength(3);
+    // 新库建表语句含 meta 列（专家团可观测性批）
+    expect(
+      sqls.find((s) => s.includes("CREATE TABLE IF NOT EXISTS llmCallEvent")),
+    ).toContain("meta TEXT");
+    // 旧库列补建：pragma 判缺席（[]）后 ALTER ADD COLUMN
+    expect(
+      sqls.filter((s) => s === "ALTER TABLE llmCallEvent ADD COLUMN meta TEXT"),
+    ).toHaveLength(1);
+  });
+
+  it("meta 列已在（旧库已补建过）：ALTER 不再执行（幂等）", async () => {
+    pragmaRows.rows = [{ name: "meta" }];
+    const { ensureMonitorTables } =
+      await import("../../electron/commons/prisma-client");
+    await ensureMonitorTables();
+    const sqls = executeRawCalls.map((s: unknown) => String(s));
+    expect(
+      sqls.filter((s) => s === "ALTER TABLE llmCallEvent ADD COLUMN meta TEXT"),
+    ).toHaveLength(0);
   });
 });
 

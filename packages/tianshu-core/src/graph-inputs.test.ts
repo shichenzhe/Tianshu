@@ -15,7 +15,7 @@ import {
   parseInputSchema,
 } from "./graph-inputs";
 import { validateGraph } from "./graph-schema";
-import { renderNodePrompt } from "./graph-prompt";
+import { GraphTemplateError, renderNodePrompt } from "./graph-prompt";
 
 const jsonField = {
   key: "payload",
@@ -153,5 +153,68 @@ describe("renderNodePrompt 容器值 stringify", () => {
       now: new Date("2026-11-05T08:00:00"),
     });
     expect(out).toBe("n=35 b=true");
+  });
+});
+
+/** 路径引用 fixture：容器含嵌套对象/数组/null/数字字段 */
+const PATH_INPUTS = {
+  payload: {
+    name: "张三",
+    count: 35,
+    sub: { deep: "leaf" },
+    items: [{ id: 1 }, { id: 2 }],
+    nothing: null,
+  },
+  plain: "文本值",
+} as Record<string, unknown>;
+
+describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
+  const render = (template: string) =>
+    renderNodePrompt(template, {
+      inputs: PATH_INPUTS as never,
+      nodes: {},
+      now: new Date("2026-11-05T08:00:00"),
+    });
+
+  it("对象字段叶子：标量按 String() 插入", () => {
+    expect(render("{{input.payload.name}}")).toBe("张三");
+    expect(render("n={{input.payload.count}}")).toBe("n=35");
+  });
+
+  it("嵌套路径逐层下钻", () => {
+    expect(render("{{input.payload.sub.deep}}")).toBe("leaf");
+  });
+
+  it("数组下标段：数字段当下标取项", () => {
+    expect(render("{{input.payload.items.0.id}}")).toBe("1");
+    expect(render("{{input.payload.items.1.id}}")).toBe("2");
+  });
+
+  it("叶子为容器：紧凑 stringify（与顶层同语义）", () => {
+    expect(render("{{input.payload.sub}}")).toBe('{"deep":"leaf"}');
+    expect(render("{{input.payload.items}}")).toBe('[{"id":1},{"id":2}]');
+  });
+
+  it("叶子为 null：插入 \"null\"", () => {
+    expect(render("{{input.payload.nothing}}")).toBe("null");
+  });
+
+  it("字段缺失/下标越界/中途非容器：抛 GraphTemplateError", () => {
+    expect(() => render("{{input.payload.missing}}")).toThrow(
+      GraphTemplateError,
+    );
+    expect(() => render("{{input.payload.items.5.id}}")).toThrow(
+      GraphTemplateError,
+    );
+    // 标量（string 类型值）不可下钻
+    expect(() => render("{{input.plain.fieldx}}")).toThrow(
+      GraphTemplateError,
+    );
+  });
+
+  it("键未声明：抛 GraphTemplateError（路径首段即键）", () => {
+    expect(() => render("{{input.unknown.fieldx}}")).toThrow(
+      GraphTemplateError,
+    );
   });
 });

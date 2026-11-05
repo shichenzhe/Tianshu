@@ -545,6 +545,28 @@ describe("sessions store", () => {
     expect(useSessionsStore.getState().items).toEqual([created, brief1]); // 失败不动表
   });
 
+  it("create(projectId/planItemId)：项目/任务会话键透传（任务会话查重复用在服务端 D1）", async () => {
+    const created = {
+      id: 102,
+      workspaceId: 9,
+      title: "任务推进",
+      updatedAt: "2026-10-17T10:00:00.000Z",
+      archivedAt: null,
+      pinnedAt: null,
+      unreadCount: 0,
+      lastMessage: null,
+    };
+    transport.request.mockResolvedValueOnce(ok(created));
+    await useSessionsStore
+      .getState()
+      .create("任务推进", undefined, { projectId: 7, planItemId: 42 });
+    expect(transport.request).toHaveBeenCalledWith(
+      "POST",
+      ENDPOINTS.session.create,
+      { title: "任务推进", projectId: 7, planItemId: 42 },
+    );
+  });
+
   it("create(workspaceId)：请求体携带 workspaceId；归属组已加载时原地前置入组缓存，其余组缓存不动", async () => {
     const created = {
       id: 101,

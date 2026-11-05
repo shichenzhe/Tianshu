@@ -378,24 +378,36 @@ async function handleCreate(body: unknown): Promise<RouteResult> {
     title?: string;
     workspaceId?: number;
     assistantId?: number;
+    // 项目会话/任务会话（D1 语义内聚 repo createSession：projectId 强制
+    // 解析项目资产空间防传错、planItemId 查重复用既有会话一任务一会话）
+    projectId?: number;
+    planItemId?: number;
   };
   return withUserId(async (userId) => {
     const deps = faceDeps();
+    const projectId = asInt(params.projectId);
+    const planItemId = asInt(params.planItemId);
     // workspaceId 缺省挂默认空间（用户最新一个；无空间即业务错，不自建
-    // ——桌面端工作空间带目录语义，被控面不可替用户拍板目录）
+    // ——桌面端工作空间带目录语义，被控面不可替用户拍板目录）；项目会话
+    // 例外：空间由 repo 按项目解析，不预解析默认空间（项目不可见由 repo
+    // 抛 PROJECT_NOT_FOUND 经 bizErrorFrom 转 4040）
     const workspaceId =
       asInt(params.workspaceId) ??
-      (await deps.resolveDefaultWorkspaceId(userId));
-    if (workspaceId == null) {
+      (projectId == null
+        ? await deps.resolveDefaultWorkspaceId(userId)
+        : undefined);
+    if (projectId == null && workspaceId == null) {
       return bizError("4040", "工作空间不存在");
     }
     const session = await deps.sessions.createSession(
       {
-        workspaceId,
+        ...(workspaceId != null ? { workspaceId } : {}),
         title: params.title,
         ...(params.assistantId != null
           ? { assistantId: params.assistantId }
           : {}),
+        ...(projectId != null ? { projectId } : {}),
+        ...(planItemId != null ? { planItemId } : {}),
       },
       userId,
     );

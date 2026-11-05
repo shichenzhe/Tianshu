@@ -9,7 +9,7 @@
 // 关于：指令只读卡+成员列表+bindings 只读清单（valid=false 置灰标注）。
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -31,6 +31,8 @@ import {
   Folder,
   FolderPlus,
   Link2,
+  MessageCircle,
+  MessageCirclePlus,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -72,6 +74,7 @@ import {
   useConnectionsStore,
 } from "@/store/connections.store";
 import { resolveActiveView, useProjectStore } from "@/store/project.store";
+import { useSessionsStore } from "@/store/sessions.store";
 import { useThemeColors } from "@/store/theme";
 
 type WsTab = "plan" | "assets" | "about";
@@ -398,6 +401,7 @@ function AssetRow({
 export default function ProjectWorkspaceScreen() {
   const { t } = useTranslation(["project", "chat", "common"]);
   const params = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const projectId = Number(params.id);
   const colors = useThemeColors();
   const activeConnId = useConnectionsStore((state) => state.activeConnId);
@@ -538,6 +542,22 @@ export default function ProjectWorkspaceScreen() {
         useProjectStore.getState().hub.error || t("project:loadFailed"),
       );
     }
+  }
+
+  /** 任务推进直达专属会话（桌面对齐 openTaskSession：服务端按 planItemId
+   *  查重复用——一任务一会话；复用到已归档会话时先撤销归档再进） */
+  async function advanceTask(item: PlanItemRecordDto) {
+    const brief = await useSessionsStore
+      .getState()
+      .create(item.title, undefined, { projectId, planItemId: item.id });
+    if (brief === null) {
+      toast.error(t("project:advanceFailed"));
+      return;
+    }
+    if (brief.archivedAt !== null) {
+      await useSessionsStore.getState().update(brief.id, { archived: false });
+    }
+    router.push(`/session/${brief.id}`);
   }
 
   function notifyFailure() {
@@ -959,7 +979,25 @@ export default function ProjectWorkspaceScreen() {
       className="flex-1 bg-grouped dark:bg-black"
       edges={["top", "bottom"]}
     >
-      <PageHeader title={projectName} backLabel={t("project:back")} />
+      <PageHeader
+        title={projectName}
+        backLabel={t("project:back")}
+        right={
+          detail?.sessionId != null ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("project:openProjectSession")}
+              onPress={() => router.push(`/session/${detail.sessionId}`)}
+              className="h-11 w-11 items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.subtle : "transparent",
+              })}
+            >
+              <MessageCircle size={22} color={colors.primary} />
+            </Pressable>
+          ) : undefined
+        }
+      />
       {!activeConnId || !supported ? (
         renderGuide()
       ) : (
@@ -1017,6 +1055,16 @@ export default function ProjectWorkspaceScreen() {
         items={
           planSheetTarget
             ? [
+                {
+                  key: "advance",
+                  label: t("project:advanceTask"),
+                  Icon: MessageCirclePlus,
+                  onPress: () => {
+                    const target = planSheetTarget;
+                    setPlanSheetTarget(null);
+                    void advanceTask(target);
+                  },
+                },
                 ...PLAN_STATUSES.filter(
                   (status) => status !== planSheetTarget.status,
                 ).map((status) => ({

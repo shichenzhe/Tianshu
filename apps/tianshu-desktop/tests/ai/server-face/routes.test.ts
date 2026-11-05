@@ -812,6 +812,48 @@ describe("被控面路由表（T11 查询端点）", () => {
     await expectBizError("POST", "memory/get", {}, "5000");
   });
 
+  it("create：projectId/planItemId 透传（项目/任务会话 D1——空间解析与查重内聚 repo）", async () => {
+    // 默认空间恒缺位：项目会话空间由 repo 按项目解析（防传错），不被
+    // 默认空间缺位挡成 4040（若预解析了即此断言红）
+    const wired = wireDeps(
+      {},
+      { resolveDefaultWorkspaceId: async () => null },
+    );
+    const calls: SessionCreateParams[] = [];
+    const original = wired.sessions.createSession;
+    wired.sessions.createSession = async (p, userId) => {
+      calls.push(p);
+      return original(p, userId);
+    };
+    const r = await handleRoute("POST", "session/create", {
+      projectId: 7,
+      planItemId: 42,
+      title: "任务推进",
+    });
+    expect(r.body.success).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      projectId: 7,
+      planItemId: 42,
+      title: "任务推进",
+    });
+
+    // 普通会话不传项目键：params 不落 projectId/planItemId（缺省行为不变）
+    const wired2 = wireDeps();
+    const calls2: SessionCreateParams[] = [];
+    const original2 = wired2.sessions.createSession;
+    wired2.sessions.createSession = async (p, userId) => {
+      calls2.push(p);
+      return original2(p, userId);
+    };
+    const plain = await handleRoute("POST", "session/create", {
+      title: "普通",
+    });
+    expect(plain.body.success).toBe(true);
+    expect(calls2[0]).not.toHaveProperty("projectId");
+    expect(calls2[0]).not.toHaveProperty("planItemId");
+  });
+
   it("create+query+getById+delete 闭环（workspaceId 缺省回落默认空间）", async () => {
     const wired = wireDeps();
     // create：不传 workspaceId → 被控面默认空间（resolveDefaultWorkspaceId）

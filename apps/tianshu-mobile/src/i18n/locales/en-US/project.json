@@ -86,5 +86,8 @@
   "template": "Template",
   "deleteItem": "Delete Item",
   "deleteItemConfirm": "Delete \"{{title}}\"? This cannot be undone.",
-  "moveTo": "Move to {{status}}"
+  "moveTo": "Move to {{status}}",
+  "openProjectSession": "Project session",
+  "advanceTask": "Advance",
+  "advanceFailed": "Failed to create task session"
 }

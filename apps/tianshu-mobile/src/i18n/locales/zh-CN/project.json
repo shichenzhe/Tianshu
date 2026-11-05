@@ -86,5 +86,8 @@
   "template": "项目模版",
   "deleteItem": "删除事项",
   "deleteItemConfirm": "确定删除「{{title}}」？该操作不可撤销。",
-  "moveTo": "移到{{status}}"
+  "moveTo": "移到{{status}}",
+  "openProjectSession": "项目会话",
+  "advanceTask": "推进",
+  "advanceFailed": "推进会话创建失败"
 }

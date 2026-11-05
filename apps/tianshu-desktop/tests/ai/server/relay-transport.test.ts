@@ -138,6 +138,8 @@ class FakeControlledEnd {
                   name: "fake-headless",
                   instanceId: "fake-instance",
                   capabilities: ["chat", "provider"],
+                  // 批3B：协议版本上报（server.connected 合成事件透传）
+                  protocolVersion: 1,
                 }
               : { page: 1, pageSize: 100, records: [], total: 0 },
           message: "success",
@@ -222,6 +224,8 @@ describe.skipIf(!hasRelay)("RelayTransport（真 relay + 假被控端）", () =>
           payload: {
             instanceId: "fake-instance",
             capabilities: ["chat", "provider"],
+            // 批3B：/info protocolVersion 透传进合成事件
+            protocolVersion: 1,
           },
         },
       );

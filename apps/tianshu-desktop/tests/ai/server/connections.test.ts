@@ -155,6 +155,8 @@ class FakeFace {
           sseFrame("server.connected", {
             instanceId: "fake-instance",
             capabilities: ["chat", "provider"],
+            // 批3B：协议版本上报（注册表 ConnectionView 透传）
+            protocolVersion: 1,
           }),
         );
         return;
@@ -170,6 +172,8 @@ class FakeFace {
             version: "0.0.0",
             instanceId: "fake-instance",
             capabilities: ["chat", "provider"],
+            // 批3B：协议版本上报（testConnection 结果透传）
+            protocolVersion: 1,
           });
           return;
         }
@@ -419,6 +423,8 @@ describe("testConnection", () => {
         ok: true,
         instanceId: "fake-instance",
         capabilities: ["chat", "provider"],
+        // 批3B：/info protocolVersion 透传（老被控端缺省→无此字段）
+        protocolVersion: 1,
       });
     } finally {
       await face.kill();
@@ -494,6 +500,8 @@ describe("session 透传与 invalid-token 连接态", () => {
         const list = await registry.list();
         expect(list.connections[0].state).toBe("connected");
         expect(list.connections[0].capabilities).toEqual(["chat", "provider"]);
+        // 批3B：server.connected 上报的协议版本进 ConnectionView
+        expect(list.connections[0].protocolVersion).toBe(1);
       });
       await vi.waitFor(() =>
         expect(events.map((e) => e.event.type)).toEqual(["server.connected"]),
@@ -520,6 +528,7 @@ describe("session 透传与 invalid-token 连接态", () => {
         payload: {
           instanceId: "fake-instance",
           capabilities: ["chat", "provider"],
+          protocolVersion: 1,
         },
       });
 

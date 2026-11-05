@@ -2,7 +2,8 @@
  * 连接列表（HD-P3e 双形态）：panel=双栏侧挂（h-full+内部滚动，编排
  * 遥控场景）；page=居中平铺（自然高文档流，页面自滚——无外层卡/无
  * 内部滚动条）。连接行置顶（运行态状态点/选中高亮/编辑/删除常显；
- * relay 行附 E2E 承载徽标——E2E-T3），本机被控面设置卡随后。
+ * relay 行附 E2E 承载徽标——E2E-T3；批3B 增直连明文警示徽标与协议
+ * 版本「建议升级」徽标——connection-safety 判定），本机被控面设置卡随后。
  * 本地无头端启停卡已删（HD-P3e：单 UI 本地主机直达后单机分体场景
  * 退役——localStart 通道保留经 IPC/脚本可达）。
  * 运行态变化来自注册表（server:event 不含连接级事件），5s 轮询兜底刷新。
@@ -33,6 +34,10 @@ import ServerApi, {
   type ConnectionRuntimeState,
   type ConnectionView,
 } from "../api/server.api";
+import {
+  isPlainHttpRemote,
+  isProtocolOutdated,
+} from "../lib/connection-safety";
 import { ConnectionDialog, CONNECTIONS_QUERY_KEY } from "./ConnectionDialog";
 
 /** 状态点配色（主题变量；connected 主题色/连通，invalid-token 破坏色） */
@@ -95,6 +100,52 @@ function ConnectionE2eBadge({ connection }: { connection: ConnectionView }) {
     >
       <E2eBadgeIcon state={connection.e2e} />
       {label}
+    </span>
+  );
+}
+
+/** 警示徽标通用样式（批3B：复用 E2E plaintext 徽标视觉语言——语义状态
+ *  色 orange，非主题色） */
+const WARN_BADGE_CLASS =
+  "inline-flex shrink-0 items-center gap-0.5 text-[10px] select-none text-orange-500";
+
+/** 直连明文警示徽标（批3B，design §5 项7）：http:// 非局域网地址——token
+ * 与业务面全程明文（局域网内明文风险可控不警示；https 恒安全态） */
+function ConnectionPlainHttpBadge({ connection }: { connection: ConnectionView }) {
+  const { t } = useTranslation("ai");
+  if (connection.mode !== "direct" || !isPlainHttpRemote(connection.baseUrl)) {
+    return null;
+  }
+  return (
+    <span
+      data-testid={`connection-plain-http-${connection.id}`}
+      title={t("ai:server.connection.plainHttpHint")}
+      className={WARN_BADGE_CLASS}
+    >
+      <TriangleAlert className="h-3 w-3 shrink-0" />
+      {t("ai:server.connection.plainHttp")}
+    </span>
+  );
+}
+
+/** 协议版本「建议升级」徽标（批3B，design §5 项9）：被控端 protocolVersion
+ * 低于控制端基线（PROTOCOL_VERSION 单源协议包）；老被控端未上报
+ * （undefined）不告警——增量兼容 */
+function ConnectionProtocolBadge({ connection }: { connection: ConnectionView }) {
+  const { t } = useTranslation("ai");
+  if (!isProtocolOutdated(connection.protocolVersion)) {
+    return null;
+  }
+  return (
+    <span
+      data-testid={`connection-protocol-outdated-${connection.id}`}
+      title={t("ai:server.connection.protocolOutdatedHint", {
+        version: connection.protocolVersion,
+      })}
+      className={WARN_BADGE_CLASS}
+    >
+      <TriangleAlert className="h-3 w-3 shrink-0" />
+      {t("ai:server.connection.protocolOutdated")}
     </span>
   );
 }
@@ -239,6 +290,8 @@ export default function ConnectionList({
                       </span>
                     )}
                     <ConnectionE2eBadge connection={connection} />
+                    <ConnectionPlainHttpBadge connection={connection} />
+                    <ConnectionProtocolBadge connection={connection} />
                   </div>
                   <span className="block truncate text-xs text-muted-foreground">
                     {connection.mode === "direct"

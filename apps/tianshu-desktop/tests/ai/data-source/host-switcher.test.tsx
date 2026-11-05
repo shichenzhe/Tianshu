@@ -73,6 +73,7 @@ import {
   useHostStore,
   LOCAL_HOST_CAPS,
 } from "../../../src-react/domains/ai/data-source/host.store";
+import { hostScopedQueryHash } from "../../../src-react/domains/ai/data-source/host-query";
 
 /** 位置探针：主机配置入口导航断言 */
 function LocationProbe() {
@@ -83,8 +84,11 @@ function LocationProbe() {
 }
 
 function renderSwitcher() {
+  // 与 main.tsx 同款装配：queryKeyHashFn 按主机隔离（批3B）
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false, queryKeyHashFn: hostScopedQueryHash },
+    },
   });
   const { container } = render(
     <QueryClientProvider client={client}>
@@ -182,13 +186,14 @@ describe("HostSwitcher", () => {
     expect(localItem).toBeDefined();
   });
 
-  it("点击 connected 连接：activeHost 切远程 + react-query 缓存清空", async () => {
+  it("点击 connected 连接：activeHost 切远程；同 key 缓存按主机隔离且回切保留", async () => {
     serverApi.listConnections.mockResolvedValue({
       activeConnId: null,
       connections: [conn("c1", "connected", "公司无头端")],
     });
     const client = renderSwitcher().client;
-    // 预置一条任意 query 缓存：切换后应被清
+    // 预置一条任意 query 缓存：切换后同 key 在远程主机下不可见（隔离），
+    // 但本机主机的缓存保留（回切秒开——批3B 不再全清）
     client.setQueryData(["host", "probe"], "stale");
 
     const trigger = await screen.findByTestId("host-switcher");
@@ -202,10 +207,19 @@ describe("HostSwitcher", () => {
         connId: "c1",
       }),
     );
-    // 缓存清空：probe 缓存不复存在
-    await waitFor(() =>
-      expect(client.getQueryData(["host", "probe"])).toBeUndefined(),
+    expect(client.getQueryData(["host", "probe"])).toBeUndefined();
+
+    // 回切本机：缓存原地可见
+    openMenu(trigger);
+    fireEvent.click(
+      await screen.findByRole("menuitem", {
+        name: "layout:hostSwitcher.local",
+      }),
     );
+    await waitFor(() =>
+      expect(useHostStore.getState().activeHost).toEqual({ kind: "local" }),
+    );
+    expect(client.getQueryData(["host", "probe"])).toBe("stale");
   });
 
   it("caps 自注册表上报回填（chat 开/files 关）", async () => {

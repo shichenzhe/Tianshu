@@ -172,7 +172,12 @@ export type BridgeToolResult =
 export type ServerEvent =
   | {
       type: "server.connected";
-      payload: { instanceId: string; capabilities: string[] };
+      payload: {
+        instanceId: string;
+        capabilities: string[];
+        /** 协议版本（批3B）：与 /info 同源；缺省 = 老被控端（不告警） */
+        protocolVersion?: number;
+      };
     }
   | FaceEvent
   | { type: "graph.run.updated"; payload: GraphRunUpdatedPayload }
@@ -240,6 +245,13 @@ export const DESKTOP_CAPABILITIES = [
   "backup",
 ] as const;
 
+/** 协议版本（批3B，design §5 项9）：控制端/被控端协商基线。被控端
+ * /info 与 server.connected 首帧上报 protocolVersion；控制端低于本值给
+ * 「建议升级」提示而非静默降级；缺省 = 老被控端未上报（增量兼容，不
+ * 告警）。语义变更（端点载荷/事件语义分叉）时 +1——纯新增能力走
+ * capabilities 数组，不动本值 */
+export const PROTOCOL_VERSION = 1;
+
 /** /info 端点结果形状（双侧被控端同构；username 为身份面增补——token
  * 是实例级非用户级，被控数据面实际归属的用户名单独透出：桌面 face =
  * user 表最新用户（resolveUserId 语义）、无头端 = 伴生用户 userId=1；
@@ -250,6 +262,9 @@ export interface RemoteInstanceInfo {
   instanceId: string;
   capabilities: string[];
   username?: string | null;
+  /** 协议版本（批3B）：与 PROTOCOL_VERSION 协商；缺省 = 老被控端未
+   * 上报（控制端不告警，增量兼容） */
+  protocolVersion?: number;
 }
 
 /**

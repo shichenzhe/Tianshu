@@ -11,6 +11,7 @@ import { StaticTokenGuard } from 'src/commons/auth/guard/token.guard';
 import { ResponseInterceptor } from 'src/commons/web/interceptor/response.interceptor';
 import { InfoModule } from 'src/modules/info/info.module';
 import { instanceId } from 'src/modules/info/info.controller';
+import { PROTOCOL_VERSION } from '@tianshu/protocol';
 
 /** /info 经 starter 统一包装后的响应体形状 */
 interface InfoResponseBody {
@@ -20,6 +21,7 @@ interface InfoResponseBody {
     version: string;
     instanceId: string;
     capabilities: string[];
+    protocolVersion?: number;
   };
 }
 
@@ -113,6 +115,9 @@ describe('InfoController (e2e)', () => {
       // 端不报——防协议包常量扩充后 capability 泄漏回归（ui/* 三端点本端
       // 不实现，控制端据 capability 门控不可达，直连调用返回 404）
       expect(body.data.capabilities).not.toContain('ui-drive');
+      // 批3B：协议版本协商——/info 上报协议包单源常量（控制端低于基线
+      // 给「建议升级」；老被控端缺省不告警的兼容语义由控制端承载）
+      expect(body.data.protocolVersion).toBe(PROTOCOL_VERSION);
     });
 
     it('instanceId 为进程级单例：与导出常量一致、两次请求相同、UUID 格式', async () => {

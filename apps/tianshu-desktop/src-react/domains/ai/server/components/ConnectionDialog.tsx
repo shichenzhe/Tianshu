@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, PlugZap } from "lucide-react";
+import { Loader2, PlugZap, TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +39,7 @@ import ServerApi, {
   type ConnectionMode,
   type TestConnectionResult,
 } from "../api/server.api";
+import { isPlainHttpRemote, isProtocolOutdated } from "../lib/connection-safety";
 
 export const CONNECTIONS_QUERY_KEY = ["server", "connections"] as const;
 
@@ -233,6 +234,15 @@ export function ConnectionDialog({
         toast.success(
           t("ai:server.connection.testOk", { instance: result.instanceId }),
         );
+        // 批3B：协议版本过旧——测试连通但语义可能分叉，给升级建议而非
+        // 静默降级（老被控端未上报不提示）
+        if (isProtocolOutdated(result.protocolVersion)) {
+          toast.warning(
+            t("ai:server.connection.protocolOutdatedHint", {
+              version: result.protocolVersion,
+            }),
+          );
+        }
       } else {
         toast.error(
           t("ai:server.connection.testFailed", {
@@ -366,6 +376,17 @@ export function ConnectionDialog({
               <p className="text-[10px] leading-relaxed text-muted-foreground/80">
                 {t("ai:server.connection.backupTokenHint")}
               </p>
+              {/* 批3B：http 非局域网明文警示（连接行徽标同源判定——
+                  connection-safety.isPlainHttpRemote） */}
+              {isPlainHttpRemote(draft.baseUrl.trim()) && (
+                <p
+                  data-testid="conn-plain-http-warning"
+                  className="flex items-start gap-1 text-[10px] leading-relaxed text-orange-500"
+                >
+                  <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                  {t("ai:server.connection.plainHttpHint")}
+                </p>
+              )}
             </>
           ) : (
             <>

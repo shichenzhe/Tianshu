@@ -54,6 +54,17 @@ export function capsOfCapabilities(capabilities: string[]): HostCaps {
 
 export type ActiveHost = { kind: "local" } | { kind: "remote"; connId: string };
 
+/** 同主机判定（local 同类即同；remote 比 connId）——switchHost 幂等守卫
+ * 与切换入口 switchToHost 共用单源（批3B：入口级幂等消灭同主机切换的
+ * 冗余 listConnections 请求） */
+export function isSameHost(a: ActiveHost, b: ActiveHost): boolean {
+  if (a.kind !== b.kind) return false;
+  return (
+    a.kind === "local" ||
+    (a as { connId: string }).connId === (b as { connId: string }).connId
+  );
+}
+
 interface HostState {
   activeHost: ActiveHost;
   /** 远程主机 caps（本地时为 LOCAL_HOST_CAPS） */
@@ -66,11 +77,7 @@ export const useHostStore = create<HostState>((set, get) => ({
   activeHost: { kind: "local" },
   caps: LOCAL_HOST_CAPS,
   switchHost: (next, opts) => {
-    if (
-      get().activeHost.kind === next.kind &&
-      (next.kind === "local" ||
-        (get().activeHost as { connId: string }).connId === next.connId)
-    ) {
+    if (isSameHost(get().activeHost, next)) {
       return; // 同主机幂等
     }
     set({ activeHost: next });

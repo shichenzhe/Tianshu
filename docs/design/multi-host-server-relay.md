@@ -51,7 +51,7 @@
 
 | 层 | 位置 | 职责 |
 |---|---|---|
-| 数据源路由层 | `src-react/domains/ai/data-source/`（host-route/host.store/switch-host/remote-catalog/remote-session/remote-files/chat-stream） | api 模块内双通道路由 + 远程形状转换 + 主机全局态与 caps |
+| 数据源路由层 | `src-react/domains/ai/data-source/`（host-route/host.store/switch-host/host-query/remote-catalog/remote-session/remote-files/chat-stream） | api 模块内双通道路由 + 远程形状转换 + 主机全局态与 caps + queryKey 主机隔离（host-query 的 queryKeyHashFn，批3B） |
 | 连接管理层 | `electron/domains/server/`（connections/ipc/transport/direct-transport/relay-transport/supervisor/relay-ak/bridge-executor/protocol） | 连接注册表持久化、Transport 抽象与两承载、Supervisor 本地无头端启停、57 个 `server:*` IPC、AK 换发、控制端桥执行面 |
 | 被控面层 | `electron/domains/server-face/`（server-face/routes/relay-client/deps/face-events/face-info/e2e-keys/ws-liveness/各 *-tap） | 桌面端 HTTP/WS 被控服务 + relay 出站客户端 + 各域 tap 桥接 |
 | 无头端层 | `apps/tianshu-server/src/{modules,core,commons}` | NestJS 二十余模块业务面 + `core/` 桌面 golden 移植（chat-runner/tools/graph…） |
@@ -81,7 +81,7 @@ UI 组件对路由完全透明——改造发生在 api 方法内部，本地分
 
 **主机全局态与 caps**（`host.store.ts`）：`HostCaps` 九面（chat/provider/session/assistant/skills/permission/usage/files/graph）——`caps.files=false` 隐藏附件/文件联想/compact 等（`ChatInput.tsx` 消费），`caps.graph=false` 不渲染编排遥控。本地主机恒 `LOCAL_HOST_CAPS` 全集但 **graph 恒 false**（本地桌面无编排端点，远程编排是无头端专属）；远程 caps 由 `capsOfCapabilities(capabilities: string[])` 从连接运行时上报值推导：`chat/provider` 直判、`session/permission/usage` 挂 chat、`assistant/skills` 恒 true、`files` 需被控端显式上报（FA-T3 动态化——旧端不上报照旧全关）、`graph` 独立判定。切换时先置空面（`capsOfCapabilities([])`），由切换入口拉连接列表回填真实值。
 
-**切换副作用**（`switch-host.ts` `switchToHost`，HD-T4）：`useHostStore.switchHost` 幂等守卫（同主机直 return）后置 activeHost，`onSwitched` 钩子执行——react-query 缓存全清（`deps.clearCache` ← `queryClient.clear()`；数据按主机隔离的 P1 简化口径：queryKey 不带主机维度，切换即全清）、会话搜索复位（`useSessionSearchStore.reset()`）、流式缓冲复位（`useChatStore.resetAll()`）；随后 `ServerApi.listConnections()` 按注册表运行时上报回填 caps（连接查无——已删/注册表过期——保持空面）。store 保持纯态不依赖 queryClient（缓存清空经 deps 注入）。
+**切换副作用**（`switch-host.ts` `switchToHost`，HD-T4；批3B 改造）：同主机幂等直 return（零请求）；异主机先 kick 后切——`deps.kickQueries`（组件注入 `queryClient.resetQueries({type:"active"})`）在切 store 前执行：活动条目 data 置空必达 re-render + 旧条目 refetch 同步锁定旧主机（正确归位旧条目），通知延后一拍让观察者 re-render 时按新主机 hash 跳缓存项（**不再 `queryClient.clear()` 全清**——queryKeyHashFn 已按主机隔离缓存，非活动条目保留=回切秒开，见改进 1 落地注）；随后置 activeHost、会话搜索复位（`useSessionSearchStore.reset()`）、流式缓冲复位（`useChatStore.resetAll()`）；`ServerApi.listConnections()` 按注册表运行时上报回填 caps（连接查无——已删/注册表过期——保持空面）。store 保持纯态不依赖 queryClient（kick 经 deps 注入）。
 
 **已路由化域清单**（`routeInvoke`/`routeSubscribe` 消费方，`src-react` 全量）：
 
@@ -311,7 +311,7 @@ RELAY_CLOSE_CODES = {QUOTA_EXCEEDED:4005, ID_CONFLICT:4006, TENANT_FORBIDDEN:400
 | 文件 | 内容 |
 |---|---|
 | `relay-frames.ts` | RelayFrame/AuthFrame/RELAY_CLOSE_CODES/E2E 握手与信封类型（3.4 节） |
-| `server-event.ts`（29K） | `ServerEvent` 联合（server.connected/session.updated/message.chunk/tool.request/session.error/graph.run.updated/automation.changed/backup.progress…）、`FaceEvent`（被控端事件总线，server.connected 不含——连接级合成）、`CAPABILITIES`（无头端：chat/provider/graph/files/library/monitor）、`DESKTOP_CAPABILITIES`（桌面被控端：chat/provider/ui-drive/files/mcp/monitor/library/project/skillhub/automation/memory/backup）、`RemoteInstanceInfo {name, version, instanceId, capabilities, username?}`（token 是实例级非用户级，归属用户名单独透出）、`ENDPOINTS` 逻辑端点路径表 |
+| `server-event.ts`（29K） | `ServerEvent` 联合（server.connected/session.updated/message.chunk/tool.request/session.error/graph.run.updated/automation.changed/backup.progress…；server.connected 载荷含可选 `protocolVersion`——批3B 版本协商）、`FaceEvent`（被控端事件总线，server.connected 不含——连接级合成）、`CAPABILITIES`（无头端：chat/provider/graph/files/library/monitor）、`DESKTOP_CAPABILITIES`（桌面被控端：chat/provider/ui-drive/files/mcp/monitor/library/project/skillhub/automation/memory/backup）、`PROTOCOL_VERSION`（协议协商基线常量，批3B）、`RemoteInstanceInfo {name, version, instanceId, capabilities, username?, protocolVersion?}`（token 是实例级非用户级，归属用户名单独透出）、`ENDPOINTS` 逻辑端点路径表 |
 | `chat-contract.ts` | chunk（`ChatStreamChunk`）/blocks（`MessageBlock` 联合）/send（`ChatSendParams`）契约——三端消息形态单源 |
 | `agent-runner.ts` / `artifact-contract.ts` / `backup-contract.ts` / `expert-contract.ts` / `graph-contract.ts` / `library-contract.ts` / `mcp-contract.ts` / `memory-contract.ts` / `monitor-contract.ts` / `permission-contract.ts` / `project-contract.ts` / `provider-save-contract.ts` / `skill-contract.ts` / `ui-contract.ts` / `workspace-contract.ts` | 各域载荷与稳定错误码（provider-save 含 apiKey 掩码回传约定；skill 含 SkillHub 市场契约） |
 
@@ -341,12 +341,12 @@ RELAY_CLOSE_CODES = {QUOTA_EXCEEDED:4005, ID_CONFLICT:4006, TENANT_FORBIDDEN:400
 
 ## 5. 改进空间
 
-1. **queryKey 主机维度化**：当前隔离靠切换时 `queryClient.clear()` 全清（spec §2.4 自认 P1 简化口径）——切换后全部重新拉取、无「回切秒开」。可把 activeHost 归一为 queryKey 前缀（或利用 react-query 的 query scope 机制），缓存按主机自然隔离，切换保留各自缓存；顺带消灭同主机幂等切换仍需回填 caps 的重复请求。改动集中在 `switch-host.ts` + 各 api 的 queryKey 构造（约十处机械替换）。
+1. **queryKey 主机维度化**：~~当前隔离靠切换时 `queryClient.clear()` 全清~~ ✅ 已落地（批3B，2026-11-05）：activeHost 归一进 react-query 的 `queryKeyHashFn`（`data-source/host-query.ts` 的 `hostScopedQueryHash`——主机令牌 `local` / `conn:<connId>` 前缀 + 稳定序列化），`main.tsx` 装配 client 默认层一处收口；同 key 跨主机落不同 queryHash，缓存按主机自然隔离。落地口径与原案（逐处给 queryKey 加前缀，约十处）不同：实测全仓 queryKey 内联构造 283 处（115 文件），逐处替换漏一处即跨主机污染，hash 收口单点生效零遗漏（失效按 key 前缀匹配仍主机无关——跨主机同名 key 一并标脏无害；exact 匹配经 `query.options.queryKeyHashFn` 同口径不受影响）。切换踢面为切 store 前 `resetQueries({type:"active"})`（`switch-host.ts` kickQueries）：活动条目 data 置空必达 re-render（tracked props 语义下 invalidate 的 fetchStatus 通知会被吞）、旧条目 refetch 同步起步锁定旧主机（刷新正确归位旧条目——若 kick 晚于切 store 会以新主机取数写入旧条目=跨主机污染，时序勿动）、非活动条目缓存原样保留=回切秒开；同主机幂等切换直 return（消灭仍拉 listConnections 回填 caps 的重复请求）。
 2. **多主机并发会话**（HD spec 遗留）：activeHost 全局单值意味着同时只能操作一台主机；可在 store 层引入 per-host 会话视图（chat 面板绑定 connId 而非全局 activeHost），对齐「多 headless 会话共享工作区」的既有协作纪律。改动面大（api 路由层签名需带显式 host 参数、缓存与流式订阅联动），宜分批：先消息查看后发送、后审批/操作。
 3. **caps 变更事件化**：caps 只在切换时回填一次，被控端能力热变化（server 升级新增 graph/重启换 instanceId）要重连才可见；可在 register/info 差异检测时经注册表推 caps 更新事件（复用 server.connected 同通道语义），HostSwitcher/store 消费刷新——对齐 K8s watch 的「事实变化即推送」而非「查询时点快照」。
 4. **E2E 会话密钥前向保密增强**：现会话密钥连接生命周期恒定；可引入密钥演进（每 N 帧或每分钟 HKDF ratchet 派生下一把，接收端同步窗口宽限），把单帧密文泄露的影响窗从「整连接」收敛到「窗口内」——Signal 双棘轮的最小子集。改动集中在 `e2e-crypto.ts` `E2ESession`（seal/open 内部维护代际）+ 双端同步窗口，wire 契约不变（信封形态不动）。
 5. **TOFU 指纹核对的 UI 显式化**：指纹目前 TOFU 首连自动回填，之后仅 mitm 时报警（红色徽标）；可在连接详情卡常显当前指纹（`ConnectionConfig.fingerprint` 字段已有），并提供「核对后确认」动作（显式 pin + 确认时间戳），对齐 Signal safety number 的人工核对仪式——把「静默信任首连」升级为「可审计的信任决策」。
 6. **relay 多副本/水平扩展**：RelayRegistry 是单进程内存态（配对/租户计数/CRL stub），单点且重启丢配对（被控端重注册自愈、client 侧重连，但 admin 在线视图断档）；多副本需 sticky（同 connectionId 的 server/client 同副本）或注册表外置（Redis）+ internal 端点鉴权改造。Dockerfile.relay 已零业务代码具备多副本部署基础，缺的是状态外置方案——短期可先做 relay 无状态化评估（CRL 已是 stub 控制平面，配对表外置是主要工程量）。
-7. **DirectTransport 与 server-face 的传输安全强化**：直连模式鉴权是静态 Bearer token，明文 HTTP 时 token 即凭证且业务面明文；局域网外直连应要求 HTTPS——可加自签证书 + 指纹钉扎（复用 E2E 指纹基础设施与 UI 警示先例），至少先在 UI 对 `http://` 非局域网地址给警示徽标（relay 链路已有 plaintext 警示徽标可直接复用视觉语言）。
+7. **DirectTransport 与 server-face 的传输安全强化**：直连模式鉴权是静态 Bearer token，明文 HTTP 时 token 即凭证且业务面明文；局域网外直连应要求 HTTPS——自签证书 + 指纹钉扎（复用 E2E 指纹基础设施）仍未做。✅ 已落地首步（批3B，2026-11-05）：`http://` 非局域网地址（保守白名单：回环/10/8、172.16/12、192.168/16、169.254/16、fe80::/10、fc00::/7 及 v4 映射之外，非 IP 主机名与解析失败一律按公网）的直连在连接行给橙色警示徽标（`connection-safety.ts` `isPlainHttpRemote`，复用 relay plaintext 徽标视觉语言），连接对话框 baseUrl 下方同步内联警示；https/wss 恒安全态不警示。
 8. **编排遥控的实时性**：GraphPanel/AutomationPanel 走请求-响应式轮询；`graphRunNode` 节点级执行详情表已存在（`ensureGraphRunNodeTable`），可透出为 face 事件流（先例：message.chunk/graph.run.updated），图运行监控页实时滚动、减少轮询空转——协议面只需增一种 ServerEvent 载荷（增量兼容）。
-9. **无头端 capabilities 的版本协商**：capabilities 是布尔清单无版本号，控制端遇未知能力名静默忽略（数组 includes 判定），新语义依赖隐式兼容；可在 `/info` 增 `protocolVersion` 字段（协议包常量，`RemoteInstanceInfo` 加可选列），控制端对过低版本给「建议升级」提示而非静默降级——避免「能力在但语义老」的隐性行为分叉。
+9. **无头端 capabilities 的版本协商**：~~capabilities 是布尔清单无版本号~~ ✅ 已落地（批3B，2026-11-05）：协议包增 `PROTOCOL_VERSION` 常量（单源，语义变更时 +1；纯新增能力仍走 capabilities 数组），`RemoteInstanceInfo` 与 `server.connected` 载荷均增可选 `protocolVersion` 列；双侧被控端（无头端 `/info` 与 SSE 首帧、桌面 face `/info` 与 SSE 首帧）上报同源值，relay 承载经 RelayTransport 合成 `server.connected` 自 GET info 透传；控制端注册表 `ConnectionView.protocolVersion`（direct 自 SSE 首帧、relay 自合成事件）+ testConnection 结果均携带，连接行对低于基线给「建议升级」徽标、测试连通 toast 同步提示（`connection-safety.ts` `isProtocolOutdated`）；缺省 = 老被控端未上报，不告警（增量兼容）。relay register 帧不带版本（relay 侧不消费，控制端两路数据面已覆盖）。

@@ -86,11 +86,14 @@ export type ConnectionRuntimeState =
   | "closed";
 
 /** 注册表对外视图：配置 + 运行态 + 协商到的能力清单 + E2E 承载态（relay
- * 会话加密徽标数据；direct 恒 unsupported、idle 无值——UI 按 mode 门控） */
+ * 会话加密徽标数据；direct 恒 unsupported、idle 无值——UI 按 mode 门控）
+ * + 协议版本（批3B：server.connected 上报，控制端低于 PROTOCOL_VERSION
+ * 给「建议升级」） */
 export interface ConnectionView extends ConnectionConfig {
   state: ConnectionRuntimeState;
   e2e?: TransportE2eState;
   capabilities: string[];
+  protocolVersion?: number;
 }
 
 export interface PersistedShape {
@@ -99,7 +102,13 @@ export interface PersistedShape {
 }
 
 export type TestConnectionResult =
-  | { ok: true; instanceId: string; capabilities: string[] }
+  | {
+      ok: true;
+      instanceId: string;
+      capabilities: string[];
+      /** 协议版本（批3B）：/info 透传；缺省 = 老被控端未上报（不告警） */
+      protocolVersion?: number;
+    }
   | {
       ok: false;
       reason: "invalid-config" | "invalid-token" | "unreachable" | "timeout";
@@ -124,6 +133,8 @@ interface TransportEntry {
   state: ConnectionRuntimeState;
   e2e: TransportE2eState;
   capabilities: string[];
+  /** 协议版本（批3B）：server.connected 上报；undefined=老被控端 */
+  protocolVersion?: number;
   /** AK 凭证失效占位标记（T17）：invalid-ak=粘滞（重配经 save 自愈）；
    * unavailable=瞬态（下次请求/激活重建自愈） */
   akFailure?: "invalid-ak" | "unavailable";
@@ -400,6 +411,7 @@ export class ConnectionRegistry {
           state: entry?.state ?? "idle",
           e2e: entry?.e2e,
           capabilities: entry?.capabilities ?? [],
+          protocolVersion: entry?.protocolVersion,
         };
       }),
     };
@@ -506,7 +518,11 @@ export class ConnectionRegistry {
       }
       const body = info.body as {
         code?: unknown;
-        data?: { instanceId?: unknown; capabilities?: unknown };
+        data?: {
+          instanceId?: unknown;
+          capabilities?: unknown;
+          protocolVersion?: unknown;
+        };
       } | null;
       const instanceId = body?.data?.instanceId;
       if (body?.code === "2000" && typeof instanceId === "string") {
@@ -516,6 +532,10 @@ export class ConnectionRegistry {
           capabilities: Array.isArray(body.data?.capabilities)
             ? (body.data.capabilities as string[])
             : [],
+          // 协议版本（批3B）：/info 透传（老被控端缺省不告警）
+          ...(typeof body.data?.protocolVersion === "number"
+            ? { protocolVersion: body.data.protocolVersion }
+            : {}),
         };
       }
       return {
@@ -693,6 +713,12 @@ export class ConnectionRegistry {
       if (event.type === "server.connected") {
         entry.state = "connected";
         entry.capabilities = event.payload.capabilities;
+        // 协议版本（批3B）：直接覆盖（含 undefined——重连老被控端自愈为
+        // 未上报口径，不留陈旧值）
+        entry.protocolVersion =
+          typeof event.payload.protocolVersion === "number"
+            ? event.payload.protocolVersion
+            : undefined;
         // 不 return：连接态就地更新后继续下发 sink（§13 项 2）
       }
       this.eventSink?.(id, event);

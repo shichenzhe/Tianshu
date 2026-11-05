@@ -106,6 +106,7 @@ import {
   FACE_INSTANCE_ID,
   FACE_CAPABILITIES,
 } from "../../../electron/domains/server-face/face-info";
+import { PROTOCOL_VERSION } from "@tianshu/protocol";
 import type { SessionRecord } from "../../../src-react/domains/ai/api/session.api";
 import type { ProviderRepository } from "../../../electron/domains/ai/provider/provider.repo";
 import type { ModelRepository } from "../../../electron/domains/ai/provider/model.repo";
@@ -453,10 +454,12 @@ describe("send 桥 → SSE 事件流", () => {
 
     const connected = await reader.nextEvent();
     expect(connected.event).toBe("server.connected");
-    // 能力清单以包常量为准（UD-T1 增 ui-drive——chat/provider/ui-drive）
+    // 能力清单以包常量为准（UD-T1 增 ui-drive——chat/provider/ui-drive）；
+    // protocolVersion 协商上报（批3B，与 /info 同源）
     expect(JSON.parse(connected.data)).toEqual({
       instanceId: FACE_INSTANCE_ID,
       capabilities: [...FACE_CAPABILITIES],
+      protocolVersion: PROTOCOL_VERSION,
     });
 
     // send：202 受理（HTTP 面同端口 POST）

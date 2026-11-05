@@ -14,6 +14,7 @@ import { initFontScale } from "@/domains/app-settings/model/font-scale";
 import { registerMainWindowNavigate } from "@/domains/ai/file-window/lib/main-window-navigate";
 import { initUiDriveListener } from "@/domains/ai/server/lib/ui-drive-listener";
 import { registerQueryInvalidation } from "@/lib/query-invalidate-events";
+import { hostScopedQueryHash } from "@/domains/ai/data-source/host-query";
 import "./i18n";
 import { initLocale } from "./i18n";
 import "./styles/globals.css";
@@ -45,6 +46,9 @@ const queryClient = new QueryClient({
       // M14：全局 staleTime——路由/会话往返不重复 IPC 全量重拉（事件
       // invalidate 链路完备，数据新鲜度由失效驱动而非挂载驱动）
       staleTime: 30_000,
+      // 批3B：queryKey 主机隔离——hash 携带 activeHost 令牌，同 key 跨
+      // 主机落不同缓存项（切换不清缓存，回切秒开；详见 host-query 头注释）
+      queryKeyHashFn: hostScopedQueryHash,
     },
   },
 });

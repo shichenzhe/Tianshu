@@ -3,7 +3,7 @@ import type { FastifyReply } from 'fastify';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from 'src/commons/auth/decorator/public.decorator';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
-import { CAPABILITIES, type ServerEvent } from '@tianshu/protocol';
+import { CAPABILITIES, PROTOCOL_VERSION, type ServerEvent } from '@tianshu/protocol';
 import { instanceId } from 'src/modules/info/info.controller';
 
 /** SSE 心跳间隔：注释行防中间层（代理/网关）空闲超时断连 */
@@ -87,11 +87,16 @@ export class EventController {
     raw.on('close', cleanup);
     raw.on('error', cleanup);
 
-    // 首帧：进程实例标识 + 能力清单（/info 同源，连接即知服务身份）
+    // 首帧：进程实例标识 + 能力清单（/info 同源，连接即知服务身份）；
+    // protocolVersion 协议协商（批3B，与 /info 同源）
     raw.write(
       encodeSseFrame({
         type: 'server.connected',
-        payload: { instanceId, capabilities: [...CAPABILITIES] },
+        payload: {
+          instanceId,
+          capabilities: [...CAPABILITIES],
+          protocolVersion: PROTOCOL_VERSION,
+        },
       }),
     );
   }

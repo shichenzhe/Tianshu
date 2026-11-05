@@ -13,6 +13,7 @@ import { openSecretFields, sealSecretFields } from "../security/option-secrets";
 import Log from "../../commons/Log";
 import { handleRoute } from "./routes";
 import { ensureTapBridge, onFaceEvent, type FaceEvent } from "./face-events";
+import { PROTOCOL_VERSION } from "@tianshu/protocol";
 import { FACE_CAPABILITIES, FACE_INSTANCE_ID } from "./face-info";
 
 const OPTION_TYPE = "app";
@@ -137,7 +138,12 @@ export type SseEvent =
   | FaceEvent
   | {
       type: "server.connected";
-      payload: { instanceId: string; capabilities: string[] };
+      payload: {
+        instanceId: string;
+        capabilities: string[];
+        /** 协议版本（批3B）：与协议包 ServerEvent 同口径（老被控端可缺省） */
+        protocolVersion?: number;
+      };
     };
 
 export function encodeSseFrame(event: SseEvent): string {
@@ -310,6 +316,8 @@ function streamSse(res: http.ServerResponse): void {
       payload: {
         instanceId: FACE_INSTANCE_ID,
         capabilities: [...FACE_CAPABILITIES],
+        // 协议版本协商（批3B）：与 /info 同源（info.controller 同构）
+        protocolVersion: PROTOCOL_VERSION,
       },
     }),
   );

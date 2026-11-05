@@ -2,7 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { randomUUID } from 'node:crypto';
 import { Public } from 'src/commons/auth/decorator/public.decorator';
-import { CAPABILITIES } from '@tianshu/protocol';
+import { CAPABILITIES, PROTOCOL_VERSION } from '@tianshu/protocol';
 import { version } from '../../../package.json';
 
 /**
@@ -26,7 +26,8 @@ export class InfoController {
   @Get('/info')
   @ApiOperation({
     summary: '服务信息与 capability 协商',
-    description: '返回服务名、版本、实例标识、能力列表与伴生用户名（starter 统一包装）',
+    description:
+      '返回服务名、版本、实例标识、能力列表、协议版本与伴生用户名（starter 统一包装）',
   })
   getInfo() {
     return {
@@ -34,6 +35,8 @@ export class InfoController {
       version,
       instanceId,
       capabilities: [...CAPABILITIES],
+      // 批3B：协议版本协商——控制端低于基线给「建议升级」（缺省=老端不告警）
+      protocolVersion: PROTOCOL_VERSION,
       username: null,
     };
   }

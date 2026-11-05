@@ -366,6 +366,9 @@ export interface ServerFaceInfo {
   /** 身份面：被控数据归属用户名（token 实例级非用户级——单独透出；
    *  库空/查询失败 null，控制端按未知显示） */
   username: string | null;
+  /** 协议版本（批3B）：与 /info 同源上报；装配侧恒设，类型对齐协议包
+   *  RemoteInstanceInfo 的可选列（老被控端缺省不告警） */
+  protocolVersion?: number;
 }
 
 /** 工作空间面桥（workspace/query 数据源，HD-A1：单 UI 远程态侧栏分组树） */

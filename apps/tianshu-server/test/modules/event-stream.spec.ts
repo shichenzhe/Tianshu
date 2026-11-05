@@ -8,6 +8,7 @@ import compression from 'compression';
 import { AuthModule } from 'src/commons/auth/auth.module';
 import { EventBusModule } from 'src/commons/event-bus/event-bus.module';
 import { EventModule } from 'src/modules/event/event.module';
+import { PROTOCOL_VERSION } from '@tianshu/protocol';
 
 /**
  * GET /event SSE 流（含压缩豁免回归）：
@@ -98,5 +99,18 @@ describe('EventController /event (e2e)', () => {
     const { headers, chunk } = await readFirstChunk({});
     expect(headers['content-encoding']).toBeUndefined();
     expect(chunk).toContain('event: server.connected');
+  });
+
+  it('批3B：首帧 server.connected 携带协议版本（与 /info 同源协商基线）', async () => {
+    const { chunk } = await readFirstChunk({});
+    const dataLine = chunk
+      .split('\n')
+      .find((line) => line.startsWith('data: '));
+    expect(dataLine).toBeDefined();
+    expect(JSON.parse(dataLine!.slice('data: '.length))).toMatchObject({
+      instanceId: expect.any(String),
+      capabilities: expect.any(Array),
+      protocolVersion: PROTOCOL_VERSION,
+    });
   });
 });

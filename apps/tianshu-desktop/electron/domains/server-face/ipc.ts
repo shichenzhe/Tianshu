@@ -68,6 +68,7 @@ import {
 } from "./relay-client";
 import type { RelayAkCredentials } from "./renewable-credential";
 import { ensureE2eStaticPair } from "./e2e-keys";
+import { PROTOCOL_VERSION } from "@tianshu/protocol";
 import { FACE_CAPABILITIES, FACE_INSTANCE_ID, FACE_NAME } from "./face-info";
 import { getReportedActiveUser, reportActiveUser } from "./active-user";
 import { fingerprintOf, type E2EKeyPair } from "@tianshu/core";
@@ -615,6 +616,8 @@ export function attachServerFace(deps: {
         instanceId: FACE_INSTANCE_ID,
         capabilities: [...FACE_CAPABILITIES],
         username: identityUser?.nickname ?? identityUser?.username ?? null,
+        // 协议版本协商（批3B）：控制端低于基线给「建议升级」
+        protocolVersion: PROTOCOL_VERSION,
       };
     },
   });

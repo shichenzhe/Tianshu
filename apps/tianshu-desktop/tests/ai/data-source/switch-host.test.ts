@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // 主机切换入口（HD-T4，spec §2.1）：switchToHost 承载切换副作用——
-// react-query 缓存清空（数据按主机隔离）、会话搜索与流式缓冲复位、
-// 远程 caps 自连接注册表运行时上报回填。store 全用真实实现（非 mock）。
+// 切前 kick react-query（批3B：不再清缓存——queryKeyHashFn 按主机隔离，
+// 缓存保留回切秒开）、会话搜索与流式缓冲复位、远程 caps 自连接注册表
+// 运行上报回填；同主机幂等直 return（零请求）。store 全用真实实现。
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/ipc", () => ({
@@ -67,7 +68,7 @@ describe("switchToHost", () => {
 
     await switchToHost(
       { kind: "remote", connId: "c9" },
-      { clearCache: vi.fn() },
+      { kickQueries: vi.fn() },
     );
 
     expect(serverApi.listConnections).toHaveBeenCalledTimes(1);
@@ -82,8 +83,8 @@ describe("switchToHost", () => {
     expect(caps.files).toBe(false);
   });
 
-  it("切换副作用齐发：缓存清空/会话搜索复位/流式缓冲复位", async () => {
-    const clearCache = vi.fn();
+  it("切换副作用齐发：切前 kick/会话搜索复位/流式缓冲复位", async () => {
+    const kickQueries = vi.fn();
     // 污染三个面：query 缓存（spy 断言）、搜索态、流式缓冲
     useSessionSearchStore.getState().setOpen(true);
     useSessionSearchStore.getState().setQuery("旧主机关键词");
@@ -95,9 +96,9 @@ describe("switchToHost", () => {
       ],
     });
 
-    await switchToHost({ kind: "remote", connId: "c1" }, { clearCache });
+    await switchToHost({ kind: "remote", connId: "c1" }, { kickQueries });
 
-    expect(clearCache).toHaveBeenCalledTimes(1);
+    expect(kickQueries).toHaveBeenCalledTimes(1);
     expect(useSessionSearchStore.getState().open).toBe(false);
     expect(useSessionSearchStore.getState().query).toBe("");
     expect(useChatStore.getState().streams).toEqual({});
@@ -105,20 +106,27 @@ describe("switchToHost", () => {
 
   it("切回本地：caps 全集，副作用同样触发", async () => {
     useHostStore.setState({ activeHost: { kind: "remote", connId: "c1" } });
-    const clearCache = vi.fn();
+    const kickQueries = vi.fn();
 
-    await switchToHost({ kind: "local" }, { clearCache });
+    await switchToHost({ kind: "local" }, { kickQueries });
 
     expect(useHostStore.getState().activeHost).toEqual({ kind: "local" });
     expect(useHostStore.getState().caps.files).toBe(true);
-    expect(clearCache).toHaveBeenCalledTimes(1);
+    expect(kickQueries).toHaveBeenCalledTimes(1);
     expect(serverApi.listConnections).not.toHaveBeenCalled();
   });
 
-  it("同主机幂等：副作用不触发", async () => {
-    const clearCache = vi.fn();
-    await switchToHost({ kind: "local" }, { clearCache });
-    expect(clearCache).not.toHaveBeenCalled();
+  it("同主机幂等：副作用不触发且零请求（消灭回填 caps 的重复拉取）", async () => {
+    const kickQueries = vi.fn();
+    await switchToHost({ kind: "local" }, { kickQueries });
+    expect(kickQueries).not.toHaveBeenCalled();
+    expect(serverApi.listConnections).not.toHaveBeenCalled();
+
+    // 同远程主机同样幂等（此前仍会拉 listConnections 回填 caps）
+    useHostStore.setState({ activeHost: { kind: "remote", connId: "c1" } });
+    await switchToHost({ kind: "remote", connId: "c1" }, { kickQueries });
+    expect(kickQueries).not.toHaveBeenCalled();
+    expect(serverApi.listConnections).not.toHaveBeenCalled();
   });
 
   it("注册表查无该连接（已删）：caps 保持空面不炸", async () => {
@@ -128,7 +136,7 @@ describe("switchToHost", () => {
     });
     await switchToHost(
       { kind: "remote", connId: "gone" },
-      { clearCache: vi.fn() },
+      { kickQueries: vi.fn() },
     );
     expect(useHostStore.getState().activeHost).toEqual({
       kind: "remote",

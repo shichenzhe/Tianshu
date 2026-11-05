@@ -523,6 +523,8 @@ function wireDeps(
       instanceId: "iid-1",
       capabilities: ["chat", "provider"],
       username: "测试用户",
+      // 批3B：协议版本协商（生产装配自 PROTOCOL_VERSION 常量）
+      protocolVersion: 1,
     }),
   });
   return {
@@ -588,7 +590,7 @@ afterEach(() => {
 });
 
 describe("被控面路由表（T11 查询端点）", () => {
-  it("GET info：capability 协商（chat/provider）+ 身份面 username + starter 成功包装", async () => {
+  it("GET info：capability 协商（chat/provider）+ 协议版本 + 身份面 username + starter 成功包装", async () => {
     wireDeps();
     const result = await handleRoute("GET", "info", null);
     expect(result.status).toBe(200);
@@ -602,6 +604,7 @@ describe("被控面路由表（T11 查询端点）", () => {
         instanceId: "iid-1",
         capabilities: ["chat", "provider"],
         username: "测试用户",
+        protocolVersion: 1,
       },
     });
   });

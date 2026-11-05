@@ -483,7 +483,11 @@ export class RelayTransport extends TransportBase {
       const info = await this.request("GET", "info");
       const body = info.body as {
         code?: unknown;
-        data?: { instanceId?: unknown; capabilities?: unknown };
+        data?: {
+          instanceId?: unknown;
+          capabilities?: unknown;
+          protocolVersion?: unknown;
+        };
       } | null;
       const instanceId = body?.data?.instanceId;
       if (body?.code === "2000" && typeof instanceId === "string") {
@@ -494,6 +498,10 @@ export class RelayTransport extends TransportBase {
             capabilities: Array.isArray(body.data?.capabilities)
               ? (body.data.capabilities as string[])
               : [],
+            // 协议版本协商（批3B）：/info 透传；缺省 = 老被控端未上报
+            ...(typeof body.data?.protocolVersion === "number"
+              ? { protocolVersion: body.data.protocolVersion }
+              : {}),
           },
         });
       }

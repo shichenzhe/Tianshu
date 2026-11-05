@@ -77,11 +77,13 @@ export type ConnectionE2eState =
   | "required-failed";
 
 /** 注册表对外视图：配置 + 运行态 + 协商到的能力清单 + E2E 承载态
- * （relay 会话加密徽标数据；direct 恒 unsupported、idle 无值） */
+ * （relay 会话加密徽标数据；direct 恒 unsupported、idle 无值）+
+ * 协议版本（批3B：低于 PROTOCOL_VERSION 给「建议升级」徽标） */
 export interface ConnectionView extends ConnectionConfig {
   state: ConnectionRuntimeState;
   e2e?: ConnectionE2eState;
   capabilities: string[];
+  protocolVersion?: number;
 }
 
 export interface ConnectionListResult {
@@ -93,7 +95,13 @@ export interface ConnectionListResult {
 export const LOCAL_CONNECTION_ID = "local";
 
 export type TestConnectionResult =
-  | { ok: true; instanceId: string; capabilities: string[] }
+  | {
+      ok: true;
+      instanceId: string;
+      capabilities: string[];
+      /** 协议版本（批3B）：/info 透传；缺省 = 老被控端未上报（不告警） */
+      protocolVersion?: number;
+    }
   | {
       ok: false;
       reason: "invalid-config" | "invalid-token" | "unreachable" | "timeout";

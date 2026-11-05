@@ -49,7 +49,12 @@ export default function HostSwitcher() {
   const connections = connectionsQuery.data?.connections ?? [];
 
   const doSwitch = (next: ActiveHost) => {
-    void switchToHost(next, { clearCache: () => queryClient.clear() });
+    // 批3B：不再 clear() 全清——切前 kick 活动查询（data 置空必达
+    // re-render 让观察者跳新主机缓存项；旧条目刷新锁定旧主机、其余缓存
+    // 原样保留=回切秒开——时序语义详见 switch-host 头注释）
+    void switchToHost(next, {
+      kickQueries: () => void queryClient.resetQueries({ type: "active" }),
+    });
   };
 
   // 重连全量刷新（spec §13 项 2，HD-P2c 随壳承接）：远程主机重连时

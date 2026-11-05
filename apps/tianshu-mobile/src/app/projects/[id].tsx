@@ -29,6 +29,7 @@ import {
   CircleDot,
   File,
   Folder,
+  FolderPlus,
   Link2,
   MoreHorizontal,
   Pencil,
@@ -802,6 +803,23 @@ export default function ProjectWorkspaceScreen() {
             </Text>
           </View>
         )}
+        {/* 新建文件夹入口（桌面对齐：create 态弹窗逻辑本就备好，
+            此前缺触发点致功能不可达；重命名后残留旧名故先清空） */}
+        <View className="flex-row justify-end px-4 pb-2">
+          <Pressable
+            onPress={() => {
+              setAssetName("");
+              setFolderDialog("create");
+            }}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <FolderPlus size={14} color={colors.primary} />
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {t("project:newFolder")}
+            </Text>
+          </Pressable>
+        </View>
         {entries.length === 0 ? (
           <Text className="py-20 text-center text-sm text-label2 dark:text-[#EBEBF599]">
             {t("project:emptyAssets")}
@@ -1072,7 +1090,11 @@ export default function ProjectWorkspaceScreen() {
           }
         >
           <FormField
-            label={t("project:newFolder")}
+            label={t(
+              folderDialog === "create"
+                ? "project:newFolder"
+                : "project:renameAsset",
+            )}
             value={assetName}
             onChangeText={setAssetName}
           />

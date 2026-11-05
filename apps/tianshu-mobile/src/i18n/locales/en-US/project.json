@@ -77,7 +77,10 @@
     "priority": "Priority",
     "dateInvalid": "Date must be YYYY-MM-DD",
     "saveFailed": "Save failed",
-    "customFields": "Custom fields"
+    "customFields": "Custom fields",
+    "aiProgress": "AI progress",
+    "descPreview": "Preview",
+    "descEdit": "Edit"
   },
   "searchTasks": "Search task titles",
   "template": "Template",

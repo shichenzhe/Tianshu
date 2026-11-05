@@ -17,7 +17,7 @@
   "sidebar": {
     "newTask": "新建任务",
     "experts": "专家·技能·连接器",
-    "automation": "定时任务",
+    "automation": "自动化",
     "server": "主机",
     "monitor": "监控",
     "workflows": "工作流",
@@ -41,7 +41,7 @@
     "sceneAll": "全部",
     "sceneChat": "对话",
     "sceneGraph": "工作流",
-    "sceneAutomation": "定时任务",
+    "sceneAutomation": "自动化",
     "todayInputTokens": "今日输入 Token",
     "todayOutputTokens": "今日输出 Token",
     "todayLlmCalls": "今日 LLM 轮次",
@@ -538,7 +538,7 @@
     "title": "自动化",
     "toggleEnabled": "启用或停用任务",
     "tabs": {
-      "tasks": "定时任务",
+      "tasks": "自动化",
       "runs": "运行记录"
     },
     "toolbar": {
@@ -566,13 +566,13 @@
     "list": {
       "sourceProject": "项目 · {{name}}",
       "sourceLocal": "本地",
-      "empty": "暂无定时任务",
+      "empty": "暂无自动化",
       "emptyAction": "去创建",
       "batchSelected": "已选择 {{count}} 项",
       "selectAll": "全选",
       "delete": "删除",
       "exitBatch": "退出管理",
-      "deleteTitle": "删除定时任务",
+      "deleteTitle": "删除自动化",
       "deleteBody": "将删除 {{count}} 个任务及其全部运行记录，此操作不可恢复。",
       "lastRun": "上次 {{time}}",
       "graphBadge": "工作流"

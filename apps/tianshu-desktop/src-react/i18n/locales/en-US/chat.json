@@ -17,7 +17,7 @@
   "sidebar": {
     "newTask": "New Task",
     "experts": "Experts·Skills·Connectors",
-    "automation": "Scheduled Tasks",
+    "automation": "Automation",
     "server": "Hosts",
     "monitor": "Monitor",
     "workflows": "Workflows",
@@ -41,7 +41,7 @@
     "sceneAll": "All",
     "sceneChat": "Chat",
     "sceneGraph": "Workflows",
-    "sceneAutomation": "Scheduled Tasks",
+    "sceneAutomation": "Automation",
     "todayInputTokens": "Input tokens today",
     "todayOutputTokens": "Output tokens today",
     "todayLlmCalls": "LLM calls today",
@@ -538,7 +538,7 @@
     "title": "Automation",
     "toggleEnabled": "Toggle task enabled",
     "tabs": {
-      "tasks": "Scheduled Tasks",
+      "tasks": "Automation",
       "runs": "Run History"
     },
     "toolbar": {
@@ -566,13 +566,13 @@
     "list": {
       "sourceProject": "Project · {{name}}",
       "sourceLocal": "Local",
-      "empty": "No scheduled tasks",
+      "empty": "No automation",
       "emptyAction": "Create now",
       "batchSelected": "{{count}} selected",
       "selectAll": "Select all",
       "delete": "Delete",
       "exitBatch": "Exit batch mode",
-      "deleteTitle": "Delete scheduled tasks",
+      "deleteTitle": "Delete automation",
       "deleteBody": "This will delete {{count}} tasks and all of their run history. This cannot be undone.",
       "lastRun": "Last {{time}}",
       "graphBadge": "Graph"

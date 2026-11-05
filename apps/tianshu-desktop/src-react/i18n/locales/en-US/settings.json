@@ -80,7 +80,7 @@
   },
   "executionHistory": {
     "title": "Run History Retention",
-    "desc": "Automatically clean scheduled task and workflow run records; trace data is cleaned before records to prevent unbounded growth",
+    "desc": "Automatically clean automation and workflow run records; trace data is cleaned before records to prevent unbounded growth",
     "enabledLabel": "Auto-clean run history",
     "successDaysLabel": "Keep successful runs (days)",
     "failureDaysLabel": "Keep failed runs (days)",

@@ -220,9 +220,9 @@
     "members": "成员",
     "owner": "创建者",
     "me": "我",
-    "automation": "定时任务",
+    "automation": "自动化",
     "automationNew": "新建",
-    "automationEmpty": "暂无定时任务",
+    "automationEmpty": "暂无自动化",
     "projectWorkspace": "项目资产空间",
     "taskRunning": "任务正在运行中，请稍候",
     "goAutomation": "前往自动化"

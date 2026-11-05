@@ -80,7 +80,7 @@
   },
   "executionHistory": {
     "title": "执行历史保留",
-    "desc": "定时任务与工作流运行记录自动清理，轨迹数据先于记录清理，防止无限增长",
+    "desc": "自动化与工作流运行记录自动清理，轨迹数据先于记录清理，防止无限增长",
     "enabledLabel": "自动清理执行历史",
     "successDaysLabel": "成功记录保留天数",
     "failureDaysLabel": "失败记录保留天数",

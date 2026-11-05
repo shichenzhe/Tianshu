@@ -220,9 +220,9 @@
     "members": "Members",
     "owner": "Owner",
     "me": "Me",
-    "automation": "Scheduled Tasks",
+    "automation": "Automation",
     "automationNew": "New",
-    "automationEmpty": "No scheduled tasks yet",
+    "automationEmpty": "No automation yet",
     "projectWorkspace": "Project assets",
     "taskRunning": "Task is already running",
     "goAutomation": "Go to Automation"

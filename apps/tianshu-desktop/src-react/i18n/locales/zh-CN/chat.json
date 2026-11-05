@@ -837,7 +837,8 @@
       "failed": "试运行失败：{{message}}",
       "cancelRun": "中断运行",
       "cancelSent": "已发出中断请求，状态稍后自动刷新",
-      "selectValue": "请选择值"
+      "selectValue": "请选择值",
+      "invalidJson": "须为合法的 JSON 对象/数组文本"
     },
     "runs": {
       "title": "运行历史",
@@ -1355,7 +1356,8 @@
         "number": "数值",
         "boolean": "布尔",
         "enum": "枚举",
-        "date": "日期"
+        "date": "日期",
+        "json": "JSON"
       }
     },
     "templates": {

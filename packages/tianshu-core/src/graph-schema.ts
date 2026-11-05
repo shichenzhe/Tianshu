@@ -776,19 +776,22 @@ export const graphEdgeSchema = z.object({
 
 /** 输入变量类型字面量（typed 输入，切片 D 2026-10-29）：string 为旧简写
  *  等价形态；number/boolean 原生传递（database 参数直通驱动）；enum
- *  值域收口；date 归一 yyyy-MM-dd */
+ *  值域收口；date 归一 yyyy-MM-dd；json 容器原生保型（2026-11-05——
+ *  对象/数组，标量与既有标量类型互斥；default 亦容器形态） */
 export const INPUT_TYPES = [
   "string",
   "number",
   "boolean",
   "enum",
   "date",
+  "json",
 ] as const;
 export type InputType = (typeof INPUT_TYPES)[number];
 
-/** default 与 type 自洽判定（enum 宽收 string|number——按 String() 比值域） */
+/** default 与 type 自洽判定（enum 宽收 string|number——按 String() 比值域；
+ *  json 收容器对象——标量 default 与既有标量类型互斥） */
 function defaultFitsType(
-  value: string | number | boolean,
+  value: string | number | boolean | Record<string, unknown> | unknown[],
   type: InputType,
 ): boolean {
   switch (type) {
@@ -801,6 +804,8 @@ function defaultFitsType(
       return typeof value === "boolean";
     case "enum":
       return typeof value === "string" || typeof value === "number";
+    case "json":
+      return typeof value === "object" && value !== null;
   }
 }
 
@@ -814,7 +819,15 @@ export const inputFieldSchema = z
   .object({
     type: z.enum(INPUT_TYPES),
     required: z.boolean().optional(),
-    default: z.union([z.string(), z.number(), z.boolean()]).optional(),
+    default: z
+      .union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+        z.array(z.unknown()),
+      ])
+      .optional(),
     enumValues: z.array(z.string().min(1)).optional(),
     description: z.string().max(200).optional(),
   })

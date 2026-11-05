@@ -2930,7 +2930,8 @@ export function StartNodeFields({
       : { type: "string" };
   const patchField = (key: string, next: GraphInputField) =>
     onPatch({ inputSchema: { ...inputSchema, [key]: next } });
-  /** default 文本按类型转换（不可转换/空 → 省略，交给保存期校验引导） */
+  /** default 文本按类型转换（不可转换/空 → 省略，交给保存期校验引导）；
+   *  json 文本须 parse 为容器（标量/非法省略——与入口归一互斥语义一致） */
   const defaultOf = (text: string, field: GraphInputField) => {
     const trimmed = text.trim();
     if (trimmed === "") {
@@ -2948,8 +2949,24 @@ export function StartNodeFields({
     if (field.type === "enum") {
       return (field.enumValues ?? []).includes(trimmed) ? trimmed : undefined;
     }
+    if (field.type === "json") {
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        return parsed !== null && typeof parsed === "object"
+          ? (parsed as Record<string, unknown> | unknown[])
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    }
     return trimmed;
   };
+  /** default 回显文本（json 容器紧凑 stringify——String() 会得
+   *  [object Object]） */
+  const defaultTextOf = (field: GraphInputField): string =>
+    field.default !== null && typeof field.default === "object"
+      ? JSON.stringify(field.default)
+      : String(field.default ?? "");
   return (
     <>
       <Field
@@ -3001,6 +3018,7 @@ export function StartNodeFields({
                             "boolean",
                             "enum",
                             "date",
+                            "json",
                           ] as const
                         ).map((type) => (
                           <SelectItem key={type} value={type}>
@@ -3030,7 +3048,7 @@ export function StartNodeFields({
                     <Input
                       className="h-7 text-xs"
                       placeholder={t("chat:orchestration.editor.varDefault")}
-                      value={String(field.default ?? "")}
+                      value={defaultTextOf(field)}
                       onChange={(e) => {
                         const next = defaultOf(e.target.value, field);
                         patchField(key, {

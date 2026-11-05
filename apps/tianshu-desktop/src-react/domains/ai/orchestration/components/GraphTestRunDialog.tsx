@@ -7,6 +7,8 @@
  * number 用 type=number、enum 用 Select、boolean 用 Switch、date 用日期
  * 控件（均项目既有组件零新依赖），default 预填；required 缺值禁跑（入口
  * 侧 runTest 归一双保险）。legacy variables（纯名称）按 string 字段兜底。
+ * json（2026-11-05）：多行文本域编辑紧凑 JSON 文本，required 判满须可
+ * parse 为容器（标量/非法禁跑），提交 parse 为容器原生值上送。
  * onStarted（触发成功即切历史）：runTest 成功后随关弹窗回调——列表页
  * 据此直接弹运行历史（running 徽标 + 收尾事件自动刷新，供结果查看）；
  * 编辑器调用点不传，行为不变 */
@@ -33,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceApi } from "@/domains/ai/api/workspace.api";
 import { GraphApi } from "../api/orchestration.api";
 import {
@@ -41,9 +44,15 @@ import {
   type NormalizedInputField,
 } from "../api/graph.schema";
 
-/** default 预填（date 的 "today" 魔法值在此展开为当天，入口归一兜底同值） */
+/** default 预填（date 的 "today" 魔法值在此展开为当天，入口归一兜底同值）；
+ *  json 容器 default 预填为紧凑 JSON 文本（表单态文本、提交时 parse） */
 function initialFieldValue(field: NormalizedInputField): GraphInputValue {
   if (field.default !== undefined) {
+    if (field.type === "json") {
+      return field.default !== null && typeof field.default === "object"
+        ? JSON.stringify(field.default)
+        : "";
+    }
     return field.default === "today" && field.type === "date"
       ? new Date().toISOString().slice(0, 10)
       : field.default;
@@ -51,8 +60,28 @@ function initialFieldValue(field: NormalizedInputField): GraphInputValue {
   return field.type === "boolean" ? false : "";
 }
 
+/** json 文本 parse 为容器（fieldFilled 判满与提交 parse 同源）；标量
+ * JSON 文本（number/boolean/null）与非法文本均返回 null——与入口归一
+ * 的容器互斥语义一致 */
+function parseJsonContainer(
+  text: string,
+): Record<string, unknown> | unknown[] | null {
+  const trimmed = text.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === "object"
+      ? (parsed as Record<string, unknown> | unknown[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 字段是否有值（required 判满用）：boolean 恒有值；number 接受原生数值
- * 或可载数字串；其余非空串即可 */
+ * 或可载数字串；json 须为可 parse 为容器的文本；其余非空串即可 */
 function fieldFilled(field: NormalizedInputField, value: GraphInputValue) {
   if (field.type === "boolean") {
     return true;
@@ -64,6 +93,9 @@ function fieldFilled(field: NormalizedInputField, value: GraphInputValue) {
         value.trim() !== "" &&
         Number.isFinite(Number(value)))
     );
+  }
+  if (field.type === "json") {
+    return typeof value === "string" && parseJsonContainer(value) !== null;
   }
   return String(value).trim() !== "";
 }
@@ -129,11 +161,20 @@ export default function GraphTestRunDialog({
     if (!allFilled || workspaceId === null) {
       return;
     }
-    // required 有值的字段上行（optional 空串不上送——入口 default 兜底）
+    // required 有值的字段上行（optional 空串不上送——入口 default 兜底）；
+    // json 表单文本 parse 为容器原生值上送（fieldFilled 已保证可 parse，
+    // parse 失败透传原文由入口归一结构化回喂——双保险）
     const inputs = Object.fromEntries(
       resolved
         .filter((f) => fieldFilled(f, values[f.key] ?? ""))
-        .map((f) => [f.key, values[f.key]]),
+        .map((f) => {
+          if (f.type === "json") {
+            const text = String(values[f.key] ?? "");
+            const parsed = parseJsonContainer(text);
+            return [f.key, parsed ?? text];
+          }
+          return [f.key, values[f.key]];
+        }),
     );
     setRunning(true);
     try {
@@ -178,7 +219,28 @@ export default function GraphTestRunDialog({
                   {field.required ? " *" : ""}
                   {field.description ? `（${field.description}）` : ""}
                 </Label>
-                {field.type === "enum" ? (
+                {field.type === "json" ? (
+                  <div className="flex flex-col gap-1">
+                    <Textarea
+                      className="min-h-20 font-mono text-xs"
+                      placeholder='{"key": "value"}'
+                      value={String(values[field.key] ?? "")}
+                      onChange={(e) =>
+                        setValues((current) => ({
+                          ...current,
+                          [field.key]: e.target.value,
+                        }))
+                      }
+                    />
+                    {String(values[field.key] ?? "").trim() !== "" &&
+                      parseJsonContainer(String(values[field.key])) ===
+                        null && (
+                        <span className="text-xs text-destructive">
+                          {t("chat:orchestration.testRun.invalidJson")}
+                        </span>
+                      )}
+                  </div>
+                ) : field.type === "enum" ? (
                   <Select
                     value={String(values[field.key] ?? "")}
                     onValueChange={(value) =>

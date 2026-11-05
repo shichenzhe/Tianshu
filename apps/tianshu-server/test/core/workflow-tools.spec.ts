@@ -238,3 +238,90 @@ describe('展示三件（F2）', () => {
     expect(receipt).toContain('1 列 × 2 行');
   });
 });
+
+/** json 容器图 fixture（2026-11-05 json 类型）：payload 声明 json */
+const JSON_GRAPH = {
+  version: 1,
+  inputSchema: {
+    payload: { type: 'json', required: true },
+  },
+  nodes: [
+    { id: 'start', name: '开始', kind: 'start', variables: ['payload'] },
+    {
+      id: 'insert',
+      name: '插入',
+      kind: 'database',
+      engine: 'sqlite',
+      sqlitePath: 'demo.db',
+      sql: 'INSERT INTO t (a) VALUES (?)',
+      params: ['{{input.payload}}'],
+    },
+  ],
+  edges: [
+    { from: 'start', to: 'insert' },
+    { from: 'insert', to: 'END' },
+  ],
+};
+
+describe('run_workflow json 输入（容器保型，2026-11-05）', () => {
+  function makeJsonDeps() {
+    const deps = makeDeps();
+    deps.rows[0] = {
+      id: 1,
+      name: 'json-flow',
+      description: null,
+      version: 1,
+      graphJson: JSON.stringify(JSON_GRAPH),
+    };
+    return deps;
+  }
+
+  it('工具参数 schema 收容器对象/数组（zod union 扩 json）', () => {
+    const run = toolsOf(makeJsonDeps()).find(
+      (t) => t.name === 'run_workflow',
+    )!;
+    const parameters = run.parameters as unknown as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    expect(
+      parameters.safeParse({ id: 1, inputs: { payload: { a: 1 } } }).success,
+    ).toBe(true);
+    expect(
+      parameters.safeParse({ id: 1, inputs: { payload: [1, 2] } }).success,
+    ).toBe(true);
+  });
+
+  it('json 容器保型直达 runGraph；文本 parse 归一为容器', async () => {
+    const deps = makeJsonDeps();
+    const run = toolsOf(deps).find((t) => t.name === 'run_workflow')!;
+    const result = await run.execute(CTX, {
+      id: 1,
+      inputs: { payload: { a: 1, list: [1, 2] } },
+    });
+    expect(result).toContain('runId=33');
+    const inputs = (deps.runGraph.mock.calls[0][0].inputs ?? {}) as Record<
+      string,
+      unknown
+    >;
+    expect(inputs).toEqual({ payload: { a: 1, list: [1, 2] } });
+    // 文本形态同归一（AI 传 JSON 字符串场景）
+    await run.execute(CTX, { id: 1, inputs: { payload: '{"x":2}' } });
+    const textInputs = (deps.runGraph.mock.calls[1][0].inputs ?? {}) as Record<
+      string,
+      unknown
+    >;
+    expect(textInputs).toEqual({ payload: { x: 2 } });
+  });
+
+  it('非法 JSON 文本结构化回喂（引导修正）', async () => {
+    const deps = makeJsonDeps();
+    const run = toolsOf(deps).find((t) => t.name === 'run_workflow')!;
+    const result = await run.execute(CTX, {
+      id: 1,
+      inputs: { payload: '{a:1}' },
+    });
+    expect(result).toContain('输入参数无效');
+    expect(result).toContain('JSON 对象/数组');
+    expect(deps.runGraph).not.toHaveBeenCalled();
+  });
+});

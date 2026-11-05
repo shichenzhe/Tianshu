@@ -20,9 +20,11 @@ export type CodeLanguage = "bash" | "python" | "nodejs";
 /** prompt 语言：仅变量表达式高亮，不做代码着色 */
 export type HighlightLanguage = CodeLanguage | "prompt";
 
-/** 变量占位符（合法集合才高亮：input.x / nodes.<id>.output / 日期时间） */
+/** 变量占位符（合法集合才高亮：input.x / input.x.field[sub].path（json
+ *  容器字段路径——.field 字段、[N] 数组下标，末尾可 ? null 安全引用）/
+ *  nodes.<id>.output / 日期时间） */
 const VARIABLE_RE =
-  /\{\{(input\.[A-Za-z0-9_]+|nodes\.[a-z0-9-]+\.output|date|weekday|time)\}\}/g;
+  /\{\{(input\.[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|\[[0-9]+\])*\??|nodes\.[a-z0-9-]+\.output|date|weekday|time)\}\}/g;
 
 const KEYWORDS: Record<CodeLanguage, Set<string>> = {
   bash: new Set(

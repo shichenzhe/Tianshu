@@ -117,5 +117,25 @@
     "sourceManual": "Manual",
     "sourceAi": "AI",
     "sourceTemplate": "Template"
-  }
+  },
+  "defaultView": "Default view",
+  "newView": "New view",
+  "renameView": "Rename view",
+  "deleteView": "Delete view",
+  "deleteViewConfirm": "Delete view \"{{name}}\"? A project keeps at least one view (the last one will be rejected).",
+  "viewName": "View name",
+  "viewType": {
+    "table": "Table",
+    "kanban": "Kanban",
+    "list": "List",
+    "gantt": "Gantt",
+    "calendar": "Calendar"
+  },
+  "groupBy": {
+    "status": "By status",
+    "priority": "By priority",
+    "assignee": "By assignee"
+  },
+  "groupByOption": "Grouped {{by}} (current)",
+  "groupBySet": "Switch to {{by}}"
 }

@@ -45,7 +45,10 @@ import type {
   PlanItemMovePayload,
   PlanItemRecordDto,
   PlanItemUpdatePayload,
+  PlanViewCreatePayload,
   PlanViewRecordDto,
+  PlanViewReorderPayload,
+  PlanViewUpdatePayload,
   ProjectCreatePayload,
   ProjectDetailResult,
   ProjectMemberItemDto,
@@ -568,6 +571,24 @@ export interface ServerFacePlanItem {
  *  补齐——漏一面即越权，spec §4 风险面） */
 export interface ServerFacePlanView {
   list(userId: number, projectId: number): Promise<PlanViewRecordDto[]>;
+  /** 创建（type/groupBy 枚举校验、重名 (n) 在 repo）；返回新视图记录 */
+  create(
+    userId: number,
+    projectId: number,
+    params: Omit<PlanViewCreatePayload, "projectId">,
+  ): Promise<PlanViewRecordDto>;
+  /** 局部更新（仅传键生效；视图不存在 PLAN_VIEW_NOT_FOUND） */
+  update(
+    userId: number,
+    params: PlanViewUpdatePayload,
+  ): Promise<void>;
+  /** 删除（最后一个拒删 PLAN_VIEW_LAST_ONE） */
+  remove(userId: number, id: number): Promise<void>;
+  /** Tab 顺序批量更新（逐项归属守卫） */
+  reorder(
+    userId: number,
+    items: PlanViewReorderPayload["items"],
+  ): Promise<void>;
 }
 
 /** A7 项目资产面桥（projectAsset 六端点数据源——目录浏览/建夹/重命名/

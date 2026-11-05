@@ -117,5 +117,25 @@
     "sourceManual": "手动",
     "sourceAi": "AI",
     "sourceTemplate": "模版"
-  }
+  },
+  "defaultView": "默认视图",
+  "newView": "新建视图",
+  "renameView": "重命名视图",
+  "deleteView": "删除视图",
+  "deleteViewConfirm": "确定删除视图「{{name}}」？项目至少保留一个视图（最后一个会被拒绝）。",
+  "viewName": "视图名称",
+  "viewType": {
+    "table": "表格",
+    "kanban": "看板",
+    "list": "清单",
+    "gantt": "甘特",
+    "calendar": "日历"
+  },
+  "groupBy": {
+    "status": "按状态",
+    "priority": "按优先级",
+    "assignee": "按处理人"
+  },
+  "groupByOption": "分组：{{by}}（当前）",
+  "groupBySet": "改为{{by}}分组"
 }

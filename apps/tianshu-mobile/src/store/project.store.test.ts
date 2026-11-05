@@ -380,6 +380,84 @@ describe("project.store", () => {
     expect(paths).toContain(ENDPOINTS.projectAsset.storage);
   });
 
+  it("视图写面：createView 载荷+新建即激活 / updateView 行内合并 / removeView 滤行+激活回落", async () => {
+    const t = makeTransport();
+    const viewRow = {
+      id: 1,
+      projectId: 5,
+      name: "",
+      type: "table",
+      groupBy: null,
+      filterJson: "{}",
+      sortJson: "[]",
+      sortOrder: 0,
+      createdAt: "2026-10-26T00:00:00.000Z",
+      updatedAt: "2026-10-26T00:00:00.000Z",
+    };
+    t.request.mockImplementation(async (_method, path) => {
+      if (
+        path === ENDPOINTS.planItem.list ||
+        path === ENDPOINTS.planItem.fieldsList
+      ) {
+        return successBody([]);
+      }
+      if (path === ENDPOINTS.planView.list) {
+        return successBody([viewRow]);
+      }
+      return successBody(null);
+    });
+    connMock.activeTransport.mockReturnValue(t);
+    await useProjectStore.getState().loadPlan(5);
+    expect(useProjectStore.getState().views).toHaveLength(1);
+
+    // create：回读新记录 → views 追加（列尾）+ 新建即激活
+    t.request.mockImplementation(async (_method, path) => {
+      if (path === ENDPOINTS.planView.create) {
+        return successBody({
+          ...viewRow,
+          id: 9,
+          name: "新看板",
+          type: "kanban",
+          sortOrder: 1,
+        });
+      }
+      return successBody(null);
+    });
+    const created = await useProjectStore
+      .getState()
+      .createView(5, { type: "kanban", name: "新看板" });
+    expect(created?.id).toBe(9);
+    const createCall = t.request.mock.calls.find(
+      (call) => call[1] === ENDPOINTS.planView.create,
+    );
+    expect(createCall?.[2]).toEqual({
+      projectId: 5,
+      type: "kanban",
+      name: "新看板",
+    });
+    const s1 = useProjectStore.getState();
+    expect(s1.views.map((v) => v.id)).toEqual([1, 9]);
+    expect(s1.activeViewId).toBe(9);
+
+    // update：groupBy 切 priority → 载荷直传 + 行内合并（不重拉）
+    t.request.mockClear();
+    t.request.mockResolvedValue(successBody(null));
+    await useProjectStore.getState().updateView({ id: 9, groupBy: "priority" });
+    const updCall = t.request.mock.calls.find(
+      (call) => call[1] === ENDPOINTS.planView.update,
+    );
+    expect(updCall?.[2]).toEqual({ id: 9, groupBy: "priority" });
+    expect(
+      useProjectStore.getState().views.find((v) => v.id === 9)?.groupBy,
+    ).toBe("priority");
+
+    // remove：删激活视图 → 滤行 + activeViewId 回落 null（按 sortOrder 首条）
+    await useProjectStore.getState().removeView(9);
+    const s3 = useProjectStore.getState();
+    expect(s3.views.map((v) => v.id)).toEqual([1]);
+    expect(s3.activeViewId).toBeNull();
+  });
+
   it("loadDetail 并联 getDetail + listMembers", async () => {
     const t = makeTransport();
     t.request

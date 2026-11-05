@@ -35,6 +35,8 @@ import type {
   PlanItemCreatePayload,
   PlanItemMovePayload,
   PlanItemUpdatePayload,
+  PlanViewCreatePayload,
+  PlanViewUpdatePayload,
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProviderSavePayload,
@@ -2367,6 +2369,96 @@ function handlePlanViewList(body: unknown): Promise<RouteResult> {
   );
 }
 
+/** planView 写面（2026-11-05 批）：type/groupBy 枚举校验在 repo
+ *  （非枚举值抛错经 bizErrorFrom 落 5000）；groupBy null = 清除分组透传 */
+function handlePlanViewCreate(body: unknown): Promise<RouteResult> {
+  const p = (body ?? {}) as Record<string, unknown>;
+  const projectId = asInt(p.projectId);
+  if (projectId === null || typeof p.type !== "string") {
+    return Promise.resolve(bizError("5000", "projectId/type 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.planView,
+    "planView",
+    (face, userId) =>
+      face.create(userId, projectId, {
+        type: p.type as PlanViewCreatePayload["type"],
+        ...(typeof p.name === "string" ? { name: p.name } : {}),
+        ...(p.groupBy !== undefined
+          ? { groupBy: p.groupBy as PlanViewCreatePayload["groupBy"] }
+          : {}),
+        ...(typeof p.filterJson === "string" ? { filterJson: p.filterJson } : {}),
+        ...(typeof p.sortJson === "string" ? { sortJson: p.sortJson } : {}),
+      }),
+  );
+}
+
+function handlePlanViewUpdate(body: unknown): Promise<RouteResult> {
+  const p = (body ?? {}) as Record<string, unknown>;
+  const id = asInt(p.id);
+  if (id === null) {
+    return Promise.resolve(bizError("5000", "id 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.planView,
+    "planView",
+    (face, userId) =>
+      face.update(userId, {
+        id,
+        ...(typeof p.name === "string" ? { name: p.name } : {}),
+        ...(typeof p.type === "string"
+          ? { type: p.type as PlanViewUpdatePayload["type"] }
+          : {}),
+        ...(p.groupBy !== undefined
+          ? { groupBy: p.groupBy as PlanViewUpdatePayload["groupBy"] }
+          : {}),
+        ...(typeof p.filterJson === "string" ? { filterJson: p.filterJson } : {}),
+        ...(typeof p.sortJson === "string" ? { sortJson: p.sortJson } : {}),
+      }),
+  );
+}
+
+function handlePlanViewDelete(body: unknown): Promise<RouteResult> {
+  const id = asInt((body as { id?: unknown } | null)?.id);
+  if (id === null) {
+    return Promise.resolve(bizError("5000", "id 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.planView,
+    "planView",
+    (face, userId) => face.remove(userId, id).then(() => null),
+  );
+}
+
+function handlePlanViewReorder(body: unknown): Promise<RouteResult> {
+  const raw = (body as { items?: unknown } | null)?.items;
+  if (
+    !Array.isArray(raw) ||
+    raw.length === 0 ||
+    !raw.every(
+      (item) =>
+        item !== null &&
+        typeof item === "object" &&
+        asInt((item as Record<string, unknown>).id) !== null &&
+        asInt((item as Record<string, unknown>).sortOrder) !== null,
+    )
+  ) {
+    return Promise.resolve(bizError("5000", "items 参数不合法"));
+  }
+  const items = raw.map((item) => {
+    const row = item as Record<string, unknown>;
+    return {
+      id: asInt(row.id) as number,
+      sortOrder: asInt(row.sortOrder) as number,
+    };
+  });
+  return faceHandler(
+    (d) => d.planView,
+    "planView",
+    (face, userId) => face.reorder(userId, items).then(() => null),
+  );
+}
+
 function handleProjectAssetList(body: unknown): Promise<RouteResult> {
   const p = (body ?? {}) as Record<string, unknown>;
   const projectId = asInt(p.projectId);
@@ -2629,6 +2721,10 @@ const ROUTES: Record<string, RouteHandler> = {
   [`POST ${ENDPOINTS.planItem.attachmentDelete}`]:
     handlePlanItemAttachmentDelete,
   [`POST ${ENDPOINTS.planView.list}`]: handlePlanViewList,
+  [`POST ${ENDPOINTS.planView.create}`]: handlePlanViewCreate,
+  [`POST ${ENDPOINTS.planView.update}`]: handlePlanViewUpdate,
+  [`POST ${ENDPOINTS.planView.delete}`]: handlePlanViewDelete,
+  [`POST ${ENDPOINTS.planView.reorder}`]: handlePlanViewReorder,
   [`POST ${ENDPOINTS.projectAsset.list}`]: handleProjectAssetList,
   [`POST ${ENDPOINTS.projectAsset.createFolder}`]:
     handleProjectAssetCreateFolder,

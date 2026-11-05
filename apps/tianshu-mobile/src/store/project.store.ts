@@ -21,7 +21,9 @@ import {
   type PlanItemRecordDto,
   type PlanItemUpdatePayload,
   type PlanStatus,
+  type PlanViewCreatePayload,
   type PlanViewRecordDto,
+  type PlanViewUpdatePayload,
   type ProjectCreatePayload,
   type ProjectDetailResult,
   type ProjectMemberItemDto,
@@ -91,6 +93,15 @@ interface ProjectState {
 
   loadPlan(projectId: number): Promise<void>;
   setActiveView(id: number): void;
+  /** #1 视图写面批：创建视图（返回新记录并即时激活；null=门禁/业务错） */
+  createView(
+    projectId: number,
+    params: Omit<PlanViewCreatePayload, "projectId">,
+  ): Promise<PlanViewRecordDto | null>;
+  /** 局部更新（name/type/groupBy/filterJson/sortJson 传啥改啥，行内合并） */
+  updateView(payload: PlanViewUpdatePayload): Promise<boolean>;
+  /** 删除视图（最后一个服务端拒删 PLAN_VIEW_LAST_ONE；本地滤行+激活回落） */
+  removeView(id: number): Promise<boolean>;
   createItem(payload: PlanItemCreatePayload): Promise<boolean>;
   updateItem(payload: PlanItemUpdatePayload): Promise<boolean>;
   /** 状态流转：跨列落点（sortOrder 由调用方按目标列计算） */
@@ -464,6 +475,40 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     return queued;
   }
 
+  /** 带回读的写面（#1 视图批：create 需返回新建记录；队列/saving 门面
+   *  与 enqueueWrite 同构——boolean 语义面继续用 enqueueWrite） */
+  async function enqueueWriteData<T>(
+    path: string,
+    body: unknown,
+  ): Promise<T | null> {
+    const token = beginRequest("write");
+    if (!token) return null;
+    pendingWrites += 1;
+    set({ saving: true });
+    const doWrite = async (): Promise<T | null> => {
+      try {
+        const result = await wireRequest("POST", path, body, token.transport);
+        if (!isCurrentRequest(token)) return null;
+        if (!result.ok) {
+          patchFacet("hub", { error: result.message });
+          return null;
+        }
+        return result.data as T;
+      } catch (error) {
+        if (isCurrentRequest(token)) {
+          patchFacet("hub", { error: errorMessage(error) });
+        }
+        return null;
+      } finally {
+        pendingWrites -= 1;
+        if (pendingWrites === 0) set({ saving: false });
+      }
+    };
+    const queued = writeChain.then(doWrite);
+    writeChain = queued;
+    return queued;
+  }
+
   /** 计划写后局部刷新：重拉当前项目计划面 + 我的任务（已初始化时） */
   function refreshPlanAfterWrite() {
     const { currentProjectId, tasks } = get();
@@ -687,6 +732,40 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     setActiveView: (id) => set({ activeViewId: id }),
+
+    createView: async (projectId, params) => {
+      const view = await enqueueWriteData<PlanViewRecordDto>(
+        ENDPOINTS.planView.create,
+        { projectId, ...params },
+      );
+      if (view === null) return null;
+      // 新建即激活 + 列尾追加（服务端 sortOrder 列尾语义）
+      set((s) => ({ views: [...s.views, view], activeViewId: view.id }));
+      return view;
+    },
+
+    updateView: (payload) => {
+      // 行内合并快照（写前视图列表逐键应用——与服务端局部更新同语义）
+      const prev = get().views;
+      return enqueueWrite(ENDPOINTS.planView.update, payload, () => {
+        set({
+          views: prev.map((view) =>
+            view.id === payload.id ? { ...view, ...payload } : view,
+          ),
+        });
+      });
+    },
+
+    removeView: (id) => {
+      const prev = get().views;
+      return enqueueWrite(ENDPOINTS.planView.delete, { id }, () => {
+        set({
+          views: prev.filter((view) => view.id !== id),
+          // 删的是激活视图：回落 null（resolveActiveView 按 sortOrder 首条）
+          ...(get().activeViewId === id ? { activeViewId: null } : {}),
+        });
+      });
+    },
 
     createItem: (payload) =>
       enqueueWrite(ENDPOINTS.planItem.create, payload, refreshPlanAfterWrite),

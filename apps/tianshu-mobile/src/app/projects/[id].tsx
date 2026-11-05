@@ -32,6 +32,7 @@ import {
   Filter,
   Folder,
   FolderPlus,
+  LayoutList,
   Link2,
   MessageCircle,
   MessageCirclePlus,
@@ -43,14 +44,18 @@ import {
   X,
 } from "lucide-react-native";
 import {
+  PLAN_GROUP_BYS,
   PLAN_PRIORITIES,
   PLAN_STATUSES,
+  PLAN_VIEW_TYPES,
   type AssetEntryDto,
   type PlanItemCreatePayload,
   type PlanItemRecordDto,
   type PlanItemUpdatePayload,
   type PlanPriority,
   type PlanStatus,
+  type PlanViewRecordDto,
+  type PlanViewType,
   type ProjectBindingItemDto,
   type ProjectMemberItemDto,
 } from "@tianshu/protocol";
@@ -71,7 +76,7 @@ import {
   toggleConditionValueUpdater,
 } from "@/logic/plan-filter";
 
-import { AppActionSheet } from "@/components/AppActionSheet";
+import { ActionSheetItem, AppActionSheet } from "@/components/AppActionSheet";
 import { DialogShell } from "@/components/DialogShell";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
 import { FormField, PLACEHOLDER } from "@/components/FormField";
@@ -177,24 +182,32 @@ function WsSegments({
 
 // —— 计划拍平条目（组头/事项/组尾新建——行级 memo，行上禁 flex-1 铁律） ——
 
+type PlanGroupByKey = "status" | "priority" | "assignee";
+
 type PlanEntry =
-  | { kind: "header"; key: string; status: PlanStatus; count: number }
+  | {
+      kind: "header";
+      key: string;
+      groupBy: PlanGroupByKey;
+      groupValue: string;
+      label: string;
+      count: number;
+    }
   | { kind: "item"; key: string; item: PlanItemRecordDto; isLast: boolean }
   | { kind: "add"; key: string; status: PlanStatus };
 
-/** 组头行：状态本地化名 + 计数 */
+/** 组头行：分组本地化标签 + 计数（groupBy 生效——#1 视图批） */
 const PlanGroupHeaderRow = memo(function PlanGroupHeaderRow({
-  status,
+  label,
   count,
 }: {
-  status: PlanStatus;
+  label: string;
   count: number;
 }) {
-  const { t } = useTranslation("project");
   return (
     <View className="flex-row items-center gap-2 px-4 pb-1 pt-4">
       <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
-        {t(`status.${status}`)}
+        {label}
       </Text>
       <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">{count}</Text>
     </View>
@@ -667,6 +680,14 @@ export default function ProjectWorkspaceScreen() {
   /** #8 筛选批：本地会话态组合筛选（不随视图持久化——planView 只读现状） */
   const [localFilters, setLocalFilters] = useState<PlanFilterCondition[]>([]);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  /** #1 视图写面批：长按视图 chip 的管理面板目标 / 新建·重命名弹窗态 */
+  const [viewSheetTarget, setViewSheetTarget] =
+    useState<PlanViewRecordDto | null>(null);
+  const [viewDialog, setViewDialog] = useState<"create" | "rename" | null>(
+    null,
+  );
+  const [viewName, setViewName] = useState("");
+  const [viewType, setViewType] = useState<PlanViewType>("table");
   const [itemDialog, setItemDialog] = useState<
     | { mode: "create"; status?: PlanStatus }
     | { mode: "edit"; item: PlanItemRecordDto }
@@ -707,8 +728,9 @@ export default function ProjectWorkspaceScreen() {
     [views, activeViewId],
   );
 
-  /** 计划拍平：激活视图条件+排序 → 本地筛选叠加 → status 分组 →
-   *  组头/事项/组尾条目 */
+  /** 计划拍平：激活视图条件+排序 → 本地筛选叠加 → 视图分组依据分组
+   *  （groupBy 生效——#1 视图批：status 全枚举组含空组+组尾快速新建；
+   *  priority/assignee 空组不占位）→ 组头/事项/组尾条目 */
   const planEntries = useMemo<PlanEntry[]>(() => {
     const config = parsePlanViewConfig(
       activeView?.filterJson ?? "",
@@ -725,15 +747,47 @@ export default function ProjectWorkspaceScreen() {
         ? filterPlanItems(viewFiltered, localFilters, "", currentUserId ?? 0)
         : viewFiltered;
     const visible = sortPlanItems(filtered, config.sortRules);
-    const groups = groupPlanItems(visible, "status", members);
+    const viewGroupBy = activeView?.groupBy ?? "status";
+    const groups = groupPlanItems(visible, viewGroupBy, members);
+    const groupLabel = (groupValue: string): string => {
+      if (viewGroupBy === "status") return t(`project:status.${groupValue}`);
+      if (viewGroupBy === "priority") return t(`project:priority.${groupValue}`);
+      return groupValue === "unassigned"
+        ? t("project:unassigned")
+        : (memberNames.get(Number(groupValue)) ?? "-");
+    };
     const entries: PlanEntry[] = [];
     groups.forEach((group) => {
-      const status = group.key as PlanStatus;
-      if (!PLAN_STATUSES.includes(status)) return;
+      if (viewGroupBy === "status") {
+        const status = group.key as PlanStatus;
+        if (!PLAN_STATUSES.includes(status)) return;
+        entries.push({
+          kind: "header",
+          key: `h-${group.key}`,
+          groupBy: "status",
+          groupValue: status,
+          label: groupLabel(status),
+          count: group.items.length,
+        });
+        group.items.forEach((item, index) => {
+          entries.push({
+            kind: "item",
+            key: `i-${item.id}`,
+            item,
+            isLast: index === group.items.length - 1,
+          });
+        });
+        entries.push({ kind: "add", key: `a-${group.key}`, status });
+        return;
+      }
+      // priority/assignee：空组不占位（成员枚举全量组会拉长列表）
+      if (group.items.length === 0) return;
       entries.push({
         kind: "header",
         key: `h-${group.key}`,
-        status,
+        groupBy: viewGroupBy,
+        groupValue: group.key,
+        label: groupLabel(group.key),
         count: group.items.length,
       });
       group.items.forEach((item, index) => {
@@ -744,10 +798,9 @@ export default function ProjectWorkspaceScreen() {
           isLast: index === group.items.length - 1,
         });
       });
-      entries.push({ kind: "add", key: `a-${group.key}`, status });
     });
     return entries;
-  }, [items, activeView, members, currentUserId, localFilters]);
+  }, [items, activeView, members, currentUserId, localFilters, memberNames, t]);
 
   const openPlanItem = useCallback(
     (item: PlanItemRecordDto) => setItemDialog({ mode: "edit", item }),
@@ -795,6 +848,52 @@ export default function ProjectWorkspaceScreen() {
         useProjectStore.getState().hub.error || t("project:loadFailed"),
       );
     }
+  }
+
+  /** 视图新建/重命名提交（服务端重名自动 (n) 后缀；新建即激活） */
+  async function handleViewDialogConfirm() {
+    const trimmed = viewName.trim();
+    if (!trimmed) return;
+    const store = useProjectStore.getState();
+    const ok =
+      viewDialog === "create"
+        ? (await store.createView(projectId, {
+            name: trimmed,
+            type: viewType,
+          })) !== null
+        : await store.updateView({
+            id: viewSheetTarget?.id,
+            name: trimmed,
+          } as Parameters<typeof store.updateView>[0]);
+    if (ok) {
+      setViewDialog(null);
+      setViewSheetTarget(null);
+    } else {
+      toast.error(store.hub.error || t("project:loadFailed"));
+    }
+  }
+
+  /** 视图删除（Alert 确认；最后一个由服务端 PLAN_VIEW_LAST_ONE 拒删） */
+  function confirmDeleteView(view: PlanViewRecordDto) {
+    Alert.alert(
+      t("project:deleteView"),
+      t("project:deleteViewConfirm", { name: view.name }),
+      [
+        { text: t("common:cancel"), style: "cancel" },
+        {
+          text: t("common:confirm"),
+          style: "destructive",
+          onPress: () => void performDeleteView(view.id),
+        },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  async function performDeleteView(id: number) {
+    const store = useProjectStore.getState();
+    const ok = await store.removeView(id);
+    if (!ok) toast.error(store.hub.error || t("project:loadFailed"));
   }
 
   /** 任务推进直达专属会话（桌面对齐 openTaskSession：服务端按 planItemId
@@ -979,7 +1078,7 @@ export default function ProjectWorkspaceScreen() {
         renderItem={({ item: entry }) => {
           if (entry.kind === "header") {
             return (
-              <PlanGroupHeaderRow status={entry.status} count={entry.count} />
+              <PlanGroupHeaderRow label={entry.label} count={entry.count} />
             );
           }
           if (entry.kind === "add") {
@@ -1306,6 +1405,7 @@ export default function ProjectWorkspaceScreen() {
                       onPress={() =>
                         useProjectStore.getState().setActiveView(view.id)
                       }
+                      onLongPress={() => setViewSheetTarget(view)}
                       className="rounded-full px-3 py-1.5"
                       style={{
                         backgroundColor: active
@@ -1317,11 +1417,25 @@ export default function ProjectWorkspaceScreen() {
                         className="text-xs"
                         style={{ color: active ? "#FFFFFF" : colors.primary }}
                       >
-                        {view.name}
+                        {view.name === "" ? t("project:defaultView") : view.name}
                       </Text>
                     </Pressable>
                   );
                 })}
+                {/* 新建视图（#1 视图写面批）：列尾「+」 */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("project:newView")}
+                  onPress={() => {
+                    setViewName("");
+                    setViewType("table");
+                    setViewDialog("create");
+                  }}
+                  className="items-center justify-center rounded-full px-3 py-1.5"
+                  style={{ backgroundColor: colors.subtle }}
+                >
+                  <Plus size={13} color={colors.primary} />
+                </Pressable>
               </ScrollView>
               <Pressable
                 accessibilityRole="button"
@@ -1357,6 +1471,115 @@ export default function ProjectWorkspaceScreen() {
             renderAbout()
           )}
         </>
+      )}
+      {/* #1 视图写面批：长按视图 chip——重命名 / 分组依据切换 / 删除 */}
+      <AppActionSheet
+        visible={viewSheetTarget !== null}
+        title={
+          viewSheetTarget?.name === ""
+            ? t("project:defaultView")
+            : viewSheetTarget?.name
+        }
+        items={
+          viewSheetTarget
+            ? [
+                {
+                  key: "rename",
+                  label: t("project:renameView"),
+                  Icon: Pencil,
+                  onPress: () => {
+                    setViewName(viewSheetTarget.name);
+                    setViewDialog("rename");
+                  },
+                },
+                ...(PLAN_GROUP_BYS.map((groupBy) => ({
+                  key: `group-${groupBy}`,
+                  label:
+                    groupBy === viewSheetTarget.groupBy
+                      ? t("project:groupByOption", {
+                          by: t(`project:groupBy.${groupBy}`),
+                        })
+                      : t("project:groupBySet", {
+                          by: t(`project:groupBy.${groupBy}`),
+                        }),
+                  Icon: LayoutList,
+                  onPress: () => {
+                    const target = viewSheetTarget;
+                    setViewSheetTarget(null);
+                    void useProjectStore
+                      .getState()
+                      .updateView({
+                        id: target.id,
+                        groupBy:
+                          target.groupBy === groupBy ? null : groupBy,
+                      })
+                      .then((ok) => {
+                        if (!ok) {
+                          toast.error(
+                            useProjectStore.getState().hub.error ||
+                              t("project:loadFailed"),
+                          );
+                        }
+                      });
+                  },
+                })) as ActionSheetItem[]),
+                {
+                  key: "delete",
+                  label: t("project:deleteView"),
+                  Icon: Trash2,
+                  danger: true,
+                  onPress: () => {
+                    const target = viewSheetTarget;
+                    setViewSheetTarget(null);
+                    confirmDeleteView(target);
+                  },
+                },
+              ]
+            : []
+        }
+        onClose={() => setViewSheetTarget(null)}
+      />
+      {viewDialog !== null && (
+        <DialogShell
+          title={t(
+            viewDialog === "create"
+              ? "project:newView"
+              : "project:renameView",
+          )}
+          busy={saving}
+          onClose={() => setViewDialog(null)}
+          footer={
+            <FormFooter
+              busy={saving}
+              confirmDisabled={!viewName.trim()}
+              onConfirm={() => void handleViewDialogConfirm()}
+              onCancel={() => setViewDialog(null)}
+            />
+          }
+        >
+          <FormField
+            label={t("project:viewName")}
+            value={viewName}
+            onChangeText={setViewName}
+          />
+          {viewDialog === "create" && (
+            <View className="gap-1.5">
+              <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+                {t("project:viewType")}
+              </Text>
+              <FilterValueChips
+                options={PLAN_VIEW_TYPES.map((type) => ({
+                  value: type,
+                  label: t(`project:viewType.${type}`),
+                }))}
+                values={[viewType]}
+                onToggle={(value) =>
+                  setViewType(value as Parameters<typeof setViewType>[0])
+                }
+              />
+            </View>
+          )}
+        </DialogShell>
       )}
       {/* 批②：计划事项长按面板——状态快捷流转（当前态不列）+ 删除 */}
       <AppActionSheet

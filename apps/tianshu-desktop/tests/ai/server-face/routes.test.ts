@@ -2710,6 +2710,21 @@ function makeFakePlanView(overrides: Record<string, unknown> = {}) {
         updatedAt: "2026-10-26T00:00:00.000Z",
       },
     ]),
+    create: vi.fn(async () => ({
+      id: 9,
+      projectId: 3,
+      name: "新看板",
+      type: "kanban",
+      groupBy: null,
+      filterJson: "{}",
+      sortJson: "[]",
+      sortOrder: 1,
+      createdAt: "2026-10-26T00:00:00.000Z",
+      updatedAt: "2026-10-26T00:00:00.000Z",
+    })),
+    update: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+    reorder: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -2996,6 +3011,43 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
     });
     expect(result.body).toMatchObject({ success: true });
     expect(planView.list).toHaveBeenCalledWith(UID, 3);
+  });
+
+  it("planView 写面四端点：载荷映射 + groupBy null 透传", async () => {
+    const planView = makeFakePlanView();
+    wireProjectFaces({ planView });
+
+    const r = await handleRoute("POST", ENDPOINTS.planView.create, {
+      projectId: 3,
+      type: "kanban",
+      name: "新看板",
+    });
+    expect(r.body).toMatchObject({
+      success: true,
+      data: { id: 9, name: "新看板", type: "kanban" },
+    });
+    expect(planView.create).toHaveBeenCalledWith(UID, 3, {
+      type: "kanban",
+      name: "新看板",
+    });
+    await handleRoute("POST", ENDPOINTS.planView.update, {
+      id: 1,
+      groupBy: null,
+      name: "改名",
+    });
+    expect(planView.update).toHaveBeenCalledWith(UID, {
+      id: 1,
+      groupBy: null,
+      name: "改名",
+    });
+    await handleRoute("POST", ENDPOINTS.planView.delete, { id: 1 });
+    expect(planView.remove).toHaveBeenCalledWith(UID, 1);
+    await handleRoute("POST", ENDPOINTS.planView.reorder, {
+      items: [{ id: 1, sortOrder: 2 }],
+    });
+    expect(planView.reorder).toHaveBeenCalledWith(UID, [
+      { id: 1, sortOrder: 2 },
+    ]);
   });
 
   it("projectAsset 六端点：载荷映射 + 返回直透", async () => {

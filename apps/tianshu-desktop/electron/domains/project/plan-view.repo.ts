@@ -85,6 +85,12 @@ export default class PlanViewRepository {
     return rows.map((row) => this.toRecord(row));
   }
 
+  /** 按 id 查视图（被控面写面归属解析用；null = 不存在） */
+  async getViewById(id: number): Promise<PlanViewRecord | null> {
+    const row = await prisma.planView.findUnique({ where: { id } });
+    return row ? this.toRecord(row) : null;
+  }
+
   /** 创建视图：type 枚举校验 + 重名自动 (n) 后缀 + sortOrder 列尾 */
   async create(params: PlanViewCreateParams): Promise<PlanViewRecord> {
     this.ensureEnumOrThrow(params.type, PLAN_VIEW_TYPES, "无效的视图类型");

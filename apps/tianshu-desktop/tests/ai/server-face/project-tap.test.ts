@@ -354,6 +354,67 @@ describe("plan-view-tap（A7 桌面被控面）", () => {
     expect(viewRepo.list).toHaveBeenCalledWith(3);
   });
 
+  it("写面四方法：守卫先行（update/remove/reorder 经归属解析）+ 参数直透", async () => {
+    const created = { ...VIEW, id: 9, name: "看板 2", type: "kanban" as const };
+    const viewRepo = {
+      list: vi.fn(async () => [VIEW]),
+      getViewById: vi.fn(async () => VIEW),
+      create: vi.fn(async () => created),
+      update: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+      reorder: vi.fn(async () => {}),
+    };
+    const projectRepo = { assertProjectVisible: vi.fn(async () => {}) };
+    const face = createPlanViewFace(projectRepo, viewRepo);
+
+    await face.create(UID, 3, { projectId: 3, type: "kanban" });
+    expect(viewRepo.create).toHaveBeenCalledWith({ projectId: 3, type: "kanban" });
+    await face.update(UID, { id: 1, name: "改名" });
+    expect(viewRepo.update).toHaveBeenCalledWith({ id: 1, name: "改名" });
+    await face.remove(UID, 1);
+    expect(viewRepo.remove).toHaveBeenCalledWith(1);
+    await face.reorder(UID, [{ id: 1, sortOrder: 0 }]);
+    expect(viewRepo.reorder).toHaveBeenCalledWith([{ id: 1, sortOrder: 0 }]);
+    // VIEW.projectId=3：create 直守 + 其余三者经 getViewById 归属解析后守卫
+    expect(projectRepo.assertProjectVisible).toHaveBeenCalledWith(3, UID);
+    expect(viewRepo.getViewById).toHaveBeenCalledTimes(3);
+  });
+
+  it("写面：视图不存在 PLAN_VIEW_NOT_FOUND；守卫拒绝不触达 repo 写", async () => {
+    const viewRepo = {
+      list: vi.fn(async () => [VIEW]),
+      getViewById: vi.fn(async () => null),
+      create: vi.fn(async () => VIEW),
+      update: vi.fn(async () => {}),
+      remove: vi.fn(async () => {}),
+      reorder: vi.fn(async () => {}),
+    };
+    const projectRepo = {
+      assertProjectVisible: vi.fn(async () => {
+        throw new Error("PROJECT_NOT_FOUND");
+      }),
+    };
+    const face = createPlanViewFace(projectRepo, viewRepo);
+
+    await expect(face.update(UID, { id: 99, name: "x" })).rejects.toMatchObject({
+      code: "PLAN_VIEW_NOT_FOUND",
+    });
+    await expect(face.remove(UID, 99)).rejects.toMatchObject({
+      code: "PLAN_VIEW_NOT_FOUND",
+    });
+    await expect(
+      face.create(UID, 3, { projectId: 3, type: "table" }),
+    ).rejects.toMatchObject({ code: "PROJECT_NOT_FOUND" });
+    viewRepo.getViewById.mockResolvedValueOnce(VIEW);
+    await expect(face.reorder(UID, [{ id: 1, sortOrder: 1 }])).rejects.toMatchObject(
+      { code: "PROJECT_NOT_FOUND" },
+    );
+    expect(viewRepo.create).not.toHaveBeenCalled();
+    expect(viewRepo.update).not.toHaveBeenCalled();
+    expect(viewRepo.remove).not.toHaveBeenCalled();
+    expect(viewRepo.reorder).not.toHaveBeenCalled();
+  });
+
   it("守卫拒绝：非 owner 非成员 PROJECT_NOT_FOUND，不触达 viewRepo", async () => {
     const { face, projectRepo, viewRepo } = makeFace({
       assertProjectVisible: vi.fn(async () => {

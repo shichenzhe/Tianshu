@@ -219,7 +219,8 @@ export class AutomationScheduler
     void maybeTrimAutomationRuns(this.prisma);
     // automationStat 90 天裁剪：对齐 mirror commons ensureEventStatMaintenance
     // 语义（mirror 在启动链 prisma-client.ts:115；server 端此前完全无裁剪）。
-    // server 不写 llm/toolCallEvent（2026-10-22 复核），无需处理。
+    // llm/toolCallEvent 的裁剪归 MonitorService（MO 批起 server 亦埋点，
+    // P0-2 每日周期裁剪——spec monitoring.md §6）
     const statCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
     void this.prisma.automationStat
       .deleteMany({ where: { createdAt: { lt: statCutoff } } })

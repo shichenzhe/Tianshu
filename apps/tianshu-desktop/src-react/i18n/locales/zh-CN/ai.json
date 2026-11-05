@@ -494,6 +494,12 @@
       "paused": "已停用",
       "loadFailed": "任务加载失败"
     },
+    "monitorCard": {
+      "title": "用量监控",
+      "refresh": "刷新用量",
+      "loadFailed": "用量加载失败",
+      "empty": "暂无用量数据"
+    },
     "ui": {
       "openInClient": "在被控端打开",
       "opened": "已让被控端打开该会话",

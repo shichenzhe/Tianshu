@@ -28,8 +28,8 @@ LangChain 流（usage_metadata 多轮记账，agent-chunk-emitter）
 
 **现状能力一览**（有/无清单，后文逐一展开）：
 
-- 有：三场景全量埋点（无采样）、7 天窗口聚合、场景筛选、按模型/按工具分布、90 天保留裁剪（仅桌面）、无头端对称读面 + 移动端遥控查看；
-- 无：成本核算（无单价表）、事件明细列表/会话下钻、导出与归档、trace 树视图、错误/中止轮次成功率口径（这两类轮次不写 llm 事件）、桌面 UI 远程主机遥看（监控页未接主机路由层）。
+- 有：三场景全量埋点（无采样）、7 天窗口聚合、场景筛选、按模型/按工具分布、90 天保留裁剪（桌面启动时 + server 启动即跑 + 每日周期，P0 批 2026-11-05 起双端齐备）、无头端对称读面 + 移动端遥控查看 + 桌面监控页主机路由化遥看远程主机（P0-1）；
+- 无：成本核算（无单价表）、事件明细列表/会话下钻、导出与归档、trace 树视图、错误/中止轮次成功率口径（这两类轮次不写 llm 事件）。
 
 **单源原则**（MO 批收编后的形态）：
 
@@ -87,7 +87,7 @@ LangChain 流（usage_metadata 多轮记账，agent-chunk-emitter）
 
 - **桌面**：不走 v1 快照（快照 sha256 指纹变化会触发旧库 drop 重建，见 CLAUDE.md 快照守卫说明），由 `ensureMonitorTables()`（`electron/commons/prisma-client.ts:85`）启动幂等 `CREATE TABLE IF NOT EXISTS` 建两表 + 补三索引；`Application.execute()`（`electron/Application.ts:133`）在 `initDatabase` 后调用，失败仅记日志不阻塞启动。
 - **server**：经 Prisma 基线迁移建表（`apps/tianshu-server/prisma/migrations/0_init/migration.sql:329`），无运行时 DDL。
-- **保留期**：桌面 90 天——`ensureEventStatMaintenance()`（`prisma-client.ts:188`）启动时对 `llmCallEvent`/`toolCallEvent`（连同 `skillStat`/`automationStat` 埋点表）按 `cutoff = now - 90 天` `deleteMany` 裁剪，且必须串行待 `ensureMonitorTables` 成功后再跑（`Application.ts:128` 注释明确：维护函数会对新表 deleteMany，微任务交错下会 `no such table`）。**server 端无任何裁剪逻辑**（全仓 grep `llmCallEvent.deleteMany` 零命中），无头端长驻进程下事件表无界增长；桌面裁剪也只在启动时跑一次，应用长驻数周期间不清理。
+- **保留期**：桌面 90 天——`ensureEventStatMaintenance()`（`prisma-client.ts:188`）启动时对 `llmCallEvent`/`toolCallEvent`（连同 `skillStat`/`automationStat` 埋点表）按 `cutoff = now - 90 天` `deleteMany` 裁剪，且必须串行待 `ensureMonitorTables` 成功后再跑（`Application.ts:128` 注释明确：维护函数会对新表 deleteMany，微任务交错下会 `no such table`）。**server 端裁剪已补齐**（P0-2，2026-11-05）：`MonitorService`（`apps/tianshu-server/src/modules/monitor/monitor.service.ts`）`pruneMonitorEvents()` 同 cutoff 口径（`createdAt < now - 90 天`，无 userId 过滤），Nest lifecycle `onModuleInit` 启动即跑一次 + `setInterval` 每日周期跑（常量 `MONITOR_RETENTION_DAYS`/`MONITOR_PRUNE_INTERVAL_MS` 导出供测试），`onModuleDestroy` 清 timer。桌面裁剪仍只在启动时跑一次，应用长驻数周期间不清理（P2 待办）。
 
 ## 3. 核心技术方案（埋点链路）
 
@@ -153,7 +153,7 @@ graph 场景不走流式 accumulator：`graph-executor.ts:1523` 的 `extractToke
 
 路由：`src-react/routes/index.tsx`（271 行 `path: "monitor"`，懒加载 MonitorView，在 `/module/ai` 认证布局内）。前端文件均在 `src-react/domains/ai/monitor/`：
 
-- **api/monitor.api.ts**：`MonitorApi.stats(scene?)` → `invoke<MonitorStats>("monitor:stats", scene)`；类型 re-export 协议包（A6 批自前端收编后的回流引用）；
+- **api/monitor.api.ts**：`MonitorApi.stats(scene?)` 已主机路由化（P0-1，2026-11-05）——`routeInvoke` 双通道：本地 `invoke("monitor:stats", scene)` 参数逐字零行为变化；远程 `ServerApi.monitorStats(scene, connId)`（`server:monitorStats` IPC 透传 → `POST monitor/stats`）；类型 re-export 协议包（A6 批自前端收编后的回流引用）；
 - **views/MonitorView.tsx**：React Query `queryKey: ["monitor", "stats", scene]`，场景切换即失效重拉；结构为三段——KPI 卡行（今日输入/输出 token、LLM 调用数、工具调用数·今日成功率，`KpiCard` 为 AutomationStatsPanel 同款）、7 天趋势（`MonitorTrendChart`）、双表（按模型分布：模型名/调用数/输入/输出 token；工具排行：总数/成功率/平均耗时/拒绝数/错误数，denied/error > 0 标 `text-destructive/80`）。场景筛选 chips（all/chat/graph/automation）存 **store/monitor.store.ts**（zustand，仅 scene 一字段）并挂 TopBar trailing（`usePageHeaderStore`）；
 - **components/MonitorTrendChart.tsx**：纯 CSS 双柱图（无图表库）——每日两柱 token 总量（`bg-primary`）/调用次数（`bg-primary-active`），**两序列各自以窗口内单日最大值独立归一**（token 量级远大于次数，共用基准会让调用柱恒 3px 不可读）；零值柱 2px 且 `opacity-30` 保持占位，tooltip 用原生 `title` 插值；
 - **lib/format.ts**：`formatCount` / `formatDuration`；
@@ -191,7 +191,7 @@ server 三处埋点与桌面逐字同位（MO 批对称移植，埋点函数同�
 
 **多用户口径差异**：桌面事件按真实 `userId` 隔离（chat 取 session 行、automation 取 task 行）；server 是单伴生用户模型，聚合恒用常量 `COMPANION_USER_ID`（`src/commons/config/tianshu-config.entity.ts`，全仓 20+ 处同口径）。
 
-**现状缺口（如实记录）**：桌面 UI 的监控页**未接主机路由层**——`monitor.api.ts` 直 `invoke` 本地通道，而 chat/model/provider/session/skill 等域已按 `src-react/domains/ai/data-source/host-route.ts` 的 `routeInvoke` 模式双通道路由化（本地 invoke / 远程 `requestRemote(connId, ...)` 适配器，UI 透明）。即：HostSwitcher 切到远程主机后，`/module/ai/monitor` 仍显示**本地**数据；远程主机的用量目前只有移动端（或任何直连 monitor/stats 的控制端）能看，主机页（/module/ai/server）本身也无用量模块。
+**现状缺口（P0 批 2026-11-05 已收口，原样记录修复前形态）**：桌面 UI 的监控页原先**未接主机路由层**——`monitor.api.ts` 直 `invoke` 本地通道，HostSwitcher 切到远程主机后 `/module/ai/monitor` 仍显示本地数据。P0-1 落地后 `monitor.api.ts` 按 `routeInvoke` 模式双通道路由化（本地 invoke 原样 / 远程 `server:monitorStats` 透传 `POST monitor/stats`，UI 透明），主机页（/module/ai/server）另挂选中连接的用量摘要卡 `MonitorSummaryCard`（`capabilities` 运行时上报含 `monitor` 才渲染，显式 connId 直拉与活动主机路由解耦）——「远程主机的用量桌面遥看」补齐。
 
 ## 5. 业界主流做法对比
 
@@ -247,13 +247,12 @@ OTel 语义约定的 GenAI 专卷（GenAI SIG 2024-04 成立，现已迁至 OTel
 
 **P0（低成本、补现成缺口）**
 
-1. **监控页主机路由化**：
+1. ✅ **监控页主机路由化**（P0 批 2026-11-05 落地）：
 
-   - 改造点：`src-react/domains/ai/monitor/api/monitor.api.ts` 按 `host-route.ts` 的 `routeInvoke` 模式——本地分支 `invoke("monitor:stats", scene)` 原样；远程分支走 `requestRemote(connId, "POST", ENDPOINTS.monitor.stats, { scene })` 适配器（`server.api.ts` 已有该原语与信封解包）；
-   - 依赖项全部就绪：被控面端点（`server-face/routes.ts` 的 `POST monitor/stats`）、协议常量（`ENDPOINTS.monitor.stats`）、capability 位（`DESKTOP_CAPABILITIES`/`CAPABILITIES` 均含 monitor）；
-   - 顺手在主机页（/module/ai/server）加用量摘要卡；「远程主机的用量桌面遥看」即补齐。
+   - 改造点：`src-react/domains/ai/monitor/api/monitor.api.ts` 已按 `host-route.ts` 的 `routeInvoke` 模式双通道化——本地分支 `invoke("monitor:stats", scene)` 原样；远程分支走 `ServerApi.monitorStats(scene, connId)`（`server:monitorStats` IPC 通道注册于 `electron/domains/server/ipc.ts`，`requestRemote` 信封解包）；
+   - 载荷形状与移动端同款（`{}` / `{ scene }`）；主机页（/module/ai/server）已加用量摘要卡 `MonitorSummaryCard`（选中连接 capabilities 含 monitor 才挂，今日 token/调用数四 KPI）；「远程主机的用量桌面遥看」即补齐。
 
-2. **server 端保留期裁剪**：无头端补齐 90 天裁剪（对齐桌面 `ensureEventStatMaintenance` 的 cutoff 语义）；server 是长驻进程，建议 `setInterval` 周期跑（如每日）而非仅启动跑；桌面也可同款改造为周期任务。
+2. ✅ **server 端保留期裁剪**（P0 批 2026-11-05 落地）：无头端已补齐 90 天裁剪（`MonitorService.pruneMonitorEvents`，对齐桌面 `ensureEventStatMaintenance` 的 cutoff 语义）；server 长驻进程 `setInterval` 每日跑（`MONITOR_PRUNE_INTERVAL_MS`）+ 启动即跑一次；桌面同款改造为周期任务仍属待办（现只在启动时裁一次）。
 
 **P1（价值主体）**
 

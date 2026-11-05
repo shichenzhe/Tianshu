@@ -483,3 +483,92 @@ describe("ServerConsoleView 远程会话遥控壳退役（HD-P2c）", () => {
     expect(screen.queryByTestId("console-tab-session")).toBeNull();
   });
 });
+
+describe("主机页用量摘要卡（P0-1，spec monitoring.md §6）", () => {
+  /** 远程主机用量 fixture（today 四 KPI——数字 <1000 使 compact 格式不变样） */
+  const STATS_ENVELOPE = {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        today: {
+          inputTokens: 4210,
+          outputTokens: 512,
+          llmCalls: 8,
+          toolCalls: 13,
+          toolSuccessRate: 0.9,
+        },
+        trend: [],
+        byModel: [],
+        tools: [],
+      },
+    },
+  };
+
+  function stubMonitorList(
+    capabilities: string[],
+    monitorStats?: unknown,
+  ): void {
+    stubInvoke({
+      "server:connectionList": {
+        activeConnId: "c9",
+        connections: [
+          {
+            id: "c9",
+            name: "无头端",
+            mode: "direct",
+            baseUrl: "http://x",
+            state: "connected",
+            capabilities,
+          },
+        ],
+      },
+      ...(monitorStats === undefined
+        ? {}
+        : { "server:monitorStats": monitorStats }),
+    });
+  }
+
+  it("选中连接含 monitor 能力：拉 server:monitorStats 并渲染今日 KPI（非编排分支，卡居中列于列表上方）", async () => {
+    stubMonitorList(["chat", "monitor"], STATS_ENVELOPE);
+    renderView();
+    expect(await screen.findByTestId("monitor-summary-card")).toBeTruthy();
+    expect(await screen.findByTestId("monitor-kpi-llm")).toBeTruthy();
+    expect(screen.getByTestId("monitor-kpi-llm").textContent).toContain("8");
+    expect(screen.getByTestId("monitor-kpi-tool").textContent).toContain("13");
+    // 拉取走显式 connId（选中的连接，非活动主机路由）
+    await waitFor(() => {
+      const call = invoke.mock.calls.find(
+        (c) => c[0] === "server:monitorStats",
+      );
+      expect(call).toBeTruthy();
+      expect(call?.[2]).toBe("c9");
+    });
+  });
+
+  it("选中连接无 monitor 能力：卡不渲染不查询（其余通道零扰动）", async () => {
+    stubMonitorList(["chat", "provider", "graph"]);
+    renderView();
+    await screen.findByTestId("orchestration-area");
+    expect(screen.queryByTestId("monitor-summary-card")).toBeNull();
+    expect(invoke.mock.calls.some((c) => c[0] === "server:monitorStats")).toBe(
+      false,
+    );
+  });
+
+  it("拉取失败：loadFailed 态 + 重试按钮再拉", async () => {
+    let calls = 0;
+    stubMonitorList(["monitor"], () => {
+      calls += 1;
+      if (calls === 1) throw new Error("boom");
+      return STATS_ENVELOPE;
+    });
+    renderView();
+    expect(
+      await screen.findByText("ai:server.monitorCard.loadFailed"),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "common:reset" }));
+    expect(await screen.findByTestId("monitor-kpi-llm")).toBeTruthy();
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+});

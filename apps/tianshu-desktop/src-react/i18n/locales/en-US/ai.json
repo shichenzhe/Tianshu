@@ -494,6 +494,12 @@
       "paused": "Paused",
       "loadFailed": "Failed to load tasks"
     },
+    "monitorCard": {
+      "title": "Usage Monitor",
+      "refresh": "Refresh usage",
+      "loadFailed": "Failed to load usage",
+      "empty": "No usage data yet"
+    },
     "ui": {
       "openInClient": "Open on controlled endpoint",
       "opened": "Session opened on the controlled endpoint",

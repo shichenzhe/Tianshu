@@ -214,6 +214,10 @@ export function registerServerIpc(
     "server:workspaceList",
     remoteHandler(registry, ENDPOINTS.workspace.query),
   );
+  // —— 监控读面（P0-1，spec monitoring.md §6）：monitor/stats 透传——
+  //  monitor.api 主机路由化（本地 monitor:stats / 远程此通道），两端
+  //  被控面均含 monitor capability ——
+  ipcMain.handle("server:monitorStats", remoteHandler(registry, ENDPOINTS.monitor.stats));
   // —— 编排区遥控（GA-T8）：graph 五端点 + automation 四端点（同款透传） ——
   ipcMain.handle("server:graphQuery", remoteHandler(registry, ENDPOINTS.graph.query));
   ipcMain.handle("server:graphSave", remoteHandler(registry, ENDPOINTS.graph.save));

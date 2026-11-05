@@ -388,6 +388,9 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:skillsRead",
   // ＋菜单子菜单（PM 批）：技能启停
   "server:skillsSetEnabled",
+  // 监控读面（P0-1，spec monitoring.md §6）：monitor/stats 透传——
+  // monitor.api 主机路由化的远程分支（本地走 monitor:stats 用户通道）
+  "server:monitorStats",
   // 控制端编排区（GA-T8）：graph 五端点 + automation 四端点透传（同款
   // 末参可选 connId，缺省走活动连接；启停语义 = automation/save 全量
   // enabled 字段，无 toggle 端点——Ruling 12）

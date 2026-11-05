@@ -19,6 +19,7 @@ import { CONNECTIONS_QUERY_KEY } from "../components/ConnectionDialog";
 import GraphPanel from "../components/GraphPanel";
 import AutomationPanel from "../components/AutomationPanel";
 import BridgeApprovalCard from "../components/BridgeApprovalCard";
+import MonitorSummaryCard from "../components/MonitorSummaryCard";
 import { usePageHeader } from "@/components/layout/page-header.store";
 
 export default function ServerConsoleView() {
@@ -46,6 +47,11 @@ export default function ServerConsoleView() {
   );
   const graphCapable = (selectedConnection?.capabilities ?? []).includes(
     "graph",
+  );
+  // 用量监控能力门控（P0-1）：连接运行时上报含 monitor 才挂摘要卡
+  // （两端被控面均含该位；判定用上报值勿 import CAPABILITIES 常量）
+  const monitorCapable = (selectedConnection?.capabilities ?? []).includes(
+    "monitor",
   );
 
   // 重连全量刷新（spec §13 项 2）：server.connected 下发渲染层——连接态
@@ -83,19 +89,27 @@ export default function ServerConsoleView() {
               selectedConnId={selectedConnId}
               onSelect={setSelectedConnId}
             />
-            {/* 编排遥控区（GA-T8 Ruling 11）：graph 面板 + automation 面板 */}
+            {/* 编排遥控区（GA-T8 Ruling 11）：用量摘要 + graph 面板 +
+                automation 面板 */}
             <div
               data-testid="orchestration-area"
               className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3"
             >
+              {monitorCapable ? (
+                <MonitorSummaryCard connId={selectedConnId} />
+              ) : null}
               <GraphPanel connId={selectedConnId} />
               <AutomationPanel connId={selectedConnId} />
             </div>
           </>
         ) : (
           // 无编排面（HD-P3e）：列表平铺（max-w 居中限宽）——无外层卡、
-          // 无内部滚动条，页面文档流自滚；主机管理即页面主体
-          <div className="mx-auto w-full max-w-lg py-4">
+          // 无内部滚动条，页面文档流自滚；主机管理即页面主体（monitor
+          // 能力在场时摘要卡居中列于列表上方——远程主机用量桌面遥看）
+          <div className="mx-auto flex w-full max-w-lg flex-col gap-3 py-4">
+            {monitorCapable && selectedConnId ? (
+              <MonitorSummaryCard connId={selectedConnId} />
+            ) : null}
             <ConnectionList
               variant="page"
               selectedConnId={selectedConnId}

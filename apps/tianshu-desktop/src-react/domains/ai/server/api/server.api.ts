@@ -13,6 +13,7 @@ import { invoke, on, type IPCChannel } from "@/lib/ipc";
 import type { ChatStreamChunk } from "@/domains/ai/api/chat.api";
 import type {
   FaceEvent,
+  MonitorStats,
   RemoteFileUploadInput,
   RemoteWorkspaceBrief,
   SessionPolishParams,
@@ -683,6 +684,19 @@ export default class ServerApi {
     return requestRemote<RemoteWorkspaceBrief[]>(
       "server:workspaceList",
       {},
+      connId,
+    );
+  }
+
+  /** 用量监控聚合（P0-1：monitor/stats 只读面——scene 缺省全量，载荷
+   *  形状与移动端同款 {} / {scene}；返回 MonitorStats 协议形状） */
+  static async monitorStats(
+    scene: string | undefined,
+    connId: string,
+  ): Promise<MonitorStats> {
+    return requestRemote<MonitorStats>(
+      "server:monitorStats",
+      scene == null ? {} : { scene },
       connId,
     );
   }

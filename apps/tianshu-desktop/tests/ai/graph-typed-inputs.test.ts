@@ -181,3 +181,105 @@ describe("run_workflow typed 入口归一", () => {
     expect(result).toEqual({ ok: true, inputs: { topic: "x", n: 3 } });
   });
 });
+
+/** json 容器图 fixture（2026-11-05 json 类型）：payload 声明 json，
+ *  database 参数单一引用直通（容器经模板渲染为紧凑 JSON 文本绑定） */
+const JSON_GRAPH = (() => {
+  const json = {
+    version: 1,
+    inputSchema: {
+      payload: { type: "json", required: true },
+    },
+    nodes: [
+      { id: "start", name: "开始", kind: "start", variables: ["payload"] },
+      {
+        id: "insert",
+        name: "插入",
+        kind: "database",
+        engine: "sqlite",
+        sqlitePath: "demo.db",
+        sql: "INSERT INTO t (a) VALUES (?)",
+        params: ["{{input.payload}}"],
+      },
+    ],
+    edges: [
+      { from: "start", to: "insert" },
+      { from: "insert", to: "END" },
+    ],
+  };
+  expect(validateGraph(json).ok).toBe(true);
+  return json;
+})();
+
+describe("run_workflow json 输入（容器保型，2026-11-05）", () => {
+  function makeJsonStubs() {
+    return {
+      graphDefinition: {
+        findFirst: vi.fn(async () => ({
+          id: 1,
+          name: "json-flow",
+          description: null,
+          graphJson: JSON.stringify(JSON_GRAPH),
+          version: 1,
+        })),
+      },
+      session: {
+        findUnique: vi.fn(async () => ({ userId: 7, appId: null })),
+      },
+      workspace: {
+        findFirst: vi.fn(async () => ({ id: 9, directoryPath: "/ws" })),
+      },
+    };
+  }
+
+  it("工具参数 schema 收容器对象/数组（zod union 扩 json）", async () => {
+    const tool = makeRunWorkflowTool({
+      ...makeJsonStubs(),
+      launch: vi.fn(),
+    } as never);
+    const parameters = tool.parameters as unknown as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    const object = parameters.safeParse({
+      id: 1,
+      inputs: { payload: { a: 1 } },
+    });
+    expect(object.success).toBe(true);
+    const array = parameters.safeParse({
+      id: 1,
+      inputs: { payload: [1, 2] },
+    });
+    expect(array.success).toBe(true);
+  });
+
+  it("json 容器保型直达 launch（未字符串化）", async () => {
+    const launch = vi.fn();
+    const tool = makeRunWorkflowTool({
+      ...makeJsonStubs(),
+      launch,
+    } as never);
+    const result = await tool.execute(CTX, {
+      id: 1,
+      inputs: { payload: { a: 1, list: [1, 2] } },
+    });
+    expect(result).toContain("已启动");
+    const params = launch.mock.calls[0][0];
+    expect(params.inputs.payload).toEqual({ a: 1, list: [1, 2] });
+    expect(typeof params.inputs.payload).toBe("object");
+  });
+
+  it("非法 JSON 文本结构化回喂（引导修正）", async () => {
+    const launch = vi.fn();
+    const tool = makeRunWorkflowTool({
+      ...makeJsonStubs(),
+      launch,
+    } as never);
+    const result = await tool.execute(CTX, {
+      id: 1,
+      inputs: { payload: "{a:1}" },
+    });
+    expect(result).toContain("输入参数无效");
+    expect(result).toContain("JSON 对象/数组");
+    expect(launch).not.toHaveBeenCalled();
+  });
+});

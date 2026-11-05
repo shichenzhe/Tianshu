@@ -4,6 +4,7 @@
  * {{nodes.<id>.errorOutput}}（循环节点死信，未设时抛错）/{{date}}/
  * {{weekday}}/{{time}}；缺引用抛 GraphTemplateError */
 import { format } from "date-fns";
+import type { GraphInputValue } from "./graph-inputs";
 
 const WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"];
 const VAR_RE =
@@ -18,10 +19,11 @@ export class GraphTemplateError extends Error {
 
 export interface PromptRenderContext {
   /** 输入值（切片 D typed 输入）：模板替换语义保持——number/boolean 经
-   *  String() 归一插入（35 → "35"、true → "true"），值形态由入口
-   *  normalizeGraphInputs 收口；database 参数的原生类型直通在执行层做，
-   *  不经模板 */
-  inputs: Record<string, string | number | boolean>;
+   *  String() 归一插入（35 → "35"、true → "true"），json 容器紧凑
+   *  stringify 插入（{"a":1}——HTTP body 可直拼 {{input.x}} 位），值形态
+   *  由入口 normalizeGraphInputs 收口；database 参数的原生类型直通在
+   *  执行层做，不经模板 */
+  inputs: Record<string, GraphInputValue>;
   nodes: Record<string, { output: string; errorOutput?: string }>;
   now: Date;
 }
@@ -38,7 +40,10 @@ export function renderNodePrompt(
     if (token.startsWith("input.")) {
       const key = token.slice("input.".length);
       if (!(key in ctx.inputs)) throw new GraphTemplateError(token);
-      return String(ctx.inputs[key]);
+      const value = ctx.inputs[key];
+      return value !== null && typeof value === "object"
+        ? JSON.stringify(value)
+        : String(value);
     }
     const nodeId = token.slice("nodes.".length).split(".")[0];
     const field = token.endsWith(".errorOutput")

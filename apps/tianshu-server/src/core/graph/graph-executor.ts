@@ -128,6 +128,7 @@ import {
   type NotifyNode,
   type RerankNode,
   type SubflowNode,
+  type GraphInputValue,
   graphHttpUrlErrorDns,
   type GraphHttpUrlPolicy,
 } from '@tianshu/core';
@@ -192,8 +193,9 @@ export interface GraphRunParams {
   graph: GraphRow;
   task: AutomationTaskRow | null;
   /** typed 输入（F1 对齐 mirror GraphInputValue：number/boolean 原生透传
-   *  database 参数；模板替换语义下 String() 归一——core graph-prompt 同款） */
-  inputs: Record<string, string | number | boolean>;
+   *  database 参数；json 容器保型（2026-11-05）——模板替换语义下容器紧凑
+   *  stringify、标量 String() 归一——core graph-prompt 同款） */
+  inputs: Record<string, GraphInputValue>;
   triggerType:
     | 'schedule'
     | 'catchUp'
@@ -1191,7 +1193,7 @@ function makeHttpNodeHandler(node: HttpNode, ctx: NodeContext): NodeHandler {
 async function runHttpRequest(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const attempts = (node.retries ?? 0) + 1;
   let lastError: unknown;
@@ -1213,7 +1215,7 @@ async function runHttpRequest(
 async function fetchOnce(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const render = (text: string) =>
     renderNodePrompt(text, {
@@ -1419,7 +1421,7 @@ async function runCodeScript(
   node: CodeNode,
   ctx: NodeContext,
   script: string,
-  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   // python 命令节点级可配（pythonCommand，缺省 python）；?? 兜底防
   // 调用方绕过 schema parse 直构节点对象
@@ -2085,7 +2087,7 @@ function makeFileReadNodeHandler(
 async function runFileRead(
   node: FileReadNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const raw = renderNodePrompt(node.path, {
     inputs: state.inputs,
@@ -2190,7 +2192,7 @@ function makeNotifyNodeHandler(
 async function launchAsyncSubflow(
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string | number | boolean>,
+  inputs: Record<string, GraphInputValue>,
 ): Promise<string> {
   void runSubflowGraph(
     'async',
@@ -2209,7 +2211,7 @@ async function runSubflowGraph(
   nodeId: string,
   graphId: number,
   ctx: NodeContext,
-  inputs: Record<string, string | number | boolean>,
+  inputs: Record<string, GraphInputValue>,
   outerAbort?: AbortSignal,
 ): Promise<string> {
   if (ctx.subflowStack.includes(String(graphId))) {
@@ -2260,7 +2262,7 @@ function makeSubflowNodeHandler(
     const startedAt = Date.now();
     const label = `子工作流 #${node.graphId}`;
     try {
-      const inputs: Record<string, string | number | boolean> = {};
+      const inputs: Record<string, GraphInputValue> = {};
       for (const kv of node.inputs) {
         if (kv.key !== '') {
           inputs[kv.key] = renderNodePrompt(kv.value, {
@@ -2734,7 +2736,7 @@ function makeJsonParseNodeHandler(
 async function runJsonParse(
   node: JsonParseNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, string | number | boolean>; nodes: Record<string, NodeResult> },
+  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
 ): Promise<string> {
   const source = renderNodePrompt(node.source, {
     inputs: state.inputs,
@@ -3615,7 +3617,7 @@ function notifyNodeStatus(
  * 不推（无图运行态）。inputs/nodes 由前端从占位符表单构造 */
 export async function testSingleNode(params: {
   node: GraphNode;
-  inputs: Record<string, string | number | boolean>;
+  inputs: Record<string, GraphInputValue>;
   nodes: Record<string, { output: string }>;
   workspace: { id: number; directoryPath: string | null };
   userId: number;

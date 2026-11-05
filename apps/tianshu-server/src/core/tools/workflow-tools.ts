@@ -16,6 +16,7 @@ import {
   validateGraph,
   normalizeGraphInputs,
   parseInputSchema,
+  type GraphInputValue,
 } from '@tianshu/core';
 
 /** 四件名（2026-11-01 审查批对齐 mirror 2026-10-29 六件坍缩：write/read
@@ -99,7 +100,7 @@ export interface WorkflowPrismaLike {
 /** 执行基建注入：GraphService.run（受理即返 runId；错误经 Error message） */
 export type RunGraphFn = (dto: {
   graphId: number;
-  inputs?: Record<string, string | number | boolean>;
+  inputs?: Record<string, GraphInputValue>;
   workspaceId?: number;
 }) => Promise<{ runId: number }>;
 
@@ -150,7 +151,7 @@ export function makeWorkflowTools(deps: {
   };
 
   const INPUT_SCHEMA_EXPECTATION =
-    '简写 "string" 或对象 {type: "string"|"number"|"boolean"|"enum"|"date", required?, default?, enumValues?（enum 必填非空不重复）, description?}';
+    '简写 "string" 或对象 {type: "string"|"number"|"boolean"|"enum"|"date"|"json", required?, default?（json 为对象/数组）, enumValues?（enum 必填非空不重复）, description?}';
 
   function translateZodMessage(message: string): string {
     if (message === 'Required') {
@@ -249,7 +250,14 @@ export function makeWorkflowTools(deps: {
           const qualifiers = [field.required ? '必填' : '可选'];
           if (field.default !== undefined) {
             qualifiers.push(
-              `默认:${field.default === 'today' ? '当天' : String(field.default)}`,
+              `默认:${
+                field.default === 'today'
+                  ? '当天'
+                  : field.default !== null &&
+                      typeof field.default === 'object'
+                    ? JSON.stringify(field.default)
+                    : String(field.default)
+              }`,
             );
           }
           return `${head}(${qualifiers.join('，')})`;
@@ -265,7 +273,7 @@ export function makeWorkflowTools(deps: {
     graphJson: string,
     raw: Record<string, unknown>,
   ):
-    | { ok: true; inputs: Record<string, string | number | boolean> }
+    | { ok: true; inputs: Record<string, GraphInputValue> }
     | { ok: false; error: string } {
     let schema: unknown = {};
     try {
@@ -488,17 +496,26 @@ export function makeWorkflowTools(deps: {
   const runSchema = z.object({
     id: z.number().int().positive().describe('要运行的工作流 id'),
     inputs: z
-      .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+      .record(
+        z.string(),
+        z.union([
+          z.string(),
+          z.number(),
+          z.boolean(),
+          z.record(z.string(), z.unknown()),
+          z.array(z.unknown()),
+        ]),
+      )
       .optional()
       .describe(
-        '输入变量（键与类型以 workflow_read 各工作流的输入说明为准；number 直传、enum 限值域、date 为 yyyy-MM-dd）',
+        '输入变量（键与类型以 workflow_read 各工作流的输入说明为准；number 直传、enum 限值域、date 为 yyyy-MM-dd、json 为对象/数组原生直传）',
       ),
   });
 
   const run: ToolDefinition<z.infer<typeof runSchema>> = {
     name: 'run_workflow',
     description:
-      '异步试运行工作流（真实执行，受理即返 runId）；inputs 键与类型以 workflow_read 各工作流的「输入」说明为准；写操作需批准',
+      '异步试运行工作流（真实执行，受理即返 runId）；inputs 键与类型以 workflow_read 各工作流的「输入」说明为准（number 直传数值、enum 限值域、date 为 yyyy-MM-dd、json 为对象/数组原生直传）；写操作需批准',
     parameters: runSchema,
     kind: 'write',
     execute: async (ctx, args) => {
@@ -648,6 +665,6 @@ export const WORKFLOW_NODE_COOKBOOK = `【节点速查】输入输出均为文�
 3. LLM 加工：llm 节点（prompt 引 {{input.x}}/{{nodes.*.output}}）→结果交 show_summary/show_chart 渲染（show_* 为聊天展示工具，非节点）
 4. 写类工作流经 run_workflow 触发（写操作走审批门——manual 模式挂远程应答、其余模式自动拒，config accessMode 决定）
 
-【输入声明】inputSchema 支持对象形态 {type:"string"|"number"|"boolean"|"enum"|"date", required?, default?, enumValues?(enum 必填), description?}——number 参数原生传库免 CAST，enum 收口值域，date 归一 yyyy-MM-dd（default "today"=执行日）
+【输入声明】inputSchema 支持对象形态 {type:"string"|"number"|"boolean"|"enum"|"date"|"json", required?, default?（json 为对象/数组）, enumValues?(enum 必填), description?}——number 参数原生传库免 CAST，enum 收口值域，date 归一 yyyy-MM-dd（default "today"=执行日），json 对象/数组原生直传（模板 {{input.x}} 处紧凑 stringify）
 
 【照猫画虎】动手前先 workflow_read 看同类图（id 可无参清单查，如「记账」三件是 database+merge 范式的现成样板）`;

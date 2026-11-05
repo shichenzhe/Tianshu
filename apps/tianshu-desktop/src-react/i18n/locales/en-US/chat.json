@@ -837,7 +837,8 @@
       "failed": "Test run failed: {{message}}",
       "cancelRun": "Interrupt Run",
       "cancelSent": "Interrupt request sent; status will refresh shortly",
-      "selectValue": "Select a value"
+      "selectValue": "Select a value",
+      "invalidJson": "Must be a valid JSON object/array text"
     },
     "runs": {
       "title": "Run history",
@@ -1355,7 +1356,8 @@
         "number": "Number",
         "boolean": "Boolean",
         "enum": "Enum",
-        "date": "Date"
+        "date": "Date",
+        "json": "JSON"
       }
     },
     "templates": {

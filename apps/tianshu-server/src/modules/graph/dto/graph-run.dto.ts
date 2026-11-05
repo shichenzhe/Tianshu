@@ -14,19 +14,25 @@ export class GraphRunDto {
 
   @ApiProperty({
     description:
-      '输入变量（inputSchema 键值；缺省空）——typed 值（number/boolean）经入口归一为原生类型（D 批共享 normalizeGraphInputs）',
+      '输入变量（inputSchema 键值；缺省空）——typed 值（number/boolean）经入口归一为原生类型（D 批共享 normalizeGraphInputs）；json 对象/数组原生直传（2026-11-05）',
     // SK-2 契约测试暴露：裸 type:object 无 additionalProperties 时
     // openapi-typescript 生成退化形 Record<string, never>（值域禁写入）；
     // 值域对齐 chat 工具 typed 上送（HTTP 侧 @IsObject 不深校验，行为不变）
     required: false,
     type: Object,
     additionalProperties: {
-      anyOf: [{ type: 'string' }, { type: 'number' }, { type: 'boolean' }],
+      anyOf: [
+        { type: 'string' },
+        { type: 'number' },
+        { type: 'boolean' },
+        { type: 'object' },
+        { type: 'array' },
+      ],
     },
   })
   @IsOptional()
   @IsObject({ message: '输入变量必须是键值对象' })
-  inputs?: Record<string, string | number | boolean>;
+  inputs?: Record<string, unknown>;
 
   @ApiProperty({
     description: '工作空间；缺省挂用户最近一个空间',

@@ -3,8 +3,13 @@
  * 简写 ∪ 类型化对象）的统一解析与入口校验/默认值填充。桌面侧试运行与
  * run_workflow 入口统一走这里（required 结构化报错取代模板渲染期的
  * 「模板变量未定义」；default 填充的唯一归一位置）。纯函数零依赖。
+ * json 类型（2026-11-05）：容器原生保型/文本 parse 归一，标量互斥拒收。
  */
 import type { GraphInputField, InputType } from "./graph-schema";
+
+/** json 容器值形态（2026-11-05 json 类型）：对象/数组原生保型传递，
+ *  标量 JSON 与既有标量类型互斥（null 视为缺值） */
+export type JsonContainer = Record<string, unknown> | unknown[];
 
 /** 归一化输入变量描述：required 缺省 true——与旧语义等价（此前所有声明
  *  变量事实上必填：模板缺键即报错）；optional 字段按需出现 */
@@ -12,7 +17,7 @@ export interface NormalizedInputField {
   key: string;
   type: InputType;
   required: boolean;
-  default?: string | number | boolean;
+  default?: string | number | boolean | JsonContainer;
   enumValues?: string[];
   description?: string;
 }
@@ -44,8 +49,8 @@ export function parseInputSchema(
 }
 
 /** 输入值类型（模板替换语义下归一为字符串；number/boolean 供 database
- *  参数原生直通） */
-export type GraphInputValue = string | number | boolean;
+ *  参数原生直通；json 容器保型传递——模板替换 stringify 为紧凑文本） */
+export type GraphInputValue = string | number | boolean | JsonContainer;
 
 /** 入口校验问题（结构化，切片 D） */
 export interface GraphInputIssue {
@@ -55,7 +60,8 @@ export interface GraphInputIssue {
     | "invalidNumber"
     | "invalidBoolean"
     | "invalidEnum"
-    | "invalidDate";
+    | "invalidDate"
+    | "invalidJson";
   message: string;
 }
 
@@ -173,6 +179,31 @@ export function normalizeGraphInputs(
           continue;
         }
         inputs[field.key] = normalized;
+        break;
+      }
+      case "json": {
+        // 原生容器保型直收；文本须 parse 为容器归一原生值（标量/null
+        // JSON 与既有标量类型互斥——引导改用对应类型）
+        if (typeof value === "object" && value !== null) {
+          inputs[field.key] = value as JsonContainer;
+          break;
+        }
+        if (typeof value === "string") {
+          try {
+            const parsed: unknown = JSON.parse(value.trim());
+            if (parsed !== null && typeof parsed === "object") {
+              inputs[field.key] = parsed as JsonContainer;
+              break;
+            }
+          } catch {
+            // 落入下方统一报错
+          }
+        }
+        issues.push({
+          key: field.key,
+          code: "invalidJson",
+          message: `${field.key} 须为 JSON 对象/数组（或其文本），标量请改用对应类型，收到: ${String(value).slice(0, 40)}`,
+        });
         break;
       }
       default: {

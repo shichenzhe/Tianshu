@@ -1,0 +1,157 @@
+// packages/tianshu-core/src/graph-inputs.test.ts
+/**
+ * json 输入类型（2026-11-05）：
+ * - normalizeGraphInputs json 归一三态：原生容器保型直收 / JSON 文本
+ *   parse 为容器归一原生值 / 非法（含标量 JSON 文本）回喂 invalidJson
+ * - json default 容器填充；parseInputSchema 容器 default 透传
+ * - validateGraph 声明面：json 类型 + 容器 default 合法、default 字符串
+ *   不自洽、enumValues 仅 enum 可带互斥
+ * - renderNodePrompt：{{input.x}} 容器值紧凑 stringify 插入（替代
+ *   String() 的 [object Object]）
+ */
+import { describe, expect, it } from "vitest";
+import {
+  normalizeGraphInputs,
+  parseInputSchema,
+} from "./graph-inputs";
+import { validateGraph } from "./graph-schema";
+import { renderNodePrompt } from "./graph-prompt";
+
+const jsonField = {
+  key: "payload",
+  type: "json",
+  required: true,
+} as const;
+
+describe("normalizeGraphInputs json 归一", () => {
+  it("原生对象/数组保型直收", () => {
+    const result = normalizeGraphInputs([jsonField], {
+      payload: { a: 1, b: [true, null] },
+    });
+    expect(result).toEqual({
+      ok: true,
+      inputs: { payload: { a: 1, b: [true, null] } },
+    });
+  });
+
+  it("JSON 文本 parse 为容器 → 归一原生值", () => {
+    const result = normalizeGraphInputs([jsonField], {
+      payload: '[{"x": 2}]',
+    });
+    expect(result).toEqual({ ok: true, inputs: { payload: [{ x: 2 }] } });
+  });
+
+  it("非法 JSON 文本回喂 invalidJson", () => {
+    const result = normalizeGraphInputs([jsonField], { payload: "{a:1}" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues[0].code).toBe("invalidJson");
+      expect(result.issues[0].message).toContain("payload");
+    }
+  });
+
+  it("标量 JSON 文本拒收（与既有标量类型互斥）", () => {
+    const scalar = normalizeGraphInputs([jsonField], { payload: "3" });
+    expect(scalar.ok).toBe(false);
+    if (!scalar.ok) {
+      expect(scalar.issues[0].code).toBe("invalidJson");
+    }
+    const nullText = normalizeGraphInputs([jsonField], { payload: "null" });
+    expect(nullText.ok).toBe(false);
+  });
+
+  it("缺值时 default 容器填充（原生形态）", () => {
+    const result = normalizeGraphInputs(
+      [{ ...jsonField, required: false, default: { fallback: true } }],
+      {},
+    );
+    expect(result).toEqual({
+      ok: true,
+      inputs: { payload: { fallback: true } },
+    });
+  });
+});
+
+describe("parseInputSchema json 透传", () => {
+  it("json 字段（含容器 default）逐字段透传", () => {
+    const fields = parseInputSchema({
+      payload: { type: "json", required: false, default: [1, 2] },
+    });
+    expect(fields).toEqual([
+      { key: "payload", type: "json", required: false, default: [1, 2] },
+    ]);
+  });
+});
+
+/** 最小合法图 fixture（start + database 两节点） */
+function graphWith(inputSchema: Record<string, unknown>) {
+  return {
+    version: 1,
+    inputSchema,
+    nodes: [
+      { id: "start", name: "开始", kind: "start", variables: ["payload"] },
+      {
+        id: "insert",
+        name: "插入",
+        kind: "database",
+        engine: "sqlite",
+        sqlitePath: "demo.db",
+        sql: "INSERT INTO t (a) VALUES (?)",
+        params: ["{{input.payload}}"],
+      },
+    ],
+    edges: [
+      { from: "start", to: "insert" },
+      { from: "insert", to: "END" },
+    ],
+  };
+}
+
+describe("validateGraph json 声明", () => {
+  it("json 类型 + 容器 default 合法", () => {
+    const result = validateGraph(
+      graphWith({
+        payload: { type: "json", default: { a: 1 } },
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("json 的 default 为字符串 → 不自洽报错", () => {
+    const result = validateGraph(
+      graphWith({
+        payload: { type: "json", default: "not-json-object" },
+      }),
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  it("json 带 enumValues 被拒（仅 enum 可带）", () => {
+    const result = validateGraph(
+      graphWith({
+        payload: { type: "json", enumValues: ["a"] },
+      }),
+    );
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("renderNodePrompt 容器值 stringify", () => {
+  it("{{input.x}} 容器值紧凑 JSON 插入", () => {
+    const out = renderNodePrompt("{{input.payload}}", {
+      inputs: { payload: { a: 1, list: [1, 2] } },
+      nodes: {},
+      now: new Date("2026-11-05T08:00:00"),
+    });
+    expect(out).toBe('{"a":1,"list":[1,2]}');
+  });
+
+  it("标量值替换语义不变（35 → \"35\"）", () => {
+    const out = renderNodePrompt("n={{input.n}} b={{input.b}}", {
+      inputs: { n: 35, b: true },
+      nodes: {},
+      now: new Date("2026-11-05T08:00:00"),
+    });
+    expect(out).toBe("n=35 b=true");
+  });
+});

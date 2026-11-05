@@ -246,9 +246,9 @@ const FIELD_EXPECTATIONS: Record<string, string> = {
   position: "{x: 数值, y: 数值}（画布坐标，可省略）",
 };
 
-/** inputSchema 路径 → 期望形态（D 批双形态） */
+/** inputSchema 路径 → 期望形态（D 批双形态；json 2026-11-05） */
 const INPUT_SCHEMA_EXPECTATION =
-  '简写 "string" 或对象 {type: "string"|"number"|"boolean"|"enum"|"date", required?, default?, enumValues?（enum 必填非空不重复）, description?}';
+  '简写 "string" 或对象 {type: "string"|"number"|"boolean"|"enum"|"date"|"json", required?, default?（json 为对象/数组）, enumValues?（enum 必填非空不重复）, description?}';
 
 /** zod 英文消息 → 中文 + 期望（模式表；未命中原样透传——自定义
  *  superRefine 消息本就是中文） */
@@ -349,7 +349,7 @@ function formatInputField(field: {
   key: string;
   type: string;
   required: boolean;
-  default?: string | number | boolean;
+  default?: string | number | boolean | Record<string, unknown> | unknown[];
   enumValues?: string[];
 }): string {
   const head =
@@ -358,8 +358,15 @@ function formatInputField(field: {
       : `${field.key}:${field.type}`;
   const qualifiers = [field.required ? "必填" : "可选"];
   if (field.default !== undefined) {
+    // json 容器 default 紧凑 stringify（String() 会得 [object Object]）
     qualifiers.push(
-      `默认:${field.default === "today" ? "当天" : String(field.default)}`,
+      `默认:${
+        field.default === "today"
+          ? "当天"
+          : field.default !== null && typeof field.default === "object"
+            ? JSON.stringify(field.default)
+            : String(field.default)
+      }`,
     );
   }
   return `${head}(${qualifiers.join("，")})`;
@@ -630,10 +637,19 @@ export type LaunchTestRunFn = (params: {
 const runWorkflowSchema = z.object({
   id: z.number().int().positive().describe("要运行的工作流 id"),
   inputs: z
-    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .record(
+      z.string(),
+      z.union([
+        z.string(),
+        z.number(),
+        z.boolean(),
+        z.record(z.string(), z.unknown()),
+        z.array(z.unknown()),
+      ]),
+    )
     .optional()
     .describe(
-      "输入变量（键与类型以 workflow_read 清单返回的输入说明为准；number 直传、boolean 为 true/false、enum 须在值域内）",
+      "输入变量（键与类型以 workflow_read 清单返回的输入说明为准；number 直传、boolean 为 true/false、enum 须在值域内、json 为对象/数组原生直传）",
     ),
 });
 
@@ -701,7 +717,7 @@ export function makeRunWorkflowTool(deps: {
   return {
     name: "run_workflow",
     description:
-      "异步试运行工作流（真实执行，触发即返；应用会话内仅可运行该应用的工作流）；inputs 键与类型以 workflow_read 清单各工作流的「输入」说明为准（number 直传数值、enum 限值域、date 为 yyyy-MM-dd）；写操作需批准",
+      "异步试运行工作流（真实执行，触发即返；应用会话内仅可运行该应用的工作流）；inputs 键与类型以 workflow_read 清单各工作流的「输入」说明为准（number 直传数值、enum 限值域、date 为 yyyy-MM-dd、json 为对象/数组原生直传）；写操作需批准",
     parameters: runWorkflowSchema,
     kind: "write",
     execute: async (ctx, args) => {

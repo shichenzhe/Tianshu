@@ -112,7 +112,8 @@ export type ToolRespondRequestIdIsString = ExpectTrue<
 >;
 
 // graph/run：协议无 run 入参类型——锚生成形自身（graphId: number、
-// inputs 为字符串值对象、workspaceId 可选 number）
+// inputs 为 typed 值对象（string 值可赋——2026-11-05 json 扩容后值域
+// string|number|boolean|object|array）、workspaceId 可选 number）
 export type GraphRunGraphIdIsNumber = ExpectTrue<
   [number] extends [Schemas['GraphRunDto']['graphId']] ? true : false
 >;

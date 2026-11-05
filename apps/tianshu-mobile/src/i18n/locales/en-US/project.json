@@ -127,6 +127,9 @@
   "bindingSkillDesktopTip": "Edit skill bindings on desktop (unbinding works here)",
   "bindingCandidatesEmpty": "No candidates",
   "manageFields": "Manage fields",
+  "moveUp": "Move up",
+  "moveDown": "Move down",
+  "advancePrompt": "Please advance #{{id}} \"{{title}}\": with project context and this task's progress notes, move the work forward and update its status and progress.",
   "fieldName": "Field name",
   "addField": "Add field",
   "fieldType": {

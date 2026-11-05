@@ -34,6 +34,8 @@ import {
   FolderPlus,
   LayoutList,
   Link2,
+  ArrowDown,
+  ArrowUp,
   MessageCircle,
   MessageCirclePlus,
   MoreHorizontal,
@@ -1064,14 +1066,22 @@ export default function ProjectWorkspaceScreen() {
     [views, activeViewId],
   );
 
+  /** 激活视图解析配置（planEntries 与「上移/下移」可用性共用——
+   *  sortRules 非空的视图显示序由规则主导，sortOrder 操作无感知不提供） */
+  const viewConfig = useMemo(
+    () =>
+      parsePlanViewConfig(
+        activeView?.filterJson ?? "",
+        activeView?.sortJson ?? "",
+      ),
+    [activeView],
+  );
+
   /** 计划拍平：激活视图条件+排序 → 本地筛选叠加 → 视图分组依据分组
    *  （groupBy 生效——#1 视图批：status 全枚举组含空组+组尾快速新建；
    *  priority/assignee 空组不占位）→ 组头/事项/组尾条目 */
   const planEntries = useMemo<PlanEntry[]>(() => {
-    const config = parsePlanViewConfig(
-      activeView?.filterJson ?? "",
-      activeView?.sortJson ?? "",
-    );
+    const config = viewConfig;
     const viewFiltered = filterPlanItems(
       items,
       config.conditions,
@@ -1136,7 +1146,7 @@ export default function ProjectWorkspaceScreen() {
       });
     });
     return entries;
-  }, [items, activeView, members, currentUserId, localFilters, memberNames, t]);
+  }, [items, activeView, members, currentUserId, localFilters, memberNames, t, viewConfig]);
 
   const openPlanItem = useCallback(
     (item: PlanItemRecordDto) => setItemDialog({ mode: "edit", item }),
@@ -1232,8 +1242,41 @@ export default function ProjectWorkspaceScreen() {
     if (!ok) toast.error(store.hub.error || t("project:loadFailed"));
   }
 
+  /** #9 排序批：组内上移/下移（仅默认序视图——sortRules 主导的视图操作
+   *  无感知不提供入口）；整组按交换后的显示序重编号 0..n-1 串行回写
+   *  （enqueueWrite 队列保序；已正确且未变的行免写） */
+  async function moveItemWithinGroup(
+    item: PlanItemRecordDto,
+    dir: "up" | "down",
+  ) {
+    const groupItems = planEntries.flatMap((entry) =>
+      entry.kind === "item" && entry.item.status === item.status
+        ? [entry.item]
+        : [],
+    );
+    const index = groupItems.findIndex((row) => row.id === item.id);
+    const target = dir === "up" ? index - 1 : index + 1;
+    if (index < 0 || target < 0 || target >= groupItems.length) return;
+    const reordered = [...groupItems];
+    [reordered[index], reordered[target]] = [
+      reordered[target],
+      reordered[index],
+    ];
+    const store = useProjectStore.getState();
+    for (let i = 0; i < reordered.length; i += 1) {
+      if (reordered[i].sortOrder === i) continue;
+      const ok = await store.moveItem(reordered[i].id, reordered[i].status, i);
+      if (!ok) {
+        toast.error(store.hub.error || t("project:loadFailed"));
+        return;
+      }
+    }
+  }
+
   /** 任务推进直达专属会话（桌面对齐 openTaskSession：服务端按 planItemId
-   *  查重复用——一任务一会话；复用到已归档会话时先撤销归档再进） */
+   *  查重复用——一任务一会话；复用到已归档会话时先撤销归档再进）；
+   *  #14 批：携预填引导语（桌面 setAdvancePrompt 同文案，session 页
+   *  prefill 机制接力） */
   async function advanceTask(item: PlanItemRecordDto) {
     const brief = await useSessionsStore
       .getState()
@@ -1245,7 +1288,13 @@ export default function ProjectWorkspaceScreen() {
     if (brief.archivedAt !== null) {
       await useSessionsStore.getState().update(brief.id, { archived: false });
     }
-    router.push(`/session/${brief.id}`);
+    const prompt = t("project:advancePrompt", {
+      id: item.id,
+      title: item.title,
+    });
+    router.push(
+      `/session/${brief.id}?prefill=${encodeURIComponent(prompt)}`,
+    );
   }
 
   /** 资产上传（桌面对齐 AssetsPane 上传；复用资料库 picker→base64 链——
@@ -1995,6 +2044,31 @@ export default function ProjectWorkspaceScreen() {
                     void advanceTask(target);
                   },
                 },
+                // #9 排序批：默认序视图才有 sortOrder 感知（规则序视图不提供）
+                ...(viewConfig.sortRules.length === 0
+                  ? ([
+                      {
+                        key: "move-up",
+                        label: t("project:moveUp"),
+                        Icon: ArrowUp,
+                        onPress: () => {
+                          const target = planSheetTarget;
+                          setPlanSheetTarget(null);
+                          void moveItemWithinGroup(target, "up");
+                        },
+                      },
+                      {
+                        key: "move-down",
+                        label: t("project:moveDown"),
+                        Icon: ArrowDown,
+                        onPress: () => {
+                          const target = planSheetTarget;
+                          setPlanSheetTarget(null);
+                          void moveItemWithinGroup(target, "down");
+                        },
+                      },
+                    ] as ActionSheetItem[])
+                  : []),
                 ...PLAN_STATUSES.filter(
                   (status) => status !== planSheetTarget.status,
                 ).map((status) => ({

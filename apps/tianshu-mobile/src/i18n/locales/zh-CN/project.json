@@ -127,6 +127,9 @@
   "bindingSkillDesktopTip": "技能挂载的完整编辑请在桌面端进行（此处可解绑）",
   "bindingCandidatesEmpty": "暂无候选",
   "manageFields": "管理字段",
+  "moveUp": "上移",
+  "moveDown": "下移",
+  "advancePrompt": "请推进 #{{id}}《{{title}}》：结合项目上下文与此任务的进展记录，推进下一步工作，并更新任务状态与进展。",
   "fieldName": "字段名",
   "addField": "添加字段",
   "fieldType": {

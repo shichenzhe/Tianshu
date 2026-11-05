@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
@@ -105,7 +105,9 @@ const FILE_REJECT_KEYS: Record<FileRejectReason, string> = {
  * provider/query 选定随 startSend 携带）。
  */
 export default function SessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; prefill?: string }>();
+  const id = params.id;
+  const router = useRouter();
   const sessionId = Number(id);
   const { t } = useTranslation("chat");
   const colors = useThemeColors();
@@ -263,6 +265,14 @@ export default function SessionScreen() {
     text: string;
     nonce: number;
   } | null>(null);
+  // #14 批：推进入口携 ?prefill= 引导语（桌面 setAdvancePrompt 同文案）——
+  // 挂载读参即填 Composer 并清参（防返回重进重复触发）
+  useEffect(() => {
+    if (typeof params.prefill === "string" && params.prefill !== "") {
+      setPrefill({ text: params.prefill, nonce: Date.now() });
+      void router.setParams({ prefill: undefined });
+    }
+  }, [params.prefill, router]);
   // 键盘避让高度（手动方案，见渲染区注释）
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   useEffect(() => {

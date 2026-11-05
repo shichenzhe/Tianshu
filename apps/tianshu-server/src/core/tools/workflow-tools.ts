@@ -665,6 +665,6 @@ export const WORKFLOW_NODE_COOKBOOK = `【节点速查】输入输出均为文�
 3. LLM 加工：llm 节点（prompt 引 {{input.x}}/{{nodes.*.output}}）→结果交 show_summary/show_chart 渲染（show_* 为聊天展示工具，非节点）
 4. 写类工作流经 run_workflow 触发（写操作走审批门——manual 模式挂远程应答、其余模式自动拒，config accessMode 决定）
 
-【输入声明】inputSchema 支持对象形态 {type:"string"|"number"|"boolean"|"enum"|"date"|"json", required?, default?（json 为对象/数组）, enumValues?(enum 必填), description?}——number 参数原生传库免 CAST，enum 收口值域，date 归一 yyyy-MM-dd（default "today"=执行日），json 对象/数组原生直传（模板 {{input.x}} 处紧凑 stringify；支持字段路径 {{input.x.field}}，数字段为数组下标 {{input.x.items.0.id}}，叶子标量 String()/容器 stringify）
+【输入声明】inputSchema 支持对象形态 {type:"string"|"number"|"boolean"|"enum"|"date"|"json", required?, default?（json 为对象/数组）, enumValues?(enum 必填), description?}——number 参数原生传库免 CAST，enum 收口值域，date 归一 yyyy-MM-dd（default "today"=执行日），json 对象/数组原生直传（模板 {{input.x}} 处紧凑 stringify；支持字段路径 {{input.x.field}}，数组下标用方括号 {{input.x.items[0].id}}——点号一律字段名，叶子标量 String()/容器 stringify）
 
 【照猫画虎】动手前先 workflow_read 看同类图（id 可无参清单查，如「记账」三件是 database+merge 范式的现成样板）`;

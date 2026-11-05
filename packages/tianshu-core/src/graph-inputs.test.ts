@@ -156,13 +156,14 @@ describe("renderNodePrompt 容器值 stringify", () => {
   });
 });
 
-/** 路径引用 fixture：容器含嵌套对象/数组/null/数字字段 */
+/** 路径引用 fixture：容器含嵌套对象/数组/null/数字字段/数字键对象 */
 const PATH_INPUTS = {
   payload: {
     name: "张三",
     count: 35,
     sub: { deep: "leaf" },
     items: [{ id: 1 }, { id: 2 }],
+    flags: { 0: "on" },
     nothing: null,
   },
   plain: "文本值",
@@ -185,9 +186,23 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
     expect(render("{{input.payload.sub.deep}}")).toBe("leaf");
   });
 
-  it("数组下标段：数字段当下标取项", () => {
-    expect(render("{{input.payload.items.0.id}}")).toBe("1");
-    expect(render("{{input.payload.items.1.id}}")).toBe("2");
+  it("数组下标段：[N] 按下标取项（可混排 .field 与 [N]）", () => {
+    expect(render("{{input.payload.items[0].id}}")).toBe("1");
+    expect(render("{{input.payload.items[1].id}}")).toBe("2");
+    expect(render("{{input.payload.items[0]}}")).toBe('{"id":1}');
+  });
+
+  it("正交语义锁定：.N 对数组抛错（点号一律字段名）", () => {
+    expect(() => render("{{input.payload.items.0.id}}")).toThrow(
+      GraphTemplateError,
+    );
+  });
+
+  it("正交语义锁定：[N] 对非数组抛错；对象数字键走 .N 字段名", () => {
+    expect(() => render("{{input.payload.name[0]}}")).toThrow(
+      GraphTemplateError,
+    );
+    expect(render("{{input.payload.flags.0}}")).toBe("on");
   });
 
   it("叶子为容器：紧凑 stringify（与顶层同语义）", () => {
@@ -203,7 +218,7 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
     expect(() => render("{{input.payload.missing}}")).toThrow(
       GraphTemplateError,
     );
-    expect(() => render("{{input.payload.items.5.id}}")).toThrow(
+    expect(() => render("{{input.payload.items[5].id}}")).toThrow(
       GraphTemplateError,
     );
     // 标量（string 类型值）不可下钻

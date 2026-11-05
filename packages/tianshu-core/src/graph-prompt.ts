@@ -1,8 +1,9 @@
 // packages/tianshu-core/src/graph-prompt.ts（GA-T2 自 electron/domains/ai/
 // orchestration/graph-prompt.ts 物理搬入，原位改 re-export，老 import 链不变）
-/** 节点 prompt 模板渲染（spec §4）：{{input.x}}/{{input.x.fieldx.path}}（
- *  json 容器字段路径——首段为输入键，余段逐层下钻：对象取字段、全数字
- *  段且当前为数组则当下标；中途非容器/缺失/越界同缺引用抛错）/
+/** 节点 prompt 模板渲染（spec §4）：{{input.x}}/{{input.x.field[sub].path}}（
+ *  json 容器字段路径——首段为输入键，余段下钻：`.field` 取对象字段、
+ *  `[N]` 取数组下标（正交：点号一律字段名、方括号一律下标），中途
+ *  非容器/缺失/越界同缺引用抛错）/
  *  {{nodes.<id>.output}}/{{nodes.<id>.errorOutput}}（循环节点死信，未设时
  *  抛错）/{{date}}/{{weekday}}/{{time}}；缺引用抛 GraphTemplateError */
 import { format } from "date-fns";
@@ -10,7 +11,7 @@ import type { GraphInputValue } from "./graph-inputs";
 
 const WEEKDAY_ZH = ["一", "二", "三", "四", "五", "六", "日"];
 const VAR_RE =
-  /\{\{(input\.[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*|nodes\.[a-z0-9-]+\.(output|errorOutput)|date|weekday|time)\}\}/g;
+  /\{\{(input\.[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+|\[[0-9]+\])*|nodes\.[a-z0-9-]+\.(output|errorOutput)|date|weekday|time)\}\}/g;
 
 export class GraphTemplateError extends Error {
   constructor(public varName: string) {
@@ -40,20 +41,35 @@ export function renderNodePrompt(
       return WEEKDAY_ZH[(ctx.now.getDay() === 0 ? 7 : ctx.now.getDay()) - 1];
     if (token === "time") return format(ctx.now, "HH:mm");
     if (token.startsWith("input.")) {
-      // 首段为输入键，余段逐层下钻（对象字段/数组数字下标）；顶层引用
-      // （无余段）行为与既有语义一致
-      const segments = token.slice("input.".length).split(".");
-      const head = segments[0];
-      if (!(head in ctx.inputs)) throw new GraphTemplateError(token);
+      // 首段为输入键，余段下钻（VAR_RE 已保证形态：.field 或 [N]）；
+      // 正交语义：点号一律字段名（含数字键）、方括号一律数组下标；
+      // 顶层引用（无余段）行为与既有语义一致
+      const segments = [
+        ...token
+          .slice("input".length)
+          .matchAll(/\.([A-Za-z0-9_]+)|\[([0-9]+)\]/g),
+      ];
+      const head = segments[0]?.[1];
+      if (head === undefined || !(head in ctx.inputs)) {
+        throw new GraphTemplateError(token);
+      }
       let current: unknown = ctx.inputs[head];
       for (const segment of segments.slice(1)) {
-        if (current === null || typeof current !== "object") {
-          throw new GraphTemplateError(token);
+        if (segment[2] !== undefined) {
+          if (!Array.isArray(current)) {
+            throw new GraphTemplateError(token);
+          }
+          current = current[Number(segment[2])];
+        } else {
+          if (
+            current === null ||
+            typeof current !== "object" ||
+            Array.isArray(current)
+          ) {
+            throw new GraphTemplateError(token);
+          }
+          current = (current as Record<string, unknown>)[segment[1] as string];
         }
-        const container = current as Record<string, unknown> | unknown[];
-        current = Array.isArray(container) && /^\d+$/.test(segment)
-          ? container[Number(segment)]
-          : (container as Record<string, unknown>)[segment];
         if (current === undefined) {
           throw new GraphTemplateError(token);
         }

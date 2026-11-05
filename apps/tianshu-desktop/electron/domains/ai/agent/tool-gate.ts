@@ -635,6 +635,17 @@ export async function runToolCall(
   // WorkBuddy bypass「requires confirmation every time」——commandRisk
   // 与 bulkEstimate 在 remembered 之外取或）。查询保持懒：无 ask 来源
   // 且 write 兜底面不成立时不触表（热路径零额外查询）
+  //
+  // 子不变量（2026-11-05 终审注记）：pattern 行永远够不到内置敏感清单——
+  // 内置清单条目全为 ~/ 绝对路径（defaults.ts BUILTIN_FILE_BLOCKLIST_ALL，
+  // 经 normalizeRulePath 归一后落在工作空间之外），而 pattern 匹配的
+  // normalizeRelativePath（@tianshu/core）对绝对路径与 .. 逃逸段一律
+  // 返回 null 不命中——两条件合一，参数级记忆对内置敏感路径必然落空、
+  // block 面审批照挂。因此内置清单必须保持全绝对路径；加入工作空间内
+  // 相对条目前须先收紧 pattern 匹配（拒命中清单的相对目标），否则记忆
+  // 抑制面会静默扩到内置保护路径。整工具行（无 pattern）的全参数抑制
+  // 是上方已声明设计，不受本不变量约束。钉死测试：tests/security/
+  // permission-pattern-gate.test.ts「内置敏感路径 × 记忆行」describe
   const askLevelActive =
     def.kind === "write" && (gate === "ask" || fileGateDecision === "block");
   const remembered =

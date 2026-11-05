@@ -5,7 +5,13 @@
  * 硬线（危险分级/批量删除）永不被记忆抑制（对齐 WorkBuddy bypass
  * 「requires confirmation every time」）。isToolAllowed 双参形态与
  * 旧签名桩兼容性同钉。
+ * 内置敏感路径 × 记忆行子不变量（2026-11-05 终审注记）：内置清单全
+ * 绝对路径 + pattern 匹配对绝对路径返回 null → pattern 行（即使 `**`）
+ * 永远够不到内置敏感路径，block 面审批照挂；整工具行全参抑制为已声明
+ * 设计，作对照钉死。
  */
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 // tool-gate 传递依赖 Log → electron（prisma-client 顶层读 app.getPath）
@@ -20,6 +26,13 @@ vi.mock("electron", () => ({
 import { runToolCall } from "../../electron/domains/ai/agent/tool-gate";
 import type { AgentStreamOptions } from "../../electron/domains/ai/agent/tool-gate";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
+import { isRememberedPermission } from "@tianshu/core";
+import { makeFileDecider } from "../../electron/domains/security/file-gate";
+import {
+  SECURITY_DEFAULTS,
+  defaultFileBlocklist,
+} from "../../electron/domains/security/defaults";
+import { normalizeRulePath } from "../../electron/domains/security/file-policy";
 
 const bashDef: ToolDefinition = {
   name: "bash",
@@ -114,5 +127,94 @@ describe("runToolCall 记忆抑制面（参数级审批批）", () => {
     await runToolCall(readDef, agent, "t1", { path: "secret.key" }, undefined);
     expect(isToolAllowed).not.toHaveBeenCalled();
     expect(requestApproval).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("内置敏感路径 × 记忆行（子不变量钉死，2026-11-05 终审注记）", () => {
+  /** 文件门只认 read/write/ls/rm——def 名必须是 "write" 才进判定面 */
+  const writeDef: ToolDefinition = {
+    name: "write",
+    description: "write",
+    parameters: {},
+    kind: "write",
+    execute: async () => "已写入",
+  };
+
+  it("pattern 行（即使最宽 `**`）够不到内置敏感绝对路径 → block 面仍审批；整工具行全参抑制（已声明设计）", async () => {
+    const WS = "/tmp/ws";
+    // 真判定引擎 + 真内置清单（无 extraBuiltin/grantedOf 的基础形态；
+    // 纯字符串匹配，目标文件无需真实存在）
+    const decideFileAccess = makeFileDecider(
+      () => ({ ...SECURITY_DEFAULTS }),
+      [],
+    );
+
+    // —— 条件①：内置清单条目归一化后全为绝对路径（落在工作空间之外）。
+    // 有人往清单加工作空间内相对条目时此断言先红，逼读 defaults.ts 注记
+    for (const entry of defaultFileBlocklist(process.platform)) {
+      expect(path.isAbsolute(normalizeRulePath(entry, WS))).toBe(true);
+    }
+
+    // —— 真清单真命中：~/.ssh/ 下绝对路径（本机 homedir 文字形态）
+    const sensitive = path.join(os.homedir(), ".ssh", "config");
+    expect(decideFileAccess(sensitive, WS)).toBe("block");
+
+    // 真记忆查表接线（chat.service resolveAgentOptions 同款：core 单源）
+    const touched: number[] = [];
+    let rows: Array<{ id: number; pattern: string | null }> = [];
+    const db = {
+      toolPermission: {
+        findMany: async () => rows,
+        update: async (args: { where: { id: number } }) => {
+          touched.push(args.where.id);
+          return {};
+        },
+      },
+    };
+
+    // —— 条件② + 行为钉死：最宽 pattern 行 `**` × 内置敏感绝对路径 →
+    // normalizeRelativePath 对绝对路径返回 null 不命中 → remembered=false
+    // → block 面审批照挂（`**` 都够不到，任何 pattern 行都够不到）
+    rows = [{ id: 1, pattern: "**" }];
+    const approvals: string[] = [];
+    const trackApproval = async (id: string) => {
+      approvals.push(id);
+      return false;
+    };
+    const gated = makeAgent({
+      workspacePath: WS,
+      // 绝对路径越过工作空间边界的合法来源：文件窗口授权清单（spec §6.4）
+      grantedPaths: () => [sensitive],
+      decideFileAccess,
+      isToolAllowed: (toolName, input) =>
+        isRememberedPermission(db, 1, toolName, input),
+      requestApproval: trackApproval,
+    });
+    const denied = await runToolCall(writeDef, gated, "t1", {
+      path: sensitive,
+      content: "x",
+    });
+    expect(approvals).toHaveLength(1); // block 面仍拦（未被参数级记忆抑制）
+    expect(denied).toContain("用户拒绝了此操作");
+    expect(touched).toEqual([]); // pattern 行未命中：lastUsedAt 不回写
+
+    // —— 对照（已声明设计）：整工具行（无 pattern）全参数抑制 block 面，
+    // 免审直执行——区别于 pattern 行，本就是记忆语义的一部分
+    rows = [{ id: 2, pattern: null }];
+    const wholeTool = makeAgent({
+      workspacePath: WS,
+      grantedPaths: () => [sensitive],
+      decideFileAccess,
+      isToolAllowed: (toolName, input) =>
+        isRememberedPermission(db, 1, toolName, input),
+      requestApproval: trackApproval,
+    });
+    const out = await runToolCall(writeDef, wholeTool, "t2", {
+      path: sensitive,
+      content: "x",
+    });
+    expect(approvals).toHaveLength(1); // 仍只有上一次——整工具行免审直执行
+    expect(out).toBe("已写入");
+    expect(touched).toEqual([2]); // 整工具行命中并回写 lastUsedAt
   });
 });

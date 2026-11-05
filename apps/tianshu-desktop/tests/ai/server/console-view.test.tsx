@@ -567,7 +567,9 @@ describe("主机页用量摘要卡（P0-1，spec monitoring.md §6）", () => {
     expect(
       await screen.findByText("ai:server.monitorCard.loadFailed"),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "common:reset" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "ai:server.monitorCard.retry" }),
+    );
     expect(await screen.findByTestId("monitor-kpi-llm")).toBeTruthy();
     expect(calls).toBeGreaterThanOrEqual(2);
   });

@@ -60,6 +60,7 @@
     "outputLimit": "输出",
     "exceedsContext": "总长度超出模型限制：输出不应达到或超过输入窗口",
     "positiveIntRequired": "请输入正整数",
+    "positiveNumberRequired": "请输入正数",
     "test": "测试",
     "testing": "测试中…",
     "testSuccess": "连接成功",
@@ -518,6 +519,7 @@
       "title": "用量监控",
       "refresh": "刷新用量",
       "loadFailed": "用量加载失败",
+      "retry": "重试",
       "empty": "暂无用量数据"
     },
     "ui": {

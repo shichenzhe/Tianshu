@@ -2179,6 +2179,14 @@ export default class ChatService {
       }
       const result = await run.result;
 
+      // fallback 全灭标注（批5）：message 是上游原文（本就不经 i18n），
+      // 尾缀 ASCII 稳定标记供人识别与移动端透传（toast 详情行）；
+      // 落库 error 与 UI error chunk 同带此尾缀（2026-11-05 终审统一：
+      // 历史回看可追溯，两处不再分叉）
+      const errorMessage = result.fallbackUsed
+        ? `${result.errorMessage ?? ""} [fallback retried]`
+        : (result.errorMessage ?? "");
+
       // 成员产出落块（可观测性批，experts §6 P1）：done 态 dispatch 工具块
       // 后插 memberReport（成员名/任务/产出/轮次）——成员观点来源事后可审
       // 计（回喂不受影响：memberReport 不进 blocksToModelMessages 正文）
@@ -2195,7 +2203,7 @@ export default class ChatService {
           blocks: serializeBlocks(finalBlocks),
           modelId: ctx.modelId,
           assistantId: ctx.session.assistantId ?? undefined,
-          error: result.errorMessage,
+          error: errorMessage,
           durationMs: Date.now() - startedAt,
         } satisfies AppendMessageParams);
       }
@@ -2217,11 +2225,8 @@ export default class ChatService {
         this.emit(sessionId, {
           type: "error",
           errorCode: result.errorCode,
-          // fallback 全灭标注（批5）：message 是上游原文（本就不经 i18n），
-          // 尾缀 ASCII 稳定标记供人识别与移动端透传（toast 详情行）
-          message: result.fallbackUsed
-            ? `${result.errorMessage ?? ""} [fallback retried]`
-            : (result.errorMessage ?? ""),
+          // 落库 error 与此处同源（上方 errorMessage，含 fallback 尾缀）
+          message: errorMessage,
         });
       } else {
         this.emit(sessionId, { type: "finish" });

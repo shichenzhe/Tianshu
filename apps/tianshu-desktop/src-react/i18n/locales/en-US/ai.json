@@ -60,6 +60,7 @@
     "outputLimit": "Output",
     "exceedsContext": "Total exceeds model limit: output must stay below the context window",
     "positiveIntRequired": "Please enter a positive integer",
+    "positiveNumberRequired": "Please enter a positive number",
     "test": "Test",
     "testing": "Testing…",
     "testSuccess": "Connection succeeded",
@@ -518,6 +519,7 @@
       "title": "Usage Monitor",
       "refresh": "Refresh usage",
       "loadFailed": "Failed to load usage",
+      "retry": "Retry",
       "empty": "No usage data yet"
     },
     "ui": {

@@ -46,7 +46,16 @@ export const SECURITY_DEFAULTS: SecurityConfig = {
   disabledTools: [],
 };
 
-/** 内置文件黑名单全量清单（照 WorkBuddy 默认文件安全规则，PRD 同源） */
+/**
+ * 内置文件黑名单全量清单（照 WorkBuddy 默认文件安全规则，PRD 同源）。
+ * 不变量（2026-11-05 终审注记）：条目必须保持 ~/ 展开后的绝对路径形态
+ * （normalizeRulePath 归一后落在工作空间之外）——@tianshu/core pattern
+ * 记忆行对绝对路径不命中（normalizeRelativePath 返回 null），内置敏感
+ * 路径因此永不被参数级记忆抑制审批（tool-gate.ts 记忆查表点子不变量，
+ * 钉死测试 tests/security/permission-pattern-gate.test.ts）。加入工作
+ * 空间内相对条目前须先收紧 pattern 匹配，否则记忆抑制面会静默扩到
+ * 内置保护路径。
+ */
 export const BUILTIN_FILE_BLOCKLIST_ALL = [
   "~/.ssh/",
   "~/.aws/",

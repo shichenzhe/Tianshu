@@ -151,7 +151,8 @@ export default function ModelDialog({
         parsed.priceInPerMTokens < 0) ||
       (parsed.priceOutPerMTokens !== undefined && parsed.priceOutPerMTokens < 0)
     ) {
-      toast.error(t("ai:model.positiveIntRequired"));
+      // 单价为 step 0.01 的浮点（USD/1M），负值提示用「正数」而非「正整数」
+      toast.error(t("ai:model.positiveNumberRequired"));
       return;
     }
     // 能力矩阵：两开关全关 = 无能力标注（null 清除语义由差量承载）

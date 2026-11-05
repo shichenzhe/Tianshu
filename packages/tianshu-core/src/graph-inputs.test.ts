@@ -60,6 +60,27 @@ describe("normalizeGraphInputs json 归一", () => {
     expect(nullText.ok).toBe(false);
   });
 
+  it("顶层 raw null 视为缺值（沿用切片 D 归一语义——null=没有值，非值为 null）", () => {
+    // required → 报缺，run 不启动
+    const req = normalizeGraphInputs([jsonField], { payload: null });
+    expect(req.ok).toBe(false);
+    if (!req.ok) {
+      expect(req.issues[0].code).toBe("required");
+    }
+    // optional 无 default → 键缺席（模板引用将抛「模板变量未定义」）
+    const opt = normalizeGraphInputs(
+      [{ ...jsonField, required: false }],
+      { payload: null },
+    );
+    expect(opt).toEqual({ ok: true, inputs: {} });
+    // optional + default → 填充 default
+    const def = normalizeGraphInputs(
+      [{ ...jsonField, required: false, default: { a: 1 } }],
+      { payload: null },
+    );
+    expect(def).toEqual({ ok: true, inputs: { payload: { a: 1 } } });
+  });
+
   it("缺值时 default 容器填充（原生形态）", () => {
     const result = normalizeGraphInputs(
       [{ ...jsonField, required: false, default: { fallback: true } }],

@@ -410,6 +410,8 @@ export const ENDPOINTS = {
     update: "project/update",
     delete: "project/delete",
     listMembers: "project/listMembers",
+    /** 能力挂载全量覆盖（items 为替换后全集；仅 owner——repo 内聚校验） */
+    setBindings: "project/setBindings",
   },
   planItem: {
     list: "planItem/list",

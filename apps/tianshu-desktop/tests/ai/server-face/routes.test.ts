@@ -2659,6 +2659,7 @@ function makeFakeProject(overrides: Record<string, unknown> = {}) {
     listMembers: vi.fn(async () => [
       { userId: UID, nickname: "昵称", username: "user", role: "owner" },
     ]),
+    setBindings: vi.fn(async () => null),
     ...overrides,
   };
 }
@@ -3048,6 +3049,40 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
     expect(planView.reorder).toHaveBeenCalledWith(UID, [
       { id: 1, sortOrder: 2 },
     ]);
+  });
+
+  it("project/setBindings：载荷校验 + items 全量透传（#2 绑定写面批）", async () => {
+    const project = makeFakeProject();
+    wireProjectFaces({ project });
+    const items = [
+      { itemType: "assistant", itemId: 7 },
+      { itemType: "skill", itemId: 9 },
+    ];
+    const r = await handleRoute("POST", ENDPOINTS.project.setBindings, {
+      projectId: 3,
+      items,
+    });
+    expect(r.body).toMatchObject({ success: true, data: null });
+    expect(project.setBindings).toHaveBeenCalledWith(UID, 3, items);
+    // items 畸形：非数组 / itemType 非三枚举 / itemId 非正整数 → 5000
+    await expectBizError(
+      "POST",
+      ENDPOINTS.project.setBindings,
+      { projectId: 3, items: {} },
+      "5000",
+    );
+    await expectBizError(
+      "POST",
+      ENDPOINTS.project.setBindings,
+      { projectId: 3, items: [{ itemType: "bogus", itemId: 1 }] },
+      "5000",
+    );
+    await expectBizError(
+      "POST",
+      ENDPOINTS.project.setBindings,
+      { projectId: 3, items: [{ itemType: "skill", itemId: 0 }] },
+      "5000",
+    );
   });
 
   it("projectAsset 六端点：载荷映射 + 返回直透", async () => {

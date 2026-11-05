@@ -37,6 +37,7 @@ import type {
   PlanItemUpdatePayload,
   PlanViewCreatePayload,
   PlanViewUpdatePayload,
+  ProjectBindingInputDto,
   ProjectCreatePayload,
   ProjectUpdatePayload,
   ProviderSavePayload,
@@ -2195,6 +2196,35 @@ function handleProjectListMembers(body: unknown): Promise<RouteResult> {
   );
 }
 
+/** project/setBindings（#2 绑定写面批）：items 三枚举 itemType + 正整数
+ *  itemId 校验；全量覆盖语义（items 即替换后全集，空数组=清空） */
+function handleProjectSetBindings(body: unknown): Promise<RouteResult> {
+  const p = (body ?? {}) as Record<string, unknown>;
+  const projectId = asInt(p.projectId);
+  const raw = p.items;
+  const BINDING_TYPES = new Set(["assistant", "skill", "mcpServer"]);
+  const items =
+    Array.isArray(raw) &&
+    raw.every(
+      (item) =>
+        item !== null &&
+        typeof item === "object" &&
+        BINDING_TYPES.has(String((item as Record<string, unknown>).itemType)) &&
+        asInt((item as Record<string, unknown>).itemId) !== null &&
+        (asInt((item as Record<string, unknown>).itemId) as number) > 0,
+    )
+      ? (raw as ProjectBindingInputDto[])
+      : null;
+  if (projectId === null || items === null) {
+    return Promise.resolve(bizError("5000", "projectId/items 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.project,
+    "project",
+    (face, userId) => face.setBindings(userId, projectId, items),
+  );
+}
+
 function handlePlanItemList(body: unknown): Promise<RouteResult> {
   const projectId = asInt((body as { projectId?: unknown } | null)?.projectId);
   if (projectId === null) {
@@ -2708,6 +2738,8 @@ const ROUTES: Record<string, RouteHandler> = {
   [`POST ${ENDPOINTS.project.update}`]: handleProjectUpdate,
   [`POST ${ENDPOINTS.project.delete}`]: handleProjectDelete,
   [`POST ${ENDPOINTS.project.listMembers}`]: handleProjectListMembers,
+  // #2 绑定写面批：能力挂载全量覆盖
+  [`POST ${ENDPOINTS.project.setBindings}`]: handleProjectSetBindings,
   [`POST ${ENDPOINTS.planItem.list}`]: handlePlanItemList,
   [`POST ${ENDPOINTS.planItem.listMine}`]: handlePlanItemListMine,
   [`POST ${ENDPOINTS.planItem.create}`]: handlePlanItemCreate,

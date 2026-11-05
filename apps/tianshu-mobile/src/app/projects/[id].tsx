@@ -44,6 +44,7 @@ import {
   X,
 } from "lucide-react-native";
 import {
+  ENDPOINTS,
   PLAN_GROUP_BYS,
   PLAN_PRIORITIES,
   PLAN_STATUSES,
@@ -56,8 +57,10 @@ import {
   type PlanStatus,
   type PlanViewRecordDto,
   type PlanViewType,
+  type ProjectBindingInputDto,
   type ProjectBindingItemDto,
   type ProjectMemberItemDto,
+  type RemoteMcpBrief,
 } from "@tianshu/protocol";
 import {
   filterPlanItems,
@@ -90,6 +93,7 @@ import { relativeTimeLabel } from "@/lib/relative-time-label";
 import { toast } from "@/lib/toast-bus";
 import { pickLibraryFile } from "@/logic/library-upload";
 import { formatRelative } from "@/logic/time";
+import { wireRequest } from "@/transport/wire";
 import {
   useConnectionCapabilities,
   useConnectionsStore,
@@ -467,6 +471,208 @@ const PlanFilterDialog = memo(function PlanFilterDialog({
   );
 });
 
+/** 绑定编辑弹窗（#2 绑定写面批）：专家/连接器候选 chips 多选（候选经
+ *  assistant/query + mcp/query 按需拉取）；技能类 wire 面无数字 id
+ *  （RemoteSkillBrief 仅 name）——只读保留 + 可解绑，完整编辑在桌面端；
+ *  失效项单独保留区（原样带回=保留语义，X 即解绑） */
+const BindingEditorDialog = memo(function BindingEditorDialog({
+  projectId,
+  bindings,
+  onClose,
+}: {
+  projectId: number;
+  bindings: ProjectBindingItemDto[];
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(["project", "common"]);
+  const [selected, setSelected] = useState<{
+    assistant: Set<number>;
+    mcpServer: Set<number>;
+  }>(() => ({
+    assistant: new Set(
+      bindings
+        .filter((b) => b.itemType === "assistant" && b.valid)
+        .map((b) => b.itemId),
+    ),
+    mcpServer: new Set(
+      bindings
+        .filter((b) => b.itemType === "mcpServer" && b.valid)
+        .map((b) => b.itemId),
+    ),
+  }));
+  const [skillsKept, setSkillsKept] = useState<ProjectBindingItemDto[]>(() =>
+    bindings.filter((b) => b.itemType === "skill"),
+  );
+  const [invalidKept, setInvalidKept] = useState<ProjectBindingItemDto[]>(() =>
+    bindings.filter((b) => !b.valid),
+  );
+  const [assistants, setAssistants] = useState<
+    Array<{ id: number; name: string }> | null
+  >(null);
+  const [mcps, setMcps] = useState<RemoteMcpBrief[] | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const [assistantResult, mcpResult] = await Promise.all([
+        wireRequest("POST", ENDPOINTS.assistant.query, null),
+        wireRequest("POST", ENDPOINTS.mcp.query, null),
+      ]);
+      if (cancelled) return;
+      setAssistants(
+        assistantResult.ok
+          ? ((assistantResult.data as Array<Record<string, unknown>>) ?? [])
+              .filter(
+                (row) =>
+                  typeof row.id === "number" && typeof row.name === "string",
+              )
+              .map((row) => ({ id: row.id as number, name: row.name as string }))
+          : [],
+      );
+      setMcps(mcpResult.ok ? ((mcpResult.data as RemoteMcpBrief[]) ?? []) : []);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function toggle(kind: "assistant" | "mcpServer", id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev[kind]);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return { ...prev, [kind]: next };
+    });
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const items: ProjectBindingInputDto[] = [
+      ...[...selected.assistant].map((itemId) => ({
+        itemType: "assistant" as const,
+        itemId,
+      })),
+      ...[...selected.mcpServer].map((itemId) => ({
+        itemType: "mcpServer" as const,
+        itemId,
+      })),
+      ...skillsKept.map((b) => ({
+        itemType: "skill" as const,
+        itemId: b.itemId,
+      })),
+      ...invalidKept.map((b) => ({
+        itemType: b.itemType,
+        itemId: b.itemId,
+      })),
+    ];
+    const store = useProjectStore.getState();
+    const ok = await store.setBindings(projectId, items);
+    setSaving(false);
+    if (ok) {
+      onClose();
+    } else {
+      toast.error(store.hub.error || t("project:loadFailed"));
+    }
+  }
+
+  /** 多选候选 chips（专家/连接器共用；候选未到显示 …） */
+  function renderCandidates(
+    kind: "assistant" | "mcpServer",
+    candidates: Array<{ id: number; name: string }> | null,
+  ) {
+    if (candidates === null) {
+      return <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">…</Text>;
+    }
+    if (candidates.length === 0) {
+      return (
+        <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
+          {t("project:bindingCandidatesEmpty")}
+        </Text>
+      );
+    }
+    const values = [...selected[kind]];
+    return (
+      <FilterValueChips
+        options={candidates.map((c) => ({ value: String(c.id), label: c.name }))}
+        values={values.map(String)}
+        onToggle={(value) => toggle(kind, Number(value))}
+      />
+    );
+  }
+
+  /** 保留区行（技能/失效项：名称 + X 解绑） */
+  function renderKeptRow(binding: ProjectBindingItemDto) {
+    return (
+      <View key={`${binding.itemType}-${binding.itemId}`} className="flex-row items-center gap-2">
+        <Text
+          numberOfLines={1}
+          className="min-w-0 flex-1 text-sm text-black dark:text-white"
+          style={{ opacity: binding.valid ? 1 : 0.5 }}
+        >
+          {binding.itemName}
+          {!binding.valid ? ` · ${t("project:bindingInvalid")}` : ""}
+        </Text>
+        <Pressable
+          onPress={() => {
+            setSkillsKept((rows) =>
+              rows.filter((b) => b !== binding),
+            );
+            setInvalidKept((rows) => rows.filter((b) => b !== binding));
+          }}
+          hitSlop={8}
+        >
+          <X size={14} color="#8E8E93" />
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <DialogShell
+      title={t("project:bindingEdit")}
+      busy={saving}
+      onClose={saving ? () => undefined : onClose}
+      footer={
+        <FormFooter
+          busy={saving}
+          confirmDisabled={false}
+          onConfirm={() => void handleSave()}
+          onCancel={onClose}
+        />
+      }
+    >
+      <View className="gap-2">
+        <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+          {t("project:bindingAssistant")}
+        </Text>
+        {renderCandidates("assistant", assistants)}
+      </View>
+      <View className="gap-2">
+        <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+          {t("project:bindingMcp")}
+        </Text>
+        {renderCandidates("mcpServer", mcps)}
+      </View>
+      <View className="gap-2">
+        <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+          {t("project:bindingSkill")}
+        </Text>
+        <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">
+          {t("project:bindingSkillDesktopTip")}
+        </Text>
+        {skillsKept.length === 0 ? null : skillsKept.map(renderKeptRow)}
+        {invalidKept.length === 0
+          ? null
+          : invalidKept.filter((b) => b.itemType !== "skill").map(renderKeptRow)}
+      </View>
+    </DialogShell>
+  );
+});
+
 /** 事项行：标题/优先级色点/处理人昵称/截止 MM-dd（行上禁 flex-1——
  *  仅文本节点收 min-w-0，防 Yoga 0 高塌行）；批②：长按开操作面板
  *  （状态快捷流转+删除） */
@@ -690,6 +896,8 @@ export default function ProjectWorkspaceScreen() {
   );
   const [viewName, setViewName] = useState("");
   const [viewType, setViewType] = useState<PlanViewType>("table");
+  /** #2 绑定写面批：挂载编辑弹窗开关 */
+  const [bindingEditorOpen, setBindingEditorOpen] = useState(false);
   const [itemDialog, setItemDialog] = useState<
     | { mode: "create"; status?: PlanStatus }
     | { mode: "edit"; item: PlanItemRecordDto }
@@ -1329,9 +1537,22 @@ export default function ProjectWorkspaceScreen() {
           </View>
         </View>
         <View className="mx-3 gap-2">
-          <Text className="px-1 text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
-            {t("project:bindings")}
-          </Text>
+          <View className="flex-row items-center justify-between px-1">
+            <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
+              {t("project:bindings")}
+            </Text>
+            {/* #2 绑定写面批：编辑入口（专家/连接器完整编辑，技能只读解绑） */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("project:bindingEdit")}
+              onPress={() => setBindingEditorOpen(true)}
+              hitSlop={8}
+            >
+              <Text className="text-xs" style={{ color: colors.primary }}>
+                {t("project:bindingEdit")}
+              </Text>
+            </Pressable>
+          </View>
           <View className="overflow-hidden rounded-2xl">
             {bindings.length === 0 ? (
               <View className="bg-card px-3 py-3 dark:bg-[#1C1C1E]">
@@ -1733,6 +1954,13 @@ export default function ProjectWorkspaceScreen() {
             onChangeText={setAssetName}
           />
         </DialogShell>
+      )}
+      {bindingEditorOpen && detail && (
+        <BindingEditorDialog
+          projectId={projectId}
+          bindings={detail.bindings}
+          onClose={() => setBindingEditorOpen(false)}
+        />
       )}
       {filterPanelOpen && (
         <PlanFilterDialog

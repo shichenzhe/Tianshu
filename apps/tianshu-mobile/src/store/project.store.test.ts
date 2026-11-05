@@ -458,6 +458,47 @@ describe("project.store", () => {
     expect(s3.activeViewId).toBeNull();
   });
 
+  it("setBindings：items 全量载荷 + 成功后重拉详情（挂载随 detail 刷新）", async () => {
+    const t = makeTransport();
+    const detailBody = successBody({
+      project: projectDto(),
+      assetWorkspaceId: 9,
+      bindings: [],
+      sessionId: 1,
+    });
+    t.request.mockImplementation(async (_method, path) =>
+      path === ENDPOINTS.project.getDetail
+        ? detailBody
+        : path === ENDPOINTS.project.listMembers
+          ? successBody([])
+          : successBody(null),
+    );
+    connMock.activeTransport.mockReturnValue(t);
+    await useProjectStore.getState().loadDetail(5);
+    t.request.mockClear();
+    t.request.mockResolvedValue(successBody(null));
+    const ok = await useProjectStore.getState().setBindings(5, [
+      { itemType: "assistant", itemId: 7 },
+      { itemType: "skill", itemId: 9 },
+    ]);
+    expect(ok).toBe(true);
+    const setCall = t.request.mock.calls.find(
+      (call) => call[1] === ENDPOINTS.project.setBindings,
+    );
+    expect(setCall?.[2]).toEqual({
+      projectId: 5,
+      items: [
+        { itemType: "assistant", itemId: 7 },
+        { itemType: "skill", itemId: 9 },
+      ],
+    });
+    expect(
+      t.request.mock.calls.some(
+        (call) => call[1] === ENDPOINTS.project.getDetail,
+      ),
+    ).toBe(true);
+  });
+
   it("loadDetail 并联 getDetail + listMembers", async () => {
     const t = makeTransport();
     t.request

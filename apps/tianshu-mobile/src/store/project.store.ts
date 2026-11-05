@@ -24,6 +24,7 @@ import {
   type PlanViewCreatePayload,
   type PlanViewRecordDto,
   type PlanViewUpdatePayload,
+  type ProjectBindingInputDto,
   type ProjectCreatePayload,
   type ProjectDetailResult,
   type ProjectMemberItemDto,
@@ -90,6 +91,12 @@ interface ProjectState {
   setTasksKeyword(keyword: string): void;
 
   loadDetail(projectId: number): Promise<void>;
+  /** #2 绑定写面批：能力挂载全量覆盖（items=替换后全集，空数组清空）；
+   *  成功后重拉详情（挂载列表随 detail 刷新） */
+  setBindings(
+    projectId: number,
+    items: ProjectBindingInputDto[],
+  ): Promise<boolean>;
 
   loadPlan(projectId: number): Promise<void>;
   setActiveView(id: number): void;
@@ -611,6 +618,14 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     setScope: (scope) => set({ scope }),
     setSource: (source) => set({ source }),
     setTasksKeyword: (keyword) => set({ tasksKeyword: keyword }),
+
+    setBindings: (projectId, items) =>
+      enqueueWrite(
+        ENDPOINTS.project.setBindings,
+        { projectId, items },
+        // 挂载列表内聚 detail——写后重拉详情即刷新（含 valid 重算）
+        () => void get().loadDetail(projectId),
+      ),
 
     loadDetail: async (projectId) => {
       const token = beginRequest("detail");

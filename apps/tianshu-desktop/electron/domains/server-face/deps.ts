@@ -49,6 +49,7 @@ import type {
   PlanViewRecordDto,
   PlanViewReorderPayload,
   PlanViewUpdatePayload,
+  ProjectBindingInputDto,
   ProjectCreatePayload,
   ProjectDetailResult,
   ProjectMemberItemDto,
@@ -538,6 +539,13 @@ export interface ServerFaceProject {
     userId: number,
     projectId: number,
   ): Promise<ProjectMemberItemDto[]>;
+  /** 能力挂载全量覆盖（items 为替换后全集；owner 守卫内聚 repo；
+   *  #2 绑定写面批） */
+  setBindings(
+    userId: number,
+    projectId: number,
+    items: ProjectBindingInputDto[],
+  ): Promise<null>;
 }
 
 /** A7 计划事项面桥（planItem 十端点数据源——计划/任务双视图 + 字段定义

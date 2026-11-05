@@ -29,7 +29,13 @@ export function toFaceProjectError(error: unknown): never {
 /** 桥接的仓储方法子集（ProjectRepository 满足） */
 type ProjectRepoSubset = Pick<
   ProjectRepository,
-  "list" | "getDetail" | "create" | "update" | "remove" | "listMembers"
+  | "list"
+  | "getDetail"
+  | "create"
+  | "update"
+  | "remove"
+  | "listMembers"
+  | "setBindings"
 >;
 
 export function createProjectFace(repo: ProjectRepoSubset): ServerFaceProject {
@@ -51,5 +57,11 @@ export function createProjectFace(repo: ProjectRepoSubset): ServerFaceProject {
     remove: (userId, id) => repo.remove(id, userId).catch(toFaceProjectError),
     listMembers: (userId, projectId) =>
       repo.listMembers(projectId, userId).catch(toFaceProjectError),
+    // 全量覆盖挂载（#2 绑定写面批）：owner 守卫内聚 repo（assertProjectOwned）
+    setBindings: (userId, projectId, items) =>
+      repo
+        .setBindings(projectId, items, userId)
+        .then(() => null)
+        .catch(toFaceProjectError),
   };
 }

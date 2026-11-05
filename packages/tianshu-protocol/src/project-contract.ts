@@ -196,6 +196,19 @@ export interface PlanViewReorderPayload {
   items: Array<{ id: number; sortOrder: number }>;
 }
 
+/** project/setBindings 单条挂载输入（itemType 指向 assistant/skill/mcp
+ *  各表主键；失效项原样带回=保留语义，剔除即解绑） */
+export interface ProjectBindingInputDto {
+  itemType: ProjectBindingType;
+  itemId: number;
+}
+
+/** project/setBindings 载荷（全量覆盖语义） */
+export interface ProjectBindingSetPayload {
+  projectId: number;
+  items: ProjectBindingInputDto[];
+}
+
 /** 资产条目（目录树行） */
 export interface AssetEntryDto {
   name: string;

@@ -306,6 +306,7 @@ export function attachServerFace(deps: {
     | "remove"
     | "listMembers"
     | "assertProjectVisible"
+    | "setBindings"
   >;
   /** A7 计划事项面：PlanItemRepository 单实例桥（十端点；userId 校验
    *  repo 自带；缺省不装配） */

@@ -140,6 +140,7 @@ function fakeProjectRepo(overrides: Record<string, unknown> = {}) {
     listMembers: vi.fn(async () => [
       { userId: UID, nickname: "昵称", username: "user", role: "owner" },
     ]),
+    setBindings: vi.fn(async () => {}),
   };
   return {
     repo: { ...base, ...overrides } as unknown as Parameters<
@@ -164,6 +165,16 @@ describe("project-tap（A7 桌面被控面）", () => {
     expect(base.remove).toHaveBeenCalledWith(11, UID);
     await face.listMembers(UID, 11);
     expect(base.listMembers).toHaveBeenCalledWith(11, UID);
+  });
+
+  it("setBindings：全量覆盖透传（repo 内聚 owner 守卫；#2 绑定写面批）", async () => {
+    const { repo, base } = fakeProjectRepo();
+    const items = [
+      { itemType: "assistant" as const, itemId: 7 },
+      { itemType: "skill" as const, itemId: 9 },
+    ];
+    await createProjectFace(repo).setBindings(UID, 11, items);
+    expect(base.setBindings).toHaveBeenCalledWith(11, items, UID);
   });
 
   it("create：载荷无 ownerId 透传（身份唯一来源 withUserId）", async () => {

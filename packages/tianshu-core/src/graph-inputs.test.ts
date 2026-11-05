@@ -287,3 +287,43 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
     );
   });
 });
+
+describe("renderNodePrompt null 安全引用（{{input.x.path?}}）", () => {
+  const render = (template: string) =>
+    renderNodePrompt(template, {
+      inputs: {
+        ...PATH_INPUTS,
+        nullPayload: null,
+      } as never,
+      nodes: {},
+      now: new Date("2026-11-05T08:00:00"),
+    });
+
+  it("? 降级：null 叶子/键缺失/越界/中途 null/顶层 null → 空串", () => {
+    expect(render("{{input.payload.nothing?}}")).toBe("");
+    expect(render("{{input.payload.missing?}}")).toBe("");
+    expect(render("{{input.payload.items[5]?}}")).toBe("");
+    expect(render("{{input.nullPayload.items[0]?}}")).toBe("");
+    expect(render("{{input.nullPayload?}}")).toBe("");
+    expect(render("{{input.unknown?}}")).toBe("");
+  });
+
+  it("? 正常值不受影响（标量/容器照常渲染）", () => {
+    expect(render("{{input.payload.name?}}")).toBe("张三");
+    expect(render("{{input.payload.count?}}")).toBe("35");
+    expect(render("{{input.payload.items[0]?}}")).toBe('{"id":1}');
+    expect(render("{{input.payload?}}")).toBe(
+      JSON.stringify(PATH_INPUTS.payload),
+    );
+  });
+
+  it("? 拼接场景（condition source 判空用法）", () => {
+    expect(render("v={{input.payload.nothing?}}!")).toBe("v=!");
+  });
+
+  it("无 ? 语义不变：null 叶子仍抛错", () => {
+    expect(() => render("{{input.payload.nothing}}")).toThrow(
+      GraphTemplateError,
+    );
+  });
+});

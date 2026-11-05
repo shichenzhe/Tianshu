@@ -78,7 +78,7 @@
 - 桌面监控事件周期裁剪 + 会话级 trace 下钻 + 错误/中止轮补行（outcome 列）｜#8
 - 移动端 TOFU 确认仪式 + planView valid 消费 UI｜#12 #5
 - 文件门 block 面从 askLevelActive 剔除（安全加固优先，Task 11 minor-1）｜#2
-- 各任务 review 过程沉淀的 deferred minor（见 .superpowers ledger，随 final review triage）
+- 各任务 review 过程沉淀的 deferred minor 约 36 条，已经终审（opus 全区间复核）triage：无跨任务恶化、无 Critical，全部确认挂账；其中安全加固项（文件门 block 面不变量注记与测试）与两处用户可见文案错误已在终审修波（b68690c2）收掉
 
 ## 阅读约定
 

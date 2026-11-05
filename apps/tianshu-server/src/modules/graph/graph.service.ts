@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import type { GraphInputValue } from '@tianshu/core';
 import { QueryResult } from 'src/commons/query/query-result';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { PrismaService } from 'src/commons/database/prisma.service';
@@ -95,7 +96,9 @@ export class GraphService {
     const launched = executeGraphRun({
       graph,
       task: null,
-      inputs: dto.inputs ?? {},
+      // GraphRunDto.inputs 为 Record<string, unknown>（HTTP 侧不深校验，
+      // wire JSON 值域天然 JSON 值）——executor 消费面 GraphInputValue 直通
+      inputs: (dto.inputs ?? {}) as Record<string, GraphInputValue>,
       triggerType: 'manual',
       attempt: 1,
       abort: abort.signal,

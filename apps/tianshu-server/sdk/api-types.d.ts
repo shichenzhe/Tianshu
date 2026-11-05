@@ -2011,6 +2011,12 @@ export interface components {
             /** @description 会话标识 */
             id: number;
         };
+        ContentRefItemDto: {
+            /** @description 文件路径（注入前缀标识/卡片展示） */
+            path: string;
+            /** @description 文件文本内容（发送侧授权读取结果） */
+            content: string;
+        };
         SessionSendDto: {
             /** @description 会话标识 */
             sessionId: number;
@@ -2018,6 +2024,10 @@ export interface components {
             content: string;
             /** @description 图片附件（数据根相对路径，attachments/ 前缀） */
             images?: string[];
+            /** @description 技能引用名单（skill_ref 批：落 SkillRefBlock 组装侧展开） */
+            skillRefs?: string[];
+            /** @description 内容注入式文件引用（file_ref 批：path+内容随块落库） */
+            contentRefs?: components["schemas"]["ContentRefItemDto"][];
             /** @description 助手（请求级覆盖，写回会话当前值） */
             assistantId?: number;
             /** @description 模型（请求级覆盖，写回会话当前值） */
@@ -2342,7 +2352,7 @@ export interface components {
              * @example 100
              */
             pageSize: number;
-            /** @description 名称关键词（includes 大小写敏感，内存过滤） */
+            /** @description 名称关键词（contains 下推 DB；大小写不敏感——双引擎统一） */
             keyword?: string;
         };
         GraphSaveDto: {
@@ -2364,9 +2374,9 @@ export interface components {
         GraphRunDto: {
             /** @description 图标识 */
             graphId: number;
-            /** @description 输入变量（inputSchema 键值；缺省空） */
+            /** @description 输入变量（inputSchema 键值；缺省空）——typed 值（number/boolean）经入口归一为原生类型（D 批共享 normalizeGraphInputs）；json 对象/数组原生直传（2026-11-05） */
             inputs?: {
-                [key: string]: string;
+                [key: string]: string | number | boolean | Record<string, never> | unknown[];
             };
             /** @description 工作空间；缺省挂用户最近一个空间 */
             workspaceId?: number;
@@ -2564,7 +2574,7 @@ export interface components {
              * @example 100
              */
             pageSize: number;
-            /** @description 任务名关键词（includes 大小写敏感，内存过滤） */
+            /** @description 任务名关键词（contains 下推 DB；大小写不敏感——双引擎统一） */
             keyword?: string;
         };
         AutomationSaveDto: {

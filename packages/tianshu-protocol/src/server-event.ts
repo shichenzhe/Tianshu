@@ -421,6 +421,9 @@ export const ENDPOINTS = {
     delete: "planItem/delete",
     move: "planItem/move",
     fieldsList: "planItem/fieldsList",
+    /** 字段定义全量替换（消失字段名同步清理行内值——repo 内聚）；可见性
+     *  校验在 repo（成员可编辑，同桌面 IPC 语义） */
+    fieldsSave: "planItem/fieldsSave",
     attachmentList: "planItem/attachmentList",
     attachmentCreate: "planItem/attachmentCreate",
     attachmentDelete: "planItem/attachmentDelete",

@@ -184,10 +184,10 @@ describe("@tianshu/protocol 协议包", () => {
         uploadFile: "library/uploadFile",
       },
       image: "image",
-      // A7 项目批（29 段）：桌面被控面专属；planView 含写面四段
+      // A7 项目批（30 段）：桌面被控面专属；planView 含写面四段
       // （2026-11-05 批），projectAsset/readImage 服务端解析资产根，
       // upload 为 base64 单文件写面，project/setBindings 能力挂载全量
-      // 覆盖（#2 绑定写面批）
+      // 覆盖（#2 绑定写面批），planItem/fieldsSave 字段定义替换（#3 批）
       project: {
         query: "project/query",
         getDetail: "project/getDetail",
@@ -205,6 +205,7 @@ describe("@tianshu/protocol 协议包", () => {
         delete: "planItem/delete",
         move: "planItem/move",
         fieldsList: "planItem/fieldsList",
+        fieldsSave: "planItem/fieldsSave",
         attachmentList: "planItem/attachmentList",
         attachmentCreate: "planItem/attachmentCreate",
         attachmentDelete: "planItem/attachmentDelete",

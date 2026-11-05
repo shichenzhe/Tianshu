@@ -2674,6 +2674,7 @@ function makeFakePlanItem(overrides: Record<string, unknown> = {}) {
     remove: vi.fn(async () => {}),
     move: vi.fn(async () => {}),
     listFields: vi.fn(async () => [{ name: "进度", type: "text" }]),
+    saveFields: vi.fn(async () => {}),
     listAttachments: vi.fn(async () => [
       {
         id: 9,
@@ -3081,6 +3082,33 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
       "POST",
       ENDPOINTS.project.setBindings,
       { projectId: 3, items: [{ itemType: "skill", itemId: 0 }] },
+      "5000",
+    );
+  });
+
+  it("planItem/fieldsSave：{projectId,fields} 载荷校验 + 全量透传（#3 批）", async () => {
+    const planItem = makeFakePlanItem();
+    wireProjectFaces({ planItem });
+    const fields = [
+      { name: "工作量", type: "number" },
+      { name: "上线日", type: "date" },
+    ];
+    const r = await handleRoute("POST", ENDPOINTS.planItem.fieldsSave, {
+      projectId: 3,
+      fields,
+    });
+    expect(r.body).toMatchObject({ success: true });
+    expect(planItem.saveFields).toHaveBeenCalledWith(UID, 3, fields);
+    await expectBizError(
+      "POST",
+      ENDPOINTS.planItem.fieldsSave,
+      { projectId: 3, fields: [{ name: "x", type: "bogus" }] },
+      "5000",
+    );
+    await expectBizError(
+      "POST",
+      ENDPOINTS.planItem.fieldsSave,
+      { projectId: 3, fields: [{ name: "", type: "text" }] },
       "5000",
     );
   });

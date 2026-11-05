@@ -126,6 +126,14 @@
   "bindingSkill": "技能",
   "bindingSkillDesktopTip": "技能挂载的完整编辑请在桌面端进行（此处可解绑）",
   "bindingCandidatesEmpty": "暂无候选",
+  "manageFields": "管理字段",
+  "fieldName": "字段名",
+  "addField": "添加字段",
+  "fieldType": {
+    "text": "文本",
+    "number": "数字",
+    "date": "日期"
+  },
   "newView": "新建视图",
   "renameView": "重命名视图",
   "deleteView": "删除视图",

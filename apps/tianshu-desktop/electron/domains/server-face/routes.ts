@@ -35,6 +35,7 @@ import type {
   PlanItemCreatePayload,
   PlanItemMovePayload,
   PlanItemUpdatePayload,
+  PlanFieldDefDto,
   PlanViewCreatePayload,
   PlanViewUpdatePayload,
   ProjectBindingInputDto,
@@ -2342,6 +2343,35 @@ function handlePlanItemFieldsList(body: unknown): Promise<RouteResult> {
   );
 }
 
+/** planItem/fieldsSave（#3 批）：字段定义全集替换（name trim 非空 + type
+ *  三枚举；消失字段行内值清理内聚 repo） */
+function handlePlanItemFieldsSave(body: unknown): Promise<RouteResult> {
+  const p = (body ?? {}) as Record<string, unknown>;
+  const projectId = asInt(p.projectId);
+  const FIELD_TYPES = new Set(["text", "number", "date"]);
+  const raw = p.fields;
+  const fields =
+    Array.isArray(raw) &&
+    raw.every(
+      (field) =>
+        field !== null &&
+        typeof field === "object" &&
+        typeof (field as Record<string, unknown>).name === "string" &&
+        (field as Record<string, unknown>).name.trim() !== "" &&
+        FIELD_TYPES.has(String((field as Record<string, unknown>).type)),
+    )
+      ? (raw as PlanFieldDefDto[])
+      : null;
+  if (projectId === null || fields === null) {
+    return Promise.resolve(bizError("5000", "projectId/fields 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.planItem,
+    "planItem",
+    (face, userId) => face.saveFields(userId, projectId, fields),
+  );
+}
+
 function handlePlanItemAttachmentList(body: unknown): Promise<RouteResult> {
   const planItemId = asInt(
     (body as { planItemId?: unknown } | null)?.planItemId,
@@ -2747,6 +2777,8 @@ const ROUTES: Record<string, RouteHandler> = {
   [`POST ${ENDPOINTS.planItem.delete}`]: handlePlanItemDelete,
   [`POST ${ENDPOINTS.planItem.move}`]: handlePlanItemMove,
   [`POST ${ENDPOINTS.planItem.fieldsList}`]: handlePlanItemFieldsList,
+  // #3 字段定义批：全集替换
+  [`POST ${ENDPOINTS.planItem.fieldsSave}`]: handlePlanItemFieldsSave,
   [`POST ${ENDPOINTS.planItem.attachmentList}`]: handlePlanItemAttachmentList,
   [`POST ${ENDPOINTS.planItem.attachmentCreate}`]:
     handlePlanItemAttachmentCreate,

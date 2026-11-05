@@ -209,6 +209,12 @@ export interface ProjectBindingSetPayload {
   items: ProjectBindingInputDto[];
 }
 
+/** planItem/fieldsSave 载荷（字段定义全集替换；消失字段名行内值同步清理） */
+export interface PlanFieldSavePayload {
+  projectId: number;
+  fields: PlanFieldDefDto[];
+}
+
 /** 资产条目（目录树行） */
 export interface AssetEntryDto {
   name: string;

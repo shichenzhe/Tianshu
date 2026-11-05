@@ -499,6 +499,37 @@ describe("project.store", () => {
     ).toBe(true);
   });
 
+  it("saveFields：{projectId,fields} 全量载荷 + 写后刷新计划面（#3 批）", async () => {
+    const t = makeTransport();
+    t.request.mockImplementation(async (_method, path) => {
+      if (path === ENDPOINTS.planItem.list) return successBody([]);
+      if (path === ENDPOINTS.planItem.listMine) return successBody([]);
+      if (path === ENDPOINTS.planView.list) return successBody([]);
+      return successBody(null);
+    });
+    connMock.activeTransport.mockReturnValue(t);
+    await useProjectStore.getState().loadPlan(5);
+    t.request.mockClear();
+    t.request.mockResolvedValue(successBody(null));
+    const ok = await useProjectStore
+      .getState()
+      .saveFields(5, [{ name: "工作量", type: "number" }]);
+    expect(ok).toBe(true);
+    const saveCall = t.request.mock.calls.find(
+      (call) => call[1] === ENDPOINTS.planItem.fieldsSave,
+    );
+    expect(saveCall?.[2]).toEqual({
+      projectId: 5,
+      fields: [{ name: "工作量", type: "number" }],
+    });
+    // 写后刷新：fields 随 loadPlan 三联重拉
+    expect(
+      t.request.mock.calls.some(
+        (call) => call[1] === ENDPOINTS.planItem.fieldsList,
+      ),
+    ).toBe(true);
+  });
+
   it("loadDetail 并联 getDetail + listMembers", async () => {
     const t = makeTransport();
     t.request

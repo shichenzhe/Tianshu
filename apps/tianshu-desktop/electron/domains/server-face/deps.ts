@@ -40,6 +40,7 @@ import type {
   PermissionRememberedItem,
   PermissionRevokeResult,
   PlanFieldDefDto,
+  PlanFieldSavePayload,
   PlanItemAttachmentRecordDto,
   PlanItemCreatePayload,
   PlanItemMovePayload,
@@ -562,6 +563,12 @@ export interface ServerFacePlanItem {
   remove(userId: number, id: number): Promise<void>;
   move(userId: number, payload: PlanItemMovePayload): Promise<void>;
   listFields(userId: number, projectId: number): Promise<PlanFieldDefDto[]>;
+  /** 字段定义全集替换（#3 批；可见性守卫/清理内聚 repo） */
+  saveFields(
+    userId: number,
+    projectId: number,
+    fields: PlanFieldSavePayload["fields"],
+  ): Promise<null>;
   listAttachments(
     userId: number,
     planItemId: number,

@@ -319,6 +319,7 @@ export function attachServerFace(deps: {
     | "remove"
     | "move"
     | "listFields"
+    | "saveFields"
     | "listAttachments"
     | "createAttachment"
     | "removeAttachment"

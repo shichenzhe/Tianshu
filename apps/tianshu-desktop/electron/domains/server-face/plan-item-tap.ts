@@ -3,6 +3,7 @@
 // repo 自带，tap 只做 userId 前置序适配 + 稳定码转 FaceProjectError；
 // DTO 与桌面记录同形直传——日期 repo 侧已 ISO 串行化）。
 import type PlanItemRepository from "../project/plan-item.repo";
+import type { PlanFieldDefDto } from "@tianshu/protocol";
 import type { ServerFacePlanItem } from "./deps";
 import { toFaceProjectError } from "./project-tap";
 
@@ -16,6 +17,7 @@ type PlanItemRepoSubset = Pick<
   | "remove"
   | "move"
   | "listFields"
+  | "saveFields"
   | "listAttachments"
   | "createAttachment"
   | "removeAttachment"
@@ -37,6 +39,13 @@ export function createPlanItemFace(
       repo.move(payload, userId).catch(toFaceProjectError),
     listFields: (userId, projectId) =>
       repo.listFields(projectId, userId).catch(toFaceProjectError),
+    // 字段定义全量替换（#3 批）：可见性守卫/枚举校验/消失字段行内值清理
+    // 均内聚 repo
+    saveFields: (userId, projectId, fields: PlanFieldDefDto[]) =>
+      repo
+        .saveFields(projectId, fields, userId)
+        .then(() => null)
+        .catch(toFaceProjectError),
     listAttachments: (userId, planItemId) =>
       repo.listAttachments(planItemId, userId).catch(toFaceProjectError),
     createAttachment: (userId, planItemId, input) =>

@@ -39,17 +39,21 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  SlidersHorizontal,
   Trash2,
   Upload,
   X,
 } from "lucide-react-native";
 import {
   ENDPOINTS,
+  PLAN_FIELD_TYPES,
   PLAN_GROUP_BYS,
   PLAN_PRIORITIES,
   PLAN_STATUSES,
   PLAN_VIEW_TYPES,
   type AssetEntryDto,
+  type PlanFieldDefDto,
+  type PlanFieldType,
   type PlanItemCreatePayload,
   type PlanItemRecordDto,
   type PlanItemUpdatePayload,
@@ -673,6 +677,113 @@ const BindingEditorDialog = memo(function BindingEditorDialog({
   );
 });
 
+/** 字段定义编辑弹窗（#3 批）：行 = 名称输入 + 类型三选 + 删行；增行；
+ *  保存 = 全量替换（消失字段名的事项行内值服务端同步清理） */
+const FieldsEditorDialog = memo(function FieldsEditorDialog({
+  projectId,
+  fields,
+  onClose,
+}: {
+  projectId: number;
+  fields: PlanFieldDefDto[];
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(["project", "common"]);
+  const colors = useThemeColors();
+  const [rows, setRows] = useState<Array<{ name: string; type: PlanFieldType }>>(
+    () => fields.map((field) => ({ name: field.name, type: field.type })),
+  );
+  const [saving, setSaving] = useState(false);
+
+  function patchRow(index: number, patch: Partial<{ name: string; type: PlanFieldType }>) {
+    setRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row)),
+    );
+  }
+
+  async function handleSave() {
+    const normalized = rows
+      .map((row) => ({ name: row.name.trim(), type: row.type }))
+      .filter((row) => row.name !== "");
+    setSaving(true);
+    const store = useProjectStore.getState();
+    const ok = await store.saveFields(projectId, normalized);
+    setSaving(false);
+    if (ok) {
+      onClose();
+    } else {
+      toast.error(store.hub.error || t("project:loadFailed"));
+    }
+  }
+
+  return (
+    <DialogShell
+      title={t("project:manageFields")}
+      busy={saving}
+      onClose={saving ? () => undefined : onClose}
+      footer={
+        <FormFooter
+          busy={saving}
+          confirmDisabled={false}
+          onConfirm={() => void handleSave()}
+          onCancel={onClose}
+        />
+      }
+    >
+      <ScrollView className="max-h-72" contentContainerStyle={{ gap: 10 }}>
+        {rows.map((row, index) => (
+          <View
+            key={`f-${index}`}
+            className="gap-2 rounded-lg border border-sep p-2.5 dark:border-[#545458A6]"
+          >
+            <View className="flex-row items-center gap-2">
+              <TextInput
+                value={row.name}
+                onChangeText={(text) => patchRow(index, { name: text })}
+                placeholder={t("project:fieldName")}
+                placeholderTextColor={PLACEHOLDER}
+                autoCapitalize="none"
+                autoCorrect={false}
+                className="min-w-0 flex-1 rounded-lg border border-sep bg-field px-3 py-2 text-sm text-black dark:border-[#545458A6] dark:bg-[#2C2C2E] dark:text-white"
+              />
+              <Pressable
+                onPress={() =>
+                  setRows((prev) => prev.filter((_, i) => i !== index))
+                }
+                hitSlop={8}
+              >
+                <X size={14} color="#8E8E93" />
+              </Pressable>
+            </View>
+            <FilterValueChips
+              options={PLAN_FIELD_TYPES.map((type) => ({
+                value: type,
+                label: t(`project:fieldType.${type}`),
+              }))}
+              values={[row.type]}
+              onToggle={(value) =>
+                patchRow(index, { type: value as PlanFieldType })
+              }
+            />
+          </View>
+        ))}
+        <Pressable
+          onPress={() =>
+            setRows((prev) => [...prev, { name: "", type: "text" }])
+          }
+          className="flex-row items-center gap-1 self-start"
+          hitSlop={8}
+        >
+          <Plus size={14} color={colors.primary} />
+          <Text className="text-xs" style={{ color: colors.primary }}>
+            {t("project:addField")}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </DialogShell>
+  );
+});
+
 /** 事项行：标题/优先级色点/处理人昵称/截止 MM-dd（行上禁 flex-1——
  *  仅文本节点收 min-w-0，防 Yoga 0 高塌行）；批②：长按开操作面板
  *  （状态快捷流转+删除） */
@@ -898,6 +1009,8 @@ export default function ProjectWorkspaceScreen() {
   const [viewType, setViewType] = useState<PlanViewType>("table");
   /** #2 绑定写面批：挂载编辑弹窗开关 */
   const [bindingEditorOpen, setBindingEditorOpen] = useState(false);
+  /** #3 字段定义批：字段管理弹窗开关 */
+  const [fieldsEditorOpen, setFieldsEditorOpen] = useState(false);
   const [itemDialog, setItemDialog] = useState<
     | { mode: "create"; status?: PlanStatus }
     | { mode: "edit"; item: PlanItemRecordDto }
@@ -1715,7 +1828,7 @@ export default function ProjectWorkspaceScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={t("project:filter.title")}
                 onPress={() => setFilterPanelOpen(true)}
-                className="relative mr-3 h-8 w-8 items-center justify-center rounded-full"
+                className="relative mr-1.5 h-8 w-8 items-center justify-center rounded-full"
                 style={{ backgroundColor: colors.subtle }}
               >
                 <Filter size={14} color={colors.primary} />
@@ -1729,6 +1842,16 @@ export default function ProjectWorkspaceScreen() {
                     </Text>
                   </View>
                 )}
+              </Pressable>
+              {/* #3 字段定义批：管理字段入口（桌面 PlanPane 工具栏同位） */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("project:manageFields")}
+                onPress={() => setFieldsEditorOpen(true)}
+                className="mr-3 h-8 w-8 items-center justify-center rounded-full"
+                style={{ backgroundColor: colors.subtle }}
+              >
+                <SlidersHorizontal size={14} color={colors.primary} />
               </Pressable>
             </View>
           )}
@@ -1954,6 +2077,13 @@ export default function ProjectWorkspaceScreen() {
             onChangeText={setAssetName}
           />
         </DialogShell>
+      )}
+      {fieldsEditorOpen && (
+        <FieldsEditorDialog
+          projectId={projectId}
+          fields={fields}
+          onClose={() => setFieldsEditorOpen(false)}
+        />
       )}
       {bindingEditorOpen && detail && (
         <BindingEditorDialog

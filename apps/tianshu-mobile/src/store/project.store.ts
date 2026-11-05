@@ -114,6 +114,12 @@ interface ProjectState {
   /** 状态流转：跨列落点（sortOrder 由调用方按目标列计算） */
   moveItem(id: number, status: PlanStatus, sortOrder: number): Promise<boolean>;
   removeItem(id: number): Promise<boolean>;
+  /** #3 字段定义批：字段定义全集替换（消失字段行内值服务端同步清理）；
+   *  成功后重拉计划面（fields/事项行内值一并刷新） */
+  saveFields(
+    projectId: number,
+    fields: PlanFieldDefDto[],
+  ): Promise<boolean>;
 
   loadAssets(projectId: number, path?: string[]): Promise<void>;
   /** 不进面态的目录读取（附件「从资产挂接」挑文件用，不扰动浏览态） */
@@ -747,6 +753,14 @@ export const useProjectStore = create<ProjectState>((set, get) => {
     },
 
     setActiveView: (id) => set({ activeViewId: id }),
+
+    saveFields: (projectId, fields) =>
+      enqueueWrite(
+        ENDPOINTS.planItem.fieldsSave,
+        { projectId, fields },
+        // 字段定义与事项行内值（消失字段清理）都随 loadPlan 三联刷新
+        refreshPlanAfterWrite,
+      ),
 
     createView: async (projectId, params) => {
       const view = await enqueueWriteData<PlanViewRecordDto>(

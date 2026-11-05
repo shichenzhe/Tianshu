@@ -40,21 +40,27 @@ export type ToolPermissionMinAggregateOutputType = {
   id: number | null
   workspaceId: number | null
   toolName: string | null
+  pattern: string | null
   createdAt: Date | null
+  lastUsedAt: Date | null
 }
 
 export type ToolPermissionMaxAggregateOutputType = {
   id: number | null
   workspaceId: number | null
   toolName: string | null
+  pattern: string | null
   createdAt: Date | null
+  lastUsedAt: Date | null
 }
 
 export type ToolPermissionCountAggregateOutputType = {
   id: number
   workspaceId: number
   toolName: number
+  pattern: number
   createdAt: number
+  lastUsedAt: number
   _all: number
 }
 
@@ -73,21 +79,27 @@ export type ToolPermissionMinAggregateInputType = {
   id?: true
   workspaceId?: true
   toolName?: true
+  pattern?: true
   createdAt?: true
+  lastUsedAt?: true
 }
 
 export type ToolPermissionMaxAggregateInputType = {
   id?: true
   workspaceId?: true
   toolName?: true
+  pattern?: true
   createdAt?: true
+  lastUsedAt?: true
 }
 
 export type ToolPermissionCountAggregateInputType = {
   id?: true
   workspaceId?: true
   toolName?: true
+  pattern?: true
   createdAt?: true
+  lastUsedAt?: true
   _all?: true
 }
 
@@ -181,7 +193,9 @@ export type ToolPermissionGroupByOutputType = {
   id: number
   workspaceId: number
   toolName: string
+  pattern: string | null
   createdAt: Date
+  lastUsedAt: Date | null
   _count: ToolPermissionCountAggregateOutputType | null
   _avg: ToolPermissionAvgAggregateOutputType | null
   _sum: ToolPermissionSumAggregateOutputType | null
@@ -211,32 +225,40 @@ export type toolPermissionWhereInput = {
   id?: Prisma.IntFilter<"toolPermission"> | number
   workspaceId?: Prisma.IntFilter<"toolPermission"> | number
   toolName?: Prisma.StringFilter<"toolPermission"> | string
+  pattern?: Prisma.StringNullableFilter<"toolPermission"> | string | null
   createdAt?: Prisma.DateTimeFilter<"toolPermission"> | Date | string
+  lastUsedAt?: Prisma.DateTimeNullableFilter<"toolPermission"> | Date | string | null
 }
 
 export type toolPermissionOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   workspaceId?: Prisma.SortOrder
   toolName?: Prisma.SortOrder
+  pattern?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  lastUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type toolPermissionWhereUniqueInput = Prisma.AtLeast<{
   id?: number
-  workspaceId_toolName?: Prisma.toolPermissionWorkspaceIdToolNameCompoundUniqueInput
+  workspaceId_toolName_pattern?: Prisma.toolPermissionWorkspaceIdToolNamePatternCompoundUniqueInput
   AND?: Prisma.toolPermissionWhereInput | Prisma.toolPermissionWhereInput[]
   OR?: Prisma.toolPermissionWhereInput[]
   NOT?: Prisma.toolPermissionWhereInput | Prisma.toolPermissionWhereInput[]
   workspaceId?: Prisma.IntFilter<"toolPermission"> | number
   toolName?: Prisma.StringFilter<"toolPermission"> | string
+  pattern?: Prisma.StringNullableFilter<"toolPermission"> | string | null
   createdAt?: Prisma.DateTimeFilter<"toolPermission"> | Date | string
-}, "id" | "workspaceId_toolName">
+  lastUsedAt?: Prisma.DateTimeNullableFilter<"toolPermission"> | Date | string | null
+}, "id" | "workspaceId_toolName_pattern">
 
 export type toolPermissionOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   workspaceId?: Prisma.SortOrder
   toolName?: Prisma.SortOrder
+  pattern?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  lastUsedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.toolPermissionCountOrderByAggregateInput
   _avg?: Prisma.toolPermissionAvgOrderByAggregateInput
   _max?: Prisma.toolPermissionMaxOrderByAggregateInput
@@ -251,65 +273,84 @@ export type toolPermissionScalarWhereWithAggregatesInput = {
   id?: Prisma.IntWithAggregatesFilter<"toolPermission"> | number
   workspaceId?: Prisma.IntWithAggregatesFilter<"toolPermission"> | number
   toolName?: Prisma.StringWithAggregatesFilter<"toolPermission"> | string
+  pattern?: Prisma.StringNullableWithAggregatesFilter<"toolPermission"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"toolPermission"> | Date | string
+  lastUsedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"toolPermission"> | Date | string | null
 }
 
 export type toolPermissionCreateInput = {
   workspaceId: number
   toolName: string
+  pattern?: string | null
   createdAt?: Date | string
+  lastUsedAt?: Date | string | null
 }
 
 export type toolPermissionUncheckedCreateInput = {
   id?: number
   workspaceId: number
   toolName: string
+  pattern?: string | null
   createdAt?: Date | string
+  lastUsedAt?: Date | string | null
 }
 
 export type toolPermissionUpdateInput = {
   workspaceId?: Prisma.IntFieldUpdateOperationsInput | number
   toolName?: Prisma.StringFieldUpdateOperationsInput | string
+  pattern?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type toolPermissionUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   workspaceId?: Prisma.IntFieldUpdateOperationsInput | number
   toolName?: Prisma.StringFieldUpdateOperationsInput | string
+  pattern?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type toolPermissionCreateManyInput = {
   id?: number
   workspaceId: number
   toolName: string
+  pattern?: string | null
   createdAt?: Date | string
+  lastUsedAt?: Date | string | null
 }
 
 export type toolPermissionUpdateManyMutationInput = {
   workspaceId?: Prisma.IntFieldUpdateOperationsInput | number
   toolName?: Prisma.StringFieldUpdateOperationsInput | string
+  pattern?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type toolPermissionUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   workspaceId?: Prisma.IntFieldUpdateOperationsInput | number
   toolName?: Prisma.StringFieldUpdateOperationsInput | string
+  pattern?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
-export type toolPermissionWorkspaceIdToolNameCompoundUniqueInput = {
+export type toolPermissionWorkspaceIdToolNamePatternCompoundUniqueInput = {
   workspaceId: number
   toolName: string
+  pattern: string
 }
 
 export type toolPermissionCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   workspaceId?: Prisma.SortOrder
   toolName?: Prisma.SortOrder
+  pattern?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  lastUsedAt?: Prisma.SortOrder
 }
 
 export type toolPermissionAvgOrderByAggregateInput = {
@@ -321,14 +362,18 @@ export type toolPermissionMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   workspaceId?: Prisma.SortOrder
   toolName?: Prisma.SortOrder
+  pattern?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  lastUsedAt?: Prisma.SortOrder
 }
 
 export type toolPermissionMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   workspaceId?: Prisma.SortOrder
   toolName?: Prisma.SortOrder
+  pattern?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
+  lastUsedAt?: Prisma.SortOrder
 }
 
 export type toolPermissionSumOrderByAggregateInput = {
@@ -342,31 +387,39 @@ export type toolPermissionSelect<ExtArgs extends runtime.Types.Extensions.Intern
   id?: boolean
   workspaceId?: boolean
   toolName?: boolean
+  pattern?: boolean
   createdAt?: boolean
+  lastUsedAt?: boolean
 }, ExtArgs["result"]["toolPermission"]>
 
 export type toolPermissionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   workspaceId?: boolean
   toolName?: boolean
+  pattern?: boolean
   createdAt?: boolean
+  lastUsedAt?: boolean
 }, ExtArgs["result"]["toolPermission"]>
 
 export type toolPermissionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   workspaceId?: boolean
   toolName?: boolean
+  pattern?: boolean
   createdAt?: boolean
+  lastUsedAt?: boolean
 }, ExtArgs["result"]["toolPermission"]>
 
 export type toolPermissionSelectScalar = {
   id?: boolean
   workspaceId?: boolean
   toolName?: boolean
+  pattern?: boolean
   createdAt?: boolean
+  lastUsedAt?: boolean
 }
 
-export type toolPermissionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "toolName" | "createdAt", ExtArgs["result"]["toolPermission"]>
+export type toolPermissionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "toolName" | "pattern" | "createdAt" | "lastUsedAt", ExtArgs["result"]["toolPermission"]>
 
 export type $toolPermissionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "toolPermission"
@@ -375,7 +428,17 @@ export type $toolPermissionPayload<ExtArgs extends runtime.Types.Extensions.Inte
     id: number
     workspaceId: number
     toolName: string
+    /**
+     * 参数级 pattern（security P1-3）：bash 命令前缀（`git *`）/ write·rm
+     * 路径 glob（`src/**`）；null = 整工具记忆（旧全等语义——任意参数命中）
+     */
+    pattern: string | null
     createdAt: Date
+    /**
+     * 最近一次命中回写（记忆直执行/ask 级抑制命中时 fire-and-forget）；
+     * null = 落行后从未命中（安全中心「90 天未用」治理数据源）
+     */
+    lastUsedAt: Date | null
   }, ExtArgs["result"]["toolPermission"]>
   composites: {}
 }
@@ -802,7 +865,9 @@ export interface toolPermissionFieldRefs {
   readonly id: Prisma.FieldRef<"toolPermission", 'Int'>
   readonly workspaceId: Prisma.FieldRef<"toolPermission", 'Int'>
   readonly toolName: Prisma.FieldRef<"toolPermission", 'String'>
+  readonly pattern: Prisma.FieldRef<"toolPermission", 'String'>
   readonly createdAt: Prisma.FieldRef<"toolPermission", 'DateTime'>
+  readonly lastUsedAt: Prisma.FieldRef<"toolPermission", 'DateTime'>
 }
     
 

@@ -208,7 +208,10 @@
       "update": "Status: #{{id}} → {{status}}",
       "append": "Appended progress: {{text}}",
       "list": "Listed {{count}} tasks"
-    }
+    },
+    "approveRememberPrefix": "Always allow ({{pattern}})",
+    "approveRememberWhole": "Always allow entire tool ({{toolName}})",
+    "approveRememberMore": "More remember options"
   },
   "permission": {
     "default": "Default Access",

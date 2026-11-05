@@ -33,4 +33,14 @@ export class SessionApproveDto {
   @IsOptional()
   @IsString()
   toolName?: string;
+
+  @ApiProperty({
+    description:
+      '参数级 pattern（批7 security P1-3）：bash 前缀 `git *` / 路径 glob ' +
+      '`src/**`，缺席 = 整工具记忆；命中判定 @tianshu/core matchPermissionPattern',
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  pattern?: string;
 }

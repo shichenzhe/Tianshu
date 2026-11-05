@@ -13,6 +13,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
   DEFAULT_MAX_STEPS,
   effectiveContextWindow as effectiveContextWindowOf,
+  isRememberedPermission,
   listWorkspaceFiles,
   readTextFileGuarded,
   runChatStream as runChatStreamCore,
@@ -87,11 +88,16 @@ import {
 import {
   filterToolsBySession,
   isWorkflowGroupAllowed,
+  skillDeclaredGroups,
   WORKFLOW_CREATOR_SKILL_NAME,
   WORKFLOW_NO_WORKSPACE_TOOLS,
   type ToolGroupGate,
 } from "../agent/tool-groups";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
+import {
+  mcpAdaptiveDefinitions,
+  mcpAdaptiveSourceInstalled,
+} from "../agent/mcp-manager";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { AUTOMATION_TOOL_NAME } from "../agent/automation-tool";
@@ -372,12 +378,18 @@ export interface FullSessionGrant {
   title: string;
 }
 
-/** SP6 系统授权卡：工具记忆行（permission:listRemembered 载荷，spec §4.2） */
+/** SP6 系统授权卡：工具记忆行（permission:listRemembered 载荷，spec §4.2）。
+ *  参数级审批批（security P1-3）：pattern/lastUsedAt 增量可选段——
+ *  与 @tianshu/protocol PermissionRememberedItem 同形（server-face 桥透传） */
 export interface RememberedToolGrant {
   id: number;
   workspaceName: string;
   toolName: string;
   createdAt: string;
+  /** 参数级 pattern（null = 整工具记忆） */
+  pattern?: string | null;
+  /** 最近一次命中 ISO（null = 落行后从未命中） */
+  lastUsedAt?: string | null;
 }
 
 /** 流式工具态快照（chat:status 恢复渲染层 agent 态用，与 T6 store 同构） */
@@ -572,7 +584,9 @@ export default class ChatService {
       },
     );
     // P4 工作空间级工具记忆（参照 Claude Code allowed-tools）：
-    // 「允许并记住」写表 → 该工具在本工作空间后续免审
+    // 「允许并记住」写表 → 该工具在本工作空间后续免审。
+    // 参数级审批批（security P1-3）：pattern 可选（审批横幅下拉的参数
+    // 前缀选项——bash `git *` / write `src/**`；缺席 = 整工具记忆）
     handleUser(
       "permission:rememberTool",
       async (
@@ -580,21 +594,24 @@ export default class ChatService {
         userId,
         workspaceId: number,
         toolName: string,
+        pattern?: string | null,
       ): Promise<void> => {
-        await this.rememberTool(workspaceId, toolName, userId);
+        await this.rememberTool(workspaceId, toolName, userId, pattern);
       },
     );
     handleUser(
       "permission:listAllowedTools",
       async (_, userId, workspaceId: number): Promise<string[]> => {
         await this.sessions.assertWorkspaceOwned(workspaceId, userId);
+        // 参数级审批批：同工具可有多行（pattern 各异/整工具行）——
+        // 该面语义为「工具名清单」，按名去重
         return prisma.toolPermission
           .findMany({
             where: { workspaceId },
             orderBy: { createdAt: "desc" },
             select: { toolName: true },
           })
-          .then((rows) => rows.map((row) => row.toolName));
+          .then((rows) => [...new Set(rows.map((row) => row.toolName))]);
       },
     );
     handleUser(
@@ -1005,7 +1022,9 @@ export default class ChatService {
     return ids.length;
   }
 
-  /** 工具记忆列表（SP6 spec §4.2）：空间名 join 失败行回落 #workspaceId（spec §8）；v12 限定本人空间；A10 批提 public——server-face permission 面桥消费 */
+  /** 工具记忆列表（SP6 spec §4.2）：空间名 join 失败行回落 #workspaceId（spec §8）；v12 限定本人空间；A10 批提 public——server-face permission 面桥消费。
+   *  参数级审批批（security P1-3）：透出 pattern/lastUsedAt（增量可选段——
+   *  旧端不识别不炸；lastUsedAt null = 落行后从未命中） */
   async listRemembered(userId: number): Promise<RememberedToolGrant[]> {
     const ownedWorkspaceIds = await this.ownedWorkspaceIds(userId);
     const rows = await prisma.toolPermission.findMany({
@@ -1020,6 +1039,8 @@ export default class ChatService {
           `#${row.workspaceId}`,
         toolName: row.toolName,
         createdAt: row.createdAt.toISOString(),
+        pattern: row.pattern,
+        lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       })),
     );
   }
@@ -1404,6 +1425,8 @@ export default class ChatService {
               ctx.team,
               ctx.toolGate,
               this.allowExpertRecommend(ctx),
+              // MCP 折叠自适应（§6-3）：预算线随会话窗口（与下次请求同集）
+              this.effectiveContextWindow(ctx.modelRow, ctx.providerRow),
             );
       const historyCost = trimHistoryToolOutputs(ctx.history).reduce(
         (sum, m) => sum + estimateMessageTokens(m.blocks),
@@ -1641,16 +1664,11 @@ export default class ChatService {
       workspacePath: workspaceDir ?? undefined,
       projectId: session.projectId ?? null,
       fullAccess: () => this.permissions.get(sessionId) === "full",
-      isToolAllowed: async (toolName: string) => {
-        if (workspaceId === null) {
-          return false;
-        }
-        const row = await prisma.toolPermission.findUnique({
-          where: { workspaceId_toolName: { workspaceId, toolName } },
-          select: { id: true },
-        });
-        return row !== null;
-      },
+      isToolAllowed: async (toolName: string, input?: unknown) =>
+        // 参数级审批批（security P1-3）：查表/匹配/lastUsedAt 回写单源
+        // @tianshu/core isRememberedPermission（pattern 行参数级匹配，
+        // 无 pattern 行旧全等语义；workspaceId 缺席恒 false）
+        isRememberedPermission(prisma, workspaceId, toolName, input),
       requestApproval: (toolCallId, argSummary) =>
         this.approvals.request(sessionId, toolCallId, argSummary),
       // 监控埋点（spec §4.1 #3）：终态工具事件 → fire-and-forget 落库
@@ -1847,15 +1865,28 @@ export default class ChatService {
     team: DispatchMemberDeps | null,
     gate: ToolGroupGate,
     expertRecommend: boolean,
+    /** 会话模型窗口（MCP 折叠自适应批 skills-tools-mcp §6-3）：MCP 面
+     *  按会话 contextWindow 动态调线（surfaceBudgetFor）；缺席回落注册层
+     *  静态线（registry 内已按 4K 折叠的面），行为零漂移 */
+    modelContextWindow?: number | null,
   ): ToolDefinition[] {
     // 专家推荐两跳组注入面（2026-11-01 目录出 system 批）：原 system
     // 目录段三合一条件的工具层平移——非 agent 模式/已绑专家时整组缺席
     // （目录在 list_experts 的工具结果里，工具缺席即目录缺席）；安全
     // 中心禁用面由外层 filterDisabledTools 统一收口（单名禁用单名消失）
+    // MCP 会话级自适应（§6-3）：已装配 manager 时 registry 的 mcp__ 前缀面
+    // 替换为 manager 自适应面（按会话窗口动态调线）；未装配（测试/局部
+    // 构造）保留 registry 静态面——零扰动回落
+    const useMcpAdaptive = mcpAdaptiveSourceInstalled();
     const registered = registry
       .getDefinitions()
       .filter(
-        (def) => expertRecommend || !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name),
+        (def) =>
+          (expertRecommend || !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name)) &&
+          (!useMcpAdaptive || !def.name.startsWith("mcp__")),
+      )
+      .concat(
+        useMcpAdaptive ? mcpAdaptiveDefinitions(modelContextWindow) : [],
       );
     const workspaceScoped = agent.workspacePath
       ? registered
@@ -2101,6 +2132,9 @@ export default class ChatService {
                 ctx.team ? { ...ctx.team, abortSignal: abort.signal } : null,
                 ctx.toolGate,
                 this.allowExpertRecommend(ctx),
+                // MCP 折叠自适应（§6-3）：预算线随主会话模型窗口（备选
+                // 窗口差异不重算——切备选为瞬态失败路径，保主口径）
+                this.effectiveContextWindow(ctx.modelRow, ctx.providerRow),
               ),
         agent: ctx.agent,
         maxSteps,
@@ -2344,6 +2378,11 @@ export default class ChatService {
           parseJsonStringArray(assistantRow?.skillNames ?? null),
           allScanned,
         );
+    // per-skill 工具声明批（skills-tools-mcp §6-1）：挂载集（system 清单
+    // 同源集）frontmatter `tools` 声明并集驱动工具组挂载——「技能即开关」
+    // 泛化（内置 workflow-creator 不声明，仍走三信号特判——builtin 恒
+    // 启用，声明式会让门恒开）
+    toolGate.skillGroups = skillDeclaredGroups(sessionSkills);
     const baseProjectCtx = isolation ? isolation.declaredCtx : projectCtx;
     // 专家团会话（二期 spec）：team 助手且解析出合法成员时 base 换主理人
     // 组装（成员清单+协作铁律）。members 为 prisma 原始 JSON 字符串列，
@@ -2480,6 +2519,8 @@ export default class ChatService {
               ctx.team,
               ctx.toolGate,
               this.allowExpertRecommend(ctx),
+              // MCP 折叠自适应（§6-3）：与下次请求同口径
+              this.effectiveContextWindow(ctx.modelRow, ctx.providerRow),
             );
       // 成员调度累计：meta 非空行即成员补全埋点（当前唯一 meta 写入面）
       const memberRows = await prisma.llmCallEvent.findMany({
@@ -2765,32 +2806,50 @@ export default class ChatService {
   }
 
   /** 工作空间级工具记忆写（P4 语义上提——IPC 与远控 remember 共用）：
-   *  归属校验 + upsert + remembered 审计（幂等：已存在时 update 空） */
+   *  归属校验 + 幂等落行 + remembered 审计。参数级审批批（security
+   *  P1-3）：pattern 可选——bash 命令前缀（`git *`）/ write·rm 路径
+   *  glob（`src/**`），同 pattern 行幂等（findFirst+create——SQLite
+   *  NULL 互异使 null 行不可用复合唯一 upsert，单进程写路径无竞态） */
   async rememberTool(
     workspaceId: number,
     toolName: string,
     userId: number,
+    pattern?: string | null,
   ): Promise<void> {
     await this.sessions.assertWorkspaceOwned(workspaceId, userId);
-    await prisma.toolPermission.upsert({
-      where: { workspaceId_toolName: { workspaceId, toolName } },
-      update: {},
-      create: { workspaceId, toolName },
+    const normalizedPattern =
+      typeof pattern === "string" && pattern.trim() !== ""
+        ? pattern.trim()
+        : null;
+    const existing = await prisma.toolPermission.findFirst({
+      where: { workspaceId, toolName, pattern: normalizedPattern },
+      select: { id: true },
     });
+    if (!existing) {
+      await prisma.toolPermission.create({
+        data: {
+          workspaceId,
+          toolName,
+          ...(normalizedPattern != null ? { pattern: normalizedPattern } : {}),
+        },
+      });
+    }
     // remembered 审计（SP1 终审归档补齐项，SP2 接入）
     this.auditSink?.({
       eventType: `${
         toolName === "bash" ? "command-safety" : "file-safety"
       }.remembered`,
       decision: "info",
-      detail: { tool: toolName, workspaceId },
+      detail: { tool: toolName, workspaceId, pattern: normalizedPattern },
     });
   }
 
   /** 远控审批应答（可选记住——审批记住批）：approve+remember 且控制端
    *  上送 toolName 时，先落工作空间工具记忆（会话归属校验同 IPC 口径；
    *  记忆先落防竞速——本次放行后同工具再触发即命中直执行），后 respond；
-   *  toolName 未上送 / 会话无工作空间时 remembered=false 只应答 */
+   *  toolName 未上送 / 会话无工作空间时 remembered=false 只应答。
+   *  pattern（参数级审批批）：控制端审批横幅「始终允许」下拉的参数前缀
+   *  选项上送——落 pattern 行（session/approve 契约 ApproveParams.pattern） */
   async respondApprovalRemember(
     sessionId: number,
     toolCallId: string,
@@ -2798,13 +2857,19 @@ export default class ChatService {
     userId: number,
     remember: boolean,
     toolName: string | null,
+    pattern?: string | null,
   ): Promise<{ hit: boolean; remembered: boolean }> {
     let remembered = false;
     if (remember && approved && toolName != null && toolName !== "") {
       await this.sessions.assertSessionOwned(sessionId, userId);
       const session = await this.sessions.getSession(sessionId);
       if (session?.workspaceId != null) {
-        await this.rememberTool(session.workspaceId, toolName, userId);
+        await this.rememberTool(
+          session.workspaceId,
+          toolName,
+          userId,
+          pattern ?? null,
+        );
         remembered = true;
       }
     }

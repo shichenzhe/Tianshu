@@ -12,7 +12,11 @@ import { z } from "zod";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { estimateTokens } from "@tianshu/core";
+import {
+  estimateTokens,
+  surfaceBudgetFor,
+  MCP_TOOL_SURFACE_BUDGET_TOKENS,
+} from "@tianshu/core";
 import type { ToolDefinition } from "./file-tools";
 import { registerTools, unregisterTools } from "./tool-registry";
 import { getNetworkGate } from "../../security/network-gate";
@@ -21,14 +25,14 @@ import Log from "../../../commons/Log";
 import { errorMessageWithCause } from "../../../commons/error-message-with-cause";
 
 /**
- * 单 server 工具面注入预算（token，estimateTokens 1token≈2 字符口径，
- * 与 context-usage toolDefinitionTokens 同源）：超线 server 折叠为
- * list_tools/call_tool 两聚合工具，直接工具 schema 不再常驻每会话
- * payload——依据 2026-11-01 实测：22 工具 HTTP MCP ≈12K 字符 ≈6K
- * token/每轮；4K token 线让小 server 直注体验不变，大 server 改两跳
- * （专家目录出 system 批同构的渐进披露）
+ * 单 server 工具面注入预算——静态线（core 单源；会话级自适应线见
+ * surfaceBudgetFor）：注册层折叠判定（connect 时点）消费本静态线；
+ * 会话装配层（chat.service collectToolDefinitions）按会话 contextWindow
+ * 经 adaptiveDefinitions 动态调线——小窗激进折叠、大窗保直注
+ * （skills-tools-mcp §6-3：注册逻辑不动，折叠判定输入增
+ * modelContextWindow 一维）
  */
-export const MCP_TOOL_SURFACE_BUDGET_TOKENS = 4000;
+export { MCP_TOOL_SURFACE_BUDGET_TOKENS };
 
 export interface McpServerConfig {
   id: number;
@@ -100,6 +104,14 @@ interface ServerRecord {
    * await 恢复后核对代际，不符即整体丢弃结果（I1 竞态守卫）
    */
   generation: number;
+  /** 直接工具面 token 估值（estimateTokens，会话级自适应折叠判定输入） */
+  surfaceTokens: number;
+  /** 直接工具面留存（自适应折叠的直注分支与 unfold 复用；连接成功后非空数组） */
+  directDefs: ToolDefinition[];
+  /** listTools 原始目录（自适应折叠的聚合分支按需重建两跳工具） */
+  mcpTools: Array<
+    Awaited<ReturnType<McpClientLike["listTools"]>>["tools"][number]
+  >;
 }
 
 /** 服务器内工具的统一前缀 */
@@ -260,9 +272,11 @@ export class McpManager {
       const connected = client;
       const defs = tools.map((tool) => this.toDefinition(row, connected, tool));
       // 工具面预算折叠：超线不注册直接工具（schema 不常驻每会话），
-      // 改挂 list_tools/call_tool 两聚合工具（spec §1）；线内零行为变化
-      const deferred =
-        estimateTokens(JSON.stringify(defs)) > MCP_TOOL_SURFACE_BUDGET_TOKENS;
+      // 改挂 list_tools/call_tool 两聚合工具（spec §1）；线内零行为变化。
+      // 会话级自适应批（§6-3）：直接面/目录/估值留存于 record，供
+      // adaptiveDefinitions 按会话 contextWindow 动态折叠/直注（注册层不动）
+      const surfaceTokens = estimateTokens(JSON.stringify(defs));
+      const deferred = surfaceTokens > MCP_TOOL_SURFACE_BUDGET_TOKENS;
       registerTools(
         deferred ? this.toAggregateTools(row, connected, tools) : defs,
       );
@@ -270,6 +284,9 @@ export class McpManager {
       record.state = "connected";
       record.toolCount = defs.length;
       record.deferred = deferred;
+      record.surfaceTokens = surfaceTokens;
+      record.directDefs = defs;
+      record.mcpTools = tools;
     } catch (e) {
       // 半成品 client（createClient 成功但后续失败）不留活连接
       if (client) {
@@ -283,6 +300,9 @@ export class McpManager {
       record.state = "error";
       record.toolCount = 0;
       record.deferred = false;
+      record.surfaceTokens = 0;
+      record.directDefs = [];
+      record.mcpTools = [];
       record.error = e instanceof Error ? e.message : String(e);
     }
   }
@@ -312,6 +332,9 @@ export class McpManager {
         record.client = undefined;
         record.toolCount = 0;
         record.deferred = false;
+        record.surfaceTokens = 0;
+        record.directDefs = [];
+        record.mcpTools = [];
         record.state = client ? "error" : record.state;
         if (client) {
           void closeQuietly(client);
@@ -333,6 +356,9 @@ export class McpManager {
     record.state = "disabled";
     record.toolCount = 0;
     record.deferred = false;
+    record.surfaceTokens = 0;
+    record.directDefs = [];
+    record.mcpTools = [];
     record.error = undefined;
     if (client) {
       await closeQuietly(client);
@@ -359,11 +385,38 @@ export class McpManager {
         toolCount: 0,
         deferred: false,
         generation: 0,
+        surfaceTokens: 0,
+        directDefs: [],
+        mcpTools: [],
       };
       this.records.set(row.id, record);
     }
     record.row = row;
     return record;
+  }
+
+  /**
+   * 会话级自适应折叠面（skills-tools-mcp §6-3，chat.service 每 send 消费）：
+   * 按会话 contextWindow 经 core surfaceBudgetFor 动态调线——小窗激进折叠
+   * （超线 server 换 list_tools/call_tool 两聚合）、大窗保直注（静态线外
+   * 的 server 直注）。窗口缺席/非法回落静态线（与注册层判定一致，行为零
+   * 漂移）；仅 connected 态记录参与（connecting/error/disabled 无工具面）。
+   * 注册层（全局 registry）不动——graph/automation 等其余消费面维持静态线
+   */
+  adaptiveDefinitions(modelContextWindow?: number | null): ToolDefinition[] {
+    const budget = surfaceBudgetFor(modelContextWindow);
+    const defs: ToolDefinition[] = [];
+    for (const record of this.records.values()) {
+      if (record.state !== "connected" || !record.client) continue;
+      // 预算线只看 surfaceTokens（注册层 deferred 位不参与——大窗时
+      // 静态线折叠的 server 可 unfold 直注，小窗时静态线内 server 也可折叠）
+      defs.push(
+        ...(record.surfaceTokens <= budget
+          ? record.directDefs
+          : this.toAggregateTools(record.row, record.client, record.mcpTools)),
+      );
+    }
+    return defs;
   }
 
   private toDefinition(
@@ -447,4 +500,29 @@ export class McpManager {
       return `错误: MCP 服务不可用（${row.name}）：${errorMessageWithCause(e)}`;
     }
   }
+}
+
+/**
+ * 会话级自适应折叠源（模块级单例，commandGate install 先例）：
+ * Application 装配 McpManager 后 install；chat.service
+ * collectToolDefinitions 经 mcpAdaptiveDefinitions 消费（装配晚于
+ * ChatService 构造，install 只需先于首个 send）。未安装（测试/局部
+ * 构造）返回空数组——chat 链 MCP 面回落 registry 静态线，行为不变
+ */
+let adaptiveSource: McpManager | null = null;
+
+export function installMcpAdaptiveSource(manager: McpManager | null): void {
+  adaptiveSource = manager;
+}
+
+/** 自适应源是否已装配（chat 链据此切换 MCP 面来源——未装配回落 registry） */
+export function mcpAdaptiveSourceInstalled(): boolean {
+  return adaptiveSource !== null;
+}
+
+/** 当前自适应 MCP 工具面（含全部 connected server；窗口缺席=静态线） */
+export function mcpAdaptiveDefinitions(
+  modelContextWindow?: number | null,
+): ToolDefinition[] {
+  return adaptiveSource?.adaptiveDefinitions(modelContextWindow) ?? [];
 }

@@ -15,6 +15,17 @@ export interface PermissionRememberedItem {
   toolName: string;
   /** ISO 8601 字符串 */
   createdAt: string;
+  /**
+   * 参数级 pattern（审批参数级批，security P1-3）：bash 命令前缀（`git *`）
+   * / write·rm 路径 glob（`src/**`）；null = 整工具记忆（旧全等语义）。
+   * 可选段——旧端增量兼容。
+   */
+  pattern?: string | null;
+  /**
+   * 最近一次命中时间 ISO（记忆直执行/ask 级抑制命中时 fire-and-forget
+   * 回写）；null = 落行后从未命中。可选段——旧端增量兼容。
+   */
+  lastUsedAt?: string | null;
 }
 
 /** revokeAllRemembered/revokeAllFull 共用返回：实际撤销条数（空集 0） */

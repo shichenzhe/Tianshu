@@ -273,7 +273,9 @@ export const ToolPermissionScalarFieldEnum = {
   id: 'id',
   workspaceId: 'workspaceId',
   toolName: 'toolName',
-  createdAt: 'createdAt'
+  pattern: 'pattern',
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt'
 } as const
 
 export type ToolPermissionScalarFieldEnum = (typeof ToolPermissionScalarFieldEnum)[keyof typeof ToolPermissionScalarFieldEnum]

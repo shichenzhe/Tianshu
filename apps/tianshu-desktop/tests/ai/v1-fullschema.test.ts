@@ -385,15 +385,38 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     expect(indexesOf(db, "model")).not.toContain("model_fallbackModelId_index");
   });
 
-  it("toolPermission 工作空间+工具唯一索引生效", () => {
+  it("批7 toolPermission 参数级审批两列并入：pattern/lastUsedAt 可空；唯一索引扩含 pattern（同 pattern 拒重、跨 pattern 共存）", () => {
     const db = createDb();
-    db.exec(
-      "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write')",
+    expect(columnsOf(db, "toolPermission")).toEqual(
+      expect.arrayContaining(["pattern", "lastUsedAt"]),
     );
+    // 整工具行（pattern NULL）+ 参数级行（git *）共存——参数级记忆与整工具记忆并列
+    db.exec(
+      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', NULL)`,
+    );
+    db.exec(
+      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')`,
+    );
+    db.exec(
+      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'npm *')`,
+    );
+    // 同 pattern 重复落行被唯一索引拒绝（写路径幂等由 findFirst+create 保证，
+    // 索引兜底防手写竞态）
     expect(() =>
       db.exec(
-        "INSERT INTO toolPermission (workspaceId, toolName) VALUES (1, 'write')",
+        `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')`,
       ),
     ).toThrow();
+    // lastUsedAt 缺省 NULL（落行后从未命中）
+    expect(
+      db.prepare("SELECT lastUsedAt FROM toolPermission WHERE id = 1").get(),
+    ).toEqual({ lastUsedAt: null });
+    // 新三列唯一索引在场，旧两列索引已替换
+    expect(indexesOf(db, "toolPermission")).toContain(
+      "idx_tool_permission_ws_tool_pattern",
+    );
+    expect(indexesOf(db, "toolPermission")).not.toContain(
+      "idx_tool_permission_ws_tool",
+    );
   });
 });

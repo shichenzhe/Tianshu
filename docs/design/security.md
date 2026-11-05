@@ -391,7 +391,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 
 **P1-2 OS 级沙箱引入**（遗留 #8）：macOS 走 sandbox-exec 模板（网络白名单 + 工作空间写白名单，Claude Code 同构）、Linux 走 Landlock（kernel 5.13+）；落地路径为 bash 工具 execute 处按平台包一层 sandbox 启动器，NetworkGate 的代理 env 继续生效；win32 维持现状并诚实声明。
 
-**P1-3 审批面细粒度化**：toolPermission 记忆粒度当前是 workspace×toolName——bash 无参数前缀记忆（Claude Code `Bash(git push:*)` 同款）、write 无路径 glob 记忆；cmdAllow 已有 prefix 规则可复用其数据结构，审批横幅「始终允许」下拉带出参数前缀选项。
+**P1-3 审批面细粒度化**：~~toolPermission 记忆粒度当前是 workspace×toolName——bash 无参数前缀记忆（Claude Code `Bash(git push:*)` 同款）、write 无路径 glob 记忆；cmdAllow 已有 prefix 规则可复用其数据结构，审批横幅「始终允许」下拉带出参数前缀选项。~~ ✅ 已落地（2026-11-05，skills-tools-mcp §6-6 同批）：`toolPermission` 加 `pattern`（参数级记忆——bash 前缀 `git *` / write·rm 路径 glob `src/**`，null = 整工具旧全等语义）与 `lastUsedAt`（命中回写）两列；命中判定单源 `@tianshu/core` `matchPermissionPattern`——复用 cmdAllow prefix 数据结构并**加 shell 元字符守卫**（管道/分号/条件链/重定向/命令替换不命中，`git *` 不覆盖 `git push; rm -rf /`——持久放宽面比 cmdAllow 更严）；记忆抑制限 ask 级来源，危险分级/批量删除/黑名单硬线永不受抑；审批横幅下拉带参数前缀选项（`suggestRememberPattern` 同源建议）；安全中心 90 天未用提示 + 工作空间维度统计；双端 schema（desktop v1 快照直改 + server 迁移 4_ 成对 + ensure 幂等补列）与契约（ApproveParams.pattern / PermissionRememberedItem.pattern·lastUsedAt）同步。
 
 **P2-1 server 部署面 TLS 强制**：~~`listen-host.ts` 非 loopback 监听时若 relay 未配 TLS 且无反代头标识，启动告警/可配拒绝（对齐 TIANSHU_TOKEN「非 loopback 无 token 拒绝启动」先例）。~~ ✅ 告警形态已落地（2026-11-05，只告警不拒绝）：`listen-host.ts` `emitNonLoopbackTlsWarning`——非 loopback 监听且 relay 客户端 URL 非 wss:// 且无反代终止声明时启动告警（[安全告警] 前缀 + 指引配置面，TIANSHU_TOKEN 告警同形态）；豁免标识 `config app.tlsBehindProxy: true` / env `TIANSHU_TLS_PROXY=1`（本 HTTP 面无原生 TLS 通道，强制拒绝会拦死合法明文内网部署，故收敛为告警；main.ts 启动期接线，relay 解析前置）。可配拒绝留待需要时再加。
 

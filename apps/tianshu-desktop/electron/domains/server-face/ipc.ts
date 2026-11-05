@@ -473,6 +473,7 @@ export function attachServerFace(deps: {
         userId,
         remember,
         toolName,
+        pattern,
       ) =>
         deps.chatService.respondApprovalRemember(
           sessionId,
@@ -481,6 +482,7 @@ export function attachServerFace(deps: {
           userId,
           remember,
           toolName,
+          pattern,
         ),
     },
     providers: createProvidersFace({

@@ -185,15 +185,24 @@ export default class ChatApi {
     toolCallId: string,
     approved: boolean,
     rememberToolName?: string,
+    /** 参数级审批批：下拉「始终允许」前缀选项的 pattern（仅远程分支
+     *  随 remember 上送；本地走 rememberTool IPC 两步带 pattern） */
+    rememberPattern?: string,
   ): Promise<void> {
     return routeInvoke(
       { ch: "agent:approve", args: [toolCallId, approved] },
       (connId) =>
         // 无 remember 保持原四参形状（既有路由测试断言零扰动）
         rememberToolName != null
-          ? ServerApi.approveSession(connId, sessionId, toolCallId, approved, {
-              toolName: rememberToolName,
-            })
+          ? ServerApi.approveSession(
+              connId,
+              sessionId,
+              toolCallId,
+              approved,
+              rememberPattern != null
+                ? { toolName: rememberToolName, pattern: rememberPattern }
+                : { toolName: rememberToolName },
+            )
           : ServerApi.approveSession(connId, sessionId, toolCallId, approved),
     );
   }
@@ -252,12 +261,20 @@ export default class ChatApi {
     );
   }
 
-  /** 工作空间级工具记忆（P4，参照 Claude Code allowed-tools）：记住后免审 */
+  /** 工作空间级工具记忆（P4，参照 Claude Code allowed-tools）：记住后免审；
+   *  pattern（参数级审批批）可选——bash 命令前缀（`git *`）/ write·rm
+   *  路径 glob（`src/**`），缺席 = 整工具记忆 */
   static async rememberTool(
     workspaceId: number,
     toolName: string,
+    pattern?: string,
   ): Promise<void> {
-    return invoke<void>("permission:rememberTool", workspaceId, toolName);
+    return invoke<void>(
+      "permission:rememberTool",
+      workspaceId,
+      toolName,
+      pattern,
+    );
   }
 
   /** 已记忆工具清单（工作空间级） */

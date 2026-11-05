@@ -48,6 +48,7 @@ import { runChatStream } from '../../core/chat-runner.service';
 import { normalizeWorkspacePath } from '../../core/tools/workspace-path';
 import {
   classifyError,
+  isRememberedPermission,
   recordLlmCall,
   recordToolCall,
   serializeBlocks,
@@ -426,22 +427,18 @@ async function streamAndRecord(
       modelId: task.modelId,
       // 权限按任务持久化 accessMode 分流(spec §2.3)，不再无条件放行；
       // F3：toolPermission 查表（工作空间级 remembered 免审——chat 链
-      // 审批记忆批同款；default 任务命中记忆即跳审批，full 语义不变）
+      // 审批记忆批同款；default 任务命中记忆即跳审批，full 语义不变）。
+      // 参数级审批批（批7 security P1-3）：查表/匹配/lastUsedAt 回写单源
+      // isRememberedPermission（pattern 行参数级匹配，无 pattern 行旧全等语义）
       ...resolveAutomationPermissions(
         task.accessMode === 'full' ? 'full' : 'default',
-        async (toolName: string) => {
-          const row = await graphExecutorRuntime().db.toolPermission.findUnique(
-            {
-              where: {
-                workspaceId_toolName: {
-                  workspaceId: task.workspaceId,
-                  toolName,
-                },
-              },
-            },
-          );
-          return row != null;
-        },
+        (toolName: string, input?: unknown) =>
+          isRememberedPermission(
+            graphExecutorRuntime().db,
+            task.workspaceId,
+            toolName,
+            input,
+          ),
       ),
       // 监控埋点（MO 批；mirror 同位）：终态工具事件 fire-and-forget
       toolStats: (e) =>

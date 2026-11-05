@@ -22,6 +22,22 @@ export class PermissionRememberedWireDto implements PermissionRememberedItem {
 
   @ApiProperty({ description: '记住时间（ISO）' })
   createdAt: string;
+
+  @ApiProperty({
+    description: '参数级 pattern（null = 整工具记忆；批7 参数级审批批）',
+    required: false,
+    nullable: true,
+    type: String,
+  })
+  pattern?: string | null;
+
+  @ApiProperty({
+    description: '最近一次命中 ISO（null = 落行后从未命中）',
+    required: false,
+    nullable: true,
+    type: String,
+  })
+  lastUsedAt?: string | null;
 }
 
 /** 完全授权行（会话级运行态——{sessionId, title} 最小公共形状） */

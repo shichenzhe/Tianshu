@@ -7,6 +7,16 @@
 export const SKILL_SCENARIOS = ["daily", "coding", "design"] as const;
 export type SkillScenario = (typeof SKILL_SCENARIOS)[number];
 
+/**
+ * SKILL.md frontmatter 可选 `tools` 声明的值域（per-skill 工具声明批，
+ * skills-tools-mcp §6-1）：技能挂载（进入会话技能清单）时附加注入对应
+ * 工具组——「技能即开关」泛化（WORKFLOW_CREATOR_SKILL_NAME 三信号先例）。
+ * 值域三端单份；frontmatter 写法为逗号/空格分隔（`tools: workflow`、
+ `tools: workflow, expert`），未知组名静默忽略。
+ */
+export const SKILL_TOOL_GROUPS = ["workflow", "expert"] as const;
+export type SkillToolGroup = (typeof SKILL_TOOL_GROUPS)[number];
+
 /** skills/query 增量扩展（RemoteSkillBrief 增补可选段——既有消费方不受影响） */
 export interface SkillBriefExtension {
   scenarios?: SkillScenario[];

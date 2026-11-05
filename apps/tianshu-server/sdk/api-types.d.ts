@@ -2050,6 +2050,8 @@ export interface components {
             remember?: boolean;
             /** @description remember 时上送的 pending 工具名（记忆写行用） */
             toolName?: string;
+            /** @description 参数级 pattern（批7 security P1-3）：bash 前缀 `git *` / 路径 glob `src/**`，缺席 = 整工具记忆；命中判定 @tianshu/core matchPermissionPattern */
+            pattern?: string;
         };
         SessionUpdateDto: {
             /** @description 会话标识 */
@@ -2718,6 +2720,10 @@ export interface components {
             toolName: string;
             /** @description 记住时间（ISO） */
             createdAt: string;
+            /** @description 参数级 pattern（null = 整工具记忆；批7 参数级审批批） */
+            pattern?: string | null;
+            /** @description 最近一次命中 ISO（null = 落行后从未命中） */
+            lastUsedAt?: string | null;
         };
         PermissionFullGrantWireDto: {
             /** @description 会话标识 */

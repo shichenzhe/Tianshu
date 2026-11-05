@@ -61,8 +61,13 @@ export interface AgentStreamOptions {
   /** 工作空间级工具记忆：命中跳过审批直执行；每次 write 判定前查询。
    *  F3（2026-10-29）：chat 链查 toolPermission 表（session/approve
    *  remember 写入）；automation/graph 任务链经
-   *  resolveAutomationPermissions 注入同款查表，缺席装配恒 false */
-  isToolAllowed: (toolName: string) => Promise<boolean>;
+   *  resolveAutomationPermissions 注入同款查表，缺席装配恒 false。
+   *  参数级审批批（security P1-3，mirror 同批）：input 随调用透传——
+   *  pattern 行经 matchPermissionPattern（@tianshu/core 单源）参数级
+   *  匹配，无 pattern 行为旧全等语义；命中行 lastUsedAt 由装配实现
+   *  fire-and-forget 回写。旧签名 `(toolName) => boolean` 的实现/桩
+   *  对新增可选参天然兼容 */
+  isToolAllowed: (toolName: string, input?: unknown) => Promise<boolean>;
   /** 挂起等待审批决议（relay 应答注入）；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
   /** 无应答方裁定（T7）：true 时需审批操作不挂起，直接以
@@ -567,7 +572,7 @@ export async function runToolCall(
   // write 兜底收窄（权限放宽 spec §4.4）：普通命令/write/DB 写/网络
   // 域免审，只剩其余 write（rm 等）的记忆或审批；fullAccess 提至
   // 外层与 mirror 3c 同构（bulk/ask/block 询问面 full 全豁免）
-  const writeFallbackNeedsApproval =
+  const writeFallbackBase =
     gate !== 'allow' &&
     fileGateDecision !== 'allow' &&
     def.kind === 'write' &&
@@ -583,8 +588,18 @@ export async function runToolCall(
     def.name !== 'write' &&
     // bash 兜底审批移除（spec §4.4）：危险面已由分级表前置捕获，
     // gate 为 allow/default 直执行——审批面只剩 ask 源
-    def.name !== 'bash' &&
-    !(await agent.isToolAllowed(def.name));
+    def.name !== 'bash';
+  // 记忆查表点（参数级审批批 security P1-3，mirror 同批）：write 兜底面
+  // 与 ask 级来源（cmdAsk ask / 文件门 block）共用的单次懒查询——命中
+  // 工作空间记忆（pattern 行参数级匹配，无 pattern 行旧全等语义）即免审；
+  // 硬线（危险分级/批量删除/程序黑名单/危险工具门）永不被记忆抑制。
+  // 查询保持懒：无 ask 来源且 write 兜底面不成立时不触表
+  const askLevelActive =
+    def.kind === 'write' && (gate === 'ask' || fileGateDecision === 'block');
+  const remembered =
+    (writeFallbackBase || askLevelActive) &&
+    (await agent.isToolAllowed(def.name, input));
+  const writeFallbackNeedsApproval = writeFallbackBase && !remembered;
   const needsApproval =
     // 危险分级（spec §4.5）：先于 fullAccess 短路——full 也审
     commandRisk !== null ||
@@ -593,9 +608,10 @@ export async function runToolCall(
     // 危险工具门不受档位影响照常强拒）
     (!agent.fullAccess() &&
       (bulkEstimate !== null ||
-        gate === 'ask' ||
-        fileGateDecision === 'block' ||
-        writeFallbackNeedsApproval));
+        (!remembered &&
+          (gate === 'ask' ||
+            fileGateDecision === 'block' ||
+            writeFallbackNeedsApproval))));
   if (needsApproval) {
     // T7 无头裁定：无应答方不挂起（挂起=永久悬挂），denied chunk 提示 config 放行
     if (agent.autoDenyApprovals) {

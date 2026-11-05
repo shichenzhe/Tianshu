@@ -13,7 +13,7 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     model: { findUnique: vi.fn() },
     provider: { findUnique: vi.fn() },
     // 审批记忆查表（2026-11-01 审查批）：rememberedToolOf 消费
-    toolPermission: { findUnique: vi.fn(async () => null) },
+    toolPermission: { findMany: vi.fn(async () => []) },
     // 子系统 E：项目指令查询（全局任务不触达，项目任务按需 stub）
     project: { findUnique: vi.fn() },
     session: { create: vi.fn(), update: vi.fn() },

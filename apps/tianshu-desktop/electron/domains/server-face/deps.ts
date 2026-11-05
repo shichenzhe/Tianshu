@@ -218,6 +218,8 @@ export interface ServerFaceChat {
     userId: number,
     remember: boolean,
     toolName: string | null,
+    /** 参数级审批批（security P1-3）：pattern 可选——落参数级记忆行 */
+    pattern?: string | null,
   ): Promise<{ hit: boolean; remembered: boolean }>;
   /** A10 审批记忆面数据源（ChatService 五方法 A10 批提 public；归属过滤/
    *  单条幂等 no-op 语义内聚 service——permission-tap 只信封 DTO） */
@@ -240,6 +242,8 @@ export interface ServerFaceApprovals {
     userId: number,
     remember: boolean,
     toolName: string | null,
+    /** 参数级审批批（security P1-3）：pattern 可选——落参数级记忆行 */
+    pattern?: string | null,
   ): Promise<{ hit: boolean; remembered: boolean }>;
 }
 

@@ -125,6 +125,28 @@ export default function SystemGrantCard() {
       .catch(onRevokeFailed);
   };
 
+  // —— 记忆治理（skills-tools-mcp §6-5）：工作空间维度量统计 + 90 天
+  // 未用提示（lastUsedAt 缺席回落 createdAt——落行后从未命中的行以记住
+  // 时间计龄；提示清理，逐行撤销即清理入口）
+  const STALE_DAYS = 90;
+  const staleCutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
+  const lastUsedMsOf = (row: RememberedGrantRow) =>
+    Date.parse(row.lastUsedAt ?? row.createdAt);
+  const staleRows = remembered.filter(
+    (row) => lastUsedMsOf(row) < staleCutoff,
+  );
+  const workspaceCounts = remembered.reduce<Map<string, number>>((acc, row) => {
+    acc.set(row.workspaceName, (acc.get(row.workspaceName) ?? 0) + 1);
+    return acc;
+  }, new Map());
+  const statsText = t("security:systemGrant.rememberedStats", {
+    count: remembered.length,
+    workspaces: workspaceCounts.size,
+  });
+  const workspaceBreakdown = [...workspaceCounts.entries()]
+    .map(([name, count]) => `${name} (${count})`)
+    .join(" · ");
+
   return (
     <div className="space-y-5">
       <p className="text-xs text-muted-foreground">
@@ -172,6 +194,20 @@ export default function SystemGrantCard() {
           <p className="text-xs text-muted-foreground">
             {t("security:systemGrant.rememberedDesc")}
           </p>
+          {remembered.length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {statsText}
+              {workspaceBreakdown && ` · ${workspaceBreakdown}`}
+            </p>
+          )}
+          {staleRows.length > 0 && (
+            <p className="mt-1 text-xs text-primary">
+              {t("security:systemGrant.staleHint", {
+                count: staleRows.length,
+                days: STALE_DAYS,
+              })}
+            </p>
+          )}
         </div>
         <div className="divide-y divide-border/50">
           {remembered.length === 0 ? (
@@ -179,26 +215,44 @@ export default function SystemGrantCard() {
               {t("security:systemGrant.emptyRemembered")}
             </p>
           ) : (
-            remembered.map((row) => (
-              <div key={row.id} className="flex items-center gap-2 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  {row.workspaceName}
-                </span>
-                <span className="shrink-0 font-mono text-xs">
-                  {row.toolName}
-                </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {format(new Date(row.createdAt), "yyyy/M/d HH:mm:ss")}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => revokeRemembered(row.id)}
-                >
-                  {t("security:systemGrant.revoke")}
-                </Button>
-              </div>
-            ))
+            remembered.map((row) => {
+              const stale = lastUsedMsOf(row) < staleCutoff;
+              return (
+                <div key={row.id} className="flex items-center gap-2 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {row.workspaceName}
+                  </span>
+                  <span className="shrink-0 font-mono text-xs">
+                    {row.pattern != null
+                      ? `${row.toolName}: ${row.pattern}`
+                      : row.toolName}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {format(
+                      new Date(row.lastUsedAt ?? row.createdAt),
+                      "yyyy/M/d HH:mm:ss",
+                    )}
+                  </span>
+                  {stale && (
+                    <Badge
+                      variant="outline"
+                      className="shrink-0 border-primary/30 text-[10px] text-primary"
+                    >
+                      {t("security:systemGrant.staleBadge", {
+                        days: STALE_DAYS,
+                      })}
+                    </Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => revokeRemembered(row.id)}
+                  >
+                    {t("security:systemGrant.revoke")}
+                  </Button>
+                </div>
+              );
+            })
           )}
         </div>
         <div className="flex justify-end">

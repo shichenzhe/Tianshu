@@ -95,6 +95,8 @@ export class SessionService {
       dto.approved,
       remember,
       dto.toolName ?? null,
+      // 参数级审批批（批7）：下拉「始终允许」前缀选项随载荷上送
+      dto.pattern ?? null,
     );
     if (!r.hit) {
       throw new BusinessException(

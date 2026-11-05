@@ -208,7 +208,10 @@
       "update": "流转状态: #{{id}} → {{status}}",
       "append": "追加进展: {{text}}",
       "list": "列出任务 {{count}} 项"
-    }
+    },
+    "approveRememberPrefix": "始终允许（{{pattern}}）",
+    "approveRememberWhole": "始终允许整个工具（{{toolName}}）",
+    "approveRememberMore": "更多记住选项"
   },
   "permission": {
     "default": "默认权限",

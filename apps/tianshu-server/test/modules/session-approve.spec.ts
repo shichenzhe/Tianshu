@@ -78,7 +78,8 @@ describe('POST /session/approve (e2e)', () => {
     expect(body.code).toBe('2000');
     expect(body.success).toBe(true);
     expect(body.data).toEqual({ responded: true, remembered: false });
-    expect(approveStub).toHaveBeenCalledWith(1, 'tc-x', true, false, null);
+    // 批7 参数级审批批：pattern 第 6 参随载荷透传（缺席 null = 整工具记忆）
+    expect(approveStub).toHaveBeenCalledWith(1, 'tc-x', true, false, null, null);
   });
 
   it('remember+toolName 透传：remembered 随真值返回', async () => {
@@ -101,6 +102,7 @@ describe('POST /session/approve (e2e)', () => {
       true,
       true,
       'write',
+      null,
     );
   });
 

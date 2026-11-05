@@ -70,21 +70,41 @@ describe('ChatRunnerService run', () => {
       where: { id: session.id },
       select: { workspaceId: true },
     });
-    const row = await db.prisma.toolPermission.findUnique({
+    // 批7 参数级审批批：复合唯一扩含 pattern（可空列 NULL 互异不可用
+    // findUnique——findFirst 断言，与写路径同形态）
+    const row = await db.prisma.toolPermission.findFirst({
       where: {
-        workspaceId_toolName: {
-          workspaceId: sessionRow!.workspaceId,
-          toolName: 'write',
-        },
+        workspaceId: sessionRow!.workspaceId,
+        toolName: 'write',
+        pattern: null,
       },
     });
     expect(row).not.toBeNull();
     // pending 被 resolve 为批准
     await expect(pending).resolves.toBe(true);
-    // isToolAllowed 查表：记忆工具免审、未记忆仍审批
+    // isToolAllowed 查表：记忆工具免审、未记忆仍审批（无 pattern 行 =
+    // 旧全等语义，任意参数命中）
     const ctx = await internals.assembleContext(session.id, 1);
     await expect(ctx.agent.isToolAllowed('write')).resolves.toBe(true);
     await expect(ctx.agent.isToolAllowed('bash')).resolves.toBe(false);
+    // 参数级 pattern 行：bash `git *` 命中 git push 不命中 npm（批7）
+    await db.prisma.toolPermission.create({
+      data: {
+        workspaceId: sessionRow!.workspaceId,
+        toolName: 'bash',
+        pattern: 'git *',
+      },
+    });
+    await expect(
+      ctx.agent.isToolAllowed('bash', { command: 'git push' }),
+    ).resolves.toBe(true);
+    await expect(
+      ctx.agent.isToolAllowed('bash', { command: 'npm install' }),
+    ).resolves.toBe(false);
+    // 危险链不命中（安全红线：`git *` 不覆盖 `git fetch; rm -rf /`）
+    await expect(
+      ctx.agent.isToolAllowed('bash', { command: 'git fetch; rm -rf /' }),
+    ).resolves.toBe(false);
   });
 
   it('纯文本轮：chunks 顺序 text-delta…finish 收尾，双消息落库（usage 块收尾）', async () => {

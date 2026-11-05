@@ -174,6 +174,12 @@ export interface ApproveParams {
   /** remember 时由控制端上送的 pending 工具名（token 全权语义下可接受；
    *  被控端仍校验会话归属，写行落会话所属工作空间） */
   toolName?: string;
+  /**
+   * remember 时可选上送的参数级 pattern（审批参数级批）：bash 命令前缀
+   * （`git *`）/ write·rm 路径 glob（`src/**`）；缺席 = 整工具记忆。
+   * 命中判定单源 @tianshu/core matchPermissionPattern。
+   */
+  pattern?: string;
 }
 
 /** 图片读取响应（移动端 spec §4.2）：base64 单一形态，direct/relay 同构 */

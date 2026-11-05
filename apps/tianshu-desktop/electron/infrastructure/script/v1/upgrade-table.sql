@@ -203,11 +203,13 @@ CREATE TABLE IF NOT EXISTS toolPermission (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     workspaceId INTEGER NOT NULL,
     toolName TEXT NOT NULL,
-    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    pattern TEXT NULL,
+    createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    lastUsedAt DATETIME NULL
 );
 
 --/ignore
-CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_permission_ws_tool ON toolPermission (workspaceId, toolName);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_tool_permission_ws_tool_pattern ON toolPermission (workspaceId, toolName, pattern);
 
 --/p 新建技能安装记录表（P-A 技能管理：目录为文件源、DB 为状态源，自愈对账；scenarios 为场景标签 JSON 数组，如 ["daily","coding"]，null = 未打标）
 CREATE TABLE IF NOT EXISTS skillRecord (

@@ -102,12 +102,14 @@ model mcpServer {           // schema.prisma:159
   @@index([userId], map: "mcpServer_userId_index")
 }
 
-model toolPermission {      // schema.prisma:176 —— 工作空间级「已记住」清单
+model toolPermission {      // schema.prisma:185 —— 工作空间级「已记住」清单
   id          Int      @id @default(autoincrement())
   workspaceId Int
   toolName    String          // 存老名（read_file 等），禁用语义跨改名延续
+  pattern     String?         // 参数级记忆（§6-6 批）：bash 前缀 `git *` / 路径 glob `src/**`；null = 整工具旧全等语义
   createdAt   DateTime @default(now())
-  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+  lastUsedAt  DateTime?       // 命中回写（§6-5 批）：fire-and-forget；null = 从未命中
+  @@unique([workspaceId, toolName, pattern], map: "idx_tool_permission_ws_tool_pattern")
 }
 ```
 
@@ -136,7 +138,7 @@ model toolCallEvent {  // schema.prisma:496
 
 ### 3.1 技能发现与注入
 
-**磁盘格式（Claude Code SKILL.md 子集）**：每个技能 = 技能根下一个子目录，内含 `SKILL.md`；frontmatter 为 `---` 包裹的简易键值，**只解析 `name` 与 `description` 两个字段**（无 args 等扩展），缺一即跳过该技能。格式示例：
+**磁盘格式（Claude Code SKILL.md 子集）**：每个技能 = 技能根下一个子目录，内含 `SKILL.md`；frontmatter 为 `---` 包裹的简易键值，解析 `name`、`description` 两必填字段（缺一即跳过该技能）与可选 `tools` 声明（per-skill 工具面声明批 §6-1：逗号/空格分隔工具组名，值域 @tianshu/protocol SKILL_TOOL_GROUPS）。格式示例：
 
 ```markdown
 ---
@@ -146,7 +148,7 @@ description: 查询与创建公司内部 Jira 任务单
 （正文为使用指引，read_skill 按需读取）
 ```
 
-解析器 `agent/skill-loader.ts:36` `parseFrontmatter(raw)`；性能优化 `readHead()`（`FRONTMATTER_PEEK_BYTES = 4096`）只读文件头 4KB 探 frontmatter，畸形未闭合回退全读。扫描入口 `loadSkills(dirs: Array<{dir, source}>)`（skill-loader.ts:89）返回 `SkillInfo {name, description, dir, bodyPath, source}`，跳过点前缀隐藏目录（`.staging-*` 残留防幽灵技能）。技能根解析：`electron/commons/paths.ts:48` `skillsDir()` = `appDataDir("skills")` → `~/.tianshu/<分组>/skills`（数据根优先级 `TIANSHU_DATA_ROOT` 环境变量 > `data-root.json` 自定义 > 默认 `~/.tianshu`）；绑定工作目录的会话追加 `<工作区>/.tianshu/skills`（workspace 级技能）。
+解析器 `agent/skill-loader.ts` `parseFrontmatter(raw)`（server 移植对同源，drift 对 agent-skill-loader）；性能优化 `readHead()`（`FRONTMATTER_PEEK_BYTES = 4096`）只读文件头 4KB 探 frontmatter，畸形未闭合回退全读。扫描入口 `loadSkills(dirs: Array<{dir, source}>)`（skill-loader.ts:89）返回 `SkillInfo {name, description, dir, bodyPath, source}`，跳过点前缀隐藏目录（`.staging-*` 残留防幽灵技能）。技能根解析：`electron/commons/paths.ts:48` `skillsDir()` = `appDataDir("skills")` → `~/.tianshu/<分组>/skills`（数据根优先级 `TIANSHU_DATA_ROOT` 环境变量 > `data-root.json` 自定义 > 默认 `~/.tianshu`）；绑定工作目录的会话追加 `<工作区>/.tianshu/skills`（workspace 级技能）。
 
 **每 send 重扫（无缓存）**：调用链 `chat.service.ts send() → streamAndPersist() → assembleContext()`（约 2178 行）→ `collectEnabledSkills`（1901）→ `collectSkills`（1888）→ `loadSkills(dirs)`——注释明确「每次 send 现算、无缓存——增删技能免重启生效」。与 WorkBuddy 的 watcher（rename 立即/change 防抖 3s）+ 8min lazy 兜底相反，天枢选择每轮全扫：技能量级小、4KB peek 成本低，换来零状态机、零 watcher 生命周期管理。同构副本：`orchestration/graph-executor.ts` `loadRunSkills`（图运行节点技能面）、`automation/resolve-attachments.ts`（定时任务附件解析）。
 
@@ -254,7 +256,7 @@ list_workflows / get_workflow: "workflow_read",
 
 **生命周期**：`McpManager`（依赖注入 `createClient`/`prisma` 工厂，单测可换 fake）连接 → `listTools` → 以 `toolPrefix(serverName) = "mcp__<server>__"` 注册进 tool-registry；状态机 `McpServerState = "connecting" | "connected" | "error" | "disabled"`，`McpServerStatus {id, name, state, toolCount, deferred, error?}`。`ServerRecord.generation` 代际计数：connect 开始与 `setEnabled(false)` 各自递增，挂起的 connect 在 await 恢复后核对代际不符即整体丢弃结果（I1 竞态守卫）。重连/停用经 `unregisterTools(prefix)` 清旧注册。
 
-**工具面预算折叠**（2026-11-01 批）：`MCP_TOOL_SURFACE_BUDGET_TOKENS = 4000`（`estimateTokens` 1token≈2 字符口径，与 `context-usage.ts toolDefinitionTokens` 同源）。依据实测：22 工具 HTTP MCP ≈12K 字符 ≈6K token/每轮；超线 server 折叠为 `mcp__<server>__list_tools/call_tool` 两聚合工具——引擎（langgraph）工具集静态绑定不支持动态挂载，defer 必须在注册层完成。`list_tools` 返回全工具目录（schema 仅在模型查询时进上下文——与专家目录出 system 批同构的渐进披露）；`call_tool` 按目录转发并白名单校验（目标工具不在目录即报错引导先 list），kind 恒 write 保守走审批（目标工具只读性运行时未知）。直接注册时 `tool.annotations?.readOnlyHint === true ? "read" : "write"` 定读写面（readOnlyHint 缺失按 write）。
+**工具面预算折叠**（2026-11-01 批；2026-11-05 会话级自适应 §6-3：静态线为注册层基准，会话装配层经 `@tianshu/core surfaceBudgetFor(contextWindow)` 动态调线——`adaptiveDefinitions` 按会话窗口 unfold/折叠，chat 三调用点消费）：`MCP_TOOL_SURFACE_BUDGET_TOKENS = 4000`（core 单源；`estimateTokens` 1token≈2 字符口径，与 `context-usage.ts toolDefinitionTokens` 同源）。依据实测：22 工具 HTTP MCP ≈12K 字符 ≈6K token/每轮；超线 server 折叠为 `mcp__<server>__list_tools/call_tool` 两聚合工具——引擎（langgraph）工具集静态绑定不支持动态挂载，defer 必须在注册层完成。`list_tools` 返回全工具目录（schema 仅在模型查询时进上下文——与专家目录出 system 批同构的渐进披露）；`call_tool` 按目录转发并白名单校验（目标工具不在目录即报错引导先 list），kind 恒 write 保守走审批（目标工具只读性运行时未知）。直接注册时 `tool.annotations?.readOnlyHint === true ? "read" : "write"` 定读写面（readOnlyHint 缺失按 write）。
 
 **权限面**：`NETWORK_TOOL_NAMES`（fetch/browse/browser 四件）+ `mcp__` 前缀整体免审（2026-10-24 裁定——注入本就来自 enabled server，「已启用的连接器」语义天然成立）；`toolPermission` 记忆（工作空间级）对 MCP 同样生效（DB 行 toolName 存 `mcp__server__tool` 全名）；完全访问（full 档）直执行（含 MCP）。
 
@@ -344,12 +346,12 @@ list_workflows / get_workflow: "workflow_read",
 
 以下均为可落地项（不含 stdio MCP 写面——已裁定不做）：
 
-1. **技能 per-skill 工具面声明**：SKILL.md frontmatter 增可选 `tools` 字段（挂载该技能时附加注入对应工具组），对齐 Claude Code `allowed-tools`；现工作流组挂载已具备「技能即开关」语义（`WORKFLOW_CREATOR_SKILL_NAME` 三信号），可把该机制泛化为 frontmatter 声明驱动。改动集中：`skill-loader.ts`（解析新字段）+ `tool-groups.ts`（挂载信号源）+ `chat.service.ts` 装配；协议面 `SkillInfo` 加可选列（增量兼容）。
+1. ✅ **技能 per-skill 工具面声明**（2026-11-05 落地）：SKILL.md frontmatter 可选 `tools` 字段（逗号/空格分隔，值域 `workflow` / `expert`——`@tianshu/protocol` `SKILL_TOOL_GROUPS` 三端单份，未知组名静默忽略）；挂载技能（进入会话 system 清单集——含专家附带/项目收窄后的 sessionSkills）声明并集驱动工具组挂载。`skill-loader.ts`（desktop + server 移植对同改，drift 对 agent-skill-loader）解析新字段原样透出（值域过滤在门控层收口，loader 保持零依赖）；`tool-groups.ts` 增 `skillDeclaredGroups`（声明并集）+ `ToolGroupGate.skillGroups`（`isWorkflowGroupAllowed`/专家门同口径消费）；`chat.service assembleContext` 装配；server `chat-runner workflowTools` 轻量复刻同语义（`skill.tools` 含 `workflow` 同开门）。内置 workflow-creator 不声明（builtin 恒启用，声明式会让门恒开——三信号特判保留）。护栏：桌面 `tests/ai/skill-tools.test.ts`（解析/并集/门控/零漂移）。
 2. **技能市场安全分级自动化**：`SkillHubSecurityStatus`（benign/caution/unknown）目前是远端静态标注；可加本地静态扫描——SKILL.md 正文敏感指令模式（诱导读取凭据/危险命令的措辞）+ 包内文件构成检测（`skill-archive.ts` 已有可执行扩展拒绝基础），install 前复检并与远端标注取严，结果进安装确认弹窗。
-3. **MCP 工具面折叠的会话级自适应**：`MCP_TOOL_SURFACE_BUDGET_TOKENS = 4000` 是全局静态线；可按会话 contextWindow（`context-usage.ts` 已有 token 估算面）动态调线——小窗模型更激进折叠、大窗模型保直注体验；折叠判定输入增 modelContextWindow 一维即可，注册逻辑不动。
+3. ✅ **MCP 工具面折叠的会话级自适应**（2026-11-05 落地）：折叠判定输入增 modelContextWindow 一维，注册逻辑不动（连接时点静态线折叠/直注照旧，graph/automation 等其余消费面维持静态线）。实现：`@tianshu/core` `surfaceBudgetFor(contextWindow)` 纯函数单源（128K=4000 与静态线重合零漂移、32K=1000 激进折叠、≥262K=8000 封顶、非法输入回落静态线）；`McpManager` 连接成功后留存 `surfaceTokens/directDefs/mcpTools`，新 `adaptiveDefinitions(contextWindow)` 按会话窗口产出 MCP 工具面（大窗 unfold 直注/小窗折叠两跳）；`chat.service collectToolDefinitions`（send/usage/probe 三调用点）以自适应面替换 registry 的 `mcp__` 前缀面（未装配 manager 回落 registry 静态面——测试/局部装配零扰动；manager 经 `installMcpAdaptiveSource` 模块级装配，commandGate install 先例）。护栏：core `mcp-surface-budget.test.ts` 边界 + 桌面 `mcp-manager.test.ts` 自适应四例 + `mcp-adaptive.test.ts` 装配接线。
 4. **MCP 健康巡检**：`McpServerStatus` 只有连接时点状态，无周期探活——server 半死（TCP 活、MCP 死）要等首次调用失败才暴露，且失败后不自愈。可在 `mcp-manager.ts` 加低频 listTools 探活（复用 generation 守卫防与用户操作竞态；指数退避），状态变化推 `mcpServer:statuses` 事件（现轮询改订阅可选）。
-5. **toolPermission 记忆的过期与审计面**：记忆条目目前无过期与使用计数（`createdAt` 后永久有效），长期授权面只增不减；可加 `lastUsedAt` 回写（`runToolCall` 记忆直执行分支顺手埋点，fire-and-forget 同款）+ 安全中心按「90 天未用」提示清理，附带按工作空间维度的记忆量统计。
-6. **审批粒度从工具级到参数级**：`resolveBulkDelete` 已是参数级先例（rm 目录预估）；可把「write 限路径前缀」「bash 限命令前缀」纳入记忆形态——`toolPermission` 行增可选 pattern 列（如 `bash:git *`、`write:src/**`），`runToolCall` 记忆命中判定从全等改为模式匹配，对齐 Claude Code allowed-tools 规则语法（`Bash(git:*)` 形态）。需同步 `permission-contract.ts` 契约与双端。
+5. ✅ **toolPermission 记忆的过期与审计面**（2026-11-05 落地）：表加 `lastUsedAt`（可空）——`runToolCall` 记忆查表命中行 fire-and-forget 回写（`@tianshu/core` `isRememberedPermission` 单源内聚，chat/automation/graph 三链六处装配同源）；安全中心「工作空间工具记忆」区按 lastUsedAt（缺席回落 createdAt）展示「90 天未用」徽标与清理提示行 + 工作空间维度记忆量统计行（提示清理形态——逐行/全部撤销即清理入口，未加一键清理端点）。
+6. ✅ **审批粒度从工具级到参数级**（2026-11-05 落地）：`toolPermission` 表加可选 `pattern` 列（bash 命令前缀 `git *` / write·rm 路径 glob `src/**`；唯一索引扩含 pattern——同 pattern 拒重、跨 pattern 共存，NULL 互异由写路径 findFirst+create 幂等兜底）。`runToolCall` 记忆命中判定从全等改模式匹配：`@tianshu/core` `matchPermissionPattern(pattern, toolName, args)` 单源——bash 复用 cmdAllow prefix 数据结构（token 前缀）**并加 shell 元字符守卫**（管道/顺序/条件链/重定向/命令替换一律不命中——`git *` 不覆盖 `git push; rm -rf /`，比 cmdAllow 更严：toolPermission 是持久放宽面；cmdAllow allow 仅跳过询问且黑名单/危险分级独立把关）；路径 glob 段级匹配（`*` 不跨 `/`、`**` 跨段、`..` 与绝对路径拒绝）。**保守缺省：无 pattern 行 = 旧全等语义（任意参数命中）**；记忆抑制面限 ask 级来源（cmdAsk/文件门 block/write 兜底），硬线（危险分级/批量删除/程序黑名单）永不被记忆抑制。审批横幅「始终允许」对 bash（命令首 token）/write·rm（所在目录）出参数前缀主选项 + 下拉整工具副项（`suggestRememberPattern` 与匹配同源，含元字符命令不提供选项）；契约 `ApproveParams.pattern` / `PermissionRememberedItem.pattern·lastUsedAt` 双端同步（server session/approve + permission wire DTO/openapi 随批刷新）。schema：desktop v1 快照直改（旧开发库快照指纹变化自动重建）+ server schema/双端成对迁移 4_ + `ensurePermissionPatternColumns` 存量幂等补列。护栏：core `permission-pattern.test.ts`（含防管道注入扩大安全红线钉死）+ 桌面 `permission-pattern-gate.test.ts`（硬线不受抑/热路径不触表/旧签名桩兼容）+ `permissions-integration.test.ts`（send 级 pattern 命中/未命中/lastUsedAt 回写）+ server `chat-runner.spec`（pattern 行参数级判定）+ `ensure-permission-pattern-columns.spec`。
 7. **server 端工具面与桌面 golden 的单源收编**：`core/tools/` 移植副本靠 `check:drift` 容差守护，但 `assessCommandRisk` 危险表等安全语义双份无单测对照断言，分叉即安全漏洞；可把危险表与 FILE_GATE/免审集常量抽 `@tianshu/core` 单源（先例：canonicalToolName/monitor-events 收编），两端各持薄壳。`tool-alias.ts` 头注释已列「名字耦合点清单」可作迁移地图。
 8. ✅ **MCP 调用结果进 monitor 聚合**（2026-11-05 落地）：`toolCallEvent` 已覆盖 MCP（toolName 带 `mcp__` 前缀，`@@index([userId, toolName])` 现成），`monitor-stats.ts` 增 `mcpServerOf` 切 server 段（`mcp__<server>__<tool>` 前缀后首个 `__` 为界）+ `MonitorStats.mcpByServer` 按 server 聚合（次数/成功率/平均延迟，total 降序）——零协议破坏（字段可选，旧端/移动端增量兼容）、零埋点变更，纯读面；桌面监控页新增「MCP 服务」聚合卡（mcpByServer 缺席时整卡不渲染，i18n 双语）；core 单测 `packages/tianshu-core/src/monitor-stats.test.ts` + server 端点 spec 锚 `mcp__github__create_issue` 聚合 + 桌面 MonitorView 渲染测试三端护栏。
 9. **审批卡的会话外聚合入口**：审批挂起发生在会话流内，切走会话即看不见挂起卡（automation/graph 场景尤甚）；可在 monitor 或顶栏加「待审批」聚合角标（数据源 `finalStates` 挂起态或 face 事件总线），点击跳转对应会话。

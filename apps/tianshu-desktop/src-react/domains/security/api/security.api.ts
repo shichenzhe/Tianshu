@@ -67,12 +67,18 @@ export class SecurityApi {
     return invoke<void>("permission:revokeAllFull");
   }
 
+  /** 参数级审批批（security P1-3）：pattern/lastUsedAt 增量可选段——
+   *  与 @tianshu/protocol PermissionRememberedItem 同形 */
   static listRemembered(): Promise<
     Array<{
       id: number;
       workspaceName: string;
       toolName: string;
       createdAt: string;
+      /** 参数级 pattern（null = 整工具记忆） */
+      pattern?: string | null;
+      /** 最近一次命中 ISO（null = 落行后从未命中） */
+      lastUsedAt?: string | null;
     }>
   > {
     return invoke("permission:listRemembered");

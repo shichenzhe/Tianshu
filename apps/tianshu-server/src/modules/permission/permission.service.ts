@@ -38,6 +38,10 @@ export class PermissionService {
       workspaceName: nameById.get(row.workspaceId) ?? `#${row.workspaceId}`,
       toolName: row.toolName,
       createdAt: row.createdAt.toISOString(),
+      // 参数级审批批（批7 security P1-3，mirror 同批）：增量可选段
+      // ——pattern（null = 整工具记忆）/ lastUsedAt（null = 从未命中）
+      pattern: row.pattern,
+      lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     }));
   }
 

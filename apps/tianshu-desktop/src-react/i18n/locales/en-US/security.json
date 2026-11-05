@@ -169,7 +169,11 @@
     "revoke": "Revoke",
     "revokeAll": "Revoke all",
     "revokeAllConfirm": "This revokes all tool memories. Continue?",
-    "revoked": "Revoked"
+    "revoked": "Revoked",
+    "rememberedStats": "{{count}} remembered entries across {{workspaces}} workspaces",
+    "staleHint": "{{count}} entries unused for over {{days}} days — consider revoking them",
+    "staleBadge": "{{days}}d unused",
+    "lastUsedAt": "Last used"
   },
   "runtimeDetail": {
     "title": "Runtime tools",

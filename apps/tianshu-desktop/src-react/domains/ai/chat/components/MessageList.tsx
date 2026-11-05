@@ -459,6 +459,7 @@ export default function MessageList({
                     toolCallId={toolCallId}
                     toolName={tool.toolName}
                     argSummary={argSummary}
+                    args={tool.args}
                     workspaceId={workspaceId}
                     onDecided={noopOnDecided}
                   />

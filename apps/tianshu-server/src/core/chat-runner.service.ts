@@ -47,6 +47,7 @@ import {
   estimateMessageTokens,
   estimateReserveTokens,
   estimateTokens,
+  isRememberedPermission,
   truncateHistory,
   trimHistoryToolOutputs,
   mergeParams,
@@ -814,15 +815,19 @@ export class ChatRunnerService {
   }
 
   /** 审批决议（可选记住——审批记忆批）：remember 且批准且上送 toolName
-   *  时，经会话行取 workspaceId 后先落 toolPermission 记忆（upsert 幂等，
-   *  先落防竞速——本次放行后同工具再触发即命中免审），后 respond；
-   *  会话归属校验由调用方（session.service approve）收口 */
+   *  时，经会话行取 workspaceId 后先落 toolPermission 记忆（findFirst+
+   *  create 幂等——复合唯一含可空 pattern，SQLite/PG NULL 互异不可用
+   *  upsert；先落防竞速——本次放行后同工具再触发即命中免审），后 respond；
+   *  会话归属校验由调用方（session.service approve）收口。
+   *  pattern（参数级审批批批7）：控制端审批横幅下拉的参数前缀选项上送
+   *  ——落参数级记忆行（ApproveParams.pattern）；缺席 = 整工具记忆 */
   async approveRemember(
     sessionId: number,
     toolCallId: string,
     approved: boolean,
     remember: boolean,
     toolName: string | null,
+    pattern?: string | null,
   ): Promise<{ hit: boolean; remembered: boolean }> {
     let remembered = false;
     if (remember && approved && toolName != null && toolName !== '') {
@@ -831,16 +836,29 @@ export class ChatRunnerService {
         select: { workspaceId: true },
       });
       if (session != null) {
-        await this.prisma.toolPermission.upsert({
+        const normalizedPattern =
+          typeof pattern === 'string' && pattern.trim() !== ''
+            ? pattern.trim()
+            : null;
+        const existing = await this.prisma.toolPermission.findFirst({
           where: {
-            workspaceId_toolName: {
+            workspaceId: session.workspaceId,
+            toolName,
+            pattern: normalizedPattern,
+          },
+          select: { id: true },
+        });
+        if (!existing) {
+          await this.prisma.toolPermission.create({
+            data: {
               workspaceId: session.workspaceId,
               toolName,
+              ...(normalizedPattern != null
+                ? { pattern: normalizedPattern }
+                : {}),
             },
-          },
-          update: {},
-          create: { workspaceId: session.workspaceId, toolName },
-        });
+          });
+        }
         remembered = true;
       }
     }
@@ -1319,18 +1337,17 @@ export class ChatRunnerService {
           this.permissions.get(sessionId) === 'full' ||
           config.accessMode === 'auto-approve',
         // 工作空间工具记忆查表（审批记忆批）：session/approve remember
-        // 写入——同空间同工具 write 免审；未记忆恒审批（原安全侧语义）
-        isToolAllowed: async (toolName: string) => {
-          const row = await this.prisma.toolPermission.findUnique({
-            where: {
-              workspaceId_toolName: {
-                workspaceId: session.workspaceId,
-                toolName,
-              },
-            },
-          });
-          return row != null;
-        },
+        // 写入——同空间同工具 write 免审；未记忆恒审批（原安全侧语义）。
+        // 参数级审批批（批7 security P1-3）：查表/匹配/lastUsedAt 回写单源
+        // @tianshu/core isRememberedPermission（pattern 行参数级匹配，
+        // 无 pattern 行旧全等语义；mirror chat.service 同批同源）
+        isToolAllowed: async (toolName: string, input?: unknown) =>
+          isRememberedPermission(
+            this.prisma,
+            session.workspaceId,
+            toolName,
+            input,
+          ),
         // manual 模式挂起等远程应答（session/approve），超时自动 deny
         requestApproval: (toolCallId, argSummary) =>
           config.accessMode === 'auto-approve'
@@ -1437,12 +1454,18 @@ export class ChatRunnerService {
   }
 
   /** 工作流+展示工具门控（mirror tool-groups 轻量复刻；场景值域
-   *  daily/coding/design/automation 按值判定） */
+   *  daily/coding/design/automation 按值判定）。per-skill 工具声明批
+   *  （skills-tools-mcp §6-1）：挂载技能 frontmatter `tools: workflow`
+   *  声明同样开门（mirror skillDeclaredGroups 同语义轻量复刻） */
   private workflowTools(ctx: AssembledContext): ToolDefinition[] {
     const capable =
       ctx.scenario === 'automation' ||
       ctx.scenario === 'coding' ||
-      ctx.skills.some((skill) => skill.name === 'workflow-creator');
+      ctx.skills.some(
+        (skill) =>
+          skill.name === 'workflow-creator' ||
+          (skill.tools ?? []).includes('workflow'),
+      );
     if (!capable) {
       return [];
     }

@@ -218,6 +218,46 @@ describe("SystemGrantCard（SP6 系统授权卡）", () => {
     );
   });
 
+  it("记忆治理（批7 security P1-3）：pattern 展示 + lastUsedAt 时间 + 90 天未用徽标 + 工作空间量统计", async () => {
+    const stale = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    stubGrants(
+      [],
+      [
+        {
+          id: 7,
+          workspaceName: "空间A",
+          toolName: "bash",
+          createdAt: "2026-09-01T08:00:00Z",
+          pattern: "git *",
+          lastUsedAt: "2026-11-01T08:00:00Z",
+        },
+        {
+          id: 8,
+          workspaceName: "空间A",
+          toolName: "write",
+          createdAt: stale,
+          pattern: null,
+          lastUsedAt: null,
+        },
+      ],
+    );
+    render(<SystemGrantCard />);
+    // 参数级行展示 `bash: git *`；整工具行展示裸名
+    expect(await screen.findByText("bash: git *")).toBeTruthy();
+    expect(screen.getByText("write")).toBeTruthy();
+    // 未命中行 lastUsedAt 缺席回落 createdAt（120 天前）→ stale 徽标
+    expect(screen.getByText("security:systemGrant.staleBadge")).toBeTruthy();
+    expect(screen.getByText("security:systemGrant.staleHint")).toBeTruthy();
+    // 工作空间维度量统计（2 条 1 空间）——stats 与 breakdown 同段拼接，
+    // 按 <p> textContent 匹配（多文本节点不经 getByText 默认匹配）
+    const statsLine = screen.getByText(
+      (_, el) =>
+        el?.tagName === "P" &&
+        (el.textContent ?? "").includes("rememberedStats"),
+    );
+    expect(statsLine.textContent).toContain("空间A (2)");
+  });
+
   it("工具记忆行内撤销：revokeRemembered(id) + 行消失 + toast", async () => {
     stubGrants([], [REMEMBERED_ROW]);
     render(<SystemGrantCard />);

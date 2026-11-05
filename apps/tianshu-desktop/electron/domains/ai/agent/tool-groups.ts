@@ -6,7 +6,11 @@
  * 与历史 tool_call 回喂均不受影响，禁用=对模型不存在的注入语义同 SP6）。
  * 纯函数零依赖（不 import electron/prisma）：判定输入 ToolGroupGate 由
  * ChatService.assembleContext 装配（先例 tool-registry.filterDisabledTools）。
+ * per-skill 工具声明批（skills-tools-mcp §6-1）：挂载技能 frontmatter
+ * `tools` 声明驱动工具组挂载（「技能即开关」泛化，值域
+ * @tianshu/protocol SKILL_TOOL_GROUPS 三端单份）。
  */
+import { SKILL_TOOL_GROUPS } from "@tianshu/protocol";
 
 /**
  * 核心组（恒注入）：file 5 + browser 4 + browse + bash +
@@ -105,22 +109,47 @@ const EXPERT_SCENARIOS: ReadonlySet<string> = new Set(["experts"]);
  * workflowCreatorEnabled 三信号取或（chat.service 装配）：会话内
  * read_skill 读过 workflow-creator（使用即意图）/ 用户侧安装
  * （source!=="builtin"）且启用 —— f49349d7 自愈纠存量 source 后
- * 内置态恒 builtin，第二信号对普通用户永假，第一信号恢复可达性
+ * 内置态恒 builtin，第二信号对普通用户永假，第一信号恢复可达性；
+ * skillGroups = 会话挂载技能 frontmatter `tools` 声明并集（per-skill
+ * 工具声明批——「技能即开关」泛化，skillDeclaredGroups 产出）。
  */
 export interface ToolGroupGate {
   scenario?: string | null;
   assistantBound: boolean;
   workflowCreatorEnabled: boolean;
+  /** 挂载技能声明的工具组并集（值域 SKILL_TOOL_GROUPS；缺省无声明） */
+  skillGroups?: ReadonlySet<string>;
+}
+
+/**
+ * 挂载技能 tools 声明并集（per-skill 工具声明批）：输入会话挂载技能
+ * 清单（system 清单同源集），输出声明组名并集——未知组名过滤（协议
+ * 值域单源，SKILL.md 手写错值静默忽略不误开门）
+ */
+export function skillDeclaredGroups(
+  skills: Array<{ name: string; tools?: string[] }>,
+): ReadonlySet<string> {
+  const known: ReadonlySet<string> = new Set(SKILL_TOOL_GROUPS);
+  const groups = new Set<string>();
+  for (const skill of skills) {
+    for (const group of skill.tools ?? []) {
+      if (known.has(group)) groups.add(group);
+    }
+  }
+  return groups;
 }
 
 /**
  * 工作流组是否挂载：场景命中（automation/coding）或 workflowCreatorEnabled
- * 三信号取或——filterToolsBySession 同口径判定，导出供 chat.service 挂载
+ * 三信号取或，或挂载技能声明 `workflow`（per-skill 工具声明批）——
+ * filterToolsBySession 同口径判定，导出供 chat.service 挂载
  * 元说明注入条件复用（口径漂移即元说明误报/漏报）
  */
 export function isWorkflowGroupAllowed(gate: ToolGroupGate): boolean {
   return (
-    WORKFLOW_SCENARIOS.has(gate.scenario ?? "") || gate.workflowCreatorEnabled
+    WORKFLOW_SCENARIOS.has(gate.scenario ?? "") ||
+    gate.workflowCreatorEnabled ||
+    (gate.skillGroups?.has("workflow") ?? false)
   );
 }
 
@@ -134,7 +163,9 @@ export function filterToolsBySession<T extends { name: string }>(
 ): T[] {
   const workflowAllowed = isWorkflowGroupAllowed(gate);
   const expertAllowed =
-    EXPERT_SCENARIOS.has(gate.scenario ?? "") || gate.assistantBound;
+    EXPERT_SCENARIOS.has(gate.scenario ?? "") ||
+    gate.assistantBound ||
+    (gate.skillGroups?.has("expert") ?? false);
   const workflowGroup = new Set(WORKFLOW_GROUP_TOOL_NAMES);
   const expertGroup = new Set(EXPERT_GROUP_TOOL_NAMES);
   const displayGroup = new Set(DISPLAY_GROUP_TOOL_NAMES);

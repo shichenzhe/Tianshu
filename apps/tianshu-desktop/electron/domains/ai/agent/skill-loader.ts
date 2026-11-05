@@ -18,6 +18,13 @@ export interface SkillInfo {
   name: string;
   /** 一句话用途说明（注入 system prompt 供模型按需取用） */
   description: string;
+  /**
+   * frontmatter 可选 `tools` 声明（per-skill 工具声明批，skills-tools-mcp
+   * §6-1）：逗号/空格分隔的工具组名（值域 @tianshu/protocol
+   * SKILL_TOOL_GROUPS，此处原样保留——值域过滤在 tool-groups 门控层
+   * 收口，loader 保持零依赖）；未声明为 undefined（存量技能零影响）
+   */
+  tools?: string[];
   /** skill 条目目录（含 SKILL.md） */
   dir: string;
   /** SKILL.md 绝对路径（read_skill 工具按此读正文） */
@@ -29,13 +36,23 @@ export interface SkillInfo {
 /** frontmatter 字段行：键为 \w+，冒号后空白可有可无，值为行内剩余部分 */
 const FIELD_RE = /^(\w+):\s*(.+)$/;
 
+/** tools 声明分隔：英文/中文逗号与空白混用 */
+function parseToolGroups(raw: string): string[] | undefined {
+  const groups = raw
+    .split(/[,，\s]+/)
+    .map((group) => group.trim())
+    .filter((group) => group !== "");
+  return groups.length > 0 ? groups : undefined;
+}
+
 /**
- * 解析 `---` 包裹的简易 frontmatter，只提取 name/description 两字段。
+ * 解析 `---` 包裹的简易 frontmatter，提取 name/description 与可选 tools。
  * 无包裹块、残缺块（缺结束 ---）或字段缺失 → 对应字段为 undefined，不抛错。
  */
 export function parseFrontmatter(raw: string): {
   name?: string;
   description?: string;
+  tools?: string[];
 } {
   const lines = raw.split(/\r?\n/);
   if (lines[0]?.trim() !== "---") return {};
@@ -52,7 +69,13 @@ export function parseFrontmatter(raw: string): {
     const match = FIELD_RE.exec(lines[i] ?? "");
     if (match) fields[match[1]!] = match[2]!.trim();
   }
-  return { name: fields.name, description: fields.description };
+  return {
+    name: fields.name,
+    description: fields.description,
+    ...(fields.tools != null
+      ? { tools: parseToolGroups(fields.tools) }
+      : {}),
+  };
 }
 
 /**
@@ -111,10 +134,17 @@ export function loadSkills(
       } catch {
         continue; // 无 SKILL.md 或不可读：跳过该条目
       }
-      const { name, description } = parseFrontmatter(raw);
+      const { name, description, tools } = parseFrontmatter(raw);
       if (!name || !description || seen.has(name)) continue;
       seen.add(name);
-      skills.push({ name, description, dir: entryDir, bodyPath, source });
+      skills.push({
+        name,
+        description,
+        ...(tools != null ? { tools } : {}),
+        dir: entryDir,
+        bodyPath,
+        source,
+      });
     }
   }
   return skills;

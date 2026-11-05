@@ -443,14 +443,20 @@ model LibraryItem {
 // @@map 保留 mirror 物理表名。session/approve remember 写入（记忆先落防竞速），
 // chat-runner isToolAllowed 查表消费——同工具同空间 write 免审；workspaceId
 // 关联列为普通列（relationMode=prisma），本仓无查看/撤销端点（远端记忆管理
-// 留桌面安全中心——无头端暂不透出）
+// 留桌面安全中心——无头端暂不透出）。参数级审批批（security P1-3，mirror
+// 同批）：pattern 参数级记忆（bash 前缀 `git *` / 路径 glob `src/**`，null =
+// 整工具旧全等语义）+ lastUsedAt 命中回写（fire-and-forget）；唯一索引扩含
+// pattern（同 pattern 拒重，跨 pattern 共存——SQLite/PG NULL 互异由写路径
+// findFirst+create 幂等兜底）
 model ToolPermission {
   id          Int      @id @default(autoincrement())
   workspaceId Int
   toolName    String
+  pattern     String?
   createdAt   DateTime @default(now())
+  lastUsedAt  DateTime?
 
-  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+  @@unique([workspaceId, toolName, pattern], map: "idx_tool_permission_ws_tool_pattern")
   @@map("toolPermission")
 }
 

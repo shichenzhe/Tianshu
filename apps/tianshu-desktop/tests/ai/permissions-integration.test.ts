@@ -48,8 +48,11 @@ const prismaStub = {
     extraHeaders: null,
   } as unknown,
   assistantRow: null as { systemPrompt: string } | null,
-  // P4 工作空间记忆：命中表内的工具名免审
-  toolPermissions: [] as string[],
+  // P4 工作空间记忆：命中表内的工具名免审。
+  // 参数级审批批（security P1-3）：行扩为 {toolName, pattern}——
+  // null pattern = 旧全等语义（任意参数命中）；回写 lastUsedAt 采集于此
+  toolPermissions: [] as Array<{ toolName: string; pattern: string | null }>,
+  permissionUpdates: [] as number[],
 };
 
 vi.mock("../../electron/commons/prisma-client", () => ({
@@ -59,14 +62,18 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     provider: { findUnique: async () => prismaStub.providerRow },
     assistant: { findUnique: async () => prismaStub.assistantRow },
     toolPermission: {
-      findUnique: async (args: {
-        where: { workspaceId_toolName: { toolName: string } };
+      // isRememberedPermission（core 单源）：findMany 投影 + lastUsedAt
+      // fire-and-forget 回写（update 吞错不影响判定）
+      findMany: async (args: {
+        where: { workspaceId: number; toolName: string };
       }) =>
-        prismaStub.toolPermissions.includes(
-          args.where.workspaceId_toolName.toolName,
-        )
-          ? { id: 1 }
-          : null,
+        prismaStub.toolPermissions
+          .filter((row) => row.toolName === args.where.toolName)
+          .map((row, index) => ({ id: index + 1, pattern: row.pattern })),
+      update: async (args: { where: { id: number } }) => {
+        prismaStub.permissionUpdates.push(args.where.id);
+        return {};
+      },
     },
   },
 }));
@@ -106,6 +113,7 @@ import {
   registerTools,
   unregisterTools,
 } from "../../electron/domains/ai/agent/tool-registry";
+import { installCommandGate } from "../../electron/domains/security/command-gate";
 import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
 import type { ChatStreamChunk } from "../../src-react/domains/ai/api/chat.api";
 import { onChatChunk } from "../../electron/domains/server-face/chat-tap";
@@ -275,6 +283,7 @@ beforeEach(() => {
   prismaStub.messages = [];
   prismaStub.assistantRow = null;
   prismaStub.toolPermissions = [];
+  prismaStub.permissionUpdates = [];
   mcpExecuted.length = 0;
   fakeWriteExecuted.length = 0;
 });
@@ -396,7 +405,10 @@ describe("两级审批判定（send 级集成）", () => {
   });
 
   it("工作空间记忆（P4 allowed-tools）：命中 toolPermission 表免审直执行", async () => {
-    prismaStub.toolPermissions = ["test_write"];
+    // 无 pattern 行 = 旧全等语义（任意参数命中）
+    prismaStub.toolPermissions = [
+      { toolName: "test_write", pattern: null },
+    ];
     registerTools([fakeWrite]);
     const ws = mkdtempSync(path.join(os.tmpdir(), "p4-remember-"));
     const { model } = scriptedModel([
@@ -428,13 +440,77 @@ describe("两级审批判定（send 级集成）", () => {
       expect(
         chunks.some((c) => c.type === "tool-update" && c.state === "done"),
       ).toBe(true);
+      // lastUsedAt 回写（fire-and-forget）：命中行被 touch（安全中心
+      // 「90 天未用」治理数据源）
+      expect(prismaStub.permissionUpdates.length).toBe(1);
     } finally {
+      rmSync(ws, { recursive: true, force: true });
+    }
+  });
+
+  it("参数级 pattern 行：bash 前缀匹配免审、不匹配挂审批（security P1-3）", async () => {
+    // cmdAsk 档：bash 全部挂审批——参数级 pattern 记忆是免审面
+    installCommandGate(() => "ask");
+    prismaStub.toolPermissions = [{ toolName: "bash", pattern: "git *" }];
+    const ws = mkdtempSync(path.join(os.tmpdir(), "p4-pattern-"));
+    // bash 为 zod 参数工具：input 传对象（scripted-chat-model 约定）
+    const mkModel = (toolCallId: string, command: string) =>
+      scriptedModel([
+        {
+          steps: [
+            {
+              kind: "tool",
+              toolCallId,
+              toolName: "bash",
+              input: { command },
+            },
+          ],
+        },
+        { steps: [{ kind: "text", delta: "完成" }] },
+      ]);
+    mockFactory.current = () => mkModel("t1", "git status").model;
+    const service = new ChatService(sessionsStub(ws));
+    const chunks: ChatStreamChunk[] = [];
+    try {
+      await service.send(
+        { sessionId: 1, content: "hi" },
+        1,
+        captureSender(chunks),
+      );
+      // 匹配：`git *` 命中 git status → cmdAsk 免审直执行 + lastUsedAt 回写
+      expect(hasApprovalChunk(chunks)).toBe(false);
+      expect(
+        chunks.some(
+          (c) => c.type === "tool-update" && (c.state === "done" || c.state === "error"),
+        ),
+      ).toBe(true);
+      expect(prismaStub.permissionUpdates.length).toBe(1);
+
+      // 不匹配：npm 越出声明前缀 → 挂起审批，拒绝后不执行
+      prismaStub.permissionUpdates = [];
+      mockFactory.current = () => mkModel("t2", "npm ping").model;
+      const chunks2: ChatStreamChunk[] = [];
+      const pending = service.send(
+        { sessionId: 1, content: "again" },
+        1,
+        captureSender(chunks2),
+      );
+      await vi.waitFor(() =>
+        expect(internals(service).approvals.pendingCount).toBe(1),
+      );
+      expect(hasApprovalChunk(chunks2)).toBe(true);
+      await internals(service).approvals.respond("t2", false);
+      await pending;
+      expect(prismaStub.permissionUpdates).toEqual([]);
+    } finally {
+      installCommandGate(null);
       rmSync(ws, { recursive: true, force: true });
     }
   });
 
   it("工作空间未记忆的工具默认态仍挂起审批", async () => {
     prismaStub.toolPermissions = [];
+    prismaStub.permissionUpdates = [];
     registerTools([fakeWrite]);
     const ws = mkdtempSync(path.join(os.tmpdir(), "p4-fresh-"));
     const { model } = scriptedModel([

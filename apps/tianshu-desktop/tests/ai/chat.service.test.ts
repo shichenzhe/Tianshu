@@ -2558,18 +2558,23 @@ describe("ChatService 系统授权 IPC（SP6 spec §4）", () => {
       where: { workspaceId: { in: [5, 6] } },
       orderBy: { createdAt: "desc" },
     });
+    // 参数级审批批：pattern/lastUsedAt 增量可选段随行透出
     expect(list).toEqual([
       {
         id: 7,
         workspaceName: "我的空间",
         toolName: "bash",
         createdAt: "2026-09-01T08:00:00.000Z",
+        pattern: undefined,
+        lastUsedAt: null,
       },
       {
         id: 8,
         workspaceName: "#6",
         toolName: "write",
         createdAt: "2026-09-02T08:00:00.000Z",
+        pattern: undefined,
+        lastUsedAt: null,
       },
     ]);
   });

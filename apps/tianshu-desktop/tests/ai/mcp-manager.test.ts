@@ -487,6 +487,90 @@ describe("McpManager 工具面预算折叠（spec 2026-11-01-mcp-tool-surface-bu
     expect(manager.getStatuses()[0].deferred).toBe(false);
   });
 
+  describe("会话级自适应折叠（skills-tools-mcp §6-3：surfaceBudgetFor 动态线）", () => {
+    /**
+     * 中型工具集：3 工具 × 2900 字符描述 + 显式 schema ≈ 9.1K 字符
+     * ≈ 4.6K token——静态线 4000 折叠、1M 窗自适应线 8000 直注
+     * （bigTools 的无 schema 工具会落 zod 空对象，序列化面不可控，
+     * 此处全显式 schema 保证估值确定性）
+     */
+    const midTools = () => [
+      {
+        name: "mid_a",
+        description: "A".repeat(2900),
+        inputSchema: { type: "object" },
+      },
+      {
+        name: "mid_b",
+        description: "B".repeat(2900),
+        inputSchema: { type: "object" },
+      },
+      {
+        name: "mid_c",
+        description: "C".repeat(2900),
+        inputSchema: { type: "object" },
+      },
+    ];
+
+    it("静态线折叠的 server 大窗保直注：1M 窗（预算 8000）下自适应面为直接工具", async () => {
+      const { client } = fakeClient(midTools());
+      const { manager } = makeManager([client]);
+      await manager.connect(server);
+      expect(manager.getStatuses()[0].deferred).toBe(true); // 注册层仍静态线
+
+      const names = manager
+        .adaptiveDefinitions(1024 * 1024)
+        .map((d) => d.name);
+      expect(names).toEqual([
+        "mcp__srv__mid_a",
+        "mcp__srv__mid_b",
+        "mcp__srv__mid_c",
+      ]);
+    });
+
+    it("静态线直注的 server 小窗激进折叠：32K 窗（预算 1000）下换聚合两跳", async () => {
+      // 单工具 3000 字符 ≈ 1.5K token：静态线 4000 直注、自适应线 1000 折叠
+      const { client } = fakeClient([
+        {
+          name: "medium",
+          description: "M".repeat(3000),
+          inputSchema: { type: "object" },
+        },
+      ]);
+      const { manager } = makeManager([client]);
+      await manager.connect(server);
+      expect(manager.getStatuses()[0].deferred).toBe(false);
+
+      const names = manager.adaptiveDefinitions(32 * 1024).map((d) => d.name);
+      expect(names).toEqual(["mcp__srv__list_tools", "mcp__srv__call_tool"]);
+    });
+
+    it("窗口缺席回落静态线：与注册层判定一致（行为零漂移）", async () => {
+      const { client: big } = fakeClient(midTools());
+      const { manager } = makeManager([big]);
+      await manager.connect(server);
+
+      for (const window of [undefined, null]) {
+        const names = manager.adaptiveDefinitions(window).map((d) => d.name);
+        expect(names).toEqual(["mcp__srv__list_tools", "mcp__srv__call_tool"]);
+      }
+    });
+
+    it("停用记录不进自适应面（连接态记录才参与）", async () => {
+      const { client } = fakeClient([
+        { name: "small", description: "小", inputSchema: { type: "object" } },
+      ]);
+      const { manager } = makeManager([client]);
+      await manager.connect(server);
+      expect(manager.adaptiveDefinitions().map((d) => d.name)).toEqual([
+        "mcp__srv__small",
+      ]);
+
+      await manager.setEnabled(server, false);
+      expect(manager.adaptiveDefinitions()).toEqual([]);
+    });
+  });
+
   it("聚合工具 kind：list_tools=read（免审批）、call_tool=write（保守走审批）", async () => {
     const { client } = fakeClient(bigTools());
     const { manager } = makeManager([client]);

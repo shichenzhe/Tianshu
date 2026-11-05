@@ -72,19 +72,24 @@ describe('PermissionController (e2e)', () => {
     const body = (await post('/permission/listRemembered').expect(200))
       .body as WrappedBody<PermissionRememberedItem[]>;
     expect(body.success).toBe(true);
-    // createdAt 倒序（他人行最新但不透）；四字段形状；createdAt ISO 串
+    // createdAt 倒序（他人行最新但不透）；createdAt ISO 串；批7 参数级
+    // 审批批：pattern/lastUsedAt 增量可选段随行透出（null = 整工具/从未命中）
     expect(body.data).toEqual([
       {
         id: expect.any(Number),
         workspaceName: '空间B',
         toolName: 'bash',
         createdAt: '2026-10-25T08:00:00.000Z',
+        pattern: null,
+        lastUsedAt: null,
       },
       {
         id: expect.any(Number),
         workspaceName: '空间A',
         toolName: 'write',
         createdAt: '2026-10-20T08:00:00.000Z',
+        pattern: null,
+        lastUsedAt: null,
       },
     ]);
     expect(JSON.stringify(body)).not.toContain('secret_tool');

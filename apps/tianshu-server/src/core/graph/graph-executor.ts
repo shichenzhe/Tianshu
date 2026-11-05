@@ -132,6 +132,7 @@ import {
   type GraphInputValue,
   graphHttpUrlErrorDns,
   type GraphHttpUrlPolicy,
+  isRememberedPermission,
 } from '@tianshu/core';
 import { format as dateFnsFormat } from 'date-fns';
 import { GraphRecursionError, isNodeError } from '@langchain/langgraph';
@@ -655,22 +656,18 @@ function buildAgentContext(
     ...resolveAutomationPermissions(
       params.task?.accessMode === 'full' ? 'full' : 'default',
       // F3：toolPermission 查表（工作空间级 remembered 免审；runtime db
-      // 注入面同 graphRunNode 写入——default 任务命中记忆即跳审批）
+      // 注入面同 graphRunNode 写入——default 任务命中记忆即跳审批）。
+      // 参数级审批批（批7）：查表/匹配/lastUsedAt 回写单源
+      // isRememberedPermission（pattern 行参数级匹配，无 pattern 行旧全等语义）
       params.task === null
         ? undefined
-        : async (toolName: string) => {
-            const row = await graphExecutorRuntime().db.toolPermission.findUnique(
-              {
-                where: {
-                  workspaceId_toolName: {
-                    workspaceId: params.workspace.id,
-                    toolName,
-                  },
-                },
-              },
-            );
-            return row != null;
-          },
+        : (toolName: string, input?: unknown) =>
+            isRememberedPermission(
+              graphExecutorRuntime().db,
+              params.workspace.id,
+              toolName,
+              input,
+            ),
     ),
     decideCommand: commandGate,
     decideFileAccess: fileGate,
@@ -5002,7 +4999,7 @@ export async function collectTools(
 
 export interface AutomationPermissions {
   fullAccess: () => boolean;
-  isToolAllowed: (toolName: string) => Promise<boolean>;
+  isToolAllowed: (toolName: string, input?: unknown) => Promise<boolean>;
   requestApproval: () => Promise<boolean>;
 }
 
@@ -5011,21 +5008,23 @@ export interface AutomationPermissions {
  * F3（2026-10-29）：isToolAllowed 可注入 toolPermission 查表（工作空间级
  * remembered 免审——chat 链 2026-10 审批记忆批同款）；缺席时保持旧语义
  * （full 短路 true、default 恒 false=每 write 必审批）。
- * requestApproval 永不触达（isToolAllowed=true 直接放行门禁短路） */
+ * requestApproval 永不触达（isToolAllowed=true 直接放行门禁短路）。
+ * 参数级审批批（批7 security P1-3，mirror 同批）：input 随调用透传
+ * （pattern 行参数级匹配，旧单参注入实现天然兼容） */
 export function resolveAutomationPermissions(
   accessMode: 'default' | 'full',
-  isToolAllowed?: (toolName: string) => Promise<boolean>,
+  isToolAllowed?: (toolName: string, input?: unknown) => Promise<boolean>,
 ): AutomationPermissions {
   const full = accessMode === 'full';
   return {
     fullAccess: () => full,
     // full=完全访问恒 true（注入的查表不收窄完全访问语义）；default=
     // 注入查表按表判定，缺席恒 false（旧语义）
-    isToolAllowed: async (toolName: string) => {
+    isToolAllowed: async (toolName: string, input?: unknown) => {
       if (full) {
         return true;
       }
-      return isToolAllowed ? isToolAllowed(toolName) : false;
+      return isToolAllowed ? isToolAllowed(toolName, input) : false;
     },
     requestApproval: async () => full,
   };

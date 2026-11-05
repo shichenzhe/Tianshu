@@ -69,3 +69,8 @@ export * from "./library-vectorize";
 // effectiveContextWindow 四层兜底）与模型类型启发式（桌面/移动双份收编）
 export * from "./model-catalog";
 export * from "./model-type";
+// 批7（skills-tools-mcp §6-3/6-6 + security P1-3）：MCP 折叠预算会话级
+// 自适应纯函数 + toolPermission 参数级 pattern 匹配/记忆查表单源（双端
+// tool-gate 装配与桌面审批横幅建议同源消费）
+export * from "./mcp-surface-budget";
+export * from "./permission-pattern";

@@ -72,9 +72,14 @@ export interface AgentStreamOptions {
   fullAccess: () => boolean;
   /**
    * 工作空间级工具记忆（P4 反馈 2，参照 Claude Code allowed-tools）：
-   * 命中 toolPermission 表 → 跳过审批直执行；每次 write 判定前查询
+   * 命中 toolPermission 表 → 跳过审批直执行；每次 write 判定前查询。
+   * 参数级审批批（security P1-3）：input 随调用透传——pattern 行经
+   * matchPermissionPattern（@tianshu/core 单源）参数级匹配，无 pattern
+   * 行为旧全等语义（任意参数命中）；命中行 lastUsedAt 由装配实现
+   * fire-and-forget 回写（isRememberedPermission 单源）。旧签名
+   * `(toolName) => boolean` 的实现/桩对新增可选参天然兼容
    */
-  isToolAllowed: (toolName: string) => Promise<boolean>;
+  isToolAllowed: (toolName: string, input?: unknown) => Promise<boolean>;
   /** 挂起等待渲染层审批决议；resolve false = 拒绝 */
   requestApproval: (toolCallId: string, argSummary: string) => Promise<boolean>;
   /** 安全事件上报（SP1）：透传给工具 ctx（bash 拦截/cwd 回退） */
@@ -452,7 +457,9 @@ function resolveCommandRisk(toolName: string, input: unknown): CommandRisk {
  * （unattended 强拒；full 豁免——2026-10-23 三档递进裁定推翻 SP4 旧不豁免
  * 裁定，回收站/备份保护不依赖审批照常兜底）；
  * write 审批判定（P4 反馈）——完全访问直执行（含 MCP）；
- * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行；
+ * 工作空间已记忆（toolPermission 表，参照 Claude Code allowed-tools）直执行
+ * （参数级审批批 security P1-3：ask 级来源 cmdAsk/文件门 block 同受记忆
+ * 抑制——pattern 行参数级匹配；硬线危险分级/批量删除/黑名单永不受抑）；
  * 权限放宽（2026-10-24 spec §4.4）：default 档审批面收窄为「高危询问」——
  * 普通命令（bash 兜底移除）/write 工作空间内/DB 写
  * （AUTO_EXEMPT_WRITE_TOOLS）直执行，其余 write 未记忆挂起审批；
@@ -608,7 +615,7 @@ export async function runToolCall(
   // write 兜底收窄（权限放宽 spec §4.4）：普通命令/write/DB 写免审，
   // 只剩其余 write（mcp__ 写类等）的记忆或审批；展开为独立布尔值避免
   // 深嵌套括号（brief 原稿末层括号失衡，语义不变）
-  const writeFallbackNeedsApproval =
+  const writeFallbackBase =
     gate !== "allow" &&
     fileGateDecision !== "allow" &&
     def.kind === "write" &&
@@ -620,8 +627,20 @@ export async function runToolCall(
     def.name !== "write" &&
     // bash 兜底审批移除（spec §4.4）：危险面已由分级表前置
     // 捕获，gate 为 allow/default 直执行——审批面只剩 ask 源
-    def.name !== "bash" &&
-    !(await agent.isToolAllowed(def.name));
+    def.name !== "bash";
+  // 记忆查表点（参数级审批批 security P1-3）：write 兜底面与 ask 级
+  // 来源（cmdAsk 命令门 ask / 文件门 block）共用的单次懒查询——命中
+  // 工作空间记忆（pattern 行参数级匹配，无 pattern 行旧全等语义）即
+  // 免审；硬线（危险分级/批量删除/程序黑名单）永不被记忆抑制（对齐
+  // WorkBuddy bypass「requires confirmation every time」——commandRisk
+  // 与 bulkEstimate 在 remembered 之外取或）。查询保持懒：无 ask 来源
+  // 且 write 兜底面不成立时不触表（热路径零额外查询）
+  const askLevelActive =
+    def.kind === "write" && (gate === "ask" || fileGateDecision === "block");
+  const remembered =
+    (writeFallbackBase || askLevelActive) &&
+    (await agent.isToolAllowed(def.name, input));
+  const writeFallbackNeedsApproval = writeFallbackBase && !remembered;
   const needsApproval =
     // 危险分级（spec §4.5）：先于 fullAccess 短路——full 也审
     commandRisk !== null ||
@@ -630,9 +649,10 @@ export async function runToolCall(
     // fullAccess 不豁免」旧裁定：回收站/备份保护不依赖审批照常生效
     (!agent.fullAccess() &&
       (bulkEstimate !== null ||
-        gate === "ask" ||
-        fileGateDecision === "block" ||
-        writeFallbackNeedsApproval));
+        (!remembered &&
+          (gate === "ask" ||
+            fileGateDecision === "block" ||
+            writeFallbackNeedsApproval))));
   if (needsApproval) {
     const decision = await awaitApproval(
       def,

@@ -19,6 +19,7 @@ import ChatService from "./domains/ai/chat/chat.service";
 import {
   McpManager,
   createDefaultClient,
+  installMcpAdaptiveSource,
   parseMcpRow,
 } from "./domains/ai/agent/mcp-manager";
 import { McpRepository } from "./domains/ai/mcp/mcp.repo";
@@ -483,6 +484,11 @@ export default class Application {
         },
       },
     });
+    // MCP 折叠会话级自适应（skills-tools-mcp §6-3）：manager 装配进
+    // 模块级自适应源（commandGate install 先例），chat.service
+    // collectToolDefinitions 按会话 contextWindow 消费（装配顺序仅要求
+    // 先于首个 send——ChatService 构造在此前，消费在运行期）
+    installMcpAdaptiveSource(mcpManager);
     const mcpRepo = new McpRepository(prisma, mcpManager);
     // 自动化/编排 repo 前移构造（CRUD 批：被控面 automation 五段 + graph
     // 只读需实例引用；构造副作用仅 IPC 注册与工具登记，顺序无依赖——

@@ -697,7 +697,9 @@ async function handleApprove(body: unknown): Promise<RouteResult> {
     typeof p.toolCallId !== "string" ||
     typeof p.approved !== "boolean" ||
     (p.remember !== undefined && typeof p.remember !== "boolean") ||
-    (p.toolName !== undefined && typeof p.toolName !== "string")
+    (p.toolName !== undefined && typeof p.toolName !== "string") ||
+    // 参数级审批批（security P1-3）：pattern 可选字符串（空串视同未上送）
+    (p.pattern !== undefined && typeof p.pattern !== "string")
   ) {
     return bizError("5000", "sessionId/toolCallId/approved 参数不合法");
   }
@@ -713,6 +715,7 @@ async function handleApprove(body: unknown): Promise<RouteResult> {
       userId,
       p.remember === true,
       p.toolName ?? null,
+      p.pattern != null && p.pattern !== "" ? p.pattern : null,
     );
     if (!r.hit) {
       return bizError("4040", "审批不存在或已应答");

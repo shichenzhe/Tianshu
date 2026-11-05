@@ -186,9 +186,15 @@ model toolPermission {
   id          Int      @id @default(autoincrement())
   workspaceId Int
   toolName    String
+  /// 参数级 pattern（security P1-3）：bash 命令前缀（`git *`）/ write·rm
+  /// 路径 glob（`src/**`）；null = 整工具记忆（旧全等语义——任意参数命中）
+  pattern     String?
   createdAt   DateTime @default(now())
+  /// 最近一次命中回写（记忆直执行/ask 级抑制命中时 fire-and-forget）；
+  /// null = 落行后从未命中（安全中心「90 天未用」治理数据源）
+  lastUsedAt  DateTime?
 
-  @@unique([workspaceId, toolName], map: "idx_tool_permission_ws_tool")
+  @@unique([workspaceId, toolName, pattern], map: "idx_tool_permission_ws_tool_pattern")
 }
 
 model skillRecord {

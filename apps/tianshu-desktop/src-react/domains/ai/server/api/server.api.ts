@@ -738,17 +738,25 @@ export default class ServerApi {
     sessionId: number,
     toolCallId: string,
     approved: boolean,
-    remember?: { toolName: string },
+    remember?: { toolName: string; pattern?: string },
   ): Promise<void> {
     // remember（审批记住批）：批准同时写工作空间级工具记忆（被控端归属
-    // 校验后落 toolPermission——远程态「允许并记住」由此解锁）
+    // 校验后落 toolPermission——远程态「允许并记住」由此解锁）；
+    // pattern（参数级审批批）：下拉「始终允许」的参数前缀选项——
+    // bash `git *` / write `src/**`，缺席 = 整工具记忆
     await requestRemote(
       "server:sessionApprove",
       {
         sessionId,
         toolCallId,
         approved,
-        ...(remember ? { remember: true, toolName: remember.toolName } : {}),
+        ...(remember
+          ? {
+              remember: true,
+              toolName: remember.toolName,
+              ...(remember.pattern != null ? { pattern: remember.pattern } : {}),
+            }
+          : {}),
       },
       connId,
     );

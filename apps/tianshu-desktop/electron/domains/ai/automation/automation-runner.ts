@@ -8,6 +8,7 @@
  * (trim 后非空)作为 buildSystemPrompt base 注入。
  */
 import { format } from "date-fns";
+import { isRememberedPermission } from "@tianshu/core";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { runChatStream, type ChatDataSafety } from "../chat/chat.service";
@@ -91,23 +92,20 @@ export async function collectTools(
 
 export interface AutomationPermissions {
   fullAccess: () => boolean;
-  isToolAllowed: (toolName: string) => Promise<boolean>;
+  isToolAllowed: (toolName: string, input?: unknown) => Promise<boolean>;
   requestApproval: () => Promise<boolean>;
 }
 
 /** 审批记忆查表闭包（chat 链同款，审查批 F3 收口）：workspaceId 缺席
- *  恒 false；命中 toolPermission 行（工作空间已记忆）返回 true */
+ *  恒 false；命中 toolPermission 行（工作空间已记忆）返回 true。
+ *  参数级审批批（security P1-3）：input 透传 @tianshu/core
+ *  isRememberedPermission 单源（pattern 行参数级匹配 + lastUsedAt
+ *  fire-and-forget 回写，无 pattern 行旧全等语义） */
 export function rememberedToolOf(
   workspaceId: number | null | undefined,
-): (toolName: string) => Promise<boolean> {
-  return async (toolName) => {
-    if (workspaceId == null) return false;
-    const row = await prisma.toolPermission.findUnique({
-      where: { workspaceId_toolName: { workspaceId, toolName } },
-      select: { id: true },
-    });
-    return row !== null;
-  };
+): (toolName: string, input?: unknown) => Promise<boolean> {
+  return (toolName, input) =>
+    isRememberedPermission(prisma, workspaceId, toolName, input);
 }
 
 /** 无人值守权限分流:full=完全访问+审批放行(原行为);default=只读执行,
@@ -119,13 +117,13 @@ export function rememberedToolOf(
  * 此前图/自动化链一律拒；缺省不查（原行为，测试注入面） */
 export function resolveAutomationPermissions(
   accessMode: "default" | "full",
-  rememberedTool?: (toolName: string) => Promise<boolean>,
+  rememberedTool?: (toolName: string, input?: unknown) => Promise<boolean>,
 ): AutomationPermissions {
   const full = accessMode === "full";
   return {
     fullAccess: () => full,
-    isToolAllowed: async (toolName) =>
-      full || (await rememberedTool?.(toolName)) === true,
+    isToolAllowed: async (toolName, input) =>
+      full || (await rememberedTool?.(toolName, input)) === true,
     requestApproval: async () => full,
   };
 }

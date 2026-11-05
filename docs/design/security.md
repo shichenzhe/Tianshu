@@ -369,8 +369,8 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 | 1 | relay 首帧 auth | 尾批遗留「仅剩首帧 auth」双轨窗口 | **已闭环**：`relay-main.ts` 324 行起 query 凭证一律无视，凭证只走首帧 auth（5s 窗超时 4001）；四端客户端已全部切换 |
 | 2 | 被控端缺省 required | 尾批遗留「被控端可收敛全局 required」 | **已闭环**：`server-face.ts` FaceE2eMode 缺省 "required"（安全批 J 收敛）；auto/off 仍可显式配置 |
 | 3 | TOFU 指纹自动回填无用户确认 | 高危 #4 待办（需 UI） | **已闭环**：TOFU 首连不再自动回填——`relay-transport.ts` 落 `pending-confirm`（加密会话可用但指纹待核对，mitm-suspect 同款警示 + 主机页指纹核对卡），用户确认（`connections.ts confirmFingerprint`）才钉扎 + `confirmedAt` 落档并重建握手强制校验；存量已钉扎连接经迁移视为已确认（P0-1 批，2026-11-05） |
-| 4 | relay TLS | 高危 #5「TLS 待办」 | **部分闭环**：批 I 落地 `--cert/--key` 原生 TLS 可选项；既定架构仍依赖反代终止 TLS，部署面是否强制 TLS 未约束 |
-| 5 | server 端操作日志 | 中危收口清单未含 | **未启用**：`operation-log.interceptor.ts` `DISABLE_LOG=true` 写死，operation_log 表与模型齐备但不写入（脚手架遗留） |
+| 4 | relay TLS | 高危 #5「TLS 待办」 | **部分闭环**：批 I 落地 `--cert/--key` 原生 TLS 可选项；既定架构仍依赖反代终止 TLS，部署面已加非 loopback 明文监听启动告警（P2-1，2026-11-05）——强制拒绝未做 |
+| 5 | server 端操作日志 | 中危收口清单未含 | **已闭环**：`operation-log.interceptor.ts` 配置驱动启用（config `operationLog.enabled` 缺省 true，P0-2 批 2026-11-05）；details 脱敏对齐桌面审计链 commandPreview 口径（IP/UA 表列既有） |
 | 6 | 静态 token 对称凭证 | 批 I 注（static 模式现状平移） | 设计内保留：单租户 `--token` 模式仍是"知道即通过"，泄露即全量失守（jwt 模式已是非对称短期凭证，两模式互斥共存） |
 | 7 | E2E 无前向保密 | 审查文档未列（本轮分析） | 静态身份私钥长期有效、无棘轮进阶：私钥泄露可回解历史录制流量（Signal Double Ratchet / MLS 级别的后向保密未达）；降级审计已兜底但 auto 模式仍可被中继攻击者压降级 |
 | 8 | OS 级沙箱缺位 | 审查未列（设计边界） | 应用层防护（四层网络拦截+ps 监控+代理）完整，但无 Seatbelt/Landlock 进程隔离：子进程在用户全权限上下文运行，ps 轮询 1s 间隔存在逃逸窗口，win32 子进程监控 no-op |
@@ -385,7 +385,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 
 **P0-1 TOFU 指纹确认 UI**（遗留 #3）：~~控制端首连 TOFU 时在主机页弹指纹核对卡（fingerprintOf 16hex + 连接名），用户确认后才回填 `connections` 行；未确认前按 mitm-suspect 同款呈现。~~ ✅ 已落地（2026-11-05）：`server/relay-transport.ts` TOFU 分支落 `pending-confirm`（通信可用，不再自动回填）；`connections.ts confirmFingerprint`（IPC `server:connectionConfirmFingerprint`）钉扎指纹 + `confirmedAt` 并重建 transport 强制校验；主机页 `E2eFingerprintCard`（连接名 + 指纹常显 + 核对确认动作，pending/mitm 双警示态）；协议类型单源 `@tianshu/protocol` `connection-contract.ts`；存量已回填连接经 load 迁移视为已确认。
 
-**P0-2 server 操作日志启用**（遗留 #5）：将 `operation-log.interceptor.ts` DISABLE_LOG 改为配置驱动（config.yml `operationLog.enabled`，缺省 true），补 Jest 用例；运维侧对齐桌面审计链的 commandPreview 脱敏口径（IP/UA 已有）。
+**P0-2 server 操作日志启用**（遗留 #5）：~~将 `operation-log.interceptor.ts` DISABLE_LOG 改为配置驱动（config.yml `operationLog.enabled`，缺省 true），补 Jest 用例；运维侧对齐桌面审计链的 commandPreview 脱敏口径（IP/UA 已有）。~~ ✅ 已落地（2026-11-05）：`operation-log.interceptor.ts` 注入 ConfigService 读 `operationLog.enabled`（缺省 true，false 直通不落表）；details 脱敏对齐桌面审计链 commandPreview 口径（method + url 预览：token query/webhook 路径段打码 + 截断 100 字符，params/query/body 不落），打码函数与请求日志拦截器抽 `url-sanitize.util.ts` 单源；Jest 用例 `test/modules/operation-log-interceptor.spec.ts`（开关四态/脱敏/跳过装饰器/无认证面/ERROR 路径/IP-UA）。
 
 **P1-1 E2E 前向保密升级**（遗留 #7）：握手加入被控端静态密钥签名绑定（静态对当前仅做 ECDH，无身份签名——可叠 Ed25519 签 ack 防主动 MITM 而非仅 TOFU），并评估每连接双棘轮（对齐 Signal Double Ratchet 的简化版：以 HKDF(chainKey) 逐帧进阶）；wire 契约经 protocol 包单源演进，三端交叉向量测试护栏已有。
 
@@ -393,7 +393,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 
 **P1-3 审批面细粒度化**：toolPermission 记忆粒度当前是 workspace×toolName——bash 无参数前缀记忆（Claude Code `Bash(git push:*)` 同款）、write 无路径 glob 记忆；cmdAllow 已有 prefix 规则可复用其数据结构，审批横幅「始终允许」下拉带出参数前缀选项。
 
-**P2-1 server 部署面 TLS 强制**：`listen-host.ts` 非 loopback 监听时若 relay 未配 TLS 且无反代头标识，启动告警/可配拒绝（对齐 TIANSHU_TOKEN「非 loopback 无 token 拒绝启动」先例）。
+**P2-1 server 部署面 TLS 强制**：~~`listen-host.ts` 非 loopback 监听时若 relay 未配 TLS 且无反代头标识，启动告警/可配拒绝（对齐 TIANSHU_TOKEN「非 loopback 无 token 拒绝启动」先例）。~~ ✅ 告警形态已落地（2026-11-05，只告警不拒绝）：`listen-host.ts` `emitNonLoopbackTlsWarning`——非 loopback 监听且 relay 客户端 URL 非 wss:// 且无反代终止声明时启动告警（[安全告警] 前缀 + 指引配置面，TIANSHU_TOKEN 告警同形态）；豁免标识 `config app.tlsBehindProxy: true` / env `TIANSHU_TLS_PROXY=1`（本 HTTP 面无原生 TLS 通道，强制拒绝会拦死合法明文内网部署，故收敛为告警；main.ts 启动期接线，relay 解析前置）。可配拒绝留待需要时再加。
 
 **P2-2 审计链外部锚定**：桌面哈希链的单点弱点是"整库可删重建"（clear 自身留痕但攻击者可直接改库文件）——定期将链尾 hash 锚定到外部（系统 keychain 属性或 relay-admin 侧），与 verifyChain 配套做启动自检告警。
 

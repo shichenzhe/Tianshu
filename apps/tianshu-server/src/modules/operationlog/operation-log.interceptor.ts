@@ -9,25 +9,42 @@ import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import { OperationLogService } from './operation-log.service';
 import { OperateContext } from 'src/commons/entity/operate-context.entity';
 import { OperationLog } from './operation-log.entity';
+import { resolveOperationLogEnabled } from 'src/commons/config/operation-log-config.entity';
+import { urlPreview } from 'src/commons/web/util/url-sanitize.util';
 
-const DISABLE_LOG: boolean = true;
 /**
  * 操作日志拦截器
  * 自动记录用户操作日志
+ *
+ * 启用开关配置驱动（security.md §6 P0-2，遗留 #5）：config.yml
+ * `operationLog.enabled` 缺省 true——脚手架期 DISABLE_LOG 写死停用的
+ * 遗留收口；false 时直通不落表。
+ *
+ * details 脱敏口径对齐桌面审计链 commandPreview 先例：只记 method +
+ * url 预览（token 面打码 + 截断 100 字符），不落 params/query/body
+ * （可能携带凭证）；IP/UA 由表列既有承载。
  */
 @Injectable()
 export class OperationLogInterceptor implements NestInterceptor {
+  private readonly enabled: boolean;
+
   constructor(
     private readonly operationLogService: OperationLogService,
     private readonly reflector: Reflector,
-  ) {}
+    configService: ConfigService,
+  ) {
+    this.enabled = resolveOperationLogEnabled(
+      configService.get<unknown>('operationLog'),
+    );
+  }
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    //先写死不记录操作日志
-    if (DISABLE_LOG) {
+    // 配置关停：直通不落表（config.yml operationLog.enabled: false）
+    if (!this.enabled) {
       return next.handle();
     }
 
@@ -136,13 +153,12 @@ export class OperationLogInterceptor implements NestInterceptor {
       const logDto: OperationLog = {
         userId,
         operation,
-        details: {},
-        // details: {
-        //   method: request.method,
-        //   url: request.url,
-        //   params: request.params,
-        //   query: request.query,
-        // },
+        // 脱敏口径（commandPreview 先例）：method + url 预览（token 打码 +
+        // 截断 100 字符）；params/query/body 可能携带凭证，不落 details
+        details: {
+          method: request.method,
+          url: urlPreview(request.url ?? ''),
+        },
         ipAddress: this.getClientIp(request),
         userAgent: this.getUserAgent(request),
         executionTime,

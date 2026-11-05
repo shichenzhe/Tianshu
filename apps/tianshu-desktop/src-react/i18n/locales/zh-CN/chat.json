@@ -62,6 +62,8 @@
     "toolAvgDuration": "平均耗时",
     "toolDenied": "被拒",
     "toolError": "失败",
+    "mcpServerTitle": "MCP 服务",
+    "mcpServerName": "服务",
     "empty": "暂无数据",
     "loadFailed": "监控数据加载失败"
   },

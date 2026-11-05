@@ -230,10 +230,15 @@ const mergedProperties = (
 /** 协议 ENDPOINTS 无头端面（ui/* 与 image 为桌面被控端专属——本仓不实现） */
 const headlessEndpointExpectations = [
   { logical: ENDPOINTS.info, method: 'get' as const },
-  ...Object.values(ENDPOINTS.session).map((logical) => ({
-    logical,
-    method: 'post' as const,
-  })),
+  // session/handoverSummary 为桌面被控端专属（项目补齐批⑪，electron
+  // server-face 路由面，本仓不实现）——自 protocol dist 刷新后在场，
+  // 需显式排除（image/ui/* 同款口径）
+  ...Object.values(ENDPOINTS.session)
+    .filter((logical) => logical !== ENDPOINTS.session.handoverSummary)
+    .map((logical) => ({
+      logical,
+      method: 'post' as const,
+    })),
   ...Object.values(ENDPOINTS.provider).map((logical) => ({
     logical,
     method: 'post' as const,

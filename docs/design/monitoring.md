@@ -279,7 +279,7 @@ OTel 语义约定的 GenAI 专卷（GenAI SIG 2024-04 成立，现已迁至 OTel
 
 - **llmCallEvent / toolCallEvent（本模块）**：机器遥测——模型与工具的**行为度量**（token/耗时/终态计数）。无操作者叙事、无安全判定细节、无入参出参（零载荷）。
 - **securityAuditLog（桌面安全审计）**：`prisma/schema.prisma:396`，hash 链防篡改（`prevHash`/`hash`/`sequence`），category 为 command-safety/file-safety/network/data-safety/config 五类（`electron/domains/security/audit/audit-log.service.ts` `categoryOf` 前缀映射）。工具 denied 的**原因**（命令门拦截、文件门越界、审批拒绝）在此留痕，事件表只留终态计数——同一工具调用的一体两面。
-- **operationlog（server 脚手架遗留）**：`apps/tianshu-server/src/modules/operationlog/` 的 `operation_log` 表 + `OperationLogInterceptor`，语义是「用户对系统的管理操作」（谁改了什么）——但 `DISABLE_LOG: boolean = true` 硬开关写死，**实质停用**。桌面端无对应物（管理操作审计归 securityAuditLog 的 config 类）。若未来启用，边界应为：operationlog 记人操作、监控事件记 AI 行为、securityAuditLog 记安全判定，互不重复。
+- **operationlog（server 管理操作审计）**：`apps/tianshu-server/src/modules/operationlog/` 的 `operation_log` 表 + `OperationLogInterceptor`，语义是「用户对系统的管理操作」（谁改了什么）——**已启用**（2026-11-05，security.md §6 P0-2）：config.yml `operationLog.enabled` 缺省 true（false 直通不落表），details 脱敏对齐桌面审计链 commandPreview 口径（method + url 预览打码截断，params/query/body 不落），IP/UA 落表列。桌面端无对应物（管理操作审计归 securityAuditLog 的 config 类）。边界：operationlog 记人操作、监控事件记 AI 行为、securityAuditLog 记安全判定，互不重复。
 
 一张速查表收尾：
 
@@ -289,7 +289,7 @@ OTel 语义约定的 GenAI 专卷（GenAI SIG 2024-04 成立，现已迁至 OTel
 | 某工具为什么被拒？ | `securityAuditLog` | 安全审计页（category 前缀过滤） |
 | 某次图运行哪步失败、输出了什么？ | `automationRun.graphTrace` + `graphRunNode` | 图运行历史（节点树渲染） |
 | 某轮对话原文与该轮 usage？ | `message.blocks`（含 usage 块） | 会话视图本身 |
-| 谁改了系统配置？ | `securityAuditLog`（config 类） | 安全审计页 |
+| 谁改了系统配置？ | `securityAuditLog`（config 类）；server 部署另有 `operation_log`（已启用） | 安全审计页；server `operationLogs/query` |
 
 ---
 

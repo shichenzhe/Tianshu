@@ -1,7 +1,9 @@
 // src-react/domains/ai/monitor/views/MonitorView.tsx
 /**
  * 监控页（spec §6）：场景筛选 chip + KPI 行 + 7 天趋势 + 按模型分布 +
- * 工具排行。数据 monitor:stats 即时聚合；场景变更经 queryKey 失效重拉。
+ * 工具排行 + MCP 服务聚合。数据 monitor:stats 即时聚合；场景变更经
+ * queryKey 失效重拉。MCP server 维度卡（skills-tools-mcp §6 项 8）：
+ * mcpByServer 可选字段（旧远端响应缺席时整卡不渲染，增量兼容）。
  */
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -239,6 +241,40 @@ export default function MonitorView() {
                 />
               )}
             </section>
+            {(data.mcpByServer?.length ?? 0) > 0 && (
+              <section
+                data-testid="monitor-mcp-section"
+                className="rounded-lg border border-border/50 p-3"
+              >
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  {t("chat:monitor.mcpServerTitle")}
+                </p>
+                <StatTable
+                  head={[
+                    t("chat:monitor.mcpServerName"),
+                    t("chat:monitor.toolTotal"),
+                    t("chat:monitor.toolSuccess"),
+                    t("chat:monitor.toolAvgDuration"),
+                    t("chat:monitor.toolDenied"),
+                    t("chat:monitor.toolError"),
+                  ]}
+                  rows={data.mcpByServer!.map((mcp) => [
+                    { text: mcp.server },
+                    { text: String(mcp.total) },
+                    { text: `${Math.round(mcp.successRate * 100)}%` },
+                    { text: formatDuration(mcp.avgDurationMs) },
+                    {
+                      text: String(mcp.denied),
+                      tone: mcp.denied > 0 ? "destructive" : undefined,
+                    },
+                    {
+                      text: String(mcp.error),
+                      tone: mcp.error > 0 ? "destructive" : undefined,
+                    },
+                  ])}
+                />
+              </section>
+            )}
           </div>
         )}
       </div>

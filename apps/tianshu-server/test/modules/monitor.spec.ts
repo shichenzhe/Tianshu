@@ -93,6 +93,16 @@ describe('monitor/stats 端点（MO 批）', () => {
           state: 'denied',
           createdAt: now,
         },
+        // MCP 调用（skills-tools-mcp §6 项 8）：mcp__<server>__<tool> 前缀
+        // 行经 computeMonitorStats 切 server 段进 mcpByServer
+        {
+          scene: 'chat',
+          userId: 1,
+          toolName: 'mcp__github__create_issue',
+          state: 'done',
+          durationMs: 300,
+          createdAt: now,
+        },
       ],
     });
     const res = await request(server).post('/monitor/stats').send({});
@@ -102,6 +112,17 @@ describe('monitor/stats 端点（MO 批）', () => {
     // monitor-stats.test 直测 core；此处钉端点链路通与关键面在场）
     expect(JSON.stringify(data)).toContain('测试模型');
     expect(JSON.stringify(data)).toContain('write');
+    // mcpByServer：server 段聚合在场（github 一次 done）
+    const mcpByServer = (data as { mcpByServer?: Array<{ server: string }> })
+      .mcpByServer;
+    expect(mcpByServer).toEqual([
+      expect.objectContaining({
+        server: 'github',
+        total: 1,
+        done: 1,
+        avgDurationMs: 300,
+      }),
+    ]);
   });
 
   it('scene 过滤：graph 只聚合 graph 行', async () => {

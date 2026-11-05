@@ -1,5 +1,5 @@
 /**
- * HTTP 监听地址解析与启动安全告警（终审必修 3）。
+ * HTTP 监听地址解析与启动安全告警（终审必修 3 + P2-1 部署面 TLS 告警）。
  * main.ts 启动期调用；判定函数独立成模块以便单测（main.ts 顶层即 bootstrap
  * 不可导入）。告警口径与 main.ts 的 JWT 占位符告警同款（[安全告警] 前缀）。
  */
@@ -70,4 +70,40 @@ export function emitListenSecurityWarnings(
         '请设置 TIANSHU_TOKEN，或将 config.yml app.hostname 指定为 loopback/内网地址',
     );
   }
+}
+
+/** 非 loopback 无 TLS 告警的输入面（main.ts 启动期可见信号） */
+export interface NonLoopbackTlsWarningInputs {
+  /** HTTP 监听地址 */
+  hostname: string;
+  /** relay 客户端启动 URL（wss:// = server↔relay 跳 TLS；未启动 relay 缺省） */
+  relayUrl?: string;
+  /** 反代终止 TLS 声明（config app.tlsBehindProxy / env TIANSHU_TLS_PROXY） */
+  behindTlsProxy?: boolean;
+}
+
+/**
+ * 部署面 TLS 启动告警（security.md §6 P2-1，遗留 #4 部分收口）：
+ * 非 loopback 监听且 relay 跳非 TLS 且无反代终止声明 → 明文暴露告警。
+ * 与 TIANSHU_TOKEN 的「拒绝启动」先例同形态（[安全告警] 前缀 + 指引
+ * 配置面），但**只告警不拒绝**——本 HTTP 面无原生 TLS 通道（TLS 由
+ * 反代或 relay 终止），强制拒绝会把合法的明文内网部署一并拦死，
+ * 留给部署侧显式声明。豁免信号任一在场即静默：
+ * - relayUrl 为 wss://（远程通道经 TLS 中继）
+ * - behindTlsProxy（反代终止 TLS 的显式声明）
+ */
+export function emitNonLoopbackTlsWarning(
+  inputs: NonLoopbackTlsWarningInputs,
+  warn: (message: string) => void,
+): void {
+  const { hostname, relayUrl, behindTlsProxy } = inputs;
+  if (isLoopbackAddress(hostname)) return;
+  if (behindTlsProxy) return;
+  if (relayUrl?.startsWith('wss://')) return;
+  warn(
+    `[安全告警] HTTP 服务以明文监听非 loopback 地址（${hostname}）：` +
+      'chat/file 等业务流量将明文过网。请在反代（nginx 等）终止 TLS 并声明 ' +
+      'config.yml app.tlsBehindProxy: true（或 env TIANSHU_TLS_PROXY=1），' +
+      '或改用 wss:// relay 通道；内网明文部署属已知风险自负',
+  );
 }

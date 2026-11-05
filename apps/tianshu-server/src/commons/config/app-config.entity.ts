@@ -8,6 +8,9 @@ export class AppConfig {
   port: number;
   // 监听地址（缺省 0.0.0.0 监听所有网卡；内网部署建议指定，见 listen-host 告警）
   hostname?: string;
+  // 反代终止 TLS 声明（P2-1）：非 loopback 明文监听启动告警的豁免标识——
+  // 部署面由反代（nginx 等）终止 TLS 时置 true；env TIANSHU_TLS_PROXY=1 同效
+  tlsBehindProxy?: boolean;
   // 服务根路径，没有默认为"/"
   contextPath: string;
   // 响应压缩配置

@@ -23,6 +23,7 @@ import { SwaggerConfig } from './commons/config/swagger-config.entity';
 import { jwtSecretSource } from './commons/config/env-secret';
 import {
   emitListenSecurityWarnings,
+  emitNonLoopbackTlsWarning,
   resolveListenHostname,
 } from './commons/web/listen-host';
 import { shutdownAndExit } from './commons/web/shutdown';
@@ -87,10 +88,27 @@ async function bootstrap() {
     );
   }
   //设置监听地址与端口号（终审必修 3：通配绑定/无 token 非 loopback 启动告警）
+  // relay 启动解析前置（P2-1 告警需读 relayUrl 的 wss 信号；下方启动复用同值）
+  const relayLaunch = resolveRelayLaunch(process.argv.slice(2));
   const listenHostname = resolveListenHostname(appConfig.hostname);
   emitListenSecurityWarnings(
     listenHostname,
     process.env.TIANSHU_TOKEN,
+    (message) => console.warn(message),
+  );
+  // P2-1 部署面 TLS 告警（只告警不拒绝）：非 loopback 明文监听且 relay
+  // 非 wss 且无反代终止声明——豁免标识 config app.tlsBehindProxy /
+  // env TIANSHU_TLS_PROXY=1（与 TIANSHU_TOKEN 告警同形态）
+  emitNonLoopbackTlsWarning(
+    {
+      hostname: listenHostname,
+      relayUrl: relayLaunch?.relayUrl,
+      behindTlsProxy:
+        appConfig.tlsBehindProxy ||
+        ['1', 'true'].includes(
+          (process.env.TIANSHU_TLS_PROXY ?? '').toLowerCase(),
+        ),
+    },
     (message) => console.warn(message),
   );
   await app.listen(appConfig.port, listenHostname);
@@ -131,7 +149,6 @@ async function bootstrap() {
   // 先 Basic 换 access + 低频续期，见 relay/relay-client.ts）；static
   // 在场优先；缺任一不启动——relay 接入必须鉴权。register 后 req 帧 →
   // inject 内部派发、EventBus → event 帧
-  const relayLaunch = resolveRelayLaunch(process.argv.slice(2));
   if (relayLaunch) {
     await startHeadlessRelay({
       app,

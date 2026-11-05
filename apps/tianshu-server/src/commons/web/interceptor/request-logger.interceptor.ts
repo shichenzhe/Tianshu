@@ -12,6 +12,7 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { Logger } from 'src/commons/log/logger';
 import { LoggerFactory } from 'src/commons/log/logger-factory';
 import IPUtil from '../util/ip.util';
+import { MASKED_VALUE, maskUrlToken } from '../util/url-sanitize.util';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 
 /**
@@ -44,8 +45,7 @@ const SENSITIVE_VALUE_KEYS = new Set([
   'confirmpassword',
   'passwordhash',
 ]);
-/** 敏感值打码占位符 */
-const MASKED_VALUE = '***';
+/** 敏感值打码占位符（url/query 面共用口径已抽 url-sanitize.util） */
 /** 递归打码深度上限（防畸形深嵌套；超出层原样保留） */
 const MASK_MAX_DEPTH = 8;
 
@@ -109,7 +109,7 @@ export class RequestLoggerInterceptor implements NestInterceptor {
   private extractRequestInfo(request: FastifyRequest) {
     const method = request.method;
     // 获取子路径（query 中 token 打码，SSE EventSource 经 ?token= 携带凭证）
-    const url = this.maskUrlToken(request.url);
+    const url = maskUrlToken(request.url);
     const queryParams = this.maskQueryToken(request.query);
     // 安全批 B6：消息载荷路径正文只记摘要——聊天/图/自动化请求体原文
     // 落 info 级按日日志曾使 e2e 内容防护在日志面旁路失效（日志采集/
@@ -147,17 +147,6 @@ export class RequestLoggerInterceptor implements NestInterceptor {
     } catch {
       return "n/a";
     }
-  }
-
-  /** url 的 token 泄露面打码：query 参数值 + /webhook/ 路径段（webhook
-   *  token 是 URL path 的一部分，2026-11-02 审查曾整段明文落按日日志） */
-  private maskUrlToken(url: string): string {
-    let masked = url.replace(/([?&])token=[^&]*/gi, `$1token=${MASKED_VALUE}`);
-    masked = masked.replace(
-      /(\/webhook\/)[a-f0-9]{16,}/gi,
-      `$1${MASKED_VALUE}`,
-    );
-    return masked;
   }
 
   /** query 对象的 token 键值打码（浅层：token 只出现在顶层） */

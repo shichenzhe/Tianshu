@@ -34,4 +34,19 @@ export interface MonitorStats {
     avgDurationMs: number | null;
     successRate: number;
   }>;
+  /**
+   * MCP server 维度聚合（skills-tools-mcp §6 项 8）：toolName 带 mcp__
+   * 前缀的调用按 server 段切分聚合；可选字段——旧服务端响应/移动端等
+   * 既有消费面不构造该字段，增量兼容（三端共用 computeMonitorStats
+   * 产出侧恒在场）
+   */
+  mcpByServer?: Array<{
+    server: string; // mcp__<server>__<tool> 的 server 段
+    total: number;
+    done: number;
+    denied: number;
+    error: number;
+    avgDurationMs: number | null;
+    successRate: number;
+  }>;
 }

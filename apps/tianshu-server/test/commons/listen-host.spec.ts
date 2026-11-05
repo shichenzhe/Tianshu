@@ -1,6 +1,7 @@
 import {
   DEFAULT_LISTEN_HOSTNAME,
   emitListenSecurityWarnings,
+  emitNonLoopbackTlsWarning,
   isLoopbackAddress,
   isWildcardAddress,
   resolveListenHostname,
@@ -91,5 +92,59 @@ describe('emitListenSecurityWarnings', () => {
 
   it('非 loopback 地址且有 token：无告警', () => {
     expect(collectWarnings('192.168.1.10', 'a'.repeat(32))).toHaveLength(0);
+  });
+});
+
+describe('emitNonLoopbackTlsWarning（P2-1 部署面 TLS 告警）', () => {
+  function collectTls(
+    hostname: string,
+    opts?: { relayUrl?: string; behindTlsProxy?: boolean },
+  ): string[] {
+    const warnings: string[] = [];
+    emitNonLoopbackTlsWarning({ hostname, ...opts }, (m) =>
+      warnings.push(m),
+    );
+    return warnings;
+  }
+
+  it('非 loopback 且无 TLS 信号：告警明文暴露（只告警不拒绝）', () => {
+    const warnings = collectTls('192.168.1.10');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('[安全告警]');
+    expect(warnings[0]).toContain('TLS');
+    // 告警形态对齐 TIANSHU_TOKEN 先例：指引可操作配置
+    expect(warnings[0]).toContain('tlsBehindProxy');
+  });
+
+  it('通配绑定 0.0.0.0 同样告警（非 loopback 子集）', () => {
+    expect(collectTls('0.0.0.0')).toHaveLength(1);
+  });
+
+  it('loopback 绑定：静默（本地开发语义，与 token 告警同豁免）', () => {
+    expect(collectTls('127.0.0.1')).toHaveLength(0);
+    expect(collectTls('localhost')).toHaveLength(0);
+    expect(collectTls('::1')).toHaveLength(0);
+  });
+
+  it('relay wss://（server↔relay 跳 TLS）：不告警', () => {
+    expect(
+      collectTls('192.168.1.10', { relayUrl: 'wss://relay.example.com/ws' }),
+    ).toHaveLength(0);
+  });
+
+  it('relay ws://（明文中继跳）：仍告警', () => {
+    expect(
+      collectTls('192.168.1.10', { relayUrl: 'ws://relay.example.com/ws' }),
+    ).toHaveLength(1);
+  });
+
+  it('反代终止 TLS 声明（behindTlsProxy）：不告警', () => {
+    expect(
+      collectTls('192.168.1.10', { behindTlsProxy: true }),
+    ).toHaveLength(0);
+  });
+
+  it('relay 未启动（undefined）：非 loopback 即告警', () => {
+    expect(collectTls('10.0.0.5', {})).toHaveLength(1);
   });
 });

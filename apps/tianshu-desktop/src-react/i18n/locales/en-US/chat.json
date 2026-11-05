@@ -62,6 +62,8 @@
     "toolAvgDuration": "Avg duration",
     "toolDenied": "Denied",
     "toolError": "Failed",
+    "mcpServerTitle": "MCP Servers",
+    "mcpServerName": "Server",
     "empty": "No data yet",
     "loadFailed": "Failed to load monitor data"
   },

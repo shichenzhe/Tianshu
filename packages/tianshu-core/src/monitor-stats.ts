@@ -6,10 +6,26 @@
  * 与自动化成功率「skipped 不进分母」不同：工具被拒是可观测结果）；
  * byModel 跳过 modelId=null（graph 场景，今日/趋势已含其 token）；
  * 趋势 7 天含空日补零（旧→新）；avgDurationMs 仅非 null 参与均值。
+ * mcpByServer（skills-tools-mcp §6 项 8）：mcp__ 前缀行按 server 段另聚
+ * （成功率/延迟/次数），tools 榜单口径不变——协议字段可选（旧端增量兼容）。
  */
 import type { MonitorStats } from "@tianshu/protocol";
 
 const TREND_DAYS = 7;
+
+/** MCP 工具名前缀（mcp-manager toolPrefix 同款构造 mcp__<server>__<tool>） */
+export const MCP_TOOL_PREFIX = "mcp__";
+
+/**
+ * mcp__<server>__<tool> 切 server 段：前缀后首个 __ 之前（构造序决定；
+ * server 名自身含 __ 时以首个为界）。非 mcp__ 前缀返回 null。
+ */
+export function mcpServerOf(toolName: string): string | null {
+  if (!toolName.startsWith(MCP_TOOL_PREFIX)) return null;
+  const rest = toolName.slice(MCP_TOOL_PREFIX.length);
+  const sep = rest.indexOf("__");
+  return sep === -1 ? rest : rest.slice(0, sep);
+}
 
 /** findMany 产出行（llmCallEvent select 子集） */
 export interface LlmEventRow {
@@ -56,11 +72,25 @@ function emptyToolItem(toolName: string): MonitorStats["tools"][number] {
   };
 }
 
-function withRate(
-  item: MonitorStats["tools"][number],
+function emptyMcpServerItem(
+  server: string,
+): NonNullable<MonitorStats["mcpByServer"]>[number] {
+  return {
+    server,
+    total: 0,
+    done: 0,
+    denied: 0,
+    error: 0,
+    avgDurationMs: null,
+    successRate: 0,
+  };
+}
+
+function withRate<T extends { total: number; done: number }>(
+  item: T,
   durationSum: number,
   durationCount: number,
-): MonitorStats["tools"][number] {
+): T & { avgDurationMs: number | null; successRate: number } {
   return {
     ...item,
     avgDurationMs:
@@ -136,6 +166,16 @@ export function computeMonitorStats(
     string,
     { item: MonitorStats["tools"][number]; sum: number; cnt: number }
   >();
+  // —— mcpByServer：mcp__ 前缀行另按 server 段聚合（tools 榜单口径不变，
+  //    双面并存——server 维度看整体健康度，tools 看 single 工具排行）——
+  const mcpMap = new Map<
+    string,
+    {
+      item: NonNullable<MonitorStats["mcpByServer"]>[number];
+      sum: number;
+      cnt: number;
+    }
+  >();
   for (const row of toolRows) {
     const entry = toolsMap.get(row.toolName) ?? {
       item: emptyToolItem(row.toolName),
@@ -155,6 +195,27 @@ export function computeMonitorStats(
       entry.cnt += 1;
     }
     toolsMap.set(row.toolName, entry);
+    const server = mcpServerOf(row.toolName);
+    if (server !== null) {
+      const mcpEntry = mcpMap.get(server) ?? {
+        item: emptyMcpServerItem(server),
+        sum: 0,
+        cnt: 0,
+      };
+      mcpEntry.item.total += 1;
+      if (
+        row.state === "done" ||
+        row.state === "denied" ||
+        row.state === "error"
+      ) {
+        mcpEntry.item[row.state] += 1;
+      }
+      if (row.durationMs !== null) {
+        mcpEntry.sum += row.durationMs;
+        mcpEntry.cnt += 1;
+      }
+      mcpMap.set(server, mcpEntry);
+    }
   }
   return {
     today: {
@@ -170,6 +231,9 @@ export function computeMonitorStats(
       (a, b) => b.inputTokens - a.inputTokens,
     ),
     tools: [...toolsMap.values()]
+      .map((e) => withRate(e.item, e.sum, e.cnt))
+      .sort((a, b) => b.total - a.total),
+    mcpByServer: [...mcpMap.values()]
       .map((e) => withRate(e.item, e.sum, e.cnt))
       .sort((a, b) => b.total - a.total),
   };

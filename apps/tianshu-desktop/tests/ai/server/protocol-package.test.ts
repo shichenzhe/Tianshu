@@ -184,8 +184,9 @@ describe("@tianshu/protocol 协议包", () => {
         uploadFile: "library/uploadFile",
       },
       image: "image",
-      // A7 项目批（23 段）：桌面被控面专属；planView 只读消费，
-      // projectAsset/readImage 服务端解析资产根
+      // A7 项目批（28 段）：桌面被控面专属；planView 含写面四段
+      // （2026-11-05 批），projectAsset/readImage 服务端解析资产根，
+      // upload 为 base64 单文件写面
       project: {
         query: "project/query",
         getDetail: "project/getDetail",
@@ -208,6 +209,10 @@ describe("@tianshu/protocol 协议包", () => {
       },
       planView: {
         list: "planView/list",
+        create: "planView/create",
+        update: "planView/update",
+        delete: "planView/delete",
+        reorder: "planView/reorder",
       },
       projectAsset: {
         list: "projectAsset/list",
@@ -216,6 +221,7 @@ describe("@tianshu/protocol 协议包", () => {
         delete: "projectAsset/delete",
         storage: "projectAsset/storage",
         readImage: "projectAsset/readImage",
+        upload: "projectAsset/upload",
       },
       // ui-drive 三段（UD-T1）：仅桌面被控面实现，无头端不报即不可达
       ui: {

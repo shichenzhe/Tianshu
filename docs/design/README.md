@@ -3,6 +3,8 @@
 > 调研基线：main 分支 995bf652（2026-11-05），由 9 路并行代码实况调研生成。
 > 每篇统一结构：模块定位 → 数据模型 → 核心技术方案（真实路径/函数/字段佐证）→ 三端布局 → 业界主流做法对比 → 改进空间（按优先级）。
 > 路径基准：桌面端 `apps/tianshu-desktop/`（`electron/` 主进程、`src-react/` 渲染进程），server 端 `apps/tianshu-server/`，移动端 `apps/tianshu-mobile/`，共享包 `packages/*`。
+>
+> **2026-11-05 落地批**：各篇 §6 改进空间的执行结果见 [improvement-log-2026-11-05.md](improvement-log-2026-11-05.md)（过程记录：任务-commit 对照、修复环、执行裁定、数据迁移影响、挂账去向）。
 
 ## 文档索引
 

@@ -160,5 +160,7 @@
   "polish": "Polish",
   "polishDone": "Polished",
   "polishFailed": "Polish failed—please retry",
-  "fileRefEdit": "Edit"
+  "fileRefEdit": "Edit",
+  "loadMoreSessions": "Load more ({{loaded}}/{{total}})",
+  "loadingMore": "Loading…"
 }

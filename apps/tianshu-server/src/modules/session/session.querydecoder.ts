@@ -40,6 +40,11 @@ export class SessionQueryDecoder implements QueryDecoder {
       where.workspaceId = params.workspaceId;
     }
 
+    // 项目组深翻页定向过滤（mirror 同构；无头端项目会话恒 null 命中空集）
+    if (params.projectId != null) {
+      where.projectId = params.projectId;
+    }
+
     // keyword 不在此处：SQLite LIKE 对 ASCII 不敏感，无法表达 mirror 的
     // 大小写敏感 includes 语义——由 SessionRepository.query 内存过滤
 

@@ -160,5 +160,7 @@
   "polish": "润色",
   "polishDone": "已润色",
   "polishFailed": "润色失败，请重试",
-  "fileRefEdit": "编辑"
+  "fileRefEdit": "编辑",
+  "loadMoreSessions": "加载更多（已 {{loaded}}/{{total}}）",
+  "loadingMore": "加载中…"
 }

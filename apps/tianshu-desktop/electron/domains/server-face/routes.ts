@@ -432,6 +432,7 @@ async function handleQuery(body: unknown): Promise<RouteResult> {
     workspaceId?: number;
     archived?: boolean;
     activityAfter?: string;
+    projectId?: number;
   };
   // A11 时间筛选批：畸形时间串按 5000 参数不合法拒（跟随本 handler
   // 参数错误惯例）；阈值由客户端按本机时区算好上送（被控端时区不可信）
@@ -454,6 +455,10 @@ async function handleQuery(body: unknown): Promise<RouteResult> {
           : {}),
         ...(params.workspaceId != null
           ? { workspaceId: params.workspaceId }
+          : {}),
+        // #16 批：项目组深翻页定向过滤（无头端同构——项目会话恒 null）
+        ...(asInt(params.projectId) != null
+          ? { projectId: asInt(params.projectId) as number }
           : {}),
         ...(typeof params.archived === "boolean"
           ? { archived: params.archived }
@@ -2352,14 +2357,15 @@ function handlePlanItemFieldsSave(body: unknown): Promise<RouteResult> {
   const raw = p.fields;
   const fields =
     Array.isArray(raw) &&
-    raw.every(
-      (field) =>
-        field !== null &&
-        typeof field === "object" &&
-        typeof (field as Record<string, unknown>).name === "string" &&
-        (field as Record<string, unknown>).name.trim() !== "" &&
-        FIELD_TYPES.has(String((field as Record<string, unknown>).type)),
-    )
+    raw.every((field) => {
+      if (field === null || typeof field !== "object") return false;
+      const row = field as Record<string, unknown>;
+      return (
+        typeof row.name === "string" &&
+        row.name.trim() !== "" &&
+        FIELD_TYPES.has(String(row.type))
+      );
+    })
       ? (raw as PlanFieldDefDto[])
       : null;
   if (projectId === null || fields === null) {

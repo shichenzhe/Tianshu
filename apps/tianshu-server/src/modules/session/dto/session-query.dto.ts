@@ -18,6 +18,14 @@ export class SessionQueryDto extends QueryFilter {
   workspaceId?: number;
 
   @ApiProperty({
+    description: '会话归属项目过滤（项目组深翻页定向拉取；无头端项目会话恒 null）',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt({ message: '项目标识必须是整数' })
+  projectId?: number;
+
+  @ApiProperty({
     description: '标题关键词（includes 大小写敏感，内存过滤）',
     required: false,
   })

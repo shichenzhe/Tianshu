@@ -127,8 +127,14 @@ interface SessionsState {
   deleteWorkspace(id: number): Promise<boolean>;
   /** GL-P5 组懒加载缓存（首页分组折叠）：key=workspaceId（-1=未归属哨兵） */
   workspaceSessions: Record<number, WorkspaceSessionsState>;
+  /** #16 深翻页批：项目组定向缓存（键=projectId；展开拉首页、组尾翻页追加） */
+  projectSessions: Record<number, ProjectSessionsState>;
   /** 展开组时拉取（首页组第一页 50；loaded 缓存复用，收缩不清）；null=未归属 */
   loadWorkspaceSessions(workspaceId: number | null): Promise<void>;
+  /** 项目组展开定向拉取（projectId 过滤；旧被控端不识别时前端兜底滤行） */
+  loadProjectSessions(projectId: number): Promise<void>;
+  /** 项目组内翻页追加（items.length < total 时组尾触发） */
+  loadMoreProjectSessions(projectId: number): Promise<void>;
   /** 清组缓存（筛选切换/下拉刷新——下次展开重拉） */
   clearWorkspaceSessions(): void;
   /** 事件订阅装配（App 级只绑一次：session.updated 原地刷新+重排、server.connected 全量重拉） */
@@ -146,6 +152,17 @@ export interface WorkspaceSessionsState {
   items: SessionBrief[];
   loading: boolean;
   loaded: boolean;
+}
+
+/** 项目组会话缓存（#16 深翻页批）：projectId 定向过滤分页 + 追加翻页
+ *  （与 workspace 组差异：组内行不随主列表累积——独立分页到底） */
+interface ProjectSessionsState {
+  items: SessionBrief[];
+  loading: boolean;
+  loadingMore: boolean;
+  loaded: boolean;
+  total: number;
+  page: number;
 }
 
 /** search 防抖句柄（模块级：跨 setState 存续） */
@@ -462,6 +479,7 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
     loading: false,
     refreshing: false,
     workspaceSessions: {},
+    projectSessions: {},
 
     loadFirst: () => fetchPage(1, false),
 
@@ -554,7 +572,108 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
     },
 
     clearWorkspaceSessions: () => {
-      set({ workspaceSessions: {} });
+      set({ workspaceSessions: {}, projectSessions: {} });
+    },
+
+    loadProjectSessions: async (projectId) => {
+      const cur = get().projectSessions[projectId];
+      if (cur?.loading || cur?.loaded) return;
+      set((s) => ({
+        projectSessions: {
+          ...s.projectSessions,
+          [projectId]: {
+            items: cur?.items ?? [],
+            loading: true,
+            loadingMore: false,
+            loaded: false,
+            total: cur?.total ?? 0,
+            page: cur?.page ?? 0,
+          },
+        },
+      }));
+      const r = await request(ENDPOINTS.session.query, {
+        page: 1,
+        pageSize: PAGE_SIZE,
+        keyword: "",
+        projectId,
+        ...(get().showArchived ? {} : { archived: false }),
+        ...activityAfterParam(),
+      });
+      if (r === null) {
+        // 失败不置 loaded：重展开重试
+        set((s) => ({
+          projectSessions: {
+            ...s.projectSessions,
+            [projectId]: { ...s.projectSessions[projectId], loading: false },
+          },
+        }));
+        return;
+      }
+      const parsed = parsePage(r.data);
+      const briefs = (parsed?.records ?? []).filter(
+        // 前端兜底：旧被控端不识别 projectId（未过滤响应）按行归属滤
+        (row) => row.projectId === projectId,
+      );
+      set((s) => ({
+        projectSessions: {
+          ...s.projectSessions,
+          [projectId]: {
+            items: briefs,
+            loading: false,
+            loadingMore: false,
+            loaded: true,
+            total: parsed?.total ?? briefs.length,
+            page: 1,
+          },
+        },
+      }));
+    },
+
+    loadMoreProjectSessions: async (projectId) => {
+      const cur = get().projectSessions[projectId];
+      if (!cur?.loaded || cur.loading || cur.loadingMore) return;
+      if (cur.items.length >= cur.total) return;
+      set((s) => ({
+        projectSessions: {
+          ...s.projectSessions,
+          [projectId]: { ...cur, loadingMore: true },
+        },
+      }));
+      const nextPage = cur.page + 1;
+      const r = await request(ENDPOINTS.session.query, {
+        page: nextPage,
+        pageSize: PAGE_SIZE,
+        keyword: "",
+        projectId,
+        ...(get().showArchived ? {} : { archived: false }),
+        ...activityAfterParam(),
+      });
+      if (r === null) {
+        set((s) => ({
+          projectSessions: {
+            ...s.projectSessions,
+            [projectId]: { ...s.projectSessions[projectId], loadingMore: false },
+          },
+        }));
+        return;
+      }
+      const parsed = parsePage(r.data);
+      const appended = (parsed?.records ?? [])
+        .filter((row) => row.projectId === projectId)
+        .filter((row) => !cur.items.some((x) => x.id === row.id));
+      set((s) => ({
+        projectSessions: {
+          ...s.projectSessions,
+          [projectId]: {
+            items: [...cur.items, ...appended],
+            loading: false,
+            loadingMore: false,
+            loaded: true,
+            total: parsed?.total ?? cur.total,
+            page: nextPage,
+          },
+        },
+      }));
     },
 
     search: (kw) => {
@@ -603,6 +722,18 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
             },
           ]),
         ),
+        // #16：项目组缓存同步投影
+        projectSessions: Object.fromEntries(
+          Object.entries(s.projectSessions).map(([key, pg]) => [
+            key,
+            {
+              ...pg,
+              items: pg.items.map((i) =>
+                i.id === id ? projectUpdate(i, params, now, s.showArchived) : i,
+              ),
+            },
+          ]),
+        ),
       }));
       return true;
     },
@@ -624,6 +755,20 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
               : ws,
           ]),
         ),
+        // #16：项目组缓存同步清角标
+        projectSessions: Object.fromEntries(
+          Object.entries(s.projectSessions).map(([key, pg]) => [
+            key,
+            pg.items.some((i) => i.id === id)
+              ? {
+                  ...pg,
+                  items: pg.items.map((i) =>
+                    i.id === id ? { ...i, unreadCount } : i,
+                  ),
+                }
+              : pg,
+          ]),
+        ),
       }));
     },
 
@@ -632,9 +777,13 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
         const pending = (i: SessionBrief) =>
           i.id === id && i.pendingArchive === true;
         const inItems = s.items.some(pending);
-        const inCaches = Object.values(s.workspaceSessions).some((ws) =>
-          ws.items.some(pending),
-        );
+        const inCaches =
+          Object.values(s.workspaceSessions).some((ws) =>
+            ws.items.some(pending),
+          ) ||
+          Object.values(s.projectSessions).some((pg) =>
+            pg.items.some(pending),
+          );
         if (!inItems && !inCaches) return {}; // 已撤销/已移除：落定 no-op
         return {
           items: s.items.filter((i) => i.id !== id),
@@ -643,6 +792,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
             Object.entries(s.workspaceSessions).map(([key, ws]) => [
               key,
               { ...ws, items: ws.items.filter((i) => i.id !== id) },
+            ]),
+          ),
+          // #16：项目组缓存滤行（total 随行递减）
+          projectSessions: Object.fromEntries(
+            Object.entries(s.projectSessions).map(([key, pg]) => [
+              key,
+              pg.items.some((i) => i.id === id)
+                ? {
+                    ...pg,
+                    items: pg.items.filter((i) => i.id !== id),
+                    total: Math.max(0, pg.total - 1),
+                  }
+                : pg,
             ]),
           ),
         };
@@ -667,6 +829,10 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
         // 沉底，与本地置顶不一致，已知可接受（首条消息发出后即归位）
         const groupKey = brief.workspaceId ?? UNGROUPED_KEY;
         const cached = get().workspaceSessions[groupKey];
+        // #16：项目组缓存定向前置（归属项目组已加载时；未加载组展开时拉）
+        const pgId = options?.projectId ?? brief.projectId ?? null;
+        const pgCached =
+          pgId != null ? get().projectSessions[pgId] : undefined;
         set((s) => ({
           items: [brief, ...s.items],
           total: s.total + 1,
@@ -678,6 +844,17 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
                 [groupKey]: { ...cached, items: [brief, ...cached.items] },
               }
             : s.workspaceSessions,
+          projectSessions:
+            pgCached?.loaded && pgId != null
+              ? {
+                  ...s.projectSessions,
+                  [pgId]: {
+                    ...pgCached,
+                    items: [brief, ...pgCached.items],
+                    total: pgCached.total + 1,
+                  },
+                }
+              : s.projectSessions,
         }));
       }
       return brief;
@@ -694,6 +871,19 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
           Object.entries(s.workspaceSessions).map(([key, ws]) => [
             key,
             { ...ws, items: ws.items.filter((i) => i.id !== id) },
+          ]),
+        ),
+        // #16：项目组缓存同步滤行（total 随行递减）
+        projectSessions: Object.fromEntries(
+          Object.entries(s.projectSessions).map(([key, pg]) => [
+            key,
+            pg.items.some((i) => i.id === id)
+              ? {
+                  ...pg,
+                  items: pg.items.filter((i) => i.id !== id),
+                  total: Math.max(0, pg.total - 1),
+                }
+              : pg,
           ]),
         ),
       }));

@@ -247,6 +247,11 @@ export default function SessionsScreen() {
   const create = useSessionsStore((s) => s.create);
   // GL-P5 组懒加载：折叠组缓存与拉取（展开才查）
   const workspaceSessions = useSessionsStore((s) => s.workspaceSessions);
+  const projectSessions = useSessionsStore((s) => s.projectSessions);
+  const loadProjectSessions = useSessionsStore((s) => s.loadProjectSessions);
+  const loadMoreProjectSessions = useSessionsStore(
+    (s) => s.loadMoreProjectSessions,
+  );
   const loadWorkspaceSessions = useSessionsStore(
     (s) => s.loadWorkspaceSessions,
   );
@@ -364,19 +369,24 @@ export default function SessionsScreen() {
     [loadWorkspaceSessions],
   );
 
-  /** 批③：项目组展开/收缩（行来自主列表剥离，无懒加载——不触组缓存拉取） */
-  const toggleProjectGroup = useCallback((projectId: number) => {
-    tapLight();
-    setExpandedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
-      return next;
-    });
-  }, []);
+  /** 批③：项目组展开/收缩；#16 深翻页：展开触发定向拉取（loaded 缓存
+   *  内 no-op；组行不再依赖主列表翻页累积——独立分页到底） */
+  const toggleProjectGroup = useCallback(
+    (projectId: number) => {
+      tapLight();
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
+        if (next.has(projectId)) {
+          next.delete(projectId);
+        } else {
+          next.add(projectId);
+          void loadProjectSessions(projectId);
+        }
+        return next;
+      });
+    },
+    [loadProjectSessions],
+  );
 
   /** 行回调组（全 stable——memo 会话行 props 稳定的根基） */
   const openSheetFor = useCallback((s: SessionBrief) => {
@@ -486,6 +496,15 @@ export default function SessionsScreen() {
       }
     | { kind: "pending"; key: string; state: "loading" | "empty" }
     | {
+        /** #16 深翻页：项目组尾「加载更多」行（定向缓存翻页追加） */
+        kind: "pmore";
+        key: string;
+        projectId: number;
+        loading: boolean;
+        loaded: number;
+        total: number;
+      }
+    | {
         kind: "row";
         key: string;
         session: SessionBrief;
@@ -554,29 +573,50 @@ export default function SessionsScreen() {
         entries.push({ kind: "row", key: `r${session.id}`, session, edge });
       });
     });
-    // 批③：项目组接在空间组之后（对齐桌面侧栏 D4 渲染序）
+    // 批③：项目组接在空间组之后（对齐桌面侧栏 D4 渲染序）；
+    // #16 深翻页：展开组行来自 projectSessions 定向缓存（独立分页到底，
+    // 不再随主列表翻页累积），组尾「加载更多」翻页追加
     projectGroups.forEach((pg) => {
       const open = expandedProjects.has(pg.id);
+      const pgCache = projectSessions[pg.id];
       entries.push({
         kind: "pgroup",
         key: `pg${pg.id}`,
         projectId: pg.id,
         title: pg.name,
-        count: pg.items.length,
+        count: pgCache?.loaded ? pgCache.total : pg.items.length,
         open,
       });
       if (!open) return;
-      pg.items.forEach((session, i) => {
+      if (!pgCache || pgCache.loading) {
+        entries.push({ kind: "pending", key: `pgl${pg.id}`, state: "loading" });
+        return;
+      }
+      if (pgCache.items.length === 0) {
+        entries.push({ kind: "pending", key: `pge${pg.id}`, state: "empty" });
+        return;
+      }
+      pgCache.items.forEach((session, i) => {
         const edge: "first" | "middle" | "last" | "single" =
-          pg.items.length === 1
+          pgCache.items.length === 1
             ? "single"
             : i === 0
               ? "first"
-              : i === pg.items.length - 1
+              : i === pgCache.items.length - 1
                 ? "last"
                 : "middle";
         entries.push({ kind: "row", key: `r${session.id}`, session, edge });
       });
+      if (pgCache.items.length < pgCache.total) {
+        entries.push({
+          kind: "pmore",
+          key: `pgm${pg.id}`,
+          projectId: pg.id,
+          loading: pgCache.loadingMore,
+          loaded: pgCache.items.length,
+          total: pgCache.total,
+        });
+      }
     });
     return entries;
   }, [
@@ -585,6 +625,7 @@ export default function SessionsScreen() {
     projectGroups,
     workspaces,
     workspaceSessions,
+    projectSessions,
     expanded,
     expandedProjects,
     creatingWs,
@@ -808,6 +849,28 @@ export default function SessionsScreen() {
                   onToggle={toggleProjectGroup}
                   onCreate={null}
                 />
+              );
+            }
+            if (item.kind === "pmore") {
+              return (
+                <Pressable
+                  onPress={() => void loadMoreProjectSessions(item.projectId)}
+                  disabled={item.loading}
+                  className="items-center px-4 py-3"
+                  hitSlop={4}
+                >
+                  <Text
+                    className="text-xs"
+                    style={{ color: item.loading ? "#8E8E93" : colors.primary }}
+                  >
+                    {item.loading
+                      ? t("chat:loadingMore")
+                      : t("chat:loadMoreSessions", {
+                          loaded: item.loaded,
+                          total: item.total,
+                        })}
+                  </Text>
+                </Pressable>
               );
             }
             return (

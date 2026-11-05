@@ -81,6 +81,9 @@ export interface SessionQueryParams {
   workspaceId?: number;
   archived?: boolean;
   activityAfter?: Date;
+  /** 会话归属项目过滤（#16 批：移动端项目组深翻页定向拉取；无头端
+   *  协议同构——项目会话恒 null，过滤命中空集语义正确） */
+  projectId?: number;
 }
 
 /** 分页协议（starter QueryResult 同构：{page,pageSize,records,total}） */
@@ -623,6 +626,9 @@ export class SessionRepository {
     const where: Prisma.sessionWhereInput = { userId };
     if (params.workspaceId != null) {
       where.workspaceId = params.workspaceId;
+    }
+    if (params.projectId != null) {
+      where.projectId = params.projectId;
     }
     if (typeof params.archived === "boolean") {
       // SQLite 语义：null 表示未归档

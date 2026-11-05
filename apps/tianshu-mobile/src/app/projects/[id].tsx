@@ -76,7 +76,8 @@ import {
   toggleConditionValueUpdater,
 } from "@/logic/plan-filter";
 
-import { ActionSheetItem, AppActionSheet } from "@/components/AppActionSheet";
+import { AppActionSheet, ActionSheetItem } from "@/components/AppActionSheet";
+import { AutomationCard } from "@/components/AutomationCard";
 import { DialogShell } from "@/components/DialogShell";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
 import { FormField, PLACEHOLDER } from "@/components/FormField";
@@ -94,6 +95,7 @@ import {
   useConnectionsStore,
 } from "@/store/connections.store";
 import { resolveActiveView, useProjectStore } from "@/store/project.store";
+import { useOrchestrationStore } from "@/store/orchestration.store";
 import { useSessionsStore } from "@/store/sessions.store";
 import { useThemeColors } from "@/store/theme";
 
@@ -716,6 +718,19 @@ export default function ProjectWorkspaceScreen() {
     void store.loadAssets(projectId);
     void store.loadStorage(projectId);
   }, [projectId, activeConnId, supported]);
+
+  /** #13 定时任务批：本项目任务（orchestration 同源派生——启停/删除的
+   *  乐观翻转在 store 生效，本区块随订阅自动刷新；桌面 ConfigPanel 同位） */
+  const allTasks = useOrchestrationStore((state) => state.tasks);
+  const tasksLoading = useOrchestrationStore((state) => state.tasksLoading);
+  const projectTasks = useMemo(
+    () => allTasks.filter((task) => task.projectId === projectId),
+    [allTasks, projectId],
+  );
+  useEffect(() => {
+    if (tab !== "about" || !activeConnId || !supported) return;
+    void useOrchestrationStore.getState().loadTasks();
+  }, [tab, activeConnId, supported]);
 
   /** 处理人昵称映射（未指派显示 -） */
   const memberNames = useMemo(
@@ -1351,6 +1366,44 @@ export default function ProjectWorkspaceScreen() {
               ))
             )}
           </View>
+        </View>
+        {/* #13 定时任务批：本项目任务（AutomationCard 复用——启停/立即
+            运行/点击编辑/长按历史与删除，桌面 ConfigPanel 区块③同位） */}
+        <View className="mx-3 gap-2">
+          <View className="flex-row items-center justify-between px-1">
+            <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
+              {t("project:automationTasks")}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("orchestration:newTask")}
+              onPress={() => router.push(`/automation/new?projectId=${projectId}`)}
+              className="flex-row items-center gap-1"
+              hitSlop={8}
+            >
+              <Plus size={14} color={colors.primary} />
+              <Text className="text-xs" style={{ color: colors.primary }}>
+                {t("orchestration:newTask")}
+              </Text>
+            </Pressable>
+          </View>
+          {projectTasks.length === 0 ? (
+            <Text className="bg-card px-4 py-4 text-center text-sm text-label2 dark:bg-[#1C1C1E] dark:text-[#EBEBF599]">
+              {tasksLoading && allTasks.length === 0
+                ? "…"
+                : t("orchestration:emptyTasks")}
+            </Text>
+          ) : (
+            <View className="overflow-hidden rounded-2xl">
+              {projectTasks.map((task, index) => (
+                <AutomationCard
+                  key={task.id}
+                  task={task}
+                  isLast={index === projectTasks.length - 1}
+                />
+              ))}
+            </View>
+          )}
         </View>
       </ScrollView>
     );

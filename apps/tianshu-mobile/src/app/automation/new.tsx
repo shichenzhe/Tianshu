@@ -476,9 +476,17 @@ export default function NewAutomationScreen() {
   const { t } = useTranslation(["orchestration", "common"]);
   const router = useRouter();
   const colors = useThemeColors();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string; projectId?: string }>();
   const editId =
     params.id != null && params.id !== "" ? Number(params.id) : null;
+  /** #13 项目批：新建预设归属（?projectId=，项目工作台「+」入口携带；
+   *  编辑态不用——buildEditPayload 原样带走任务原值） */
+  const presetProjectId =
+    params.projectId != null &&
+    params.projectId !== "" &&
+    Number.isFinite(Number(params.projectId))
+      ? Number(params.projectId)
+      : null;
 
   const graphs = useOrchestrationStore((state) => state.graphs);
   const graphsLoading = useOrchestrationStore((state) => state.graphsLoading);
@@ -621,6 +629,9 @@ export default function NewAutomationScreen() {
               scheduleText: buildScheduleText(values, t),
               missedPolicy: missed,
               accessMode: access,
+              ...(presetProjectId !== null
+                ? { projectId: presetProjectId }
+                : {}),
               enabled: true,
             });
       if (result.ok) router.back();

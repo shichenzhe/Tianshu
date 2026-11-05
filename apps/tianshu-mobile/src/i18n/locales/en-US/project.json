@@ -119,6 +119,7 @@
     "sourceTemplate": "Template"
   },
   "defaultView": "Default view",
+  "automationTasks": "Scheduled tasks",
   "newView": "New view",
   "renameView": "Rename view",
   "deleteView": "Delete view",

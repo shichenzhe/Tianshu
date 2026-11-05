@@ -119,6 +119,7 @@
     "sourceTemplate": "模版"
   },
   "defaultView": "默认视图",
+  "automationTasks": "定时任务",
   "newView": "新建视图",
   "renameView": "重命名视图",
   "deleteView": "删除视图",

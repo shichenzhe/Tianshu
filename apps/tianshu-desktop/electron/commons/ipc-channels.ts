@@ -339,6 +339,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:connectionList",
   "server:connectionSave",
   "server:connectionDelete",
+  // TOFU 指纹用户确认（P0-1 确认仪式）：确认卡「核对后确认」动作
+  "server:connectionConfirmFingerprint",
   "server:testConnection",
   "server:localStart",
   "server:localStop",

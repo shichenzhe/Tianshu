@@ -266,7 +266,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 
 **握手状态机**（控制端 `electron/domains/server/relay-transport.ts`；被控端 `server-face` 对称实现）：
 
-- ws open → 发 e2e-hello（临时对+已存指纹）→ 等 e2e-ack（默认 2s 超时）：指纹匹配（**自算 fingerprintOf，不信任 wire 回显**）→ deriveSessionKeys + createE2ESession，此后 req/res/event 全走信封；TOFU（首连无存档指纹）→ 加密 + ack 指纹上报注册表回填持久化（下次强制）——**自动回填无用户确认是已知待办**（需 UI，§5）；不匹配 → 断开 + mitm-suspect 态不再重连（用户须核对指纹重配）。
+- ws open → 发 e2e-hello（临时对+已存指纹）→ 等 e2e-ack（默认 2s 超时）：指纹匹配（**自算 fingerprintOf，不信任 wire 回显**）→ deriveSessionKeys + createE2ESession，此后 req/res/event 全走信封（状态 encrypted）；TOFU（首连无存档指纹）→ 加密会话可用 + 状态 `pending-confirm`——ack 指纹上报注册表（`ConnectionView.e2eFingerprint`）供确认卡核对，**不自动回填**：用户在主机页指纹核对卡（连接名 + 16hex + mitm-suspect 同款警示）比对被控端设置卡后经 `server:connectionConfirmFingerprint` 显式确认，才钉扎指纹 + `confirmedAt` 落档（P0-1 确认仪式批，2026-11-05）；不匹配 → 断开 + mitm-suspect 态不再重连（用户须核对指纹重配）。连接 E2E 状态值域单源 `packages/tianshu-protocol/src/connection-contract.ts`（六值含 pending-confirm，主进程/渲染层同源）；存量已钉扎连接经 load 迁移视为已确认（补 confirmedAt——option 表 JSON 无行级 createdAt，以升级首见时刻代替，避免升级后全员弹确认卡）。
 - 降级语义：auto（缺省）握手超时重试一次明文兼容旧被控端，**降级入审计链**（relay.e2e-degraded，安全批 S2——曾有 2s 超时静默降级明文的审查发现）；required 超时**不降级直接断开**（required-failed，不再重连——堵中继攻击者恒强制降级的缺口）。
 - **被控端缺省 required**：`server-face.ts` FaceE2eMode 缺省已收敛为 "required"（安全批 J；类型含 auto/required/off 三值供显式降级）。此前 2026-11-02 审查时为 auto 缺省——该遗留项已闭环。
 - 恒明文帧面（与被控端对称）：open/close（relay 配对生命周期）、ping/pong（活性不依赖加密态）；解封失败断开重连换新协商。
@@ -354,7 +354,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 | 审批交互 | approval-request chunk → 渲染层横幅（argSummary 摘要）→ agent:approve IPC；拒绝回喂循环继续 | TUI 内联确认（y/n/always），会话内完成 | CLI/TUI 确认 + IDE 面板 | 无人工审批（预授权模型） | ITSM 工单流（ServiceNow 类），带 SLA 与代理审批 |
 | 审计 | 哈希链（sequence 单调 + prevHash→hash + verifyChain 复算）+ 命令 preview/hash 双字段脱敏 | 本地 JSONL 转录（session 文件），无防篡改 | 会话日志 + rollouts 云端留痕 | 平台操作日志（DB 落库） | SOC2 CC7.2 要求监控告警留痕；防篡改哈希链对齐 WORM/区块链存证思路，**业界 agent 工具普遍未做**——天枢此项领先 |
 | 凭证存储 | safeStorage 主密钥 + AES-GCM 字段信封 + AAD 绑字段名 + 备份口令加密 | keychain 集成（OAuth token 存 OS keychain） | auth.json 明文/系统 keyring | 平台侧 KMS 托管 | 静态加密为 SOC2 CC6.1 基线；信封加密 + 字段级 AAD 为云厂商 KMS envelope 同构 |
-| E2E 加密 | X25519+HKDF 双向密钥+GCM+64 滑动窗重放拒+TOFU；relay 零知识（业务帧密文过境） | 不涉及（无中继面） | 不涉及 | 平台 TLS 终止（非 E2E） | Signal 协议=X3DH 前向保密+Double Ratchet 后续保密（每条消息棘轮前进）；MLS(RFC 9420) 树形棘轮支持群组。**天枢差距**：无前向保密（静态私钥泄露可解历史录制流量）、静态私钥长期有效、TOFU 无用户确认——为已知待办 |
+| E2E 加密 | X25519+HKDF 双向密钥+GCM+64 滑动窗重放拒+TOFU；relay 零知识（业务帧密文过境） | 不涉及（无中继面） | 不涉及 | 平台 TLS 终止（非 E2E） | Signal 协议=X3DH 前向保密+Double Ratchet 后续保密（每条消息棘轮前进）；MLS(RFC 9420) 树形棘轮支持群组。**天枢差距**：无前向保密（静态私钥泄露可解历史录制流量）、静态私钥长期有效——为已知待办（TOFU 人工核对仪式已于 P0-1 批补齐，见 §3.5） |
 | 传输凭证 | 首帧 auth（ws 帧载荷，URL 零凭证）+ EdDSA 非对称租户凭证 + CRL 吊销 | OAuth device flow + PKCE | API key/chatgpt 登录 | API key | mTLS 与短期证书（SPIFFE/SVID）是零信任标杆；天枢 static token 模式（单租户）仍是"知道即通过"对称凭证，jwt 模式已对齐短期凭证方向 |
 | SSRF 防护 | 字面+编码 IP+DNS 解析级 + metadata 硬边界 + 平台差异化逃生口 | 无内置 fetch SSRF 清单（WebSearch/WebFetch 域名允许制） | 沙箱网络域即边界 | 平台出网代理白名单 | 云厂商 Function 网关标配（metadata 拦截）；DNS 解析级判定（防 rebinding）与 GCP/Salesforce 同构 |
 
@@ -368,7 +368,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 |---|---|---|---|
 | 1 | relay 首帧 auth | 尾批遗留「仅剩首帧 auth」双轨窗口 | **已闭环**：`relay-main.ts` 324 行起 query 凭证一律无视，凭证只走首帧 auth（5s 窗超时 4001）；四端客户端已全部切换 |
 | 2 | 被控端缺省 required | 尾批遗留「被控端可收敛全局 required」 | **已闭环**：`server-face.ts` FaceE2eMode 缺省 "required"（安全批 J 收敛）；auto/off 仍可显式配置 |
-| 3 | TOFU 指纹自动回填无用户确认 | 高危 #4 待办（需 UI） | **仍待办**：`relay-transport.ts` TOFU 分支仍为 ack 指纹上报注册表自动回填持久化，无用户核对交互 |
+| 3 | TOFU 指纹自动回填无用户确认 | 高危 #4 待办（需 UI） | **已闭环**：TOFU 首连不再自动回填——`relay-transport.ts` 落 `pending-confirm`（加密会话可用但指纹待核对，mitm-suspect 同款警示 + 主机页指纹核对卡），用户确认（`connections.ts confirmFingerprint`）才钉扎 + `confirmedAt` 落档并重建握手强制校验；存量已钉扎连接经迁移视为已确认（P0-1 批，2026-11-05） |
 | 4 | relay TLS | 高危 #5「TLS 待办」 | **部分闭环**：批 I 落地 `--cert/--key` 原生 TLS 可选项；既定架构仍依赖反代终止 TLS，部署面是否强制 TLS 未约束 |
 | 5 | server 端操作日志 | 中危收口清单未含 | **未启用**：`operation-log.interceptor.ts` `DISABLE_LOG=true` 写死，operation_log 表与模型齐备但不写入（脚手架遗留） |
 | 6 | 静态 token 对称凭证 | 批 I 注（static 模式现状平移） | 设计内保留：单租户 `--token` 模式仍是"知道即通过"，泄露即全量失守（jwt 模式已是非对称短期凭证，两模式互斥共存） |
@@ -383,7 +383,7 @@ MCP 服务器注册表。stdio 行在**本地**可执行任意 command+args（�
 
 按优先级（P0 最高），均为可落地项：
 
-**P0-1 TOFU 指纹确认 UI**（遗留 #3）：控制端首连 TOFU 时在主机页弹指纹核对卡（fingerprintOf 16hex + 连接名），用户确认后才回填 `connections` 行；未确认前按 mitm-suspect 同款呈现。改动面：`server/relay-transport.ts` onE2eState 上报链 + `src-react/domains/ai/server/` 主机页新增确认卡（协议类型加 `@tianshu/protocol`）。
+**P0-1 TOFU 指纹确认 UI**（遗留 #3）：~~控制端首连 TOFU 时在主机页弹指纹核对卡（fingerprintOf 16hex + 连接名），用户确认后才回填 `connections` 行；未确认前按 mitm-suspect 同款呈现。~~ ✅ 已落地（2026-11-05）：`server/relay-transport.ts` TOFU 分支落 `pending-confirm`（通信可用，不再自动回填）；`connections.ts confirmFingerprint`（IPC `server:connectionConfirmFingerprint`）钉扎指纹 + `confirmedAt` 并重建 transport 强制校验；主机页 `E2eFingerprintCard`（连接名 + 指纹常显 + 核对确认动作，pending/mitm 双警示态）；协议类型单源 `@tianshu/protocol` `connection-contract.ts`；存量已回填连接经 load 迁移视为已确认。
 
 **P0-2 server 操作日志启用**（遗留 #5）：将 `operation-log.interceptor.ts` DISABLE_LOG 改为配置驱动（config.yml `operationLog.enabled`，缺省 true），补 Jest 用例；运维侧对齐桌面审计链的 commandPreview 脱敏口径（IP/UA 已有）。
 

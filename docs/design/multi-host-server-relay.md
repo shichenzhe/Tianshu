@@ -243,7 +243,7 @@ RELAY_CLOSE_CODES = {QUOTA_EXCEEDED:4005, ID_CONFLICT:4006, TENANT_FORBIDDEN:400
    │ open {connectionId} ────────────▶│ 配对（顶号/租户校验）                  │
    │ e2e-hello {ephemeralKey} ───────▶│ （明文照转发） ──────────────────────▶│
    │◀────────────── e2e-ack {staticKey, fingerprint} ────────────────────────│
-   │   [TOFU 首连：回填 fingerprint 持久化；不匹配：断开 mitm-suspect]        │
+   │   [TOFU 首连：加密可用但 pending-confirm（确认卡人工核对后钉扎）；不匹配：断开 mitm-suspect] │
    │ e2e-secure{req(id,path,body)} ──▶│ （密文照转发） ──────────────────────▶│ handleRoute
    │◀────────────── e2e-secure{res(id,status,body)} ──────────────────────────│
    │◀────────────── e2e-secure{event(type,payload)} ──────────────────────────│ face 事件总线
@@ -345,7 +345,7 @@ RELAY_CLOSE_CODES = {QUOTA_EXCEEDED:4005, ID_CONFLICT:4006, TENANT_FORBIDDEN:400
 2. **多主机并发会话**（HD spec 遗留）：activeHost 全局单值意味着同时只能操作一台主机；可在 store 层引入 per-host 会话视图（chat 面板绑定 connId 而非全局 activeHost），对齐「多 headless 会话共享工作区」的既有协作纪律。改动面大（api 路由层签名需带显式 host 参数、缓存与流式订阅联动），宜分批：先消息查看后发送、后审批/操作。
 3. **caps 变更事件化**：caps 只在切换时回填一次，被控端能力热变化（server 升级新增 graph/重启换 instanceId）要重连才可见；可在 register/info 差异检测时经注册表推 caps 更新事件（复用 server.connected 同通道语义），HostSwitcher/store 消费刷新——对齐 K8s watch 的「事实变化即推送」而非「查询时点快照」。
 4. **E2E 会话密钥前向保密增强**：现会话密钥连接生命周期恒定；可引入密钥演进（每 N 帧或每分钟 HKDF ratchet 派生下一把，接收端同步窗口宽限），把单帧密文泄露的影响窗从「整连接」收敛到「窗口内」——Signal 双棘轮的最小子集。改动集中在 `e2e-crypto.ts` `E2ESession`（seal/open 内部维护代际）+ 双端同步窗口，wire 契约不变（信封形态不动）。
-5. **TOFU 指纹核对的 UI 显式化**：指纹目前 TOFU 首连自动回填，之后仅 mitm 时报警（红色徽标）；可在连接详情卡常显当前指纹（`ConnectionConfig.fingerprint` 字段已有），并提供「核对后确认」动作（显式 pin + 确认时间戳），对齐 Signal safety number 的人工核对仪式——把「静默信任首连」升级为「可审计的信任决策」。
+5. **TOFU 指纹核对的 UI 显式化**：~~指纹目前 TOFU 首连自动回填，之后仅 mitm 时报警（红色徽标）；可在连接详情卡常显当前指纹（`ConnectionConfig.fingerprint` 字段已有），并提供「核对后确认」动作（显式 pin + 确认时间戳）~~ ✅ 已落地（批4A，2026-11-05）：TOFU 首连不再自动回填——`relay-transport.ts` 落 `pending-confirm`（加密会话可用、通信不阻断），主机页 `E2eFingerprintCard` 按选中 relay 连接常显当前指纹（协商值 `ConnectionView.e2eFingerprint` 优先、钉扎值次之），pending-confirm 态呈 mitm-suspect 同款 destructive 警示 + 连接名 + 16hex 指纹 +「核对后确认」动作（`server:connectionConfirmFingerprint` → 钉扎 + `confirmedAt` 落档 + 重建握手强制校验），mitm-suspect 态呈期望 vs 实际对照；存量已钉扎连接经 load 迁移视为已确认（升级首见时刻代替行级 createdAt——option 表 JSON 无此列），状态值域单源 `@tianshu/protocol` `connection-contract.ts`。对齐 Signal safety number 的人工核对仪式——「静默信任首连」升级为「可审计的信任决策」。
 6. **relay 多副本/水平扩展**：RelayRegistry 是单进程内存态（配对/租户计数/CRL stub），单点且重启丢配对（被控端重注册自愈、client 侧重连，但 admin 在线视图断档）；多副本需 sticky（同 connectionId 的 server/client 同副本）或注册表外置（Redis）+ internal 端点鉴权改造。Dockerfile.relay 已零业务代码具备多副本部署基础，缺的是状态外置方案——短期可先做 relay 无状态化评估（CRL 已是 stub 控制平面，配对表外置是主要工程量）。
 7. **DirectTransport 与 server-face 的传输安全强化**：直连模式鉴权是静态 Bearer token，明文 HTTP 时 token 即凭证且业务面明文；局域网外直连应要求 HTTPS——自签证书 + 指纹钉扎（复用 E2E 指纹基础设施）仍未做。✅ 已落地首步（批3B，2026-11-05）：`http://` 非局域网地址（保守白名单：回环/10/8、172.16/12、192.168/16、169.254/16、fe80::/10、fc00::/7 及 v4 映射之外，非 IP 主机名与解析失败一律按公网）的直连在连接行给橙色警示徽标（`connection-safety.ts` `isPlainHttpRemote`，复用 relay plaintext 徽标视觉语言），连接对话框 baseUrl 下方同步内联警示；https/wss 恒安全态不警示。
 8. **编排遥控的实时性**：GraphPanel/AutomationPanel 走请求-响应式轮询；`graphRunNode` 节点级执行详情表已存在（`ensureGraphRunNodeTable`），可透出为 face 事件流（先例：message.chunk/graph.run.updated），图运行监控页实时滚动、减少轮询空转——协议面只需增一种 ServerEvent 载荷（增量兼容）。

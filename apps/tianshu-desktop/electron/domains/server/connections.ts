@@ -61,8 +61,12 @@ export interface ConnectionConfig {
   relayUrl?: string;
   relayToken?: string;
   connectionId?: string;
-  /** 被控端 E2E 指纹（hex16；空=TOFU 首连回填——E2E-T3。仅 relay 模式） */
+  /** 被控端 E2E 指纹（hex16；TOFU 首连经用户确认卡钉扎——P0-1 仪式。
+   * 仅 relay 模式） */
   fingerprint?: string;
+  /** 指纹确认时间（ISO；P0-1 TOFU 仪式）：用户确认卡或手工录入指纹时
+   * 写入；缺省 = 未确认。存量已钉扎连接经 load 迁移视为已确认 */
+  confirmedAt?: string;
   /** 连接级 E2E 模式（仅 relay；缺省 auto。required=握手无 ack 拒降级直接
    * 断开——spec §2.4 控制端配置级开关，E2E-T4/T3 审查；无 off：不建 relay
    * 连接即得等价语义） */
@@ -88,12 +92,15 @@ export type ConnectionRuntimeState =
 /** 注册表对外视图：配置 + 运行态 + 协商到的能力清单 + E2E 承载态（relay
  * 会话加密徽标数据；direct 恒 unsupported、idle 无值——UI 按 mode 门控）
  * + 协议版本（批3B：server.connected 上报，控制端低于 PROTOCOL_VERSION
- * 给「建议升级」） */
+ * 给「建议升级」）
+ * + 协商指纹（P0-1：当前连接实际核对到的被控端指纹——pending-confirm
+ *   确认卡与 mitm-suspect 期望 vs 实际对照的数据源；idle 无值） */
 export interface ConnectionView extends ConnectionConfig {
   state: ConnectionRuntimeState;
   e2e?: TransportE2eState;
   capabilities: string[];
   protocolVersion?: number;
+  e2eFingerprint?: string;
 }
 
 export interface PersistedShape {
@@ -135,9 +142,30 @@ interface TransportEntry {
   capabilities: string[];
   /** 协议版本（批3B）：server.connected 上报；undefined=老被控端 */
   protocolVersion?: number;
+  /** 当前协商指纹（P0-1）：transport onE2eState 上报值（自算）——
+   * pending-confirm 待确认 / mitm-suspect 实际值的显示数据源 */
+  e2eFingerprint?: string;
   /** AK 凭证失效占位标记（T17）：invalid-ak=粘滞（重配经 save 自愈）；
    * unavailable=瞬态（下次请求/激活重建自愈） */
   akFailure?: "invalid-ak" | "unavailable";
+}
+
+/**
+ * 存量已钉扎指纹连接的确认迁移（P0-1 TOFU 仪式）：旧版 TOFU 自动回填的
+ * 指纹行无 confirmedAt——升级后按「已确认」对待（避免全员弹待确认卡）。
+ * option 表 JSON 无行级 createdAt 可取，以迁移首见时刻代替（仅显示口径：
+ * 功能面以「指纹在场即强制校验」判定，不依赖该时间戳）。幂等：仅在
+ * fingerprint 在场而 confirmedAt 缺席时补写。
+ */
+function backfillConfirmedAt(
+  connections: ConnectionConfig[],
+): ConnectionConfig[] {
+  const confirmedAt = new Date().toISOString();
+  return connections.map((config) =>
+    config.mode === "relay" && config.fingerprint && !config.confirmedAt
+      ? { ...config, confirmedAt }
+      : config,
+  );
 }
 
 /** option 表持久化（server-face 配置同款 findFirst + update/create） */
@@ -151,8 +179,11 @@ export function createOptionPersistence(): ConnectionPersistence {
       // 安全批 D1：token 字段透明解封（旧明文原样）
       const shape = parsePersisted(row.value);
       return {
-        connections: await Promise.all(
-          shape.connections.map((c) => openSecretFields("connections", c)),
+        // P0-1 迁移：存量已回填指纹连接视为已确认（补 confirmedAt）
+        connections: backfillConfirmedAt(
+          await Promise.all(
+            shape.connections.map((c) => openSecretFields("connections", c)),
+          ),
         ),
         activeConnId: shape.activeConnId,
       };
@@ -412,6 +443,7 @@ export class ConnectionRegistry {
           e2e: entry?.e2e,
           capabilities: entry?.capabilities ?? [],
           protocolVersion: entry?.protocolVersion,
+          e2eFingerprint: entry?.e2eFingerprint,
         };
       }),
     };
@@ -433,6 +465,16 @@ export class ConnectionRegistry {
       !shape.connections.some((c) => c.id === config.id)
     ) {
       config.e2eMode = "required";
+    }
+    // 指纹确认时间（P0-1 TOFU 仪式）：服务端计算不信任上行——指纹未动
+    // 保留存量确认时刻；手工录入/更换指纹 = 用户带外核对行为（记 now）；
+    // 清空指纹（TOFU 重来）连带清除（validateConfig 全量重建已天然丢弃）
+    if (config.mode === "relay" && config.fingerprint) {
+      const existing = shape.connections.find((c) => c.id === config.id);
+      config.confirmedAt =
+        existing?.fingerprint === config.fingerprint && existing?.confirmedAt
+          ? existing.confirmedAt
+          : new Date().toISOString();
     }
     const rest = shape.connections.filter((c) => c.id !== config.id);
     await this.persistence.save({
@@ -601,20 +643,42 @@ export class ConnectionRegistry {
     for (const id of [...this.entries.keys()]) this.closeEntry(id);
   }
 
-  /** E2E TOFU 指纹回填（spec §2.2）：首连协商确认的指纹写入连接配置持久
-   * 化——下次连接即作为 expectedFingerprint 强制校验；已存指纹（匹配
-   * 路径同值）不覆盖。失败仅告警（回填非连接功能面，下次协商重试） */
-  private async pinFingerprint(id: string, fingerprint: string): Promise<void> {
-    try {
-      const shape = await this.persistence.load();
-      const config = shape.connections.find((c) => c.id === id);
-      if (!config || config.fingerprint) return;
-      config.fingerprint = fingerprint;
-      await this.persistence.save(shape);
-      Log.info("relay e2e TOFU 指纹已回填连接配置", id, fingerprint);
-    } catch (e) {
-      Log.warn("relay e2e 指纹回填失败", e);
+  /** TOFU 指纹用户确认仪式（P0-1，spec §2.2 + design/security §6 P0-1）：
+   * 把当前协商指纹（transport onE2eState 上报的自算值）钉扎进连接配置
+   * + confirmedAt 落档持久化；随即重建 transport——新握手携
+   * expectedFingerprint 强制校验（其后不匹配即 mitm-suspect，不再重连）。
+   * 守卫：非 relay 拒绝；未协商出指纹（从未建链）拒绝；已钉扎幂等返回 */
+  async confirmFingerprint(
+    id: string,
+  ): Promise<{ activeConnId: string | null; connections: ConnectionView[] }> {
+    const shape = await this.persistence.load();
+    const config = shape.connections.find((c) => c.id === id);
+    if (!config) throw new Error(`连接不存在：${id}`);
+    if (config.mode !== "relay") {
+      throw new Error("仅中继连接需要指纹确认（direct 无 E2E 面）");
     }
+    if (config.fingerprint) return this.list(); // 已钉扎：幂等（含迁移行）
+    const negotiated = this.entries.get(id)?.e2eFingerprint;
+    if (!negotiated) {
+      throw new Error("连接尚未协商出指纹（请先建立连接）");
+    }
+    const connections = shape.connections.map((c) =>
+      c.id === id
+        ? { ...c, fingerprint: negotiated, confirmedAt: new Date().toISOString() }
+        : c,
+    );
+    await this.persistence.save({
+      connections,
+      activeConnId: shape.activeConnId,
+    });
+    Log.info("relay e2e TOFU 指纹经用户确认，已钉扎连接配置", id, negotiated);
+    // 重建 transport：换携 expectedFingerprint 的新握手（落 encrypted）；
+    // 未激活/闲置连接只拆不拉起（下次使用自然走强制校验路径）
+    this.closeEntry(id);
+    void this.transportFor(id, connections).catch(() => {
+      /* 建链失败由 transport 自身重连兜底；错误在请求路径暴露 */
+    });
+    return this.list();
   }
 
   private closeEntry(id: string): void {
@@ -702,12 +766,12 @@ export class ConnectionRegistry {
       if (entry.state === "invalid-token" && state !== "connected") return;
       entry.state = mapTransportState(state);
     });
-    // E2E 状态上报渲染层（徽标数据）；TOFU 首连指纹回填持久化（下次强制）
+    // E2E 状态上报渲染层（徽标数据）+ 协商指纹留档（P0-1 确认卡数据源：
+    // pending-confirm 待确认值 / mitm-suspect 实际值）。TOFU **不自动回填**
+    // ——用户经确认卡显式 confirmFingerprint 钉扎（安全仪式批拆除自动信任）
     transport.onE2eState((change: E2eStatusChange) => {
       entry.e2e = change.state;
-      if (change.state === "encrypted" && change.fingerprint) {
-        void this.pinFingerprint(id, change.fingerprint);
-      }
+      if (change.fingerprint) entry.e2eFingerprint = change.fingerprint;
     });
     transport.onEvent((event) => {
       if (event.type === "server.connected") {

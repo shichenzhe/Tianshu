@@ -16,6 +16,11 @@ describe("IPC 事件白名单", () => {
     expect(isEventAllowed("orchestration:node-status")).toBe(true);
   });
 
+  it("invoke 放行 server:connectionConfirmFingerprint（TOFU 指纹确认仪式，P0-1）", () => {
+    expect(IPC_INVOKE_ALLOWLIST).toContain("server:connectionConfirmFingerprint");
+    expect(isInvokeAllowed("server:connectionConfirmFingerprint")).toBe(true);
+  });
+
   it("放行 orchestration:graphs-changed 与 automation:tasks-changed", () => {
     expect(isEventAllowed("orchestration:graphs-changed")).toBe(true);
     expect(isEventAllowed("automation:tasks-changed")).toBe(true);

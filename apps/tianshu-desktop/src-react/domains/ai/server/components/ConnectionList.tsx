@@ -22,6 +22,7 @@ import {
   Lock,
   ShieldAlert,
   ShieldOff,
+  ShieldQuestionMark,
 } from "lucide-react";
 
 import IconTooltip from "@/components/common/icon-tooltip";
@@ -50,12 +51,14 @@ const STATE_DOT: Record<ConnectionRuntimeState, string> = {
   closed: "bg-muted-foreground/70",
 };
 
-/** E2E 徽标文案 key（E2E-T3/T4）：已加密 ✓ / 未加密 ⚠ / 指纹不匹配红 /
- * required 拒降级断开红。unsupported 仅作 Record 完形（渲染侧过滤，不留
- * 可达路径） */
+/** E2E 徽标文案 key（E2E-T3/T4 + P0-1）：已加密 ✓ / 未加密 ⚠ / TOFU 待
+ * 确认指纹红（mitm-suspect 同款警示——通信可用但指纹未经核对，确认卡
+ * 引导）/ 指纹不匹配红 / required 拒降级断开红。unsupported 仅作 Record
+ * 完形（渲染侧过滤，不留可达路径） */
 const E2E_LABEL_KEY: Record<ConnectionE2eState, string> = {
   encrypted: "ai:server.e2e.encrypted",
   plaintext: "ai:server.e2e.plaintext",
+  "pending-confirm": "ai:server.e2e.pendingConfirm",
   "mitm-suspect": "ai:server.e2e.mitmSuspect",
   "required-failed": "ai:server.e2e.requiredFailed",
   unsupported: "ai:server.e2e.plaintext",
@@ -64,6 +67,7 @@ const E2E_LABEL_KEY: Record<ConnectionE2eState, string> = {
 const E2E_BADGE_CLASS: Record<ConnectionE2eState, string> = {
   encrypted: "text-primary",
   plaintext: "text-orange-500",
+  "pending-confirm": "text-destructive",
   "mitm-suspect": "text-destructive",
   "required-failed": "text-destructive",
   unsupported: "text-muted-foreground",
@@ -72,6 +76,8 @@ const E2E_BADGE_CLASS: Record<ConnectionE2eState, string> = {
 function E2eBadgeIcon({ state }: { state: ConnectionE2eState }) {
   const className = "h-3 w-3 shrink-0";
   if (state === "encrypted") return <Lock className={className} />;
+  if (state === "pending-confirm")
+    return <ShieldQuestionMark className={className} />;
   if (state === "mitm-suspect") return <ShieldAlert className={className} />;
   if (state === "required-failed") return <ShieldOff className={className} />;
   return <TriangleAlert className={className} />;

@@ -378,8 +378,8 @@
     },
     "e2e": {
       "fingerprint": "Key fingerprint (optional)",
-      "fingerprintPlaceholder": "Empty = trust on first use (TOFU), saved automatically",
-      "fingerprintHint": "Paste the fingerprint shown on the controlled end's end-to-end encryption card to enforce verification against relay man-in-the-middle; mismatch disconnects with a red warning",
+      "fingerprintPlaceholder": "Empty = verify fingerprint on first connect (TOFU)",
+      "fingerprintHint": "Paste the fingerprint shown on the controlled end's end-to-end encryption card to enforce verification against relay man-in-the-middle; mismatch disconnects with a red warning. When left empty, a verification card appears after the first connect and trust is granted only after you confirm",
       "fingerprintInvalid": "Fingerprint must be 16 hex characters (copy from the controlled end settings)",
       "encrypted": "Encrypted",
       "plaintext": "Not encrypted",
@@ -388,7 +388,8 @@
       "modeAuto": "Auto (may fall back to plaintext)",
       "modeRequired": "Required (no fallback, disconnect on failure)",
       "requiredFailed": "E2E required, closed",
-      "groupTitle": "End-to-end encryption"
+      "groupTitle": "End-to-end encryption",
+      "pendingConfirm": "Fingerprint unverified"
     },
     "session": {
       "listTitle": "Remote Sessions",
@@ -569,6 +570,24 @@
       "extraHeaders": "Extra headers",
       "extraHeadersHint": "JSON object, e.g. {\"X-Key\":\"v\"}",
       "extraHeadersInvalid": "Extra headers must be a JSON object"
+    },
+    "fingerprint": {
+      "title": "End-to-end encryption fingerprint",
+      "pendingTitle": "Unverified: first-connect encryption fingerprint",
+      "pendingName": "Connection \"{{name}}\"",
+      "pendingHint": "The connection is encrypted and usable, but this fingerprint has not been verified — compare it with the fingerprint shown on the controlled end's \"Settings → Outbound services → End-to-end encryption\" card before confirming (after confirmation, any fingerprint change triggers an alarm and disconnect)",
+      "confirm": "Verified, trust this fingerprint",
+      "confirmOk": "Fingerprint confirmed and pinned (future changes will raise an alarm)",
+      "confirmError": "Fingerprint confirmation failed: {{message}}",
+      "confirmedAt": "Confirmed at {{time}}",
+      "expected": "Expected fingerprint (pinned)",
+      "actual": "Actual fingerprint (reported by peer)",
+      "mitmTitle": "Fingerprint mismatch (suspected man-in-the-middle), disconnected",
+      "mitmHint": "The fingerprint reported by the controlled end differs from the pinned value. If its key was genuinely rotated, update the fingerprint via \"Edit connection\"; otherwise do not trust this link",
+      "notNegotiated": "Not negotiated (shown after connecting)",
+      "copy": "Copy fingerprint",
+      "copied": "Fingerprint copied",
+      "copyFailed": "Copy failed"
     }
   },
   "dataSource": {

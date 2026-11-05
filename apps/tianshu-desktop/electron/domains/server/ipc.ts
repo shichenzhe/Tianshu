@@ -101,6 +101,11 @@ export function registerServerIpc(
   ipcMain.handle("server:connectionDelete", (_event, raw) =>
     registry.deleteConnection(String(raw ?? "")),
   );
+  // TOFU 指纹用户确认（P0-1 确认仪式）：协商指纹钉扎 + confirmedAt 落档，
+  // 重建 transport 转 expectedFingerprint 强制校验
+  ipcMain.handle("server:connectionConfirmFingerprint", (_event, raw) =>
+    registry.confirmFingerprint(String(raw ?? "")),
+  );
   ipcMain.handle("server:testConnection", (_event, raw) => registry.test(raw));
   ipcMain.handle("server:localStart", (_event, raw) =>
     startLocalServer(registry, String(raw ?? "")),

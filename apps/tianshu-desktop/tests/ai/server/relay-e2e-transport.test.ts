@@ -3,8 +3,10 @@
 // 本机 ws 库 MiniRelay（open 配对转发 + 帧记录）+ FakeServerEnd（真 core
 // crypto 走 server 半区握手）：
 // - 握手三态：expectedFingerprint 匹配 → 加密会话（req/res 密文信封往返，
-//   wire 无明文哨兵）；TOFU（空指纹）→ 加密 + 指纹回填连接配置持久化
-//   （ConnectionRegistry 内存持久化断言写入）；不匹配 → 断开 + e2e=
+//   wire 无明文哨兵）；TOFU（空指纹）→ 加密会话可用但 **不自动回填**
+//   （P0-1 TOFU 确认仪式）：连接视图 pending-confirm + 协商指纹，用户经
+//   registry.confirmFingerprint 显式确认后才回填 + confirmedAt 持久化
+//   （重建握手携 expectedFingerprint 强制）；不匹配 → 断开 + e2e=
 //   mitm-suspect + 不再重连
 // - 降级（§2.4）：旧版被控端（hello 无回应）→ 超时重试原 open 帧一次 +
 //   明文承载 + e2e=plaintext；required 拒明文 → 隧道断开如实呈现（reconnecting）
@@ -306,6 +308,20 @@ async function waitFor(
   }
 }
 
+/** async 谓词等待（registry.list() 每轮重取——确认后 transport 异步重建） */
+async function waitForAsync(
+  predicate: () => Promise<boolean>,
+  timeoutMs = 6000,
+  stepMs = 25,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await predicate())) {
+    if (Date.now() > deadline)
+      throw new Error(`waitForAsync 超时（${timeoutMs}ms）`);
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+  }
+}
+
 /** 每用例装配：MiniRelay + FakeServerEnd（指定模式） */
 async function setup(mode: FakeMode): Promise<{
   relay: MiniRelay;
@@ -417,7 +433,7 @@ describe("控制端 relay E2E：握手三态", () => {
     }
   }, 15000);
 
-  it("TOFU（空指纹）→ 加密 + 指纹回填连接配置持久化（下次强制）", async () => {
+  it("TOFU（空指纹）→ 加密会话可用但 **不自动回填**：视图 pending-confirm + 协商指纹（P0-1 确认仪式）", async () => {
     const { relay, serverEnd } = await setup("auto");
     try {
       let shape: PersistedShape = {
@@ -449,7 +465,7 @@ describe("控制端 relay E2E：握手三态", () => {
           },
         },
       });
-      // hello 不带 expectedFingerprint（TOFU 首连）
+      // hello 不带 expectedFingerprint（TOFU 首连）；通信可用（加密会话已建）
       const res = await registry.request("c1", "GET", "info");
       expect(res.body).toMatchObject({ code: "2000" });
       expect(
@@ -457,17 +473,21 @@ describe("控制端 relay E2E：握手三态", () => {
           ?.expectedFingerprint,
       ).toBeUndefined();
 
-      // 指纹回填：仅写 c1（TOFU 数据源为协商确认指纹）
-      await waitFor(
-        () => shape.connections[0].fingerprint === serverEnd.fingerprint,
-      );
+      // 不自动回填：稳定窗后 c1 指纹仍缺省（旧自动回填行为已拆除）
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(shape.connections[0].fingerprint).toBeUndefined();
+      expect(shape.connections[0].confirmedAt).toBeUndefined();
       expect(shape.connections[1].fingerprint).toBeUndefined();
 
-      // 连接视图：c1 加密徽标数据；闲置 relay 连接无 e2e 值
+      // 连接视图：c1 pending-confirm + 协商指纹（确认卡数据源）；闲置无 e2e
       const list = await registry.list();
-      expect(list.connections.find((c) => c.id === "c1")?.e2e).toBe(
-        "encrypted",
-      );
+      expect(list.connections.find((c) => c.id === "c1")).toMatchObject({
+        e2e: "pending-confirm",
+        e2eFingerprint: serverEnd.fingerprint,
+      });
+      expect(
+        list.connections.find((c) => c.id === "c1")?.fingerprint,
+      ).toBeUndefined();
       expect(list.connections.find((c) => c.id === "c2")?.e2e).toBeUndefined();
     } finally {
       await relay.close();
@@ -475,7 +495,71 @@ describe("控制端 relay E2E：握手三态", () => {
     }
   }, 15000);
 
-  it("指纹不匹配 → 断开 + mitm-suspect + 不再重连 + 请求拒绝", async () => {
+  it("用户确认 → 指纹 + confirmedAt 回填持久化；重建握手携 expectedFingerprint 强制（encrypted）", async () => {
+    const { relay, serverEnd } = await setup("auto");
+    try {
+      let shape: PersistedShape = {
+        connections: [
+          {
+            id: "c1",
+            name: "被控端",
+            mode: "relay",
+            relayUrl: relay.url,
+            relayToken: TOKEN,
+            connectionId: TARGET_ID,
+          },
+        ],
+        activeConnId: null,
+      };
+      const registry = new ConnectionRegistry({
+        persistence: {
+          load: async () => JSON.parse(JSON.stringify(shape)) as PersistedShape,
+          save: async (next) => {
+            shape = JSON.parse(JSON.stringify(next)) as PersistedShape;
+          },
+        },
+      });
+      // TOFU 首连 → pending-confirm
+      await registry.request("c1", "GET", "info");
+      await waitForAsync(
+        async () =>
+          (await registry.list()).connections.find((c) => c.id === "c1")
+            ?.e2e === "pending-confirm",
+      );
+      const hellosBefore = relay.fromClient.filter(
+        (f) => f.kind === "e2e-hello",
+      ).length;
+
+      // 用户确认仪式：回填协商指纹 + confirmedAt
+      await registry.confirmFingerprint("c1");
+      expect(shape.connections[0].fingerprint).toBe(serverEnd.fingerprint);
+      expect(shape.connections[0].confirmedAt).toMatch(
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+      );
+
+      // 确认后重建：新握手携 expectedFingerprint 强制校验 → encrypted
+      await waitForAsync(
+        async () =>
+          (await registry.list()).connections.find((c) => c.id === "c1")
+            ?.e2e === "encrypted",
+        9000,
+      );
+      const hellos = relay.fromClient.filter((f) => f.kind === "e2e-hello");
+      expect(hellos.length).toBeGreaterThan(hellosBefore);
+      expect(hellos.at(-1)).toMatchObject({
+        expectedFingerprint: serverEnd.fingerprint,
+      });
+
+      // 重建后通信恢复（确认不拆功能面）
+      const res = await registry.request("c1", "GET", "info");
+      expect(res.body).toMatchObject({ code: "2000" });
+    } finally {
+      await relay.close();
+      serverEnd.close();
+    }
+  }, 20000);
+
+  it("指纹不匹配（确认后指纹变化同理——expectedFingerprint 强制校验路径）→ 断开 + mitm-suspect + 不再重连 + 请求拒绝", async () => {
     const { relay, serverEnd } = await setup("auto");
     try {
       const transport = makeTransport(relay, {
@@ -504,7 +588,8 @@ describe("控制端 relay E2E：握手三态", () => {
       });
       const e2eChanges: E2eStatusChange[] = [];
       transport.onE2eState((change) => e2eChanges.push(change));
-      await waitFor(() => transport.e2eState === "encrypted");
+      // TOFU：加密会话可用但待用户确认（P0-1 仪式——不再自动视为已核实）
+      await waitFor(() => transport.e2eState === "pending-confirm");
       // 上报指纹为控制端自算值（=被控端静态对真值），非 wire 谎报字段
       expect(e2eChanges.at(-1)?.fingerprint).toBe(serverEnd.fingerprint);
       const res = await transport.request("GET", "info");
@@ -582,7 +667,8 @@ describe("控制端 relay E2E：降级与门禁", () => {
       const transport = makeTransport(relay, {
         e2eHandshakeTimeoutMs: 4000,
       });
-      await waitFor(() => transport.e2eState === "encrypted");
+      // TOFU 首连 → 加密会话可用（pending-confirm，P0-1 仪式）
+      await waitFor(() => transport.e2eState === "pending-confirm");
       // 注入明文 res（id 未知也不影响门禁判定：会话后明文业务帧即拒）
       serverEnd.sendPlaintext({
         kind: "res",
@@ -591,10 +677,11 @@ describe("控制端 relay E2E：降级与门禁", () => {
         body: null,
       });
       await waitFor(() => transport.state === "reconnecting");
-      // 新连接重新握手 → 恢复加密（重连自愈，非永久拆链）
+      // 新连接重新握手 → 恢复加密（重连自愈，非永久拆链；TOFU 仍待确认）
       await waitFor(
         () =>
-          transport.state === "connected" && transport.e2eState === "encrypted",
+          transport.state === "connected" &&
+          transport.e2eState === "pending-confirm",
         9000,
       );
       const res = await transport.request("GET", "info");
@@ -606,9 +693,9 @@ describe("控制端 relay E2E：降级与门禁", () => {
   }, 20000);
 });
 
-/** ConnectionConfig 指纹/E2E 模式字段类型面（编译期契约：字段存在且可选） */
-describe("ConnectionConfig.fingerprint/e2eMode 类型面", () => {
-  it("relay 配置可携带可选指纹与 E2E 模式（校验归一由主进程 validateConfig 收口）", () => {
+/** ConnectionConfig 指纹/E2E 模式/确认时间字段类型面（编译期契约：字段存在且可选） */
+describe("ConnectionConfig.fingerprint/e2eMode/confirmedAt 类型面", () => {
+  it("relay 配置可携带可选指纹、E2E 模式与确认时间（校验归一由主进程 validateConfig 收口）", () => {
     const config: ConnectionConfig = {
       id: "c",
       name: "n",
@@ -618,8 +705,10 @@ describe("ConnectionConfig.fingerprint/e2eMode 类型面", () => {
       connectionId: "i",
       fingerprint: "0123456789abcdef",
       e2eMode: "required",
+      confirmedAt: "2026-11-05T00:00:00.000Z",
     };
     expect(config.fingerprint).toBe("0123456789abcdef");
     expect(config.e2eMode).toBe("required");
+    expect(config.confirmedAt).toBe("2026-11-05T00:00:00.000Z");
   });
 });

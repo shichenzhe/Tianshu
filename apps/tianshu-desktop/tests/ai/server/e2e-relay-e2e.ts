@@ -824,11 +824,12 @@ describe("relay E2E 端到端（真 relay 子进程 + 双端真实握手栈 + �
       // 先订阅再等握手（server.connected 由握手后首个密文 GET info 合成，
       // 晚订阅会与事件到达赛跑）
       const connectedPromise = nextEvent(transport, "server.connected");
+      // TOFU（无已存指纹）→ 加密会话可用但待用户核对（P0-1 确认仪式）
       await waitFor(
-        "握手迁 encrypted",
-        () => transport.e2eState === "encrypted",
+        "握手迁 pending-confirm",
+        () => transport.e2eState === "pending-confirm",
       );
-      // TOFU：encrypted 上报指纹 = 被控端静态对指纹（自算不信任 wire 回显）
+      // TOFU：状态上报指纹 = 被控端静态对指纹（自算不信任 wire 回显）
       expect(changes.at(-1)?.fingerprint).toBe(await faceStaticFingerprint());
 
       // 连接级合成事件：GET info 走密文 req/res（announceConnected）
@@ -875,8 +876,8 @@ describe("relay E2E 端到端（真 relay 子进程 + 双端真实握手栈 + �
     });
     try {
       await waitFor(
-        "握手迁 encrypted",
-        () => transport.e2eState === "encrypted",
+        "握手迁 pending-confirm",
+        () => transport.e2eState === "pending-confirm",
       );
       const res = await transport.request("POST", "session/query", {
         page: 1,

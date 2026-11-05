@@ -7,6 +7,8 @@
  * 聊天与模型配置遥控已由单 UI（HostSwitcher + api 主机路由 +
  * providerSave 写面）取代。capability 判定用连接运行时上报值，勿
  * import CAPABILITIES 常量做客户端判定。
+ * 选中 relay 连接置指纹核对卡（P0-1 TOFU 确认仪式）：常显当前指纹 +
+ * 待确认警示 + 核对确认动作（两布局各有挂点）。
  * 页面标题经 usePageHeader 迁入 TopBar 中段。
  */
 import { useEffect, useState } from "react";
@@ -16,6 +18,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import ServerApi, { onRemoteEvent } from "../api/server.api";
 import ConnectionList from "../components/ConnectionList";
 import { CONNECTIONS_QUERY_KEY } from "../components/ConnectionDialog";
+import E2eFingerprintCard from "../components/E2eFingerprintCard";
 import GraphPanel from "../components/GraphPanel";
 import AutomationPanel from "../components/AutomationPanel";
 import BridgeApprovalCard from "../components/BridgeApprovalCard";
@@ -95,6 +98,9 @@ export default function ServerConsoleView() {
               data-testid="orchestration-area"
               className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3"
             >
+              {selectedConnection?.mode === "relay" && selectedConnId ? (
+                <E2eFingerprintCard connection={selectedConnection} />
+              ) : null}
               {monitorCapable ? (
                 <MonitorSummaryCard connId={selectedConnId} />
               ) : null}
@@ -107,6 +113,9 @@ export default function ServerConsoleView() {
           // 无内部滚动条，页面文档流自滚；主机管理即页面主体（monitor
           // 能力在场时摘要卡居中列于列表上方——远程主机用量桌面遥看）
           <div className="mx-auto flex w-full max-w-lg flex-col gap-3 py-4">
+            {selectedConnection?.mode === "relay" ? (
+              <E2eFingerprintCard connection={selectedConnection} />
+            ) : null}
             {monitorCapable && selectedConnId ? (
               <MonitorSummaryCard connId={selectedConnId} />
             ) : null}

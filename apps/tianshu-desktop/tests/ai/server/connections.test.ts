@@ -409,6 +409,161 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
   });
 });
 
+describe("TOFU 指纹确认仪式（P0-1，design/security §6）", () => {
+  /** 直插一行既有连接（模拟旧版自动回填落库的存量数据） */
+  function seedLegacyRelayConnection(over: Partial<ConnectionConfig> = {}): void {
+    const config: ConnectionConfig = {
+      id: "c-legacy",
+      name: "存量中继",
+      mode: "relay",
+      relayUrl: "ws://127.0.0.1:18412/ws",
+      relayToken: "rt",
+      connectionId: "inst-legacy",
+      ...over,
+    };
+    optionRows.push({
+      id: optionRows.length + 1,
+      type: "app",
+      name: "serverConnections",
+      value: JSON.stringify({
+        connections: [config],
+        activeConnId: null,
+      }),
+    });
+  }
+
+  it("迁移：存量已回填指纹连接视为已确认（load 补 confirmedAt）——升级后不进待确认弹窗", async () => {
+    seedLegacyRelayConnection({ fingerprint: "0123456789abcdef" });
+    const registry = newRegistry();
+    const list = await registry.list();
+    // option 表 JSON 无行级 createdAt 可取——迁移以升级首见时刻代替（显示口径）
+    expect(list.connections[0].fingerprint).toBe("0123456789abcdef");
+    expect(list.connections[0].confirmedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    );
+    // 无指纹（TOFU 未确认）不补
+    resetOptionTable();
+    seedLegacyRelayConnection();
+    const registry2 = newRegistry();
+    const list2 = await registry2.list();
+    expect(list2.connections[0].confirmedAt).toBeUndefined();
+    // 幂等：已带 confirmedAt 的行不覆盖
+    resetOptionTable();
+    seedLegacyRelayConnection({
+      fingerprint: "0123456789abcdef",
+      confirmedAt: "2020-01-01T00:00:00.000Z",
+    });
+    const registry3 = newRegistry();
+    const list3 = await registry3.list();
+    expect(list3.connections[0].confirmedAt).toBe("2020-01-01T00:00:00.000Z");
+  });
+
+  it("saveConnection confirmedAt 语义：手工录入/更换指纹 = 显式核对（记 now）；指纹未动保留；清空指纹回到待确认", async () => {
+    const registry = newRegistry();
+    const relayBase = {
+      name: "中继",
+      mode: "relay" as const,
+      relayUrl: "ws://127.0.0.1:1/ws",
+      relayToken: "t",
+      connectionId: "inst-1",
+      fingerprint: "0123456789abcdef",
+    };
+    // 手工录入指纹（新连接）= 用户带外核对行为 → confirmedAt 落档
+    await registry.saveConnection({ ...relayBase, id: "c-fp" });
+    const saved = readPersistedShape().connections.find((c) => c.id === "c-fp");
+    expect(saved?.confirmedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+    );
+
+    // 指纹未动改其它字段：confirmedAt 保留（不重置）
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await registry.saveConnection({
+      ...relayBase,
+      id: "c-fp",
+      name: "改名",
+    });
+    const renamed = readPersistedShape().connections.find(
+      (c) => c.id === "c-fp",
+    );
+    expect(renamed?.confirmedAt).toBe(saved?.confirmedAt);
+
+    // 更换指纹 = 新一轮核对：confirmedAt 刷新
+    await registry.saveConnection({
+      ...relayBase,
+      id: "c-fp",
+      fingerprint: "fedcba9876543210",
+    });
+    const changed = readPersistedShape().connections.find(
+      (c) => c.id === "c-fp",
+    );
+    expect(changed?.fingerprint).toBe("fedcba9876543210");
+    expect(changed?.confirmedAt).not.toBe(saved?.confirmedAt);
+
+    // 清空指纹（TOFU 重来）：confirmedAt 一并清除
+    const { fingerprint: _fp, ...noFp } = relayBase;
+    await registry.saveConnection({ ...noFp, id: "c-fp" });
+    const cleared = readPersistedShape().connections.find(
+      (c) => c.id === "c-fp",
+    );
+    expect(cleared?.fingerprint).toBeUndefined();
+    expect(cleared?.confirmedAt).toBeUndefined();
+  });
+
+  it("confirmFingerprint 守卫：不存在/direct/未协商指纹拒绝；已钉扎幂等返回", async () => {
+    const registry = newRegistry();
+    await expect(registry.confirmFingerprint("ghost")).rejects.toThrow(
+      /不存在/,
+    );
+    await registry.saveConnection(DIRECT_CONFIG);
+    await expect(registry.confirmFingerprint("conn-1")).rejects.toThrow(
+      /中继/,
+    );
+    // relay 连接从未建链（无协商指纹）：拒绝（UI 确认卡只在协商后出现）
+    await registry.saveConnection({
+      id: "c-relay",
+      name: "中继",
+      mode: "relay",
+      relayUrl: "ws://127.0.0.1:1/ws",
+      relayToken: "t",
+      connectionId: "inst-1",
+    });
+    await expect(registry.confirmFingerprint("c-relay")).rejects.toThrow(
+      /协商/,
+    );
+    // 已钉扎指纹（直插存量行——confirmFingerprint 的幂等面）：不覆盖返回。
+    // 重置表后再插：findFirst 按 name 命中首行，须独占一行
+    resetOptionTable();
+    optionRows.push({
+      id: optionRows.length + 1,
+      type: "app",
+      name: "serverConnections",
+      value: JSON.stringify({
+        connections: [
+          {
+            id: "c-pinned",
+            name: "已钉扎",
+            mode: "relay",
+            relayUrl: "ws://127.0.0.1:1/ws",
+            relayToken: "t",
+            connectionId: "inst-2",
+            fingerprint: "0123456789abcdef",
+            confirmedAt: "2020-01-01T00:00:00.000Z",
+          },
+        ],
+        activeConnId: null,
+      }),
+    });
+    const list = await registry.confirmFingerprint("c-pinned");
+    expect(
+      list.connections.find((c) => c.id === "c-pinned")?.confirmedAt,
+    ).toBe("2020-01-01T00:00:00.000Z");
+    expect(
+      readPersistedShape().connections.find((c) => c.id === "c-pinned")
+        ?.fingerprint,
+    ).toBe("0123456789abcdef");
+  });
+});
+
 describe("testConnection", () => {
   it("假被控端：capabilities 协商成功", async () => {
     const port = await reservePort();
@@ -593,7 +748,7 @@ describe("session 透传与 invalid-token 连接态", () => {
 });
 
 describe("IPC 装配（registerServerIpc）", () => {
-  it("51 通道注册（P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
+  it("52 通道注册（P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats；TOFU 仪式批 +connectionConfirmFingerprint）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
     const port = await reservePort();
     const face = await FakeFace.start(port, "face-token");
     const registry = newRegistry();
@@ -614,6 +769,7 @@ describe("IPC 装配（registerServerIpc）", () => {
         "server:automationRunNow",
         "server:automationSave",
         "server:bridgeDecision",
+        "server:connectionConfirmFingerprint",
         "server:connectionDelete",
         "server:connectionList",
         "server:connectionSave",

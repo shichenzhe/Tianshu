@@ -378,8 +378,8 @@
     },
     "e2e": {
       "fingerprint": "密钥指纹（可选）",
-      "fingerprintPlaceholder": "留空 = 首次连接自动信任并保存（TOFU）",
-      "fingerprintHint": "填入被控端「端到端加密」卡展示的指纹可强制校验，防中继中间人；不匹配将断开并红色警示",
+      "fingerprintPlaceholder": "留空 = 首次连接后需人工核对指纹（TOFU）",
+      "fingerprintHint": "填入被控端「端到端加密」卡展示的指纹可强制校验，防中继中间人；不匹配将断开并红色警示。留空首连后弹出核对卡，确认后才视为已信任",
       "fingerprintInvalid": "指纹须为 16 位十六进制（被控端设置卡可复制）",
       "encrypted": "已加密",
       "plaintext": "未加密",
@@ -388,7 +388,8 @@
       "modeAuto": "自动（握手失败可降级明文）",
       "modeRequired": "强制加密（不降级，失败即断开）",
       "requiredFailed": "强制加密失败",
-      "groupTitle": "端到端加密"
+      "groupTitle": "端到端加密",
+      "pendingConfirm": "待确认指纹"
     },
     "session": {
       "listTitle": "远程会话",
@@ -569,6 +570,24 @@
       "extraHeaders": "额外请求头",
       "extraHeadersHint": "JSON 对象，如 {\"X-Key\":\"v\"}",
       "extraHeadersInvalid": "额外请求头必须是 JSON 对象"
+    },
+    "fingerprint": {
+      "title": "端到端加密指纹",
+      "pendingTitle": "待确认：首次连接的加密指纹",
+      "pendingName": "连接「{{name}}」",
+      "pendingHint": "连接已加密可用，但该指纹尚未核对——请与被控端「设置 → 对外服务 → 端到端加密」卡展示的指纹比对，一致方可确认（确认后指纹变化将立即报警断开）",
+      "confirm": "核对无误，确认信任",
+      "confirmOk": "指纹已确认并钉扎（此后变化将报警）",
+      "confirmError": "指纹确认失败：{{message}}",
+      "confirmedAt": "已确认于 {{time}}",
+      "expected": "期望指纹（已钉扎）",
+      "actual": "实际指纹（对端上报）",
+      "mitmTitle": "指纹不匹配（疑似中间人），已断开",
+      "mitmHint": "被控端上报指纹与已确认钉扎值不符。若被控端确实更换过密钥，请到「编辑连接」更新指纹；否则请勿信任当前链路",
+      "notNegotiated": "未协商（建立连接后显示）",
+      "copy": "复制指纹",
+      "copied": "指纹已复制",
+      "copyFailed": "复制失败"
     }
   },
   "dataSource": {

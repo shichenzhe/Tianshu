@@ -18,6 +18,7 @@ import {
   type BridgeToolResult,
   type ChatSendParams,
   type ChatStreamChunk,
+  type ConnectionE2eState,
   type FaceEvent,
   type GraphIssue,
   type MessageBlock,
@@ -29,6 +30,7 @@ import {
 import { FACE_CAPABILITIES } from "../../../electron/domains/server-face/face-info";
 import { isReqFrame } from "../../../electron/domains/server-face/relay-protocol";
 import { parseBlocks } from "../../../electron/domains/ai/chat/blocks";
+import type { TransportE2eState } from "../../../electron/domains/server/transport";
 import type { ServerEvent as ServerEventOld } from "../../../electron/domains/server/protocol";
 import type { FaceEvent as FaceEventOld } from "../../../electron/domains/server-face/face-events";
 import type { RelayFrame as RelayFrameOld } from "../../../electron/domains/server-face/relay-protocol";
@@ -435,5 +437,33 @@ describe("@tianshu/protocol 协议包", () => {
     const badRead = okResult.error;
     expect(badRead).toBeUndefined();
     expect([okResult, errResult]).toHaveLength(2);
+  });
+});
+
+// TOFU 指纹确认仪式批（P0-1，2026-11-05）：连接 E2E 承载状态上收单源
+// ——新增 pending-confirm（TOFU 首连加密会话可用但待用户核对）；
+// confirmedAt 为连接配置字段约定（ConnectionConfig.confirmedAt，ISO）。
+describe("@tianshu/protocol 连接 E2E 状态契约（TOFU 仪式）", () => {
+  it("ConnectionE2eState 六值含 pending-confirm；桌面主进程/渲染层类型同源（双向可赋值 witness）", () => {
+    const states: ConnectionE2eState[] = [
+      "unsupported",
+      "plaintext",
+      "pending-confirm",
+      "encrypted",
+      "mitm-suspect",
+      "required-failed",
+    ];
+    expect(states).toHaveLength(6);
+    // @ts-expect-error 枚举外值编译期拒绝（防状态名漂移破坏三端契约）
+    const bad: ConnectionE2eState = "pendingConfirm";
+    expect(bad).toBe("pendingConfirm");
+  });
+
+  it("桌面 TransportE2eState（主进程）与协议包类型同一（收编非复制）", () => {
+    // 双向可赋值 witness：主进程类型 = 协议包类型（收编后 re-export）
+    const fromMain: TransportE2eState = "pending-confirm";
+    const asProtocol: ConnectionE2eState = fromMain;
+    const back: TransportE2eState = asProtocol;
+    expect(back).toBe("pending-confirm");
   });
 });

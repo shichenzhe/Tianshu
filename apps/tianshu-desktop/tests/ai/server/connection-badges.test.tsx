@@ -121,3 +121,29 @@ describe("协议版本「建议升级」徽标", () => {
     ).toBeNull();
   });
 });
+
+describe("TOFU 待确认指纹徽标（P0-1 确认仪式）", () => {
+  it("relay + pending-confirm：出 destructive 警示徽标（mitm-suspect 同款视觉语义）；encrypted 不出待确认徽标", async () => {
+    renderList([
+      conn({
+        id: "pend",
+        mode: "relay",
+        relayUrl: "ws://127.0.0.1:1/ws",
+        e2e: "pending-confirm",
+      }),
+      conn({
+        id: "enc",
+        mode: "relay",
+        relayUrl: "ws://127.0.0.1:1/ws",
+        e2e: "encrypted",
+      }),
+    ]);
+
+    const pending = await screen.findByTestId("connection-e2e-pend");
+    expect(pending.textContent).toContain("ai:server.e2e.pendingConfirm");
+    expect(pending.className).toContain("text-destructive");
+    expect(screen.getByTestId("connection-e2e-enc").textContent).toContain(
+      "ai:server.e2e.encrypted",
+    );
+  });
+});

@@ -12,6 +12,7 @@
 import { invoke, on, type IPCChannel } from "@/lib/ipc";
 import type { ChatStreamChunk } from "@/domains/ai/api/chat.api";
 import type {
+  ConnectionE2eState,
   FaceEvent,
   MonitorStats,
   RemoteFileUploadInput,
@@ -59,31 +60,35 @@ export interface ConnectionConfig {
   adminUrl?: string;
   akId?: string;
   akSecret?: string;
-  /** 被控端 E2E 指纹（hex16；空=TOFU 首连回填。仅 relay 模式） */
+  /** 被控端 E2E 指纹（hex16；TOFU 首连经用户确认卡钉扎——P0-1 仪式。
+   * 仅 relay 模式） */
   fingerprint?: string;
+  /** 指纹确认时间（ISO；P0-1 TOFU 仪式）：确认卡或手工录入时写入；
+   * 缺省 = 未确认（存量已钉扎连接经迁移补写） */
+  confirmedAt?: string;
   /** 连接级 E2E 模式（ConnectionE2eMode；仅 relay 模式） */
   e2eMode?: ConnectionE2eMode;
   local?: boolean;
 }
 
-/** 连接 E2E 承载状态（E2E-T3，主进程同款）：unsupported=direct 不适用；
- * plaintext=明文中继（降级警示）；encrypted=加密会话；mitm-suspect=指纹
- * 不匹配断开（红色警示）；required-failed=连接级 required 拒降级断开 */
-export type ConnectionE2eState =
-  | "unsupported"
-  | "plaintext"
-  | "encrypted"
-  | "mitm-suspect"
-  | "required-failed";
+/** 连接 E2E 承载状态（单源 @tianshu/protocol——主进程 transport 同款）：
+ * unsupported=direct 不适用；plaintext=明文中继（降级警示）；
+ * pending-confirm=TOFU 首连加密会话可用但指纹待用户核对（P0-1 确认仪式，
+ * mitm-suspect 同款警示 + 指纹核对卡）；encrypted=加密会话（已确认钉扎）；
+ * mitm-suspect=指纹不匹配断开（红色警示）；required-failed=连接级 required
+ * 拒降级断开 */
+export type { ConnectionE2eState };
 
 /** 注册表对外视图：配置 + 运行态 + 协商到的能力清单 + E2E 承载态
- * （relay 会话加密徽标数据；direct 恒 unsupported、idle 无值）+
- * 协议版本（批3B：低于 PROTOCOL_VERSION 给「建议升级」徽标） */
+ * （relay 会话加密徽标数据；direct 恒 unsupported、idle 无值）
+ * + 协议版本（批3B：低于 PROTOCOL_VERSION 给「建议升级」徽标）
+ * + 协商指纹（P0-1：当前连接实际核对到的指纹——确认卡数据源） */
 export interface ConnectionView extends ConnectionConfig {
   state: ConnectionRuntimeState;
   e2e?: ConnectionE2eState;
   capabilities: string[];
   protocolVersion?: number;
+  e2eFingerprint?: string;
 }
 
 export interface ConnectionListResult {
@@ -341,6 +346,15 @@ export default class ServerApi {
 
   static async deleteConnection(id: string): Promise<ConnectionListResult> {
     return invoke<ConnectionListResult>("server:connectionDelete", id);
+  }
+
+  /** TOFU 指纹用户确认（P0-1）：协商指纹钉扎 + confirmedAt 落档，重建
+   * transport 转 expectedFingerprint 强制校验（其后不匹配 → mitm-suspect） */
+  static async confirmFingerprint(id: string): Promise<ConnectionListResult> {
+    return invoke<ConnectionListResult>(
+      "server:connectionConfirmFingerprint",
+      id,
+    );
   }
 
   /** 连通性测试（临时 transport → GET info；不落库） */

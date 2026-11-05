@@ -9,28 +9,21 @@
 // - onState 为推送式状态通知（T13 裁定：优于轮询——变化即回调）
 import Log from "../../commons/Log";
 import type { ServerEvent } from "./protocol";
+import type { ConnectionE2eState } from "@tianshu/protocol";
 
 export type TransportState =
   "connecting" | "connected" | "reconnecting" | "closed";
 
 /**
  * E2E 承载状态（E2E-T3，spec 2026-10-18-relay-e2e §3.3——仅 relay 承载）：
- * - unsupported：不适用（direct——信任模型内：localhost/上游 TLS 已覆盖）
- * - plaintext：明文中继（握手在途/降级兼容——UI 警示徽标）
- * - encrypted：加密会话已建立（指纹核对通过/TOFU 首连）
- * - mitm-suspect：指纹不匹配断开（UI 红色警示，不再重连）
- * - required-failed：连接级 e2e=required 握手无 ack 拒降级断开（不再重连，
- *   E2E-T4/T3 审查——堵中继攻击者恒强制降级缺口）
+ * 值域单源自 @tianshu/protocol ConnectionE2eState（TOFU 确认仪式批收编，
+ * 与渲染层同源——pending-confirm = TOFU 首连加密可用但待用户核对）。
  */
-export type TransportE2eState =
-  | "unsupported"
-  | "plaintext"
-  | "encrypted"
-  | "mitm-suspect"
-  | "required-failed";
+export type TransportE2eState = ConnectionE2eState;
+export type { ConnectionE2eState };
 
-/** E2E 状态变化通知（fingerprint = 本次协商确认的被控端指纹——TOFU 回填
- * 持久化的数据源，自算不信任 wire 回显） */
+/** E2E 状态变化通知（fingerprint = 本次协商确认的被控端指纹——TOFU 待
+ * 确认指纹与已确认指纹的数据源，自算不信任 wire 回显） */
 export interface E2eStatusChange {
   state: TransportE2eState;
   fingerprint?: string;

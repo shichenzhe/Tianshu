@@ -5,8 +5,9 @@
  *   alias 不传递）；
  * - tianshu-server 仓经 npm file: 消费 dist 产物（npm run build 产 js +
  *   declaration）；
- * - 十六模块聚合：chat-contract（chunk/blocks/send 契约）、graph-contract
+ * - 十七模块聚合：chat-contract（chunk/blocks/send 契约）、graph-contract
  *   （GraphIssue 结构化校验问题）、relay-frames（中继隧道帧）、
+ *   connection-contract（连接 E2E 承载状态——TOFU 确认仪式批上收）、
  *   server-event（事件 + 能力/端点常量）、monitor-contract（A6 监控统计
  *   契约）、ui-contract（ui-drive 三端点契约，UD-T1）、agent-runner
  *   （引擎接缝契约，AR-T1）、provider-save-contract（provider/save upsert
@@ -23,6 +24,7 @@ export * from "./agent-runner";
 export * from "./artifact-contract";
 export * from "./backup-contract";
 export * from "./chat-contract";
+export * from "./connection-contract";
 export * from "./expert-contract";
 export * from "./graph-contract";
 export * from "./library-contract";

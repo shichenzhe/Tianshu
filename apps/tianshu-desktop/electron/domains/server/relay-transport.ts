@@ -16,9 +16,11 @@
 //   指纹匹配（自算 fingerprintOf，不信任 wire 回显）→ deriveSessionKeys
 //   （临时私钥+ack 静态公钥，connectionId 绑定）+ createE2ESession(role=
 //   client)，其后 req 封信封/res/event 解信封，状态 encrypted；TOFU（无已
-//   存指纹）→ 加密 + ack 指纹经 onE2eState 上报（注册表回填连接配置持久化，
-//   下次强制）；不匹配 → 断开+mitm-suspect（不再重连——重连只会再次不
-//   匹配，用户须核对指纹重配）。握手超时（默认 2s）无 ack → 降级：重试
+//   存指纹）→ 加密会话可用 + 状态 pending-confirm（P0-1 确认仪式：ack 指纹
+//   经 onE2eState 上报注册表供确认卡核对，**不自动回填**——用户确认后经
+//   registry.confirmFingerprint 钉扎持久化，下次强制）；不匹配 → 断开+
+//   mitm-suspect（不再重连——重连只会再次不匹配，用户须核对指纹重配）。
+//   握手超时（默认 2s）无 ack → 降级：重试
 //   一次原 open 帧+明文承载+状态 plaintext（旧版被控端兼容；对端 required
 //   拒明文则隧道即断，按连接失败如实呈现）；连接级 e2eMode=required（默认
 //   auto——spec §2.4 控制端配置级开关；无 off：不建 relay 连接即得）时
@@ -67,7 +69,8 @@ export interface RelayTransportOptions {
   relayToken: string;
   /** 目标被控端 connectionId（relay 注册键 = 被控端 instanceId） */
   connectionId: string;
-  /** 已存被控端指纹（TOFU 首连空缺省；ack 不匹配即断——mitm-suspect） */
+  /** 已存被控端指纹（TOFU 首连空缺省——会话可用但状态 pending-confirm
+   *   待用户确认；在场且 ack 不匹配即断——mitm-suspect） */
   fingerprint?: string;
   /** e2e 握手等 ack 超时窗（超时降级明文；测试注入缩短） */
   e2eHandshakeTimeoutMs?: number;
@@ -359,8 +362,20 @@ export class RelayTransport extends TransportBase {
     }
     this.e2eSession = session;
     this.settleE2eHandshake();
-    this.setE2eState("encrypted", fingerprint); // TOFU 回填经 onE2eState 上报
-    Log.info("relay e2e 加密会话已建立", fingerprint);
+    // 指纹三态收口（§2.2 + P0-1 确认仪式）：已存指纹（匹配路径）→
+    // encrypted（用户已确认钉扎）；TOFU（首连无存档指纹）→ pending-confirm
+    // ——加密会话可用（通信不阻断）但指纹待用户核对（确认卡数据源：
+    // fingerprint 经 onE2eState 上报注册表，不再自动回填持久化）
+    this.setE2eState(
+      this.expectedFingerprint ? "encrypted" : "pending-confirm",
+      fingerprint,
+    );
+    Log.info(
+      this.expectedFingerprint
+        ? "relay e2e 加密会话已建立"
+        : "relay e2e TOFU 首连加密会话已建立（指纹待用户确认）",
+      fingerprint,
+    );
   }
 
   /** 终局拆链（mitm-suspect / e2e-required 共用）：断开且不再重连（重连

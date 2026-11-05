@@ -193,6 +193,9 @@ export interface ServerFaceChat {
     p: { workspaceId: number; text: string; style: PolishStyle },
     userId: number,
   ): Promise<{ text: string }>;
+  /** AI 交接摘要（#15 转办批：归属校验内聚 service；同步 LLM 调用，
+   *  控制端放宽超时） */
+  handoverSummary(sessionId: number, userId: number): Promise<string>;
   /** 上下文用量拆解（AL 批：chat:usage 同口径五类估算） */
   getUsageBreakdown(sessionId: number, userId: number): Promise<unknown>;
   /** 会话工具权限（CU 批：归属校验同 IPC 口径） */

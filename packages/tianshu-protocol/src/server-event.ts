@@ -287,6 +287,9 @@ export const ENDPOINTS = {
     // 同款 AbortSignal.timeout(30_000)）
     compact: "session/compact",
     polish: "session/polish",
+    /** AI 交接摘要（#15 转办批，桌面被控端专属）：同步返回摘要文本——
+     *  LLM 调用耗时，控制端需放宽超时（对齐桌面 Loading 语义） */
+    handoverSummary: "session/handoverSummary",
   },
   provider: {
     query: "provider/query",

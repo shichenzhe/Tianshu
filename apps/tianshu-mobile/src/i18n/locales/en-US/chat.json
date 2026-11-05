@@ -162,5 +162,12 @@
   "polishFailed": "Polish failed—please retry",
   "fileRefEdit": "Edit",
   "loadMoreSessions": "Load more ({{loaded}}/{{total}})",
-  "loadingMore": "Loading…"
+  "loadingMore": "Loading…",
+  "handoverMenu": "Hand over to project",
+  "handoverLoading": "Generating AI handover summary…",
+  "handoverFailed": "Handover failed—please retry",
+  "handoverUntitled": "Untitled task",
+  "handoverTitleLabel": "Task title",
+  "handoverSummaryLabel": "Handover summary (editable)",
+  "handoverDone": "Project task created"
 }

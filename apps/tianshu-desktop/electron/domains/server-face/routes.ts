@@ -955,6 +955,20 @@ async function handleCompact(body: unknown): Promise<RouteResult> {
  *  service 内 AbortSignal.timeout(30_000)，超时/无模型走 5000 业务错）；
  * workspaceId 缺省解析用户默认工作空间；style 缺省/未知回退 professional
  * （与桌面 STYLE_PROMPTS 缺省口径一致） */
+/** session/handoverSummary（#15 转办批）：AI 交接摘要（同步 LLM 调用；
+ *  归属校验内聚 ChatService；控制端 Loading 语义放宽超时） */
+function handleHandoverSummary(body: unknown): Promise<RouteResult> {
+  const sessionId = asInt((body as { sessionId?: unknown } | null)?.sessionId);
+  if (sessionId === null) {
+    return Promise.resolve(bizError("5000", "sessionId 参数不合法"));
+  }
+  return faceHandler(
+    (d) => d.chat,
+    "chat",
+    (chat, userId) => chat.handoverSummary(sessionId, userId),
+  );
+}
+
 async function handlePolish(body: unknown): Promise<RouteResult> {
   const p = (body ?? {}) as {
     workspaceId?: unknown;
@@ -2649,6 +2663,8 @@ const ROUTES: Record<string, RouteHandler> = {
   // A9 会话内工具批（ENDPOINTS 协议常量直引——键漂移即测试红）
   [`POST ${ENDPOINTS.session.compact}`]: handleCompact,
   [`POST ${ENDPOINTS.session.polish}`]: handlePolish,
+  // #15 转办批：AI 交接摘要（同步 LLM 调用，控制端放宽超时）
+  [`POST ${ENDPOINTS.session.handoverSummary}`]: handleHandoverSummary,
   "POST skills/query": handleSkillsQuery,
   "POST skills/read": handleSkillsRead,
   "POST skills/setEnabled": handleSkillsSetEnabled,

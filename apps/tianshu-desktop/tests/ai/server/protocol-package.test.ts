@@ -95,6 +95,7 @@ describe("@tianshu/protocol 协议包", () => {
         // 同步 30s 超时
         compact: "session/compact",
         polish: "session/polish",
+        handoverSummary: "session/handoverSummary",
       },
       provider: {
         query: "provider/query",

@@ -353,6 +353,7 @@ function wireDeps(
     // A9 批：compact 桥（202 异步）+ polish 桥（同步 30s）
     compact: vi.fn(async () => {}),
     polish: vi.fn(async () => ({ text: "润色结果" })),
+    handoverSummary: vi.fn(async () => "交接摘要文本"),
     getUsageBreakdown: vi.fn(async () => ({
       system: 100,
       tools: 50,
@@ -852,6 +853,21 @@ describe("被控面路由表（T11 查询端点）", () => {
     expect(plain.body.success).toBe(true);
     expect(calls2[0]).not.toHaveProperty("projectId");
     expect(calls2[0]).not.toHaveProperty("planItemId");
+  });
+
+  it("session/handoverSummary：{sessionId} 映射 + 摘要文本直透（#15 转办批）", async () => {
+    const wired = wireDeps();
+    const r = await handleRoute("POST", ENDPOINTS.session.handoverSummary, {
+      sessionId: 11,
+    });
+    expect(r.body).toMatchObject({ success: true, data: "交接摘要文本" });
+    expect(wired.chat.handoverSummary).toHaveBeenCalledWith(11, UID);
+    await expectBizError(
+      "POST",
+      ENDPOINTS.session.handoverSummary,
+      {},
+      "5000",
+    );
   });
 
   it("create+query+getById+delete 闭环（workspaceId 缺省回落默认空间）", async () => {

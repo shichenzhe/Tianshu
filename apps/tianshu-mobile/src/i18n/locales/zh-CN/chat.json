@@ -162,5 +162,12 @@
   "polishFailed": "润色失败，请重试",
   "fileRefEdit": "编辑",
   "loadMoreSessions": "加载更多（已 {{loaded}}/{{total}}）",
-  "loadingMore": "加载中…"
+  "loadingMore": "加载中…",
+  "handoverMenu": "转办为项目待办",
+  "handoverLoading": "AI 交接摘要生成中…",
+  "handoverFailed": "转办失败，请重试",
+  "handoverUntitled": "未命名待办",
+  "handoverTitleLabel": "待办标题",
+  "handoverSummaryLabel": "交接摘要（可编辑）",
+  "handoverDone": "已创建项目待办"
 }

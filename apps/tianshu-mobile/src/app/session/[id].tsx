@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import {
+  ArrowRightLeft,
   FolderOutput,
   Minimize2,
   MoreVertical,
@@ -24,6 +25,9 @@ import { ENDPOINTS, type ServerEvent } from "@tianshu/protocol";
 import { ApprovalBanner } from "@/components/ApprovalBanner";
 import { AppActionSheet } from "@/components/AppActionSheet";
 import { Composer, type PendingImage } from "@/components/Composer";
+import { DialogShell } from "@/components/DialogShell";
+import { FormField } from "@/components/FormField";
+import { FormFooter } from "@/components/FormFooter";
 import { ExpertChip } from "@/components/ExpertChip";
 import { FileRefPicker } from "@/components/FileRefPicker";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
@@ -58,6 +62,8 @@ import { formatRelative } from "@/logic/time";
 import { timeSeparatorKeys } from "@/logic/time-separators";
 import { useProvidersStore } from "@/store/providers.store";
 import { useCreateExpertPromptStore } from "@/store/create-expert-prompt.store";
+import { useProjectStore } from "@/store/project.store";
+import { useSessionsStore } from "@/store/sessions.store";
 import { useSessionToolsStore } from "@/store/session-tools.store";
 import {
   subscribeTransportEvents,
@@ -308,6 +314,64 @@ export default function SessionScreen() {
   // 重拉 getById 刷新——刷新信号语义，不轮询） ——
   const compacting = useSessionToolsStore((s) => s.compacting);
   const [moreOpen, setMoreOpen] = useState(false);
+  // —— #15 转办批：项目会话「转办为项目待办」——AI 交接摘要（同步调用
+  //    放宽 60s，归属校验在服务端）→ 标题/摘要确认（可编辑）→
+  //    planItem/create（归属项目，source=manual）——
+  const [handoverLoading, setHandoverLoading] = useState(false);
+  const [handoverDraft, setHandoverDraft] = useState<{
+    title: string;
+    summary: string;
+  } | null>(null);
+  /** 会话归属项目（静取一次——归属不变；项目会话才有转办入口） */
+  const sessionBrief = useMemo(
+    () =>
+      useSessionsStore.getState().items.find((i) => i.id === sessionId) ??
+      null,
+    [sessionId],
+  );
+  const sessionProjectId = sessionBrief?.projectId ?? null;
+  const handleHandover = useCallback(() => {
+    if (handoverLoading) return;
+    setMoreOpen(false);
+    setHandoverLoading(true);
+    void wireRequest(
+      "POST",
+      ENDPOINTS.session.handoverSummary,
+      { sessionId },
+      null,
+      { timeoutMs: 60_000 },
+    ).then((r) => {
+      setHandoverLoading(false);
+      if (r.ok && typeof r.data === "string" && r.data !== "") {
+        setHandoverDraft({
+          title: sessionBrief?.title ?? "",
+          summary: r.data,
+        });
+      } else {
+        toast.error(t("handoverFailed"));
+      }
+    });
+  }, [handoverLoading, sessionId, sessionBrief, t]);
+
+  async function handleHandoverSubmit() {
+    if (handoverDraft === null || sessionProjectId === null) return;
+    const ok = await useProjectStore.getState().createItem({
+      projectId: sessionProjectId,
+      title: handoverDraft.title.trim() || t("handoverUntitled"),
+      description: handoverDraft.summary,
+      status: "not_started",
+      source: "manual",
+    });
+    if (ok) {
+      setHandoverDraft(null);
+      toast.info(t("handoverDone"));
+    } else {
+      toast.error(
+        useProjectStore.getState().hub.error || t("handoverFailed"),
+      );
+    }
+  }
+
   const [summaryExpanded, setSummaryExpanded] = useState(false);
   useEffect(() => {
     setSummaryExpanded(false);
@@ -1108,9 +1172,75 @@ export default function SessionScreen() {
               Icon: Minimize2,
               onPress: handleCompact,
             },
+            // #15 转办批：项目会话专属（无归属项目不显示）
+            ...(sessionProjectId != null
+              ? [
+                  {
+                    key: "handover",
+                    label: t("handoverMenu"),
+                    Icon: ArrowRightLeft,
+                    onPress: handleHandover,
+                  },
+                ]
+              : []),
           ]}
           onClose={() => setMoreOpen(false)}
         />
+
+        {/* #15 转办批：AI 摘要生成中（同步长调用） */}
+        {handoverLoading && (
+          <DialogShell
+            title={t("handoverMenu")}
+            busy
+            onClose={() => undefined}
+            footer={
+              <View className="items-center px-5 py-4">
+                <Text className="text-sm text-label2 dark:text-[#EBEBF599]">
+                  {t("handoverLoading")}
+                </Text>
+              </View>
+            }
+          >
+            <View className="h-4" />
+          </DialogShell>
+        )}
+
+        {/* #15 转办批：标题/摘要确认（可编辑）→ 创建项目待办 */}
+        {handoverDraft !== null && (
+          <DialogShell
+            title={t("handoverMenu")}
+            busy={false}
+            onClose={() => setHandoverDraft(null)}
+            footer={
+              <FormFooter
+                busy={false}
+                confirmDisabled={handoverDraft.title.trim() === ""}
+                onConfirm={() => void handleHandoverSubmit()}
+                onCancel={() => setHandoverDraft(null)}
+              />
+            }
+          >
+            <FormField
+              label={t("handoverTitleLabel")}
+              value={handoverDraft.title}
+              onChangeText={(text) =>
+                setHandoverDraft((draft) =>
+                  draft ? { ...draft, title: text } : draft,
+                )
+              }
+            />
+            <FormField
+              label={t("handoverSummaryLabel")}
+              value={handoverDraft.summary}
+              onChangeText={(text) =>
+                setHandoverDraft((draft) =>
+                  draft ? { ...draft, summary: text } : draft,
+                )
+              }
+              multiline
+            />
+          </DialogShell>
+        )}
 
         {/* 消息长按操作面板（UX 批）：操作具名可发现 + 面板即确认层 */}
         <MessageActionsSheet

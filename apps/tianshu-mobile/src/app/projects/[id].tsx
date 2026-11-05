@@ -19,6 +19,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,6 +29,7 @@ import {
   ChevronRight,
   CircleDot,
   File,
+  Filter,
   Folder,
   FolderPlus,
   Link2,
@@ -41,6 +43,7 @@ import {
   X,
 } from "lucide-react-native";
 import {
+  PLAN_PRIORITIES,
   PLAN_STATUSES,
   type AssetEntryDto,
   type PlanItemCreatePayload,
@@ -49,6 +52,7 @@ import {
   type PlanPriority,
   type PlanStatus,
   type ProjectBindingItemDto,
+  type ProjectMemberItemDto,
 } from "@tianshu/protocol";
 import {
   filterPlanItems,
@@ -56,12 +60,21 @@ import {
   isoToDateKey,
   parsePlanViewConfig,
   sortPlanItems,
+  type PlanFilterCondition,
 } from "@/logic/plan-view";
+import {
+  PLAN_FILTER_FIELDS,
+  addConditionUpdater,
+  patchConditionUpdater,
+  removeConditionUpdater,
+  setConditionOpUpdater,
+  toggleConditionValueUpdater,
+} from "@/logic/plan-filter";
 
 import { AppActionSheet } from "@/components/AppActionSheet";
 import { DialogShell } from "@/components/DialogShell";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
-import { FormField } from "@/components/FormField";
+import { FormField, PLACEHOLDER } from "@/components/FormField";
 import { FormFooter } from "@/components/FormFooter";
 import { MarkdownLite } from "@/components/MarkdownLite";
 import { PageHeader } from "@/components/PageHeader";
@@ -209,6 +222,233 @@ const PlanGroupAddRow = memo(function PlanGroupAddRow({
         {t("quickCreate")}
       </Text>
     </Pressable>
+  );
+});
+
+// —— 计划筛选面板（#8 桌面对齐：字段×操作符×值 AND 组合，本地会话态，
+//    不随视图持久化——planView 写面属后续批） ——
+
+/** source 值域（PlanItemSource；标签走 i18n filter 子树） */
+const FILTER_SOURCE_VALUES = ["manual", "ai", "template"] as const;
+
+/** 各字段可用操作符（唯一操作符字段不展示切换行） */
+const FILTER_OPS_BY_FIELD: Record<
+  PlanFilterCondition["field"],
+  PlanFilterCondition["op"][]
+> = {
+  title: ["contains"],
+  tags: ["contains"],
+  status: ["in", "notIn"],
+  priority: ["in", "notIn"],
+  source: ["in", "notIn"],
+  assigneeId: ["isMe", "notMe", "in", "notIn"],
+};
+
+/** 多选值 chip 行（status/priority/source/assignee 值选择共用） */
+const FilterValueChips = memo(function FilterValueChips({
+  options,
+  values,
+  onToggle,
+}: {
+  options: Array<{ value: string; label: string }>;
+  values: string[];
+  onToggle: (value: string) => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      {options.map((option) => {
+        const active = values.includes(option.value);
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            onPress={() => onToggle(option.value)}
+            className="rounded-full border px-3 py-1.5"
+            style={{
+              borderColor: active ? colors.primary : "transparent",
+              backgroundColor: colors.subtle,
+            }}
+          >
+            <Text
+              className="text-xs"
+              style={{ color: active ? colors.primary : undefined }}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+});
+
+/** 计划筛选面板：字段添加 chips + 条件行（操作符切换 + 值编辑） */
+const PlanFilterDialog = memo(function PlanFilterDialog({
+  conditions,
+  members,
+  onChange,
+  onClose,
+}: {
+  conditions: PlanFilterCondition[];
+  members: ProjectMemberItemDto[];
+  onChange: (next: PlanFilterCondition[]) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("project");
+  const colors = useThemeColors();
+
+  const fieldLabel = (field: PlanFilterCondition["field"]) =>
+    t(`filter.field.${field}`);
+  const valueOptions = (
+    field: PlanFilterCondition["field"],
+  ): Array<{ value: string; label: string }> => {
+    if (field === "status") {
+      return PLAN_STATUSES.map((v) => ({
+        value: v,
+        label: t(`status.${v}`),
+      }));
+    }
+    if (field === "priority") {
+      return PLAN_PRIORITIES.map((v) => ({
+        value: v,
+        label: t(`priority.${v}`),
+      }));
+    }
+    if (field === "source") {
+      return FILTER_SOURCE_VALUES.map((v) => ({
+        value: v,
+        label: t(`filter.source${v === "ai" ? "Ai" : v === "template" ? "Template" : "Manual"}`),
+      }));
+    }
+    return members.map((m) => ({ value: String(m.userId), label: m.nickname }));
+  };
+
+  /** 值编辑区（按字段/操作符形态分发；isMe/notMe 无值区） */
+  function renderValueEditor(condition: PlanFilterCondition) {
+    const { field, op, value } = condition;
+    if (field === "title" || field === "tags") {
+      return (
+        <TextInput
+          value={Array.isArray(value) ? (value[0] ?? "") : value}
+          onChangeText={(text) =>
+            onChange(patchConditionUpdater(field, { value: text })(conditions))
+          }
+          placeholder={t("filter.valuePlaceholder")}
+          placeholderTextColor={PLACEHOLDER}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="rounded-lg border border-sep bg-field px-3 py-2 text-sm text-black dark:border-[#545458A6] dark:bg-[#2C2C2E] dark:text-white"
+        />
+      );
+    }
+    if (field === "assigneeId" && (op === "isMe" || op === "notMe")) {
+      return null;
+    }
+    const list = Array.isArray(value) ? value : value ? [value] : [];
+    return (
+      <FilterValueChips
+        options={valueOptions(field)}
+        values={list}
+        onToggle={(v) =>
+          onChange(toggleConditionValueUpdater(field, v)(conditions))
+        }
+      />
+    );
+  }
+
+  return (
+    <DialogShell
+      title={t("filter.title")}
+      busy={false}
+      onClose={onClose}
+      footer={
+        <FormFooter
+          busy={false}
+          confirmDisabled={false}
+          onConfirm={onClose}
+          onCancel={onClose}
+          auxLabel={conditions.length > 0 ? t("filter.reset") : undefined}
+          onAux={conditions.length > 0 ? () => onChange([]) : undefined}
+        />
+      }
+    >
+      {/* 字段添加行：已含字段实心（再点移除），未含可添加（字段唯一） */}
+      <View className="flex-row flex-wrap gap-2">
+        {PLAN_FILTER_FIELDS.map((field) => {
+          const active = conditions.some((c) => c.field === field);
+          return (
+            <Pressable
+              key={field}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() =>
+                onChange(
+                  active
+                    ? removeConditionUpdater(field)(conditions)
+                    : addConditionUpdater(field)(conditions),
+                )
+              }
+              className="rounded-full px-3 py-1.5"
+              style={{ backgroundColor: active ? colors.primary : colors.subtle }}
+            >
+              <Text
+                className="text-xs"
+                style={{ color: active ? "#FFFFFF" : colors.primary }}
+              >
+                {fieldLabel(field)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <ScrollView className="max-h-72">
+        {conditions.map((condition) => {
+          const ops = FILTER_OPS_BY_FIELD[condition.field];
+          return (
+            <View
+              key={condition.field}
+              className="gap-2 rounded-lg border border-sep p-2.5 dark:border-[#545458A6]"
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
+                  {fieldLabel(condition.field)}
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    onChange(
+                      removeConditionUpdater(condition.field)(conditions),
+                    )
+                  }
+                  hitSlop={8}
+                >
+                  <X size={14} color="#8E8E93" />
+                </Pressable>
+              </View>
+              {ops.length > 1 && (
+                <FilterValueChips
+                  options={ops.map((op) => ({
+                    value: op,
+                    label: t(`filter.op.${op}`),
+                  }))}
+                  values={[condition.op]}
+                  onToggle={(op) =>
+                    onChange(
+                      setConditionOpUpdater(
+                        condition.field,
+                        op as PlanFilterCondition["op"],
+                      )(conditions),
+                    )
+                  }
+                />
+              )}
+              {renderValueEditor(condition)}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </DialogShell>
   );
 });
 
@@ -424,6 +664,9 @@ export default function ProjectWorkspaceScreen() {
   const currentUserId = useProjectStore((state) => state.currentUserId);
   const saving = useProjectStore((state) => state.saving);
   const [tab, setTab] = useState<WsTab>("plan");
+  /** #8 筛选批：本地会话态组合筛选（不随视图持久化——planView 只读现状） */
+  const [localFilters, setLocalFilters] = useState<PlanFilterCondition[]>([]);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [itemDialog, setItemDialog] = useState<
     | { mode: "create"; status?: PlanStatus }
     | { mode: "edit"; item: PlanItemRecordDto }
@@ -464,16 +707,24 @@ export default function ProjectWorkspaceScreen() {
     [views, activeViewId],
   );
 
-  /** 计划拍平：激活视图条件+排序 → status 分组 → 组头/事项/组尾条目 */
+  /** 计划拍平：激活视图条件+排序 → 本地筛选叠加 → status 分组 →
+   *  组头/事项/组尾条目 */
   const planEntries = useMemo<PlanEntry[]>(() => {
     const config = parsePlanViewConfig(
       activeView?.filterJson ?? "",
       activeView?.sortJson ?? "",
     );
-    const visible = sortPlanItems(
-      filterPlanItems(items, config.conditions, "", currentUserId ?? 0),
-      config.sortRules,
+    const viewFiltered = filterPlanItems(
+      items,
+      config.conditions,
+      "",
+      currentUserId ?? 0,
     );
+    const filtered =
+      localFilters.length > 0
+        ? filterPlanItems(viewFiltered, localFilters, "", currentUserId ?? 0)
+        : viewFiltered;
+    const visible = sortPlanItems(filtered, config.sortRules);
     const groups = groupPlanItems(visible, "status", members);
     const entries: PlanEntry[] = [];
     groups.forEach((group) => {
@@ -496,7 +747,7 @@ export default function ProjectWorkspaceScreen() {
       entries.push({ kind: "add", key: `a-${group.key}`, status });
     });
     return entries;
-  }, [items, activeView, members, currentUserId]);
+  }, [items, activeView, members, currentUserId, localFilters]);
 
   const openPlanItem = useCallback(
     (item: PlanItemRecordDto) => setItemDialog({ mode: "edit", item }),
@@ -714,7 +965,9 @@ export default function ProjectWorkspaceScreen() {
     if (planEntries.length === 0) {
       return (
         <Text className="py-20 text-center text-sm text-label2 dark:text-[#EBEBF599]">
-          {t("project:emptyPlan")}
+          {localFilters.length > 0
+            ? t("project:filter.empty")
+            : t("project:emptyPlan")}
         </Text>
       );
     }
@@ -1035,37 +1288,61 @@ export default function ProjectWorkspaceScreen() {
         renderGuide()
       ) : (
         <>
-          {/* 计划 Tab 的视图 chips：横滚选择，选中高亮 */}
+          {/* 计划 Tab 工具行：视图 chips 横滚 + 筛选入口（激活条件数徽标） */}
           {tab === "plan" && views.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ flexGrow: 0, flexShrink: 0 }}
-              contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}
-            >
-              {views.map((view) => {
-                const active = view.id === activeView?.id;
-                return (
-                  <Pressable
-                    key={view.id}
-                    onPress={() =>
-                      useProjectStore.getState().setActiveView(view.id)
-                    }
-                    className="rounded-full px-3 py-1.5"
-                    style={{
-                      backgroundColor: active ? colors.primary : colors.subtle,
-                    }}
-                  >
-                    <Text
-                      className="text-xs"
-                      style={{ color: active ? "#FFFFFF" : colors.primary }}
+            <View className="flex-row items-center">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="min-w-0 flex-1"
+                style={{ flexGrow: 0, flexShrink: 0 }}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}
+              >
+                {views.map((view) => {
+                  const active = view.id === activeView?.id;
+                  return (
+                    <Pressable
+                      key={view.id}
+                      onPress={() =>
+                        useProjectStore.getState().setActiveView(view.id)
+                      }
+                      className="rounded-full px-3 py-1.5"
+                      style={{
+                        backgroundColor: active
+                          ? colors.primary
+                          : colors.subtle,
+                      }}
                     >
-                      {view.name}
+                      <Text
+                        className="text-xs"
+                        style={{ color: active ? "#FFFFFF" : colors.primary }}
+                      >
+                        {view.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("project:filter.title")}
+                onPress={() => setFilterPanelOpen(true)}
+                className="relative mr-3 h-8 w-8 items-center justify-center rounded-full"
+                style={{ backgroundColor: colors.subtle }}
+              >
+                <Filter size={14} color={colors.primary} />
+                {localFilters.length > 0 && (
+                  <View
+                    className="absolute -right-0.5 -top-0.5 h-4 min-w-4 items-center justify-center rounded-full px-1"
+                    style={{ backgroundColor: colors.primary }}
+                  >
+                    <Text className="text-[10px] font-medium text-white">
+                      {localFilters.length}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                  </View>
+                )}
+              </Pressable>
+            </View>
           )}
           <WsSegments tab={tab} disabled={saving} onSelect={setTab} />
           {loadingInitial ? (
@@ -1180,6 +1457,14 @@ export default function ProjectWorkspaceScreen() {
             onChangeText={setAssetName}
           />
         </DialogShell>
+      )}
+      {filterPanelOpen && (
+        <PlanFilterDialog
+          conditions={localFilters}
+          members={members}
+          onChange={setLocalFilters}
+          onClose={() => setFilterPanelOpen(false)}
+        />
       )}
       {itemDialog !== null && (
         <PlanItemDialog

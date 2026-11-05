@@ -93,5 +93,29 @@
   "upload": "上传",
   "uploadInvalidName": "文件名须含合法扩展名",
   "uploadTooLarge": "文件超过 3MB 上限",
-  "uploadFailed": "上传失败"
+  "uploadFailed": "上传失败",
+  "filter": {
+    "title": "筛选",
+    "reset": "重置",
+    "empty": "无匹配事项，可调整筛选条件",
+    "valuePlaceholder": "包含关键字",
+    "field": {
+      "title": "标题",
+      "status": "状态",
+      "assigneeId": "处理人",
+      "source": "来源",
+      "priority": "优先级",
+      "tags": "标签"
+    },
+    "op": {
+      "contains": "包含",
+      "in": "属于",
+      "notIn": "不属于",
+      "isMe": "是我",
+      "notMe": "不是我"
+    },
+    "sourceManual": "手动",
+    "sourceAi": "AI",
+    "sourceTemplate": "模版"
+  }
 }

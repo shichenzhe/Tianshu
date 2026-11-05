@@ -93,5 +93,29 @@
   "upload": "Upload",
   "uploadInvalidName": "File name must have a valid extension",
   "uploadTooLarge": "File exceeds the 3MB limit",
-  "uploadFailed": "Upload failed"
+  "uploadFailed": "Upload failed",
+  "filter": {
+    "title": "Filter",
+    "reset": "Reset",
+    "empty": "No matching items. Adjust the filters.",
+    "valuePlaceholder": "Contains keyword",
+    "field": {
+      "title": "Title",
+      "status": "Status",
+      "assigneeId": "Assignee",
+      "source": "Source",
+      "priority": "Priority",
+      "tags": "Tags"
+    },
+    "op": {
+      "contains": "Contains",
+      "in": "Is any of",
+      "notIn": "Is none of",
+      "isMe": "Is me",
+      "notMe": "Is not me"
+    },
+    "sourceManual": "Manual",
+    "sourceAi": "AI",
+    "sourceTemplate": "Template"
+  }
 }

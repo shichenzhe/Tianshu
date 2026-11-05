@@ -12,6 +12,7 @@ import type {
   ProjectRecord,
   ProjectUpdateParams,
 } from "../../../../electron/domains/project/project.entity";
+import type { ProjectMemoryEntry } from "../../../../electron/domains/project/project-memory";
 
 export default abstract class ProjectApi {
   /** 当前用户的项目列表（ownerId 由主进程从 token 解出） */
@@ -50,6 +51,15 @@ export default abstract class ProjectApi {
   /** 项目成员列表（处理人选择器） */
   static async listMembers(projectId: number): Promise<ProjectMemberItem[]> {
     return invoke<ProjectMemberItem[]>("project:listMembers", projectId);
+  }
+
+  /** 项目记忆回写（批8 P0：交接摘要 + 产出物索引 → 资产空间 memory.md，
+   *  getPromptContext 读回注入项目会话；失败由调用方静默处理） */
+  static async appendMemory(
+    projectId: number,
+    entry: ProjectMemoryEntry,
+  ): Promise<void> {
+    return invoke<void>("project:appendMemory", projectId, entry);
   }
 }
 

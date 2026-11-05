@@ -293,6 +293,12 @@ export default class Application {
     // 均注入 prisma 单例；init 恢复审计链尾，失败仅日志不阻塞启动
     const auditLogService = new AuditLogService();
     await auditLogService.init().catch((e) => Log.error("审计链恢复失败", e));
+    // 项目域审计（批8 P2）：删项目/挂载变更/删资产入审计链——仓储先于
+    // auditLogService 构造，经安装式 sink 接线（terminal 同款模式，缺席静默）
+    this.projectRepo!.installAuditSink((event) =>
+      auditLogService.append(event),
+    );
+    this.assetRepo!.installAuditSink((event) => auditLogService.append(event));
     // provider 豁免域 30s TTL 缓存（SP5 网络安全门消费）——声明须先于
     // SecurityService：init 尾部即触 onConfigChange，晚声明会 TDZ ReferenceError
     const providerDomains: string[] = [];

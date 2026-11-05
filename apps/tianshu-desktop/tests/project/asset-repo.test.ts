@@ -36,7 +36,16 @@ const {
     copyFile: vi.fn(),
   },
   existsSyncStub: vi.fn(),
-  prismaStub: { project: { findUnique: vi.fn() } },
+  prismaStub: {
+    project: { findUnique: vi.fn() },
+    // 批8 P3：delete/rename 反查 planItemAttachment（按本项目事项 id 集圈定）
+    planItem: { findMany: vi.fn() },
+    planItemAttachment: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      update: vi.fn(),
+    },
+  },
   projectRepoStub: { ensureAssetWorkspace: vi.fn() },
   dialogStub: { showOpenDialog: vi.fn() },
   shellStub: { openPath: vi.fn(), showItemInFolder: vi.fn() },
@@ -661,5 +670,158 @@ describe("IPC 注册", () => {
         expect.any(Function),
       );
     }
+  });
+});
+
+/* ---------- 批8：附件死链反查（P3） + 资产删除审计（P2） ---------- */
+
+import { normalizeAssetRelPath } from "../../electron/domains/project/asset.repo";
+import type { SecurityEvent } from "../../src-react/domains/security/model/types";
+
+describe("normalizeAssetRelPath（批8 P3）", () => {
+  it("分隔符统一 /，剥首尾斜杠", () => {
+    expect(normalizeAssetRelPath("attachments/spec.pdf")).toBe(
+      "attachments/spec.pdf",
+    );
+    expect(normalizeAssetRelPath("docs\\a.md")).toBe("docs/a.md");
+    expect(normalizeAssetRelPath("/docs/")).toBe("docs");
+  });
+});
+
+describe("AssetRepository.delete 附件反查解绑（批8 P3）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaStub.planItem.findMany.mockResolvedValue([{ id: 5 }]);
+  });
+
+  it("删文件 → 精确命中关联被级联解绑（死链不残留）", async () => {
+    fsStub.stat.mockResolvedValueOnce(fileStat(10));
+    prismaStub.planItemAttachment.findMany.mockResolvedValue([
+      { id: 101, assetPath: "attachments/spec.pdf" },
+      { id: 102, assetPath: "attachments/other.pdf" },
+    ]);
+
+    await repo.delete(11, "attachments/spec.pdf");
+
+    // 按本项目事项 id 集圈定（assetPath 无项目列，防跨项目误伤）
+    expect(prismaStub.planItemAttachment.findMany).toHaveBeenCalledWith({
+      where: { planItemId: { in: [5] } },
+      select: { id: true, assetPath: true },
+    });
+    expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [101] } },
+    });
+  });
+
+  it("删文件夹 → 前缀命中（folder/ 下）一并解绑", async () => {
+    fsStub.stat.mockResolvedValueOnce(dirStat());
+    prismaStub.planItemAttachment.findMany.mockResolvedValue([
+      { id: 201, assetPath: "docs" }, // 同名文件级关联
+      { id: 202, assetPath: "docs/a.md" },
+      { id: 203, assetPath: "docs/sub/b.md" },
+      { id: 204, assetPath: "docsy/c.md" }, // 相似前缀不误伤
+      { id: 205, assetPath: "other.txt" },
+    ]);
+
+    await repo.delete(11, "docs");
+
+    expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [201, 202, 203] } },
+    });
+  });
+
+  it("项目无事项 → 不查关联行；反查失败不阻断删除主流程", async () => {
+    fsStub.stat.mockResolvedValueOnce(fileStat(10));
+    prismaStub.planItem.findMany.mockResolvedValue([]);
+    await repo.delete(11, "a.txt");
+    expect(fsStub.unlink).toHaveBeenCalledWith(path.join(ROOT, "a.txt"));
+
+    // 反查抛错：unlink 已完成，delete 仍正常返回（解绑是卫生动作）
+    fsStub.stat.mockResolvedValueOnce(fileStat(10));
+    prismaStub.planItem.findMany.mockRejectedValueOnce(new Error("DB_DOWN"));
+    await expect(repo.delete(11, "a.txt")).resolves.toBeUndefined();
+    expect(fsStub.unlink).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("AssetRepository.rename 附件改绑（批8 P3）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaStub.planItem.findMany.mockResolvedValue([{ id: 5 }]);
+  });
+
+  it("文件改名 → 关联 assetPath 同步迁移（含目录前缀与最终名）", async () => {
+    prismaStub.planItemAttachment.findMany.mockResolvedValue([
+      { id: 301, assetPath: "attachments/spec.pdf" },
+      { id: 302, assetPath: "attachments/other.pdf" },
+    ]);
+
+    await expect(
+      repo.rename(11, "attachments/spec.pdf", "final.pdf"),
+    ).resolves.toBe("final.pdf");
+
+    expect(prismaStub.planItemAttachment.update).toHaveBeenCalledTimes(1);
+    expect(prismaStub.planItemAttachment.update).toHaveBeenCalledWith({
+      where: { id: 301 },
+      data: { assetPath: "attachments/final.pdf" },
+    });
+  });
+
+  it("文件夹改名 → 前缀命中的关联整体迁移；uniqueName 序号名生效", async () => {
+    existsSyncStub.mockReturnValueOnce(true).mockReturnValueOnce(false);
+    prismaStub.planItemAttachment.findMany.mockResolvedValue([
+      { id: 401, assetPath: "docs" },
+      { id: 402, assetPath: "docs/a.md" },
+      { id: 403, assetPath: "docsy/b.md" }, // 相似前缀不动
+    ]);
+
+    // 目标名「设计」被占用 → uniqueName 落「设计 (2)」
+    await expect(repo.rename(11, "docs", "设计")).resolves.toBe("设计 (2)");
+
+    expect(prismaStub.planItemAttachment.update).toHaveBeenCalledTimes(2);
+    expect(prismaStub.planItemAttachment.update).toHaveBeenCalledWith({
+      where: { id: 401 },
+      data: { assetPath: "设计 (2)" },
+    });
+    expect(prismaStub.planItemAttachment.update).toHaveBeenCalledWith({
+      where: { id: 402 },
+      data: { assetPath: "设计 (2)/a.md" },
+    });
+  });
+});
+
+describe("AssetRepository 项目资产审计（批8 P2）", () => {
+  const sink = vi.hoisted(() => vi.fn());
+  const events = () => sink.mock.calls.map((call) => call[0] as SecurityEvent);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sink.mockReset();
+    repo.installAuditSink(sink);
+    prismaStub.planItem.findMany.mockResolvedValue([]);
+  });
+
+  it("delete 实删 → projectAsset.deleted 入账（detail 携带项目与路径）", async () => {
+    fsStub.stat.mockResolvedValueOnce(fileStat(10));
+    await repo.delete(11, "attachments/spec.pdf");
+    expect(events()).toHaveLength(1);
+    expect(events()[0]).toMatchObject({
+      eventType: "projectAsset.deleted",
+      detail: { projectId: 11, path: "attachments/spec.pdf" },
+    });
+  });
+
+  it("目标不存在（幂等 no-op）→ 不入账；sink 未安装 → 删除正常", async () => {
+    fsStub.stat.mockRejectedValueOnce(
+      errnoError("ENOENT", path.join(ROOT, "x")),
+    );
+    await repo.delete(11, "x");
+    expect(sink).not.toHaveBeenCalled();
+
+    repo.installAuditSink(null);
+    fsStub.stat.mockResolvedValueOnce(fileStat(10));
+    await expect(repo.delete(11, "y.txt")).resolves.toBeUndefined();
+    expect(sink).not.toHaveBeenCalled();
+    repo.installAuditSink(sink);
   });
 });

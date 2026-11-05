@@ -5,6 +5,8 @@
  * 上抛移除，暂存项仅上抛）。本地任务（projectId null）不渲染。
  * 追加去重：按 assetPath 幂等（挑选/上传遇既有路径跳过，挑选行禁用可辨），
  * 防重复挂库关联与 chips 重复 key。
+ * 批8 P3：valid=false（后端存在性校验，文件已删/改名未改绑）chip 灰显 +
+ * title 死链提示（bindings 失效置灰同款先例）。
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,6 +23,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { invoke } from "@/lib/ipc";
+import { cn } from "@/lib/utils";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import AssetApi from "../api/asset.api";
 import PlanItemApi, { PLAN_ITEM_ATTACHMENTS_KEY } from "../api/plan-item.api";
@@ -30,6 +33,8 @@ export interface PendingAttachment {
   id?: number;
   fileName: string;
   assetPath: string;
+  /** 文件存在性（已挂记录读取时后端校验；undefined/true 正常，false 灰显） */
+  valid?: boolean;
 }
 
 interface PlanItemAttachmentsProps {
@@ -271,7 +276,16 @@ export default function PlanItemAttachments({
           {value.map((attachment) => (
             <span
               key={`${attachment.id ?? "pending"}-${attachment.assetPath}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-0.5 text-xs"
+              title={
+                attachment.valid === false
+                  ? t("project:plan.attachmentMissing")
+                  : undefined
+              }
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-0.5 text-xs",
+                attachment.valid === false &&
+                  "bg-muted text-muted-foreground line-through decoration-muted-foreground/50",
+              )}
             >
               {attachment.fileName}
               <button

@@ -64,6 +64,7 @@
     "pickFromAssets": "Pick from Assets",
     "uploadFailed": "Some attachments failed to upload, please retry",
     "attachFailed": "Some attachments failed to save, you can re-upload them",
+    "attachmentMissing": "File no longer exists (deleted or renamed)",
     "filterAssets": "Search asset files",
     "noAssetFiles": "No matching files",
     "status": "Status",
@@ -225,7 +226,10 @@
     "automationEmpty": "No automation yet",
     "projectWorkspace": "Project assets",
     "taskRunning": "Task is already running",
-    "goAutomation": "Go to Automation"
+    "goAutomation": "Go to Automation",
+    "invalidBindings": "{{count}} invalid mount(s)",
+    "cleanInvalid": "Clean Invalid Mounts",
+    "cleanInvalidDone": "Cleaned {{count}} invalid mount(s)"
   },
   "chatBar": {
     "placeholder": "What can I do for you today? @ to reference assets, plan items, or skills",

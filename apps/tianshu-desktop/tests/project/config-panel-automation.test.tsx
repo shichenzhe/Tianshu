@@ -118,6 +118,12 @@ vi.mock("@/domains/ai/api/mcp.api", () => ({
   default: { list: vi.fn() },
 }));
 
+// ProjectApi.setBindings（批8 P6 失效挂载清理回写通道）整体 mock
+const setBindingsMock = vi.hoisted(() => vi.fn());
+vi.mock("@/domains/project/api/project.api", () => ({
+  default: { setBindings: setBindingsMock },
+}));
+
 vi.mock("@/domains/user/store/user.store", () => ({
   useUserStore: (
     selector?: (state: { user: { id: number; nickname: string } }) => unknown,
@@ -203,7 +209,7 @@ const TASKS: TaskRecord[] = [
 ];
 
 /** 渲染面板（MemoryRouter + 位置探针 + 自动化路由占位），返回 client 供 invalidate 断言 */
-function renderPanel() {
+function renderPanel(detail: ProjectDetail = DETAIL) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -214,7 +220,7 @@ function renderPanel() {
         <Routes>
           <Route
             path="/module/project/1"
-            element={<ConfigPanel detail={DETAIL} />}
+            element={<ConfigPanel detail={detail} />}
           />
           <Route
             path="/module/ai/automation"
@@ -259,6 +265,7 @@ beforeEach(() => {
   vi.mocked(AssistantApi.list).mockReset().mockResolvedValue([]);
   vi.mocked(SkillApi.list).mockReset().mockResolvedValue([]);
   vi.mocked(McpServerApi.list).mockReset().mockResolvedValue([]);
+  setBindingsMock.mockReset().mockResolvedValue(undefined);
   dialogProps.current = null;
   toastMock.success.mockClear();
   toastMock.error.mockClear();
@@ -432,5 +439,79 @@ describe("ConfigPanel 定时任务区块", () => {
       ),
     );
     expect(screen.getByText("automation-stub")).toBeTruthy();
+  });
+});
+
+/* ---------- 批8 P6：能力挂载失效项清理 ---------- */
+
+describe("ConfigPanel 失效挂载清理（批8 P6）", () => {
+  /** 带两失效挂载的详情夹具（valid skill + 失效 assistant/mcpServer） */
+  const detailWithInvalid: ProjectDetail = {
+    ...DETAIL,
+    bindings: [
+      { id: 1, itemType: "skill", itemId: 4, itemName: "技能A", valid: true },
+      { id: 2, itemType: "assistant", itemId: 3, itemName: "#3", valid: false },
+      { id: 3, itemType: "mcpServer", itemId: 6, itemName: "#6", valid: false },
+    ],
+  };
+
+  it("全 valid → 清理入口不渲染", async () => {
+    renderPanel();
+    await screen.findByText("project:panel.automationEmpty").catch(() => {});
+    // 无失效项时提示行与清理按钮均不出现
+    expect(
+      screen.queryByRole("button", { name: /project:panel\.cleanInvalid/ }),
+    ).toBeNull();
+  });
+
+  it("有失效项 → 提示 + 清理按钮；点击回写仅 valid 项（setBindings 全量替换）", async () => {
+    renderPanel(detailWithInvalid);
+
+    const cleanButton = await screen.findByRole("button", {
+      name: /project:panel\.cleanInvalid/,
+    });
+    expect(screen.getByText(/project:panel\.invalidBindings/)).toBeTruthy();
+
+    const client = new QueryClient();
+    const invalidateSpy = vi.spyOn(
+      QueryClient.prototype,
+      "invalidateQueries",
+    );
+    fireEvent.click(cleanButton);
+
+    await waitFor(() =>
+      expect(setBindingsMock).toHaveBeenCalledWith(1, [
+        { itemType: "skill", itemId: 4 },
+      ]),
+    );
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: ["project", 1],
+      }),
+    );
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith(
+        "project:panel.cleanInvalidDone 2",
+      ),
+    );
+    void client;
+  });
+
+  it("回写失败 → operationFailed toast（清理不生效）", async () => {
+    setBindingsMock.mockRejectedValueOnce(new Error("SET_BINDINGS_FAIL"));
+    renderPanel(detailWithInvalid);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /project:panel\.cleanInvalid/,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(toastMock.error).toHaveBeenCalledWith(
+        "project:toast.operationFailed",
+      ),
+    );
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 });

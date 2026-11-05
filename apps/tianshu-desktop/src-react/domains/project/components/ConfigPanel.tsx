@@ -6,7 +6,8 @@
  * - 指令：MarkdownView 只读渲染 systemPrompt（空 → 占位文案）+ 编辑弹窗
  * - 能力挂载：三行（连接器/专家/技能）CapabilityRow + PickerDialog；
  *   失效挂载灰显 + X 显式移除，Picker 确认只替换该类型 valid 集，
- *   失效项原样保留（Task 6 裁定：编辑不静默丢弃）
+ *   失效项原样保留（Task 6 裁定：编辑不静默丢弃）；存在失效项时给
+ *   「清理失效挂载」一键入口（批8 P6：setBindings 全量回写仅留 valid 项）
  * - 定时任务：本项目任务行列表（名称/频率/状态/上次运行/启停/立即运行，
  *   projectId 前端过滤）+ 新建（CreateTaskDialog 项目预设：资产空间锁定）
  *   + 前往自动化入口 + 空态文案
@@ -18,7 +19,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { Bot, Pencil, Play, Plug, Plus, Sparkles } from "lucide-react";
+import { Bot, Eraser, Pencil, Play, Plug, Plus, Sparkles } from "lucide-react";
 import IconTooltip from "@/components/common/icon-tooltip";
 import type { LucideIcon } from "lucide-react";
 
@@ -173,9 +174,31 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
     await persistBindings(items);
   };
 
-  const persistBindings = async (items: ProjectBindingInput[]) => {
+  /** 失效挂载数（批8 P6：清理入口仅在有失效项时出现） */
+  const invalidBindingCount = useMemo(
+    () => detail.bindings.filter((binding) => !binding.valid).length,
+    [detail.bindings],
+  );
+
+  /** 清理失效挂载（批8 P6）：setBindings 全量替换回写仅留 valid 项
+   *  （源实体已删的脏行长期累积，一键清出；单行 X 移除仍保留） */
+  const handleCleanInvalidBindings = async () => {
+    const items = detail.bindings
+      .filter((binding) => binding.valid)
+      .map(({ itemType, itemId }) => ({ itemType, itemId }));
+    const ok = await persistBindings(items);
+    if (ok) {
+      toast.success(
+        t("project:panel.cleanInvalidDone", { count: invalidBindingCount }),
+      );
+    }
+  };
+
+  const persistBindings = async (
+    items: ProjectBindingInput[],
+  ): Promise<boolean> => {
     if (savingBindings) {
-      return;
+      return false;
     }
     setSavingBindings(true);
     try {
@@ -183,8 +206,10 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
       await queryClient.invalidateQueries({
         queryKey: ["project", detail.project.id],
       });
+      return true;
     } catch {
       toast.error(t("project:toast.operationFailed"));
+      return false;
     } finally {
       setSavingBindings(false);
     }
@@ -226,7 +251,28 @@ export default function ConfigPanel({ detail }: ConfigPanelProps) {
           )}
         </section>
 
-        {/* 区块2 能力挂载：三行 Tag 列表 + Picker 添加 */}
+        {/* 区块2 能力挂载：三行 Tag 列表 + Picker 添加；存在失效项时
+            给清理入口（批8 P6：一键全量回写仅留 valid 项） */}
+        {invalidBindingCount > 0 && (
+          <section className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              {t("project:panel.invalidBindings", {
+                count: invalidBindingCount,
+              })}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={savingBindings}
+              onClick={() => void handleCleanInvalidBindings()}
+              className="h-7 gap-1 px-2 hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
+            >
+              <Eraser className="h-3.5 w-3.5" />
+              {t("project:panel.cleanInvalid")}
+            </Button>
+          </section>
+        )}
         {CAPABILITY_ROWS.map(({ kind, icon, labelKey }) => (
           <CapabilityRow
             key={kind}

@@ -14,6 +14,7 @@ import prisma from "../../commons/prisma-client";
 import Log from "../../commons/Log";
 import { PROJECT_NOT_FOUND } from "./project.entity";
 import type ProjectRepository from "./project.repo";
+import type { SecurityEventSink } from "../../../src-react/domains/security/model/types";
 import {
   ASSET_QUOTA_BYTES,
   type AssetEntry,
@@ -92,6 +93,14 @@ function errnoCode(error: unknown): string | undefined {
   return (error as NodeJS.ErrnoException).code;
 }
 
+/**
+ * 相对路径归一（批8 P3）：分隔符统一 "/"、剥首尾斜杠——附件 assetPath 与
+ * 删除/改名目标的同口径匹配基准（模块级纯函数，单测覆盖）
+ */
+export function normalizeAssetRelPath(relPath: string): string {
+  return relPath.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
 /** fs 异常转中文错误（附 cause，沿用 project.repo 先例） */
 function wrapFsError(error: unknown, message: string): Error {
   const cause = error instanceof Error ? error.message : String(error);
@@ -101,9 +110,18 @@ function wrapFsError(error: unknown, message: string): Error {
 export default class AssetRepository {
   private readonly projectRepo: ProjectRepository;
 
+  // 项目资产审计出口（批8 P2）：Application 注入 auditLogService.append；
+  // 缺席（测试/未接线）时静默空转，行为与接入前一致
+  private auditSink: SecurityEventSink | null = null;
+
   constructor(projectRepo: ProjectRepository) {
     this.projectRepo = projectRepo;
     this.registerHandlers();
+  }
+
+  /** 安装审计出口（Application 装配接 auditLogService；传 null 卸载） */
+  installAuditSink(sink: SecurityEventSink | null): void {
+    this.auditSink = sink;
   }
 
   /**
@@ -218,7 +236,8 @@ export default class AssetRepository {
   }
 
   /**
-   * 重命名：清洗 + 重名序号 + rename（同目录内改）；返回最终名
+   * 重命名：清洗 + 重名序号 + rename（同目录内改）；返回最终名。
+   * 改名后反查改绑附件关联 assetPath（批8 P3，含文件夹前缀迁移）
    */
   async rename(
     projectId: number,
@@ -235,11 +254,19 @@ export default class AssetRepository {
     } catch (error) {
       throw wrapFsError(error, `重命名失败（${oldPath} → ${finalName}）`);
     }
+    // 附件改绑：新相对路径 = 原父目录 + 最终名（uniqueName 序号生效）
+    const oldRel = normalizeAssetRelPath(oldPath);
+    const parentRel = oldRel.includes("/")
+      ? oldRel.slice(0, oldRel.lastIndexOf("/"))
+      : "";
+    const newRel = parentRel ? `${parentRel}/${finalName}` : finalName;
+    await this.rebindAttachmentsOf(projectId, oldRel, newRel);
     return finalName;
   }
 
   /**
-   * 删除：文件 unlink / 文件夹 rm recursive；目标已不存在幂等 no-op
+   * 删除：文件 unlink / 文件夹 rm recursive；目标已不存在幂等 no-op。
+   * 删除后反查级联解绑附件关联（批8 P3，防死链残留）+ 审计留痕（批8 P2）
    */
   async delete(projectId: number, targetPath: string): Promise<void> {
     const root = (await this.resolveAssetRoot(projectId)).root;
@@ -251,9 +278,17 @@ export default class AssetRepository {
     }
     if (stat.isFile()) {
       await this.unlinkFile(target);
-      return;
+    } else {
+      await this.rmFolder(target);
     }
-    await this.rmFolder(target);
+    // 附件死链治理（批8 P3）：指向已删目标的关联级联解绑（文件精确/文件夹前缀）
+    await this.unbindAttachmentsOf(projectId, targetPath);
+    // 审计（批8 P2）：资产删除不可逆且可能连带解绑附件关联
+    this.auditSink?.({
+      eventType: "projectAsset.deleted",
+      decision: "approved",
+      detail: { projectId, path: targetPath.slice(0, 200) },
+    });
   }
 
   /**
@@ -496,6 +531,83 @@ export default class AssetRepository {
   private assertNotRoot(root: string, target: string, action: string): void {
     if (target === path.resolve(root)) {
       throw new Error(`${action}不支持资产空间根目录`);
+    }
+  }
+
+  /** 本项目全部事项的附件关联行（按事项 id 集圈定——assetPath 无项目列，
+   *  防跨项目同名路径误伤，批8 P3） */
+  private async projectAttachmentRows(
+    projectId: number,
+  ): Promise<Array<{ id: number; assetPath: string }>> {
+    const items = await prisma.planItem.findMany({
+      where: { projectId },
+      select: { id: true },
+    });
+    if (items.length === 0) {
+      return [];
+    }
+    return prisma.planItemAttachment.findMany({
+      where: { planItemId: { in: items.map((item) => item.id) } },
+      select: { id: true, assetPath: true },
+    });
+  }
+
+  /** 删除反查解绑（批8 P3）：目标（文件精确/文件夹前缀）命中的本项目附件
+   *  关联行级联删除，防死链残留（assetPath 无存在性校验，打开即失败）。
+   *  失败仅记日志——文件已删，解绑是卫生动作不阻断删除主流程 */
+  private async unbindAttachmentsOf(
+    projectId: number,
+    targetPath: string,
+  ): Promise<void> {
+    try {
+      const prefix = normalizeAssetRelPath(targetPath);
+      if (!prefix) {
+        return;
+      }
+      const rows = await this.projectAttachmentRows(projectId);
+      const deadIds = rows
+        .filter((row) => {
+          const rel = normalizeAssetRelPath(row.assetPath);
+          return rel === prefix || rel.startsWith(`${prefix}/`);
+        })
+        .map((row) => row.id);
+      if (deadIds.length > 0) {
+        await prisma.planItemAttachment.deleteMany({
+          where: { id: { in: deadIds } },
+        });
+      }
+    } catch (error) {
+      Log.warn(`删除资产后解绑附件关联失败（projectId=${projectId}）`, error);
+    }
+  }
+
+  /** 改名反查改绑（批8 P3）：命中前缀的关联行 assetPath 同步迁移（文件
+   *  精确替换/文件夹前缀平移）；失败仅记日志——关联仍指旧路径，读取侧
+   *  valid=false 失效态兜底显示 */
+  private async rebindAttachmentsOf(
+    projectId: number,
+    oldRel: string,
+    newRel: string,
+  ): Promise<void> {
+    try {
+      if (!oldRel || !newRel) {
+        return;
+      }
+      const rows = await this.projectAttachmentRows(projectId);
+      for (const row of rows) {
+        const rel = normalizeAssetRelPath(row.assetPath);
+        if (rel !== oldRel && !rel.startsWith(`${oldRel}/`)) {
+          continue;
+        }
+        const next =
+          rel === oldRel ? newRel : `${newRel}${rel.slice(oldRel.length)}`;
+        await prisma.planItemAttachment.update({
+          where: { id: row.id },
+          data: { assetPath: next },
+        });
+      }
+    } catch (error) {
+      Log.warn(`资产改名后改绑附件关联失败（projectId=${projectId}）`, error);
     }
   }
 }

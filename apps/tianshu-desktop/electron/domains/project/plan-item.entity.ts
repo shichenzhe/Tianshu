@@ -137,6 +137,13 @@ export interface PlanItemAttachmentRecord {
   assetPath: string;
 
   /**
+   * 文件存在性（批8 P3 死链治理）：assetPath 在项目资产空间可定位为 true；
+   * 文件已删/改名未改绑 → false（UI 置灰提示）。workspace 行缺失或本地
+   * 任务等不可判定场景恒 true（不误灰）
+   */
+  valid: boolean;
+
+  /**
    * 创建时间（ISO）
    */
   createdAt: string;

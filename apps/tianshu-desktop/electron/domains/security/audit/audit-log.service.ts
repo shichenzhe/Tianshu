@@ -26,8 +26,19 @@ const KEYWORD_SLICE = 200;
 const PAGE_SIZE_DEFAULT = 100;
 const PAGE_SIZE_MAX = 500;
 
-/** eventType 前缀 → category 映射（缺省 config） */
-function categoryOf(eventType: string): AuditCategory {
+/** eventType 前缀 → category 映射（缺省 config）。
+ *  批8 项目域事件前缀（project/projectAsset）不在已知集，按语义显式归类：
+ *  不可逆删除级联（删项目/删资产）归 data-safety；挂载变更走缺省 config */
+const CATEGORY_OVERRIDES: Partial<Record<string, AuditCategory>> = {
+  "project.removed": "data-safety",
+  "projectAsset.deleted": "data-safety",
+};
+
+export function categoryOf(eventType: string): AuditCategory {
+  const overridden = CATEGORY_OVERRIDES[eventType];
+  if (overridden) {
+    return overridden;
+  }
   const prefix = eventType.split(".")[0] as AuditCategory;
   const known: AuditCategory[] = [
     "command-safety",

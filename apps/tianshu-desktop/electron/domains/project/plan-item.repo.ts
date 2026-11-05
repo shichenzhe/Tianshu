@@ -13,6 +13,8 @@
  */
 import { handleUser } from "../../commons/ipc-user";
 import prisma from "../../commons/prisma-client";
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { PROJECT_NOT_FOUND } from "./project.entity";
 import {
   appendAiSummaryLine,
@@ -296,19 +298,34 @@ export default class PlanItemRepository {
   }
 
   /**
-   * 事项附件关联列表（id asc）
+   * 事项附件关联列表（id asc）；逐行校验存在性置 valid（批8 P3 死链治理：
+   * 文件已删/改名未改绑 → false，UI 置灰提示；不可判定恒 true 不误灰）
    * @param planItemId 事项 id
    */
   async listAttachments(
     planItemId: number,
     userId: number,
   ): Promise<PlanItemAttachmentRecord[]> {
-    await this.assertAttachmentVisible(planItemId, userId);
+    const item = await this.assertAttachmentVisible(planItemId, userId);
     const rows = await prisma.planItemAttachment.findMany({
       where: { planItemId },
       orderBy: { id: "asc" },
     });
-    return rows.map((row) => this.toAttachmentRecord(row));
+    if (rows.length === 0 || item.projectId === null) {
+      return rows.map((row) => ({
+        ...this.toAttachmentRecord(row),
+        valid: true,
+      }));
+    }
+    const workspace = await prisma.workspace.findFirst({
+      where: { projectId: item.projectId },
+      select: { directoryPath: true },
+    });
+    const root = workspace?.directoryPath ?? null;
+    return rows.map((row) => ({
+      ...this.toAttachmentRecord(row),
+      valid: root === null ? true : existsSync(path.join(root, row.assetPath)),
+    }));
   }
 
   /**
@@ -330,7 +347,8 @@ export default class PlanItemRepository {
     const row = await prisma.planItemAttachment.create({
       data: { planItemId, fileName, assetPath },
     });
-    return this.toAttachmentRecord(row);
+    // 新建关联文件必在（上传/挑选同构），valid 恒 true
+    return { ...this.toAttachmentRecord(row), valid: true };
   }
 
   /**
@@ -347,11 +365,12 @@ export default class PlanItemRepository {
     await prisma.planItemAttachment.delete({ where: { id } });
   }
 
-  /** 附件按所属事项守门（项目事项=项目可见；本地任务=创建者） */
+  /** 附件按所属事项守门（项目事项=项目可见；本地任务=创建者）；
+   *  返回事项行（批8 P3 存在性校验复用其 projectId） */
   private async assertAttachmentVisible(
     planItemId: number,
     userId: number,
-  ): Promise<void> {
+  ): Promise<PlanItemRow> {
     const item = await prisma.planItem.findUnique({
       where: { id: planItemId },
     });
@@ -359,6 +378,7 @@ export default class PlanItemRepository {
       throw new Error(PLAN_ITEM_NOT_FOUND);
     }
     await this.assertItemOperable(item, userId);
+    return item;
   }
 
   /**
@@ -622,14 +642,15 @@ export default class PlanItemRepository {
     return date ? date.toISOString() : "";
   }
 
-  /** planItemAttachment 行 → PlanItemAttachmentRecord（DateTime → ISO） */
+  /** planItemAttachment 行 → 记录（DateTime → ISO；valid 由调用方按
+   *  存在性补齐——create 通道新建恒 true，list 通道逐行探测） */
   private toAttachmentRecord(row: {
     id: number;
     planItemId: number;
     fileName: string;
     assetPath: string;
     createdAt: Date;
-  }): PlanItemAttachmentRecord {
+  }): Omit<PlanItemAttachmentRecord, "valid"> {
     return { ...row, createdAt: row.createdAt.toISOString() };
   }
 }

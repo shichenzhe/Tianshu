@@ -232,6 +232,8 @@ export default function PlanItemDialog({
       id: record.id,
       fileName: record.fileName,
       assetPath: record.assetPath,
+      // 批8 P3：后端存在性校验结果随行透传（死链 chip 灰显）
+      valid: record.valid,
     }));
     setAttachments((prev) => [
       ...attached,

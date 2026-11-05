@@ -366,3 +366,31 @@ describe("PlanItemAttachments chips 删除", () => {
     expect(PlanItemApi.removeAttachment).not.toHaveBeenCalled();
   });
 });
+
+/* ---------- 批8 P3：死链失效态（valid=false 置灰 + 提示） ---------- */
+
+describe("PlanItemAttachments 死链失效态（批8 P3）", () => {
+  const ALIVE = { id: 5, fileName: "spec.pdf", assetPath: "attachments/spec.pdf" };
+  const DEAD = {
+    id: 6,
+    fileName: "gone.pdf",
+    assetPath: "attachments/gone.pdf",
+    valid: false,
+  };
+
+  /** 取文件名 chip 容器（span） */
+  const getChip = (fileName: string) =>
+    screen.getByText(fileName).closest("span") as HTMLElement;
+
+  it("valid=false → chip 灰显（bg-muted）+ title 死链提示", () => {
+    renderAttachments({ value: [ALIVE, DEAD] });
+    const deadChip = getChip("gone.pdf");
+    const aliveChip = getChip("spec.pdf");
+    expect(deadChip.className).toContain("bg-muted");
+    expect(deadChip.getAttribute("title")).toBe(
+      "project:plan.attachmentMissing",
+    );
+    expect(aliveChip.className).not.toContain("bg-muted");
+    expect(aliveChip.getAttribute("title")).toBeNull();
+  });
+});

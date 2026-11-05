@@ -92,9 +92,10 @@ vi.mock("@/domains/project/api/plan-item.api", () => ({
   ],
 }));
 
-// ProjectApi.listMembers（处理人胶囊成员源）整体 mock
+// ProjectApi：成员列表（处理人胶囊成员源）+ 记忆回写（批8 P0）整体 mock
+const appendMemoryMock = vi.hoisted(() => vi.fn());
 vi.mock("@/domains/project/api/project.api", () => ({
-  default: { listMembers: vi.fn() },
+  default: { listMembers: vi.fn(), appendMemory: appendMemoryMock },
 }));
 
 // AssetApi 静态类整体 mock（附件上传链路 pickFiles/upload）
@@ -147,6 +148,7 @@ beforeEach(() => {
   handoverMock.mockReset();
   createMock.mockReset().mockResolvedValue({ id: 99 });
   createAttachmentMock.mockReset().mockResolvedValue(undefined);
+  appendMemoryMock.mockReset().mockResolvedValue(undefined);
   vi.mocked(ProjectApi.listMembers).mockReset().mockResolvedValue(MEMBERS);
   toastMock.success.mockClear();
   toastMock.error.mockClear();
@@ -385,5 +387,64 @@ describe("HandoverDialog 转办弹框（批 12）", () => {
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(toastMock.success).toHaveBeenCalledWith("project:handover.created");
+  });
+
+  /* ---------- 批8 P0：交接回写项目记忆（memory.md） ---------- */
+
+  it("确认交接 → 记忆回写（标题 + 摘要 + 产出物索引 assetPath）", async () => {
+    handoverMock.mockResolvedValue(SUMMARY_MD);
+    renderDialog();
+    await screen.findByLabelText("project:handover.summaryLabel");
+
+    await uploadPendingAttachment("spec.pdf", "/tmp/spec.pdf");
+    fireEvent.change(screen.getByLabelText("project:plan.title"), {
+      target: { value: "项目交接" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common:confirm" }));
+
+    await waitFor(() =>
+      expect(appendMemoryMock).toHaveBeenCalledWith(11, {
+        title: "项目交接",
+        summary: SUMMARY_MD,
+        artifacts: ["attachments/spec.pdf"],
+      }),
+    );
+  });
+
+  it("记忆回写失败 → 静默：交接主流程不受影响（关闭 + 成功 toast + 无错误 toast）", async () => {
+    handoverMock.mockResolvedValue(SUMMARY_MD);
+    const { onOpenChange } = renderDialog();
+    await screen.findByLabelText("project:handover.summaryLabel");
+
+    appendMemoryMock.mockRejectedValueOnce(new Error("MEMORY_WRITE_FAIL"));
+    fireEvent.change(screen.getByLabelText("project:plan.title"), {
+      target: { value: "项目交接" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common:confirm" }));
+
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith("project:handover.created"),
+    );
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+    // 唯一的 error toast 源是主流程异常；记忆失败静默不追加
+    expect(toastMock.error).not.toHaveBeenCalled();
+  });
+
+  it("摘要清空且无附件 → 不回写记忆（无内容可沉淀）", async () => {
+    handoverMock.mockResolvedValue(SUMMARY_MD);
+    renderDialog();
+    const textarea = await screen.findByLabelText(
+      "project:handover.summaryLabel",
+    );
+    fireEvent.change(textarea, { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("project:plan.title"), {
+      target: { value: "项目交接" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common:confirm" }));
+
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith("project:handover.created"),
+    );
+    expect(appendMemoryMock).not.toHaveBeenCalled();
   });
 });

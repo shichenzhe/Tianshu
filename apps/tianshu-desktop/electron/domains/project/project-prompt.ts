@@ -16,6 +16,9 @@ export interface ProjectPromptContext {
   boundSkillNames: string[];
   /** 已挂载连接器名 */
   boundConnectorNames: string[];
+  /** 项目记忆正文（资产空间 memory.md 的 AI 沉淀层，批8 P0）；
+   *  缺失/空为 null（不注入记忆段） */
+  memoryMarkdown: string | null;
 }
 
 /**
@@ -39,9 +42,21 @@ function buildCapabilitySection(
 }
 
 /**
+ * 项目记忆段（批8 P0）：AI 沉淀的决议与产出物索引——置于指令/专家之后、
+ * 预设能力声明之前（能力声明是行为引导，收尾语义）
+ */
+function buildMemorySection(memoryMarkdown: string | null): string {
+  if (!memoryMarkdown || !memoryMarkdown.trim()) return "";
+  return [
+    "【项目记忆】以下是本项目历次会话沉淀的决议与产出物索引（按时间先后，供延续既有决策参考）：",
+    memoryMarkdown,
+  ].join("\n\n");
+}
+
+/**
  * 项目会话 base system：项目指令 + 挂载专家（预设）+ 会话所选助手
- * prompt 合并（会话中切换助手即时生效，预设专家仍叠加在场）；
- * 全部为空则 undefined（调用方回退）
+ * prompt + 项目记忆（AI 沉淀，批8 P0）合并（会话中切换助手即时生效，
+ * 预设专家仍叠加在场）；全部为空则 undefined（调用方回退）
  */
 export function buildProjectSystemBase(
   ctx: ProjectPromptContext,
@@ -51,11 +66,13 @@ export function buildProjectSystemBase(
     ctx.boundSkillNames,
     ctx.boundConnectorNames,
   );
+  const memorySection = buildMemorySection(ctx.memoryMarkdown ?? null);
   return (
     [
       ctx.systemPrompt,
       ...ctx.boundAssistantPrompts,
       sessionAssistantPrompt ?? null,
+      memorySection,
       capabilitySection,
     ]
       .filter(Boolean)

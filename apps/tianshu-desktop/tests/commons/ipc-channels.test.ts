@@ -107,3 +107,10 @@ describe("ipc-channels 白名单负向（缺项即拒，防拼写绕过）", () 
     expect(IPC_EVENT_ALLOWLIST).not.toContain("terminal:data");
   });
 });
+
+describe("ipc-channels 项目域新通道（批8）", () => {
+  it("invoke 放行 project:appendMemory（项目记忆回写）", () => {
+    expect(IPC_INVOKE_ALLOWLIST).toContain("project:appendMemory");
+    expect(isInvokeAllowed("project:appendMemory")).toBe(true);
+  });
+});

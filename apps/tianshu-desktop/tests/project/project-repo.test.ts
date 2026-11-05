@@ -15,7 +15,7 @@ import path from "node:path";
 // 资产目录断言口径 = 数据根 dev 分组（projectsDir 同源；全局 setup 已隔离）
 const { USER_DATA, fsStub } = vi.hoisted(() => ({
   USER_DATA: `${process.env.TIANSHU_DATA_ROOT}/dev`,
-  fsStub: { mkdir: vi.fn(), rm: vi.fn() },
+  fsStub: { mkdir: vi.fn(), rm: vi.fn(), readFile: vi.fn(), writeFile: vi.fn() },
 }));
 
 vi.mock("electron", () => ({
@@ -588,6 +588,7 @@ describe("ProjectRepository.getPromptContext", () => {
       boundAssistantPrompts: ["专家A", "专家B"],
       boundSkillNames: ["技能1"],
       boundConnectorNames: ["连接器1"],
+      memoryMarkdown: null,
     });
   });
 
@@ -610,6 +611,7 @@ describe("ProjectRepository.getPromptContext", () => {
       boundAssistantPrompts: [],
       boundSkillNames: [],
       boundConnectorNames: [],
+      memoryMarkdown: null,
     });
   });
 
@@ -634,6 +636,7 @@ describe("ProjectRepository.getPromptContext", () => {
       boundAssistantPrompts: [],
       boundSkillNames: [],
       boundConnectorNames: ["启用连接器"],
+      memoryMarkdown: null,
     });
     expect(prismaStub.mcpServer.findMany).toHaveBeenCalledWith({
       where: { id: { in: [6, 7] }, enabled: true },
@@ -669,5 +672,176 @@ describe("ProjectRepository.listMembers", () => {
     expect(prismaStub.user.findMany).toHaveBeenCalledWith({
       where: { id: { in: [2, 1] } },
     });
+  });
+});
+
+/* ---------- 批8：项目记忆回写（P0） + 项目域审计（P2） ---------- */
+
+import {
+  mergeMemoryContent,
+  MEMORY_FILE,
+  parseMemorySections,
+} from "../../electron/domains/project/project-memory";
+import type { SecurityEvent } from "../../src-react/domains/security/model/types";
+
+describe("ProjectRepository.appendMemory（批8 P0）", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // 默认：可见项目（owner=UID）+ 已有资产空间行
+    prismaStub.project.findUnique.mockResolvedValue({ id: 11, ownerId: UID, name: "p" });
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      id: 30,
+      directoryPath: assetsDir(11),
+    });
+    // 首建口径：文件缺失（ENOENT）
+    fsStub.readFile.mockRejectedValue(
+      Object.assign(new Error("ENOENT"), { code: "ENOENT" }),
+    );
+    fsStub.writeFile.mockResolvedValue(undefined);
+  });
+
+  it("首建：写入资产空间根 memory.md，内容 = 固定头 + 单条目（标题/摘要/产出物）", async () => {
+    await repo.appendMemory(
+      11,
+      {
+        title: "项目交接",
+        summary: "## 关键结论\n已敲定方案",
+        artifacts: ["attachments/spec.pdf"],
+      },
+      UID,
+    );
+    expect(fsStub.writeFile).toHaveBeenCalledWith(
+      path.join(assetsDir(11), MEMORY_FILE),
+      expect.stringContaining("项目交接"),
+      "utf-8",
+    );
+    const content = fsStub.writeFile.mock.calls[0][1] as string;
+    expect(content).toContain("# 项目记忆");
+    expect(content).toContain("已敲定方案");
+    expect(content).toContain("- attachments/spec.pdf");
+    expect(parseMemorySections(content)).toHaveLength(1);
+  });
+
+  it("追加：已有内容保留，新条目接在尾（时间序）", async () => {
+    const existing = mergeMemoryContent(null, { title: "旧条目", summary: "a" });
+    fsStub.readFile.mockResolvedValue(existing);
+    await repo.appendMemory(11, { title: "新条目", summary: "b" }, UID);
+    const content = fsStub.writeFile.mock.calls[0][1] as string;
+    expect(content.indexOf("旧条目")).toBeLessThan(content.indexOf("新条目"));
+    expect(parseMemorySections(content)).toHaveLength(2);
+  });
+
+  it("不可见项目 → PROJECT_NOT_FOUND，不落盘", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({ id: 11, ownerId: 2 });
+    prismaStub.projectMember.findFirst.mockResolvedValue(null);
+    await expect(
+      repo.appendMemory(11, { title: "t", summary: "s" }, UID),
+    ).rejects.toThrow(PROJECT_NOT_FOUND);
+    expect(fsStub.writeFile).not.toHaveBeenCalled();
+  });
+});
+
+describe("ProjectRepository.getPromptContext 记忆读入（批8 P0）", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("memory.md 存在 → memoryMarkdown 携带正文（剥固定头）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      name: "p",
+      systemPrompt: null,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([]);
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      directoryPath: assetsDir(11),
+    });
+    fsStub.readFile.mockResolvedValue(
+      mergeMemoryContent(null, { title: "交接", summary: "决议内容" }),
+    );
+    await expect(repo.getPromptContext(11)).resolves.toMatchObject({
+      memoryMarkdown: expect.stringContaining("决议内容"),
+    });
+    expect(fsStub.readFile).toHaveBeenCalledWith(
+      path.join(assetsDir(11), MEMORY_FILE),
+      "utf-8",
+    );
+  });
+
+  it("workspace 行缺失/文件缺失 → memoryMarkdown null（尽力而为不注入）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      name: "p",
+      systemPrompt: null,
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([]);
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
+    await expect(repo.getPromptContext(11)).resolves.toMatchObject({
+      memoryMarkdown: null,
+    });
+  });
+});
+
+describe("ProjectRepository 项目域审计（批8 P2）", () => {
+  const sink = vi.hoisted(() => vi.fn());
+  const events = () => sink.mock.calls.map((call) => call[0] as SecurityEvent);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    sink.mockReset();
+    repo.installAuditSink(sink);
+  });
+
+  it("remove → project.removed 入账（detail 携带项目标识）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      ownerId: UID,
+      name: "待删项目",
+    });
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
+    prismaStub.planItem.findMany.mockResolvedValue([]);
+    prismaStub.session.findMany.mockResolvedValue([]);
+
+    await repo.remove(11, UID);
+
+    expect(events()).toHaveLength(1);
+    expect(events()[0]).toMatchObject({
+      eventType: "project.removed",
+      detail: { projectId: 11, name: "待删项目" },
+    });
+  });
+
+  it("setBindings → project.bindingChanged 入账（diff 按 itemType:itemId 键）", async () => {
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      ownerId: UID,
+      name: "p",
+    });
+    prismaStub.projectBinding.findMany.mockResolvedValue([
+      { projectId: 11, itemType: "skill", itemId: 4 },
+      { projectId: 11, itemType: "assistant", itemId: 9 },
+    ]);
+
+    await repo.setBindings(11, [{ itemType: "assistant", itemId: 3 }], UID);
+
+    expect(events()[0]).toMatchObject({
+      eventType: "project.bindingChanged",
+      detail: { added: ["assistant:3"], removed: ["skill:4", "assistant:9"] },
+    });
+  });
+
+  it("审计 sink 未安装 → 写路径行为不变（remove 正常完成）", async () => {
+    repo.installAuditSink(null);
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      ownerId: UID,
+      name: "p",
+    });
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
+    prismaStub.planItem.findMany.mockResolvedValue([]);
+    prismaStub.session.findMany.mockResolvedValue([]);
+
+    await expect(repo.remove(11, UID)).resolves.toBeUndefined();
+    expect(sink).not.toHaveBeenCalled();
+    // 还原后续用例的 sink 安装
+    repo.installAuditSink(sink);
   });
 });

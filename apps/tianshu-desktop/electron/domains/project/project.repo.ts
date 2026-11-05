@@ -9,8 +9,16 @@ import { handleUser } from "../../commons/ipc-user";
 import { projectsDir } from "../../commons/paths";
 import { revokeSession } from "../ai/file-window/granted-paths";
 import { emitProjectChanged } from "./project-change-bus";
+import { safeJoin } from "./asset.repo";
+import {
+  extractMemoryBody,
+  mergeMemoryContent,
+  MEMORY_FILE,
+  type ProjectMemoryEntry,
+} from "./project-memory";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { SecurityEventSink } from "../../../src-react/domains/security/model/types";
 import {
   PROJECT_NAME_EXISTS,
   PROJECT_NOT_FOUND,
@@ -83,6 +91,21 @@ export default class ProjectRepository {
     handleUser("project:listMembers", (_, userId, projectId: number) =>
       this.listMembers(projectId, userId),
     );
+    // 项目记忆回写（批8 P0）：交接摘要 + 产出物索引 → 资产空间 memory.md
+    handleUser(
+      "project:appendMemory",
+      (_, userId, projectId: number, entry: ProjectMemoryEntry) =>
+        this.appendMemory(projectId, entry, userId),
+    );
+  }
+
+  // 项目域审计出口（批8 P2）：Application 注入 auditLogService.append；
+  // 缺席（测试/未接线）时静默空转，行为与接入前一致
+  private auditSink: SecurityEventSink | null = null;
+
+  /** 安装审计出口（Application 装配接 auditLogService；传 null 卸载） */
+  installAuditSink(sink: SecurityEventSink | null): void {
+    this.auditSink = sink;
   }
 
   /** 项目对当前用户可见（owner 或成员）；不可见与不存在同报错。
@@ -215,7 +238,7 @@ export default class ProjectRepository {
    * @param id 项目 id
    */
   async remove(id: number, userId: number): Promise<void> {
-    await this.assertProjectOwned(id, userId);
+    const row = await this.assertProjectOwned(id, userId);
     await this.removeAssetWorkspace(id);
     // 级联清计划事项附件关联（v6 附件表无 projectId 列，按事项 id 集删；
     // 文件实体已随上面的资产目录树销毁——"保留在资产空间"仅是删除单个
@@ -249,6 +272,13 @@ export default class ProjectRepository {
     await prisma.projectMember.deleteMany({ where: { projectId: id } });
     await prisma.projectBinding.deleteMany({ where: { projectId: id } });
     await prisma.project.delete({ where: { id } });
+    // 审计（批8 P2）：删除项目是不可逆级联（资产目录树 + 会话 + 计划
+    // + 定时任务全毁），完成后必留痕（失败回写不影响主流程——sink 内部吞错）
+    this.auditSink?.({
+      eventType: "project.removed",
+      decision: "approved",
+      detail: { projectId: id, name: row.name, ownerId: row.ownerId },
+    });
     emitProjectChanged();
   }
 
@@ -283,8 +313,27 @@ export default class ProjectRepository {
     items: ProjectBindingInput[],
     userId: number,
   ): Promise<void> {
-    await this.assertProjectOwned(projectId, userId);
+    const row = await this.assertProjectOwned(projectId, userId);
+    // 审计 diff 基线（批8 P2）：全量替换前的既有挂载集
+    const previous = await prisma.projectBinding.findMany({
+      where: { projectId },
+    });
     await this.replaceBindings(projectId, items);
+    // 审计（批8 P2）：挂载变更按 itemType:itemId 键 diff 留痕
+    const keyOf = (item: { itemType: string; itemId: number }) =>
+      `${item.itemType}:${item.itemId}`;
+    const before = new Set(previous.map(keyOf));
+    const after = new Set(items.map(keyOf));
+    this.auditSink?.({
+      eventType: "project.bindingChanged",
+      decision: "info",
+      detail: {
+        projectId,
+        name: row.name,
+        added: [...after].filter((key) => !before.has(key)),
+        removed: [...before].filter((key) => !after.has(key)),
+      },
+    });
   }
 
   /** 挂载全量替换实现（创建流程内部复用，免权限校验） */
@@ -386,7 +435,63 @@ export default class ProjectRepository {
       boundConnectorNames: this.orderByIds(idsByType.mcpServer, mcpRows).map(
         (row) => row.name,
       ),
+      // 项目记忆（批8 P0）：资产空间 memory.md 正文，缺失/空为 null
+      memoryMarkdown: await this.readMemoryBody(projectId),
     };
+  }
+
+  /**
+   * 项目记忆回写（批8 P0，设计文档 §6 P0）：交接摘要 + 产出物索引追加进
+   * 资产空间固定文件 memory.md（条目追加在尾、超上限裁最旧，纯函数见
+   * project-memory）；getPromptContext 读回注入项目会话上下文。
+   * 前端挂点为 HandoverDialog 确认（失败静默不阻塞交接主流程）
+   * @param projectId 项目 id（须对当前用户可见）
+   * @param entry 记忆条目（标题/摘要/产出物索引）
+   */
+  async appendMemory(
+    projectId: number,
+    entry: ProjectMemoryEntry,
+    userId: number,
+  ): Promise<void> {
+    const row = await this.mustVisibleRow(projectId, userId);
+    const workspace = await this.ensureAssetWorkspace(row);
+    const dir = workspace.directoryPath ?? this.assetsDirOf(projectId);
+    const file = safeJoin(dir, MEMORY_FILE);
+    const existing = await this.readFileOrNull(file);
+    try {
+      await fs.writeFile(file, mergeMemoryContent(existing, entry), "utf-8");
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error);
+      throw new Error(`项目记忆写入失败（projectId=${projectId}）：${cause}`, {
+        cause: error,
+      });
+    }
+  }
+
+  /** 读文件；缺失/失败归 null（记忆读写均为尽力而为层） */
+  private async readFileOrNull(file: string): Promise<string | null> {
+    try {
+      const content = await fs.readFile(file, "utf-8");
+      return typeof content === "string" ? content : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 项目记忆正文（批8 P0）：尽力而为读入——workspace 行缺失/文件缺失/
+   *  读取失败一律 null 不注入，不阻塞 getPromptContext 主流程 */
+  private async readMemoryBody(projectId: number): Promise<string | null> {
+    const workspace = await prisma.workspace.findFirst({
+      where: { projectId },
+      select: { directoryPath: true },
+    });
+    if (!workspace?.directoryPath) {
+      return null;
+    }
+    const content = await this.readFileOrNull(
+      path.join(workspace.directoryPath, MEMORY_FILE),
+    );
+    return extractMemoryBody(content);
   }
 
   /** 挂载行按类型分组取源 id（保持挂载写入顺序） */

@@ -23,6 +23,7 @@ vi.mock("../../electron/commons/prisma-client", () => ({
 }));
 
 import AuditLogService, {
+  categoryOf,
   normalizeAuditListParams,
 } from "../../electron/domains/security/audit/audit-log.service";
 import { computeEntryHash } from "../../electron/domains/security/audit/hash-chain";
@@ -262,5 +263,26 @@ describe("AuditLogService", () => {
     await svc.flush(); // sequence 201..5020，总数 5010，应裁掉最旧 10 行
     expect(db.rows.length).toBe(5000);
     expect(Number(db.rows[0].sequence)).toBe(11);
+  });
+});
+
+/* ---------- 批8 P2：项目域事件归类（前缀表外显式覆盖） ---------- */
+
+describe("categoryOf 项目域事件归类（批8 P2）", () => {
+  it("project.removed / projectAsset.deleted → data-safety（不可逆删除级联）", () => {
+    expect(categoryOf("project.removed")).toBe("data-safety");
+    expect(categoryOf("projectAsset.deleted")).toBe("data-safety");
+  });
+
+  it("project.bindingChanged → config（前缀未知走缺省）", () => {
+    expect(categoryOf("project.bindingChanged")).toBe("config");
+  });
+
+  it("既有前缀归类不受覆盖表影响", () => {
+    expect(categoryOf("command-safety.blocked")).toBe("command-safety");
+    expect(categoryOf("file-safety.remembered")).toBe("file-safety");
+    expect(categoryOf("network.blocked")).toBe("network");
+    expect(categoryOf("data-safety.bulk")).toBe("data-safety");
+    expect(categoryOf("audit.cleared")).toBe("config");
   });
 });

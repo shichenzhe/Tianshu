@@ -64,6 +64,7 @@
     "pickFromAssets": "从资产挑选",
     "uploadFailed": "部分附件上传失败，请重试",
     "attachFailed": "部分附件保存失败，可重新上传挂载",
+    "attachmentMissing": "文件已不存在（可能已被删除或改名）",
     "filterAssets": "搜索资产文件",
     "noAssetFiles": "暂无匹配文件",
     "status": "状态",
@@ -225,7 +226,10 @@
     "automationEmpty": "暂无自动化",
     "projectWorkspace": "项目资产空间",
     "taskRunning": "任务正在运行中，请稍候",
-    "goAutomation": "前往自动化"
+    "goAutomation": "前往自动化",
+    "invalidBindings": "{{count}} 项失效挂载",
+    "cleanInvalid": "清理失效挂载",
+    "cleanInvalidDone": "已清理 {{count}} 项失效挂载"
   },
   "chatBar": {
     "placeholder": "今天帮你做些什么？@ 引用资产文件、项目待办或调用技能",

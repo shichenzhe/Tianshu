@@ -6,8 +6,9 @@
  * 状态/处理人/优先级/标签/时间规划；附件区 PlanItemAttachments 新建态
  * 本地暂存）。确认后创建项目待办（description=摘要文本域当前值、
  * source=manual，属性六字段随载荷；日期经 dateKeyToIso 转 UTC 零点 ISO），
- * 按返回 id 批量挂附件（失败仅 toast 不阻断关闭），失效计划缓存并关闭
- * （PRD §5 口径）
+ * 按返回 id 批量挂附件（失败仅 toast 不阻断关闭），并触发项目记忆沉淀
+ * （批8 P0：摘要 + 产出物索引回写资产空间 memory.md，失败静默不阻塞），
+ * 失效计划缓存并关闭（PRD §5 口径）
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -177,7 +178,8 @@ export default function HandoverDialog({
     });
   };
 
-  /** 确认：创建转办待办（description=文本域当前值 + 属性六字段）→ 挂附件 → 失效计划缓存 → 关闭 */
+  /** 确认：创建转办待办（description=文本域当前值 + 属性六字段）→ 挂附件
+   *  → 项目记忆沉淀 → 失效计划缓存 → 关闭 */
   const handleConfirm = async () => {
     const trimmed = title.trim();
     if (!trimmed || submitting) {
@@ -204,6 +206,7 @@ export default function HandoverDialog({
         queryKey: PLAN_ITEMS_MINE_KEY(userId),
       });
       await attachPendingAttachments(created.id);
+      appendProjectMemory(trimmed);
       toast.success(t("project:handover.created"));
       onOpenChange(false);
     } catch (e) {
@@ -211,6 +214,24 @@ export default function HandoverDialog({
     } finally {
       setSubmitting(false);
     }
+  };
+
+  /** 项目记忆沉淀（批8 P0）：交接摘要 + 产出物索引回写资产空间 memory.md，
+   *  getPromptContext 读回注入项目会话上下文——fire-and-forget，失败静默
+   *  不阻塞交接主流程（记忆属增强层，可下次交接补沉淀） */
+  const appendProjectMemory = (entryTitle: string) => {
+    const memorySummary = summary.trim();
+    const artifacts = attachments.map((entry) => entry.assetPath);
+    if (!memorySummary && artifacts.length === 0) {
+      return;
+    }
+    void ProjectApi.appendMemory(projectId, {
+      title: entryTitle,
+      summary: memorySummary,
+      artifacts,
+    }).catch(() => {
+      /* 静默：记忆沉淀失败不影响交接主流程 */
+    });
   };
 
   return (

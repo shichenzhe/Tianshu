@@ -223,6 +223,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "project:delete",
   "project:setBindings",
   "project:listMembers",
+  // 项目记忆回写（批8 P0：交接摘要 + 产出物索引 → 资产空间 memory.md）
+  "project:appendMemory",
   // 项目资产空间（二期）
   "projectAsset:list",
   "projectAsset:createFolder",

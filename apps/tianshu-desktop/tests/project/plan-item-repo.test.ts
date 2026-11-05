@@ -18,10 +18,15 @@
  * 依赖经 vi.mock 替换（electron ipcMain / prisma client），沿用 project-repo.test.ts 模式。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import path from "node:path";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
 }));
+
+// 批8 P3：listAttachments 存在性校验消费 node:fs existsSync（资产根下探测）
+const { existsSyncStub } = vi.hoisted(() => ({ existsSyncStub: vi.fn() }));
+vi.mock("node:fs", () => ({ existsSync: existsSyncStub }));
 
 // prisma stub：各测试按需覆写实现（vi.hoisted 使其在 vi.mock 工厂执行前初始化）
 // project.findUnique 默认返回 ownerId=UID 的项目行（v12 assertProjectVisible 数据源；
@@ -54,6 +59,8 @@ const prismaStub = vi.hoisted(() => ({
   projectMember: {
     findFirst: vi.fn(),
   },
+  // 批8 P3：附件存在性校验按项目 workspace 行取资产根
+  workspace: { findFirst: vi.fn() },
 }));
 
 vi.mock("../../electron/commons/prisma-client", () => ({
@@ -746,17 +753,31 @@ describe("PlanItemRepository.attachments 三通道", () => {
 
   beforeEach(() => vi.clearAllMocks());
 
-  it("list 按 planItemId 查询并转 ISO", async () => {
+  it("list 按 planItemId 查询并转 ISO（assetPath 可定位 → valid）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      directoryPath: "/tmp/assets-11",
+    });
+    existsSyncStub.mockReturnValue(true);
     prismaStub.planItemAttachment.findMany.mockResolvedValue([attRow]);
     const rows = await repo.listAttachments(1, UID);
     expect(prismaStub.planItemAttachment.findMany).toHaveBeenCalledWith({
       where: { planItemId: 1 },
       orderBy: { id: "asc" },
     });
-    expect(rows[0]).toEqual({ ...attRow, createdAt: now.toISOString() });
+    expect(rows[0]).toEqual({
+      ...attRow,
+      createdAt: now.toISOString(),
+      valid: true,
+    });
   });
 
   it("create 建关联；delete 按 id 删", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.planItemAttachment.findUnique.mockResolvedValue({
+      id: 5,
+      planItemId: 1,
+    });
     prismaStub.planItemAttachment.create.mockResolvedValue(attRow);
     const created = await repo.createAttachment(
       1,
@@ -781,6 +802,7 @@ describe("PlanItemRepository.attachments 三通道", () => {
   });
 
   it("remove 事项级联删附件关联（保留文件）", async () => {
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
     await repo.remove(1, UID);
     expect(prismaStub.planItemAttachment.deleteMany).toHaveBeenCalledWith({
       where: { planItemId: 1 },
@@ -858,5 +880,55 @@ describe("PlanItemRepository.appendAiSummary（工具专用通道，v8）", () =
     prismaStub.planItem.findUnique.mockResolvedValueOnce(null);
     expect(await repo.appendAiSummary(99, "x")).toBeNull();
     expect(prismaStub.planItem.update).toHaveBeenCalledTimes(1);
+  });
+});
+
+/* ---------- 批8 P3：附件列表存在性校验（死链置失效态） ---------- */
+
+describe("PlanItemRepository.listAttachments 存在性（批8 P3）", () => {
+  const rows = [
+    { id: 5, planItemId: 1, fileName: "在.pdf", assetPath: "attachments/在.pdf", createdAt: now },
+    { id: 6, planItemId: 1, fileName: "丢.pdf", assetPath: "attachments/丢.pdf", createdAt: now },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prismaStub.planItem.findUnique.mockResolvedValue(projectRow);
+    prismaStub.planItemAttachment.findMany.mockResolvedValue(rows);
+  });
+
+  it("资产根下可定位 → valid true；文件已不存在 → valid false（UI 置灰）", async () => {
+    prismaStub.workspace.findFirst.mockResolvedValue({
+      directoryPath: "/tmp/assets-11",
+    });
+    existsSyncStub.mockImplementation(
+      (target: string) => !target.includes("丢"),
+    );
+
+    const result = await repo.listAttachments(1, UID);
+
+    expect(result[0]).toMatchObject({ id: 5, valid: true });
+    expect(result[1]).toMatchObject({ id: 6, valid: false });
+    expect(existsSyncStub).toHaveBeenCalledWith(
+      path.join("/tmp/assets-11", "attachments/丢.pdf"),
+    );
+  });
+
+  it("workspace 行缺失（未自愈）或本地任务 → 不可判定，valid true 不误灰", async () => {
+    prismaStub.workspace.findFirst.mockResolvedValue(null);
+    await expect(repo.listAttachments(1, UID)).resolves.toMatchObject([
+      { id: 5, valid: true },
+      { id: 6, valid: true },
+    ]);
+
+    // 本地任务（projectId null）无资产空间
+    prismaStub.planItem.findUnique.mockResolvedValue({
+      ...projectRow,
+      projectId: null,
+    });
+    await expect(repo.listAttachments(1, UID)).resolves.toMatchObject([
+      { id: 5, valid: true },
+      { id: 6, valid: true },
+    ]);
   });
 });

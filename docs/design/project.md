@@ -25,9 +25,10 @@
 |---|---|
 | `project.entity.ts` / `project.repo.ts` | 项目 CRUD、成员、能力挂载、资产空间与动态流会话生命周期 |
 | `asset.entity.ts` / `asset.repo.ts` | 资产空间文件/目录面（列表/建夹/改名/删除/上传/用量/预览/定位） |
-| `plan-item.entity.ts` / `plan-item.repo.ts` | 计划事项（单表双视图聚合）+ 自定义字段定义 + 附件关联 |
+| `plan-item.entity.ts` / `plan-item.repo.ts` | 计划事项（单表双视图聚合）+ 自定义字段定义 + 附件关联（批8 起读侧带存在性 `valid`） |
 | `plan-view.entity.ts` / `plan-view.repo.ts` | 计划视图配置 CRUD |
 | `project-prompt.ts` | 提示词组装纯函数（无 IO） |
+| `project-memory.ts` | 项目记忆纯函数件（批8：memory.md 条目渲染/合并/正文提取，无 IO） |
 | `project-change-bus.ts` | 项目级变更扇出总线 |
 
 测试 35 个文件在 `tests/project/`（`project-repo` / `plan-item-repo` / `plan-view-repo` / `asset-repo` / 五视图组件 / `task-session` / `session-isolation` 等），前端 API 层 `src-react/domains/project/api/` 四件（`project.api.ts` 导出 `PROJECT_CHANGED_EVENT = "project:changed"`、`plan-item.api.ts` 导出 `PLAN_ITEMS_KEY`/`PLAN_ITEMS_MINE_KEY`、`plan-view.api.ts`、`asset.api.ts`）。
@@ -108,7 +109,7 @@ id / planItemId / fileName(展示名，含扩展) / assetPath(项目 workspace �
 @@index([planItemId], map: "plan_item_attachment_planItemId_index")
 ```
 
-**挂的是项目资产空间里的文件引用**：`assetPath` 是相对资产根的路径（上传落 `attachments/xxx` 或挑选资产树已有文件），文件实体在数据根 `projects/<id>/assets` 目录树。删单条事项/删附件关联**保留**文件实体；删整个项目时文件实体随资产目录树一并销毁（`project.repo.ts` `remove` 的双语义注释，210–214 行）。附件关联表无 projectId 列，删项目时按事项 id 集先删（v6 设计取舍）。
+**挂的是项目资产空间里的文件引用**：`assetPath` 是相对资产根的路径（上传落 `attachments/xxx` 或挑选资产树已有文件），文件实体在数据根 `projects/<id>/assets` 目录树。删单条事项/删附件关联**保留**文件实体；删整个项目时文件实体随资产目录树一并销毁（`project.repo.ts` `remove` 的双语义注释，210–214 行）。附件关联表无 projectId 列，删项目时按事项 id 集先删（v6 设计取舍）。批8 P3 起双保险死链治理：资产 delete/rename 反查关联级联解绑/改绑（`asset.repo.ts`，按本项目事项 id 集圈定）；附件列表读取逐行校验存在性置 `valid`（缺失 → false，UI 置灰；不可判定恒 true 不误灰）。
 
 ### 2.7 关联散列（其他表的 projectId 列）
 
@@ -122,8 +123,8 @@ id / planItemId / fileName(展示名，含扩展) / assetPath(项目 workspace �
 
 ### 3.1 项目生命周期（`electron/domains/project/project.repo.ts`，682 行）
 
-IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userId 由 token 解出（`commons/ipc-user`），ownerId 不再信任前端传参）：
-`project:list / getDetail / create / update / delete / setBindings / listMembers`。
+IPC 通道 8 条（`registerHandlers`，全部经 `handleUser` 包裹——userId 由 token 解出（`commons/ipc-user`），ownerId 不再信任前端传参）：
+`project:list / getDetail / create / update / delete / setBindings / listMembers / appendMemory`。批8 起另持安装式审计出口 `installAuditSink`（Application 接 auditLogService，缺席静默）：`remove`/`setBindings` 分别入账 `project.removed`/`project.bindingChanged`。
 
 - **create**（181 行），顺序链：
   1. `ensureNameAvailable` 同 owner 重名校验；
@@ -142,7 +143,7 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
   2. `removeAssetWorkspace`：`fs.rm` 整个 `projects/<id>` 目录树 + workspace 行（fs 失败仅记日志不阻断 DB 级联，残留目录留用户手动清理）；
   3. 按事项 id 集删 planItemAttachment（表无 projectId 列）→ automationTask → planItem（projectId 精确匹配，本地任务 null 不受影响）→ planView；
   4. message → session（逐会话 `revokeSession` 回收会话级路径授权，T28；内部自吞错）→ projectMember → projectBinding → project；
-  5. `emitProjectChanged`。
+  5. 审计 `project.removed` 入账（批8 P2：不可逆级联必留痕）→ `emitProjectChanged`。
 - **update**：仅 owner；改名时显式判空校验重名（空串绕过 truthiness 漏洞已修）。
 - **变更扇出**：`project-change-bus.ts` 的 `emitProjectChanged` 双消费者——渲染层全窗 `PROJECT_CHANGED_EVENT`（React Query `["projects"]` 前缀失效）+ 进程级订阅者扇出（face 事件桥外发 `project.changed` 给远程控制端重拉；订阅者异常隔离，face 桥故障不打断本地通知链）。与 automation-change-bus 同构（2026-11-01 批③）。
 
@@ -151,7 +152,7 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 - **可见性**：`mustVisibleRow` / 公开方法 `assertProjectVisible`（A7 起提升为公开，被 planView/asset 的 face tap 逐方法守门复用）——owner 或 projectMember 行任一即可见；**不可见与不存在统一报 `PROJECT_NOT_FOUND`**（不泄露存在性）。列表 `list(ownerId)` 仅返回 owner 的项目（成员可见的项目暂不进列表——见 §6 P1）。
 - **写面分级**：项目基础字段/挂载/删除仅 owner（`assertProjectOwned`）；**planItem 写面仅要求项目可见**（`assertItemOperable` → `assertProjectVisible`），即成员可改计划；本地任务仅创建者可操作。
 - **处理人约束**：`ensureAssigneeIsMember`——`assigneeId` 非空时必须是该项目成员（本地任务无项目，跳过校验）。
-- **角色**：owner/member 两值，无更细粒度；项目域零接入 `securityAuditLog`（见 §6 P2）。
+- **角色**：owner/member 两值，无更细粒度；项目域审计已接入 `securityAuditLog`（批8 P2，见 §6）。
 
 ### 3.3 资产空间（`asset.repo.ts`，9 通道）
 
@@ -164,12 +165,13 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 - 用量：`storage` 经 `walkDirSize` 递归 du（withFileTypes+lstat 口径不跟随符号链接，天然防符号环；目录缺失/不可读按 0）+ 恒定软配额 `ASSET_QUOTA_BYTES = 5GiB`（`asset.entity.ts`——仅 UI 用量提示，上传不做大小与总量硬拦截）。
 - 上传 `upload`：逐文件 basename → 清洗 → 重名序号 → `copyFile`，单文件失败收集进 `failed` 不中断循环，同批次同名靠串行拿到不同序号。
 - `openFile`（`shell.openPath` 系统默认程序，仅文件）/ `revealFile`（`shell.showItemInFolder`）/ `pickFiles`（系统多选对话框）。
+- 附件死链治理（批8 P3）：`delete` 后按 assetPath 反查级联解绑关联（文件精确/文件夹前缀，按本项目事项 id 集圈定防跨项目误伤，失败仅记日志）；`rename` 后关联 assetPath 同步迁移（uniqueName 最终名 + 文件夹前缀平移）。资产实删入账审计 `projectAsset.deleted`（批8 P2，安装式 sink）。
 
 ### 3.4 绑定机制与项目提示词（`project-prompt.ts` + `chat.service.ts`）
 
-- **上下文采集** `getPromptContext(projectId)`（`project.repo.ts` 340 行）：project 行 + 挂载行按类型分组（`groupBindingIds` 保持挂载写入顺序；`orderByIds` 修 findMany in-查询不保序）回查三源——assistant 取 `systemPrompt`、skillRecord 取 `name`、mcpServer 取 `name` 且**仅 `enabled: true` 行**（声明与实际一致：禁用 server 的工具未注册进 registry，软约束不得将其列为可用能力）→ 产出 `ProjectPromptContext { projectName, systemPrompt, boundAssistantPrompts, boundSkillNames, boundConnectorNames }`。项目行缺失返回 null（调用方回退助手 prompt）。
-- **组装** `buildProjectSystemBase` 纯函数（无 IO）：`[project.systemPrompt, ...boundAssistantPrompts, 会话所选助手 prompt, 能力声明段]` 以 `\n\n` 拼接，全空返回 undefined。能力声明段 `buildCapabilitySection` 生成「【项目预设能力】技能：… / 连接器：… + 优先使用引导语」——**预设是默认起点而非围墙**，用户在会话中要求用预设外的技能/连接器时模型可按需直接调用。
-- **消费点** `electron/domains/ai/chat/chat.service.ts`（~2190 行）：`session.projectId` 非空且非 ask 模式时 `isolateProjectTools(skills, projectCtx)`（350 行）——技能清单按挂载集**收窄**为实际可用集（`mounted = skills.filter(skill => boundSkillNames.includes(skill.name))`，防声明未安装技能名；此时专家附带技能不并入），但**工具集不硬过滤**（read_skill/mcp 全量可用）。项目上下文空时声明段也随 `declaredCtx` 收窄。段序：项目指令 → 挂载专家 → 会话所选助手/专家团主理人（`teamLeadSystem` 嵌入而非替换，项目段保留在前）→ 预设能力声明，其后叠加个性化段/场景段/工作流元说明。
+- **上下文采集** `getPromptContext(projectId)`（`project.repo.ts` 340 行）：project 行 + 挂载行按类型分组（`groupBindingIds` 保持挂载写入顺序；`orderByIds` 修 findMany in-查询不保序）回查三源——assistant 取 `systemPrompt`、skillRecord 取 `name`、mcpServer 取 `name` 且**仅 `enabled: true` 行**（声明与实际一致：禁用 server 的工具未注册进 registry，软约束不得将其列为可用能力）→ 产出 `ProjectPromptContext { projectName, systemPrompt, boundAssistantPrompts, boundSkillNames, boundConnectorNames, memoryMarkdown }`。项目行缺失返回 null（调用方回退助手 prompt）。批8 P0：`memoryMarkdown` 为资产空间 `memory.md` 正文（尽力读入，缺失/空为 null；8000 字符预算保最新整段）。
+- **组装** `buildProjectSystemBase` 纯函数（无 IO）：`[project.systemPrompt, ...boundAssistantPrompts, 会话所选助手 prompt, 项目记忆段, 能力声明段]` 以 `\n\n` 拼接，全空返回 undefined。能力声明段 `buildCapabilitySection` 生成「【项目预设能力】技能：… / 连接器：… + 优先使用引导语」——**预设是默认起点而非围墙**，用户在会话中要求用预设外的技能/连接器时模型可按需直接调用。项目记忆段（批8 P0）「【项目记忆】…」注入 memory.md 正文（AI 沉淀层，置于指令/专家之后、能力声明之前）。
+- **消费点** `electron/domains/ai/chat/chat.service.ts`（~2190 行）：`session.projectId` 非空且非 ask 模式时 `isolateProjectTools(skills, projectCtx)`（350 行）——技能清单按挂载集**收窄**为实际可用集（`mounted = skills.filter(skill => boundSkillNames.includes(skill.name))`，防声明未安装技能名；此时专家附带技能不并入），但**工具集不硬过滤**（read_skill/mcp 全量可用）。项目上下文空时声明段也随 `declaredCtx` 收窄。段序：项目指令 → 挂载专家 → 会话所选助手/专家团主理人（`teamLeadSystem` 嵌入而非替换，项目段保留在前）→ 项目记忆段（批8）→ 预设能力声明，其后叠加个性化段/场景段/工作流元说明。
 
 ### 3.5 plan 体系（单表双视图 + 五视图渲染 + 协议化视图引擎）
 
@@ -180,7 +182,7 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 - **列内序**：`nextSortOrder(projectId, status)` 按「(projectId, status) 列」独立取 max+1——新建与状态变更（update 内 status 变更时重算，防弹窗编辑等裸 update 绕过 move 造成落列错位）落目标列尾；`move` 通道接收前端计算的落点序（`PlanKanbanView.computeSortOrder`：无落点=列尾 max+1、有落点=与前一项后邻均值，防筛选态错序）。
 - **视图配置**：`create` 重名自动 `(n)` 后缀（`uniqueName`，空串默认视图语义不参与后缀）；`remove` 最后一个拒删（`PLAN_VIEW_LAST_ONE`——单一不变量：项目至少保留一个视图）；JSON 列读取 `parseJsonOr` 畸形降级默认值并 warn。
 - **自定义字段**：`listFields`（option 域 `planFields:<projectId>` 行，note 缺失/非枚举的畸形行丢弃）；`saveFields` 全量替换（deleteMany + createMany）+ `normalizeFieldsOrThrow`（name trim 非空、三枚举、项目内不重名）+ `cleanRemovedFieldValues`（消失字段名同步清理项目内全部行 customFields 键，单行失败收集、收尾汇总抛出）。
-- **附件**：`attachments:list/create/delete` 三通道——`createAttachment` 仅写一行关联记录（上传与挑选资产树已有文件同构），`assertAttachmentVisible` 按所属事项守门。
+- **附件**：`attachments:list/create/delete` 三通道——`createAttachment` 仅写一行关联记录（上传与挑选资产树已有文件同构），`assertAttachmentVisible` 按所属事项守门；`listAttachments` 逐行校验 assetPath 存在性置 `valid`（批8 P3 死链失效态，workspace 行缺失/本地任务不可判定恒 true）。
 
 **视图引擎**（A7 批下沉共享包，双端单份权威源）：`packages/tianshu-core/src/plan-view-engine.ts` 导出四纯函数：
 
@@ -215,7 +217,7 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
    - `todo_write`（kind:"write"，走统一两级审批门禁）：批量操作——无 id=新建（title 必填、dueDate yyyy-MM-dd、priority/tags 可选，落 `source:"ai"`、`assigneeId:null` 设计裁决：AI 建的任务默认未指派，人可后续指派）；有 id=更新（status 流转 `transitionOne` 落目标列尾 + progress 追加 `appendProgressOne`）。
    - `todo_read`：无参=全量清单（#id/标题/状态/最近进展）、带 id=单任务完整详情（含描述与进展全文——AI 推进的内容依据）。
    - 防线：`ctx.projectId == null` 直接拒绝（"当前会话未关联项目"）；`findOwnedItem` 属地校验（跨项目行视同不存在）；批量内逐项错误隔离（"第 N 项"前缀，单项失败不阻断）；**坍缩语义裁定：不做 TodoWrite 式 omission-delete 全量覆写**——计划清单人机共享（source 区分 ai/manual），漏项即删会误删人类任务；进展行只增不改；更新项显式拒绝改标题（防静默忽略）。工具描述带 `GROUNDING_NOTE`（"清单不在文件系统"）掐掉模型在文件系统找任务文件的错误路径。
-3. **任务推进入口**（`lib/task-session.ts` `openTaskSession`）：任务 → 专属会话直达——`["sessions","all"]` 缓存按 `planItemId` 找既有会话命中即跳（零 IPC 往返）；否则 `SessionApi.create({ projectId, planItemId, title })`（不传 workspaceId，后端解析项目资产空间；并发双击由后端按 planItemId 查重复用兜底，D1"一任务一会话"）；返回归档会话先 `archive(created.id, false)` 撤销（D9，否则 listAll 过滤 archivedAt 后跳转落点成空）；本地任务（projectId null）无资产空间与会话域归属，不提供推进入口。配套 `store/plan-advance.store.ts` 预填桥：计划视图「AI 推进」入口写引导语（`#<id>《标题》`+模板），底栏 ChatInput `consume()` 读后即清（二次消费得 null 天然防重复）。另有 `components/HandoverDialog.tsx` 会话级工作交接（三期批 12）：打开即调 `chat:handoverSummary` AI 交接摘要（Loading → 预填可编辑文本域，失败/超时 30s 兜底可重试可手输）→ 确认创建项目待办（description=摘要、source=manual、属性六字段随载荷）→ 按返回 id 批量挂附件（失败仅 toast 不阻断）。
+3. **任务推进入口**（`lib/task-session.ts` `openTaskSession`）：任务 → 专属会话直达——`["sessions","all"]` 缓存按 `planItemId` 找既有会话命中即跳（零 IPC 往返）；否则 `SessionApi.create({ projectId, planItemId, title })`（不传 workspaceId，后端解析项目资产空间；并发双击由后端按 planItemId 查重复用兜底，D1"一任务一会话"）；返回归档会话先 `archive(created.id, false)` 撤销（D9，否则 listAll 过滤 archivedAt 后跳转落点成空）；本地任务（projectId null）无资产空间与会话域归属，不提供推进入口。配套 `store/plan-advance.store.ts` 预填桥：计划视图「AI 推进」入口写引导语（`#<id>《标题》`+模板），底栏 ChatInput `consume()` 读后即清（二次消费得 null 天然防重复）。另有 `components/HandoverDialog.tsx` 会话级工作交接（三期批 12）：打开即调 `chat:handoverSummary` AI 交接摘要（Loading → 预填可编辑文本域，失败/超时 30s 兜底可重试可手输）→ 确认创建项目待办（description=摘要、source=manual、属性六字段随载荷）→ 按返回 id 批量挂附件（失败仅 toast 不阻断）→ 项目记忆沉淀（批8 P0：摘要 + 产出物索引 fire-and-forget 回写资产空间 `memory.md`，失败静默）。
 4. **项目定时任务**（三期子系统 E，`electron/domains/ai/automation/automation-runner.ts`）：`automationTask.projectId` 非空时读 `project.systemPrompt` 注入 system prompt（227–231 行 `projectPrompt`）；`createSession` 会话归属 projectId（全局任务显式 null，322 行）——plan 工具组依赖 `ctx.projectId`，项目自动化会话因此具备读写项目计划的能力面；删除项目级联清任务（§3.1）。前端入口在 `ConfigPanel`：项目任务行列表（名称/频率/状态/上次运行/启停/立即运行，projectId 前端过滤）+ `CreateTaskDialog` 项目预设（资产空间锁定）+ 前往自动化入口。
 
 ## 4. 三端布局
@@ -267,7 +269,7 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 | 工单层级 | issue 平铺 + 新式 sub-issue | issue + subissue + relations | database 行即页，页面树无限层级 | epic → story → subtask 强层级 | 无工单概念 | **planItem 扁平无层级**、无依赖关系 |
 | 多视图 | table/board/roadmap | saved Views（filter+sort+group 可存可分享） | database 多视图（table/board/calendar/gallery/list/timeline），单数据多视图 | scrum/kanban board + JQL 强筛选 | 无 | **planView 五视图 + filterJson/sortJson/groupBy 可存配置**，引擎协议化三端复用——与 Linear Views/Notion view 同构 |
 | 项目-资源绑定 | issue/PR 天然归 repo | issue 手动/规则归 project | 行属页面树 | issue 归 project + components | 文件天然属目录 | **projectBinding 三类 AI 能力源 + workspace 行挂资产空间 + session.planItemId 挂任务会话**——「把 AI 能力挂进项目」是独有维度 |
-| 项目记忆/规则 | 无 | 无 | 无 | 无 | `.cursor/rules` 目录 + 项目 memories；CLAUDE.md + 全局/项目 memory 分层 | `project.systemPrompt` 单文档 + 四模版 prompt；aiSummary 逐事项进展；**无自动沉淀的项目记忆层** |
+| 项目记忆/规则 | 无 | 无 | 无 | 无 | `.cursor/rules` 目录 + 项目 memories；CLAUDE.md + 全局/项目 memory 分层 | `project.systemPrompt` 单文档 + 四模版 prompt；aiSummary 逐事项进展；**memory.md 交接自动沉淀（批8）注入会话上下文** |
 | 协作权限 | org/team/role 细粒度 + issue 级 assignee | team 角色（admin/member/guest） | 页面级 share + 权限矩阵 | project role + 工作流权限 | 无多人概念 | owner/member 两值；数据模型先行，**邀请/移除入口未开**；成员写计划仅查可见性 |
 | AI 写入面 | Copilot 建议（人确认） | Linear Asst（排序/去重/摘要） | AI 填属性/写页 | Atlassian Intelligence（问答为主） | agent 全权写工作区 | **todo_write/todo_read 人机共享清单**：AI 只增不删（防误删人类任务）、进展只追加、写走审批门禁——人机分界比业界更明确 |
 
@@ -279,17 +281,17 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 - **Jira**：epic → story → subtask 强层级 + scrum/kanban 双板 + sprint + JQL。天枢刻意选了扁平模型（单表双视图），换来 A7 移动端遥控链路的协议简单性；JQL 级强查询语言在天枢由结构化 filterJson 承担，表达力够用但不可组合嵌套（无 OR 条件）。
 - **AI IDE（Cursor/Claude Code）**：workspace=目录根，项目记忆走 `.cursor/rules`（分层 rule 文件）与 CLAUDE.md（手写约定）+ memory 目录沉淀。天枢 `project.systemPrompt` 等价于手写 rule 层，且多了「绑定专家/技能/连接器」的运行时能力预设（业界 IDE 的等价物 .mcp.json 不进 prompt 声明）；差距在记忆自动沉淀与分层装载。
 
-小结：天枢 planView 的「单表 + 保存视图」与 Linear Views / Notion database view 完全同构，且筛选/排序/分组引擎已下沉 `@tianshu-core` 三端单份，这点上不落后；主要差距在（a）工单层级与依赖（无 subtask/dependsOn，甘特无依赖线）、（b）时间盒（无 Linear cycle / Jira sprint 对应物）、（c）协作权限深度（成员入口未开、无审计联动）、（d）项目级记忆自动沉淀（对标 Cursor memories 还有空间，但方向应是「AI 沉淀进项目资产」而非云端画像）。
+小结：天枢 planView 的「单表 + 保存视图」与 Linear Views / Notion database view 完全同构，且筛选/排序/分组引擎已下沉 `@tianshu-core` 三端单份，这点上不落后；主要差距在（a）工单层级与依赖（无 subtask/dependsOn，甘特无依赖线）、（b）时间盒（无 Linear cycle / Jira sprint 对应物）、（c）协作权限深度（成员入口未开）。项目级记忆自动沉淀批8 已落第一层（交接触发的 memory.md + 双层上下文注入），对流结束级自动沉淀与 artifact 产物聚合入口仍是后续空间。
 
 ## 6. 改进空间（按优先级，均可落地）
 
-**P0 项目级上下文/记忆沉淀**。现状：项目记忆只有一份手写 `systemPrompt`（对标 CLAUDE.md 但不随使用演化），会话产出不回流项目；`aiSummary` 是逐事项进展而非项目级决议。落地路径：项目会话流结束或 `HandoverDialog` 交接时，把「决议 + 产出物索引」摘要回写资产空间固定文件（如 `AGENTS.md` / `memory.md`——`assetWorkspaceId`、`@` 引用链路、附件 `assetPath` 机制均已就绪），`getPromptContext` 读入拼装进 `buildProjectSystemBase`——形成「指令（人写）+ 记忆（AI 沉淀）」双层上下文；artifact 表按 workspaceId 隔离，可顺带做项目产物聚合入口。
+**P0 项目级上下文/记忆沉淀**。✅ 已落地（批8，2026-11-05）。`HandoverDialog` 确认交接时把「决议（AI 五段式交接摘要）+ 产出物索引（附件 assetPath）」回写资产空间固定文件 **`memory.md`**（IPC `project:appendMemory` → `ProjectRepository.appendMemory`；条目以 HTML 注释标记行锚定、追加在尾、超 20 条裁最旧，纯函数件 `electron/domains/project/project-memory.ts`）；`getPromptContext` 尽力读入 memory.md 正文（`memoryMarkdown` 字段，缺失/空为 null），`buildProjectSystemBase` 拼装为「项目记忆」段（指令 → 挂载专家 → 会话助手 → **记忆** → 预设能力声明），形成「指令（人写）+ 记忆（AI 沉淀）」双层上下文。回写 fire-and-forget 失败静默不阻塞交接主流程；system 注入侧有 8000 字符预算（整段取舍保最新）。选择 memory.md 而非 AGENTS.md：AGENTS.md 业界语义是「给人/agent 的指令约定」，与项目 systemPrompt（人写指令层）职责重叠；memory.md 表达 append-only 的 AI 沉淀层更准确。artifact 表按 workspaceId 隔离的项目产物聚合入口未做（后续批）。
 
 **P1 成员协作写面**。现状：`projectMember` 只有 `listMembers` 读通道，无 add/remove/改角色 IPC，多人协作进不去；且 `list` 仅返回 owner 的项目（成员可见的项目不出现在 Hub 列表）；planItem 写面只查项目可见性（成员=owner 权限）。落地：`project.repo.ts` 增 `project:addMember/removeMember/setMemberRole`（owner 专属，复用 `assertProjectOwned`），`list` 改为 `OR: [ownerId=me, member=me]` 联查；成员角色对 planItem 写面的收口（member 只读或可改自己指派的行）随权限模型一并裁定。
 
-**P2 项目操作接入安全审计**。现状：`securityAuditLog` 基础设施完备（`electron/domains/security/audit/audit-log.service.ts`，eventType 前缀归类 + hash-chain 防篡改），但项目域零入账——删除项目是不可逆级联（资产目录树 + 会话 + 任务全毁），目前无任何审计留痕。落地：按既有 `append({ eventType, decision, ... })` 模式补 `project.removed` / `project.bindingChanged` / `projectAsset.deleted` 三类关键事件。
+**P2 项目操作接入安全审计**。✅ 已落地（批8，2026-11-05）。`securityAuditLog` 基础设施（`electron/domains/security/audit/audit-log.service.ts`，eventType 前缀归类 + hash-chain 防篡改）经安装式 sink 接入项目域（`ProjectRepository/AssetRepository.installAuditSink`，Application 装配，缺席静默——terminal 同款模式）：`project.removed`（删除项目不可逆级联，detail 携项目标识）、`project.bindingChanged`（挂载 diff 按 `itemType:itemId` 键留痕 added/removed）、`projectAsset.deleted`（资产删除）三类事件。前缀归类经 `categoryOf` 显式覆盖表扩展：`project.removed`/`projectAsset.deleted` → `data-safety`，`project.bindingChanged` 走缺省 `config`。
 
-**P3 附件死链治理**。现状：`asset.repo.ts` 的 `delete/rename` 只动文件系统，不反查 `planItemAttachment`——删/改名资产文件后附件关联残留死链（`assetPath` 无存在性校验，打开即失败）。落地（二选一或并做）：delete/rename 时按 assetPath 反查关联给出提示或级联解绑；附件列表读取时校验存在性置失效态（移动端 bindings `valid=false` 置灰先例可复用）。
+**P3 附件死链治理**。✅ 已落地（批8，2026-11-05，「并做」双保险）。① delete/rename 反查：`asset.repo.ts` 删除后按 assetPath 反查级联解绑（文件精确/文件夹前缀，按本项目事项 id 集圈定防跨项目误伤，失败仅记日志不阻断删除）；改名后关联 `assetPath` 同步迁移（含 uniqueName 最终名与文件夹前缀平移）。② 读取失效态：`planItem:attachments:list` 逐行校验存在性置 `valid`（资产根下 `existsSync` 探测；文件缺失 → false），桌面 `PlanItemAttachments` chip 灰显 + 删除线 + title 死链提示（移动端 bindings `valid=false` 置灰同款先例；协议 DTO `PlanItemAttachmentRecordDto` 透传该字段，移动端 UI 消费留后续）。
 
 **P4 plan 体系扩展**（均可落在既有单表/引擎上，无需新表）：
 - planItem 增 `parentId` / `dependsOn` 支持子任务与甘特依赖线（对齐 Linear subissue / Jira epic-story）；
@@ -299,4 +301,4 @@ IPC 通道 7 条（`registerHandlers`，全部经 `handleUser` 包裹——userI
 
 **P5 移动端计划配置面**。现状：groupBy 固定 status、视图不可增改（协议面 `planView:list` 只读桥已支持列表，`PLAN_GROUP_BYS` 协议常量已透出）。低成本放开分组切换；视图配置编辑建议仍留桌面端（移动端输入成本高）。
 
-**P6 能力挂载失效项清理**。现状：源实体删除后 binding 残留 `valid=false`（UI 灰显保留，"编辑不静默丢弃"是 Task 6 既定裁定，合理），但无主动清理入口，长期累积脏行。落地：`ConfigPanel` 能力行加"清理失效挂载"操作（`setBindings` 全量替换通道现成，前端过滤 valid 项回写即可）。
+**P6 能力挂载失效项清理**。✅ 已落地（批8，2026-11-05）。`ConfigPanel` 能力挂载区块在存在 `valid=false` 挂载时出现提示行（N 项失效挂载）+「清理失效挂载」按钮：前端过滤 valid 项经 `setBindings` 全量替换通道回写（成功 toast 携清理数）；单行 X 显式移除保留（编辑不静默丢弃的 Task 6 裁定不变）。

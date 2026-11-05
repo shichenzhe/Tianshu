@@ -377,5 +377,8 @@
       "MEMORY_NO_MATERIAL": "No conversation content available to compile yet",
       "MEMORY_BUSY": "Memory compilation in progress, please try again shortly"
     }
+  },
+  "security": {
+    "encryptDegraded": "System keychain is unavailable and API key encryption is degraded: keys are still stored encrypted, but the master key is stored in plaintext in the local database, so anyone with the database file can decrypt them. Enable the OS keychain service (e.g. libsecret / keyring on Linux) and restart the app."
   }
 }

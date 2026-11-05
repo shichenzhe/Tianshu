@@ -377,5 +377,8 @@
       "MEMORY_NO_MATERIAL": "暂无可整理的对话内容",
       "MEMORY_BUSY": "记忆整理进行中，请稍后再试"
     }
+  },
+  "security": {
+    "encryptDegraded": "系统密钥链不可用，API 密钥加密保护已降级：密钥仍以密文存储，但主密钥以明文存于本机数据库，拿到数据库文件即可解密。建议启用系统密钥链服务（如 Linux 上的 libsecret / keyring）后重启应用。"
   }
 }

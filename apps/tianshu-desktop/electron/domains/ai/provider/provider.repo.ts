@@ -9,6 +9,7 @@ import type {
   ProviderUpdateParams,
 } from "../../../../src-react/domains/ai/api/provider.api";
 import type { ProviderRuntimeInfo } from "./provider-runtime";
+import { openProviderSecrets } from "./provider-runtime";
 
 type ProviderRow = NonNullable<
   Awaited<ReturnType<typeof prisma.provider.findFirst>>
@@ -153,7 +154,8 @@ export class ProviderRepository {
   }
 
   /**
-   * 供 chat 引擎使用的运行时信息（不含展示字段）
+   * 供 chat 引擎使用的运行时信息（不含展示字段）；凭证列解密收口到
+   * provider-runtime openProviderSecrets（批1A 起与引擎直读路径单源）
    */
   async getRuntimeInfo(id: number): Promise<ProviderRuntimeInfo | null> {
     const row = await prisma.provider.findUnique({
@@ -166,10 +168,7 @@ export class ProviderRepository {
     return {
       type: row.type,
       baseUrl: row.baseUrl,
-      apiKey: (await openSecret("provider.apiKey", row.apiKey)) ?? undefined,
-      extraHeaders:
-        (await openSecret("provider.extraHeaders", row.extraHeaders)) ??
-        undefined,
+      ...(await openProviderSecrets(row)),
     };
   }
 }

@@ -73,6 +73,7 @@ import {
   isExternalReadAllowed,
 } from "./external-file-gate";
 import { createChatModel } from "../orchestration/langchain-model-factory";
+import { openProviderSecrets } from "../provider/provider-runtime";
 import { toLangChainTools } from "../orchestration/langchain-tool-adapter";
 import {
   runHandoverSummary,
@@ -2103,6 +2104,12 @@ export default class ChatService {
     if (!modelRow || !providerRow) {
       throw new Error("MODEL_OR_PROVIDER_MISSING");
     }
+    // 凭证列解密（批1A 收口）：行内 apiKey/extraHeaders 为 enc:v1: 密文，
+    // 后续一切消费（主链/成员补全/起标题）以解密后明文喂 createChatModel
+    const providerRuntimeRow: typeof providerRow = {
+      ...providerRow,
+      ...(await openProviderSecrets(providerRow)),
+    };
     const assistantRow: AssistantRow | null = session.assistantId
       ? await prisma.assistant.findUnique({
           where: { id: session.assistantId },
@@ -2274,7 +2281,7 @@ export default class ChatService {
       session,
       modelId,
       modelRow,
-      providerRow,
+      providerRow: providerRuntimeRow,
       assistantRow,
       merged,
       compacted,
@@ -2298,7 +2305,7 @@ export default class ChatService {
         teamMembers.length > 0
           ? {
               members: teamMembers,
-              modelText: this.memberModelText(modelRow, providerRow),
+              modelText: this.memberModelText(modelRow, providerRuntimeRow),
             }
           : null,
       baseSystem,
@@ -2532,14 +2539,20 @@ export default class ChatService {
     if (!modelRow || !providerRow) {
       throw new Error("未配置可用模型，请先在服务商设置中配置");
     }
+    // 凭证列解密（批1A 收口，assembleContext 同款）：密文行必须解密后再
+    // 喂 createChatModel，密文当 Bearer 会致 AUTH_FAILED
+    const providerRuntimeRow: typeof providerRow = {
+      ...providerRow,
+      ...(await openProviderSecrets(providerRow)),
+    };
     // 一次性补全（titleModelText 同款 LangChain invoke 先例，system 承载
     // 改写指令、prompt 为原文；润色无标题类 token 上限约束）
     const chat = createChatModel(
       {
-        type: providerRow.type,
-        baseUrl: providerRow.baseUrl,
-        apiKey: providerRow.apiKey ?? undefined,
-        extraHeaders: providerRow.extraHeaders,
+        type: providerRuntimeRow.type,
+        baseUrl: providerRuntimeRow.baseUrl,
+        apiKey: providerRuntimeRow.apiKey ?? undefined,
+        extraHeaders: providerRuntimeRow.extraHeaders,
       },
       modelRow.modelId,
     );

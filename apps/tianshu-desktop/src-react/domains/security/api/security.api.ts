@@ -51,6 +51,12 @@ export class SecurityApi {
     return invoke<void>("security:openBackupDir");
   }
 
+  /** 加密降级状态（批1A）：主密钥 hex 明文降级（safeStorage 不可用）时
+   *  服务商设置页出示警示条 */
+  static masterKeyStatus(): Promise<{ degraded: boolean }> {
+    return invoke<{ degraded: boolean }>("security:masterKeyStatus");
+  }
+
   static listFullGrants(): Promise<
     Array<{ sessionId: number; title: string }>
   > {

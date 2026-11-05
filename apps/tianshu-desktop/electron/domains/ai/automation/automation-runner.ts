@@ -20,6 +20,7 @@ import type { SkillInfo } from "../agent/skill-loader";
 import { buildSystemPrompt } from "../agent/skill-prompt";
 import { makeReadSkillTool } from "../agent/read-skill";
 import { classifyError } from "../chat/error-classify";
+import { openProviderSecrets } from "../provider/provider-runtime";
 import { commandGate } from "../../security/command-gate";
 import { fileGate } from "../../security/file-gate";
 import { computeNextRun } from "./schedule";
@@ -233,14 +234,16 @@ export async function executeTask(
     const projectPrompt = projectRow?.systemPrompt?.trim() || undefined;
     runId = (await createRunningRun(task, opts, now)).id;
     sessionId = await createSession(task);
+    // 凭证列解密（批1A 收口）：密文行解密后再喂 createChatModel
+    const providerSecrets = await openProviderSecrets(providerRow);
     return await streamAndRecord(task, opts, {
       runId,
       sessionId,
       startedAt,
       providerType: providerRow.type,
       baseUrl: providerRow.baseUrl,
-      apiKey: providerRow.apiKey,
-      extraHeaders: providerRow.extraHeaders,
+      apiKey: providerSecrets.apiKey ?? null,
+      extraHeaders: providerSecrets.extraHeaders ?? null,
       modelSdkId: modelRow.modelId,
       workspacePath: workspace.directoryPath?.trim()
         ? normalizeWorkspacePath(workspace.directoryPath)

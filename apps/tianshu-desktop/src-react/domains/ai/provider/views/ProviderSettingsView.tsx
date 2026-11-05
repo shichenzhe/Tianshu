@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus } from "lucide-react";
+import { Plus, ShieldAlert } from "lucide-react";
 
 import { usePageHeader } from "@/components/layout/page-header.store";
 import {
@@ -36,12 +36,14 @@ import ProviderList from "../components/ProviderList";
 import ProviderDetail from "../components/ProviderDetail";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { useHostStore } from "../../data-source/host.store";
+import { SecurityApi } from "@/domains/security/api/security.api";
 
 const PROVIDERS_KEY = ["providers"] as const;
 const MODELS_KEY = ["models"] as const;
+const MASTER_KEY_STATUS_KEY = ["security", "masterKeyStatus"] as const;
 
 export default function ProviderSettingsView() {
-  const { t } = useTranslation(["ai", "common"]);
+  const { t } = useTranslation(["ai", "common", "settings"]);
   const queryClient = useQueryClient();
   const providersQuery = useQuery({
     queryKey: PROVIDERS_KEY,
@@ -51,6 +53,14 @@ export default function ProviderSettingsView() {
     queryKey: MODELS_KEY,
     queryFn: () => ModelApi.listAll(),
   });
+  // 加密降级状态（批1A）：主密钥 hex 明文降级（safeStorage 不可用，典型
+  // Linux 无 keychain）时本机密钥仅信封加密、挡库文件外流不挡同机用户
+  // 上下文——服务商页是密钥落库页，警示条在此透出
+  const masterKeyStatusQuery = useQuery({
+    queryKey: MASTER_KEY_STATUS_KEY,
+    queryFn: () => SecurityApi.masterKeyStatus(),
+  });
+  const encryptDegraded = masterKeyStatusQuery.data?.degraded === true;
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [providerDialogOpen, setProviderDialogOpen] = useState(false);
@@ -221,6 +231,17 @@ export default function ProviderSettingsView() {
   return (
     // 实底背景：遮住 body 壁纸叠加层（皮肤体系壁纸不透入本页内容区）
     <div className="h-full overflow-y-auto bg-background p-6">
+      {encryptDegraded && (
+        <div
+          data-testid="encrypt-degraded-banner"
+          className="mb-4 flex items-start gap-2 rounded-lg border border-primary/30 bg-primary-subtle/40 px-3 py-2"
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <p className="text-xs leading-relaxed text-foreground">
+            {t("settings:security.encryptDegraded")}
+          </p>
+        </div>
+      )}
       {providersQuery.isPending ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
           {t("common:loading")}

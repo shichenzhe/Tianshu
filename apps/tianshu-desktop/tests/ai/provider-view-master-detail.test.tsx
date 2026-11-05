@@ -66,6 +66,11 @@ vi.mock("../../src-react/domains/ai/api/model.api", () => ({
   },
   MODEL_TYPES: ["llm", "embedding", "tts", "reranker", "asr"],
 }));
+// 加密降级状态替身（批1A）：缺省非降级，警示条用例按需覆写
+const masterKeyStatus = vi.fn(async () => ({ degraded: false }));
+vi.mock("../../src-react/domains/security/api/security.api", () => ({
+  SecurityApi: { masterKeyStatus: (...a: unknown[]) => masterKeyStatus(...a) },
+}));
 
 import ProviderSettingsView from "../../src-react/domains/ai/provider/views/ProviderSettingsView";
 
@@ -87,6 +92,7 @@ describe("ProviderSettingsView 双栏", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelUpdate.mockResolvedValue({});
+    masterKeyStatus.mockResolvedValue({ degraded: false });
   });
 
   it("默认选中首个服务商：右栏显示其 baseUrl 与模型行", async () => {
@@ -132,5 +138,19 @@ describe("ProviderSettingsView 双栏", () => {
     expect(
       row.querySelector("[role='switch']")?.getAttribute("aria-checked"),
     ).toBe("true");
+  });
+
+  it("加密降级（isMasterKeyDegraded=true）：页顶出示警示条", async () => {
+    masterKeyStatus.mockResolvedValue({ degraded: true });
+    renderView();
+    const banner = await screen.findByTestId("encrypt-degraded-banner");
+    // 文案走 i18n（jsdom 恒 zh-CN）——只锚关键语义，整句改写不脆断
+    expect(banner.textContent).toContain("降级");
+  });
+
+  it("加密正常（degraded=false）：不出示警示条", async () => {
+    renderView();
+    await screen.findByText("https://x/1");
+    expect(screen.queryByTestId("encrypt-degraded-banner")).toBeNull();
   });
 });

@@ -147,6 +147,19 @@ export function isMasterKeyDegraded(): boolean {
   return degradedPlaintext;
 }
 
+/**
+ * 加密状态查询（批1A 设置页透出用）：先确保密钥已加载再读降级标记——
+ * degradedPlaintext 只在 getMasterKey() 加载/生成路径上置位，冷进程
+ * 直接读恒 false 会漏报。degraded=true = 主密钥 hex 明文落表
+ * （safeStorage 不可用的降级形态，仍有 enc:v1 信封）。
+ */
+export async function getMasterKeyStatus(): Promise<{
+  degraded: boolean;
+}> {
+  await getMasterKey();
+  return { degraded: isMasterKeyDegraded() };
+}
+
 /** 测试隔离：清缓存 */
 export function resetMasterKeyCacheForTest(): void {
   cached = undefined;

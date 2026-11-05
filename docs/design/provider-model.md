@@ -135,14 +135,21 @@ rolldown `external` 白名单列其中 5 项走 Node 原生 require（CJS 互操
 - **协议三态语义**：`packages/tianshu-protocol/src/provider-save-contract.ts`
   `ProviderSaveItem/ModelSaveItem`——`undefined = 未传保留现值`、`null = 显式清除`、
   掩码 = 按未传。
-- ⚠ **未收口点**：桌面聊天引擎 `chat.service.ts` 四处（`assembleContext` L2098 起
-  的裸 `prisma.provider.findUnique` → `streamAndPersist` L1964 / `memberModelText`
-  L1864 / `generateTitleIfFirstExchange` L2064 / `polishText` L2541）直读 prisma 行
-  的 `apiKey` 传给 `createChatModel`，**未走 `openSecret`**（对照：server
-  `chat-runner.service.ts` L761/L931 已解密；graph-executor 的
-  `loadModelRuntime` 同样裸读）。C3 批提交信息称「chat 引擎与 UI 全走此两口」
-  与代码现状不符——加密生效的机器上聊天链路可能拿 `enc:v1:` 密文当 Bearer 导致
-  AUTH_FAILED（§6 项 2）。
+- ✅ **引擎读侧收口（批1A，2026-11-05）**：桌面全部引擎直读点统一经
+  `openProviderSecrets()`（`electron/domains/ai/provider/provider-runtime.ts`
+  新增，与 repo `getRuntimeInfo` 同款单源）解密 apiKey/extraHeaders——覆盖
+  `chat.service.ts` 两处裸读（`assembleContext`/`polishText` 装配解密后行，
+  `streamAndPersist`/`memberModelText`/`generateTitleIfFirstExchange` 三消费点
+  均吃组装后的明文）、`handover-summary.ts` `resolveHandoverModel`、
+  graph-executor `loadModelRuntime`/`loadProviderRuntime`（comfyui 直取）与
+  `automation-runner.ts` 执行链；旧明文行原样透传（懒迁移），解密失败按凭证
+  缺失降级不阻断。契约测试 `tests/ai/provider-secret-decrypt.test.ts`
+  （密文行 → `createChatModel` 收明文，替身注入固定主密钥）。加密降级状态
+  同批接 UI：`security:masterKeyStatus` 通道（`getMasterKeyStatus()` 先加载
+  再读 `isMasterKeyDegraded()`，防冷进程假阴性）+ 服务商设置页警示条
+  （`settings:security.encryptDegraded` 双语）。历史注记：C3 批提交信息曾称
+  「chat 引擎与 UI 全走此两口」与当时代码不符——批1A 实测收口（对照：server
+  `chat-runner.service.ts` L761/L931 一直已解密）。
 
 ### 3.3 模型能力元数据
 
@@ -269,7 +276,9 @@ import type（单一形状来源，双向不漂移）。
 repo 层 `model-repo.test.ts`、UI `provider-list/provider-view-master-detail/
 model-list/model-dialog/remote-model-import/model-type-guess/model-summary` 各
 替身测试；加密面 `tests/security/master-key.test.ts` +
-`tests/ai/crypto-envelope.test.ts`（server 仓另有 jest 的 provider/repository 套件）。
+`tests/ai/crypto-envelope.test.ts`，引擎解密收口契约
+`tests/ai/provider-secret-decrypt.test.ts`（批1A，密文行 → createChatModel
+收明文）——server 仓另有 jest 的 provider/repository 套件。
 
 ## 5. 业界主流做法对比
 
@@ -316,12 +325,17 @@ model-list/model-dialog/remote-model-import/model-type-guess/model-summary` 各
    撑爆（上游 400）、200K/1M 模型被过早截断，DB 仍以 NULL 为主；(b) 无模型目录
    （OpenRouter models API / models.dev / LiteLLM catalog）自动回填窗口与价格；
    (c) Ollama `/api/show` 的 Modelfile 元数据未消费——本地模型窗口本可零手填。
-2. **apiKey 加密链路未收口（§3.2 ⚠）**：桌面 chat 引擎四处直读 prisma provider 行
-   未解密（server 侧已解密），safeStorage 可用的机器上 provider 编辑后聊天链路可能
-   携密文请求全部 AUTH_FAILED。修法明确：四处统一改走 `getRuntimeInfo()` 或补
-   `openSecret`。另 master-key 降级路径（Linux 无 keychain → hex 明文落表）与
-   TIANSHU_MASTER_KEY 未设（server 明文 + 告警）仍是弱化面——可在设置页透出加密
-   降级状态（`isMasterKeyDegraded()` 已有查询面未接 UI）。
+2. ✅ **已落地（批1A，2026-11-05）**：apiKey 加密链路引擎读侧收口——新增
+   `openProviderSecrets()`（`provider-runtime.ts`）单源解密，chat 引擎两处裸读
+   （`assembleContext`/`polishText`，覆盖 `streamAndPersist`/`memberModelText`/
+   `generateTitleIfFirstExchange` 消费点）、交接摘要 `resolveHandoverModel`、图编排
+   `loadModelRuntime`/`loadProviderRuntime`、自动化执行链全部接入（契约测试
+   `tests/ai/provider-secret-decrypt.test.ts`）。加密降级状态已接 UI：
+   `security:masterKeyStatus` 通道 + 服务商设置页警示条
+   （`settings:security.encryptDegraded`）；`isMasterKeyDegraded()` 冷进程漏报
+   一并修——`getMasterKeyStatus()` 先加载再读标记。残余弱化面：server 侧
+   `TIANSHU_MASTER_KEY` 未设（明文 + 启动告警）仍无 UI 透出（server 无设置页，
+   属运维面非产品面）。
 3. **无 fallback/多活路由**：单模型故障即会话不可用。可在模型层加「备用模型」列
    （或 workspace 级 fallback 链），`classifyError` 判瞬态（RATE_LIMITED/NETWORK/
    TIMEOUT）时自动切备选重试一次——错误分类基础设施已备，只差路由决策层。

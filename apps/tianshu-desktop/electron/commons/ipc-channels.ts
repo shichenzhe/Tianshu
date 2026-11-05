@@ -296,6 +296,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "security:openBackupDir",
   "security:resetCommandRules",
   "security:resetFileRules",
+  // 加密降级状态（批1A 设置页警示条）
+  "security:masterKeyStatus",
   // 更新日志
   "update-log:getContent",
   "update-log:getConfig",

@@ -101,7 +101,10 @@ import {
   type AutomationTaskRow,
 } from "../automation/automation-runner";
 import { loadSkills, type SkillInfo } from "../agent/skill-loader";
-import type { ProviderRuntimeInfo } from "../provider/provider-runtime";
+import {
+  openProviderSecrets,
+  type ProviderRuntimeInfo,
+} from "../provider/provider-runtime";
 import { recordGraphMonitorEvents } from "../monitor/monitor-events";
 
 export interface TraceEntry {
@@ -1486,12 +1489,14 @@ async function loadModelRuntime(modelId: number): Promise<ModelRuntime> {
       `节点模型或服务商不存在: ${modelId}`,
     );
   }
+  // 凭证列解密（批1A 收口）：密文行解密后再喂 createChatModel
+  const secrets = await openProviderSecrets(providerRow);
   return {
     provider: {
       type: providerRow.type,
       baseUrl: providerRow.baseUrl,
-      apiKey: providerRow.apiKey ?? undefined,
-      extraHeaders: providerRow.extraHeaders,
+      apiKey: secrets.apiKey,
+      extraHeaders: secrets.extraHeaders,
     },
     sdkId: modelRow.modelId,
     modelType: modelRow.type ?? "llm",
@@ -3168,10 +3173,12 @@ async function loadProviderRuntime(providerId: number) {
       `节点服务商不存在: ${providerId}`,
     );
   }
+  // 凭证列解密（批1A 收口，loadModelRuntime 同款）
+  const secrets = await openProviderSecrets(row);
   return {
     baseUrl: row.baseUrl,
-    apiKey: row.apiKey ?? undefined,
-    extraHeaders: row.extraHeaders ?? undefined,
+    apiKey: secrets.apiKey,
+    extraHeaders: secrets.extraHeaders,
   };
 }
 

@@ -8,6 +8,7 @@ import { handleUser } from "../../commons/ipc-user";
 import { fileHistoryDir } from "../../commons/paths";
 import fs from "node:fs/promises";
 import prisma from "../../commons/prisma-client";
+import { getMasterKeyStatus } from "./master-key";
 import type {
   SecurityConfig,
   SecurityConfigKey,
@@ -163,6 +164,9 @@ export default class SecurityService {
   private registerHandlers(): void {
     // handleUser：安全中心为登录用户能力（token 解 userId；配置为应用级共享，不按用户过滤）
     handleUser("security:getConfig", () => this.getConfig());
+    // 加密降级状态透出（批1A）：主密钥 hex 明文降级（safeStorage 不可用）
+    // 时设置页警示；getMasterKeyStatus 自带冷进程加载，不漏报
+    handleUser("security:masterKeyStatus", () => getMasterKeyStatus());
     handleUser(
       "security:setConfig",
       (_, _userId, key: SecurityConfigKey, value: unknown) =>

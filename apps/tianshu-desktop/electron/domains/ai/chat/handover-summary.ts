@@ -10,6 +10,7 @@ import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import { parseBlocks } from "./blocks";
 import { aiMessageContentToText } from "./ai-content";
 import { createChatModel } from "../orchestration/langchain-model-factory";
+import { openProviderSecrets } from "../provider/provider-runtime";
 import { stripCodeFence } from "../../../../src-react/domains/app-settings/model/memory-markdown";
 
 /** 五段固定结构（标题精确、顺序固定）；摘要内容语言跟随对话 */
@@ -157,11 +158,13 @@ export async function resolveHandoverModel(
       where: { id: model.providerId },
     });
     if (provider?.enabled) {
+      // 凭证列解密（批1A 收口）：密文行解密后再喂 createChatModel
+      const secrets = await openProviderSecrets(provider);
       return {
         type: provider.type,
         baseUrl: provider.baseUrl,
-        apiKey: provider.apiKey ?? undefined,
-        extraHeaders: provider.extraHeaders,
+        apiKey: secrets.apiKey,
+        extraHeaders: secrets.extraHeaders,
         modelId: model.modelId,
       };
     }

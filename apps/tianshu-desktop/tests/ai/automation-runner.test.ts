@@ -34,6 +34,20 @@ vi.mock("../../electron/domains/ai/orchestration/graph-executor", () => ({
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
+// 凭证列解密收口（批1A）：master-key 固定替身密钥（明文行经
+// isEncryptedField 短路不会触达，既有用例零影响）；createChatModel 捕获
+// 构造参数（apiKey 断言锚，替身不触网）
+vi.mock("../../electron/domains/security/master-key", () => ({
+  getMasterKey: async () => Buffer.alloc(32, 0xab),
+  isMasterKeyDegraded: () => false,
+  resetMasterKeyCacheForTest: () => {},
+}));
+vi.mock(
+  "../../electron/domains/ai/orchestration/langchain-model-factory",
+  () => ({
+    createChatModel: vi.fn(() => ({ invoke: vi.fn() })),
+  }),
+);
 vi.mock("../../electron/domains/ai/chat/chat.service", () => ({
   runChatStream: vi.fn(),
 }));
@@ -60,6 +74,8 @@ vi.mock("../../electron/domains/ai/chat/workspace-files", () => ({
 import fs from "node:fs/promises";
 import prisma from "../../electron/commons/prisma-client";
 import { runChatStream } from "../../electron/domains/ai/chat/chat.service";
+import { createChatModel } from "../../electron/domains/ai/orchestration/langchain-model-factory";
+import { encryptField } from "@tianshu/core";
 import { loadSkills } from "../../electron/domains/ai/agent/skill-loader";
 import { buildSystemPrompt } from "../../electron/domains/ai/agent/skill-prompt";
 import { readWorkspaceFile } from "../../electron/domains/ai/chat/workspace-files";
@@ -335,6 +351,46 @@ describe("executeTask 成功路径", () => {
       }),
     );
     expect(prisma.message.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("provider 行 apiKey 为 enc:v1: 密文 → createChatModel 收到解密明文（批1A 收口）", async () => {
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    const key = Buffer.alloc(32, 0xab);
+    const plain = "sk-plain-wire-123";
+    vi.mocked(prisma.automationRun.create).mockResolvedValue({
+      id: 1,
+    } as never);
+    vi.mocked(prisma.workspace.findUnique).mockResolvedValue({
+      id: 9,
+      directoryPath: null,
+    } as never);
+    vi.mocked(prisma.model.findUnique).mockResolvedValue({
+      id: 1,
+      providerId: 2,
+      modelId: "gpt-test",
+    } as never);
+    vi.mocked(prisma.provider.findUnique).mockResolvedValue({
+      type: "openai-compatible",
+      baseUrl: "https://api.test/v1",
+      // 真实信封密文（AAD 绑定 provider.apiKey，master-key 替身同钥可解）
+      apiKey: encryptField(key, "provider.apiKey", plain),
+      extraHeaders: null,
+    } as never);
+    vi.mocked(prisma.session.create).mockResolvedValue({ id: 99 } as never);
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    await executeTask(taskRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    expect(createChatModel).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: plain }),
+      "gpt-test",
+      expect.anything(),
+    );
   });
 
   it("工具装配剔除 plan_*（定时任务无 projectId，注册表有也不进模型上下文）", async () => {

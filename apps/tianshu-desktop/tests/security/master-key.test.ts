@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
     isEncryptionAvailable: vi.fn<boolean, []>(() => true),
     encryptString: vi.fn((plain: string) => Buffer.from(`wrapped(${plain})`)),
     decryptString: vi.fn((wrapped: Buffer) =>
-      wrapped.toString("utf8").replace(/^wrapped\(/, "").replace(/\)$/, ""),
+      wrapped
+        .toString("utf8")
+        .replace(/^wrapped\(/, "")
+        .replace(/\)$/, ""),
     ),
   },
   rows: new Map<string, string>(),
@@ -25,18 +28,21 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock(
-  "electron",
-  () => ({ safeStorage: mocks.safeStorage }),
-  { virtual: true },
-);
+vi.mock("electron", () => ({ safeStorage: mocks.safeStorage }), {
+  virtual: true,
+});
 
 vi.mock("../../electron/commons/prisma-client", () => {
-  const row = () => ({ id: "opt-1", value: [...mocks.rows.entries()][0]?.[1] ?? null });
+  const row = () => ({
+    id: "opt-1",
+    value: [...mocks.rows.entries()][0]?.[1] ?? null,
+  });
   return {
     default: {
       option: {
-        findFirst: vi.fn(async () => ([...mocks.rows.entries()][0] ? row() : null)),
+        findFirst: vi.fn(async () =>
+          [...mocks.rows.entries()][0] ? row() : null,
+        ),
         update: vi.fn(async (args: { data: { value: string } }) => {
           mocks.rows.set("security.masterKey", args.data.value);
         }),
@@ -50,6 +56,7 @@ vi.mock("../../electron/commons/prisma-client", () => {
 
 import {
   getMasterKey,
+  getMasterKeyStatus,
   isMasterKeyDegraded,
   resetMasterKeyCacheForTest,
 } from "../../electron/domains/security/master-key";
@@ -80,7 +87,9 @@ describe("master-key（safeStorage 可用性 + 读时升级）", () => {
     mocks.safeStorage.isEncryptionAvailable.mockReturnValue(false);
     const key = await getMasterKey();
     expect(key).toBeInstanceOf(Buffer);
-    expect(mocks.rows.get("security.masterKey")!.startsWith("hex:v1:")).toBe(true);
+    expect(mocks.rows.get("security.masterKey")!.startsWith("hex:v1:")).toBe(
+      true,
+    );
     expect(isMasterKeyDegraded()).toBe(true);
   });
 
@@ -108,5 +117,28 @@ describe("master-key（safeStorage 可用性 + 读时升级）", () => {
     const key = await getMasterKey();
     expect(key?.toString("hex")).toBe(legacyHex);
     expect(isMasterKeyDegraded()).toBe(false);
+  });
+});
+
+describe("getMasterKeyStatus（批1A 设置页透出）", () => {
+  beforeEach(() => {
+    mocks.rows.clear();
+    mocks.safeStorage.isEncryptionAvailable.mockReset();
+    resetMasterKeyCacheForTest();
+  });
+
+  it("safeStorage 可用：degraded=false", async () => {
+    mocks.safeStorage.isEncryptionAvailable.mockReturnValue(true);
+    await expect(getMasterKeyStatus()).resolves.toEqual({ degraded: false });
+  });
+
+  it("safeStorage 不可用：先加载再读标记——冷进程直接调用不漏报降级", async () => {
+    mocks.safeStorage.isEncryptionAvailable.mockReturnValue(false);
+    // 不先调 getMasterKey——状态查询自身负责加载（否则 degradedPlaintext
+    // 恒 false，冷进程透出假阴性）
+    await expect(getMasterKeyStatus()).resolves.toEqual({ degraded: true });
+    expect(mocks.rows.get("security.masterKey")!.startsWith("hex:v1:")).toBe(
+      true,
+    );
   });
 });

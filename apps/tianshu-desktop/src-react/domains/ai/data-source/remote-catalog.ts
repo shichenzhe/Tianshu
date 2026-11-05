@@ -6,6 +6,7 @@
  * providerSave 通道，本地 UI 对缺省走既有分支。
  */
 import type {
+  ModelCapabilities,
   ModelRecord,
   ModelType,
   TestConnectionResult,
@@ -29,7 +30,26 @@ import type { RemoteModel, RemoteProvider } from "../server/api/server.api";
 import type { RemoteWorkspaceBrief } from "@tianshu/protocol";
 
 /** RemoteModel → ModelRecord（type 五值收窄防远程新类型炸枚举面；
- * null → 缺省；时间戳远端不透出缺省空串） */
+ * null → 缺省；时间戳远端不透出缺省空串）。批5：能力矩阵 JSON 安全
+ * 解析 + 单价/备选/contextWindow 透传（此前 contextWindow 亦漏映射） */
+function parseRemoteCapabilities(
+  raw: string | null | undefined,
+): ModelCapabilities | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+      ? (parsed as ModelCapabilities)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function toModelRecord(row: RemoteModel): ModelRecord {
   const type: ModelType = MODEL_TYPES.includes(row.type as ModelType)
     ? (row.type as ModelType)
@@ -44,6 +64,17 @@ function toModelRecord(row: RemoteModel): ModelRecord {
     ...(row.temperature != null ? { temperature: row.temperature } : {}),
     ...(row.topP != null ? { topP: row.topP } : {}),
     ...(row.maxTokens != null ? { maxTokens: row.maxTokens } : {}),
+    ...(row.contextWindow != null ? { contextWindow: row.contextWindow } : {}),
+    capabilities: parseRemoteCapabilities(row.capabilities),
+    ...(row.priceInPerMTokens != null
+      ? { priceInPerMTokens: row.priceInPerMTokens }
+      : {}),
+    ...(row.priceOutPerMTokens != null
+      ? { priceOutPerMTokens: row.priceOutPerMTokens }
+      : {}),
+    ...(row.fallbackModelId != null
+      ? { fallbackModelId: row.fallbackModelId }
+      : {}),
     createdAt: "",
     updatedAt: "",
   };
@@ -239,14 +270,38 @@ export async function remoteProviderDelete(
   await ServerApi.providerDelete({ providerIds: [id] }, connId);
 }
 
-/** 新建 model：同 provider 款 bundle diff 取新行 */
+/** 新建 model：同 provider 款 bundle diff 取新行。capabilities 在本地 API
+ *  形为对象（批5），server save DTO 为 JSON 字符串——发送前序列化 */
+type ModelSaveWire = Omit<ModelUpdateParams, "capabilities"> & {
+  capabilities?: string | null;
+};
+
+function toModelSaveWire(
+  params: ModelCreateParams | ModelUpdateParams,
+): ModelSaveWire {
+  // 联合形态先归一到 Update 形（结构子集，仅剥 capabilities 后展开）
+  const { capabilities, ...rest } = params as ModelUpdateParams;
+  return {
+    ...rest,
+    ...(capabilities !== undefined
+      ? {
+          capabilities:
+            capabilities === null ? null : JSON.stringify(capabilities),
+        }
+      : {}),
+  };
+}
+
 export async function remoteModelCreate(
   params: ModelCreateParams,
   connId: string,
 ): Promise<ModelRecord> {
   const before = await ServerApi.providerBundle(connId);
   const beforeIds = new Set(before.models.map((m) => m.id));
-  const bundle = await ServerApi.providerSave({ models: [params] }, connId);
+  const bundle = await ServerApi.providerSave(
+    { models: [toModelSaveWire(params)] },
+    connId,
+  );
   const row =
     bundle.models.find((m) => !beforeIds.has(m.id)) ?? bundle.models.at(-1)!;
   return toModelRecord(row);
@@ -272,7 +327,7 @@ export async function remoteModelUpdate(
             type: row.type,
             enabled: row.enabled,
           },
-          params,
+          toModelSaveWire(params),
         ),
       ],
     },

@@ -154,3 +154,129 @@ describe("ModelList", () => {
     ).toBeNull();
   });
 });
+
+// ---------- 批5：测速展示与排序 ----------
+
+describe("ModelList 测速（批5 §6 项 4）", () => {
+  afterEach(cleanup);
+
+  const models = [
+    makeModel({ id: 1, modelId: "model-a", type: "llm" }),
+    makeModel({ id: 2, modelId: "model-b", type: "llm" }),
+  ];
+
+  it("测速结果行内展示（首字延迟 · 速度），未测行不渲染段", () => {
+    const { container } = render(
+      <ModelList
+        models={models}
+        testingModelId={null}
+        benchById={{
+          1: {
+            firstChunkMs: 320,
+            completeMs: 900,
+            tokensPerSec: 42.5,
+            outputTokens: 30,
+          },
+        }}
+        onToggle={() => {}}
+        onTest={() => {}}
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onAdd={() => {}}
+      />,
+    );
+    const rowA = rowOf(container, "model-a");
+    expect(
+      within(rowA).getByText(/model\.benchResult|320ms · 42.5 tok\/s/),
+    ).toBeTruthy();
+    expect(
+      within(rowOf(container, "model-b")).queryByText(/tok\/s/),
+    ).toBeNull();
+  });
+
+  it("测速按钮回调与进行中禁用", () => {
+    const onBench = vi.fn();
+    const { container } = render(
+      <ModelList
+        models={models}
+        testingModelId={null}
+        benchingModelId={1}
+        benchById={{}}
+        onBench={onBench}
+        onToggle={() => {}}
+        onTest={() => {}}
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onAdd={() => {}}
+      />,
+    );
+    const rowA = rowOf(container, "model-a");
+    const benchBtn = within(rowA)
+      .getByText(/model\.benching|测速中…/)
+      .closest("button")!;
+    expect(benchBtn.disabled).toBe(true);
+
+    const rowB = rowOf(container, "model-b");
+    fireEvent.click(
+      within(rowB)
+        .getByText(/model\.bench|测速/)
+        .closest("button")!,
+    );
+    expect(onBench).toHaveBeenCalledWith(models[1]);
+  });
+
+  it("按测速排序：sortMode=bench 时 firstChunkMs 升序、未测行垫底", () => {
+    const { container } = render(
+      <ModelList
+        models={models}
+        testingModelId={null}
+        benchById={{
+          2: {
+            firstChunkMs: 150,
+            completeMs: 800,
+            tokensPerSec: 30,
+            outputTokens: 20,
+          },
+          1: {
+            firstChunkMs: 320,
+            completeMs: 900,
+            tokensPerSec: 42.5,
+            outputTokens: 30,
+          },
+        }}
+        sortMode="bench"
+        onToggle={() => {}}
+        onTest={() => {}}
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onAdd={() => {}}
+      />,
+    );
+    const rows = [...container.querySelectorAll("[data-model-row]")].map((el) =>
+      el.getAttribute("data-model-row"),
+    );
+    expect(rows).toEqual(["model-b", "model-a"]);
+  });
+
+  it("测速列头排序开关回调（默认序 ↔ 测速序切换）", () => {
+    const onToggleSort = vi.fn();
+    render(
+      <ModelList
+        models={models}
+        testingModelId={null}
+        benchById={{}}
+        sortMode="default"
+        onToggleSort={onToggleSort}
+        onToggle={() => {}}
+        onTest={() => {}}
+        onEdit={() => {}}
+        onDelete={() => {}}
+        onAdd={() => {}}
+      />,
+    );
+    fireEvent.click(
+      screen.getByText(/model\.sortByBench|按测速排序/).closest("button")!,
+    );
+    expect(onToggleSort).toHaveBeenCalledTimes(1);
+  });
+});

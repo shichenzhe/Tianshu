@@ -64,6 +64,10 @@ CREATE TABLE IF NOT EXISTS model (
     topP REAL NULL,
     maxTokens INTEGER NULL,
     contextWindow INTEGER NULL,
+    capabilities TEXT NULL,
+    priceInPerMTokens REAL NULL,
+    priceOutPerMTokens REAL NULL,
+    fallbackModelId INTEGER NULL,
     createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updatedAt DATETIME NOT NULL
 );

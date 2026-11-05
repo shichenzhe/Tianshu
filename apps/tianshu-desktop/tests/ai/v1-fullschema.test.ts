@@ -355,6 +355,36 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     );
   });
 
+  it("批5 模型能力矩阵四列并入：capabilities/priceIn·Out/fallbackModelId 可空免索引", () => {
+    const db = createDb();
+    expect(columnsOf(db, "model")).toEqual(
+      expect.arrayContaining([
+        "capabilities",
+        "priceInPerMTokens",
+        "priceOutPerMTokens",
+        "fallbackModelId",
+      ]),
+    );
+    for (const column of [
+      "capabilities",
+      "priceInPerMTokens",
+      "priceOutPerMTokens",
+      "fallbackModelId",
+    ]) {
+      const col = (
+        db.prepare("PRAGMA table_info(model)").all() as Array<{
+          name: string;
+          notnull: number;
+          dflt_value: unknown;
+        }>
+      ).find((c) => c.name === column);
+      expect(col?.notnull).toBe(0);
+      expect(col?.dflt_value).toBeNull();
+    }
+    // 免索引：能力矩阵按模型行读取，无独立查询路径
+    expect(indexesOf(db, "model")).not.toContain("model_fallbackModelId_index");
+  });
+
   it("toolPermission 工作空间+工具唯一索引生效", () => {
     const db = createDb();
     db.exec(

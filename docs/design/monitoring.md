@@ -256,11 +256,19 @@ OTel 语义约定的 GenAI 专卷（GenAI SIG 2024-04 成立，现已迁至 OTel
 
 **P1（价值主体）**
 
-3. **成本单价配置与折算**：
+3. ✅ **成本单价配置与折算（批5，Task 9，2026-11-05）**：
 
-   - 配置面：model 表加输入/输出单价列，或 option 表键值配置（provider 级默认 + model 级覆盖两档）；
-   - 折算面：`MonitorStats` 增 cost 口径字段，`computeMonitorStats` 单源折算——该函数桌面/server/移动端三端共用，一次改动三端生效；
-   - 边界：graph 场景 modelId 恒 null，需按图内节点实际模型补查或标「未知价」；预留 cache token 单独计价位（anthropic `cache_read_input_tokens` 与普通输入价差大，先留字段不折价）。
+   - 配置面：model 表加 `priceInPerMTokens`/`priceOutPerMTokens`（USD / 1M
+     token，双列可空）+ ModelDialog 编辑面（i18n 双语，留空 = 不显式定价）；
+   - 折算面：`MonitorStats` 增可选 `totalCost` 与 `byModel[].cost` 口径，
+     `computeMonitorStats` 单源折算（`resolveModelPrices`：DB 显式价任一列在
+     场即按已知列折算、缺席列记 0 不回落目录 > 内置目录价（`model-catalog.ts`
+     常见模型单价）> 未知 null）——三端共用一次改动三端生效，旧消费面（移动端）
+     增量兼容不炸（mcpByServer 先例同款）；
+   - 呈现面：监控页 KPI 行增「累计成本」卡 + byModel 表增「成本」列，null 显
+     「未知价」（≠ 免费）；边界兑现：graph 场景 modelId 恒 null 不进 byModel，
+     其 token 无法计价由 totalCost 的部分计价语义吸收（KPI 标题即窗口累计，
+     全未知时整卡显未知价）；cache token 单独计价位仍留（未折价）。
 
 4. **会话级 trace 下钻**：聚合页点击模型/工具行 → 按 sessionId 分组的事件明细（分页列表，事件表已有 sessionId 列无需改表）；graph 场景直接复用 `automationRun.graphTrace` 的既有节点树（运行历史已渲染该数据）；达成业界「聚合 → 下钻到会话/树」的标准动线。
 

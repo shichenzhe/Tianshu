@@ -584,7 +584,7 @@
     },
     "/info": {
       "get": {
-        "description": "返回服务名、版本、实例标识、能力列表与伴生用户名（starter 统一包装）",
+        "description": "返回服务名、版本、实例标识、能力列表、协议版本与伴生用户名（starter 统一包装）",
         "operationId": "InfoController_getInfo",
         "parameters": [],
         "responses": {
@@ -6368,6 +6368,26 @@
           "contextWindow": {
             "type": "number",
             "description": "上下文窗口（整数）",
+            "nullable": true
+          },
+          "capabilities": {
+            "type": "string",
+            "description": "能力矩阵 JSON（形如 {\"vision\":true,\"tools\":true}；批5 模型能力矩阵）",
+            "nullable": true
+          },
+          "priceInPerMTokens": {
+            "type": "number",
+            "description": "输入单价（USD / 1M token）",
+            "nullable": true
+          },
+          "priceOutPerMTokens": {
+            "type": "number",
+            "description": "输出单价（USD / 1M token）",
+            "nullable": true
+          },
+          "fallbackModelId": {
+            "type": "number",
+            "description": "备用模型行 id（主模型失败时切换重试；批5 fallback）",
             "nullable": true
           }
         },

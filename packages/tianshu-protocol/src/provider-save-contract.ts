@@ -38,6 +38,14 @@ export interface ModelSaveItem {
   topP?: number | null;
   maxTokens?: number | null;
   contextWindow?: number | null;
+  /** 能力矩阵 JSON 字符串（形如 {"vision":true,"tools":true}；批5 项 5） */
+  capabilities?: string | null;
+  /** 输入单价（USD / 1M token；批5 项 5，监控成本折算） */
+  priceInPerMTokens?: number | null;
+  /** 输出单价（USD / 1M token） */
+  priceOutPerMTokens?: number | null;
+  /** 备用模型行 id（主模型失败时切换重试；批5 项 3） */
+  fallbackModelId?: number | null;
 }
 
 /** provider/save 请求体：两数组均可选、至少一项为数组；非全量覆盖 */

@@ -95,6 +95,12 @@ model Model {
   topP          Float?
   maxTokens     Int?
   contextWindow Int?
+  // 能力矩阵（批5 provider-model §6 项 5，mirror model 表同构）：JSON
+  // {"vision":true,"tools":true} / USD 每 1M token 双价列 / 备选模型引用
+  capabilities      String?
+  priceInPerMTokens Float?
+  priceOutPerMTokens Float?
+  fallbackModelId   Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

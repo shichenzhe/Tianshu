@@ -158,6 +158,10 @@ export const ModelScalarFieldEnum = {
   topP: 'topP',
   maxTokens: 'maxTokens',
   contextWindow: 'contextWindow',
+  capabilities: 'capabilities',
+  priceInPerMTokens: 'priceInPerMTokens',
+  priceOutPerMTokens: 'priceOutPerMTokens',
+  fallbackModelId: 'fallbackModelId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const

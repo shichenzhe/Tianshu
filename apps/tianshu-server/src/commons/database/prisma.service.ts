@@ -10,6 +10,7 @@ import {
 import { ensureGraphRunNodeTable } from './ensure-graph-run-node-table';
 import { ensureAutomationRunGraphSnapshotColumn } from './ensure-automation-run-snapshot';
 import { ensureAutomationTaskCatchUpLimitColumn } from './ensure-automation-task-catch-up-limit';
+import { ensureModelCapabilityColumns } from './ensure-model-capability-columns';
 
 type PrismaClientOptions = ConstructorParameters<typeof PrismaClient>[0];
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -89,6 +90,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     // automationTask 补跑上限列同款存量路径（批3A）：缺列时保存端点写
     // catchUpLimit 即失败——探测补列（新库/PG 走 2_ 增量迁移）
     await ensureAutomationTaskCatchUpLimitColumn(this, this.dbEngine);
+    // model 能力矩阵四列同款存量路径（批5）：缺列时模型 save/读取即失败
+    // ——探测补列（新库/PG 走 3_ 增量迁移）
+    await ensureModelCapabilityColumns(this, this.dbEngine);
   }
 
   async onModuleDestroy() {

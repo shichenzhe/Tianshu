@@ -107,6 +107,21 @@ describe("createChatModel", () => {
     expect((m as ChatOpenAI).clientConfig.baseURL).toBe("http://x");
   });
 
+  it("comfyui 显式拒绝（批5 §6 项 6）：无对话能力不落 openai default 分支", () => {
+    // 现状曾落 openai default——类型系统与运行时行为不一致；显式分支后
+    // 误用即刻抛错（comfyui 消费面在 graph imageGen 直取 provider，不构
+    // ChatModel；连通测试/测速在 connectivity 层已先行分流）
+    const attempt = () =>
+      createChatModel(
+        { type: "comfyui", baseUrl: "http://127.0.0.1:8188" },
+        "m",
+      );
+    expect(attempt).toThrow("ComfyUI");
+    expect(attempt).toThrow(
+      expect.objectContaining({ code: "COMFYUI_NOT_CHAT" }),
+    );
+  });
+
   it("第三参 options 透传四协议构造字段；省略字段保持各 SDK 默认（T3-3 R1）", () => {
     const opts = { temperature: 0.7, topP: 0.8, maxTokens: 4096 };
 

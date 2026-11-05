@@ -1,4 +1,5 @@
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import { estimateTokens } from "@tianshu/core";
 import { classifyError } from "../chat/error-classify";
 import { createChatModel } from "../orchestration/langchain-model-factory";
 import {
@@ -6,6 +7,7 @@ import {
   type ProviderRuntimeInfo,
 } from "./provider-runtime";
 import type {
+  BenchModelResult,
   ModelType,
   RemoteModel,
 } from "../../../../src-react/domains/ai/api/model.api";
@@ -20,6 +22,11 @@ export interface TestConnectionOptions {
   /** 模型类型（默认 llm 走 chat 补全；其余按 OpenAI 兼容专项端点探测） */
   modelType?: ModelType;
   /** 测试注入（供单测替身，仅 llm 生效） */
+  injectModel?: BaseChatModel;
+}
+
+export interface BenchModelOptions {
+  /** 测试注入（供单测替身流式计时） */
   injectModel?: BaseChatModel;
 }
 
@@ -61,6 +68,81 @@ async function testLlmConnection(
     // M7：非流式补全必须带超时——provider 半开连接时 IPC 永久 pending
     await model.invoke("hi", { signal: AbortSignal.timeout(10_000) });
     return { success: true, message: "" };
+  } catch (error) {
+    return {
+      success: false,
+      errorCode: classifyError(error),
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/** 测速超时上限（M7 同判词：半开连接不得永久挂起） */
+const BENCH_TIMEOUT_MS = 10_000;
+
+/** 测速固定短 prompt（与 testLlmConnection 的 "hi" 同款最小口径） */
+const BENCH_PROMPT = "hi";
+
+/**
+ * 测速（批5 provider-model §6 项 4，Cherry Studio 对位）：流式首 chunk
+ * 延迟（TTFB）+ 固定短 prompt 完成时长 + 生成速度（token/s，首 chunk 后
+ * 窗口）。输出 token 优先取末 chunk usage_metadata（厂商真实口径），
+ * 缺席按字符近似（estimateTokens = ceil(len/2)，中文近似口径）。结果
+ * 结构化返回（连通失败是预期结果，与 testConnection 同模式）；仅 llm
+ * 可测（comfyui 无对话面，结构化拒绝）。
+ */
+export async function benchModel(
+  provider: ProviderRuntimeInfo,
+  modelId: string,
+  options?: BenchModelOptions,
+): Promise<BenchModelResult> {
+  if (provider.type === "comfyui") {
+    return { success: false, errorCode: "UNSUPPORTED_TYPE_BENCH", message: "" };
+  }
+  try {
+    const model = options?.injectModel ?? createChatModel(provider, modelId);
+    const startedAt = Date.now();
+    const stream = await model.stream(BENCH_PROMPT, {
+      signal: AbortSignal.timeout(BENCH_TIMEOUT_MS),
+    });
+    let firstChunkMs: number | undefined;
+    let text = "";
+    let reportedOutputTokens: number | undefined;
+    for await (const chunk of stream) {
+      if (firstChunkMs === undefined) {
+        firstChunkMs = Date.now() - startedAt;
+      }
+      const content = chunk.content;
+      if (typeof content === "string") {
+        text += content;
+      }
+      const usage = (
+        chunk as unknown as {
+          usage_metadata?: { output_tokens?: number };
+        }
+      ).usage_metadata;
+      if (usage?.output_tokens !== undefined) {
+        reportedOutputTokens = usage.output_tokens;
+      }
+    }
+    const completeMs = Date.now() - startedAt;
+    const outputTokens = reportedOutputTokens ?? estimateTokens(text);
+    // 生成速度窗口：首 chunk 之后到完成（TTFB 属网络/排队，不计入生成速度）
+    const generateWindowMs = completeMs - (firstChunkMs ?? completeMs);
+    const tokensPerSec =
+      generateWindowMs > 0 && outputTokens > 0
+        ? Math.round((outputTokens / generateWindowMs) * 1000 * 10) / 10
+        : outputTokens > 0
+          ? outputTokens
+          : 0;
+    return {
+      success: true,
+      message: "",
+      firstChunkMs,
+      completeMs,
+      tokensPerSec,
+      outputTokens,
+    };
   } catch (error) {
     return {
       success: false,

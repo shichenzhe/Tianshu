@@ -204,6 +204,74 @@ describe('ProviderController (e2e)', () => {
       });
     });
 
+    it('能力矩阵四列（批5）：新建写入、undefined 保留、null 清除三态同款', async () => {
+      const seeded = await save({
+        providers: [
+          {
+            name: 'capability-matrix',
+            type: 'openai-compatible',
+            baseUrl: 'http://cap-matrix',
+          },
+        ],
+      });
+      const providerId = seeded.data.providers.find(
+        (p) => p.name === 'capability-matrix',
+      )!.id;
+      const created = await save({
+        models: [
+          {
+            providerId,
+            modelId: 'gpt-4o',
+            capabilities: '{"vision":true,"tools":true}',
+            priceInPerMTokens: 2.5,
+            priceOutPerMTokens: 10,
+            fallbackModelId: null,
+          },
+        ],
+      });
+      const id = created.data.models.find(
+        (m) => m.providerId === providerId && m.modelId === 'gpt-4o',
+      )!.id;
+      expect(
+        await db.prisma.model.findUnique({ where: { id } }),
+      ).toMatchObject({
+        capabilities: '{"vision":true,"tools":true}',
+        priceInPerMTokens: 2.5,
+        priceOutPerMTokens: 10,
+        fallbackModelId: null,
+      });
+
+      // 未传 → 保留现值
+      await save({ models: [{ id, providerId, modelId: 'gpt-4o' }] });
+      expect(
+        await db.prisma.model.findUnique({ where: { id } }),
+      ).toMatchObject({
+        capabilities: '{"vision":true,"tools":true}',
+        priceInPerMTokens: 2.5,
+      });
+
+      // 显式 null → 清除
+      await save({
+        models: [
+          {
+            id,
+            providerId,
+            modelId: 'gpt-4o',
+            capabilities: null,
+            priceInPerMTokens: null,
+            priceOutPerMTokens: null,
+          },
+        ],
+      });
+      expect(
+        await db.prisma.model.findUnique({ where: { id } }),
+      ).toMatchObject({
+        capabilities: null,
+        priceInPerMTokens: null,
+        priceOutPerMTokens: null,
+      });
+    });
+
     it('provider 更新省略 apiKey/extraHeaders 不清空现值（F4-1：undefined 保留、null 清除）', async () => {
       const created = await save({
         providers: [

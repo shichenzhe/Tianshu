@@ -13,15 +13,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import ProviderApi, { type ProviderRecord } from "../../api/provider.api";
-import type { ModelRecord } from "../../api/model.api";
+import type { ModelBenchMetrics, ModelRecord } from "../../api/model.api";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { useHostStore } from "../../data-source/host.store";
-import ModelList from "./ModelList";
+import ModelList, { type ModelSortMode } from "./ModelList";
 
 export default function ProviderDetail({
   provider,
   models,
   testingModelId,
+  benchById,
+  benchingModelId,
+  benchAvailable,
+  sortMode,
+  onToggleSort,
+  onBench,
   onToggleEnabled,
   onEdit,
   onDelete,
@@ -35,6 +41,14 @@ export default function ProviderDetail({
   provider: ProviderRecord;
   models: ModelRecord[];
   testingModelId: number | null;
+  /** 测速结果（批5 §6 项 4）：id → 最近一次 bench（内存态） */
+  benchById: Record<number, ModelBenchMetrics>;
+  benchingModelId: number | null;
+  /** 测速为本地 IPC 专属（无头端无 bench 端点）：远程态隐藏入口 */
+  benchAvailable: boolean;
+  sortMode: ModelSortMode;
+  onToggleSort: () => void;
+  onBench: (model: ModelRecord) => void;
   onToggleEnabled: (enabled: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -154,6 +168,11 @@ export default function ProviderDetail({
           <ModelList
             models={models}
             testingModelId={testingModelId}
+            benchById={benchById}
+            benchingModelId={benchingModelId}
+            sortMode={sortMode}
+            onToggleSort={onToggleSort}
+            onBench={benchAvailable ? onBench : undefined}
             onToggle={onToggleModel}
             onTest={onTestModel}
             onEdit={onEditModel}

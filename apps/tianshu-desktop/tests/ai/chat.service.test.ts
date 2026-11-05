@@ -234,6 +234,10 @@ import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { appDataHome } from "../../electron/commons/paths";
+import type { ChatModelParams } from "../../electron/domains/ai/chat/param-merge";
+
+/** 工厂替身返回面（createChatModel mock 产物形状） */
+type BaseChatModelLike = { invoke: ReturnType<typeof vi.fn> };
 
 /** handleUser 通道直调用 token（v12 起工具记忆 IPC 按用户过滤，userId=1） */
 const TOKEN = generateUserToken({ id: 1, username: "tester" });
@@ -3101,5 +3105,94 @@ describe("ChatService 自动压缩（spec §18 项 2）", () => {
       [1, "种子摘要", 900],
     ]);
     expect(persistedTextsOf(sessions, "user")).toEqual([COMPACT_DIRECTIVE]);
+  });
+});
+
+// ---------- 批5 fallback：loadFallbackModel 归属/可用面解析 ----------
+
+describe("loadFallbackModel（备用模型运行时解析）", () => {
+  it("fallbackModelId 空 → undefined；备选非 llm/跨用户/行缺失 → undefined", async () => {
+    const svc = new ChatService({} as unknown as SessionRepository);
+    const load = (m: { fallbackModelId: number | null }, uid = 1) =>
+      (
+        svc as unknown as {
+          loadFallbackModel: (
+            m: { fallbackModelId: number | null },
+            uid: number,
+            p: ChatModelParams,
+          ) => Promise<unknown>;
+        }
+      ).loadFallbackModel(m, uid, {});
+
+    expect(await load({ fallbackModelId: null })).toBeUndefined();
+
+    // 备选模型行缺失
+    assembleReads.model.findUnique.mockResolvedValue(null);
+    expect(await load({ fallbackModelId: 9 })).toBeUndefined();
+
+    // 非 llm 备选不可兜底对话
+    assembleReads.model.findUnique.mockResolvedValue({
+      id: 9,
+      providerId: 2,
+      modelId: "embed-x",
+      type: "embedding",
+    });
+    expect(await load({ fallbackModelId: 9 })).toBeUndefined();
+
+    // 跨用户备选拒绝（v12 隔离）
+    assembleReads.model.findUnique.mockResolvedValue({
+      id: 9,
+      providerId: 2,
+      modelId: "fb-model",
+      type: "llm",
+    });
+    assembleReads.provider.findUnique.mockResolvedValue({
+      id: 2,
+      type: "openai-compatible",
+      baseUrl: "http://fb",
+      apiKey: null,
+      extraHeaders: null,
+      userId: 2,
+    });
+    expect(await load({ fallbackModelId: 9 }, 1)).toBeUndefined();
+  });
+
+  it("同用户 llm 备选 → 构造备用 ChatModel（解密后凭证喂工厂）", async () => {
+    assembleReads.model.findUnique.mockResolvedValue({
+      id: 9,
+      providerId: 2,
+      modelId: "fb-model",
+      type: "llm",
+    });
+    assembleReads.provider.findUnique.mockResolvedValue({
+      id: 2,
+      type: "openai-compatible",
+      baseUrl: "http://fb",
+      apiKey: null,
+      extraHeaders: null,
+      userId: 1,
+    });
+    const svc = new ChatService({} as unknown as SessionRepository);
+    const model = await (
+      svc as unknown as {
+        loadFallbackModel: (
+          m: { fallbackModelId: number | null },
+          uid: number,
+          p: ChatModelParams,
+        ) => Promise<BaseChatModelLike>;
+      }
+    ).loadFallbackModel({ fallbackModelId: 9 }, 1, {
+      temperature: 0.4,
+      maxTokens: 512,
+    });
+    expect(model).toBeDefined();
+    expect(createChatModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "openai-compatible",
+        baseUrl: "http://fb",
+      }),
+      "fb-model",
+      expect.objectContaining({ temperature: 0.4, maxTokens: 512 }),
+    );
   });
 });

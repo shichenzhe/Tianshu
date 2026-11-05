@@ -207,8 +207,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/langchain-model-factory.ts",
       "serverPath": "src/core/provider/model-factory.ts",
       "baselineDiff": true,
-      "baselineLines": 24,
-      "note": "模型构造收口；server 版并入 provider-runtime 的 ProviderRuntimeInfo/parseExtraHeaders——controller 清单第 2 项，mirror 侧实际文件在 orchestration/（provider/ 仓内同名工厂不存在）"
+      "baselineLines": 28,
+      "note": "模型构造收口；server 版并入 provider-runtime 的 ProviderRuntimeInfo/parseExtraHeaders——controller 清单第 2 项，mirror 侧实际文件在 orchestration/（provider/ 仓内同名工厂不存在）。批5（provider-model §6 项 6）双端同构加 comfyui 显式拒绝分支（COMFYUI_NOT_CHAT）——基线 24→28 过账"
     },
     {
       "id": "chat-context-usage",
@@ -367,8 +367,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph.repo.ts",
       "serverPath": "src/modules/graph/graph.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 672,
-      "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移。2026-10-29 切片 C：mirror 独有会话应用作用域装配（run/list/create_workflow 注 appDelegate，作用域实现单份在 create-workflow.ts 不入比对）——+3 行基线过账。2026-10-29 切片 D：mirror 独有 runTest 入口归一（normalizeInputsFor + typed launch 签名）——631→652 过账。2026-10-31 查询下推批：server 新增 pageGraphs（keyword contains 引擎感知下推 + skip/take DB 分页，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 622→647 过账（纯 server 侧新增，无既有行改动）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 652→674：分支基线 652 不含 HEAD 线查询下推批的 server 单侧 pageGraphs 增量（两线并行各自过账，合并后叠加）；HEAD 线工具名精简四件注册与分支线 appDelegate 装配同落构造块，逐段语义并立无逻辑漂移"
+      "baselineLines": 674,
+      "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移。2026-10-29 切片 C：mirror 独有会话应用作用域装配（run/list/create_workflow 注 appDelegate，作用域实现单份在 create-workflow.ts 不入比对）——+3 行基线过账。2026-10-29 切片 D：mirror 独有 runTest 入口归一（normalizeInputsFor + typed launch 签名）——631→652 过账。2026-10-31 查询下推批：server 新增 pageGraphs（keyword contains 引擎感知下推 + skip/take DB 分页，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 622→647 过账（纯 server 侧新增，无既有行改动）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 652→674：分支基线 652 不含 HEAD 线查询下推批的 server 单侧 pageGraphs 增量（两线并行各自过账，合并后叠加）；HEAD 线工具名精简四件注册与分支线 appDelegate 装配同落构造块，逐段语义并立无逻辑漂移。批5 --rebase 全量过账顺带 672→674（预存容差内增量，非本批改动）"
     },
     {
       "id": "automation-repository",

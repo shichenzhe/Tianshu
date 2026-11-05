@@ -29,7 +29,7 @@ function toolRow(over: Partial<ToolEventRow>): ToolEventRow {
 }
 
 describe("computeMonitorStats", () => {
-  it("空数据：今日全 0、趋势 7 天补零、列表空", () => {
+  it("空数据：今日全 0、趋势 7 天补零、列表空、成本未知（null）", () => {
     const s = computeMonitorStats([], [], [], now);
     expect(s.today).toEqual({
       inputTokens: 0,
@@ -44,6 +44,8 @@ describe("computeMonitorStats", () => {
     );
     expect(s.byModel).toEqual([]);
     expect(s.tools).toEqual([]);
+    // 零数据 totalCost null（未知价 ≠ 免费，P1-3）
+    expect(s.totalCost).toBeNull();
   });
 
   it("今日聚合 + 趋势按本地日分桶（跨日不串桶）", () => {
@@ -74,7 +76,7 @@ describe("computeMonitorStats", () => {
     expect(s.trend[5].toolCalls).toBe(1);
   });
 
-  it("byModel：null modelId 跳过、名字补位 name→modelId→#id、inputTokens 降序", () => {
+  it("byModel：null modelId 跳过、名字补位 name→modelId→#id、inputTokens 降序、无价 cost null", () => {
     const s = computeMonitorStats(
       [
         llmRow({ modelId: 1, inputTokens: 10, outputTokens: 2 }),
@@ -95,9 +97,18 @@ describe("computeMonitorStats", () => {
         calls: 1,
         inputTokens: 50,
         outputTokens: 5,
+        cost: null,
       },
-      { modelId: 1, name: "gpt-x", calls: 1, inputTokens: 10, outputTokens: 2 },
+      {
+        modelId: 1,
+        name: "gpt-x",
+        calls: 1,
+        inputTokens: 10,
+        outputTokens: 2,
+        cost: null,
+      },
     ]);
+    expect(s.totalCost).toBeNull();
   });
 
   it("tools：state 分桶计数、avgDurationMs 忽略 null、total 降序", () => {

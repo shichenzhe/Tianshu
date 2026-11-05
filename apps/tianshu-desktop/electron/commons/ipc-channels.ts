@@ -40,6 +40,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "model:update",
   "model:delete",
   "model:test",
+  // 模型测速（批5 provider-model §6 项 4）：流式首字延迟/生成速度（本地专属）
+  "model:bench",
   "model:listOllama",
   "model:listRemote",
   "workspace:list",

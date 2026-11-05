@@ -4,6 +4,9 @@
  * 工具排行 + MCP 服务聚合。数据 monitor:stats 即时聚合；场景变更经
  * queryKey 失效重拉。MCP server 维度卡（skills-tools-mcp §6 项 8）：
  * mcpByServer 可选字段（旧远端响应缺席时整卡不渲染，增量兼容）。
+ * 成本折算（monitoring §6 P1-3，批5）：totalCost/byModel[].cost 可选——
+ * null = 未知价（未配价且目录未收录；graph 场景 modelId 恒 null 不进
+ * byModel，其存在由 totalCost 的部分计价语义吸收）。
  */
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -24,6 +27,13 @@ const SCENE_FILTERS: MonitorSceneFilter[] = [
   "graph",
   "automation",
 ];
+
+/** 成本格式化（USD）：小额保 4 位小数，大额千分位 2 位 */
+function formatCost(cost: number): string {
+  return cost >= 100
+    ? `$${cost.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+    : `$${cost.toFixed(4)}`;
+}
 
 /** 场景 chip 行（选中态 bg-primary text-primary-foreground，主题变量） */
 function SceneChips({
@@ -156,7 +166,7 @@ export default function MonitorView() {
         ) : (
           <div className="flex flex-col gap-4">
             <section className="rounded-lg border border-border/50 p-3">
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                 <KpiCard
                   label={t("chat:monitor.todayInputTokens")}
                   value={formatCount(data.today.inputTokens)}
@@ -172,6 +182,14 @@ export default function MonitorView() {
                 <KpiCard
                   label={`${t("chat:monitor.todayToolCalls")} · ${Math.round(data.today.toolSuccessRate * 100)}%`}
                   value={formatCount(data.today.toolCalls)}
+                />
+                <KpiCard
+                  label={t("chat:monitor.totalCost")}
+                  value={
+                    data.totalCost == null
+                      ? t("chat:monitor.costUnknown")
+                      : formatCost(data.totalCost)
+                  }
                 />
               </div>
               <div className="mt-3 border-t border-border/50 pt-3">
@@ -196,12 +214,19 @@ export default function MonitorView() {
                     t("chat:monitor.modelCalls"),
                     t("chat:monitor.modelInput"),
                     t("chat:monitor.modelOutput"),
+                    t("chat:monitor.modelCost"),
                   ]}
                   rows={data.byModel.map((m) => [
                     { text: m.name },
                     { text: String(m.calls) },
                     { text: formatCount(m.inputTokens) },
                     { text: formatCount(m.outputTokens) },
+                    {
+                      text:
+                        m.cost == null
+                          ? t("chat:monitor.costUnknown")
+                          : formatCost(m.cost),
+                    },
                   ])}
                 />
               )}

@@ -147,6 +147,47 @@ export class ModelItemDto {
   @IsOptional()
   @IsInt({ message: '上下文窗口必须是整数' })
   contextWindow?: number | null;
+
+  @ApiProperty({
+    description:
+      '能力矩阵 JSON（形如 {"vision":true,"tools":true}；批5 模型能力矩阵）',
+    required: false,
+    type: String,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString({ message: '能力矩阵必须是JSON字符串' })
+  capabilities?: string | null;
+
+  @ApiProperty({
+    description: '输入单价（USD / 1M token）',
+    required: false,
+    type: Number,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: '输入单价必须是数字' })
+  priceInPerMTokens?: number | null;
+
+  @ApiProperty({
+    description: '输出单价（USD / 1M token）',
+    required: false,
+    type: Number,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsNumber({}, { message: '输出单价必须是数字' })
+  priceOutPerMTokens?: number | null;
+
+  @ApiProperty({
+    description: '备用模型行 id（主模型失败时切换重试；批5 fallback）',
+    required: false,
+    type: Number,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsInt({ message: '备用模型必须是整数' })
+  fallbackModelId?: number | null;
 }
 
 /**

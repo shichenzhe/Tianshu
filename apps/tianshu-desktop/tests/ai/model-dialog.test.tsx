@@ -134,3 +134,165 @@ describe("ModelDialog 模型类型", () => {
     );
   });
 });
+
+// ---------- 批5：能力矩阵（vision/tools）/价格/备用模型编辑 ----------
+
+const editingLlm = {
+  id: 5,
+  providerId: 1,
+  modelId: "gpt-4o",
+  enabled: true,
+  type: "llm",
+  capabilities: { vision: true, tools: false },
+  priceInPerMTokens: 2.5,
+  priceOutPerMTokens: 10,
+  fallbackModelId: 3,
+  createdAt: "",
+  updatedAt: "",
+} as ModelRecord;
+
+const fallbackOptions = [
+  {
+    id: 3,
+    providerId: 1,
+    modelId: "deepseek-chat",
+    enabled: true,
+    type: "llm",
+    createdAt: "",
+    updatedAt: "",
+  } as ModelRecord,
+  {
+    id: 4,
+    providerId: 1,
+    modelId: "kimi-k2",
+    enabled: true,
+    type: "llm",
+    createdAt: "",
+    updatedAt: "",
+  } as ModelRecord,
+];
+
+describe("ModelDialog 能力矩阵/价格/备用模型（批5）", () => {
+  afterEach(cleanup);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    create.mockResolvedValue({});
+    update.mockResolvedValue({});
+  });
+
+  it("新建：勾选 vision/填价格 → create 带 capabilities 与单价", async () => {
+    renderDialog();
+    // 能力开关（vision）：aria-label 定位
+    fireEvent.click(
+      screen.getByRole("switch", { name: /model\.vision|视觉输入/ }),
+    );
+    // 价格输入（按 label）
+    fireEvent.change(screen.getByLabelText(/model\.priceIn|输入单价/), {
+      target: { value: "0.27" },
+    });
+    fireEvent.change(screen.getByLabelText(/model\.priceOut|输出单价/), {
+      target: { value: "1.1" },
+    });
+    fillModelId("deepseek-chat");
+    fireEvent.click(screen.getByRole("button", { name: /确定|confirm/ }));
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: "deepseek-chat",
+        type: "llm",
+        capabilities: { vision: true, tools: false },
+        priceInPerMTokens: 0.27,
+        priceOutPerMTokens: 1.1,
+      }),
+    );
+  });
+
+  it("编辑态回显能力/价格/备用；全清提交 null 差量", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ModelDialog
+          open
+          onOpenChange={() => {}}
+          providerId={1}
+          editing={editingLlm}
+          fallbackOptions={fallbackOptions}
+        />
+      </QueryClientProvider>,
+    );
+    // 回显：vision 开、价格、备选下拉显示 deepseek-chat
+    expect(
+      screen.getByRole("switch", { name: /model\.vision|视觉输入/ }),
+    ).toBeTruthy();
+    expect(screen.getByLabelText(/model\.priceIn|输入单价/)).toHaveProperty(
+      "value",
+      "2.5",
+    );
+    // 清空：vision 取消勾选 + 价格清空 + 备选切「无」
+    fireEvent.click(
+      screen.getByRole("switch", { name: /model\.vision|视觉输入/ }),
+    );
+    fireEvent.change(screen.getByLabelText(/model\.priceIn|输入单价/), {
+      target: { value: "" },
+    });
+    fireEvent.change(screen.getByLabelText(/model\.priceOut|输出单价/), {
+      target: { value: "" },
+    });
+    const trigger = screen.getByRole("combobox", {
+      name: /model\.fallbackModel|备用模型/,
+    }) as HTMLElement;
+    await selectOption(trigger, /model\.fallbackNone|不启用/);
+    fireEvent.click(screen.getByRole("button", { name: /确定|confirm/ }));
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledTimes(1);
+    });
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 5,
+        capabilities: null,
+        priceInPerMTokens: null,
+        priceOutPerMTokens: null,
+        fallbackModelId: null,
+      }),
+    );
+  });
+
+  it("备用模型选择提交 fallbackModelId", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ModelDialog
+          open
+          onOpenChange={() => {}}
+          providerId={1}
+          fallbackOptions={fallbackOptions}
+        />
+      </QueryClientProvider>,
+    );
+    const trigger = screen.getByRole("combobox", {
+      name: /model\.fallbackModel|备用模型/,
+    }) as HTMLElement;
+    await selectOption(trigger, /kimi-k2/);
+    fillModelId("main-model");
+    fireEvent.click(screen.getByRole("button", { name: /确定|confirm/ }));
+    await waitFor(() => {
+      expect(create).toHaveBeenCalledTimes(1);
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        modelId: "main-model",
+        fallbackModelId: 4,
+      }),
+    );
+  });
+
+  it("非 llm 态不渲染能力/价格/备选（embedding 无对话面）", () => {
+    renderDialog(editingEmbedding);
+    expect(screen.queryByRole("switch")).toBeNull();
+    expect(screen.queryByLabelText(/model\.priceIn|输入单价/)).toBeNull();
+    expect(
+      screen.queryByRole("combobox", { name: /model\.fallbackModel|备用模型/ }),
+    ).toBeNull();
+  });
+});

@@ -1,4 +1,5 @@
 import type { ModelSaveItem, ProviderSaveItem } from "@tianshu/protocol";
+import { guessModelType } from "@tianshu/core";
 
 export interface ProviderFormValues {
   name: string;
@@ -158,15 +159,6 @@ export function prepareRemoteModels(
   return rows.sort((a, b) => Number(a.imported) - Number(b.imported));
 }
 
-function inferModelType(modelId: string): string {
-  const id = modelId.toLowerCase();
-  if (id.includes("embed")) return "embedding";
-  if (id.includes("rerank")) return "reranker";
-  if (id.includes("tts") || id.includes("speech")) return "tts";
-  if (id.includes("whisper") || id.includes("asr")) return "asr";
-  return "llm";
-}
-
 export function buildRemoteModelSave(
   providerId: number,
   model: { modelId: string; name?: string },
@@ -175,7 +167,9 @@ export function buildRemoteModelSave(
     providerId,
     modelId: model.modelId,
     name: model.name?.trim() || undefined,
-    type: inferModelType(model.modelId),
+    // 收编 @tianshu/core 单源（批5 小项）：原本地 inferModelType 双份已删
+    // ——判定序对齐桌面版（whisper/asr 先于 tts）
+    type: guessModelType(model.modelId),
     enabled: true,
   };
 }

@@ -2,6 +2,7 @@ import { handleUser } from "../../../commons/ipc-user";
 import prisma from "../../../commons/prisma-client";
 import { classifyError } from "../chat/error-classify";
 import {
+  benchModel,
   listOllamaModels,
   listRemoteModels,
   testConnection,
@@ -9,6 +10,7 @@ import {
 import { ProviderRepository } from "./provider.repo";
 import type {
   ListRemoteResult,
+  ModelCapabilities,
   ModelCreateParams,
   ModelRecord,
   ModelType,
@@ -17,6 +19,26 @@ import type {
 } from "../../../../src-react/domains/ai/api/model.api";
 
 type ModelRow = NonNullable<Awaited<ReturnType<typeof prisma.model.findFirst>>>;
+
+/** capabilities 列 JSON 解析（畸形/空落 undefined——历史行容错） */
+function parseCapabilities(raw: string | null): ModelCapabilities | undefined {
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (
+      parsed !== null &&
+      typeof parsed === "object" &&
+      !Array.isArray(parsed)
+    ) {
+      return parsed as ModelCapabilities;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export class ModelRepository {
   constructor(private providerRepo: ProviderRepository) {
@@ -33,6 +55,10 @@ export class ModelRepository {
       topP: row.topP ?? undefined,
       maxTokens: row.maxTokens ?? undefined,
       contextWindow: row.contextWindow ?? undefined,
+      capabilities: parseCapabilities(row.capabilities),
+      priceInPerMTokens: row.priceInPerMTokens ?? undefined,
+      priceOutPerMTokens: row.priceOutPerMTokens ?? undefined,
+      fallbackModelId: row.fallbackModelId ?? undefined,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -53,6 +79,9 @@ export class ModelRepository {
       this.delete(id, userId),
     );
     handleUser("model:test", (_, userId, id: number) => this.test(id, userId));
+    handleUser("model:bench", (_, userId, id: number) =>
+      this.bench(id, userId),
+    );
     handleUser("model:listOllama", (_, userId, providerId: number) =>
       this.listOllama(providerId, userId),
     );
@@ -128,6 +157,12 @@ export class ModelRepository {
         topP: p.topP,
         maxTokens: p.maxTokens,
         contextWindow: p.contextWindow,
+        capabilities: p.capabilities
+          ? JSON.stringify(p.capabilities)
+          : undefined,
+        priceInPerMTokens: p.priceInPerMTokens,
+        priceOutPerMTokens: p.priceOutPerMTokens,
+        fallbackModelId: p.fallbackModelId,
       },
     });
     return this.toRecord(row);
@@ -146,6 +181,16 @@ export class ModelRepository {
         topP: p.topP,
         maxTokens: p.maxTokens,
         contextWindow: p.contextWindow,
+        // null 显式清除（capabilities 为 null 清 JSON；对象覆盖）
+        capabilities:
+          p.capabilities === undefined
+            ? undefined
+            : p.capabilities === null
+              ? null
+              : JSON.stringify(p.capabilities),
+        priceInPerMTokens: p.priceInPerMTokens,
+        priceOutPerMTokens: p.priceOutPerMTokens,
+        fallbackModelId: p.fallbackModelId,
       },
     });
     return this.toRecord(row);
@@ -169,6 +214,28 @@ export class ModelRepository {
       throw new Error("PROVIDER_MISSING");
     }
     return testConnection(provider, model.modelId, { modelType: model.type });
+  }
+
+  /** 测速（批5 §6 项 4）：llm 专属——流式首 chunk 延迟与固定短 prompt
+   *  完成时长（10s 上限）；结果结构化返回（连通失败是预期结果） */
+  async bench(id: number, userId: number) {
+    await this.assertModelOwned(id, userId);
+    const model = await this.getById(id);
+    if (!model) {
+      throw new Error("MODEL_MISSING");
+    }
+    const provider = await this.providerRepo.getRuntimeInfo(model.providerId);
+    if (!provider) {
+      throw new Error("PROVIDER_MISSING");
+    }
+    if (model.type !== "llm" || provider.type === "comfyui") {
+      return {
+        success: false,
+        errorCode: "UNSUPPORTED_TYPE_BENCH",
+        message: "",
+      };
+    }
+    return benchModel(provider, model.modelId);
   }
 
   async listOllama(providerId: number, userId: number) {

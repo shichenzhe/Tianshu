@@ -330,19 +330,27 @@ union（对齐 Vercel AI SDK UIMessage 形态的设计取向）：
 
 ## 6. 改进空间
 
-1. **contextWindow 元数据缺失致截断失控（已修一半，余留风险）**：历史上
+1. ◐ **contextWindow 元数据缺失致截断失控（批5 目录层已落，余留风险收窄）**：历史上
    model.contextWindow 全 NULL 且无兜底——`truncateHistory` 的 `!contextWindow`
    分支原样返回、自动压缩永不触发，实测单轮 input 可失控至数百万 token（对照基线：
    天枢默认 system+工具约 3.5K token）。2026-11-01 批已加三层兜底
    （model > provider > `DEFAULT_CONTEXT_WINDOW = 131_072`，`effectiveContextWindow()`）
-   并给 provider 表补 `contextWindow` 列（`ensureProviderColumns` 幂等补建）。**余留**：
-   (a) 131072 兜底是静态假设——8K 老模型（会被撑爆报 400）与 200K/1M 新模型
-   （会被过早截断）都不匹配，且 DB 仍存 NULL 无「真实窗口」来源；(b) 无模型目录
-   （models.dev / OpenRouter models API 式元数据）自动填充 contextWindow/价格/能力；
-   (c) `len/2` 估算对英文代码（~4 char/token）系统性低估。
-2. **无自动重试/降级路由**：错误分类后直达用户，`RATE_LIMITED`/`NETWORK` 等瞬态
-   错误无指数退避重试，也无备用模型 fallback（§provider 文档同项）。模型侧 429 时
-   用户只能手动 regenerate。
+   并给 provider 表补 `contextWindow` 列（`ensureProviderColumns` 幂等补建）；
+   **批5（Task 9，2026-11-05）插入内置目录层**：四层链 model > 内置目录
+   （`@tianshu/core` `model-catalog.ts`，常见模型 id → 窗口/价格/能力，别名
+   容错）> provider > DEFAULT，桌面/server 同源。**余留**：(a) 目录未收录模型
+   仍落 131072 静态兜底；(c) `len/2` 估算对英文代码（~4 char/token）系统性低估。
+2. ✅ **已落地（批5，Task 9，2026-11-05）**：瞬态重试与 fallback——
+   `runChatStream`（core）对 `classifyError` 判瞬态（RATE_LIMITED/NETWORK/
+   TIMEOUT）且**流建立前失败**（本次尝试零可见块产出——中途失败重试会重复
+   推送内容，一律直报）的错误退避 1.2s 同模型重试 1 次；配置类错误
+   （AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED）与 UNKNOWN 不重试直报
+   （UNKNOWN 与 automation-retry 的可重试口径刻意不同：聊天有人在场，直报换
+   确定性）；`fallbackModel` 注入时（桌面 `chat.service loadFallbackModel` /
+   server `chat-runner` 同构解析 model.fallbackModelId）主模型失败后切备选
+   再试 1 次，全灭报最后一次错误（message 尾缀 ` [fallback retried]`）。
+   「用户中止非错误」语义不变（abort 检查先于重试判定，退避期间中止不再发
+   起重试）。测试 `tests/ai/agent-retry-fallback.test.ts`（11 例）。
 3. **无分叉/树状会话**：editAndResend 覆盖历史，无法对照多分支回答；也无消息级
    checkpoint（工具写盘副作用无法随 regenerate 回滚——仅 file-history 备份兜底）。
 4. **text/thinking 块无 id**：流中不可局部修订（对比 AI SDK part id / Anthropic

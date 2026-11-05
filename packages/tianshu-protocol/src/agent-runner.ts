@@ -13,11 +13,17 @@
  */
 import type { ChatStreamChunk } from "./chat-contract";
 
-/** 单轮执行终态（流耗尽后有效；errorCode 存在 = 错误收敛终态） */
+/** 单轮执行终态（流耗尽后有效；errorCode 存在 = 错误收敛终态）。
+ *  retried/fallbackUsed（批5）：瞬态重试/备用模型切换发生过（无论成败）
+ *  ——LangChain 实现自 core ChatStreamResult 透传，第二引擎可不实现 */
 export interface AgentRunResult<TBlocks = unknown> {
   blocks: TBlocks[];
   errorCode?: string;
   errorMessage?: string;
+  /** 瞬态错误发生过同模型重试 */
+  retried?: boolean;
+  /** 走过 fallback 备用模型尝试 */
+  fallbackUsed?: boolean;
 }
 
 /** run() 返回句柄：chunk 流与终值并行暴露——消费者可边流式边持终值 */

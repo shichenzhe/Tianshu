@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
+import { AIMessageChunk, type BaseMessage } from "@langchain/core/messages";
+import { ChatGenerationChunk, type ChatResult } from "@langchain/core/outputs";
+import { BaseChatModel } from "@langchain/core/language_models/chat_models";
 
 // 传递依赖 prisma-client（provider-runtime→secret-field→master-key 链在
 // 模块作用域读 app.isPackaged，无 electron mock 时 import 期即炸）——
@@ -7,6 +10,7 @@ import { FakeListChatModel } from "@langchain/core/utils/testing";
 vi.mock("../../electron/commons/prisma-client", () => ({ default: {} }));
 
 import {
+  benchModel,
   listRemoteModels,
   testConnection,
 } from "../../electron/domains/ai/provider/connectivity";
@@ -506,5 +510,152 @@ describe("listRemoteModels", () => {
     } finally {
       stub.restore();
     }
+  });
+});
+
+// ---------- benchModel 测速（批5 provider-model §6 项 4） ----------
+
+interface BenchModelCtor {
+  new (opts: {
+    deltas: string[];
+    firstChunkDelayMs?: number;
+    error?: unknown;
+    usage?: { input_tokens: number; output_tokens: number };
+  }): BaseChatModel & { streamCalls: number };
+}
+
+/** 最小流式替身：覆写 _streamResponseChunks（core 1.x 流式钩子，与
+ *  scripted-chat-model 同口径）逐 delta 产 chunk（usage 尾 chunk 上报） */
+const BenchScriptedModel = class extends BaseChatModel {
+  readonly opts: {
+    deltas: string[];
+    firstChunkDelayMs?: number;
+    error?: unknown;
+    usage?: { input_tokens: number; output_tokens: number };
+  };
+  streamCalls = 0;
+  constructor(opts: {
+    deltas: string[];
+    firstChunkDelayMs?: number;
+    error?: unknown;
+    usage?: { input_tokens: number; output_tokens: number };
+  }) {
+    super({});
+    this.opts = opts;
+  }
+  _llmType() {
+    return "bench-scripted";
+  }
+  async *_streamResponseChunks(
+    _messages: BaseMessage[],
+    _options: never,
+    runManager?: {
+      handleLLMNewToken: (
+        token: string,
+        a?: unknown,
+        b?: unknown,
+        c?: unknown,
+        d?: unknown,
+        fields?: { chunk: ChatGenerationChunk },
+      ) => Promise<unknown>;
+    },
+  ): AsyncGenerator<ChatGenerationChunk> {
+    this.streamCalls += 1;
+    const { deltas, firstChunkDelayMs, error, usage } = this.opts;
+    for (const [i, delta] of deltas.entries()) {
+      if (i === 0 && firstChunkDelayMs) {
+        // 首 chunk 前延迟：测 TTFB 计时
+        await new Promise((r) => setTimeout(r, firstChunkDelayMs));
+      }
+      const fields: {
+        content: string;
+        usage_metadata?: { input_tokens: number; output_tokens: number };
+      } = { content: delta };
+      if (i === deltas.length - 1 && usage) {
+        fields.usage_metadata = usage;
+      }
+      const generation = new ChatGenerationChunk({
+        message: new AIMessageChunk(fields as never),
+      });
+      yield generation;
+      await runManager?.handleLLMNewToken(
+        delta,
+        void 0,
+        void 0,
+        void 0,
+        void 0,
+        { chunk: generation },
+      );
+    }
+    if (error !== undefined) {
+      throw error;
+    }
+  }
+  async _generate(messages: BaseMessage[]): Promise<ChatResult> {
+    const text = this.opts.deltas.join("");
+    return {
+      generations: [
+        new ChatGenerationChunk({
+          text,
+          message: new AIMessageChunk(text),
+        }),
+      ],
+    };
+  }
+  // 形状具名（测试内类型面）
+} as unknown as BenchModelCtor;
+
+describe("benchModel 测速", () => {
+  it("成功：首 chunk 延迟与完成时长可测，usage 上报时 tokensPerSec 用真实 token", async () => {
+    const model = new BenchScriptedModel({
+      deltas: ["你", "好", "呀"],
+      firstChunkDelayMs: 50,
+      usage: { input_tokens: 2, output_tokens: 6 },
+    });
+    const result = await benchModel(
+      { type: "openai-compatible", baseUrl: "https://x", apiKey: "k" },
+      "m",
+      { injectModel: model },
+    );
+    expect(result.success).toBe(true);
+    expect(result.firstChunkMs).toBeGreaterThanOrEqual(40);
+    expect(result.completeMs).toBeGreaterThanOrEqual(result.firstChunkMs ?? 0);
+    expect(result.outputTokens).toBe(6);
+    expect(model.streamCalls).toBe(1);
+  });
+
+  it("usage 缺席时按字符近似估算输出 token（estimateTokens 口径）", async () => {
+    // 10 个字符 → 5 token 近似
+    const model = new BenchScriptedModel({ deltas: ["0123456789"] });
+    const result = await benchModel(
+      { type: "openai-compatible", baseUrl: "https://x", apiKey: "k" },
+      "m",
+      { injectModel: model },
+    );
+    expect(result.success).toBe(true);
+    expect(result.outputTokens).toBe(5);
+  });
+
+  it("错误路径：结构化 success=false + classifyError 归类（429 → RATE_LIMITED）", async () => {
+    const model = new BenchScriptedModel({
+      deltas: [],
+      error: Object.assign(new Error("Rate limit reached"), { status: 429 }),
+    });
+    const result = await benchModel(
+      { type: "openai-compatible", baseUrl: "https://x", apiKey: "k" },
+      "m",
+      { injectModel: model },
+    );
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("RATE_LIMITED");
+  });
+
+  it("非 llm/comfyui 服务商结构化拒绝（不发流式请求）", async () => {
+    const result = await benchModel(
+      { type: "comfyui", baseUrl: "http://127.0.0.1:8188" },
+      "m",
+    );
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("UNSUPPORTED_TYPE_BENCH");
   });
 });

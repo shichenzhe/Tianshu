@@ -286,6 +286,12 @@ export interface RemoteModel {
   temperature?: number | null;
   topP?: number | null;
   maxTokens?: number | null;
+  /** 能力矩阵/单价/备选（批5 §6 项 3/5——server Model 行新列） */
+  contextWindow?: number | null;
+  capabilities?: string | null;
+  priceInPerMTokens?: number | null;
+  priceOutPerMTokens?: number | null;
+  fallbackModelId?: number | null;
 }
 
 export interface RemoteProviderBundle {

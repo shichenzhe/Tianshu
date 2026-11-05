@@ -89,6 +89,18 @@ export function createChatModel(
       });
     case "openai-compatible":
     default:
+      // comfyui 显式拒绝（批5 §6 项 6）：ComfyUI 无对话能力（图像生成走
+      // graph imageGen 节点直取 provider），此前落本 default 分支 = 类型
+      // 系统与运行时行为不一致——误用即刻抛错（连通测试/测速在
+      // connectivity 层已先行 comfyui 分流，不达此处）
+      if (provider.type === "comfyui") {
+        throw Object.assign(
+          new Error(
+            "ComfyUI 服务商无对话能力（图像生成走图编排 imageGen 节点）",
+          ),
+          { code: "COMFYUI_NOT_CHAT" },
+        );
+      }
       return new ChatOpenAI({
         configuration: {
           baseURL: provider.baseUrl,

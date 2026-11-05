@@ -8,8 +8,13 @@
  * 趋势 7 天含空日补零（旧→新）；avgDurationMs 仅非 null 参与均值。
  * mcpByServer（skills-tools-mcp §6 项 8）：mcp__ 前缀行按 server 段另聚
  * （成功率/延迟/次数），tools 榜单口径不变——协议字段可选（旧端增量兼容）。
+ * 成本折算（monitoring §6 P1-3，Task 9 批 5）：byModel.cost 与 totalCost
+ * ——单价 DB 显式价（任一列在场即按已知列折算，缺席列记 0 不回落目录）
+ * > 内置目录价（./model-catalog）> 未知（null）；totalCost = 有价行和，
+ * 全未知/零数据为 null（未知价 ≠ 免费）。
  */
 import type { MonitorStats } from "@tianshu/protocol";
+import { lookupModelCatalog } from "./model-catalog";
 
 const TREND_DAYS = 7;
 
@@ -43,11 +48,59 @@ export interface ToolEventRow {
   createdAt: Date;
 }
 
-/** model 联查行（名字补位） */
+/** model 联查行（名字补位 + 成本单价，P1-3：价格列可选——旧调用方/
+ * 测试替身不传时按未知价处理，不炸） */
 export interface ModelNameRow {
   id: number;
   name: string | null;
   modelId: string;
+  /** 输入单价（USD / 1M token）；DB model.priceInPerMTokens */
+  priceInPerMTokens?: number | null;
+  /** 输出单价（USD / 1M token）；DB model.priceOutPerMTokens */
+  priceOutPerMTokens?: number | null;
+}
+
+/**
+ * 解析模型单价对（USD / 1M token）：DB 显式价任一列在场即按已知列
+ * 折算（缺席列记 0——用户选了部分定价，不回落目录防口径混淆）；
+ * 否则内置目录价；均无 → null（未知价）。本模型不可计价返回 null
+ * 与「免费（0,0）」区分。
+ */
+export function resolveModelPrices(
+  model: Pick<
+    ModelNameRow,
+    "modelId" | "priceInPerMTokens" | "priceOutPerMTokens"
+  >,
+): { priceIn: number; priceOut: number } | null {
+  if (model.priceInPerMTokens != null || model.priceOutPerMTokens != null) {
+    return {
+      priceIn: model.priceInPerMTokens ?? 0,
+      priceOut: model.priceOutPerMTokens ?? 0,
+    };
+  }
+  const catalog = lookupModelCatalog(model.modelId);
+  if (
+    catalog?.priceInPerMTokens !== undefined ||
+    catalog?.priceOutPerMTokens !== undefined
+  ) {
+    return {
+      priceIn: catalog.priceInPerMTokens ?? 0,
+      priceOut: catalog.priceOutPerMTokens ?? 0,
+    };
+  }
+  return null;
+}
+
+/** 成本折算（token/1M × 单价，in+out），六位小数截噪 */
+export function llmCostUsd(
+  inputTokens: number,
+  outputTokens: number,
+  prices: { priceIn: number; priceOut: number },
+): number {
+  const cost =
+    (inputTokens / 1_000_000) * prices.priceIn +
+    (outputTokens / 1_000_000) * prices.priceOut;
+  return Math.round(cost * 1e6) / 1e6;
 }
 
 /** 本地日键 yyyy-MM-dd（设备时区，automation-stats 同款） */
@@ -144,7 +197,14 @@ export function computeMonitorStats(
   const names = new Map(
     models.map((m) => [m.id, m.name ?? m.modelId ?? `#${m.id}`]),
   );
-  const byModelMap = new Map<number, MonitorStats["byModel"][number]>();
+  // 成本单价对（P1-3）：DB 显式价 > 目录价 > 未知（null）
+  const prices = new Map(
+    models.map((m) => [m.id, resolveModelPrices(m)] as const),
+  );
+  const byModelMap = new Map<
+    number,
+    MonitorStats["byModel"][number] & { costSum: number | null }
+  >();
   for (const row of llmRows) {
     if (row.modelId === null) {
       continue;
@@ -155,12 +215,32 @@ export function computeMonitorStats(
       calls: 0,
       inputTokens: 0,
       outputTokens: 0,
+      costSum: null,
     };
     item.calls += 1;
     item.inputTokens += row.inputTokens;
     item.outputTokens += row.outputTokens;
+    const pricePair = prices.get(row.modelId);
+    if (pricePair) {
+      const cost = llmCostUsd(row.inputTokens, row.outputTokens, pricePair);
+      item.costSum = (item.costSum ?? 0) + cost;
+    }
     byModelMap.set(row.modelId, item);
   }
+  const byModel = [...byModelMap.values()]
+    .map(({ costSum, ...item }) => ({
+      ...item,
+      cost: costSum === null ? null : Math.round(costSum * 1e6) / 1e6,
+    }))
+    .sort((a, b) => b.inputTokens - a.inputTokens);
+  // totalCost = 有价行和；全未知/零数据 null（未知价 ≠ 免费）
+  const costKnown = byModel.filter(
+    (m): m is typeof m & { cost: number } =>
+      m.cost !== null && m.cost !== undefined,
+  );
+  const totalCost = costKnown.length
+    ? Math.round(costKnown.reduce((sum, m) => sum + m.cost, 0) * 1e6) / 1e6
+    : null;
   // —— tools：state 分桶计数，avgDurationMs 仅非 null 参与均值 ——
   const toolsMap = new Map<
     string,
@@ -227,14 +307,13 @@ export function computeMonitorStats(
         today.toolCalls === 0 ? 0 : todayToolDone / today.toolCalls,
     },
     trend,
-    byModel: [...byModelMap.values()].sort(
-      (a, b) => b.inputTokens - a.inputTokens,
-    ),
+    byModel,
     tools: [...toolsMap.values()]
       .map((e) => withRate(e.item, e.sum, e.cnt))
       .sort((a, b) => b.total - a.total),
     mcpByServer: [...mcpMap.values()]
       .map((e) => withRate(e.item, e.sum, e.cnt))
       .sort((a, b) => b.total - a.total),
+    totalCost,
   };
 }

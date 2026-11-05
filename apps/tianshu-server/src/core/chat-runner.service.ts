@@ -43,7 +43,7 @@ import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import {
   buildPersonalizedSystem,
   buildScenarioSystem,
-  DEFAULT_CONTEXT_WINDOW,
+  effectiveContextWindow as effectiveContextWindowOf,
   estimateMessageTokens,
   estimateReserveTokens,
   estimateTokens,
@@ -334,8 +334,9 @@ export function resolveDataRoot(configured: string): string {
 
 /** 上下文组装结果（assembleContext 产物，streamAndPersist 消费） */
 interface AssembledContext {
-  /** 模型行（modelId 字符串 = 供 SDK 的模型标识；id = 落库列） */
-  modelRow: { id: number; modelId: string };
+  /** 模型行（modelId 字符串 = 供 SDK 的模型标识；id = 落库列；
+   *  fallbackModelId = 备用模型行引用，批5 fallback 消费） */
+  modelRow: { id: number; modelId: string; fallbackModelId: number | null };
   /** 会话当前助手 id（落库列；请求级覆盖已写回会话行） */
   assistantId: number | null;
   providerRow: {
@@ -920,6 +921,13 @@ export class ChatRunnerService {
   ): Promise<void> {
     const startedAt = Date.now();
     const ctx = await this.assembleContext(sessionId, userId);
+    // 备用模型解析（批5 fallback，mirror loadFallbackModel 同构）：失败切
+    // 备选重试一次；未配置/不可用为 undefined，主链路行为与既有一致
+    const fallbackModel = await this.loadFallbackModel(
+      ctx.modelRow,
+      userId,
+      ctx.merged,
+    );
     try {
       const result = await runChatStream({
         model: this.deps.modelFactory(
@@ -942,6 +950,7 @@ export class ChatRunnerService {
             maxTokens: ctx.merged.maxTokens,
           },
         ),
+        ...(fallbackModel ? { fallbackModel } : {}),
         system: ctx.systemWithSummary,
         history: ctx.history,
         contextWindow: ctx.contextWindow,
@@ -1005,7 +1014,11 @@ export class ChatRunnerService {
         options.onChunk?.({
           type: 'error',
           errorCode: result.errorCode,
-          message: result.errorMessage ?? '',
+          // fallback 全灭标注（批5，mirror 同款）：上游原文尾缀 ASCII 稳定
+          // 标记（relay/SSE 透传零改动）
+          message: result.fallbackUsed
+            ? `${result.errorMessage ?? ''} [fallback retried]`
+            : (result.errorMessage ?? ''),
         });
       } else {
         options.onChunk?.({ type: 'finish' });
@@ -1016,6 +1029,56 @@ export class ChatRunnerService {
       // execute；会话维度隔离——他会话并发流的挂起审批不受影响
       this.approvals.voidAll(sessionId);
     }
+  }
+
+  /**
+   * 解析备用模型运行时（批5 provider-model §6 项 3，mirror
+   * loadFallbackModel 同构）：fallbackModelId 有值时加载该模型行与所属
+   * provider 行（归属同用户校验 + 只认 llm），解密凭证经注入的
+   * modelFactory 构造；任一环节缺失返回 undefined（无 fallback）
+   */
+  private async loadFallbackModel(
+    modelRow: { fallbackModelId: number | null },
+    userId: number,
+    merged: { temperature?: number; topP?: number; maxTokens?: number },
+  ): Promise<BaseChatModel | undefined> {
+    if (modelRow.fallbackModelId == null) {
+      return undefined;
+    }
+    const fbModel = await this.prisma.model.findUnique({
+      where: { id: modelRow.fallbackModelId },
+    });
+    // 备选不可用面：不存在/非 llm（embedding 等不可兜底对话）
+    if (!fbModel || fbModel.type !== 'llm') {
+      return undefined;
+    }
+    const fbProvider = await this.prisma.provider.findUnique({
+      where: { id: fbModel.providerId },
+    });
+    // 归属校验：跨用户备选拒绝，缺失同拒
+    if (!fbProvider || fbProvider.userId !== userId) {
+      return undefined;
+    }
+    return this.deps.modelFactory(
+      {
+        type: fbProvider.type,
+        baseUrl: fbProvider.baseUrl,
+        apiKey:
+          openSecret('provider.apiKey', fbProvider.apiKey ?? null) ??
+          undefined,
+        extraHeaders:
+          openSecret(
+            'provider.extraHeaders',
+            fbProvider.extraHeaders ?? null,
+          ) ?? undefined,
+      },
+      fbModel.modelId,
+      {
+        temperature: merged.temperature,
+        topP: merged.topP,
+        maxTokens: merged.maxTokens,
+      },
+    );
   }
 
   /** 采样参数经构造注入（终审 T9c 口径：不随请求下发模型） */
@@ -1151,9 +1214,14 @@ export class ChatRunnerService {
         ),
       },
       merged,
-      // 空配置兜底 128K（2026-11-01 裁定，DEFAULT_CONTEXT_WINDOW 注释）：
-      // 截断与 usage 拆解两消费同源生效值
-      contextWindow: modelRow.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
+      // 四层兜底（批5 目录层）：model 显式 > 内置目录 > DEFAULT（server
+      // Provider 表无 contextWindow 列，provider 层缺席）——截断与 usage
+      // 拆解两消费同源生效值
+      contextWindow: effectiveContextWindowOf(
+        modelRow.modelId,
+        modelRow.contextWindow,
+        null,
+      ),
       history,
       systemWithSummary,
       agent: {

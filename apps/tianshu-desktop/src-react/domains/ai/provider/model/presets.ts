@@ -1,5 +1,6 @@
 /**
- * 服务商预设模板（spec §5：精选 8 家静态常量，扩展加一行）
+ * 服务商预设模板（spec §5：精选 9 家静态常量——DeepSeek/Kimi/Qwen/GLM/
+ * OpenAI/Anthropic/Gemini/Ollama/ComfyUI，扩展加一行）
  */
 import type { ProviderType } from "../../api/provider.api";
 

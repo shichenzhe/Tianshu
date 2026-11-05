@@ -11,6 +11,7 @@ import path from "node:path";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
   DEFAULT_MAX_STEPS,
+  effectiveContextWindow as effectiveContextWindowOf,
   listWorkspaceFiles,
   readTextFileGuarded,
   runChatStream as runChatStreamCore,
@@ -32,11 +33,7 @@ import { aiMessageContentToText } from "./ai-content";
 import { createLangChainAgentRunner } from "./agent-runner";
 import { parseBlocks, serializeBlocks, type ImageBlock } from "./blocks";
 import type { SkillRefBlock } from "@tianshu/protocol";
-import {
-  DEFAULT_CONTEXT_WINDOW,
-  mergeParams,
-  type ChatModelParams,
-} from "./param-merge";
+import { mergeParams, type ChatModelParams } from "./param-merge";
 import { buildScenarioSystem } from "./scenario-prompt";
 import { withTimeBlock } from "./time-context";
 import {
@@ -1734,19 +1731,64 @@ export default class ChatService {
    * filterDisabledTools 统一收口
    */
   /**
-   * 生效上下文窗口（provider 窗口批 2026-11-01）：三层优先级 model 显式
-   * > provider 级默认 > 全局兜底 131072——本地部署/中转的真实窗口与
-   * 全局兜底分化时，provider 级默认即兜住该服务商全部空配置 llm 模型
-   * （截断/压缩/面板分母同源）
+   * 生效上下文窗口（provider 窗口批 2026-11-01 → 批5 目录层）：四层优先级
+   * model 显式 > 内置目录（@tianshu/core model-catalog 按模型 id 精确回填）
+   * > provider 级默认 > 全局兜底 131072——目录层先于 provider：目录值是
+   * 按模型的精确知识，provider 级是整服务商粗默认（截断/压缩/面板分母同源）
    */
   private effectiveContextWindow(
-    modelRow: { contextWindow: number | null },
+    modelRow: { modelId: string; contextWindow: number | null },
     providerRow: { contextWindow: number | null } | null,
   ): number {
-    return (
-      modelRow.contextWindow ??
-      providerRow?.contextWindow ??
-      DEFAULT_CONTEXT_WINDOW
+    return effectiveContextWindowOf(
+      modelRow.modelId,
+      modelRow.contextWindow,
+      providerRow?.contextWindow ?? null,
+    );
+  }
+
+  /**
+   * 解析备用模型运行时（批5 provider-model §6 项 3）：主模型
+   * fallbackModelId 有值时加载该模型行与所属 provider 行（归属同用户校验
+   * + 只认 llm），解密凭证构造备用 ChatModel；任一环节缺失返回 undefined
+   * （无 fallback，主链路行为与既有完全一致）
+   */
+  private async loadFallbackModel(
+    modelRow: { fallbackModelId: number | null },
+    userId: number,
+    merged: ChatModelParams,
+  ): Promise<ReturnType<typeof createChatModel> | undefined> {
+    if (modelRow.fallbackModelId == null) {
+      return undefined;
+    }
+    const fbModel = await prisma.model.findUnique({
+      where: { id: modelRow.fallbackModelId },
+    });
+    // 备选不可用面：不存在/非 llm（embedding 等不可兜底对话）
+    if (!fbModel || fbModel.type !== "llm") {
+      return undefined;
+    }
+    const fbProvider = await prisma.provider.findUnique({
+      where: { id: fbModel.providerId },
+    });
+    // 归属校验（v12 隔离）：跨用户备选拒绝，缺失同拒
+    if (!fbProvider || fbProvider.userId !== userId) {
+      return undefined;
+    }
+    const secrets = await openProviderSecrets(fbProvider);
+    return createChatModel(
+      {
+        type: fbProvider.type,
+        baseUrl: fbProvider.baseUrl,
+        apiKey: secrets.apiKey,
+        extraHeaders: secrets.extraHeaders,
+      },
+      fbModel.modelId,
+      {
+        temperature: merged.temperature,
+        topP: merged.topP,
+        maxTokens: merged.maxTokens,
+      },
     );
   }
 
@@ -1952,6 +1994,13 @@ export default class ChatService {
     const ctx = await this.assembleContext(sessionId, userId, overrides);
     // 面板联动（web 工具 browse）：会话 sender 绑定进 agent 闭包
     this.bindEmitPanel(ctx.agent, sessionId, sender);
+    // 备用模型解析（批5 fallback）：失败切备选重试一次；未配置/不可用为
+    // undefined，主链路行为与既有完全一致
+    const fallbackModel = await this.loadFallbackModel(
+      ctx.modelRow,
+      userId,
+      ctx.merged,
+    );
     try {
       // AR-T1 接缝消费：编排层经 agentRunner（AgentRunner 契约——chunks
       // 流 + result 终值）驱动引擎；桥接层聚合 chunk 出口（onChunk 不直传）
@@ -1996,6 +2045,10 @@ export default class ChatService {
               ),
         agent: ctx.agent,
         maxSteps,
+        // 备用模型（批5 §6 项 3）：主模型瞬态重试后仍失败/配置类失败时切
+        // 它再试一次（仅流建立前失败——流中途失败重试会重复内容，core 侧
+        // 以「零可见块」为安全点判定）
+        ...(fallbackModel ? { fallbackModel } : {}),
         // 历史图片块回喂：按数据根读盘转 dataUrl（读不到由转换层降级占位）
         loadImage: (imagePath) => readImageAsDataUrl(appDataHome(), imagePath),
         // skill_ref 块展开（skill_ref 批）：ctx.allSkills 精确匹配读正文——
@@ -2055,7 +2108,11 @@ export default class ChatService {
         this.emit(sessionId, {
           type: "error",
           errorCode: result.errorCode,
-          message: result.errorMessage ?? "",
+          // fallback 全灭标注（批5）：message 是上游原文（本就不经 i18n），
+          // 尾缀 ASCII 稳定标记供人识别与移动端透传（toast 详情行）
+          message: result.fallbackUsed
+            ? `${result.errorMessage ?? ""} [fallback retried]`
+            : (result.errorMessage ?? ""),
         });
       } else {
         this.emit(sessionId, { type: "finish" });

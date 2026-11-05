@@ -59,7 +59,14 @@ export class MonitorRepository {
     const models = modelIds.length
       ? await prisma.model.findMany({
           where: { id: { in: modelIds } },
-          select: { id: true, name: true, modelId: true },
+          // 价格列（批5 P1-3 成本折算）：DB 显式价优先于内置目录价
+          select: {
+            id: true,
+            name: true,
+            modelId: true,
+            priceInPerMTokens: true,
+            priceOutPerMTokens: true,
+          },
         })
       : [];
     return computeMonitorStats(llmRows, toolRows, models, new Date());

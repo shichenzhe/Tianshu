@@ -318,13 +318,16 @@ model-list/model-dialog/remote-model-import/model-type-guess/model-summary` 各
 
 ## 6. 改进空间
 
-1. **contextWindow 元数据缺失致截断失效（同 chat-core 文档项 1）**：model.contextWindow
-   历史上全 NULL 且无兜底，历史截断与自动压缩整体失效（实测单轮 input 失控至数百万
+1. ◐ **contextWindow 元数据缺失致截断失效（同 chat-core 文档项 1；批5 目录层已落）**：
+   model.contextWindow 历史上全 NULL 且无兜底，历史截断与自动压缩整体失效（实测单轮 input 失控至数百万
    token）。2026-11-01 批已补 provider 级列 + `DEFAULT_CONTEXT_WINDOW = 131_072`
-   三层兜底（`effectiveContextWindow`），**但**：(a) 兜底值是静态假设，8K 小模型被
-   撑爆（上游 400）、200K/1M 模型被过早截断，DB 仍以 NULL 为主；(b) 无模型目录
-   （OpenRouter models API / models.dev / LiteLLM catalog）自动回填窗口与价格；
-   (c) Ollama `/api/show` 的 Modelfile 元数据未消费——本地模型窗口本可零手填。
+   三层兜底（`effectiveContextWindow`）；**批5（Task 9，2026-11-05）插入内置目录层**：
+   四层链 model > 内置目录（`packages/tianshu-core/src/model-catalog.ts`，
+   `lookupModelCatalog(modelId)` 含 ollama 冒号 tag/路径前缀/日期后缀/短名别名
+   容错，覆盖 DeepSeek/Kimi/Qwen/GLM/OpenAI/Anthropic/Gemini/本地开源系约 50 条，
+   桌面 `effectiveContextWindow` 与 server `chat-runner` 同源消费）> provider >
+   DEFAULT。**余留**：(a) 131072 兜底仍是静态假设（目录未收录的自定义/中转模型）；
+   (c) Ollama `/api/show` 的 Modelfile 元数据未消费——本地模型窗口仍可零手填。
 2. ✅ **已落地（批1A，2026-11-05）**：apiKey 加密链路引擎读侧收口——新增
    `openProviderSecrets()`（`provider-runtime.ts`）单源解密，chat 引擎两处裸读
    （`assembleContext`/`polishText`，覆盖 `streamAndPersist`/`memberModelText`/
@@ -336,28 +339,42 @@ model-list/model-dialog/remote-model-import/model-type-guess/model-summary` 各
    一并修——`getMasterKeyStatus()` 先加载再读标记。残余弱化面：server 侧
    `TIANSHU_MASTER_KEY` 未设（明文 + 启动告警）仍无 UI 透出（server 无设置页，
    属运维面非产品面）。
-3. **无 fallback/多活路由**：单模型故障即会话不可用。可在模型层加「备用模型」列
-   （或 workspace 级 fallback 链），`classifyError` 判瞬态（RATE_LIMITED/NETWORK/
-   TIMEOUT）时自动切备选重试一次——错误分类基础设施已备，只差路由决策层。
-4. **无真实测速**：`model:test` 仅单次 invoke 连通验证。可加轻量基准（流式首 token
-  延迟 + N token 生成速度），在 ModelList 排序展示——Cherry Studio 已验证该 UX
-  价值；现有 `durationMs` 落库（message 表）可先做事后统计近似。具体落点：
-  `connectivity.ts` 增 `benchModel()`（`createChatModel(...).stream("hi")` 计
-  首 chunk 与固定 prompt 完成时长，10s 上限），`ModelRecord` 加非持久化字段承载
-  结果，`ModelList.tsx` 列头排序——零 schema 变更。
-5. **能力矩阵薄**：无 vision/function-calling 标志列与价格列。最小改法：model 表加
-   `capabilities`（JSON：vision/tools）+ `pricePerMTokens`（in/out），导入时按目录
-   预填、用量监控页即可折算成本；vision 缺标志导致用户只能试错发现
-   IMAGE_UNSUPPORTED。
-6. **comfyui 语义松**：桌面 `ProviderType` 含 comfyui 但模型工厂落 openai default
-   分支（无对话能力），provider:test 仅 comfyui 可用而 model:test 对 comfyui 走
-   `/system_stats`——类型系统与运行时行为不对齐，宜在工厂显式拒绝或独立分支。
-7. **小项**：presets.ts 注释「精选 8 家」实际数组 9 项（含 ComfyUI）；桌面
-   `guessModelType` 与移动 `inferModelType` 双份启发式未收编 `@tianshu/core`；
-   CLAUDE.md「依赖分区铁律现 4 包」滞后于现状 6 项（external 5 项）；
-   `provider:test` 通道的「仅 comfyui 可用」语义与名称不符（其余类型走
-   `model:test` 才有验证），移动端/远控台对 provider 级验证只能借 fetchModels
-   间接判定，接口语义可再梳理。
+3. ✅ **已落地（批5，Task 9，2026-11-05）**：model 表加 `fallbackModelId Int?`
+   备用模型列（桌面 v1 快照直改 + server schema/成对迁移 3_ + 存量库
+   `ensureModelCapabilityColumns` 幂等补列）。重试/fallback 决策层在
+   `@tianshu/core` `runChatStream`：瞬态错误（`classifyError` 判
+   RATE_LIMITED/NETWORK/TIMEOUT）且**流建立前失败**（本次尝试零可见块——
+   流中途失败重试会重复推送内容，不重试）退避 1.2s 同模型重试 1 次；主模型
+   重试仍失败或配置类错误（AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED）
+   且配置了备选 → 切备选再试 1 次；全部失败报最后一次错误（错误 chunk
+   message 尾缀 ` [fallback retried]` 标注）。桌面 `chat.service
+   loadFallbackModel`（归属同用户 + 只认 llm + 凭证经 openProviderSecrets
+   解密）与 server `chat-runner` 同构装配。
+4. ✅ **已落地（批5，Task 9，2026-11-05）**：`connectivity.ts` 增
+   `benchModel()`——`createChatModel(...).stream("hi")`（10s 上限）计首 chunk
+   延迟（TTFB）与固定短 prompt 完成时长，生成速度按首 chunk 后窗口折算
+   （token/s）；输出 token 优先取末 chunk `usage_metadata`，缺席按字符近似
+   （estimateTokens 口径）。IPC 通道 `model:bench`（本地专属——无头端无 bench
+   端点，远程态 UI 隐藏入口）；结果为 `ModelRecord.bench` 非持久化字段
+   （前端 `benchById` 内存态），ModelList 列头「按测速排序」开关
+   （firstChunkMs 升序、未测行垫底）。
+5. ✅ **已落地（批5，Task 9，2026-11-05）**：model 表加 `capabilities String?`
+   （JSON `{"vision":true,"tools":true}`）+ `priceInPerMTokens Float?` +
+   `priceOutPerMTokens Float?`（USD / 1M token）；ModelDialog 编辑面（能力开关/
+   双价/备用模型选择，i18n 双语）；导入预填未做（目录价在监控折算侧兜底——
+   `resolveModelPrices`：DB 显式价 > 内置目录价 > 未知 null，见 monitoring
+   文档 P1-3）；vision 标志 UI 透出（模型表单），消费侧判定仍靠上游 400 事后
+   分类（IMAGE_UNSUPPORTED）——标志列先落库，前置拦截留后续。
+6. ✅ **已落地（批5，Task 9，2026-11-05）**：模型工厂 comfyui 显式拒绝分支
+   （`COMFYUI_NOT_CHAT`，桌面/server 双端同构）——不再落 openai default 分支，
+   类型系统与运行时行为一致化；comfyui 消费面维持 graph imageGen 直取
+   provider。
+7. ◐ **小项（批5 落 2/4）**：✅ presets.ts「精选 8 家」注释已对齐实际 9 项；
+   ✅ 桌面 `guessModelType` 与移动 `inferModelType` 双份已收编
+   `@tianshu/core/model-type.ts` 单源（判定序对齐桌面版：whisper/asr 先于
+   tts——移动旧版 tts 先判，「whisper-tts」形态现归 asr）；未做：CLAUDE.md
+   「依赖分区铁律现 4 包」滞后于现状 6 项；`provider:test` 通道「仅 comfyui
+   可用」语义与名称不符的接口梳理。
 
 ## 7. 附：与聊天链路的接缝
 

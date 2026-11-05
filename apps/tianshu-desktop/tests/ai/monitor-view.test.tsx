@@ -27,6 +27,15 @@ const fixture = {
       calls: 7,
       inputTokens: 12345,
       outputTokens: 678,
+      cost: 1.5,
+    },
+    {
+      modelId: 2,
+      name: "本地模型",
+      calls: 2,
+      inputTokens: 100,
+      outputTokens: 50,
+      cost: null,
     },
   ],
   tools: [
@@ -51,6 +60,7 @@ const fixture = {
       successRate: 0.8,
     },
   ],
+  totalCost: 1.5,
 };
 
 vi.mock("../../src-react/domains/ai/monitor/api/monitor.api", () => ({
@@ -98,5 +108,29 @@ describe("MonitorView", () => {
     renderView();
     expect(await screen.findByText("write")).toBeTruthy();
     expect(screen.queryByText("80%")).toBeNull();
+  });
+
+  it("成本折算（批5 P1-3）：totalCost KPI 与 byModel 成本列（未知价标记）", async () => {
+    renderView();
+    // totalCost KPI 卡 + byModel 成本列各一处 $1.5000（成本格式化非 i18n）；
+    // 未知价标记兼容 key 形式（本 suite i18n 未初始化时 t() 返回 key）
+    expect(
+      (await screen.findAllByText("$1.5000")).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(await screen.findByText(/costUnknown|未知价/)).toBeTruthy();
+  });
+
+  it("totalCost null（全未知价）：KPI 显示未知价而非 $0", async () => {
+    const unknown = { ...fixture, totalCost: null };
+    vi.mocked(MonitorApi.stats).mockImplementationOnce(
+      async () => unknown as never,
+    );
+    renderView();
+    expect(await screen.findByText("write")).toBeTruthy();
+    // KPI 与本地模型行各一处未知价（key 形式兼容）
+    expect(
+      (await screen.findAllByText(/costUnknown|未知价/)).length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("$0.0000")).toBeNull();
   });
 });

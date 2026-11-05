@@ -65,3 +65,7 @@ export * from "./retrieval";
 // 批2（library-rag §6 P0-1/P1-2）：资料库写侧向量化编排收编三端单份
 // （db/embed/upsert 必填注入面，两端薄壳接线）——分块本体即上项 chunkText
 export * from "./library-vectorize";
+// 批5（provider-model §6 项 1b/5/7）：内置模型目录（窗口/价格/能力 +
+// effectiveContextWindow 四层兜底）与模型类型启发式（桌面/移动双份收编）
+export * from "./model-catalog";
+export * from "./model-type";

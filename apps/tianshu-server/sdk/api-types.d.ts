@@ -317,7 +317,7 @@ export interface paths {
         };
         /**
          * 服务信息与 capability 协商
-         * @description 返回服务名、版本、实例标识、能力列表与伴生用户名（starter 统一包装）
+         * @description 返回服务名、版本、实例标识、能力列表、协议版本与伴生用户名（starter 统一包装）
          */
         get: operations["InfoController_getInfo"];
         put?: never;
@@ -2000,6 +2000,8 @@ export interface components {
             pageSize: number;
             /** @description 工作空间过滤 */
             workspaceId?: number;
+            /** @description 会话归属项目过滤（项目组深翻页定向拉取；无头端项目会话恒 null） */
+            projectId?: number;
             /** @description 标题关键词（includes 大小写敏感，内存过滤） */
             keyword?: string;
             /** @description 归档过滤：false=未归档，true=已归档 */
@@ -2194,6 +2196,14 @@ export interface components {
             maxTokens?: number | null;
             /** @description 上下文窗口（整数） */
             contextWindow?: number | null;
+            /** @description 能力矩阵 JSON（形如 {"vision":true,"tools":true}；批5 模型能力矩阵） */
+            capabilities?: string | null;
+            /** @description 输入单价（USD / 1M token） */
+            priceInPerMTokens?: number | null;
+            /** @description 输出单价（USD / 1M token） */
+            priceOutPerMTokens?: number | null;
+            /** @description 备用模型行 id（主模型失败时切换重试；批5 fallback） */
+            fallbackModelId?: number | null;
         };
         ProviderSaveDto: {
             /** @description 服务商配置数组（可缺省） */
@@ -2457,6 +2467,8 @@ export interface components {
              * @enum {string}
              */
             missedPolicy: "skip" | "catchUpOnce";
+            /** @description 错过补跑上限（catchUpOnce 生效，缺省 1） */
+            catchUpLimit: number;
             /**
              * @description 访问模式
              * @enum {string}
@@ -2663,6 +2675,8 @@ export interface components {
             endAt?: string;
             /** @description 错过策略：skip | catchUpOnce */
             missedPolicy: string;
+            /** @description 错过补跑上限（missedPolicy=catchUpOnce 生效；缺省 1=只补一次，显式携带才写——批3A） */
+            catchUpLimit?: number;
             /** @description 无人值守权限：default | full（缺省 default） */
             accessMode?: string;
             /** @description 模板标识 */

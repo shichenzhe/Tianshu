@@ -28,7 +28,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import ProviderApi, { type ProviderRecord } from "../../api/provider.api";
-import ModelApi, { type ModelRecord } from "../../api/model.api";
+import ModelApi, {
+  type BenchModelResult,
+  type ModelBenchMetrics,
+  type ModelRecord,
+} from "../../api/model.api";
+import type { ModelSortMode } from "../components/ModelList";
 import ProviderDialog from "../components/ProviderDialog";
 import ModelDialog from "../components/ModelDialog";
 import RemoteModelImportDialog from "../components/RemoteModelImportDialog";
@@ -74,6 +79,12 @@ export default function ProviderSettingsView() {
     useState<ProviderRecord | null>(null);
   const [deletingModel, setDeletingModel] = useState<ModelRecord | null>(null);
   const [testingModelId, setTestingModelId] = useState<number | null>(null);
+  // 测速（批5 §6 项 4）：结果内存态（id → bench），不落库不进 query 缓存
+  const [benchById, setBenchById] = useState<Record<number, ModelBenchMetrics>>(
+    {},
+  );
+  const [benchingModelId, setBenchingModelId] = useState<number | null>(null);
+  const [modelSortMode, setModelSortMode] = useState<ModelSortMode>("default");
 
   const providers = providersQuery.data ?? [];
   const models = modelsQuery.data ?? [];
@@ -189,6 +200,45 @@ export default function ProviderSettingsView() {
     }
   };
 
+  /** 测速（批5 §6 项 4）：流式首字延迟/生成速度，结果回填行内展示 */
+  const handleBench = async (model: ModelRecord) => {
+    if (benchingModelId !== null) {
+      return;
+    }
+    setBenchingModelId(model.id);
+    try {
+      const result: BenchModelResult = await ModelApi.bench(model.id);
+      if (result.success && result.firstChunkMs !== undefined) {
+        setBenchById((prev) => ({
+          ...prev,
+          [model.id]: {
+            firstChunkMs: result.firstChunkMs ?? 0,
+            completeMs: result.completeMs ?? 0,
+            tokensPerSec: result.tokensPerSec ?? 0,
+            outputTokens: result.outputTokens ?? 0,
+          },
+        }));
+        toast.success(
+          t("ai:model.benchResult", {
+            firstChunkMs: result.firstChunkMs,
+            tokensPerSec: result.tokensPerSec ?? 0,
+          }),
+        );
+      } else {
+        toast.error(
+          result.errorCode
+            ? t(`ai:errors.${result.errorCode}`)
+            : t("ai:model.benchFailed"),
+          { description: result.message },
+        );
+      }
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBenchingModelId(null);
+    }
+  };
+
   const handleDeleteProvider = async () => {
     if (!deletingProvider) {
       return;
@@ -280,6 +330,14 @@ export default function ProviderSettingsView() {
               provider={selected}
               models={models.filter((m) => m.providerId === selected.id)}
               testingModelId={testingModelId}
+              benchById={benchById}
+              benchingModelId={benchingModelId}
+              benchAvailable={activeHost.kind === "local"}
+              sortMode={modelSortMode}
+              onToggleSort={() =>
+                setModelSortMode((m) => (m === "bench" ? "default" : "bench"))
+              }
+              onBench={handleBench}
               onToggleEnabled={(enabled) => toggleEnabled(selected, enabled)}
               onEdit={guardWrite(() => openEdit(selected))}
               onDelete={guardWrite(() => setDeletingProvider(selected))}
@@ -313,6 +371,10 @@ export default function ProviderSettingsView() {
         }}
         providerId={modelDialog?.providerId ?? 0}
         editing={modelDialog?.editing}
+        fallbackOptions={models.filter(
+          (m) =>
+            m.type === "llm" && m.enabled && m.id !== modelDialog?.editing?.id,
+        )}
       />
       <RemoteModelImportDialog
         open={importOpen}

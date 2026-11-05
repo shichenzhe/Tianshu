@@ -16,7 +16,9 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, ipcMain: { handle: vi.fn() } }));
+  },
+  ipcMain: { handle: vi.fn() },
+}));
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
@@ -41,12 +43,19 @@ vi.mock(
       await importOriginal<
         typeof import("../../electron/domains/ai/provider/connectivity")
       >();
-    return { ...actual, testConnection: vi.fn(actual.testConnection) };
+    return {
+      ...actual,
+      testConnection: vi.fn(actual.testConnection),
+      benchModel: vi.fn(),
+    };
   },
 );
 
 import { ModelRepository } from "../../electron/domains/ai/provider/model.repo";
-import { testConnection } from "../../electron/domains/ai/provider/connectivity";
+import {
+  benchModel,
+  testConnection,
+} from "../../electron/domains/ai/provider/connectivity";
 import prisma from "../../electron/commons/prisma-client";
 
 const UID = 1;
@@ -132,5 +141,117 @@ describe("type 字段链路", () => {
       "text-embedding-3",
       { modelType: "embedding" },
     );
+  });
+});
+
+describe("能力矩阵列链路（批5 §6 项 5）", () => {
+  it("toRecord：capabilities JSON 解析为对象，畸形/空落 undefined；价格/备选透传", async () => {
+    (prisma.model.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({
+        type: "llm",
+        modelId: "gpt-4o",
+        capabilities: '{"vision":true,"tools":true}',
+        priceInPerMTokens: 2.5,
+        priceOutPerMTokens: 10,
+        fallbackModelId: 7,
+      }),
+    );
+    const record = await repo.getById(1);
+    expect(record?.capabilities).toEqual({ vision: true, tools: true });
+    expect(record?.priceInPerMTokens).toBe(2.5);
+    expect(record?.priceOutPerMTokens).toBe(10);
+    expect(record?.fallbackModelId).toBe(7);
+
+    // 畸形 JSON：降级 undefined 不炸
+    (prisma.model.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({ capabilities: "{oops" }),
+    );
+    expect((await repo.getById(1))?.capabilities).toBeUndefined();
+    (prisma.model.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({ capabilities: null }),
+    );
+    expect((await repo.getById(1))?.capabilities).toBeUndefined();
+  });
+
+  it("create/update：capabilities 对象序列化 JSON、未传落 null", async () => {
+    (prisma.model.create as ReturnType<typeof vi.fn>).mockImplementation(
+      ({ data }) => row({ ...data }),
+    );
+    await repo.create(
+      {
+        providerId: 2,
+        modelId: "gpt-4o",
+        capabilities: { vision: true },
+        priceInPerMTokens: 2.5,
+        fallbackModelId: 3,
+      },
+      UID,
+    );
+    expect(prisma.model.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          capabilities: '{"vision":true}',
+          priceInPerMTokens: 2.5,
+          priceOutPerMTokens: undefined,
+          fallbackModelId: 3,
+        }),
+      }),
+    );
+
+    (prisma.model.update as ReturnType<typeof vi.fn>).mockImplementation(
+      ({ data }) => row({ ...data }),
+    );
+    await repo.update(
+      { id: 1, capabilities: null, fallbackModelId: null },
+      UID,
+    );
+    expect(prisma.model.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          capabilities: null,
+          fallbackModelId: null,
+        }),
+      }),
+    );
+  });
+});
+
+describe("bench 测速 IPC（批5 §6 项 4）", () => {
+  it("bench 分派 connectivity.benchModel（llm）", async () => {
+    (prisma.model.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({ type: "llm", modelId: "gpt-4o" }),
+    );
+    providerRepo.getRuntimeInfo.mockResolvedValue({
+      type: "openai-compatible",
+      baseUrl: "https://x.com/v1",
+      apiKey: "k",
+    });
+    (benchModel as ReturnType<typeof vi.fn>).mockResolvedValue({
+      success: true,
+      message: "",
+      firstChunkMs: 320,
+      completeMs: 900,
+      tokensPerSec: 42,
+      outputTokens: 30,
+    });
+    const result = await repo.bench(1, UID);
+    expect(benchModel).toHaveBeenCalledWith(expect.anything(), "gpt-4o");
+    expect(result.firstChunkMs).toBe(320);
+    expect(result.tokensPerSec).toBe(42);
+  });
+
+  it("非 llm / comfyui 模型结构化拒绝（不发起测速）", async () => {
+    (prisma.model.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue(
+      row({ type: "embedding" }),
+    );
+    providerRepo.getRuntimeInfo.mockResolvedValue({
+      type: "openai-compatible",
+      baseUrl: "https://x.com/v1",
+      apiKey: "k",
+    });
+    const result = await repo.bench(1, UID);
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("UNSUPPORTED_TYPE_BENCH");
+    expect(benchModel).not.toHaveBeenCalled();
   });
 });

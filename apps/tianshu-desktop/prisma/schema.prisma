@@ -65,6 +65,15 @@ model model {
   topP          Float?
   maxTokens     Int?
   contextWindow Int?
+  // 能力矩阵（批5 provider-model §6 项 5）：capabilities 为 JSON
+  // {"vision":true,"tools":true}；价格为 USD 每 1M token（in/out 两列，
+  // 监控页成本折算 DB 显式价优先于内置目录）；fallbackModelId 引用
+  // model.id（跨厂商备选，主模型失败时 chat 链切换重试一次；无外键，
+  // 归属/存在性在消费侧校验）
+  capabilities      String?
+  priceInPerMTokens Float?
+  priceOutPerMTokens Float?
+  fallbackModelId   Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

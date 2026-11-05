@@ -170,6 +170,23 @@ export class ProviderRepository {
         item.contextWindow === undefined
           ? (existing?.contextWindow ?? null)
           : item.contextWindow,
+      // 能力矩阵四列（批5）：同款三态语义（undefined 保留 / null 清除）
+      capabilities:
+        item.capabilities === undefined
+          ? (existing?.capabilities ?? null)
+          : item.capabilities,
+      priceInPerMTokens:
+        item.priceInPerMTokens === undefined
+          ? (existing?.priceInPerMTokens ?? null)
+          : item.priceInPerMTokens,
+      priceOutPerMTokens:
+        item.priceOutPerMTokens === undefined
+          ? (existing?.priceOutPerMTokens ?? null)
+          : item.priceOutPerMTokens,
+      fallbackModelId:
+        item.fallbackModelId === undefined
+          ? (existing?.fallbackModelId ?? null)
+          : item.fallbackModelId,
     };
   }
 

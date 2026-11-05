@@ -65,6 +65,9 @@ vi.mock("../../src-react/domains/ai/api/model.api", () => ({
     update: (...a: unknown[]) => modelUpdate(...a),
   },
   MODEL_TYPES: ["llm", "embedding", "tts", "reranker", "asr"],
+  // 批5：ModelDialog 备用模型下拉消费显示名单一函数（同款语义替身）
+  modelDisplayName: (m: { name?: string; modelId: string }) =>
+    m.name?.trim() || m.modelId,
 }));
 // 加密降级状态替身（批1A）：缺省非降级，警示条用例按需覆写
 const masterKeyStatus = vi.fn(async () => ({ degraded: false }));

@@ -117,6 +117,14 @@ export function createChatModel(
       });
     case 'openai-compatible':
     default:
+      // comfyui 显式拒绝（批5 §6 项 6，mirror 同款）：ComfyUI 无对话
+      // 能力，不落 openai default 分支（类型系统与运行时行为一致化）
+      if (provider.type === 'comfyui') {
+        throw Object.assign(
+          new Error('ComfyUI 服务商无对话能力（图像生成走图编排 imageGen 节点）'),
+          { code: 'COMFYUI_NOT_CHAT' },
+        );
+      }
       return new ChatOpenAI({
         configuration: {
           baseURL: provider.baseUrl,

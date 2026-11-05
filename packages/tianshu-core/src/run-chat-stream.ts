@@ -15,10 +15,7 @@
  *   ToolDefinitionLike + 泛型 TAgent 约束（server 仓 ToolDefinitionLike
  *   先例）——宿主包装层可收窄回域内真身类型。
  */
-import {
-  createReactAgent,
-  ToolNode,
-} from "@langchain/langgraph/prebuilt";
+import { createReactAgent, ToolNode } from "@langchain/langgraph/prebuilt";
 import { GraphRecursionError } from "@langchain/langgraph";
 import type { LangGraphRunnableConfig } from "@langchain/langgraph";
 import type { Command } from "@langchain/langgraph";
@@ -41,12 +38,36 @@ import {
 } from "./blocks";
 import { estimateReserveTokens, truncateHistory } from "./history-truncate";
 import { trimHistoryToolOutputs } from "./tool-output-trim";
-import { classifyError } from "./error-classify";
+import { classifyError, type ChatErrorCode } from "./error-classify";
 import { consumeAgentStream } from "./agent-chunk-emitter";
 import { canonicalToolName } from "./tool-alias";
 
 /** 步数上限保险丝（spec 决策 #3：宽上限，上下文截断为自然限界） */
 export const DEFAULT_MAX_STEPS = 50;
+
+/**
+ * 瞬态错误码重试面（chat-core §6 项 2，Task 9 批 5）：限流/网络/超时
+ * 退避后可同模型重试；配置类（AUTH_FAILED/MODEL_NOT_FOUND/
+ * IMAGE_UNSUPPORTED）与 UNKNOWN 不重试直报（UNKNOWN 面太杂——上游 4xx
+ * 未收录形态、provider 包装错误等，盲目重试放大副作用）。与
+ * automation-retry 的 isRetryableErrorCode 口径不同（那边 UNKNOWN 默认
+ * 可重试：定时任务无交互者在场；聊天有人在场，直报换取确定性）。
+ */
+const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
+  "RATE_LIMITED",
+  "NETWORK",
+  "TIMEOUT",
+]);
+
+/** 错误码是否瞬态（可重试面）判定 */
+export function isTransientChatErrorCode(
+  code: string | ChatErrorCode | undefined,
+): boolean {
+  return code !== undefined && TRANSIENT_ERROR_CODES.has(code);
+}
+
+/** 瞬态重试退避缺省（交互在场：短退避即可，非定时任务的长退避口径） */
+export const DEFAULT_TRANSIENT_RETRY_DELAY_MS = 1_200;
 
 /**
  * 别名 ToolNode（2026-10-29 工具名精简批次）：模型模仿历史 blocks 发出
@@ -142,12 +163,24 @@ export interface ChatStreamOptions<
   loadImage?: ImageDataUrlLoader;
   /** skill_ref 块 → 技能全文读取器（组装侧展开注入）；缺省时降级行 */
   loadSkill?: SkillBodyLoader;
+  /**
+   * 备用模型（provider-model §6 项 3，Task 9 批 5）：主模型瞬态重试后
+   * 仍失败（或配置类错误）且流未产出任何可见块时，切它再试 1 次；全部
+   * 失败报最后一次错误（ChatStreamResult.fallbackUsed 标注走了备选）
+   */
+  fallbackModel?: BaseChatModel;
+  /** 瞬态重试退避毫秒（缺省 1.2s；测试注入 0/短值） */
+  transientRetryDelayMs?: number;
 }
 
 export interface ChatStreamResult {
   blocks: MessageBlock[];
   errorCode?: string;
   errorMessage?: string;
+  /** 瞬态错误发生过同模型重试（无论成败） */
+  retried?: boolean;
+  /** 走过 fallback 备用模型尝试（无论成败） */
+  fallbackUsed?: boolean;
 }
 
 /** text/thinking 增量：无开放块则新起一块（工具调用后的文本另起新块，保序） */
@@ -253,21 +286,18 @@ function finalizeInterruptedToolBlocks(
  * createReactAgent + streamEvents(v2)，事件经 consumeAgentStream 归一为
  * onChunk 协议（前端零改动）。传入 toolDefinitions + agent（+ toTools）时
  * 启用 langgraph 多步工具循环（recursionLimit 保险丝），tool-result 自动
- * 回喂下一步；否则与 P0 行为一致
+ * 回喂下一步；否则与 P0 行为一致。
+ *
+ * 瞬态重试与 fallback（Task 9 批 5）：**仅在「流建立前失败」（本次尝试
+ * 零可见块产出）时重试**——流中途失败已把 delta 推给用户，重试会重复
+ * 内容，一律直报。序：主模型 →（瞬态且零产出）退避后同模型 1 次 →
+ * （仍失败或配置类失败，且 fallbackModel 在场且零产出）备选 1 次；
+ * 全部失败报最后一次错误。
  */
 export async function runChatStream<
   TToolDef extends ToolDefinitionLike = ToolDefinitionLike,
   TAgent = unknown,
 >(options: ChatStreamOptions<TToolDef, TAgent>): Promise<ChatStreamResult> {
-  const blocks: MessageBlock[] = [];
-  const toolBlocks = new Map<string, ToolCallBlock>();
-  const finalStates = new Map<string, ToolCallBlock["state"]>();
-  let openText: TextBlock | null = null;
-  let openThinking: ThinkingBlock | null = null;
-  let usage: { input: number; output: number } | undefined;
-  let errorCode: string | undefined;
-  let errorMessage: string | undefined;
-
   // 解析一次复用：token 估算与模型消息转换共享同一 parse 结果，
   // 避免长会话下同一批 blocks 被 JSON.parse 两遍；旧轮工具输出先瘦身
   // （spec §18 项 1）——只影响回喂副本（DB blocks/编辑重发/回看不动），
@@ -296,107 +326,175 @@ export async function runChatStream<
     )
   ).flat();
 
-  const { agent, toolDefinitions, toTools } = options;
-  // d.ts 核对：createReactAgent 的 tools 为必填（undefined 不可），空集传 []。
-  // ⚠ toTools 缺省且 agent+toolDefinitions 存在时静默纯聊（无错误信号）——
-  // 消费方（mirror chat.service 薄包装/server chat-runner）必须注入 toTools
-  const tools =
-    agent && toolDefinitions?.length && toTools
-      ? toTools(toolDefinitions, agent, {
-          abortSignal: options.abortSignal,
-          // 工具执行层 chunk（running/审批卡/终态）与拒绝终态记录经
-          // runToolCall 产出——approval-request 不走引擎事件流，必须透传
-          onChunk: options.onChunk,
-          finalStates,
-        })
-      : [];
+  /** 单次尝试：fresh 状态跑一遍 agent 流，返回产出与错误 */
+  const attemptOnce = async (
+    model: BaseChatModel,
+  ): Promise<ChatStreamResult> => {
+    const blocks: MessageBlock[] = [];
+    const toolBlocks = new Map<string, ToolCallBlock>();
+    const finalStates = new Map<string, ToolCallBlock["state"]>();
+    let openText: TextBlock | null = null;
+    let openThinking: ThinkingBlock | null = null;
+    let usage: { input: number; output: number } | undefined;
+    let errorCode: string | undefined;
+    let errorMessage: string | undefined;
 
-  const agentExecutor = createReactAgent({
-    llm: options.model,
-    // ToolNode 形参：绑定面（node.tools=新名集）与执行面（runTool 归一）
-    // 分离——老名分发经 AliasToolNode 兑现，见类注释
-    tools: new AliasToolNode(tools),
-    // langgraph prebuilt 系统提示注入参数名为 prompt（安装版 d.ts 核对：
-    // string | SystemMessage | fn | Runnable；string 即前置 SystemMessage）
-    prompt: options.system,
-  });
+    const { agent, toolDefinitions, toTools } = options;
+    // d.ts 核对：createReactAgent 的 tools 为必填（undefined 不可），空集传 []。
+    // ⚠ toTools 缺省且 agent+toolDefinitions 存在时静默纯聊（无错误信号）——
+    // 消费方（mirror chat.service 薄包装/server chat-runner）必须注入 toTools
+    const tools =
+      agent && toolDefinitions?.length && toTools
+        ? toTools(toolDefinitions, agent, {
+            abortSignal: options.abortSignal,
+            // 工具执行层 chunk（running/审批卡/终态）与拒绝终态记录经
+            // runToolCall 产出——approval-request 不走引擎事件流，必须透传
+            onChunk: options.onChunk,
+            finalStates,
+          })
+        : [];
 
-  const eventStream = agentExecutor.streamEvents(
-    { messages },
-    {
-      version: "v2",
-      // stepCountIs(n) 的 n 步模型 ↔ langgraph recursionLimit：一步 agent =
-      // 模型 + 工具两个 super-step。T3-3 实测（langgraph 1.5.0）：limit=2n
-      // 恰好 n 次模型调用（limit 触顶抛 GraphRecursionError，onError 侧按
-      // 保险丝语义吞掉，对齐旧 stopWhen 无错截断）；2n+2 会多调一次
-      recursionLimit: (options.maxSteps ?? DEFAULT_MAX_STEPS) * 2,
-      signal: options.abortSignal,
-    },
-  );
+    const agentExecutor = createReactAgent({
+      llm: model,
+      // ToolNode 形参：绑定面（node.tools=新名集）与执行面（runTool 归一）
+      // 分离——老名分发经 AliasToolNode 兑现，见类注释
+      tools: new AliasToolNode(tools),
+      // langgraph prebuilt 系统提示注入参数名为 prompt（安装版 d.ts 核对：
+      // string | SystemMessage | fn | Runnable；string 即前置 SystemMessage）
+      prompt: options.system,
+    });
 
-  await consumeAgentStream(
-    eventStream,
-    {
-      onTextDelta: (text) => {
-        openText = appendDelta(blocks, openText, "text", text, options.onChunk);
+    const eventStream = agentExecutor.streamEvents(
+      { messages },
+      {
+        version: "v2",
+        // stepCountIs(n) 的 n 步模型 ↔ langgraph recursionLimit：一步 agent =
+        // 模型 + 工具两个 super-step。T3-3 实测（langgraph 1.5.0）：limit=2n
+        // 恰好 n 次模型调用（limit 触顶抛 GraphRecursionError，onError 侧按
+        // 保险丝语义吞掉，对齐旧 stopWhen 无错截断）；2n+2 会多调一次
+        recursionLimit: (options.maxSteps ?? DEFAULT_MAX_STEPS) * 2,
+        signal: options.abortSignal,
       },
-      onReasoningDelta: (text) => {
-        openThinking = appendDelta(
-          blocks,
-          openThinking,
-          "thinking",
-          text,
-          options.onChunk,
-        );
-      },
-      onToolCall: (call) => {
-        // 工具调用打断文本流：关闭开放块，后续文本另起新块
-        openText = null;
-        openThinking = null;
-        handleToolCallPart(blocks, toolBlocks, call, options.onChunk);
-      },
-      onToolResult: (call) =>
-        finalizeToolBlock(
-          toolBlocks.get(call.toolCallId),
-          call.output,
-          finalStates,
-        ),
-      onToolError: (call) =>
-        // tracer stringifyError = message + "\n\n" + stack：截首段只显 message
-        markToolError(
-          toolBlocks.get(call.toolCallId),
-          call.error.split("\n")[0],
-        ),
-      onFinish: (u) => {
-        openText = null;
-        openThinking = null;
-        usage = u;
-      },
-      onError: (error) => {
-        // 用户主动中止不是错误：不记录错误码、不推送错误 chunk（已生成部分照常保留）
-        if (options.abortSignal?.aborted) {
-          return;
-        }
-        // 保险丝触顶（旧 stopWhen 语义）：无错截断，已生成内容照常保留。
-        // instanceof 为主判据（T3-3 探针实证经 streamEvents 表面保留类身份），
-        // message 前缀兜底多节点并发失败的 AggregateError 包装情形
-        if (
-          error instanceof GraphRecursionError ||
-          (error instanceof Error &&
-            error.message.startsWith("Recursion limit of"))
-        ) {
-          return;
-        }
-        errorCode = classifyError(error);
-        errorMessage = error instanceof Error ? error.message : String(error);
-      },
-    },
-    () => options.abortSignal?.aborted === true,
-  );
-  finalizeInterruptedToolBlocks(toolBlocks);
+    );
 
-  if (usage) {
-    blocks.push({ type: "usage", input: usage.input, output: usage.output });
+    await consumeAgentStream(
+      eventStream,
+      {
+        onTextDelta: (text) => {
+          openText = appendDelta(
+            blocks,
+            openText,
+            "text",
+            text,
+            options.onChunk,
+          );
+        },
+        onReasoningDelta: (text) => {
+          openThinking = appendDelta(
+            blocks,
+            openThinking,
+            "thinking",
+            text,
+            options.onChunk,
+          );
+        },
+        onToolCall: (call) => {
+          // 工具调用打断文本流：关闭开放块，后续文本另起新块
+          openText = null;
+          openThinking = null;
+          handleToolCallPart(blocks, toolBlocks, call, options.onChunk);
+        },
+        onToolResult: (call) =>
+          finalizeToolBlock(
+            toolBlocks.get(call.toolCallId),
+            call.output,
+            finalStates,
+          ),
+        onToolError: (call) =>
+          // tracer stringifyError = message + "\n\n" + stack：截首段只显 message
+          markToolError(
+            toolBlocks.get(call.toolCallId),
+            call.error.split("\n")[0],
+          ),
+        onFinish: (u) => {
+          openText = null;
+          openThinking = null;
+          usage = u;
+        },
+        onError: (error) => {
+          // 用户主动中止不是错误：不记录错误码、不推送错误 chunk（已生成部分照常保留）
+          if (options.abortSignal?.aborted) {
+            return;
+          }
+          // 保险丝触顶（旧 stopWhen 语义）：无错截断，已生成内容照常保留。
+          // instanceof 为主判据（T3-3 探针实证经 streamEvents 表面保留类身份），
+          // message 前缀兜底多节点并发失败的 AggregateError 包装情形
+          if (
+            error instanceof GraphRecursionError ||
+            (error instanceof Error &&
+              error.message.startsWith("Recursion limit of"))
+          ) {
+            return;
+          }
+          errorCode = classifyError(error);
+          errorMessage = error instanceof Error ? error.message : String(error);
+        },
+      },
+      () => options.abortSignal?.aborted === true,
+    );
+    finalizeInterruptedToolBlocks(toolBlocks);
+
+    if (usage) {
+      blocks.push({ type: "usage", input: usage.input, output: usage.output });
+    }
+    return { blocks, errorCode, errorMessage };
+  };
+
+  /** 重试安全点：本次尝试零可见块（text/thinking/tool_call 均无）——
+   *  重试不会向用户重复推送内容 */
+  const emittedNothing = (result: ChatStreamResult): boolean =>
+    result.blocks.length === 0;
+
+  let retried = false;
+  let result = await attemptOnce(options.model);
+
+  // —— 瞬态同模型重试 1 次（流建立前失败）——
+  if (
+    result.errorCode !== undefined &&
+    !options.abortSignal?.aborted &&
+    isTransientChatErrorCode(result.errorCode) &&
+    emittedNothing(result)
+  ) {
+    await sleep(
+      options.transientRetryDelayMs ?? DEFAULT_TRANSIENT_RETRY_DELAY_MS,
+    );
+    // 退避期间用户中止：不再发起（防浪费请求；返回原错误——错误真实发生过）
+    if (!options.abortSignal?.aborted) {
+      retried = true;
+      result = await attemptOnce(options.model);
+    }
   }
-  return { blocks, errorCode, errorMessage };
+
+  // —— fallback 备选 1 次（主模型仍失败/配置类失败，且流未产出内容）——
+  let fallbackUsed = false;
+  if (
+    result.errorCode !== undefined &&
+    options.fallbackModel !== undefined &&
+    !options.abortSignal?.aborted &&
+    emittedNothing(result)
+  ) {
+    fallbackUsed = true;
+    result = await attemptOnce(options.fallbackModel);
+  }
+
+  return {
+    ...result,
+    ...(retried ? { retried } : {}),
+    ...(fallbackUsed ? { fallbackUsed } : {}),
+  };
+}
+
+/** 可注入退避（测试 0/短值；AbortSignal 不可注入计时器——保持极简） */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

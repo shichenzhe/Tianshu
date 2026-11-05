@@ -7,8 +7,8 @@
 // isoToDateKey 回填，YYYY-MM-DD 格式校验不过即红字阻断提交。
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Pressable, Text, View } from "react-native";
-import { Paperclip, Plus, X } from "lucide-react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { Paperclip, Plus, Sparkles, X } from "lucide-react-native";
 import {
   PLAN_PRIORITIES,
   PLAN_STATUSES,
@@ -25,6 +25,7 @@ import {
 import { dateKeyToIso, isoToDateKey } from "@/logic/plan-view";
 
 import { DialogShell } from "@/components/DialogShell";
+import { MarkdownLite } from "@/components/MarkdownLite";
 import { FormField } from "@/components/FormField";
 import { FormFooter } from "@/components/FormFooter";
 import { ACTION_DANGER } from "@/components/AppActionSheet";
@@ -247,6 +248,7 @@ export function PlanItemDialog({
   onDelete?: (item: PlanItemRecordDto) => void;
 }) {
   const { t } = useTranslation(["project", "common"]);
+  const colors = useThemeColors();
   const isEdit = item !== undefined;
   const isProjectTask = projectId !== null;
   const [title, setTitle] = useState(item?.title ?? "");
@@ -273,6 +275,10 @@ export function PlanItemDialog({
     return initial;
   });
   const [dateError, setDateError] = useState(false);
+  /** 描述编辑 ⇄ Markdown 预览切换（桌面对齐：textarea⇄预览双态） */
+  const [descPreview, setDescPreview] = useState(false);
+  /** AI 进展折叠区展开态（只读——aiSummary 仅 AI 工具可追加） */
+  const [aiProgressOpen, setAiProgressOpen] = useState(false);
 
   const statusOptions = PLAN_STATUSES.map((value) => ({
     value,
@@ -362,12 +368,46 @@ export function PlanItemDialog({
         value={title}
         onChangeText={setTitle}
       />
-      <FormField
-        label={t("project:itemDialog.description")}
-        value={description}
-        onChangeText={setDescription}
-        multiline
-      />
+      {/* 描述：编辑 ⇄ Markdown 预览切换（桌面对齐；输入框样式与 FormField
+          一致，因需在 label 行挂切换按钮而自组） */}
+      <View className="gap-1.5">
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+            {t("project:itemDialog.description")}
+          </Text>
+          <Pressable
+            onPress={() => setDescPreview((v) => !v)}
+            hitSlop={8}
+          >
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {descPreview
+                ? t("project:itemDialog.descEdit")
+                : t("project:itemDialog.descPreview")}
+            </Text>
+          </Pressable>
+        </View>
+        {descPreview ? (
+          description.trim() === "" ? (
+            <Text className="min-h-24 py-2.5 text-sm text-label3 dark:text-[#EBEBF54D]">
+              -
+            </Text>
+          ) : (
+            <View className="min-h-24 rounded-lg border border-sep px-3 py-2.5 dark:border-[#545458A6]">
+              <MarkdownLite text={description} />
+            </View>
+          )
+        ) : (
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            textAlignVertical="top"
+            autoCapitalize="none"
+            autoCorrect={false}
+            className="min-h-24 rounded-lg border border-sep bg-field px-3 py-2.5 text-sm text-black dark:border-[#545458A6] dark:bg-[#2C2C2E] dark:text-white"
+          />
+        )}
+      </View>
       <View className="gap-1.5">
         <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
           {t("project:itemDialog.status")}
@@ -449,6 +489,26 @@ export function PlanItemDialog({
           )}
         </>
       )}
+      {/* AI 进展折叠区（桌面对齐：只读，仅 AI 工具追加的 aiSummary） */}
+      {isEdit && isProjectTask && item && item.aiSummary ? (
+        <View className="gap-1.5">
+          <Pressable
+            onPress={() => setAiProgressOpen((v) => !v)}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <Sparkles size={14} color={colors.primary} />
+            <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+              {t("project:itemDialog.aiProgress")}
+            </Text>
+          </Pressable>
+          {aiProgressOpen && (
+            <View className="rounded-lg border border-sep px-3 py-2.5 dark:border-[#545458A6]">
+              <MarkdownLite text={item.aiSummary} />
+            </View>
+          )}
+        </View>
+      ) : null}
       {isEdit && isProjectTask && item && (
         <AttachmentSection item={item} projectId={projectId} />
       )}

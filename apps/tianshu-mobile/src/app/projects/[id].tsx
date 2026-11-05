@@ -9,7 +9,7 @@
 // 关于：指令只读卡+成员列表+bindings 只读清单（valid=false 置灰标注）。
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Alert,
@@ -19,6 +19,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,23 +29,35 @@ import {
   ChevronRight,
   CircleDot,
   File,
+  Filter,
   Folder,
+  FolderPlus,
+  LayoutList,
   Link2,
+  MessageCircle,
+  MessageCirclePlus,
   MoreHorizontal,
   Pencil,
   Plus,
   Trash2,
+  Upload,
   X,
 } from "lucide-react-native";
 import {
+  PLAN_GROUP_BYS,
+  PLAN_PRIORITIES,
   PLAN_STATUSES,
+  PLAN_VIEW_TYPES,
   type AssetEntryDto,
   type PlanItemCreatePayload,
   type PlanItemRecordDto,
   type PlanItemUpdatePayload,
   type PlanPriority,
   type PlanStatus,
+  type PlanViewRecordDto,
+  type PlanViewType,
   type ProjectBindingItemDto,
+  type ProjectMemberItemDto,
 } from "@tianshu/protocol";
 import {
   filterPlanItems,
@@ -52,12 +65,21 @@ import {
   isoToDateKey,
   parsePlanViewConfig,
   sortPlanItems,
+  type PlanFilterCondition,
 } from "@/logic/plan-view";
+import {
+  PLAN_FILTER_FIELDS,
+  addConditionUpdater,
+  patchConditionUpdater,
+  removeConditionUpdater,
+  setConditionOpUpdater,
+  toggleConditionValueUpdater,
+} from "@/logic/plan-filter";
 
-import { AppActionSheet } from "@/components/AppActionSheet";
+import { ActionSheetItem, AppActionSheet } from "@/components/AppActionSheet";
 import { DialogShell } from "@/components/DialogShell";
 import { FilePreviewModal } from "@/components/FilePreviewModal";
-import { FormField } from "@/components/FormField";
+import { FormField, PLACEHOLDER } from "@/components/FormField";
 import { FormFooter } from "@/components/FormFooter";
 import { MarkdownLite } from "@/components/MarkdownLite";
 import { PageHeader } from "@/components/PageHeader";
@@ -65,12 +87,14 @@ import { PlanItemDialog } from "@/components/PlanItemDialog";
 import { formatSize } from "@/lib/format-size";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
 import { toast } from "@/lib/toast-bus";
+import { pickLibraryFile } from "@/logic/library-upload";
 import { formatRelative } from "@/logic/time";
 import {
   useConnectionCapabilities,
   useConnectionsStore,
 } from "@/store/connections.store";
 import { resolveActiveView, useProjectStore } from "@/store/project.store";
+import { useSessionsStore } from "@/store/sessions.store";
 import { useThemeColors } from "@/store/theme";
 
 type WsTab = "plan" | "assets" | "about";
@@ -158,24 +182,32 @@ function WsSegments({
 
 // —— 计划拍平条目（组头/事项/组尾新建——行级 memo，行上禁 flex-1 铁律） ——
 
+type PlanGroupByKey = "status" | "priority" | "assignee";
+
 type PlanEntry =
-  | { kind: "header"; key: string; status: PlanStatus; count: number }
+  | {
+      kind: "header";
+      key: string;
+      groupBy: PlanGroupByKey;
+      groupValue: string;
+      label: string;
+      count: number;
+    }
   | { kind: "item"; key: string; item: PlanItemRecordDto; isLast: boolean }
   | { kind: "add"; key: string; status: PlanStatus };
 
-/** 组头行：状态本地化名 + 计数 */
+/** 组头行：分组本地化标签 + 计数（groupBy 生效——#1 视图批） */
 const PlanGroupHeaderRow = memo(function PlanGroupHeaderRow({
-  status,
+  label,
   count,
 }: {
-  status: PlanStatus;
+  label: string;
   count: number;
 }) {
-  const { t } = useTranslation("project");
   return (
     <View className="flex-row items-center gap-2 px-4 pb-1 pt-4">
       <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
-        {t(`status.${status}`)}
+        {label}
       </Text>
       <Text className="text-xs text-label3 dark:text-[#EBEBF54D]">{count}</Text>
     </View>
@@ -203,6 +235,233 @@ const PlanGroupAddRow = memo(function PlanGroupAddRow({
         {t("quickCreate")}
       </Text>
     </Pressable>
+  );
+});
+
+// —— 计划筛选面板（#8 桌面对齐：字段×操作符×值 AND 组合，本地会话态，
+//    不随视图持久化——planView 写面属后续批） ——
+
+/** source 值域（PlanItemSource；标签走 i18n filter 子树） */
+const FILTER_SOURCE_VALUES = ["manual", "ai", "template"] as const;
+
+/** 各字段可用操作符（唯一操作符字段不展示切换行） */
+const FILTER_OPS_BY_FIELD: Record<
+  PlanFilterCondition["field"],
+  PlanFilterCondition["op"][]
+> = {
+  title: ["contains"],
+  tags: ["contains"],
+  status: ["in", "notIn"],
+  priority: ["in", "notIn"],
+  source: ["in", "notIn"],
+  assigneeId: ["isMe", "notMe", "in", "notIn"],
+};
+
+/** 多选值 chip 行（status/priority/source/assignee 值选择共用） */
+const FilterValueChips = memo(function FilterValueChips({
+  options,
+  values,
+  onToggle,
+}: {
+  options: Array<{ value: string; label: string }>;
+  values: string[];
+  onToggle: (value: string) => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View className="flex-row flex-wrap gap-2">
+      {options.map((option) => {
+        const active = values.includes(option.value);
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            onPress={() => onToggle(option.value)}
+            className="rounded-full border px-3 py-1.5"
+            style={{
+              borderColor: active ? colors.primary : "transparent",
+              backgroundColor: colors.subtle,
+            }}
+          >
+            <Text
+              className="text-xs"
+              style={{ color: active ? colors.primary : undefined }}
+            >
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+});
+
+/** 计划筛选面板：字段添加 chips + 条件行（操作符切换 + 值编辑） */
+const PlanFilterDialog = memo(function PlanFilterDialog({
+  conditions,
+  members,
+  onChange,
+  onClose,
+}: {
+  conditions: PlanFilterCondition[];
+  members: ProjectMemberItemDto[];
+  onChange: (next: PlanFilterCondition[]) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("project");
+  const colors = useThemeColors();
+
+  const fieldLabel = (field: PlanFilterCondition["field"]) =>
+    t(`filter.field.${field}`);
+  const valueOptions = (
+    field: PlanFilterCondition["field"],
+  ): Array<{ value: string; label: string }> => {
+    if (field === "status") {
+      return PLAN_STATUSES.map((v) => ({
+        value: v,
+        label: t(`status.${v}`),
+      }));
+    }
+    if (field === "priority") {
+      return PLAN_PRIORITIES.map((v) => ({
+        value: v,
+        label: t(`priority.${v}`),
+      }));
+    }
+    if (field === "source") {
+      return FILTER_SOURCE_VALUES.map((v) => ({
+        value: v,
+        label: t(`filter.source${v === "ai" ? "Ai" : v === "template" ? "Template" : "Manual"}`),
+      }));
+    }
+    return members.map((m) => ({ value: String(m.userId), label: m.nickname }));
+  };
+
+  /** 值编辑区（按字段/操作符形态分发；isMe/notMe 无值区） */
+  function renderValueEditor(condition: PlanFilterCondition) {
+    const { field, op, value } = condition;
+    if (field === "title" || field === "tags") {
+      return (
+        <TextInput
+          value={Array.isArray(value) ? (value[0] ?? "") : value}
+          onChangeText={(text) =>
+            onChange(patchConditionUpdater(field, { value: text })(conditions))
+          }
+          placeholder={t("filter.valuePlaceholder")}
+          placeholderTextColor={PLACEHOLDER}
+          autoCapitalize="none"
+          autoCorrect={false}
+          className="rounded-lg border border-sep bg-field px-3 py-2 text-sm text-black dark:border-[#545458A6] dark:bg-[#2C2C2E] dark:text-white"
+        />
+      );
+    }
+    if (field === "assigneeId" && (op === "isMe" || op === "notMe")) {
+      return null;
+    }
+    const list = Array.isArray(value) ? value : value ? [value] : [];
+    return (
+      <FilterValueChips
+        options={valueOptions(field)}
+        values={list}
+        onToggle={(v) =>
+          onChange(toggleConditionValueUpdater(field, v)(conditions))
+        }
+      />
+    );
+  }
+
+  return (
+    <DialogShell
+      title={t("filter.title")}
+      busy={false}
+      onClose={onClose}
+      footer={
+        <FormFooter
+          busy={false}
+          confirmDisabled={false}
+          onConfirm={onClose}
+          onCancel={onClose}
+          auxLabel={conditions.length > 0 ? t("filter.reset") : undefined}
+          onAux={conditions.length > 0 ? () => onChange([]) : undefined}
+        />
+      }
+    >
+      {/* 字段添加行：已含字段实心（再点移除），未含可添加（字段唯一） */}
+      <View className="flex-row flex-wrap gap-2">
+        {PLAN_FILTER_FIELDS.map((field) => {
+          const active = conditions.some((c) => c.field === field);
+          return (
+            <Pressable
+              key={field}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() =>
+                onChange(
+                  active
+                    ? removeConditionUpdater(field)(conditions)
+                    : addConditionUpdater(field)(conditions),
+                )
+              }
+              className="rounded-full px-3 py-1.5"
+              style={{ backgroundColor: active ? colors.primary : colors.subtle }}
+            >
+              <Text
+                className="text-xs"
+                style={{ color: active ? "#FFFFFF" : colors.primary }}
+              >
+                {fieldLabel(field)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <ScrollView className="max-h-72">
+        {conditions.map((condition) => {
+          const ops = FILTER_OPS_BY_FIELD[condition.field];
+          return (
+            <View
+              key={condition.field}
+              className="gap-2 rounded-lg border border-sep p-2.5 dark:border-[#545458A6]"
+            >
+              <View className="flex-row items-center justify-between">
+                <Text className="text-[13px] font-medium text-label2 dark:text-[#EBEBF599]">
+                  {fieldLabel(condition.field)}
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    onChange(
+                      removeConditionUpdater(condition.field)(conditions),
+                    )
+                  }
+                  hitSlop={8}
+                >
+                  <X size={14} color="#8E8E93" />
+                </Pressable>
+              </View>
+              {ops.length > 1 && (
+                <FilterValueChips
+                  options={ops.map((op) => ({
+                    value: op,
+                    label: t(`filter.op.${op}`),
+                  }))}
+                  values={[condition.op]}
+                  onToggle={(op) =>
+                    onChange(
+                      setConditionOpUpdater(
+                        condition.field,
+                        op as PlanFilterCondition["op"],
+                      )(conditions),
+                    )
+                  }
+                />
+              )}
+              {renderValueEditor(condition)}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </DialogShell>
   );
 });
 
@@ -397,6 +656,7 @@ function AssetRow({
 export default function ProjectWorkspaceScreen() {
   const { t } = useTranslation(["project", "chat", "common"]);
   const params = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const projectId = Number(params.id);
   const colors = useThemeColors();
   const activeConnId = useConnectionsStore((state) => state.activeConnId);
@@ -417,6 +677,17 @@ export default function ProjectWorkspaceScreen() {
   const currentUserId = useProjectStore((state) => state.currentUserId);
   const saving = useProjectStore((state) => state.saving);
   const [tab, setTab] = useState<WsTab>("plan");
+  /** #8 筛选批：本地会话态组合筛选（不随视图持久化——planView 只读现状） */
+  const [localFilters, setLocalFilters] = useState<PlanFilterCondition[]>([]);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  /** #1 视图写面批：长按视图 chip 的管理面板目标 / 新建·重命名弹窗态 */
+  const [viewSheetTarget, setViewSheetTarget] =
+    useState<PlanViewRecordDto | null>(null);
+  const [viewDialog, setViewDialog] = useState<"create" | "rename" | null>(
+    null,
+  );
+  const [viewName, setViewName] = useState("");
+  const [viewType, setViewType] = useState<PlanViewType>("table");
   const [itemDialog, setItemDialog] = useState<
     | { mode: "create"; status?: PlanStatus }
     | { mode: "edit"; item: PlanItemRecordDto }
@@ -457,25 +728,66 @@ export default function ProjectWorkspaceScreen() {
     [views, activeViewId],
   );
 
-  /** 计划拍平：激活视图条件+排序 → status 分组 → 组头/事项/组尾条目 */
+  /** 计划拍平：激活视图条件+排序 → 本地筛选叠加 → 视图分组依据分组
+   *  （groupBy 生效——#1 视图批：status 全枚举组含空组+组尾快速新建；
+   *  priority/assignee 空组不占位）→ 组头/事项/组尾条目 */
   const planEntries = useMemo<PlanEntry[]>(() => {
     const config = parsePlanViewConfig(
       activeView?.filterJson ?? "",
       activeView?.sortJson ?? "",
     );
-    const visible = sortPlanItems(
-      filterPlanItems(items, config.conditions, "", currentUserId ?? 0),
-      config.sortRules,
+    const viewFiltered = filterPlanItems(
+      items,
+      config.conditions,
+      "",
+      currentUserId ?? 0,
     );
-    const groups = groupPlanItems(visible, "status", members);
+    const filtered =
+      localFilters.length > 0
+        ? filterPlanItems(viewFiltered, localFilters, "", currentUserId ?? 0)
+        : viewFiltered;
+    const visible = sortPlanItems(filtered, config.sortRules);
+    const viewGroupBy = activeView?.groupBy ?? "status";
+    const groups = groupPlanItems(visible, viewGroupBy, members);
+    const groupLabel = (groupValue: string): string => {
+      if (viewGroupBy === "status") return t(`project:status.${groupValue}`);
+      if (viewGroupBy === "priority") return t(`project:priority.${groupValue}`);
+      return groupValue === "unassigned"
+        ? t("project:unassigned")
+        : (memberNames.get(Number(groupValue)) ?? "-");
+    };
     const entries: PlanEntry[] = [];
     groups.forEach((group) => {
-      const status = group.key as PlanStatus;
-      if (!PLAN_STATUSES.includes(status)) return;
+      if (viewGroupBy === "status") {
+        const status = group.key as PlanStatus;
+        if (!PLAN_STATUSES.includes(status)) return;
+        entries.push({
+          kind: "header",
+          key: `h-${group.key}`,
+          groupBy: "status",
+          groupValue: status,
+          label: groupLabel(status),
+          count: group.items.length,
+        });
+        group.items.forEach((item, index) => {
+          entries.push({
+            kind: "item",
+            key: `i-${item.id}`,
+            item,
+            isLast: index === group.items.length - 1,
+          });
+        });
+        entries.push({ kind: "add", key: `a-${group.key}`, status });
+        return;
+      }
+      // priority/assignee：空组不占位（成员枚举全量组会拉长列表）
+      if (group.items.length === 0) return;
       entries.push({
         kind: "header",
         key: `h-${group.key}`,
-        status,
+        groupBy: viewGroupBy,
+        groupValue: group.key,
+        label: groupLabel(group.key),
         count: group.items.length,
       });
       group.items.forEach((item, index) => {
@@ -486,10 +798,9 @@ export default function ProjectWorkspaceScreen() {
           isLast: index === group.items.length - 1,
         });
       });
-      entries.push({ kind: "add", key: `a-${group.key}`, status });
     });
     return entries;
-  }, [items, activeView, members, currentUserId]);
+  }, [items, activeView, members, currentUserId, localFilters, memberNames, t]);
 
   const openPlanItem = useCallback(
     (item: PlanItemRecordDto) => setItemDialog({ mode: "edit", item }),
@@ -537,6 +848,88 @@ export default function ProjectWorkspaceScreen() {
         useProjectStore.getState().hub.error || t("project:loadFailed"),
       );
     }
+  }
+
+  /** 视图新建/重命名提交（服务端重名自动 (n) 后缀；新建即激活） */
+  async function handleViewDialogConfirm() {
+    const trimmed = viewName.trim();
+    if (!trimmed) return;
+    const store = useProjectStore.getState();
+    const ok =
+      viewDialog === "create"
+        ? (await store.createView(projectId, {
+            name: trimmed,
+            type: viewType,
+          })) !== null
+        : await store.updateView({
+            id: viewSheetTarget?.id,
+            name: trimmed,
+          } as Parameters<typeof store.updateView>[0]);
+    if (ok) {
+      setViewDialog(null);
+      setViewSheetTarget(null);
+    } else {
+      toast.error(store.hub.error || t("project:loadFailed"));
+    }
+  }
+
+  /** 视图删除（Alert 确认；最后一个由服务端 PLAN_VIEW_LAST_ONE 拒删） */
+  function confirmDeleteView(view: PlanViewRecordDto) {
+    Alert.alert(
+      t("project:deleteView"),
+      t("project:deleteViewConfirm", { name: view.name }),
+      [
+        { text: t("common:cancel"), style: "cancel" },
+        {
+          text: t("common:confirm"),
+          style: "destructive",
+          onPress: () => void performDeleteView(view.id),
+        },
+      ],
+      { cancelable: true },
+    );
+  }
+
+  async function performDeleteView(id: number) {
+    const store = useProjectStore.getState();
+    const ok = await store.removeView(id);
+    if (!ok) toast.error(store.hub.error || t("project:loadFailed"));
+  }
+
+  /** 任务推进直达专属会话（桌面对齐 openTaskSession：服务端按 planItemId
+   *  查重复用——一任务一会话；复用到已归档会话时先撤销归档再进） */
+  async function advanceTask(item: PlanItemRecordDto) {
+    const brief = await useSessionsStore
+      .getState()
+      .create(item.title, undefined, { projectId, planItemId: item.id });
+    if (brief === null) {
+      toast.error(t("project:advanceFailed"));
+      return;
+    }
+    if (brief.archivedAt !== null) {
+      await useSessionsStore.getState().update(brief.id, { archived: false });
+    }
+    router.push(`/session/${brief.id}`);
+  }
+
+  /** 资产上传（桌面对齐 AssetsPane 上传；复用资料库 picker→base64 链——
+   *  扩展名守卫与 3MB 客户端预检同口径，服务端 ASSET_UPLOAD_INVALID 兜底）；
+   *  成功不 toast——资产面与用量经 refreshAssetsAfterWrite 刷新即见 */
+  async function handleUploadAsset() {
+    const picked = await pickLibraryFile();
+    if (picked === null) return;
+    if (picked === "invalid") {
+      toast.info(t("project:uploadInvalidName"));
+      return;
+    }
+    if (picked === "tooLarge") {
+      toast.info(t("project:uploadTooLarge"));
+      return;
+    }
+    const ok = await useProjectStore
+      .getState()
+      .uploadAsset(projectId, picked.name, picked.base64);
+    if (!ok) toast.error(t("project:uploadFailed"));
   }
 
   function notifyFailure() {
@@ -671,7 +1064,9 @@ export default function ProjectWorkspaceScreen() {
     if (planEntries.length === 0) {
       return (
         <Text className="py-20 text-center text-sm text-label2 dark:text-[#EBEBF599]">
-          {t("project:emptyPlan")}
+          {localFilters.length > 0
+            ? t("project:filter.empty")
+            : t("project:emptyPlan")}
         </Text>
       );
     }
@@ -683,7 +1078,7 @@ export default function ProjectWorkspaceScreen() {
         renderItem={({ item: entry }) => {
           if (entry.kind === "header") {
             return (
-              <PlanGroupHeaderRow status={entry.status} count={entry.count} />
+              <PlanGroupHeaderRow label={entry.label} count={entry.count} />
             );
           }
           if (entry.kind === "add") {
@@ -802,6 +1197,34 @@ export default function ProjectWorkspaceScreen() {
             </Text>
           </View>
         )}
+        {/* 资产工具行：上传（picker→base64）+ 新建文件夹（桌面对齐：
+            create 态弹窗逻辑本就备好，此前缺触发点致功能不可达；
+            重命名后残留旧名故先清空） */}
+        <View className="flex-row justify-end gap-4 px-4 pb-2">
+          <Pressable
+            onPress={() => void handleUploadAsset()}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <Upload size={14} color={colors.primary} />
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {t("project:upload")}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setAssetName("");
+              setFolderDialog("create");
+            }}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <FolderPlus size={14} color={colors.primary} />
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {t("project:newFolder")}
+            </Text>
+          </Pressable>
+        </View>
         {entries.length === 0 ? (
           <Text className="py-20 text-center text-sm text-label2 dark:text-[#EBEBF599]">
             {t("project:emptyAssets")}
@@ -941,42 +1364,99 @@ export default function ProjectWorkspaceScreen() {
       className="flex-1 bg-grouped dark:bg-black"
       edges={["top", "bottom"]}
     >
-      <PageHeader title={projectName} backLabel={t("project:back")} />
+      <PageHeader
+        title={projectName}
+        backLabel={t("project:back")}
+        right={
+          detail?.sessionId != null ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("project:openProjectSession")}
+              onPress={() => router.push(`/session/${detail.sessionId}`)}
+              className="h-11 w-11 items-center justify-center rounded-full"
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? colors.subtle : "transparent",
+              })}
+            >
+              <MessageCircle size={22} color={colors.primary} />
+            </Pressable>
+          ) : undefined
+        }
+      />
       {!activeConnId || !supported ? (
         renderGuide()
       ) : (
         <>
-          {/* 计划 Tab 的视图 chips：横滚选择，选中高亮 */}
+          {/* 计划 Tab 工具行：视图 chips 横滚 + 筛选入口（激活条件数徽标） */}
           {tab === "plan" && views.length > 0 && (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={{ flexGrow: 0, flexShrink: 0 }}
-              contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}
-            >
-              {views.map((view) => {
-                const active = view.id === activeView?.id;
-                return (
-                  <Pressable
-                    key={view.id}
-                    onPress={() =>
-                      useProjectStore.getState().setActiveView(view.id)
-                    }
-                    className="rounded-full px-3 py-1.5"
-                    style={{
-                      backgroundColor: active ? colors.primary : colors.subtle,
-                    }}
-                  >
-                    <Text
-                      className="text-xs"
-                      style={{ color: active ? "#FFFFFF" : colors.primary }}
+            <View className="flex-row items-center">
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="min-w-0 flex-1"
+                style={{ flexGrow: 0, flexShrink: 0 }}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 12 }}
+              >
+                {views.map((view) => {
+                  const active = view.id === activeView?.id;
+                  return (
+                    <Pressable
+                      key={view.id}
+                      onPress={() =>
+                        useProjectStore.getState().setActiveView(view.id)
+                      }
+                      onLongPress={() => setViewSheetTarget(view)}
+                      className="rounded-full px-3 py-1.5"
+                      style={{
+                        backgroundColor: active
+                          ? colors.primary
+                          : colors.subtle,
+                      }}
                     >
-                      {view.name}
+                      <Text
+                        className="text-xs"
+                        style={{ color: active ? "#FFFFFF" : colors.primary }}
+                      >
+                        {view.name === "" ? t("project:defaultView") : view.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {/* 新建视图（#1 视图写面批）：列尾「+」 */}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("project:newView")}
+                  onPress={() => {
+                    setViewName("");
+                    setViewType("table");
+                    setViewDialog("create");
+                  }}
+                  className="items-center justify-center rounded-full px-3 py-1.5"
+                  style={{ backgroundColor: colors.subtle }}
+                >
+                  <Plus size={13} color={colors.primary} />
+                </Pressable>
+              </ScrollView>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("project:filter.title")}
+                onPress={() => setFilterPanelOpen(true)}
+                className="relative mr-3 h-8 w-8 items-center justify-center rounded-full"
+                style={{ backgroundColor: colors.subtle }}
+              >
+                <Filter size={14} color={colors.primary} />
+                {localFilters.length > 0 && (
+                  <View
+                    className="absolute -right-0.5 -top-0.5 h-4 min-w-4 items-center justify-center rounded-full px-1"
+                    style={{ backgroundColor: colors.primary }}
+                  >
+                    <Text className="text-[10px] font-medium text-white">
+                      {localFilters.length}
                     </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                  </View>
+                )}
+              </Pressable>
+            </View>
           )}
           <WsSegments tab={tab} disabled={saving} onSelect={setTab} />
           {loadingInitial ? (
@@ -992,6 +1472,115 @@ export default function ProjectWorkspaceScreen() {
           )}
         </>
       )}
+      {/* #1 视图写面批：长按视图 chip——重命名 / 分组依据切换 / 删除 */}
+      <AppActionSheet
+        visible={viewSheetTarget !== null}
+        title={
+          viewSheetTarget?.name === ""
+            ? t("project:defaultView")
+            : viewSheetTarget?.name
+        }
+        items={
+          viewSheetTarget
+            ? [
+                {
+                  key: "rename",
+                  label: t("project:renameView"),
+                  Icon: Pencil,
+                  onPress: () => {
+                    setViewName(viewSheetTarget.name);
+                    setViewDialog("rename");
+                  },
+                },
+                ...(PLAN_GROUP_BYS.map((groupBy) => ({
+                  key: `group-${groupBy}`,
+                  label:
+                    groupBy === viewSheetTarget.groupBy
+                      ? t("project:groupByOption", {
+                          by: t(`project:groupBy.${groupBy}`),
+                        })
+                      : t("project:groupBySet", {
+                          by: t(`project:groupBy.${groupBy}`),
+                        }),
+                  Icon: LayoutList,
+                  onPress: () => {
+                    const target = viewSheetTarget;
+                    setViewSheetTarget(null);
+                    void useProjectStore
+                      .getState()
+                      .updateView({
+                        id: target.id,
+                        groupBy:
+                          target.groupBy === groupBy ? null : groupBy,
+                      })
+                      .then((ok) => {
+                        if (!ok) {
+                          toast.error(
+                            useProjectStore.getState().hub.error ||
+                              t("project:loadFailed"),
+                          );
+                        }
+                      });
+                  },
+                })) as ActionSheetItem[]),
+                {
+                  key: "delete",
+                  label: t("project:deleteView"),
+                  Icon: Trash2,
+                  danger: true,
+                  onPress: () => {
+                    const target = viewSheetTarget;
+                    setViewSheetTarget(null);
+                    confirmDeleteView(target);
+                  },
+                },
+              ]
+            : []
+        }
+        onClose={() => setViewSheetTarget(null)}
+      />
+      {viewDialog !== null && (
+        <DialogShell
+          title={t(
+            viewDialog === "create"
+              ? "project:newView"
+              : "project:renameView",
+          )}
+          busy={saving}
+          onClose={() => setViewDialog(null)}
+          footer={
+            <FormFooter
+              busy={saving}
+              confirmDisabled={!viewName.trim()}
+              onConfirm={() => void handleViewDialogConfirm()}
+              onCancel={() => setViewDialog(null)}
+            />
+          }
+        >
+          <FormField
+            label={t("project:viewName")}
+            value={viewName}
+            onChangeText={setViewName}
+          />
+          {viewDialog === "create" && (
+            <View className="gap-1.5">
+              <Text className="text-xs text-label2 dark:text-[#EBEBF599]">
+                {t("project:viewType")}
+              </Text>
+              <FilterValueChips
+                options={PLAN_VIEW_TYPES.map((type) => ({
+                  value: type,
+                  label: t(`project:viewType.${type}`),
+                }))}
+                values={[viewType]}
+                onToggle={(value) =>
+                  setViewType(value as Parameters<typeof setViewType>[0])
+                }
+              />
+            </View>
+          )}
+        </DialogShell>
+      )}
       {/* 批②：计划事项长按面板——状态快捷流转（当前态不列）+ 删除 */}
       <AppActionSheet
         visible={planSheetTarget !== null}
@@ -999,6 +1588,16 @@ export default function ProjectWorkspaceScreen() {
         items={
           planSheetTarget
             ? [
+                {
+                  key: "advance",
+                  label: t("project:advanceTask"),
+                  Icon: MessageCirclePlus,
+                  onPress: () => {
+                    const target = planSheetTarget;
+                    setPlanSheetTarget(null);
+                    void advanceTask(target);
+                  },
+                },
                 ...PLAN_STATUSES.filter(
                   (status) => status !== planSheetTarget.status,
                 ).map((status) => ({
@@ -1072,11 +1671,23 @@ export default function ProjectWorkspaceScreen() {
           }
         >
           <FormField
-            label={t("project:newFolder")}
+            label={t(
+              folderDialog === "create"
+                ? "project:newFolder"
+                : "project:renameAsset",
+            )}
             value={assetName}
             onChangeText={setAssetName}
           />
         </DialogShell>
+      )}
+      {filterPanelOpen && (
+        <PlanFilterDialog
+          conditions={localFilters}
+          members={members}
+          onChange={setLocalFilters}
+          onClose={() => setFilterPanelOpen(false)}
+        />
       )}
       {itemDialog !== null && (
         <PlanItemDialog

@@ -77,11 +77,65 @@
     "priority": "Priority",
     "dateInvalid": "Date must be YYYY-MM-DD",
     "saveFailed": "Save failed",
-    "customFields": "Custom fields"
+    "customFields": "Custom fields",
+    "aiProgress": "AI progress",
+    "descPreview": "Preview",
+    "descEdit": "Edit"
   },
   "searchTasks": "Search task titles",
   "template": "Template",
   "deleteItem": "Delete Item",
   "deleteItemConfirm": "Delete \"{{title}}\"? This cannot be undone.",
-  "moveTo": "Move to {{status}}"
+  "moveTo": "Move to {{status}}",
+  "openProjectSession": "Project session",
+  "advanceTask": "Advance",
+  "advanceFailed": "Failed to create task session",
+  "upload": "Upload",
+  "uploadInvalidName": "File name must have a valid extension",
+  "uploadTooLarge": "File exceeds the 3MB limit",
+  "uploadFailed": "Upload failed",
+  "filter": {
+    "title": "Filter",
+    "reset": "Reset",
+    "empty": "No matching items. Adjust the filters.",
+    "valuePlaceholder": "Contains keyword",
+    "field": {
+      "title": "Title",
+      "status": "Status",
+      "assigneeId": "Assignee",
+      "source": "Source",
+      "priority": "Priority",
+      "tags": "Tags"
+    },
+    "op": {
+      "contains": "Contains",
+      "in": "Is any of",
+      "notIn": "Is none of",
+      "isMe": "Is me",
+      "notMe": "Is not me"
+    },
+    "sourceManual": "Manual",
+    "sourceAi": "AI",
+    "sourceTemplate": "Template"
+  },
+  "defaultView": "Default view",
+  "newView": "New view",
+  "renameView": "Rename view",
+  "deleteView": "Delete view",
+  "deleteViewConfirm": "Delete view \"{{name}}\"? A project keeps at least one view (the last one will be rejected).",
+  "viewName": "View name",
+  "viewType": {
+    "table": "Table",
+    "kanban": "Kanban",
+    "list": "List",
+    "gantt": "Gantt",
+    "calendar": "Calendar"
+  },
+  "groupBy": {
+    "status": "By status",
+    "priority": "By priority",
+    "assignee": "By assignee"
+  },
+  "groupByOption": "Grouped {{by}} (current)",
+  "groupBySet": "Switch to {{by}}"
 }

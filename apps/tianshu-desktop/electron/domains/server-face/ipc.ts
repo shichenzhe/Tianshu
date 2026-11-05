@@ -322,9 +322,13 @@ export function attachServerFace(deps: {
     | "createAttachment"
     | "removeAttachment"
   >;
-  /** A7 计划视图面：PlanViewRepository 只读桥（list；历史裸暴露，可见性
-   *  守卫复用 projectRepo.assertProjectVisible——缺 projectRepo 不装配） */
-  planViewRepo?: Pick<PlanViewRepository, "list">;
+  /** A7 计划视图面：PlanViewRepository 桥（list 懒播种 + 写面四方法
+   *  2026-11-05 批；可见性守卫复用 projectRepo.assertProjectVisible——
+   *  缺 projectRepo 不装配） */
+  planViewRepo?: Pick<
+    PlanViewRepository,
+    "list" | "getViewById" | "create" | "update" | "remove" | "reorder"
+  >;
   /** A7 项目资产面：AssetRepository 单实例桥（六端点；守卫同 planView；
    *  readImage 服务端解析资产根在 project-asset-tap） */
   projectAssetRepo?: Pick<
@@ -335,6 +339,7 @@ export function attachServerFace(deps: {
     | "delete"
     | "storage"
     | "resolveAssetRoot"
+    | "uploadBuffer"
   >;
   /** 技能面（AL/PM 批 + A3 扩 + A3 尾）：SkillRepository 桥——
    *  list/readSkill/setEnabled/setScenarios/uninstall + stats 事件表聚合 /

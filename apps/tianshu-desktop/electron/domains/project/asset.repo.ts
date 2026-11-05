@@ -287,6 +287,26 @@ export default class AssetRepository {
   }
 
   /**
+   * 单文件缓冲写入（被控面上传批）：目标目录自愈 + basename 清洗 + 重名
+   * 序号 + writeFile；返回落盘名（清洗/去重与 upload 同口径）
+   */
+  async uploadBuffer(
+    projectId: number,
+    folderPath: string,
+    fileName: string,
+    data: Buffer,
+  ): Promise<string> {
+    const destDir = safeJoin(
+      (await this.resolveAssetRoot(projectId)).root,
+      folderPath,
+    );
+    await this.ensureDir(destDir);
+    const destName = uniqueName(destDir, sanitizeName(fileName));
+    await fs.writeFile(path.join(destDir, destName), data);
+    return destName;
+  }
+
+  /**
    * 资产空间用量：根目录递归 du + 恒定软配额（5GiB）
    */
   async storage(projectId: number): Promise<AssetStorage> {

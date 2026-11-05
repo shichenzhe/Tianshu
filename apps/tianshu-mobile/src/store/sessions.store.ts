@@ -107,8 +107,14 @@ interface SessionsState {
   /** B5 撤销批：归档撤销窗口到点落定——默认视图下移除暂存行（组缓存同步
    *  滤行）；已撤销（无 pendingArchive 标记）/已移除为 no-op */
   settleArchive(id: number): void;
-  /** 新建会话（workspaceId 缺省挂被控端默认空间）；成功返回 brief 即时入列 */
-  create(title?: string, workspaceId?: number): Promise<SessionBrief | null>;
+  /** 新建会话（workspaceId 缺省挂被控端默认空间）；成功返回 brief 即时入列。
+   *  options.projectId 项目会话（空间由被控端按项目解析）、planItemId 任务
+   *  会话（服务端查重复用既有会话——一任务一会话 D1） */
+  create(
+    title?: string,
+    workspaceId?: number,
+    options?: { projectId?: number; planItemId?: number },
+  ): Promise<SessionBrief | null>;
   remove(id: number): Promise<boolean>;
   /** A8 工作空间管理批：新建空间（workspace/create；icon 可选 emoji——
    *  wire 概要不回读 icon）；成功投影四字段入清单并返回 */
@@ -643,10 +649,14 @@ export const useSessionsStore = create<SessionsState>((set, get) => {
       });
     },
 
-    create: async (title, workspaceId) => {
+    create: async (title, workspaceId, options) => {
       const r = await request(ENDPOINTS.session.create, {
         ...(title != null ? { title } : {}),
         ...(workspaceId != null ? { workspaceId } : {}),
+        ...(options?.projectId != null ? { projectId: options.projectId } : {}),
+        ...(options?.planItemId != null
+          ? { planItemId: options.planItemId }
+          : {}),
       });
       if (r === null) return null;
       const brief = toBrief(r.data as SessionRow);

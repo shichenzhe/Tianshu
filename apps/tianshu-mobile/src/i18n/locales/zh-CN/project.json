@@ -77,11 +77,65 @@
     "priority": "优先级",
     "dateInvalid": "日期格式须为 YYYY-MM-DD",
     "saveFailed": "保存失败",
-    "customFields": "自定义字段"
+    "customFields": "自定义字段",
+    "aiProgress": "AI 进展",
+    "descPreview": "预览",
+    "descEdit": "编辑"
   },
   "searchTasks": "搜索任务标题",
   "template": "项目模版",
   "deleteItem": "删除事项",
   "deleteItemConfirm": "确定删除「{{title}}」？该操作不可撤销。",
-  "moveTo": "移到{{status}}"
+  "moveTo": "移到{{status}}",
+  "openProjectSession": "项目会话",
+  "advanceTask": "推进",
+  "advanceFailed": "推进会话创建失败",
+  "upload": "上传",
+  "uploadInvalidName": "文件名须含合法扩展名",
+  "uploadTooLarge": "文件超过 3MB 上限",
+  "uploadFailed": "上传失败",
+  "filter": {
+    "title": "筛选",
+    "reset": "重置",
+    "empty": "无匹配事项，可调整筛选条件",
+    "valuePlaceholder": "包含关键字",
+    "field": {
+      "title": "标题",
+      "status": "状态",
+      "assigneeId": "处理人",
+      "source": "来源",
+      "priority": "优先级",
+      "tags": "标签"
+    },
+    "op": {
+      "contains": "包含",
+      "in": "属于",
+      "notIn": "不属于",
+      "isMe": "是我",
+      "notMe": "不是我"
+    },
+    "sourceManual": "手动",
+    "sourceAi": "AI",
+    "sourceTemplate": "模版"
+  },
+  "defaultView": "默认视图",
+  "newView": "新建视图",
+  "renameView": "重命名视图",
+  "deleteView": "删除视图",
+  "deleteViewConfirm": "确定删除视图「{{name}}」？项目至少保留一个视图（最后一个会被拒绝）。",
+  "viewName": "视图名称",
+  "viewType": {
+    "table": "表格",
+    "kanban": "看板",
+    "list": "清单",
+    "gantt": "甘特",
+    "calendar": "日历"
+  },
+  "groupBy": {
+    "status": "按状态",
+    "priority": "按优先级",
+    "assignee": "按处理人"
+  },
+  "groupByOption": "分组：{{by}}（当前）",
+  "groupBySet": "改为{{by}}分组"
 }

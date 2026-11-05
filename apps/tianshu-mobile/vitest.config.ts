@@ -17,5 +17,14 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // workspace 链接包（@tianshu/*）强制 inline：rolldown 对外置 CJS 的
+    // 双通道解析在 vi.mock 隔离图下产生第二实例（新旧 dist 键不一致，
+    // 2026-11-05 实证：store 图 upload=undefined 而 entry 图有值）——
+    // inline 走 transform 管道保单实例
+    server: {
+      deps: {
+        inline: [/@tianshu\/(protocol|core)/],
+      },
+    },
   },
 });

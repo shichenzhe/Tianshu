@@ -812,6 +812,48 @@ describe("被控面路由表（T11 查询端点）", () => {
     await expectBizError("POST", "memory/get", {}, "5000");
   });
 
+  it("create：projectId/planItemId 透传（项目/任务会话 D1——空间解析与查重内聚 repo）", async () => {
+    // 默认空间恒缺位：项目会话空间由 repo 按项目解析（防传错），不被
+    // 默认空间缺位挡成 4040（若预解析了即此断言红）
+    const wired = wireDeps(
+      {},
+      { resolveDefaultWorkspaceId: async () => null },
+    );
+    const calls: SessionCreateParams[] = [];
+    const original = wired.sessions.createSession;
+    wired.sessions.createSession = async (p, userId) => {
+      calls.push(p);
+      return original(p, userId);
+    };
+    const r = await handleRoute("POST", "session/create", {
+      projectId: 7,
+      planItemId: 42,
+      title: "任务推进",
+    });
+    expect(r.body.success).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      projectId: 7,
+      planItemId: 42,
+      title: "任务推进",
+    });
+
+    // 普通会话不传项目键：params 不落 projectId/planItemId（缺省行为不变）
+    const wired2 = wireDeps();
+    const calls2: SessionCreateParams[] = [];
+    const original2 = wired2.sessions.createSession;
+    wired2.sessions.createSession = async (p, userId) => {
+      calls2.push(p);
+      return original2(p, userId);
+    };
+    const plain = await handleRoute("POST", "session/create", {
+      title: "普通",
+    });
+    expect(plain.body.success).toBe(true);
+    expect(calls2[0]).not.toHaveProperty("projectId");
+    expect(calls2[0]).not.toHaveProperty("planItemId");
+  });
+
   it("create+query+getById+delete 闭环（workspaceId 缺省回落默认空间）", async () => {
     const wired = wireDeps();
     // create：不传 workspaceId → 被控面默认空间（resolveDefaultWorkspaceId）
@@ -2668,6 +2710,21 @@ function makeFakePlanView(overrides: Record<string, unknown> = {}) {
         updatedAt: "2026-10-26T00:00:00.000Z",
       },
     ]),
+    create: vi.fn(async () => ({
+      id: 9,
+      projectId: 3,
+      name: "新看板",
+      type: "kanban",
+      groupBy: null,
+      filterJson: "{}",
+      sortJson: "[]",
+      sortOrder: 1,
+      createdAt: "2026-10-26T00:00:00.000Z",
+      updatedAt: "2026-10-26T00:00:00.000Z",
+    })),
+    update: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
+    reorder: vi.fn(async () => {}),
     ...overrides,
   };
 }
@@ -2680,6 +2737,7 @@ function makeFakeProjectAsset(overrides: Record<string, unknown> = {}) {
     remove: vi.fn(async () => {}),
     storage: vi.fn(async () => ({ usedBytes: 1, quotaBytes: 2 })),
     readImage: vi.fn(async () => ({ mime: "image/png", dataBase64: "QUJD" })),
+    upload: vi.fn(async () => "a (1).png"),
     ...overrides,
   };
 }
@@ -2955,6 +3013,43 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
     expect(planView.list).toHaveBeenCalledWith(UID, 3);
   });
 
+  it("planView 写面四端点：载荷映射 + groupBy null 透传", async () => {
+    const planView = makeFakePlanView();
+    wireProjectFaces({ planView });
+
+    const r = await handleRoute("POST", ENDPOINTS.planView.create, {
+      projectId: 3,
+      type: "kanban",
+      name: "新看板",
+    });
+    expect(r.body).toMatchObject({
+      success: true,
+      data: { id: 9, name: "新看板", type: "kanban" },
+    });
+    expect(planView.create).toHaveBeenCalledWith(UID, 3, {
+      type: "kanban",
+      name: "新看板",
+    });
+    await handleRoute("POST", ENDPOINTS.planView.update, {
+      id: 1,
+      groupBy: null,
+      name: "改名",
+    });
+    expect(planView.update).toHaveBeenCalledWith(UID, {
+      id: 1,
+      groupBy: null,
+      name: "改名",
+    });
+    await handleRoute("POST", ENDPOINTS.planView.delete, { id: 1 });
+    expect(planView.remove).toHaveBeenCalledWith(UID, 1);
+    await handleRoute("POST", ENDPOINTS.planView.reorder, {
+      items: [{ id: 1, sortOrder: 2 }],
+    });
+    expect(planView.reorder).toHaveBeenCalledWith(UID, [
+      { id: 1, sortOrder: 2 },
+    ]);
+  });
+
   it("projectAsset 六端点：载荷映射 + 返回直透", async () => {
     const projectAsset = makeFakeProjectAsset();
     wireProjectFaces({ projectAsset });
@@ -3003,6 +3098,38 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
       data: { mime: "image/png", dataBase64: "QUJD" },
     });
     expect(projectAsset.readImage).toHaveBeenCalledWith(UID, 3, "a.png");
+  });
+
+  it("projectAsset/upload：{projectId,parentPath,name,base64} 载荷映射，返回落盘名", async () => {
+    const projectAsset = makeFakeProjectAsset();
+    wireProjectFaces({ projectAsset });
+    const r = await handleRoute("POST", ENDPOINTS.projectAsset.upload, {
+      projectId: 3,
+      parentPath: "docs",
+      name: "a.png",
+      base64: "AQID",
+    });
+    expect(r.body).toMatchObject({ success: true, data: "a (1).png" });
+    expect(projectAsset.upload).toHaveBeenCalledWith(
+      UID,
+      3,
+      "docs",
+      "a.png",
+      "AQID",
+    );
+    // parentPath 缺省 = 根层（空串归一）
+    await handleRoute("POST", ENDPOINTS.projectAsset.upload, {
+      projectId: 3,
+      name: "b.png",
+      base64: "AQID",
+    });
+    expect(projectAsset.upload).toHaveBeenLastCalledWith(
+      UID,
+      3,
+      "",
+      "b.png",
+      "AQID",
+    );
   });
 
   it("非法载荷：/ 开头 path / 空 name / readImage 空 path", async () => {

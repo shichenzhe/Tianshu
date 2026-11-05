@@ -398,9 +398,11 @@ export const ENDPOINTS = {
     listFullGrants: "permission/listFullGrants",
     revokeAllFull: "permission/revokeAllFull",
   },
-  // A7 项目批（23 段，桌面被控面专属）：project 六段 / planItem 十段 /
-  // planView 只读一段（含懒播种语义）/ projectAsset 六段（readImage 服务端
-  // 解析资产根，不泄物理布局）；文本预览复用 files/list|read
+  // A7 项目批（28 段，桌面被控面专属）：project 六段 / planItem 十段 /
+  // planView 五段（含懒播种语义；写面四段 2026-11-05 批）/ projectAsset
+  // 七段（readImage 服务端解析资产根，不泄物理布局；upload 为 base64
+  // 单文件写面——3MB 解码后字节计，对齐 library uploadFile 口径）；
+  // 文本预览复用 files/list|read
   project: {
     query: "project/query",
     getDetail: "project/getDetail",
@@ -423,6 +425,15 @@ export const ENDPOINTS = {
   },
   planView: {
     list: "planView/list",
+    /** 创建视图（type 五型枚举校验；重名自动 (n) 后缀在服务端）；返回
+     *  PlanViewRecordDto */
+    create: "planView/create",
+    /** 局部更新（name/type/groupBy/filterJson/sortJson 传啥改啥） */
+    update: "planView/update",
+    /** 删除（最后一个拒删 PLAN_VIEW_LAST_ONE） */
+    delete: "planView/delete",
+    /** Tab 顺序批量更新 */
+    reorder: "planView/reorder",
   },
   projectAsset: {
     list: "projectAsset/list",
@@ -431,6 +442,9 @@ export const ENDPOINTS = {
     delete: "projectAsset/delete",
     storage: "projectAsset/storage",
     readImage: "projectAsset/readImage",
+    /** 载荷 { projectId, parentPath, name, base64 }（parentPath 同 createFolder
+     *  口径 "/" 拼接，缺省根层）；返回服务端去重后的落盘名 */
+    upload: "projectAsset/upload",
   },
   ui: {
     openSession: "ui/openSession",

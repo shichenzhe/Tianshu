@@ -171,6 +171,31 @@ export interface PlanViewRecordDto {
   updatedAt: string;
 }
 
+/** planView/create 载荷（name 缺省空串=服务端播种默认名语义） */
+export interface PlanViewCreatePayload {
+  projectId: number;
+  name?: string;
+  type: PlanViewType;
+  groupBy?: PlanGroupBy | null;
+  filterJson?: string;
+  sortJson?: string;
+}
+
+/** planView/update 载荷（局部更新，仅传键生效；groupBy null=清除分组） */
+export interface PlanViewUpdatePayload {
+  id: number;
+  name?: string;
+  type?: PlanViewType;
+  groupBy?: PlanGroupBy | null;
+  filterJson?: string;
+  sortJson?: string;
+}
+
+/** planView/reorder 载荷（Tab 批量排序） */
+export interface PlanViewReorderPayload {
+  items: Array<{ id: number; sortOrder: number }>;
+}
+
 /** 资产条目（目录树行） */
 export interface AssetEntryDto {
   name: string;
@@ -217,9 +242,11 @@ export const PROJECT_ERROR_CODES = [
   "PROJECT_NOT_FOUND",
   "PROJECT_NAME_EXISTS",
   "PLAN_ITEM_NOT_FOUND",
+  "PLAN_VIEW_NOT_FOUND",
   "PLAN_VIEW_LAST_ONE",
   "ASSET_PATH_ESCAPE",
   "ASSET_NOT_FOUND",
   "ASSET_NAME_INVALID",
+  "ASSET_UPLOAD_INVALID",
 ] as const;
 export type ProjectErrorCode = (typeof PROJECT_ERROR_CODES)[number];

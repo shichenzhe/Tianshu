@@ -391,6 +391,7 @@ describe("project-asset-tap（A7 桌面被控面）", () => {
       rename: vi.fn(async () => "b.png"),
       delete: vi.fn(async () => {}),
       storage: vi.fn(async () => ({ usedBytes: 1, quotaBytes: 2 })),
+      uploadBuffer: vi.fn(async () => "a (1).png"),
       resolveAssetRoot: vi.fn(async () => ({
         root: dataRoot,
         workspaceId: 30,
@@ -511,6 +512,42 @@ describe("project-asset-tap（A7 桌面被控面）", () => {
       code: "PROJECT_NOT_FOUND",
     });
     expect(base.resolveAssetRoot).not.toHaveBeenCalled();
+  });
+
+  it("upload：守卫通过 → base64 解码后透传 uploadBuffer，返回去重落盘名", async () => {
+    const { face, base } = makeFace();
+    const data = Buffer.from([1, 2, 3]);
+    await expect(
+      face.upload(UID, 3, "docs", "a.png", data.toString("base64")),
+    ).resolves.toBe("a (1).png");
+    expect(base.uploadBuffer).toHaveBeenCalledWith(3, "docs", "a.png", data);
+  });
+
+  it("upload：空内容/超 3MB → ASSET_UPLOAD_INVALID；守卫拒绝 repo 未触达", async () => {
+    const { face, base } = makeFace();
+    await expect(face.upload(UID, 3, "", "a.png", "")).rejects.toMatchObject({
+      code: "ASSET_UPLOAD_INVALID",
+    });
+    const big = Buffer.alloc(3 * 1024 * 1024 + 1).toString("base64");
+    await expect(
+      face.upload(UID, 3, "", "big.bin", big),
+    ).rejects.toMatchObject({ code: "ASSET_UPLOAD_INVALID" });
+    expect(base.uploadBuffer).not.toHaveBeenCalled();
+
+    const projectRepo = {
+      assertProjectVisible: vi.fn(async () => {
+        throw new Error("PROJECT_NOT_FOUND");
+      }),
+    };
+    const { repo, base: base2 } = fakeAssetRepo();
+    const face2 = createProjectAssetFace(
+      projectRepo as unknown as Parameters<typeof createProjectAssetFace>[0],
+      repo,
+    );
+    await expect(
+      face2.upload(UID, 3, "", "a.png", Buffer.from("x").toString("base64")),
+    ).rejects.toMatchObject({ code: "PROJECT_NOT_FOUND" });
+    expect(base2.uploadBuffer).not.toHaveBeenCalled();
   });
 });
 

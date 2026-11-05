@@ -602,6 +602,15 @@ export interface ServerFaceProjectAsset {
     projectId: number,
     path: string,
   ): Promise<LibraryReadImageResult>;
+  /** 单文件 base64 上传（≤3MB 解码后字节计，ASSET_UPLOAD_INVALID 稳定码）；
+   *  返回服务端去重后的落盘名 */
+  upload(
+    userId: number,
+    projectId: number,
+    parentPath: string,
+    name: string,
+    base64: string,
+  ): Promise<string>;
 }
 
 /** 分页列表壳（无头端 starter QueryResult 同形——records 命名以移动端

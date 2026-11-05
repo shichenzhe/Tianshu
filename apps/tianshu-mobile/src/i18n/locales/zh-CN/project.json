@@ -89,5 +89,9 @@
   "moveTo": "移到{{status}}",
   "openProjectSession": "项目会话",
   "advanceTask": "推进",
-  "advanceFailed": "推进会话创建失败"
+  "advanceFailed": "推进会话创建失败",
+  "upload": "上传",
+  "uploadInvalidName": "文件名须含合法扩展名",
+  "uploadTooLarge": "文件超过 3MB 上限",
+  "uploadFailed": "上传失败"
 }

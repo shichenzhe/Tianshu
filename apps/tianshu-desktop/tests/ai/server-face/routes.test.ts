@@ -2722,6 +2722,7 @@ function makeFakeProjectAsset(overrides: Record<string, unknown> = {}) {
     remove: vi.fn(async () => {}),
     storage: vi.fn(async () => ({ usedBytes: 1, quotaBytes: 2 })),
     readImage: vi.fn(async () => ({ mime: "image/png", dataBase64: "QUJD" })),
+    upload: vi.fn(async () => "a (1).png"),
     ...overrides,
   };
 }
@@ -3045,6 +3046,38 @@ describe("planView/projectAsset 七端点（A7 项目批）", () => {
       data: { mime: "image/png", dataBase64: "QUJD" },
     });
     expect(projectAsset.readImage).toHaveBeenCalledWith(UID, 3, "a.png");
+  });
+
+  it("projectAsset/upload：{projectId,parentPath,name,base64} 载荷映射，返回落盘名", async () => {
+    const projectAsset = makeFakeProjectAsset();
+    wireProjectFaces({ projectAsset });
+    const r = await handleRoute("POST", ENDPOINTS.projectAsset.upload, {
+      projectId: 3,
+      parentPath: "docs",
+      name: "a.png",
+      base64: "AQID",
+    });
+    expect(r.body).toMatchObject({ success: true, data: "a (1).png" });
+    expect(projectAsset.upload).toHaveBeenCalledWith(
+      UID,
+      3,
+      "docs",
+      "a.png",
+      "AQID",
+    );
+    // parentPath 缺省 = 根层（空串归一）
+    await handleRoute("POST", ENDPOINTS.projectAsset.upload, {
+      projectId: 3,
+      name: "b.png",
+      base64: "AQID",
+    });
+    expect(projectAsset.upload).toHaveBeenLastCalledWith(
+      UID,
+      3,
+      "",
+      "b.png",
+      "AQID",
+    );
   });
 
   it("非法载荷：/ 开头 path / 空 name / readImage 空 path", async () => {

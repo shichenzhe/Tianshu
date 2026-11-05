@@ -398,9 +398,10 @@ export const ENDPOINTS = {
     listFullGrants: "permission/listFullGrants",
     revokeAllFull: "permission/revokeAllFull",
   },
-  // A7 项目批（23 段，桌面被控面专属）：project 六段 / planItem 十段 /
-  // planView 只读一段（含懒播种语义）/ projectAsset 六段（readImage 服务端
-  // 解析资产根，不泄物理布局）；文本预览复用 files/list|read
+  // A7 项目批（24 段，桌面被控面专属）：project 六段 / planItem 十段 /
+  // planView 只读一段（含懒播种语义）/ projectAsset 七段（readImage 服务端
+  // 解析资产根，不泄物理布局；upload 为 base64 单文件写面——3MB 解码后
+  // 字节计，对齐 library uploadFile 口径）；文本预览复用 files/list|read
   project: {
     query: "project/query",
     getDetail: "project/getDetail",
@@ -431,6 +432,9 @@ export const ENDPOINTS = {
     delete: "projectAsset/delete",
     storage: "projectAsset/storage",
     readImage: "projectAsset/readImage",
+    /** 载荷 { projectId, parentPath, name, base64 }（parentPath 同 createFolder
+     *  口径 "/" 拼接，缺省根层）；返回服务端去重后的落盘名 */
+    upload: "projectAsset/upload",
   },
   ui: {
     openSession: "ui/openSession",

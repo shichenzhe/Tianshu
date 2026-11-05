@@ -2456,6 +2456,24 @@ function handleProjectAssetReadImage(body: unknown): Promise<RouteResult> {
   );
 }
 
+function handleProjectAssetUpload(body: unknown): Promise<RouteResult> {
+  const p = (body ?? {}) as Record<string, unknown>;
+  const projectId = asInt(p.projectId);
+  const parentPath = asAssetPath(p.parentPath);
+  const name = asName(p.name);
+  const base64 = typeof p.base64 === "string" ? p.base64 : null;
+  if (projectId === null || parentPath === null || name === null || !base64) {
+    return Promise.resolve(
+      bizError("5000", "projectId/parentPath/name/base64 参数不合法"),
+    );
+  }
+  return faceHandler(
+    (d) => d.projectAsset,
+    "projectAsset",
+    (face, userId) => face.upload(userId, projectId, parentPath, name, base64),
+  );
+}
+
 const ROUTES: Record<string, RouteHandler> = {
   "GET info": handleInfo,
   "POST session/create": handleCreate,
@@ -2618,6 +2636,9 @@ const ROUTES: Record<string, RouteHandler> = {
   [`POST ${ENDPOINTS.projectAsset.delete}`]: handleProjectAssetDelete,
   [`POST ${ENDPOINTS.projectAsset.storage}`]: handleProjectAssetStorage,
   [`POST ${ENDPOINTS.projectAsset.readImage}`]: handleProjectAssetReadImage,
+  // A7 项目批：base64 单文件上传写面（tap 层 3MB/空内容守卫，
+  // ASSET_UPLOAD_INVALID 稳定码信封）
+  [`POST ${ENDPOINTS.projectAsset.upload}`]: handleProjectAssetUpload,
   "POST image": handleImage,
   "POST ui/openSession": handleUiOpenSession,
   "POST ui/notify": handleUiNotify,

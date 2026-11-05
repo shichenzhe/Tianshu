@@ -102,6 +102,13 @@ interface ProjectState {
   peekAssets(projectId: number, path?: string[]): Promise<AssetEntryDto[]>;
   loadStorage(projectId: number): Promise<void>;
   createFolder(projectId: number, name: string): Promise<boolean>;
+  /** 单文件 base64 上传（3MB 客户端预检在调用方 pickLibraryFile；
+   *  服务端 ASSET_UPLOAD_INVALID 兜底；成功后刷新资产面与用量） */
+  uploadAsset(
+    projectId: number,
+    name: string,
+    base64: string,
+  ): Promise<boolean>;
   renameAsset(
     projectId: number,
     path: string[],
@@ -746,6 +753,13 @@ export const useProjectStore = create<ProjectState>((set, get) => {
       enqueueWrite(
         ENDPOINTS.projectAsset.createFolder,
         { projectId, parentPath: get().folderPath.join("/"), name },
+        refreshAssetsAfterWrite,
+      ),
+
+    uploadAsset: (projectId, name, base64) =>
+      enqueueWrite(
+        ENDPOINTS.projectAsset.upload,
+        { projectId, parentPath: get().folderPath.join("/"), name, base64 },
         refreshAssetsAfterWrite,
       ),
 

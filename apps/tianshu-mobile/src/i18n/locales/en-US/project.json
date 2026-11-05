@@ -89,5 +89,9 @@
   "moveTo": "Move to {{status}}",
   "openProjectSession": "Project session",
   "advanceTask": "Advance",
-  "advanceFailed": "Failed to create task session"
+  "advanceFailed": "Failed to create task session",
+  "upload": "Upload",
+  "uploadInvalidName": "File name must have a valid extension",
+  "uploadTooLarge": "File exceeds the 3MB limit",
+  "uploadFailed": "Upload failed"
 }

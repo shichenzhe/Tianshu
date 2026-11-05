@@ -221,5 +221,6 @@ export const PROJECT_ERROR_CODES = [
   "ASSET_PATH_ESCAPE",
   "ASSET_NOT_FOUND",
   "ASSET_NAME_INVALID",
+  "ASSET_UPLOAD_INVALID",
 ] as const;
 export type ProjectErrorCode = (typeof PROJECT_ERROR_CODES)[number];

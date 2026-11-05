@@ -357,6 +357,29 @@ describe("project.store", () => {
     ]);
   });
 
+  it("uploadAsset：{projectId,parentPath,name,base64} 载荷 + 写后刷新资产面", async () => {
+    const t = makeTransport();
+    t.request.mockResolvedValue(successBody("a (1).png"));
+    connMock.activeTransport.mockReturnValue(t);
+    await useProjectStore.getState().loadAssets(5, ["docs"]);
+    t.request.mockClear();
+    await useProjectStore.getState().uploadAsset(5, "a.png", "AQID");
+    const uploadCall = t.request.mock.calls.find(
+      (call) => call[1] === ENDPOINTS.projectAsset.upload,
+    );
+    expect(uploadCall?.[2]).toEqual({
+      projectId: 5,
+      parentPath: "docs",
+      name: "a.png",
+      base64: "AQID",
+    });
+    const paths = t.request.mock.calls
+      .filter((c) => String(c[1]).startsWith("projectAsset/"))
+      .map((c) => c[1]);
+    expect(paths).toContain(ENDPOINTS.projectAsset.list);
+    expect(paths).toContain(ENDPOINTS.projectAsset.storage);
+  });
+
   it("loadDetail 并联 getDetail + listMembers", async () => {
     const t = makeTransport();
     t.request

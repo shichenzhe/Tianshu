@@ -37,6 +37,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Upload,
   X,
 } from "lucide-react-native";
 import {
@@ -68,6 +69,7 @@ import { PlanItemDialog } from "@/components/PlanItemDialog";
 import { formatSize } from "@/lib/format-size";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
 import { toast } from "@/lib/toast-bus";
+import { pickLibraryFile } from "@/logic/library-upload";
 import { formatRelative } from "@/logic/time";
 import {
   useConnectionCapabilities,
@@ -560,6 +562,26 @@ export default function ProjectWorkspaceScreen() {
     router.push(`/session/${brief.id}`);
   }
 
+  /** 资产上传（桌面对齐 AssetsPane 上传；复用资料库 picker→base64 链——
+   *  扩展名守卫与 3MB 客户端预检同口径，服务端 ASSET_UPLOAD_INVALID 兜底）；
+   *  成功不 toast——资产面与用量经 refreshAssetsAfterWrite 刷新即见 */
+  async function handleUploadAsset() {
+    const picked = await pickLibraryFile();
+    if (picked === null) return;
+    if (picked === "invalid") {
+      toast.info(t("project:uploadInvalidName"));
+      return;
+    }
+    if (picked === "tooLarge") {
+      toast.info(t("project:uploadTooLarge"));
+      return;
+    }
+    const ok = await useProjectStore
+      .getState()
+      .uploadAsset(projectId, picked.name, picked.base64);
+    if (!ok) toast.error(t("project:uploadFailed"));
+  }
+
   function notifyFailure() {
     const message = useProjectStore.getState().hub.error;
     toast.error(message || t("project:loadFailed"));
@@ -823,9 +845,20 @@ export default function ProjectWorkspaceScreen() {
             </Text>
           </View>
         )}
-        {/* 新建文件夹入口（桌面对齐：create 态弹窗逻辑本就备好，
-            此前缺触发点致功能不可达；重命名后残留旧名故先清空） */}
-        <View className="flex-row justify-end px-4 pb-2">
+        {/* 资产工具行：上传（picker→base64）+ 新建文件夹（桌面对齐：
+            create 态弹窗逻辑本就备好，此前缺触发点致功能不可达；
+            重命名后残留旧名故先清空） */}
+        <View className="flex-row justify-end gap-4 px-4 pb-2">
+          <Pressable
+            onPress={() => void handleUploadAsset()}
+            className="flex-row items-center gap-1"
+            hitSlop={8}
+          >
+            <Upload size={14} color={colors.primary} />
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {t("project:upload")}
+            </Text>
+          </Pressable>
           <Pressable
             onPress={() => {
               setAssetName("");

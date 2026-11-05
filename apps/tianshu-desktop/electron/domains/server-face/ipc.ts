@@ -335,6 +335,7 @@ export function attachServerFace(deps: {
     | "delete"
     | "storage"
     | "resolveAssetRoot"
+    | "uploadBuffer"
   >;
   /** 技能面（AL/PM 批 + A3 扩 + A3 尾）：SkillRepository 桥——
    *  list/readSkill/setEnabled/setScenarios/uninstall + stats 事件表聚合 /

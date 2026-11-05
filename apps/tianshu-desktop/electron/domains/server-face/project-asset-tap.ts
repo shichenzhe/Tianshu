@@ -16,6 +16,10 @@ import { FaceProjectError, toFaceProjectError } from "./project-tap";
 /** readImage 图片上限（对齐 library-tap 与 workspace-files IMAGE_READ_LIMIT） */
 const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
+/** upload 原始二进制上限（对齐 library-tap UPLOAD_MAX_BYTES 3MB——relay
+ *  单帧 4MiB 余量；base64 解码后字节计） */
+const UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
+
 /** readImage 扩展名 → mime 白名单（library-tap 同口径——不回传可含脚本的 svg） */
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
   ".png": "image/png",
@@ -29,7 +33,13 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = {
 type ProjectGuard = Pick<ProjectRepository, "assertProjectVisible">;
 type AssetRepoSubset = Pick<
   AssetRepository,
-  "list" | "createFolder" | "rename" | "delete" | "storage" | "resolveAssetRoot"
+  | "list"
+  | "createFolder"
+  | "rename"
+  | "delete"
+  | "storage"
+  | "resolveAssetRoot"
+  | "uploadBuffer"
 >;
 
 /** 逐方法守门：非 owner 非成员拒（PROJECT_NOT_FOUND，存在性不泄露口径） */
@@ -116,6 +126,22 @@ export function createProjectAssetFace(
     readImage: async (userId, projectId, relPath) => {
       await assertVisible(projectRepo, userId, projectId);
       return readImageOf(assetRepo, projectId, relPath);
+    },
+    upload: async (userId, projectId, parentPath, name, base64) => {
+      await assertVisible(projectRepo, userId, projectId);
+      const data = Buffer.from(base64, "base64");
+      if (data.length === 0) {
+        throw new FaceProjectError("ASSET_UPLOAD_INVALID", "上传内容为空");
+      }
+      if (data.length > UPLOAD_MAX_BYTES) {
+        throw new FaceProjectError(
+          "ASSET_UPLOAD_INVALID",
+          "文件超过 3MB 上限",
+        );
+      }
+      return assetRepo
+        .uploadBuffer(projectId, parentPath, name, data)
+        .catch(toFaceProjectError);
     },
   };
 }

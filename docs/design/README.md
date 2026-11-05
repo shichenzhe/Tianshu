@@ -32,23 +32,56 @@
 5. **普遍缺口模式二：元数据缺失**。model.contextWindow 曾全 NULL 致截断失控（#9 已修但余静态假设）、无价格表致成本无法核算（#8）、无能力协商致 fallback 路由缺失（#10）。
 6. **HITL 断层**：工具级审批门禁成熟（#2），但工作流级 interrupt/审批未接（#3）、专家团调度过程不可见（#7）——人机协同在「图」与「团」两个多步执行体上是共同短板。
 
-## 全局优先改进汇总（跨模块 P0/P1）
+## 全局优先改进汇总（2026-11-05 落地批后状态）
 
-| 优先级 | 事项 | 来源 |
-|--------|------|------|
-| P0 | 核实并修复桌面 chat.service 直读 provider 未走 openSecret（潜在密文请求） | #10 provider-model |
-| P0 | 资料库桌面端写侧向量化补齐 + chat 引用溯源角标 | #6 library-rag |
-| P0 | TOFU 指纹用户确认 UI（relay 中间人防御闭环） | #2 security |
-| P0 | 监控页接入 host-route + server 事件表保留期裁剪 | #8 monitoring |
-| P1 | 记忆 userId 隔离与跨主机同源（换主机失忆） | #1 memory |
-| P1 | 模型元数据三件套：contextWindow 权威值 / 价格表 / 能力矩阵（联动截断、成本核算、fallback） | #9 #10 #8 |
-| P1 | 工作流 checkpointer + interrupt（断点恢复与 HITL） | #3 workflow-graphs |
-| P1 | 专家团成员调用监控埋点 + 调度过程可视 | #7 experts |
-| P2 | sqlite-vec 真向量索引（schema 注释钦定路径）与语义切块 | #6 library-rag |
-| P2 | E2E 密钥棘轮（前向保密）、relay 多副本 | #12 multi-host / #2 security |
-| P2 | 定时任务 backoff 重试与分布式锁 | #4 automation |
+以下为原汇总表的执行结果：**P0/P1 中 9 项已落地**（2026-11-05 落地批，19 commit 自 32a176de 起），其余按规模挂账。
+
+### ✅ 已落地（2026-11-05 落地批，各篇 §6 已标 ✅）
+
+| 原优先级 | 事项 | 落地 commit |
+|----------|------|-------------|
+| P0 | 桌面 chat 引擎 provider apiKey 解密收口（实况 6 处裸读点）+ 加密降级状态透出 | 59ea9f00 |
+| P0 | 监控页 host-route 化 + 主机页用量摘要卡 + server 事件 90 天保留期裁剪 | 50fc70e6 |
+| P0 | TOFU 指纹用户确认仪式（首连确认卡+确认后强制校验）+ 连接详情指纹常显 | 4e644049 |
+| P0 | server 操作日志启用（配置驱动）+ 非 loopback 无 TLS 启动告警 | 1787a8cb |
+| P0 | 资料库桌面写侧向量化（vectorizeLibraryContent 收编 core）+ 递归切块 + library_search 语义版 | d1befe67 |
+| P1 | 记忆 userId 命名空间隔离（迁移三态不断忆）+ 注入预算治理 + 条目溯源逐条删除 + 「记住这个」入口 + 导出/导入 | 1712db39 |
+| P1 | 模型元数据：capabilities/价格/fallback 四列 + 内置模型目录回填 contextWindow + 成本折算三端 + benchModel 测速 + comfyui 显式分支 | 3dcb4af8 |
+| P1 | 瞬态错误重试 + fallback 按备选自身参数/窗口构造（修复环） | 3dcb4af8 + a2608dbf |
+| P1 | 专家团成员调用埋点（llmCallEvent meta 列）+ memberReport 块（三份 blocks 同形+折叠卡）+ 截断丢失提示 | 6a60b9e3 |
+| — | 图运行快照留痕 + webhook 触发互斥 + notify 无头端降级标注 | 2249f375 |
+| — | 自动化重试指数退避（classifyError 可重试面）+ 错过补跑参数化 + 统计每日 rollup | 6c1ca49b |
+| — | queryKey 主机隔离（hash 中心收口）+ protocolVersion 协商 + 直连明文警示徽标 | c1d089aa |
+| — | MCP 调用进监控聚合（mcp__ 分组+按 server 视图） | 1787a8cb |
+| — | 技能级工具声明（SKILL.md tools 字段）+ MCP 折叠会话自适应 + toolPermission lastUsedAt 治理 + 审批参数级 pattern（元字符守卫 7 例红线） | 1b917a78 |
+| — | 项目记忆沉淀（memory.md 双层上下文+无标记内容保留）+ 项目域三类审计 + 附件死链治理 + 失效挂载清理 | 07c4e17f + 26d08a33 |
+
+### 📋 挂账（需单独立项或用户裁定）
+
+**大工程类（建议独立 spec 立项）**：
+- 工作流 checkpointer/断点恢复 + HITL/interrupt（需审中心支撑）｜#3
+- sqlite-vec 真向量索引（双 ABI 链纳入 setup:native）｜#6
+- E2E 密钥双棘轮（前向保密，wire 契约演进）+ OS 级沙箱（sandbox-exec/Landlock）｜#2 #12
+- chat.service 拆分（六域职责巨石）｜#9
+- 多主机并发会话（per-host 会话视图）+ relay 多副本/注册表外置｜#12
+- 会话分叉树 + text/thinking 块 id 协议变更｜#9
+- 专家知识库绑定（libraryIds 列+检索收窄）+ 专家附带连接器 + 成员受限 subagent + builtin 种子 + server 专家团对齐｜#7
+- 记忆语义检索化 P1/P5（复用 vectorChunk，依赖检索立项）+ 跨主机同源方案 A/B/C 裁定｜#1
+- GraphRAG / 多模态入库 / OTel GenAI 导出（长线）｜#6 #8
+
+**中小项（随手批可收）**：
+- 资料库引用溯源 UI（角标+跳转定位，P0-2 后半）｜#6
+- 记忆即时性 P3（会话事件驱动增量整理）｜#1
+- automation 时区 tz 字段 / powerMonitor suspend-resume / 分布式锁 / webhook 任务级触发｜#4
+- workflow 编辑器体验（dag 布局/连线预检/子图下钻）+ executor 双副本 drift 纳基线｜#3
+- provider 导入预填 / vision 前置拦截 / Ollama /api/show 窗口元数据｜#10
+- 桌面监控事件周期裁剪 + 会话级 trace 下钻 + 错误/中止轮补行（outcome 列）｜#8
+- 移动端 TOFU 确认仪式 + planView valid 消费 UI｜#12 #5
+- 文件门 block 面从 askLevelActive 剔除（安全加固优先，Task 11 minor-1）｜#2
+- 各任务 review 过程沉淀的 deferred minor（见 .superpowers ledger，随 final review triage）
 
 ## 阅读约定
 
 - 各篇「业界主流做法对比」一节为撰写时的业界参照（ChatGPT Memory/Mem0/Letta、LangGraph/Dify/Coze/n8n/Temporal、sqlite-vec/混合检索/GraphRAG、Langfuse/Helicone/OTel、Claude Code 权限模式、VS Code Remote/Signal 协议等），用于定位天枢的相对位置；技术细节部分则以当次代码实况为准。
 - 「未实现/未找到」均如实标注；已知历史裁定（如 stdio MCP 写面不做、移动端不做编排页）在各篇改进建议中已尊重，未反向建议。
+- 各篇 §6 改进空间节的 ✅ 标记对应 2026-11-05 落地批（19 commit），标注与代码实况经逐任务独立 review 核实。

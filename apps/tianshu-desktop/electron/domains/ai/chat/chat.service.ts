@@ -173,8 +173,9 @@ type ChatMessageRow = Awaited<
 registerTools(makePlanTools({ prisma }));
 // show_widget：聊天面板可视化组件（渲染层消费 args，无工作空间依赖）
 registerTools([makeWidgetTool()]);
-// library_search（2026-11-01 审查余项⑨）：chat 模型检索资料库（文件名
-// 关键词，用户级能力无工作空间依赖——无工作空间白名单成员）
+// library_search（2026-11-01 审查余项⑨；批2 升级语义向量版）：chat 模型
+// 检索资料库（library 集合语义检索，未建索引降级文件名关键词——用户级
+// 能力无工作空间依赖——无工作空间白名单成员）
 registerTools([makeLibrarySearchTool()]);
 // search_history（spec 2026-11-02）：chat 模型检索历史会话——三级裁剪
 // 均单向有损，本工具兜底回捞（用户级能力无工作空间依赖——同白名单）

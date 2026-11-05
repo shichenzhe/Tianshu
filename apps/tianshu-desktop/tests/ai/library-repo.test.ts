@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import fs from "node:fs/promises";
+import { chunkText } from "@tianshu/core";
 
 import { libraryDir } from "../../electron/commons/paths";
 
@@ -357,5 +358,126 @@ describe("uploadFileBuffer 二进制入库（资料库上传批）", () => {
     await expect(
       repo.uploadFileBuffer("???", Buffer.from("m"), null, UID),
     ).rejects.toThrow("名称无效");
+  });
+});
+
+describe("写侧向量化挂载（批2 P0-1：library 集合写侧 + 孤儿块清理）", () => {
+  type UpsertParams = {
+    userId: number;
+    collection: string;
+    sourceName: string;
+    model: string;
+    chunks: Array<{ seq: number; text: string; vector: number[] }>;
+  };
+  const upsertCalls: UpsertParams[] = [];
+  const deleteCalls: Array<[number, string, string]> = [];
+  const embedModelIds: number[] = [];
+
+  /** 替身 deps：db/embed/upsert/deleteSource 全注入（桌面接线壳的缺省
+   *  真身不进单测——graph-executor embedTexts 会拉起 provider 链） */
+  const vectorizeDeps = {
+    db: { model: { findFirst: async () => ({ id: 9 }) } },
+    embed: async (modelId: number, texts: string[]) => {
+      embedModelIds.push(modelId);
+      return texts.map(() => [1, 0.5]);
+    },
+    upsert: async (params: UpsertParams) => {
+      upsertCalls.push(params);
+    },
+    deleteSource: async (
+      userId: number,
+      collection: string,
+      sourceName: string,
+    ) => {
+      deleteCalls.push([userId, collection, sourceName]);
+    },
+  };
+
+  const SRC_MD = "/tmp/tianshu-vectorize-mount.md";
+  const MD_CONTENT = ["# 标题", "第一段内容。".repeat(30), "第二段内容。".repeat(40)].join(
+    "\n\n",
+  );
+
+  beforeEach(async () => {
+    table.length = 0;
+    nextId = 1;
+    upsertCalls.length = 0;
+    deleteCalls.length = 0;
+    embedModelIds.length = 0;
+    await fs.writeFile(SRC_MD, MD_CONTENT, "utf8");
+  });
+
+  it("addFiles 文本文件后 fire-and-forget upsertChunks（library 集合 + 递归切块）", async () => {
+    const repo = new LibraryRepository(undefined, vectorizeDeps);
+    const result = await repo.addFiles([SRC_MD], null, UID);
+    expect(result.failed).toHaveLength(0);
+    await vi.waitFor(() => expect(upsertCalls).toHaveLength(1));
+    const params = upsertCalls[0];
+    expect(params).toMatchObject({
+      userId: UID,
+      collection: "library",
+      sourceName: "tianshu-vectorize-mount.md",
+      model: "9", // String(modelId) 入库契约
+    });
+    // 分块本体即 @tianshu/core chunkText（批2 递归切分同源）
+    expect(params.chunks.map((c) => c.text)).toEqual(chunkText(MD_CONTENT));
+    expect(params.chunks.map((c) => c.seq)).toEqual(
+      params.chunks.map((_, i) => i),
+    );
+    expect(embedModelIds).toEqual([9]);
+  });
+
+  it("uploadFileBuffer 文本 buffer 向量化；二进制（zip）跳过不触 embed", async () => {
+    const repo = new LibraryRepository(undefined, vectorizeDeps);
+    await repo.uploadFileBuffer(
+      "笔记.md",
+      Buffer.from("# 笔记\n\n正文内容", "utf8"),
+      null,
+      UID,
+    );
+    await vi.waitFor(() => expect(upsertCalls).toHaveLength(1));
+    expect(upsertCalls[0].sourceName).toBe("笔记.md");
+
+    upsertCalls.length = 0;
+    await repo.uploadFileBuffer(
+      "资料.zip",
+      Buffer.from([80, 75, 3, 4]),
+      null,
+      UID,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(upsertCalls).toHaveLength(0); // isTextualContent 拦下二进制
+  });
+
+  it("writeFileContent 编辑保存后向量化；超 3MB 读回上限跳过", async () => {
+    const repo = new LibraryRepository(undefined, vectorizeDeps);
+    const folder = await repo.createFolder("F", null, UID);
+    const file = await repo.createFile("note.md", folder.id, UID);
+    await repo.writeFileContent(file.id, "编辑后的内容。".repeat(50), UID);
+    await vi.waitFor(() => expect(upsertCalls).toHaveLength(1));
+    expect(upsertCalls[0].sourceName).toBe("note.md");
+
+    upsertCalls.length = 0;
+    await repo.writeFileContent(file.id, "x".repeat(3 * 1024 * 1024 + 1), UID);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(upsertCalls).toHaveLength(0); // 超限不读回不编排
+  });
+
+  it("delete 子树文件名清孤儿块；rename file 清旧名块（folder 不触）", async () => {
+    const repo = new LibraryRepository(undefined, vectorizeDeps);
+    const folder = await repo.createFolder("F", null, UID);
+    const file = await repo.createFile("note.md", folder.id, UID);
+    await repo.delete([folder.id], UID);
+    expect(deleteCalls).toContainEqual([UID, "library", "note.md"]);
+
+    deleteCalls.length = 0;
+    const single = await repo.createFile("solo.md", null, UID);
+    await repo.rename(single.id, "renamed.md", UID);
+    expect(deleteCalls).toContainEqual([UID, "library", "solo.md"]);
+
+    deleteCalls.length = 0;
+    const plain = await repo.createFolder("dir", null, UID);
+    await repo.rename(plain.id, "dir2", UID);
+    expect(deleteCalls).toHaveLength(0); // folder 无向量块语义
   });
 });

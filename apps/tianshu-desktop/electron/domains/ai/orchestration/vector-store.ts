@@ -6,7 +6,7 @@
  * 维度混用防线：块携带 embedding 模型 id，检索按同模型过滤（不同模型
  * 维度不同，余弦无意义）。
  */
-import { rankBm25, type FusedHit } from "@tianshu/core";
+import { rankBm25, chunkText, type FusedHit } from "@tianshu/core";
 import prisma from "../../../commons/prisma-client";
 
 export interface VectorChunkRow {
@@ -33,25 +33,9 @@ export class VectorStoreError extends Error {
   }
 }
 
-/** 文本分块：固定字符窗口 + 重叠（导出供测试；段落边界 v2 再对齐） */
-export function chunkText(text: string, size = 500, overlap = 100): string[] {
-  const clean = text.trim();
-  if (clean === "") {
-    return [];
-  }
-  if (clean.length <= size) {
-    return [clean];
-  }
-  const step = Math.max(1, size - overlap);
-  const chunks: string[] = [];
-  for (let start = 0; start < clean.length; start += step) {
-    chunks.push(clean.slice(start, start + size));
-    if (start + size >= clean.length) {
-      break;
-    }
-  }
-  return chunks;
-}
+/** 文本分块：递归字符切分（批2 升级，@tianshu/core 单份——分隔符层级
+ *  回退 + 整段子块重叠；graph-executor/资料库向量化消费再导出） */
+export { chunkText };
 
 /** 余弦相似度（零向量防除零） */
 export function cosine(a: number[], b: number[]): number {
@@ -167,5 +151,18 @@ export async function countCollection(
 ): Promise<number> {
   return prisma.vectorChunk.count({
     where: { userId, collection },
+  });
+}
+
+/** 条目级块清理（批2 资料库向量化，对齐 server 版）：library
+ *  delete/rename 后清旧 sourceName 块防孤儿检索（upsert 语义只覆盖
+ *  同名的写路径） */
+export async function deleteSourceChunks(
+  userId: number,
+  collection: string,
+  sourceName: string,
+): Promise<void> {
+  await prisma.vectorChunk.deleteMany({
+    where: { userId, collection, sourceName },
   });
 }

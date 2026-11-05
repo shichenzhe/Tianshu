@@ -58,3 +58,6 @@ export * from "./tool-alias";
 // GA 系（混合检索 Task 1）：检索纯逻辑入包——tokenize/rankBm25/rrfFuse
 // （FTS5 否决 pivot 内存 BM25），mirror vitest 单测 tests/core/ 同源消费
 export * from "./retrieval";
+// 批2（library-rag §6 P0-1/P1-2）：资料库写侧向量化编排收编三端单份
+// （db/embed/upsert 必填注入面，两端薄壳接线）——分块本体即上项 chunkText
+export * from "./library-vectorize";

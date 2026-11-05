@@ -13,11 +13,17 @@ import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 import { handleUser } from "../../../commons/ipc-user";
 import { libraryDir } from "../../../commons/paths";
+import { isTextualContent } from "@tianshu/core";
 import type { PrismaClient } from "../../../generated/prisma/client";
 import type {
   LibraryItem,
   AddFilesResult,
 } from "../../../../src-react/domains/ai/library/api/library.api";
+import {
+  clearLibrarySourceChunks,
+  fireLibraryVectorize,
+  type LibraryVectorizeDeps,
+} from "./library-vectorize";
 import {
   buildBreadcrumbChain,
   collectSubtreeIds,
@@ -51,6 +57,10 @@ type LibraryRowInput = {
   updatedAt?: Date;
 };
 
+/** 写侧向量化读回上限（对齐 server uploadFile 3MB：超限文本不自动向量化
+ *  ——重建面 = 手动 vectorize 图节点，可自行分批） */
+const VECTORIZE_READ_LIMIT = 3 * 1024 * 1024;
+
 /** DB 行 → 前端契约（file 附 storagePath 绝对路径；folder/link 恒 null） */
 function toClientItem(row: LibraryRowInput, libraryRoot: string): LibraryItem {
   const isFile = row.kind === "file";
@@ -79,12 +89,47 @@ function toClientItem(row: LibraryRowInput, libraryRoot: string): LibraryItem {
 }
 
 export default class LibraryRepository {
-  constructor(private readonly prismaClient: PrismaClient = prisma) {
+  constructor(
+    private readonly prismaClient: PrismaClient = prisma,
+    /** 写侧向量化依赖（批2 P0-1：缺省接桌面真身；测试注入替身） */
+    private readonly vectorizeDeps: LibraryVectorizeDeps = {},
+  ) {
     this.registerHandlers();
   }
 
   private get libraryRoot(): string {
     return libraryDir();
+  }
+
+  /** 写侧向量化挂载（批2 P0-1，server vectorizeAfterWrite 同哲学）：
+   *  文本白名单 + 读回上限内 fire-and-forget 入库 library 集合（
+   *  @tianshu/core 编排，桌面接线 library-vectorize）；skip/失败静默，
+   *  绝不炸写面；读回失败记日志放行 */
+  private vectorizeWrittenFile(
+    userId: number,
+    name: string,
+    mimeType: string | null,
+    fileType: string | null,
+    sizeBytes: number,
+    readContent: () => Promise<string>,
+  ): void {
+    if (
+      !isTextualContent(mimeType, fileType) ||
+      sizeBytes > VECTORIZE_READ_LIMIT
+    ) {
+      return;
+    }
+    readContent()
+      .then((content) =>
+        fireLibraryVectorize(this.vectorizeDeps, {
+          userId,
+          sourceName: name,
+          content,
+          mimeType,
+          fileType,
+        }),
+      )
+      .catch((error) => Log.warn("library_vectorize_read_failed", error));
   }
 
   private registerHandlers(): void {
@@ -368,6 +413,15 @@ export default class LibraryRepository {
       where: { id: row.id },
       data: { size: Buffer.byteLength(content, "utf8"), updatedAt: new Date() },
     });
+    // 写侧向量化：编辑保存后的内容直接编排（无需读回）
+    this.vectorizeWrittenFile(
+      userId,
+      row.name,
+      row.mimeType,
+      row.fileType,
+      Buffer.byteLength(content, "utf8"),
+      async () => content,
+    );
     return toClientItem(updated, this.libraryRoot);
   }
 
@@ -517,6 +571,15 @@ export default class LibraryRepository {
           result.added.push(
             toClientItem({ ...row, size: stat.size }, this.libraryRoot),
           );
+          // 写侧向量化：入库副本读回（文本白名单/上限在挂载点内判定）
+          this.vectorizeWrittenFile(
+            userId,
+            name,
+            row.mimeType,
+            row.fileType,
+            stat.size,
+            () => fs.readFile(path.join(dir, name), "utf8"),
+          );
         } catch (error) {
           // 入库中途失败：回滚记录与目录（吞错——清理失败仅日志）
           await this.prismaClient.libraryItem
@@ -585,6 +648,16 @@ export default class LibraryRepository {
       await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
       throw error;
     }
+    // 写侧向量化：文本判定在挂载点内（utf8 解码对白名单文本型无损，
+    // 二进制 buffer 解码串被 isTextualContent 拦下——server uploadFile 同口径）
+    this.vectorizeWrittenFile(
+      userId,
+      finalName,
+      row.mimeType,
+      row.fileType,
+      buffer.length,
+      async () => buffer.toString("utf8"),
+    );
     return toClientItem({ ...row, size: buffer.length }, this.libraryRoot);
   }
 
@@ -614,12 +687,16 @@ export default class LibraryRepository {
       sanitizeLibraryName(name),
     );
     if (row.kind === "file" && finalName !== row.name) {
-      await this.renameDiskThenDb(id, row.name, finalName, () =>
+      // 旧名先存（update 后 row 可能被驱动复用/刷新，语义上要清理的是旧名）
+      const oldName = row.name;
+      await this.renameDiskThenDb(id, oldName, finalName, () =>
         this.prismaClient.libraryItem.update({
           where: { id },
           data: { name: finalName },
         }),
       );
+      // 旧名向量块清理（孤儿块防线；重建 = 下次写内容或手动 vectorize 节点）
+      await clearLibrarySourceChunks(this.vectorizeDeps, userId, oldName);
       return toClientItem(
         { ...row, name: finalName, updatedAt: new Date() },
         this.libraryRoot,
@@ -694,10 +771,20 @@ export default class LibraryRepository {
   async delete(ids: number[], userId: number): Promise<null> {
     const rows = await this.allItemRows(userId);
     const subtreeIds = collectSubtreeIds(rows, ids);
+    // 先取文件名（file 才可能有向量块；folder/link 清块零行无害不细分）
+    const fileNames = rows
+      .filter((row) => subtreeIds.includes(row.id) && row.kind === "file")
+      .map((row) => row.name);
     await this.prismaClient.libraryItem.deleteMany({
       where: { id: { in: subtreeIds } },
     });
     await this.cleanupDisk(subtreeIds);
+    // 子树文件名向量块清理（孤儿块防线；清理失败在挂载点内记日志放行）
+    await Promise.all(
+      fileNames.map((name) =>
+        clearLibrarySourceChunks(this.vectorizeDeps, userId, name),
+      ),
+    );
     return null;
   }
 

@@ -295,8 +295,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/vector-store.ts",
       "serverPath": "src/core/graph/vector-store.ts",
       "baselineDiff": true,
-      "baselineLines": 36,
-      "note": "向量存取（GA-T4；仅 prisma→运行时句柄改造点）。2026-10-30 hybridSearch 批基线 10→12：新增 searchFts（内存 BM25，FTS5 否决后 pivot）——findMany 行 prisma→graphExecutorRuntime().db 授权差异再现（同 countCollection 形态，单行不成对 ±2）。2026-10-31 server-pg-search 批基线 12→24：SEARCH_DB_URL 路由分派——四函数头部各一组 if/return/}（归一化后 4×3=12 行；import 块与注释被归一化剥离不计），server 有意分叉，PG 实现全落单份 search-pg.ts 不入守护面，本地实现零改动（diff 纯增量）。2026-11-02 资料库向量化批基线 24→36：新增 deleteSourceChunks（条目级块清理——library delete/rename 清孤儿块）同款路由分派 + deleteMany 4 行，server 单侧合理演进（PG 实现在 search-pg.ts 单份）"
+      "baselineLines": 29,
+      "note": "向量存取（GA-T4；仅 prisma→运行时句柄改造点）。2026-10-30 hybridSearch 批基线 10→12：新增 searchFts（内存 BM25，FTS5 否决后 pivot）——findMany 行 prisma→graphExecutorRuntime().db 授权差异再现（同 countCollection 形态，单行不成对 ±2）。2026-10-31 server-pg-search 批基线 12→24：SEARCH_DB_URL 路由分派——四函数头部各一组 if/return/}（归一化后 4×3=12 行；import 块与注释被归一化剥离不计），server 有意分叉，PG 实现全落单份 search-pg.ts 不入守护面，本地实现零改动（diff 纯增量）。2026-11-02 资料库向量化批基线 24→36：新增 deleteSourceChunks（条目级块清理——library delete/rename 清孤儿块）同款路由分派 + deleteMany 4 行，server 单侧合理演进（PG 实现在 search-pg.ts 单份）。2026-11-05 批2 桌面写侧向量化：desktop 补齐 deleteSourceChunks（无 PG 路由分派——桌面无 PG 后端，deleteMany 行对齐）基线 36→29；chunkText 双侧收编 @tianshu/core 递归切分再导出（归一化对称剥离，diff 中性）"
     },
     {
       "id": "graph-acs3-sign",
@@ -407,8 +407,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 674,
-      "note": "资料库仓储（PL-2）：仅检索段同构（search keyword trim 截 100 contains 仅 file / getById↔mustGet 同报不泄露存在性）——mirror 写面（addFiles/importFolder/rename/move/delete 等磁盘双写）与 location 面包屑投影不在本文件（graph 检索消费面零改动，library 批不回归）；写面 golden 移植见 library-disk-repository 对。文件名 library.repository.ts 沿 server *.repository.ts 先例（graph/automation repository 同形）"
+      "baselineLines": 738,
+      "note": "资料库仓储（PL-2）：仅检索段同构（search keyword trim 截 100 contains 仅 file / getById↔mustGet 同报不泄露存在性）——mirror 写面（addFiles/importFolder/rename/move/delete 等磁盘双写）与 location 面包屑投影不在本文件（graph 检索消费面零改动，library 批不回归）；写面 golden 移植见 library-disk-repository 对。文件名 library.repository.ts 沿 server *.repository.ts 先例（graph/automation repository 同形）。2026-11-05 批2 桌面写侧向量化：mirror 侧 repo 挂 vectorizeWrittenFile（addFiles/uploadFileBuffer/writeFileContent 三写面 fire-and-forget）+ delete/rename 清孤儿块——桌面无独立 service 层（repo 即 IPC 面），server 同能力挂 library.service.ts 不入守护面，基线 674→738 过账（mirror 单侧合理演进）"
     },
     {
       "id": "automation-retention",
@@ -439,8 +439,8 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/library/library.repo.ts",
       "serverPath": "src/core/library/library-disk.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 153,
-      "note": "资料库磁盘管理仓储（library 批）：mirror library.repo.ts 业务逻辑逐行对齐（addFiles 复制入库/递归导入跳隐藏软链/move/delete 级联/subtreeCount/rename/move 撞名磁盘双写+断裂补偿）；有意分叉留档头注释——无 IPC handler 注册、openLink/revealItem（shell 专属）不移植、Log.warn→可注入 onWarn、libraryRoot 构造注入、AddFilesResult 内联本文件；检索面摘取在 library-repository-search 对"
+      "baselineLines": 217,
+      "note": "资料库磁盘管理仓储（library 批）：mirror library.repo.ts 业务逻辑逐行对齐（addFiles 复制入库/递归导入跳隐藏软链/move/delete 级联/subtreeCount/rename/move 撞名磁盘双写+断裂补偿）；有意分叉留档头注释——无 IPC handler 注册、openLink/revealItem（shell 专属）不移植、Log.warn→可注入 onWarn、libraryRoot 构造注入、AddFilesResult 内联本文件；检索面摘取在 library-repository-search 对。2026-11-05 批2 桌面写侧向量化：同 library-repository-search 对（vectorizeWrittenFile 三写面 + delete/rename 清块为 mirror 侧新增，server disk repo 无向量化——接线在 service 层）基线 153→217 过账"
     }
   ]
 }

@@ -6,6 +6,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
+// 传递依赖 prisma-client（provider-runtime→secret-field→master-key 链在
+// 模块作用域读 app.isPackaged，无 electron mock 时 import 期即炸）——
+// 本 suite 不触库，最小替身拦截（command-gate-integration.test 同款）
+vi.mock("../../electron/commons/prisma-client", () => ({ default: {} }));
+
 // 默认补全走 LangChain（T1-3）：mock 模型工厂直测 defaultModelText 行为
 // （tests/ 不在 tsconfig include 内，类型断言无 tsc 覆盖，R1 改行为级验证）
 vi.mock(

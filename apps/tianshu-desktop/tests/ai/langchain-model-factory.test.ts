@@ -1,8 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatOllama } from "@langchain/ollama";
+
+// 传递依赖 prisma-client（provider-runtime→secret-field→master-key 链在
+// 模块作用域读 app.isPackaged，无 electron mock 时 import 期即炸）——
+// 本 suite 不触库，最小替身拦截（command-gate-integration.test 同款）
+vi.mock("../../electron/commons/prisma-client", () => ({ default: {} }));
+
 import { createChatModel } from "../../electron/domains/ai/orchestration/langchain-model-factory";
 import { parseExtraHeaders } from "../../electron/domains/ai/provider/provider-runtime";
 

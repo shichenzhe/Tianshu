@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { FakeListChatModel } from "@langchain/core/utils/testing";
+
+// 传递依赖 prisma-client（provider-runtime→secret-field→master-key 链在
+// 模块作用域读 app.isPackaged，无 electron mock 时 import 期即炸）——
+// 本 suite 不触库，最小替身拦截（command-gate-integration.test 同款）
+vi.mock("../../electron/commons/prisma-client", () => ({ default: {} }));
+
 import {
   listRemoteModels,
   testConnection,

@@ -64,7 +64,12 @@ export class TaskRecordDto implements TaskRecord {
   @ApiProperty({ description: '错过后策略', enum: ['skip', 'catchUpOnce'] })
   missedPolicy: TaskRecord['missedPolicy'];
 
-  @ApiProperty({ description: '错过补跑上限（catchUpOnce 生效，缺省 1）' })
+  // type 显式 Number：属性声明用索引访问类型 TaskRecord['catchUpLimit'] 时
+  // emit 的 design:type 元数据退化为 Object，swagger 会误发布 type:"object"
+  @ApiProperty({
+    description: '错过补跑上限（catchUpOnce 生效，缺省 1）',
+    type: Number,
+  })
   catchUpLimit: TaskRecord['catchUpLimit'];
 
   @ApiProperty({ description: '访问模式', enum: ['default', 'full'] })

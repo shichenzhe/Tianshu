@@ -159,7 +159,7 @@ tick 主循环（每 30s）：
 
 **launch 互斥**：进程级 `automation-inflight.ts`（Map taskId→AbortController），**与 repo runNow 手动触发共享**——调度执行中连点播放直接拒发 `TASK_ALREADY_RUNNING`；fire 不 await（单次执行可达分钟级），收尾 `.then(publishAutomationEvent(taskFinishedEvent(task, outcome))).finally(inflight.delete + emitAutomationChanged(taskId))`。triggerType 不含 event：事件触发由 event-bus 直调 executeTask（chainDepth 防环在彼处），误经 launch 会以链深 1 重置防环。
 
-**调度相位重放 replayAt（批3A §6-1 已落地）**：catchUp 决策 launch 携 `replayAt=task.nextRunAt`（正在补跑的错过触发点），错过窗口内的 retry 同样携带——advanceTask 以 replayAt 为基点推进 `lastRunAt/nextRunAt`（仿佛该次运行发生在错过的触发点），多轮错过窗口因此能按触发点依次补（上限 catchUpLimit），interval 相位与 periodic 触发点语义均不漂移；正常触发点 replayAt 缺省按 now 常规推进。missedPolicy=skip 与「补跑预算耗尽」都走 advance 跳到未来触发点（skip 另落一条 skipped run 留痕）。
+**调度相位重放 replayAt（批3A §6-1 已落地）**：catchUp 决策 launch 携 `replayAt=task.nextRunAt`（正在补跑的错过触发点），错过窗口内的 retry 同样携带——advanceTask 以 replayAt 为基点推进 `lastRunAt/nextRunAt`（仿佛该次运行发生在错过的触发点），多轮错过窗口因此能按触发点依次补（上限 catchUpLimit），interval 相位与 periodic 触发点语义均不漂移；正常触发点 replayAt 缺省按 now 常规推进。missedPolicy=skip 与「补跑预算耗尽」都走 advance 跳到未来触发点（skip 另落一条 skipped run 留痕）。已知口径：补跑计数以 processStartTime 为窗（重启即新窗口）——**补跑收敛过程中重启应用可再获得一次完整预算**（catchUpLimit 计数清零），属可接受的运维面语义而非缺口。
 
 **每日统计 rollup 挂点（批3A §6-6）**：tick 收尾 `maybeRollupAutomationStats(prisma)`（1h 节流、吞错——与保留裁剪同款 fire-and-forget 形态），见 §2.3。
 

@@ -339,6 +339,9 @@ describe('graph-executor 副本（GA-T4）', () => {
     expect(run.graphId).toBe(graphRow.id);
     expect(run.taskId).toBeNull();
     expect(run.triggerType).toBe('manual');
+    // 批1C 改进项 3：run 落执行时 graphJson 快照（图改后历史轨迹/节点
+    // 行可对照当时结构）
+    expect(run.graphJsonSnapshot).toBe(graphRow.graphJson);
     expect(run.promptTokens).toBe(10);
     expect(run.completionTokens).toBe(16);
     // 去会话化 2026-10-28：graph 路径不再写 sessionId（列保留恒 null）

@@ -60,6 +60,7 @@ export type AutomationRunMinAggregateOutputType = {
   completionTokens: number | null
   graphId: number | null
   graphTrace: string | null
+  graphJsonSnapshot: string | null
   error: string | null
   startedAt: Date | null
   finishedAt: Date | null
@@ -77,6 +78,7 @@ export type AutomationRunMaxAggregateOutputType = {
   completionTokens: number | null
   graphId: number | null
   graphTrace: string | null
+  graphJsonSnapshot: string | null
   error: string | null
   startedAt: Date | null
   finishedAt: Date | null
@@ -94,6 +96,7 @@ export type AutomationRunCountAggregateOutputType = {
   completionTokens: number
   graphId: number
   graphTrace: number
+  graphJsonSnapshot: number
   error: number
   startedAt: number
   finishedAt: number
@@ -135,6 +138,7 @@ export type AutomationRunMinAggregateInputType = {
   completionTokens?: true
   graphId?: true
   graphTrace?: true
+  graphJsonSnapshot?: true
   error?: true
   startedAt?: true
   finishedAt?: true
@@ -152,6 +156,7 @@ export type AutomationRunMaxAggregateInputType = {
   completionTokens?: true
   graphId?: true
   graphTrace?: true
+  graphJsonSnapshot?: true
   error?: true
   startedAt?: true
   finishedAt?: true
@@ -169,6 +174,7 @@ export type AutomationRunCountAggregateInputType = {
   completionTokens?: true
   graphId?: true
   graphTrace?: true
+  graphJsonSnapshot?: true
   error?: true
   startedAt?: true
   finishedAt?: true
@@ -273,6 +279,7 @@ export type AutomationRunGroupByOutputType = {
   completionTokens: number | null
   graphId: number | null
   graphTrace: string | null
+  graphJsonSnapshot: string | null
   error: string | null
   startedAt: Date
   finishedAt: Date | null
@@ -313,6 +320,7 @@ export type automationRunWhereInput = {
   completionTokens?: Prisma.IntNullableFilter<"automationRun"> | number | null
   graphId?: Prisma.IntNullableFilter<"automationRun"> | number | null
   graphTrace?: Prisma.StringNullableFilter<"automationRun"> | string | null
+  graphJsonSnapshot?: Prisma.StringNullableFilter<"automationRun"> | string | null
   error?: Prisma.StringNullableFilter<"automationRun"> | string | null
   startedAt?: Prisma.DateTimeFilter<"automationRun"> | Date | string
   finishedAt?: Prisma.DateTimeNullableFilter<"automationRun"> | Date | string | null
@@ -330,6 +338,7 @@ export type automationRunOrderByWithRelationInput = {
   completionTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   graphId?: Prisma.SortOrderInput | Prisma.SortOrder
   graphTrace?: Prisma.SortOrderInput | Prisma.SortOrder
+  graphJsonSnapshot?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -350,6 +359,7 @@ export type automationRunWhereUniqueInput = Prisma.AtLeast<{
   completionTokens?: Prisma.IntNullableFilter<"automationRun"> | number | null
   graphId?: Prisma.IntNullableFilter<"automationRun"> | number | null
   graphTrace?: Prisma.StringNullableFilter<"automationRun"> | string | null
+  graphJsonSnapshot?: Prisma.StringNullableFilter<"automationRun"> | string | null
   error?: Prisma.StringNullableFilter<"automationRun"> | string | null
   startedAt?: Prisma.DateTimeFilter<"automationRun"> | Date | string
   finishedAt?: Prisma.DateTimeNullableFilter<"automationRun"> | Date | string | null
@@ -367,6 +377,7 @@ export type automationRunOrderByWithAggregationInput = {
   completionTokens?: Prisma.SortOrderInput | Prisma.SortOrder
   graphId?: Prisma.SortOrderInput | Prisma.SortOrder
   graphTrace?: Prisma.SortOrderInput | Prisma.SortOrder
+  graphJsonSnapshot?: Prisma.SortOrderInput | Prisma.SortOrder
   error?: Prisma.SortOrderInput | Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -392,6 +403,7 @@ export type automationRunScalarWhereWithAggregatesInput = {
   completionTokens?: Prisma.IntNullableWithAggregatesFilter<"automationRun"> | number | null
   graphId?: Prisma.IntNullableWithAggregatesFilter<"automationRun"> | number | null
   graphTrace?: Prisma.StringNullableWithAggregatesFilter<"automationRun"> | string | null
+  graphJsonSnapshot?: Prisma.StringNullableWithAggregatesFilter<"automationRun"> | string | null
   error?: Prisma.StringNullableWithAggregatesFilter<"automationRun"> | string | null
   startedAt?: Prisma.DateTimeWithAggregatesFilter<"automationRun"> | Date | string
   finishedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationRun"> | Date | string | null
@@ -408,6 +420,7 @@ export type automationRunCreateInput = {
   completionTokens?: number | null
   graphId?: number | null
   graphTrace?: string | null
+  graphJsonSnapshot?: string | null
   error?: string | null
   startedAt?: Date | string
   finishedAt?: Date | string | null
@@ -425,6 +438,7 @@ export type automationRunUncheckedCreateInput = {
   completionTokens?: number | null
   graphId?: number | null
   graphTrace?: string | null
+  graphJsonSnapshot?: string | null
   error?: string | null
   startedAt?: Date | string
   finishedAt?: Date | string | null
@@ -441,6 +455,7 @@ export type automationRunUpdateInput = {
   completionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphTrace?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  graphJsonSnapshot?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -458,6 +473,7 @@ export type automationRunUncheckedUpdateInput = {
   completionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphTrace?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  graphJsonSnapshot?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -475,6 +491,7 @@ export type automationRunCreateManyInput = {
   completionTokens?: number | null
   graphId?: number | null
   graphTrace?: string | null
+  graphJsonSnapshot?: string | null
   error?: string | null
   startedAt?: Date | string
   finishedAt?: Date | string | null
@@ -491,6 +508,7 @@ export type automationRunUpdateManyMutationInput = {
   completionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphTrace?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  graphJsonSnapshot?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -508,6 +526,7 @@ export type automationRunUncheckedUpdateManyInput = {
   completionTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   graphTrace?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  graphJsonSnapshot?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   error?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   startedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   finishedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -525,6 +544,7 @@ export type automationRunCountOrderByAggregateInput = {
   completionTokens?: Prisma.SortOrder
   graphId?: Prisma.SortOrder
   graphTrace?: Prisma.SortOrder
+  graphJsonSnapshot?: Prisma.SortOrder
   error?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
@@ -553,6 +573,7 @@ export type automationRunMaxOrderByAggregateInput = {
   completionTokens?: Prisma.SortOrder
   graphId?: Prisma.SortOrder
   graphTrace?: Prisma.SortOrder
+  graphJsonSnapshot?: Prisma.SortOrder
   error?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
@@ -570,6 +591,7 @@ export type automationRunMinOrderByAggregateInput = {
   completionTokens?: Prisma.SortOrder
   graphId?: Prisma.SortOrder
   graphTrace?: Prisma.SortOrder
+  graphJsonSnapshot?: Prisma.SortOrder
   error?: Prisma.SortOrder
   startedAt?: Prisma.SortOrder
   finishedAt?: Prisma.SortOrder
@@ -600,6 +622,7 @@ export type automationRunSelect<ExtArgs extends runtime.Types.Extensions.Interna
   completionTokens?: boolean
   graphId?: boolean
   graphTrace?: boolean
+  graphJsonSnapshot?: boolean
   error?: boolean
   startedAt?: boolean
   finishedAt?: boolean
@@ -617,6 +640,7 @@ export type automationRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   completionTokens?: boolean
   graphId?: boolean
   graphTrace?: boolean
+  graphJsonSnapshot?: boolean
   error?: boolean
   startedAt?: boolean
   finishedAt?: boolean
@@ -634,6 +658,7 @@ export type automationRunSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   completionTokens?: boolean
   graphId?: boolean
   graphTrace?: boolean
+  graphJsonSnapshot?: boolean
   error?: boolean
   startedAt?: boolean
   finishedAt?: boolean
@@ -651,12 +676,13 @@ export type automationRunSelectScalar = {
   completionTokens?: boolean
   graphId?: boolean
   graphTrace?: boolean
+  graphJsonSnapshot?: boolean
   error?: boolean
   startedAt?: boolean
   finishedAt?: boolean
 }
 
-export type automationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "taskId" | "sessionId" | "attempt" | "triggerType" | "status" | "durationMs" | "promptTokens" | "completionTokens" | "graphId" | "graphTrace" | "error" | "startedAt" | "finishedAt", ExtArgs["result"]["automationRun"]>
+export type automationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "taskId" | "sessionId" | "attempt" | "triggerType" | "status" | "durationMs" | "promptTokens" | "completionTokens" | "graphId" | "graphTrace" | "graphJsonSnapshot" | "error" | "startedAt" | "finishedAt", ExtArgs["result"]["automationRun"]>
 
 export type $automationRunPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "automationRun"
@@ -673,6 +699,7 @@ export type $automationRunPayload<ExtArgs extends runtime.Types.Extensions.Inter
     completionTokens: number | null
     graphId: number | null
     graphTrace: string | null
+    graphJsonSnapshot: string | null
     error: string | null
     startedAt: Date
     finishedAt: Date | null
@@ -1110,6 +1137,7 @@ export interface automationRunFieldRefs {
   readonly completionTokens: Prisma.FieldRef<"automationRun", 'Int'>
   readonly graphId: Prisma.FieldRef<"automationRun", 'Int'>
   readonly graphTrace: Prisma.FieldRef<"automationRun", 'String'>
+  readonly graphJsonSnapshot: Prisma.FieldRef<"automationRun", 'String'>
   readonly error: Prisma.FieldRef<"automationRun", 'String'>
   readonly startedAt: Prisma.FieldRef<"automationRun", 'DateTime'>
   readonly finishedAt: Prisma.FieldRef<"automationRun", 'DateTime'>

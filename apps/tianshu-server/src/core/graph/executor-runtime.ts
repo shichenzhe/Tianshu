@@ -44,6 +44,9 @@ export interface GraphRunStore {
     graphId: number;
     attempt: number;
     triggerType: string;
+    /** 执行时 graphJson 快照（改进项 3，批1C）：截 64KB 对齐
+     * graphRunNode input/output 上限 */
+    graphJsonSnapshot: string;
   }) => Promise<number>;
   finishRun: (p: {
     runId: number;

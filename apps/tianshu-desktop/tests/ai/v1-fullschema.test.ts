@@ -335,6 +335,26 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     ).toEqual({ n: 1 });
   });
 
+  it("批1C run 快照列并入：automationRun.graphJsonSnapshot 可空免索引", () => {
+    const db = createDb();
+    expect(columnsOf(db, "automationRun")).toContain("graphJsonSnapshot");
+    const col = (
+      db
+        .prepare("PRAGMA table_info(automationRun)")
+        .all() as Array<{
+        name: string;
+        notnull: number;
+        dflt_value: unknown;
+      }>
+    ).find((c) => c.name === "graphJsonSnapshot");
+    expect(col?.notnull).toBe(0);
+    expect(col?.dflt_value).toBeNull();
+    // 快照按 run 行读取，免索引
+    expect(indexesOf(db, "automationRun")).not.toContain(
+      "automationRun_graphJsonSnapshot_index",
+    );
+  });
+
   it("toolPermission 工作空间+工具唯一索引生效", () => {
     const db = createDb();
     db.exec(

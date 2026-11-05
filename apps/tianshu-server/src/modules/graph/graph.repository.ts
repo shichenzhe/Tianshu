@@ -134,6 +134,8 @@ export interface CreateRunParams {
   graphId: number;
   attempt: number;
   triggerType: string;
+  /** 执行时 graphJson 快照（改进项 3，批1C；截 64KB） */
+  graphJsonSnapshot: string;
 }
 
 /** run 收尾入参（mirror finishRun 落库字段的具名收口——trace 序列化/
@@ -407,7 +409,8 @@ export class GraphRepository {
   }
 
   /** run 行写入原语（mirror graph-executor createRunRow 同款落库）：
-   * 图/任务运行开始即落 running 行，返回 runId 供状态流与收尾定位 */
+   * 图/任务运行开始即落 running 行（含执行时 graphJson 快照，批1C），
+   * 返回 runId 供状态流与收尾定位 */
   async createRun(params: CreateRunParams): Promise<number> {
     const run = await this.prisma.automationRun.create({
       data: {
@@ -415,6 +418,7 @@ export class GraphRepository {
         graphId: params.graphId,
         attempt: params.attempt,
         triggerType: params.triggerType,
+        graphJsonSnapshot: params.graphJsonSnapshot,
         status: 'running',
         startedAt: new Date(),
       },

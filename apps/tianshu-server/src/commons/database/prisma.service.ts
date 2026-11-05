@@ -8,6 +8,7 @@ import {
   type DbEngine,
 } from './db-url';
 import { ensureGraphRunNodeTable } from './ensure-graph-run-node-table';
+import { ensureAutomationRunGraphSnapshotColumn } from './ensure-automation-run-snapshot';
 
 type PrismaClientOptions = ConstructorParameters<typeof PrismaClient>[0];
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -81,6 +82,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     // 见 ensure-graph-run-node-table.ts 头注释）；this 经 Proxy 已具备
     // Prisma 面（$executeRawUnsafe 转发 engineClient，RawExecutor 结构满足）
     await ensureGraphRunNodeTable(this, this.dbEngine);
+    // automationRun 快照列同款存量路径（批1C）：快路径库不跑迁移，缺列时
+    // 图运行 createRun 100% 失败——探测补列（新库/PG 走 1_ 增量迁移）
+    await ensureAutomationRunGraphSnapshotColumn(this, this.dbEngine);
   }
 
   async onModuleDestroy() {

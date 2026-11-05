@@ -251,6 +251,7 @@ model automationRun {
   completionTokens Int?
   graphId          Int?   // 图运行（试运行 taskId=null）
   graphTrace       String? // 节点级轨迹 JSON（spec §4）
+  graphJsonSnapshot String? // 执行时 graphJson 快照（批1C 改进项 3：图改后历史轨迹/节点行可对照当时结构；截 64KB）
   error            String?
   startedAt        DateTime  @default(now())
   finishedAt       DateTime?

@@ -176,6 +176,38 @@ describe("GraphRunTraceView", () => {
     expect(screen.queryByText("/abs/path/image-1.png")).toBeNull();
   });
 
+  it("notifySkipped 在场：展开显示通知未送达标注与原因（无头端降级可见）", () => {
+    const trace: TraceEntry[] = [
+      {
+        id: "notify",
+        name: "通知",
+        status: "success",
+        startedAt: "2026-11-05T08:00:00.000Z",
+        durationMs: 10,
+        outputPreview: "任务完成",
+        notifySkipped: "no_channel",
+      },
+    ];
+    renderView(<GraphRunTraceView trace={trace} />);
+    fireEvent.click(screen.getByText("通知"));
+    expect(
+      screen.getByText("chat:orchestration.trace.notifySkipped"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("chat:orchestration.trace.notifySkippedNoChannel"),
+    ).toBeTruthy();
+    // send_failed 原因分支
+    const failedSend: TraceEntry[] = [
+      { ...trace[0], notifySkipped: "send_failed" },
+    ];
+    cleanup();
+    renderView(<GraphRunTraceView trace={failedSend} />);
+    fireEvent.click(screen.getByText("通知"));
+    expect(
+      screen.getByText("chat:orchestration.trace.notifySkippedSendFailed"),
+    ).toBeTruthy();
+  });
+
   it("空轨迹显示空态文案", () => {
     renderView(<GraphRunTraceView trace={[]} />);
     expect(screen.getByText("chat:orchestration.trace.empty")).toBeTruthy();

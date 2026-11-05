@@ -18,6 +18,7 @@ import { openNamedSecret, sealNamedSecret } from "../../security/option-secrets"
 import Log from "../../../commons/Log";
 import { createBoundedMap } from "../../../commons/bounded-map";
 import { renderNodePrompt } from "./graph-prompt";
+import { graphWebhookInflight } from "./graph-inflight";
 import type { GraphRow } from "./graph-executor";
 
 const DEFAULT_PORT = 27_400;
@@ -440,7 +441,10 @@ function handleRequest(
 /** 执行 + 响应构建（自定义模板经 renderNodePrompt 渲染节点输出）。
  * fireAndForget（异步 job）：不挂 120s 强杀定时器（各节点自身超时兜底），
  * 完成结果只写内存 jobResults；两条路径完成均发布 taskFinished 事件
- * （targetType=graph，链式任务对 webhook 运行同样可续） */
+ * （targetType=graph，链式任务对 webhook 运行同样可续）。
+ * 同图并发互斥（改进项 4，批1C）：入口 check→set 相邻同步占位
+ * （launchTestRun 先例，防窗口双跑），在途期间同图第二个 POST 拒
+ * graph_inflight；全路径（含前置失败）经 finally 释放互斥位 */
 async function runForWebhook(
   reg: Registration,
   inputs: Record<string, string>,
@@ -455,32 +459,37 @@ async function runForWebhook(
     }
   | { ok: false; error: string; runId?: number }
 > {
-  const graph = await prisma.graphDefinition.findFirst({
-    where: { id: reg.graphId, userId: reg.userId },
-  });
-  if (!graph || !graph.enabled) {
-    return { ok: false, error: "graph_not_available" };
-  }
-  const workspace = await prisma.workspace.findFirst({
-    where: { userId: reg.userId },
-    orderBy: { id: "desc" },
-  });
-  if (!workspace) {
-    return { ok: false, error: "workspace_not_found" };
-  }
-  const { runGraphToResult } = await import("./graph-executor");
   const abort = new AbortController();
+  if (graphWebhookInflight.has(reg.graphId)) {
+    return { ok: false, error: "graph_inflight" };
+  }
+  graphWebhookInflight.set(reg.graphId, abort);
   // 同步模式挂 120s 强杀；异步 fire-and-forget 靠节点自身超时，退出/
   // 注销时经 activeRuns 中止
-  const timer =
-    opts?.fireAndForget === true
-      ? null
-      : setTimeout(() => abort.abort(), SYNC_TIMEOUT_MS);
-  const track = (runId: number) => {
-    activeRuns.set(runId, { abort, graphId: reg.graphId });
-    opts?.onRunId?.(runId);
-  };
+  let timer: ReturnType<typeof setTimeout> | null = null;
   try {
+    const graph = await prisma.graphDefinition.findFirst({
+      where: { id: reg.graphId, userId: reg.userId },
+    });
+    if (!graph || !graph.enabled) {
+      return { ok: false, error: "graph_not_available" };
+    }
+    const workspace = await prisma.workspace.findFirst({
+      where: { userId: reg.userId },
+      orderBy: { id: "desc" },
+    });
+    if (!workspace) {
+      return { ok: false, error: "workspace_not_found" };
+    }
+    const { runGraphToResult } = await import("./graph-executor");
+    timer =
+      opts?.fireAndForget === true
+        ? null
+        : setTimeout(() => abort.abort(), SYNC_TIMEOUT_MS);
+    const track = (runId: number) => {
+      activeRuns.set(runId, { abort, graphId: reg.graphId });
+      opts?.onRunId?.(runId);
+    };
     const result = await runGraphToResult({
       graph: graph as GraphRow,
       task: null,
@@ -541,6 +550,7 @@ async function runForWebhook(
     Log.error("webhook 图执行异常", reg.graphId, e);
     return { ok: false, error: "internal" };
   } finally {
+    graphWebhookInflight.delete(reg.graphId);
     if (timer !== null) {
       clearTimeout(timer);
     }

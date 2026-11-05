@@ -52,7 +52,7 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 `apps/tia
 
 ### 2.2 automationRun（run 级，与自动化任务共用表，见姊妹文档 §2.2）
 
-图相关字段：`taskId Int?`（**null = 图试运行**，taskName 取图名）、`graphId Int?`、`graphTrace String?`（TraceEntry 数组 JSON）、`triggerType` 图侧值域 `manual`/`schedule`/`catchUp`/`retry`/`event`/`subflow`/`webhook`。run 状态机单一状态源只有 success|failed 两个终态——「aborted」是 failed+`user_aborted` 错误码的展示投影（server `GraphRunProjectionState`，executor-runtime.ts 28-31 行注释：queued 仅保留给控制层队列语义，server run 生命周期从 running 起）。
+图相关字段：`taskId Int?`（**null = 图试运行**，taskName 取图名）、`graphId Int?`、`graphTrace String?`（TraceEntry 数组 JSON）、`graphJsonSnapshot String?`（**执行时 graphJson 快照**，批1C 改进项 3：createRunRow 随 run 行写入、截 64KB——图改后历史轨迹/graphRunNode 节点行可对照当时结构；非图任务运行恒 null；免索引，按 run 行读取。桌面 v1 快照直改列（指纹重放自动重建旧开发库），server 侧 `1_automation_run_graph_snapshot` 双端成对迁移 + SQLite 存量库启动幂等补列）、`triggerType` 图侧值域 `manual`/`schedule`/`catchUp`/`retry`/`event`/`subflow`/`webhook`。run 状态机单一状态源只有 success|failed 两个终态——「aborted」是 failed+`user_aborted` 错误码的展示投影（server `GraphRunProjectionState`，executor-runtime.ts 28-31 行注释：queued 仅保留给控制层队列语义，server run 生命周期从 running 起）。
 
 ### 2.3 graphRunNode（节点级执行详情）
 
@@ -291,10 +291,10 @@ server 摘取了 graph CRUD + run 行写入原语（createRun/finishRun 自 mirr
 
 1. **checkpointer/断点恢复**：thread_id 已带，接入 SqliteSaver 后长图（iterate×subflow 大循环）可在节点边界持久化、失败断点续跑；recursionLimit=25 对多分支长链偏紧（iterate 子图算独立 invoke 不受此限，但顶层 25 步需评估）。
 2. **HITL/Interrupt 缺位**：delay 节点注释已立项待做（「人在环审批需待审中心+持久化支撑，后续单独立项」）；审批类工作流（生成→人审→发布）当前只能拆两图 + taskFinished 事件链拼接，链深上限 5（MAX_CHAIN_DEPTH）。
-3. **版本化与运行绑定**：run 不记录「执行时的 graphJson 快照」——图改后历史轨迹的节点结构与 graphRunNode 行可能对不上（节点行只存终态快照，nodeName 可漂移）；建议 run 落 graphVersion 或快照引用。
-4. **webhook 触发无互斥**：`runForWebhook` 不查 inflight，同一图被并发 POST 会双跑（试运行有 graphTestInflight、任务级有 automation-inflight，唯独 webhook 面）；`activeRuns` 只管 abort。可按图加 inflight 键或复用 graphTestInflight。
+3. ~~**版本化与运行绑定**~~ ✅ 已落地（批1C，2026-11-05）：run 落执行时快照——automationRun 新增 `graphJsonSnapshot String?` 列（桌面 v1 快照直改 + 指纹重放；server schema/PG 派生 + `1_automation_run_graph_snapshot` 双端成对迁移 + SQLite 存量库启动幂等补列 `ensureAutomationRunGraphSnapshotColumn`），createRunRow 写入截 64KB（对齐 graphRunNode input/output 上限）。未做 graphVersion 语义版（快照已可对照当时结构，发布/回滚语义仍不存在）。
+4. ~~**webhook 触发无互斥**~~ ✅ 已落地（批1C）：`runForWebhook` 入口 check→set 相邻同步占位（launchTestRun 先例）新增图级 `graphWebhookInflight` 注册表（graph-inflight.ts，桌面/server 双份），同图并发 POST 第二个拒 `graph_inflight`（500，graph_not_available 同 code 形态）；同步/异步面同径，finally 全路径释放；中止仍走 activeRuns（runId 键）。
 5. **双 executor 副本漂移风险**：桌面 4843 行与 server 副本是手动摘取+改造点登记模式（GA-T4 起 11 类授权面装配），drift-manifest 守护的是 automation-retention 等文件——executor 体量大、30 种节点持续增改，建议纳入 check:drift 基线或继续抽公共段入 @tianshu/core。
 6. **编辑器体验**：旧图无 position 仅 autoLayout 兜底，缺 dag 自动布局；连线校验保存期才报（画布连线时可前置预检）；iterate/subflow 引用的子图不可视化展开（只能下拉选 graphId，GraphPanel/编辑器均无子图下钻）。
 7. **移动端遥控深度**：GraphPanel/移动端只能触发与中止，图结构与 graphRunNode 节点详情在移动端不可见——协议面已备（graph/query 只读 + automation/runNodes），UI 未做展开，属低成本补齐项。
 8. **图 HTTP 守卫 allowlist 无管理面**：server 侧 `tianshu.graph.allowlist` 只能手改 config.yml 重启生效；可考虑运维端点热载或图级白名单覆盖（当前只有全局 allowPrivateNetwork/allowlist 两档）。
-9. **notify 节点 server 降级静默**：无头端 notify 桌面通知缺省 no-op（executor-runtime 可注入替代通道），图作者在 server 跑图时通知「消失」且无提示——建议 trace 里标注通知未送达渠道。
+9. ~~**notify 节点 server 降级静默**~~ ✅ 已落地（批1C）：无头端未注入 notify 钩子（缺省）时 trace 条目落 `notifySkipped` 标注（`no_channel` 无通道 / `send_failed` 发送失败，桌面端发送失败同款落点），节点仍 success（尽力而为语义不变）；桌面轨迹视图（GraphRunTraceView）展开行显示「通知未送达」+ 原因（i18n 双语）。

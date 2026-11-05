@@ -313,10 +313,9 @@ describe("webhook 资源防泄漏", () => {
       .mockImplementationOnce(async () => ({ id: 101 }));
     const url = await registerWebhook(5, 1, { async: true });
     const first = await post(url, { word: "one" });
-    const second = await post(url, { word: "two" });
     expect(first.json.jobId).toBe(100);
-    expect(second.json.jobId).toBe(101);
-    // fire-and-forget：轮询重试直至各自结果就绪
+    // 互斥（批1C）：同图在途期间第二个 POST 会被拒 graph_inflight——
+    // 先轮询首个 run 终态（互斥位释放）再触发第二次
     const pollOf = (statusUrl: string) =>
       vi.waitFor(
         async () => {
@@ -331,9 +330,11 @@ describe("webhook 资源防泄漏", () => {
         { timeout: 5_000 },
       );
     const poll1 = await pollOf(String(first.json.statusUrl));
-    const poll2 = await pollOf(String(second.json.statusUrl));
     expect(poll1.status).toBe("success");
     expect(poll1.output).toContain("one");
+    const second = await post(url, { word: "two" });
+    expect(second.json.jobId).toBe(101);
+    const poll2 = await pollOf(String(second.json.statusUrl));
     expect(poll2.output).toContain("two");
     await unregisterWebhook(5, 1);
   });

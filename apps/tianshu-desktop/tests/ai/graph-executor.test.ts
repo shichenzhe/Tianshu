@@ -630,3 +630,26 @@ describe("图执行留痕去会话化", () => {
     expect(loopCalls[1][0].create.output).toBe("stop"); // 最后一轮为准
   });
 });
+
+describe("run 执行时 graphJson 快照（批1C 改进项 3）", () => {
+  it("createRunRow 落执行时 graphJsonSnapshot（图改后历史轨迹/节点行可对照当时结构）", async () => {
+    modelMock.invoke.mockReset();
+    modelMock.invoke.mockResolvedValueOnce({ branch: "stop" }); // research → END
+    const out = await executeGraphRun(runParams({ topic: "AI" }));
+    expect(out).toBe("success");
+    const create = vi.mocked(prisma.automationRun.create).mock.calls.at(-1)![0];
+    expect(create.data.graphJsonSnapshot).toBe(graph.graphJson);
+  });
+
+  it("超大图快照截 64KB（对齐 graphRunNode input/output 上限）；截断图 parse 失败 run failed 不影响快照先落", async () => {
+    modelMock.invoke.mockReset();
+    const padded = {
+      ...graph,
+      graphJson: `{"pad":"${"x".repeat(70 * 1024)}"}`,
+    } as never;
+    const out = await executeGraphRun({ ...runParams({}), graph: padded });
+    expect(out).toBe("failed"); // 快照在 createRunRow 先落，parse 随后失败
+    const create = vi.mocked(prisma.automationRun.create).mock.calls.at(-1)![0];
+    expect((create.data.graphJsonSnapshot as string).length).toBe(64 * 1024);
+  });
+});

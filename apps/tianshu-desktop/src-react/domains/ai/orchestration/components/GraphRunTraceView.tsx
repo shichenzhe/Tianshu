@@ -47,6 +47,9 @@ export interface TraceEntry {
   fallback?: { code: string; message: string };
   /** 循环节点死信（onItemError=continue 的失败项清单），与 executor 同构 */
   errorOutput?: string;
+  /** notify 节点桌面通知未送达标注（改进项 9，无头端运行 server 落）：
+   * no_channel 无通道 / send_failed 发送失败；已送达缺省 */
+  notifySkipped?: string;
 }
 
 const DOT_CLASSES: Record<TraceEntry["status"], string> = {
@@ -246,6 +249,18 @@ function TraceDetail({
           <pre className="whitespace-pre-wrap break-all font-mono text-xs text-destructive/80">
             {entry.errorOutput}
           </pre>
+        </div>
+      )}
+      {entry.notifySkipped && (
+        <div className="flex flex-col gap-0.5 rounded-md bg-muted/60 p-1.5">
+          <p className="text-xs font-medium text-muted-foreground">
+            {t("chat:orchestration.trace.notifySkipped")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {entry.notifySkipped === "no_channel"
+              ? t("chat:orchestration.trace.notifySkippedNoChannel")
+              : t("chat:orchestration.trace.notifySkippedSendFailed")}
+          </p>
         </div>
       )}
       {failed && (

@@ -129,6 +129,10 @@ export interface TraceEntry {
   /** 降级继续标记（llm 节点 onError=defaultValue）：实际执行失败但以
    * 默认输出继续，此处保留失败原因供运行历史展示 */
   fallback?: { code: string; message: string };
+  /** notify 节点桌面通知未送达标注（改进项 9）：no_channel 无通道
+   * （无头端未注入 notify 钩子，server 副本落）/ send_failed 发送失败；
+   * 已送达缺省不落 */
+  notifySkipped?: string;
 }
 
 export type GraphRow = NonNullable<
@@ -227,6 +231,8 @@ interface NodeOutput {
   output: string;
   /** 循环节点死信（continue 模式失败项清单） */
   errorOutput?: string;
+  /** notify 节点桌面通知未送达原因码（改进项 9，trace 透传） */
+  notifySkipped?: string;
   /** 生成图片相对数据根路径（imageGen 专用，trace 透传） */
   outputImage?: string;
   /** 检索类节点候选序列化预览（hybridSearch，trace 透传） */
@@ -345,6 +351,9 @@ async function createRunRow(params: GraphRunParams): Promise<number> {
       triggerType: params.triggerType,
       status: "running",
       startedAt: new Date(),
+      // 执行时 graphJson 快照（改进项 3）：图改后历史轨迹/节点行仍可
+      // 对照当时结构（nodeName 可漂移）；截 64KB 对齐 graphRunNode 上限
+      graphJsonSnapshot: clipNodeIo(params.graph.graphJson),
     },
   });
   return run.id;
@@ -1765,6 +1774,7 @@ function traceSuccess(
       ? { hitsTruncated: done.hitsTruncated }
       : {}),
     ...(done.errorOutput ? { errorOutput: done.errorOutput } : {}),
+    ...(done.notifySkipped ? { notifySkipped: done.notifySkipped } : {}),
   };
 }
 
@@ -2012,7 +2022,9 @@ async function runFileRead(
 }
 
 /** 通知节点 handler：title/body 模板替换后发系统桌面通知（发送失败仅
- * 记日志不炸节点——通知是尽力而为的提醒通道）；output 为标题+正文 */
+ * 记日志不炸节点——通知是尽力而为的提醒通道）；output 为标题+正文。
+ * 发送失败 trace 标注 notifySkipped=send_failed（改进项 9，与 server
+ * 无头端 no_channel 标注同构） */
 function makeNotifyNodeHandler(
   node: NotifyNode,
   ctx: NodeContext,
@@ -2028,10 +2040,12 @@ function makeNotifyNodeHandler(
     try {
       const title = render(node.title);
       const body = node.body ? render(node.body) : "";
+      let notifySkipped: string | undefined;
       try {
         new Notification({ title, ...(body ? { body } : {}) }).show();
       } catch (e) {
         Log.warn("桌面通知发送失败（节点继续）", node.id, e);
+        notifySkipped = "send_failed";
       }
       if (node.webhookProvider !== "none" && node.webhookUrl.trim() !== "") {
         // IM webhook：失败仅记日志不炸节点（通知尽力而为，与桌面通知同语义）
@@ -2049,7 +2063,7 @@ function makeNotifyNodeHandler(
       }
       const output = body ? `${title}\n${body}` : title;
       await writeNodeRecord(ctx, node, title, output, startedAt);
-      ctx.trace.push(traceSuccess(node, startedAt, { output }));
+      ctx.trace.push(traceSuccess(node, startedAt, { output, notifySkipped }));
       return toNodeUpdate(node.id, { output });
     } catch (e) {
       const failure = toNodeFailure(node, e);

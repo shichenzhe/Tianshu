@@ -311,6 +311,35 @@ describe('webhook 端点（GA-T7 e2e）', () => {
     expect(run.status).toBe('failed');
   });
 
+  it('同图并发互斥（批1C）：在途第二个 POST 500 graph_inflight，完成后恢复可触发', async () => {
+    const mutexGraphId = (
+      await db.prisma.graphDefinition.create({
+        data: { name: '互斥图', graphJson: singleNodeGraphJson(modelId), userId: 1 },
+      })
+    ).id;
+    // 挂起模型：同步 150ms 强杀窗口内第二个并发 POST 必被拒
+    createChatModelMock.mockImplementation(() => new FakeInvokeModel([], true));
+    const reg = await register(mutexGraphId);
+    const [first, second] = await Promise.all([
+      request(server).post(`/webhook/${reg.token}`).send({ q: 'a' }),
+      request(server).post(`/webhook/${reg.token}`).send({ q: 'b' }),
+    ]);
+    expect(second.status).toBe(500);
+    expect(second.body).toEqual({ error: 'graph_inflight' });
+    // 首个请求同步模式挂起至 150ms 强杀 → failed 终态
+    expect(first.status).toBe(200);
+    expect(first.body.status).toBe('failed');
+    // 互斥位随收尾释放：再次触发照常
+    createChatModelMock.mockImplementation(
+      () => new FakeInvokeModel([{ content: 'ok' }]),
+    );
+    const third = await request(server)
+      .post(`/webhook/${reg.token}`)
+      .send({ q: 'c' })
+      .expect(200);
+    expect(third.body).toEqual({ status: 'success', output: 'ok' });
+  });
+
   it('JSON body 顶层值展平：字符串原样、非字符串 JSON 化 → inputs', async () => {
     createChatModelMock.mockImplementation(
       () => new FakeInvokeModel([{ content: 'ok' }]),

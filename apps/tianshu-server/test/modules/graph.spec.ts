@@ -188,6 +188,7 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
         graphId: row.id,
         attempt: 1,
         triggerType: 'manual',
+        graphJsonSnapshot: row.graphJson,
       });
       const running = await db.prisma.automationRun.findUniqueOrThrow({
         where: { id: runId },
@@ -195,6 +196,8 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
       expect(running.status).toBe('running');
       expect(running.graphId).toBe(row.id);
       expect(running.finishedAt).toBeNull();
+      // 批1C：createRun 落执行时快照（executor createRunRow 传参面）
+      expect(running.graphJsonSnapshot).toBe(row.graphJson);
 
       await graphs.finishRun({
         runId,
@@ -257,6 +260,7 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
         graphId: target.id,
         attempt: 1,
         triggerType: 'manual',
+        graphJsonSnapshot: target.graphJson,
       });
       // 去会话化 2026-10-28（spec §3.1）：run 的节点详情行随 run 级联删
       await db.prisma.graphRunNode.create({

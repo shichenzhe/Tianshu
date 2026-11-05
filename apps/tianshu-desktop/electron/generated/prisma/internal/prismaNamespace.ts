@@ -3173,6 +3173,7 @@ export const AutomationRunScalarFieldEnum = {
   completionTokens: 'completionTokens',
   graphId: 'graphId',
   graphTrace: 'graphTrace',
+  graphJsonSnapshot: 'graphJsonSnapshot',
   error: 'error',
   startedAt: 'startedAt',
   finishedAt: 'finishedAt'

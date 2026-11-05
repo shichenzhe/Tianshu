@@ -852,7 +852,10 @@
       "input": "输入",
       "fallback": "已降级继续（原失败原因）",
       "deadLetter": "失败项死信（onItemError=continue 跳过的项）",
-      "errorDetail": "错误详情"
+      "errorDetail": "错误详情",
+      "notifySkipped": "通知未送达",
+      "notifySkippedNoChannel": "无桌面通知通道（无头端运行，通知缺省不发送）",
+      "notifySkippedSendFailed": "桌面通知发送失败（详见运行日志）"
     },
     "validation": {
       "duplicateNodeId": "节点 id 重复",

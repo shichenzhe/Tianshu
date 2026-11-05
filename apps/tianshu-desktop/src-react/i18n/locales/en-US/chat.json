@@ -852,7 +852,10 @@
       "input": "Input",
       "fallback": "Continued with fallback (original failure)",
       "deadLetter": "Dead letters (items skipped by onItemError=continue)",
-      "errorDetail": "Error detail"
+      "errorDetail": "Error detail",
+      "notifySkipped": "Notification not delivered",
+      "notifySkippedNoChannel": "No desktop notification channel (headless run, notify defaults to no-op)",
+      "notifySkippedSendFailed": "Desktop notification send failed (see run logs)"
     },
     "validation": {
       "duplicateNodeId": "Duplicate node id",

@@ -84,6 +84,10 @@ vi.mock("../../electron/commons/Log", () => ({
 }));
 
 const runGraphCalls: Array<Record<string, unknown>> = [];
+/** 在途 run promise（fire-and-forget 泄漏防线）：互斥（批1C）后上个
+ * 用例未收口的在途 run 会占住同图互斥位、连环打挂后续用例——afterEach
+ * allSettled 等全部收口（先例：真实 executor 文件以轮询终态对齐） */
+const runGraphPromises: Array<Promise<unknown>> = [];
 let runGraphImpl: (
   params: Record<string, unknown>,
 ) => Promise<unknown> = async () => ({
@@ -94,9 +98,11 @@ let runGraphImpl: (
 });
 
 vi.mock("../../electron/domains/ai/orchestration/graph-executor", () => ({
-  runGraphToResult: vi.fn(async (params: Record<string, unknown>) => {
+  runGraphToResult: vi.fn((params: Record<string, unknown>) => {
     runGraphCalls.push(params);
-    return runGraphImpl(params);
+    const promise = runGraphImpl(params);
+    runGraphPromises.push(promise);
+    return promise;
   }),
   executeGraphRun: vi.fn(),
 }));
@@ -141,6 +147,9 @@ beforeAll(() => {
 });
 
 afterEach(async () => {
+  // 在途 run 全部收口后再停 server（互斥位随各 run 的 finally 释放）
+  await Promise.allSettled(runGraphPromises);
+  runGraphPromises.length = 0;
   await stopWebhookServer();
   runGraphCalls.length = 0;
   published.length = 0;
@@ -275,5 +284,76 @@ describe("webhook 异步模式（fire-and-forget）", () => {
     await stopWebhookServer();
     expect(signal.aborted).toBe(true);
     release();
+  });
+});
+
+describe("webhook 同图并发互斥（批1C 改进项 4）", () => {
+  it("在途第二个 POST 500 graph_inflight（同步/异步面同径）；完成后互斥释放恢复可触发", async () => {
+    let release: () => void = () => {};
+    runGraphImpl = (params) =>
+      new Promise((resolve) => {
+        (params.onRunId as (id: number) => void)(41);
+        release = () =>
+          resolve({
+            status: "success",
+            output: "first-done",
+            nodeOutputs: {},
+            runId: 41,
+          });
+      });
+    const url = await registerWebhook(5, 1);
+    // 第一个请求挂起至图完成（同步模式）——占住同图在途位；上一用例
+    // afterEach 的 closeAllConnections 会使 undici 连接池中的 keep-alive
+    // 连接失效，偶发 ECONNRESET——重试一次兜底（先例 stopWebhookServer 用例）
+    const first = post(url, { word: "a" }).catch(() => post(url, { word: "a" }));
+    await vi.waitFor(() => expect(runGraphCalls.length).toBe(1));
+    const second = await post(url, { word: "b" });
+    expect(second.status).toBe(500);
+    expect(((await second.json()) as { error: string }).error).toBe(
+      "graph_inflight",
+    );
+    release();
+    expect((await first).status).toBe(200);
+    // 互斥位已随收尾释放：恢复即完实现后再次触发照常
+    runGraphImpl = async () => ({
+      status: "success",
+      output: "third-done",
+      nodeOutputs: {},
+      runId: 43,
+    });
+    const third = await post(url, { word: "c" });
+    expect(third.status).toBe(200);
+    await unregisterWebhook(5, 1);
+  });
+
+  it("异步 job 面同样互斥：在途第二个 POST 500 graph_inflight", async () => {
+    let release: () => void = () => {};
+    runGraphImpl = (params) =>
+      new Promise((resolve) => {
+        (params.onRunId as (id: number) => void)(42);
+        release = () =>
+          resolve({
+            status: "success",
+            output: "async-done",
+            nodeOutputs: {},
+            runId: 42,
+          });
+      });
+    const url = await registerWebhook(5, 1, { async: true });
+    // 上一用例 afterEach 的 closeAllConnections 使 undici 池内 keep-alive
+    // 连接失效偶发 ECONNRESET——首帖带一次重试兜底（先例同步面用例）
+    const first = await post(url, { word: "a" }).catch(() =>
+      post(url, { word: "a" }),
+    );
+    expect(first.status).toBe(202); // runId 就绪即回，图仍在途（互斥位占用中）
+    const second = await post(url, { word: "b" }).catch(() =>
+      post(url, { word: "b" }),
+    );
+    expect(second.status).toBe(500);
+    expect(((await second.json()) as { error: string }).error).toBe(
+      "graph_inflight",
+    );
+    release();
+    await unregisterWebhook(5, 1);
   });
 });

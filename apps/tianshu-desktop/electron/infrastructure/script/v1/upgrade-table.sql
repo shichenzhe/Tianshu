@@ -279,6 +279,7 @@ CREATE TABLE IF NOT EXISTS automationRun (
     completionTokens INTEGER,
     graphId INTEGER,
     graphTrace TEXT,
+    graphJsonSnapshot TEXT,
     error TEXT,
     startedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     finishedAt DATETIME

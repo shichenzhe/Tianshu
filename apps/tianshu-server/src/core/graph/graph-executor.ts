@@ -23,8 +23,9 @@
  * 1. Electron 副作用注入化：BrowserWindow 节点状态推送（notifyNodeStatus，
  *    原 orchestration:node-status 广播）→ EventBus graph.run.updated 的
  *    progress 投影；Notification（notify 节点桌面通知）→ 运行时 notify
- *    钩子（默认无通道）。openPreview 无消费点（executor 实际 Electron 面
- *    仅上述两处；规划文本 BrowserWindow×3 为含注释/导入的计数）。
+ *    钩子（默认无通道——批1C 改进项 9 起未注入时 trace 落 notifySkipped=
+ *    no_channel 标注，不再静默）。openPreview 无消费点（executor 实际
+ *    Electron 面仅上述两处；规划文本 BrowserWindow×3 为含注释/导入的计数）。
  * 2. prisma → server 自有（授权面 2）：mirror 模块级 prisma 单例改为
  *    executor-runtime 进程级句柄（./executor-runtime，graph 模块工厂/测试
  *    安装）；run 行落库走 graph.repository createRun/finishRun 原语（GA-T3
@@ -177,6 +178,10 @@ export interface TraceEntry {
   /** 降级继续标记（llm 节点 onError=defaultValue）：实际执行失败但以
    * 默认输出继续，此处保留失败原因供运行历史展示 */
   fallback?: { code: string; message: string };
+  /** notify 节点桌面通知未送达标注（改进项 9）：no_channel 无通道
+   * （无头端未注入 notify 钩子，server 副本落）/ send_failed 发送失败；
+   * 已送达缺省不落 */
+  notifySkipped?: string;
 }
 
 /** server 行类型（GA-T3 graph.repository 同款：@prisma/client 生成模型名
@@ -308,6 +313,8 @@ interface NodeOutput {
   output: string;
   /** 循环节点死信（continue 模式失败项清单） */
   errorOutput?: string;
+  /** notify 节点桌面通知未送达原因码（改进项 9，trace 透传） */
+  notifySkipped?: string;
   /** 生成图片相对数据根路径（imageGen 专用，trace 透传） */
   outputImage?: string;
   /** 检索类节点候选序列化预览（hybridSearch，trace 透传） */
@@ -437,6 +444,9 @@ async function createRunRow(params: GraphRunParams): Promise<number> {
     graphId: params.graph.id,
     attempt: params.attempt,
     triggerType: params.triggerType,
+    // 执行时 graphJson 快照（改进项 3）：图改后历史轨迹/节点行仍可
+    // 对照当时结构（nodeName 可漂移）；截 64KB 对齐 graphRunNode 上限
+    graphJsonSnapshot: clipNodeIo(params.graph.graphJson),
   });
   publishRunUpdated({
     runId,
@@ -1881,6 +1891,7 @@ function traceSuccess(
       ? { hitsTruncated: done.hitsTruncated }
       : {}),
     ...(done.errorOutput ? { errorOutput: done.errorOutput } : {}),
+    ...(done.notifySkipped ? { notifySkipped: done.notifySkipped } : {}),
   };
 }
 
@@ -2149,12 +2160,20 @@ function makeNotifyNodeHandler(
     try {
       const title = render(node.title);
       const body = node.body ? render(node.body) : '';
-      try {
-        // 授权面 1：Electron Notification → 运行时 notify 钩子（无头端
-        // 默认无通道；发送失败不炸节点——通知尽力而为语义保持）
-        graphExecutorRuntime().notify?.(title, body === '' ? undefined : body);
-      } catch (e) {
-        logger.warn('桌面通知发送失败（节点继续）', node.id, e);
+      // 授权面 1：Electron Notification → 运行时 notify 钩子（发送失败
+      // 不炸节点——通知尽力而为语义保持）。无头端未注入钩子（缺省）时
+      // 桌面通知静默消失——trace 标注 notifySkipped 让图作者可见（改进项 9）
+      let notifySkipped: string | undefined;
+      const notify = graphExecutorRuntime().notify;
+      if (notify) {
+        try {
+          notify(title, body === '' ? undefined : body);
+        } catch (e) {
+          logger.warn('桌面通知发送失败（节点继续）', node.id, e);
+          notifySkipped = 'send_failed';
+        }
+      } else {
+        notifySkipped = 'no_channel';
       }
       if (node.webhookProvider !== 'none' && node.webhookUrl.trim() !== '') {
         // IM webhook：失败仅记日志不炸节点（通知尽力而为，与桌面通知同语义）
@@ -2172,7 +2191,7 @@ function makeNotifyNodeHandler(
       }
       const output = body ? `${title}\n${body}` : title;
       await writeNodeRecord(ctx, node, title, output, startedAt);
-      ctx.trace.push(traceSuccess(node, startedAt, { output }));
+      ctx.trace.push(traceSuccess(node, startedAt, { output, notifySkipped }));
       return toNodeUpdate(node.id, { output });
     } catch (e) {
       const failure = toNodeFailure(node, e);

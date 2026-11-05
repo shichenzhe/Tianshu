@@ -461,6 +461,8 @@ export default class ProjectRepository {
     try {
       await fs.writeFile(file, mergeMemoryContent(existing, entry), "utf-8");
     } catch (error) {
+      // 前端静默吞错（交接主流程不阻塞），主进程侧必留痕
+      Log.error(`项目记忆写入失败（projectId=${projectId}）`, error);
       const cause = error instanceof Error ? error.message : String(error);
       throw new Error(`项目记忆写入失败（projectId=${projectId}）：${cause}`, {
         cause: error,

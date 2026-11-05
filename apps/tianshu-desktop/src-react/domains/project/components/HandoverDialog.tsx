@@ -229,8 +229,10 @@ export default function HandoverDialog({
       title: entryTitle,
       summary: memorySummary,
       artifacts,
-    }).catch(() => {
-      /* 静默：记忆沉淀失败不影响交接主流程 */
+    }).catch((error) => {
+      // 静默不阻塞交接主流程，但留痕可查（renderer 侧 console.warn；
+      // 主进程 appendMemory wrap 抛错处另有 Log.error）
+      console.warn("项目记忆回写失败:", error);
     });
   };
 

@@ -227,6 +227,25 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
     );
   });
 
+  it("中途 null（字段值为 null 再下钻）：抛 GraphTemplateError", () => {
+    // payload 为 null → 首个余段 .items 即撞 null 检查
+    expect(() =>
+      renderNodePrompt("{{input.nullPayload.items[0]}}", {
+        inputs: { nullPayload: null },
+        nodes: {},
+        now: new Date("2026-11-05T08:00:00"),
+      } as never),
+    ).toThrow(GraphTemplateError);
+    // items 为 null → [0] 段撞非数组检查
+    expect(() =>
+      renderNodePrompt("{{input.payload.nullItems[0]}}", {
+        inputs: { payload: { nullItems: null } },
+        nodes: {},
+        now: new Date("2026-11-05T08:00:00"),
+      } as never),
+    ).toThrow(GraphTemplateError);
+  });
+
   it("键未声明：抛 GraphTemplateError（路径首段即键）", () => {
     expect(() => render("{{input.unknown.fieldx}}")).toThrow(
       GraphTemplateError,

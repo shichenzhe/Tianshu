@@ -362,7 +362,7 @@ async function main(): Promise<number> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_TOKEN: "e2e-main-pg-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
@@ -371,7 +371,7 @@ async function main(): Promise<number> {
     );
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-main-pg-token" || info.port !== port) {
+    if (info.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info.port !== port) {
       fail(
         "server spawn+握手",
         `token/port 未按 env 回显（token=${info.token} port=${info.port} ≠ 配置 ${port}）`,
@@ -547,7 +547,7 @@ async function main(): Promise<number> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_TOKEN: "e2e-main-pg-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
@@ -556,7 +556,7 @@ async function main(): Promise<number> {
     );
     child = respawned.child;
     const info2 = parseHandshake(respawned.matched);
-    if (info2.token !== "e2e-main-pg-token" || info2.port !== port) {
+    if (info2.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info2.port !== port) {
       fail(
         "重启握手（two-boot）",
         `token/port 未按 env 回显（token=${info2.token} port=${info2.port} ≠ 配置 ${port}）`,
@@ -676,7 +676,7 @@ async function main(): Promise<number> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-main-pg-token",
+        TIANSHU_TOKEN: "e2e-main-pg-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: PG_URL,
@@ -685,7 +685,7 @@ async function main(): Promise<number> {
     );
     child = baselineBoot.child;
     const info3 = parseHandshake(baselineBoot.matched);
-    if (info3.token !== "e2e-main-pg-token" || info3.port !== port) {
+    if (info3.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info3.port !== port) {
       fail(
         "baseline 首启握手",
         `token/port 未按 env 回显（token=${info3.token} port=${info3.port} ≠ 配置 ${port}）`,

@@ -551,7 +551,7 @@ async function runDirect(model: ModelChoice): Promise<void> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-token",
+        TIANSHU_TOKEN: "e2e-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
@@ -568,7 +568,7 @@ async function runDirect(model: ModelChoice): Promise<void> {
     );
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-token")
+    if (info.token !== "e2e-token-0123456789abcdef0123456789")
       fail(`${label} 握手`, "token 未按 env 回显");
     pass(
       `${label} spawn+握手`,
@@ -618,7 +618,7 @@ async function runRelay(model: ModelChoice): Promise<void> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-token",
+        TIANSHU_TOKEN: "e2e-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 

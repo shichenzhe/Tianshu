@@ -175,7 +175,7 @@ async function main(): Promise<number> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-graph-pg-token",
+        TIANSHU_TOKEN: "e2e-graph-pg-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
         TIANSHU_DB_URL: path.join(dataRoot, "database", "local.db"),
@@ -184,7 +184,7 @@ async function main(): Promise<number> {
     );
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-graph-pg-token" || info.port !== port) {
+    if (info.token !== "e2e-graph-pg-token-0123456789abcdef0123456789" || info.port !== port) {
       fail(
         "server spawn+握手",
         `token/port 未按 env 回显（token=${info.token} port=${info.port} ≠ 配置 ${port}）`,

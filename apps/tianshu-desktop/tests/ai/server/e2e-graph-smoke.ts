@@ -327,7 +327,7 @@ async function runPhaseOne(
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-graph-token",
+        TIANSHU_TOKEN: "e2e-graph-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 
@@ -341,7 +341,7 @@ async function runPhaseOne(
     SERVER_DB = path.join(dataRoot, "database", "local.db");
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-graph-token") {
+    if (info.token !== "e2e-graph-token-0123456789abcdef0123456789") {
       fail("实例 1 握手", "token 未按 env 回显");
     }
     if (info.port !== port) {
@@ -374,8 +374,10 @@ async function runPhaseOne(
       name: "e2e-graph-smoke 两节点图",
       graphJson: twoNodeGraphJson(modelRowId),
     })) as { id: number; version: number; nodeCount: number };
-    if (graph.nodeCount !== 2) {
-      fail("graph/save", `nodeCount 期望 2 实为 ${graph.nodeCount}`);
+    if (graph.nodeCount !== 3) {
+      // 保存自愈（1c79fff3，mirror 同款）：无 start 的图 normalizeGraph
+      // 统一口补 start 节点与入口边——2 业务节点 + start = 3
+      fail("graph/save", `nodeCount 期望 3 实为 ${graph.nodeCount}`);
     }
     const runAccepted = (await call(request, "graph/run", "graph/run", {
       graphId: graph.id,
@@ -452,10 +454,11 @@ async function runPhaseOne(
         graphJson: hybridSearchGraphJson(HYBRID_COLLECTION),
       },
     )) as { id: number; nodeCount: number };
-    if (hybridGraph.nodeCount !== 1) {
+    if (hybridGraph.nodeCount !== 2) {
+      // 同上保存自愈：单业务节点 + start = 2
       fail(
         "hybrid graph/save",
-        `nodeCount 期望 1 实为 ${hybridGraph.nodeCount}`,
+        `nodeCount 期望 2 实为 ${hybridGraph.nodeCount}`,
       );
     }
     const hybridRun = (await call(request, "hybrid graph/run", "graph/run", {
@@ -654,7 +657,7 @@ async function runPhaseTwo(
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-graph-token",
+        TIANSHU_TOKEN: "e2e-graph-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
 

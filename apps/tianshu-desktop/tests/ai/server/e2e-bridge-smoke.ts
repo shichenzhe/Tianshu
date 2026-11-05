@@ -489,7 +489,7 @@ async function main(): Promise<number> {
       /^TIANSHU_HANDSHAKE /,
       {
         NODE_ENV: "e2e",
-        TIANSHU_TOKEN: "e2e-bridge-token",
+        TIANSHU_TOKEN: "e2e-bridge-token-0123456789abcdef0123456789",
         TIANSHU_HANDSHAKE_TOKEN: "1",
         TIANSHU_DATA_ROOT: dataRoot,
       },
@@ -497,7 +497,7 @@ async function main(): Promise<number> {
     child = spawned.child;
     scanned = spawned;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-bridge-token") {
+    if (info.token !== "e2e-bridge-token-0123456789abcdef0123456789") {
       fail("spawn+握手", "token 未按 env 回显");
     }
     if (info.port !== port) {

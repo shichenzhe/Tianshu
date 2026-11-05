@@ -8,6 +8,7 @@ import {
 } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import {
   DEFAULT_MAX_STEPS,
@@ -1748,16 +1749,28 @@ export default class ChatService {
   }
 
   /**
-   * 解析备用模型运行时（批5 provider-model §6 项 3）：主模型
-   * fallbackModelId 有值时加载该模型行与所属 provider 行（归属同用户校验
-   * + 只认 llm），解密凭证构造备用 ChatModel；任一环节缺失返回 undefined
-   * （无 fallback，主链路行为与既有完全一致）
+   * 解析备用模型运行时（批5 provider-model §6 项 3；修复环 Round 1 返回
+   * 完整 plan）：主模型 fallbackModelId 有值时加载该模型行与所属 provider
+   * 行（归属同用户校验 + 只认 llm），**按备选自身行参数**构造备用
+   * ChatModel（模型基层换备选行，assistant/overrides 上层保留——与主链
+   * mergeParams 同序）并给出备选自己的 effectiveContextWindow（备选
+   * attempt 的截断预算，core 侧按 plan 重算）。任一环节缺失或构造抛错
+   * （comfyui 备选 provider 等——备选不可用不该毁掉主路径）返回 undefined
+   * （无 fallback，主链路行为与既有完全一致）。
    */
   private async loadFallbackModel(
     modelRow: { fallbackModelId: number | null },
     userId: number,
-    merged: ChatModelParams,
-  ): Promise<ReturnType<typeof createChatModel> | undefined> {
+    /** 模型行之上的参数层（assistant/overrides，与主链 mergeParams 同序） */
+    upperLayers: Array<ChatModelParams | undefined>,
+  ): Promise<
+    | {
+        chatModel: BaseChatModel;
+        contextWindow: number;
+        params: ChatModelParams;
+      }
+    | undefined
+  > {
     if (modelRow.fallbackModelId == null) {
       return undefined;
     }
@@ -1775,21 +1788,46 @@ export default class ChatService {
     if (!fbProvider || fbProvider.userId !== userId) {
       return undefined;
     }
+    // 备选自身采样参数：备选行为基层 + 主链同款上层（assistant/overrides）
+    const params = mergeParams([
+      {
+        temperature: fbModel.temperature ?? undefined,
+        topP: fbModel.topP ?? undefined,
+        maxTokens: fbModel.maxTokens ?? undefined,
+      },
+      ...upperLayers,
+    ]);
     const secrets = await openProviderSecrets(fbProvider);
-    return createChatModel(
-      {
-        type: fbProvider.type,
-        baseUrl: fbProvider.baseUrl,
-        apiKey: secrets.apiKey,
-        extraHeaders: secrets.extraHeaders,
-      },
-      fbModel.modelId,
-      {
-        temperature: merged.temperature,
-        topP: merged.topP,
-        maxTokens: merged.maxTokens,
-      },
-    );
+    try {
+      const chatModel = createChatModel(
+        {
+          type: fbProvider.type,
+          baseUrl: fbProvider.baseUrl,
+          apiKey: secrets.apiKey,
+          extraHeaders: secrets.extraHeaders,
+        },
+        fbModel.modelId,
+        {
+          temperature: params.temperature,
+          topP: params.topP,
+          maxTokens: params.maxTokens,
+        },
+      );
+      return {
+        chatModel,
+        params,
+        contextWindow: this.effectiveContextWindow(fbModel, fbProvider),
+      };
+    } catch (e) {
+      // 修复环 Minor 2：备选构造抛错（comfyui 备选 provider →
+      // COMFYUI_NOT_CHAT 等）降级为「无 fallback」——备选不可用不该
+      // 毁掉主路径的错误报告
+      Log.warn(
+        `fallback 备选构造失败，降级为无备选（modelId=${fbModel.modelId}）:`,
+        e instanceof Error ? e.message : String(e),
+      );
+      return undefined;
+    }
   }
 
   private allowExpertRecommend(ctx: {
@@ -1994,13 +2032,18 @@ export default class ChatService {
     const ctx = await this.assembleContext(sessionId, userId, overrides);
     // 面板联动（web 工具 browse）：会话 sender 绑定进 agent 闭包
     this.bindEmitPanel(ctx.agent, sessionId, sender);
-    // 备用模型解析（批5 fallback）：失败切备选重试一次；未配置/不可用为
-    // undefined，主链路行为与既有完全一致
-    const fallbackModel = await this.loadFallbackModel(
-      ctx.modelRow,
-      userId,
-      ctx.merged,
-    );
+    // 备用模型解析（批5 fallback；修复环 Round 1 完整 plan）：备选按自身
+    // 行参数构造 + 自身窗口截断；未配置/不可用为 undefined，主链路行为
+    // 与既有完全一致。上层参数层与主链 mergeParams 同序（assistant →
+    // overrides），模型基层换备选行
+    const fallbackPlan = await this.loadFallbackModel(ctx.modelRow, userId, [
+      {
+        temperature: ctx.assistantRow?.temperature ?? undefined,
+        topP: ctx.assistantRow?.topP ?? undefined,
+        maxTokens: ctx.assistantRow?.maxTokens ?? undefined,
+      },
+      overrides,
+    ]);
     try {
       // AR-T1 接缝消费：编排层经 agentRunner（AgentRunner 契约——chunks
       // 流 + result 终值）驱动引擎；桥接层聚合 chunk 出口（onChunk 不直传）
@@ -2047,8 +2090,17 @@ export default class ChatService {
         maxSteps,
         // 备用模型（批5 §6 项 3）：主模型瞬态重试后仍失败/配置类失败时切
         // 它再试一次（仅流建立前失败——流中途失败重试会重复内容，core 侧
-        // 以「零可见块」为安全点判定）
-        ...(fallbackModel ? { fallbackModel } : {}),
+        // 以「零可见块」为安全点判定）。修复环 Round 1：传完整 plan——
+        // 备选 attempt 的截断预算与采样/预留参数按备选自身行计算
+        ...(fallbackPlan
+          ? {
+              fallbackModel: {
+                chatModel: fallbackPlan.chatModel,
+                contextWindow: fallbackPlan.contextWindow,
+                params: fallbackPlan.params,
+              },
+            }
+          : {}),
         // 历史图片块回喂：按数据根读盘转 dataUrl（读不到由转换层降级占位）
         loadImage: (imagePath) => readImageAsDataUrl(appDataHome(), imagePath),
         // skill_ref 块展开（skill_ref 批）：ctx.allSkills 精确匹配读正文——

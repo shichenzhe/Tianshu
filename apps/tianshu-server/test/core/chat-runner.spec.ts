@@ -15,6 +15,8 @@ import {
 } from 'src/core/tools/bridge/bridge-registry';
 import type { ToolRequestPayload } from '@tianshu/protocol';
 import type { ChatStreamChunk } from '@tianshu/protocol';
+import { ChatRunnerService } from 'src/core/chat-runner.service';
+import { ScriptedChatModel } from '../helpers/scripted-chat-model';
 import { createTestDb, type TestDb } from '../support/test-db';
 import { waitFor } from '../support/wait-for';
 import {
@@ -727,5 +729,115 @@ describe('ChatRunnerService run', () => {
     await expect(fallback.agent.requestApproval('tc2', '摘要')).resolves.toBe(
       false,
     );
+  });
+
+  // ---------- 修复环 Round 1：loadFallbackModel 备选 plan（自身参数/窗口） ----------
+
+  describe('loadFallbackModel（备用 plan 解析，修复环 Round 1）', () => {
+    /** 备选 attempt 运行时 plan 形状（私有方法产物） */
+    type FallbackPlan = {
+      chatModel: unknown;
+      contextWindow: number;
+      params: { temperature?: number; topP?: number; maxTokens?: number };
+    };
+    type LoadFallback = (
+      modelRow: { fallbackModelId: number | null },
+      userId: number,
+      upperLayers: Array<
+        { temperature?: number; topP?: number; maxTokens?: number } | undefined
+      >,
+    ) => Promise<FallbackPlan | undefined>;
+
+    it('备选按自身行参数构造（assistant 上层保留）+ 自身窗口；构造抛错降级 undefined', async () => {
+      // 备选 provider/model：窗口 8192、temperature 0.2、maxTokens 2048
+      const fbProvider = await db.prisma.provider.create({
+        data: {
+          name: 'fb-provider',
+          type: 'openai-compatible',
+          baseUrl: 'http://localhost:9/v1',
+          apiKey: 'sk-fb',
+          userId: 1,
+        },
+      });
+      const fbModel = await db.prisma.model.create({
+        data: {
+          providerId: fbProvider.id,
+          modelId: 'fb-llm',
+          type: 'llm',
+          contextWindow: 8192,
+          temperature: 0.2,
+          maxTokens: 2048,
+        },
+      });
+      const mainModel = await db.prisma.model.create({
+        data: {
+          providerId: fbProvider.id,
+          modelId: 'main-llm',
+          type: 'llm',
+        },
+      });
+      const mainRow = await db.prisma.model.update({
+        where: { id: mainModel.id },
+        data: { fallbackModelId: fbModel.id },
+      });
+
+      const made: Array<{
+        providerId: number;
+        modelId: string;
+        options?: { temperature?: number; maxTokens?: number };
+      }> = [];
+      const runner = new ChatRunnerService(db.prisma, {
+        modelFactory: (provider, modelId, options) => {
+          made.push({
+            providerId: (provider as { baseUrl?: string }).baseUrl?.includes(
+              '9/v1',
+            )
+              ? fbProvider.id
+              : -1,
+            modelId,
+            options,
+          });
+          return new ScriptedChatModel([]);
+        },
+        config: () => ({
+          dataRoot: dirs.dataRoot,
+          allowDangerousTools: false,
+          deleteProtection: true,
+          accessMode: 'default' as const,
+        }),
+      });
+      const plan = await (
+        runner as unknown as { loadFallbackModel: LoadFallback }
+      ).loadFallbackModel(mainRow, 1, [{ maxTokens: 4096 }]);
+      // 构造：备选行 temperature 0.2 基层 + assistant 上层 maxTokens 4096
+      expect(made.at(-1)).toMatchObject({
+        modelId: 'fb-llm',
+        options: { temperature: 0.2, maxTokens: 4096 },
+      });
+      // plan：备选自身窗口（server Provider 无 contextWindow 列，model 显式 8192）
+      expect(plan?.contextWindow).toBe(8192);
+      expect(plan?.params).toEqual({ temperature: 0.2, maxTokens: 4096 });
+
+      // 修复环 Minor 2：构造抛错（comfyui 备选 provider → COMFYUI_NOT_CHAT 等）
+      // 降级 undefined——备选不可用不毁主路径
+      const throwing = new ChatRunnerService(db.prisma, {
+        modelFactory: () => {
+          throw Object.assign(new Error('ComfyUI 服务商无对话能力'), {
+            code: 'COMFYUI_NOT_CHAT',
+          });
+        },
+        config: () => ({
+          dataRoot: dirs.dataRoot,
+          allowDangerousTools: false,
+          deleteProtection: true,
+          accessMode: 'default' as const,
+        }),
+      });
+      await expect(
+        (
+          throwing as unknown as { loadFallbackModel: LoadFallback }
+        ).loadFallbackModel(mainRow, 1, []),
+      ).resolves.toBeUndefined();
+    });
   });
 });

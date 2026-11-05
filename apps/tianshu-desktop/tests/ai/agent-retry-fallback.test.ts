@@ -254,3 +254,106 @@ describe("runChatStream fallback 备用模型", () => {
     });
   });
 });
+
+// ---------- 修复环 Round 1：fallback 按备选自身窗口/参数截断 ----------
+
+/** 长历史夹具：N 对 user/assistant（每条 ~3000 token）+ 末条 user——
+ *  131072 窗口全量保留；8192 窗口（预算扣除 maxTokens 预留后）必裁早期消息 */
+function longHistory(pairs: number) {
+  const big = "字".repeat(6000); // estimateTokens = ceil(len/2) ≈ 3000
+  const rows: Array<{ role: "user" | "assistant"; blocks: string }> = [];
+  for (let i = 0; i < pairs; i += 1) {
+    rows.push({
+      role: "user",
+      blocks: JSON.stringify([{ type: "text", text: `${i} ${big}` }]),
+    });
+    rows.push({
+      role: "assistant",
+      blocks: JSON.stringify([{ type: "text", text: `${i} 答 ${big}` }]),
+    });
+  }
+  rows.push({
+    role: "user",
+    blocks: JSON.stringify([{ type: "text", text: "hi" }]),
+  });
+  return rows;
+}
+
+describe("fallback 备选自身的窗口与参数（修复环 Round 1）", () => {
+  it("plan 形态：备选 attempt 按 contextWindow=8192 截断（主 131072 全量零变化）", async () => {
+    const history = longHistory(6); // 13 条消息 ≈ 3.6 万 token
+    const primary = scriptedChatModel([
+      { steps: [], error: rateLimited() },
+      { steps: [], error: rateLimited() },
+    ]);
+    const fallback = scriptedChatModel([
+      { steps: [{ kind: "text", delta: "备选回答" }] },
+    ]);
+    const result = await runChatStream({
+      model: primary.model,
+      fallbackModel: {
+        chatModel: fallback.model,
+        contextWindow: 8192,
+        params: { maxTokens: 1024 },
+      },
+      history,
+      contextWindow: 131072,
+      params: { maxTokens: 4096 },
+      transientRetryDelayMs: 0,
+    });
+    expect(result.errorCode).toBeUndefined();
+    expect(result.fallbackUsed).toBe(true);
+    // 主 attempt：131072 窗口全量回喂（零回归证据）
+    expect(primary.model.seenInputs[0].length).toBe(history.length);
+    // 备选 attempt：8192 窗口预算（-1024 maxTokens 预留 -headroom）必裁早期消息
+    const fed = fallback.model.seenInputs[0];
+    expect(fed.length).toBeLessThan(history.length);
+    expect(fed.length).toBeGreaterThanOrEqual(1); // keep-at-least-one
+  });
+
+  it("plan 形态：备选 params 参与截断预算（maxTokens 大→预算小→裁得更多）", async () => {
+    const history = longHistory(3);
+    const runWithFallbackMaxTokens = async (fbMaxTokens: number) => {
+      const primary = scriptedChatModel([
+        { steps: [], error: authFailed() }, // 配置类：直接切备选
+      ]);
+      const fallback = scriptedChatModel([
+        { steps: [{ kind: "text", delta: "ok" }] },
+      ]);
+      await runChatStream({
+        model: primary.model,
+        fallbackModel: {
+          chatModel: fallback.model,
+          contextWindow: 16384,
+          params: { maxTokens: fbMaxTokens },
+        },
+        history,
+        contextWindow: 131072,
+        params: {},
+        transientRetryDelayMs: 0,
+      });
+      return fallback.model.seenInputs[0].length;
+    };
+    const tight = await runWithFallbackMaxTokens(12288); // 预留大 → 历史预算小
+    const loose = await runWithFallbackMaxTokens(1024); // 预留小 → 历史预算大
+    expect(tight).toBeLessThan(loose);
+  });
+
+  it("简式（裸模型）沿用主 attempt 窗口——兼容形态语义钉死", async () => {
+    const history = longHistory(6);
+    const primary = scriptedChatModel([{ steps: [], error: authFailed() }]);
+    const fallback = scriptedChatModel([
+      { steps: [{ kind: "text", delta: "ok" }] },
+    ]);
+    await runChatStream({
+      model: primary.model,
+      fallbackModel: fallback.model,
+      history,
+      contextWindow: 131072,
+      params: {},
+      transientRetryDelayMs: 0,
+    });
+    // 主窗口 131072：备选也全量（简式共享主预算——非 plan 不换算）
+    expect(fallback.model.seenInputs[0].length).toBe(history.length);
+  });
+});

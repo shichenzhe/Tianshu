@@ -3109,6 +3109,40 @@ describe("ChatService 自动压缩（spec §18 项 2）", () => {
 });
 
 // ---------- 批5 fallback：loadFallbackModel 归属/可用面解析 ----------
+// 修复环 Round 1：返回完整 plan（chatModel/contextWindow/params）——备选
+// 按自身行参数构造与截断；构造抛错（comfyui 备选 provider 等）降级 undefined
+
+/** 备选 attempt 运行时 plan 形状（loadFallbackModel 产物） */
+type FallbackPlan = {
+  chatModel: BaseChatModelLike;
+  contextWindow: number;
+  params: ChatModelParams;
+};
+
+/** 模型行 + 服务商行夹具（同用户 llm 备选） */
+const fbRows = (modelOver: Record<string, unknown> = {}) => {
+  assembleReads.model.findUnique.mockResolvedValue({
+    id: 9,
+    providerId: 2,
+    modelId: "fb-model",
+    type: "llm",
+    temperature: null,
+    topP: null,
+    maxTokens: null,
+    contextWindow: null,
+    fallbackModelId: null,
+    ...modelOver,
+  });
+  assembleReads.provider.findUnique.mockResolvedValue({
+    id: 2,
+    type: "openai-compatible",
+    baseUrl: "http://fb",
+    apiKey: null,
+    extraHeaders: null,
+    contextWindow: null,
+    userId: 1,
+  });
+};
 
 describe("loadFallbackModel（备用模型运行时解析）", () => {
   it("fallbackModelId 空 → undefined；备选非 llm/跨用户/行缺失 → undefined", async () => {
@@ -3119,10 +3153,10 @@ describe("loadFallbackModel（备用模型运行时解析）", () => {
           loadFallbackModel: (
             m: { fallbackModelId: number | null },
             uid: number,
-            p: ChatModelParams,
-          ) => Promise<unknown>;
+            layers: Array<ChatModelParams | undefined>,
+          ) => Promise<FallbackPlan | undefined>;
         }
-      ).loadFallbackModel(m, uid, {});
+      ).loadFallbackModel(m, uid, []);
 
     expect(await load({ fallbackModelId: null })).toBeUndefined();
 
@@ -3140,12 +3174,7 @@ describe("loadFallbackModel（备用模型运行时解析）", () => {
     expect(await load({ fallbackModelId: 9 })).toBeUndefined();
 
     // 跨用户备选拒绝（v12 隔离）
-    assembleReads.model.findUnique.mockResolvedValue({
-      id: 9,
-      providerId: 2,
-      modelId: "fb-model",
-      type: "llm",
-    });
+    fbRows();
     assembleReads.provider.findUnique.mockResolvedValue({
       id: 2,
       type: "openai-compatible",
@@ -3157,42 +3186,92 @@ describe("loadFallbackModel（备用模型运行时解析）", () => {
     expect(await load({ fallbackModelId: 9 }, 1)).toBeUndefined();
   });
 
-  it("同用户 llm 备选 → 构造备用 ChatModel（解密后凭证喂工厂）", async () => {
-    assembleReads.model.findUnique.mockResolvedValue({
-      id: 9,
-      providerId: 2,
-      modelId: "fb-model",
-      type: "llm",
+  it("修复环：构造按备选行参数（模型基层换备选行，assistant/overrides 上层保留）、窗口取备选 effectiveContextWindow", async () => {
+    fbRows({
+      temperature: 0.2,
+      maxTokens: 2048,
+      contextWindow: 8192,
     });
-    assembleReads.provider.findUnique.mockResolvedValue({
-      id: 2,
-      type: "openai-compatible",
-      baseUrl: "http://fb",
-      apiKey: null,
-      extraHeaders: null,
-      userId: 1,
-    });
+    (createChatModel as ReturnType<typeof vi.fn>).mockClear();
     const svc = new ChatService({} as unknown as SessionRepository);
-    const model = await (
+    const plan = await (
       svc as unknown as {
         loadFallbackModel: (
           m: { fallbackModelId: number | null },
           uid: number,
-          p: ChatModelParams,
-        ) => Promise<BaseChatModelLike>;
+          layers: Array<ChatModelParams | undefined>,
+        ) => Promise<FallbackPlan | undefined>;
       }
-    ).loadFallbackModel({ fallbackModelId: 9 }, 1, {
-      temperature: 0.4,
-      maxTokens: 512,
-    });
-    expect(model).toBeDefined();
+    ).loadFallbackModel(
+      { fallbackModelId: 9 },
+      1,
+      // 上层：assistant maxTokens 覆盖备选基层；temperature 未设（备选 0.2 生效）
+      [{ maxTokens: 4096 }],
+    );
+    expect(plan).toBeDefined();
+    // 构造参数：备选行 temperature + 上层 maxTokens（mergeParams 后层优先）
     expect(createChatModel).toHaveBeenCalledWith(
       expect.objectContaining({
         type: "openai-compatible",
         baseUrl: "http://fb",
       }),
       "fb-model",
-      expect.objectContaining({ temperature: 0.4, maxTokens: 512 }),
+      expect.objectContaining({ temperature: 0.2, maxTokens: 4096 }),
     );
+    // plan：窗口取备选行 8192（四层链 model 显式），params 同构造参数
+    expect(plan?.contextWindow).toBe(8192);
+    expect(plan?.params).toEqual({ temperature: 0.2, maxTokens: 4096 });
+  });
+
+  it("修复环：备选行 contextWindow 空时经目录层回填（provider 层后于目录）", async () => {
+    fbRows({ modelId: "gpt-4o" }); // 目录：128K
+    assembleReads.provider.findUnique.mockResolvedValue({
+      id: 2,
+      type: "openai-compatible",
+      baseUrl: "http://fb",
+      apiKey: null,
+      extraHeaders: null,
+      contextWindow: 8192,
+      userId: 1,
+    });
+    const svc = new ChatService({} as unknown as SessionRepository);
+    const plan = await (
+      svc as unknown as {
+        loadFallbackModel: (
+          m: { fallbackModelId: number | null },
+          uid: number,
+          layers: Array<ChatModelParams | undefined>,
+        ) => Promise<FallbackPlan | undefined>;
+      }
+    ).loadFallbackModel({ fallbackModelId: 9 }, 1, []);
+    expect(plan?.contextWindow).toBe(128_000);
+  });
+
+  it("修复环 Minor 2：构造抛错（comfyui 备选 provider 等）降级 undefined，不毁主路径", async () => {
+    fbRows();
+    assembleReads.provider.findUnique.mockResolvedValue({
+      id: 2,
+      type: "comfyui",
+      baseUrl: "http://127.0.0.1:8188",
+      apiKey: null,
+      extraHeaders: null,
+      userId: 1,
+    });
+    (createChatModel as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
+      throw Object.assign(new Error("ComfyUI 服务商无对话能力"), {
+        code: "COMFYUI_NOT_CHAT",
+      });
+    });
+    const svc = new ChatService({} as unknown as SessionRepository);
+    const plan = await (
+      svc as unknown as {
+        loadFallbackModel: (
+          m: { fallbackModelId: number | null },
+          uid: number,
+          layers: Array<ChatModelParams | undefined>,
+        ) => Promise<FallbackPlan | undefined>;
+      }
+    ).loadFallbackModel({ fallbackModelId: 9 }, 1, []);
+    expect(plan).toBeUndefined();
   });
 });

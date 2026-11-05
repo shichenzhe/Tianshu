@@ -339,6 +339,12 @@ interface AssembledContext {
   modelRow: { id: number; modelId: string; fallbackModelId: number | null };
   /** 会话当前助手 id（落库列；请求级覆盖已写回会话行） */
   assistantId: number | null;
+  /** 助手行（修复环 Round 1：fallback 备选参数的 assistant 上层来源） */
+  assistantRow: {
+    temperature: number | null;
+    topP: number | null;
+    maxTokens: number | null;
+  } | null;
   providerRow: {
     type: string;
     baseUrl: string;
@@ -464,13 +470,11 @@ export class ChatRunnerService {
             type: 'skill_ref',
             name,
           })),
-          ...(options.contentRefs ?? []).map(
-            (ref): MessageBlock => ({
-              type: 'file_ref',
-              path: ref.path,
-              content: ref.content,
-            }),
-          ),
+          ...(options.contentRefs ?? []).map((ref): MessageBlock => ({
+            type: 'file_ref',
+            path: ref.path,
+            content: ref.content,
+          })),
           { type: 'text', text: options.content },
           ...(options.images?.length ? imageBlocksOf(options.images) : []),
         ]),
@@ -921,13 +925,17 @@ export class ChatRunnerService {
   ): Promise<void> {
     const startedAt = Date.now();
     const ctx = await this.assembleContext(sessionId, userId);
-    // 备用模型解析（批5 fallback，mirror loadFallbackModel 同构）：失败切
-    // 备选重试一次；未配置/不可用为 undefined，主链路行为与既有一致
-    const fallbackModel = await this.loadFallbackModel(
-      ctx.modelRow,
-      userId,
-      ctx.merged,
-    );
+    // 备用模型解析（批5 fallback；修复环 Round 1 完整 plan）：备选按自身
+    // 行参数构造 + 自身窗口截断；未配置/不可用为 undefined，主链路行为
+    // 与既有完全一致。上层参数层与主链 mergeParams 同序（assistant——
+    // server 无单次请求 overrides 层），模型基层换备选行
+    const fallbackPlan = await this.loadFallbackModel(ctx.modelRow, userId, [
+      {
+        temperature: ctx.assistantRow?.temperature ?? undefined,
+        topP: ctx.assistantRow?.topP ?? undefined,
+        maxTokens: ctx.assistantRow?.maxTokens ?? undefined,
+      },
+    ]);
     try {
       const result = await runChatStream({
         model: this.deps.modelFactory(
@@ -939,9 +947,10 @@ export class ChatRunnerService {
               openSecret('provider.apiKey', ctx.providerRow.apiKey ?? null) ??
               undefined,
             extraHeaders:
-              openSecret('provider.extraHeaders', ctx.providerRow.extraHeaders ?? null)
-              ??
-              undefined,
+              openSecret(
+                'provider.extraHeaders',
+                ctx.providerRow.extraHeaders ?? null,
+              ) ?? undefined,
           },
           ctx.modelRow.modelId,
           {
@@ -950,7 +959,17 @@ export class ChatRunnerService {
             maxTokens: ctx.merged.maxTokens,
           },
         ),
-        ...(fallbackModel ? { fallbackModel } : {}),
+        // 修复环 Round 1：完整 plan——备选 attempt 截断预算与采样/预留
+        // 参数按备选自身行计算（core 侧重算备选 messages）
+        ...(fallbackPlan
+          ? {
+              fallbackModel: {
+                chatModel: fallbackPlan.chatModel,
+                contextWindow: fallbackPlan.contextWindow,
+                params: fallbackPlan.params,
+              },
+            }
+          : {}),
         system: ctx.systemWithSummary,
         history: ctx.history,
         contextWindow: ctx.contextWindow,
@@ -1032,16 +1051,29 @@ export class ChatRunnerService {
   }
 
   /**
-   * 解析备用模型运行时（批5 provider-model §6 项 3，mirror
-   * loadFallbackModel 同构）：fallbackModelId 有值时加载该模型行与所属
-   * provider 行（归属同用户校验 + 只认 llm），解密凭证经注入的
-   * modelFactory 构造；任一环节缺失返回 undefined（无 fallback）
+   * 解析备用模型运行时（批5 provider-model §6 项 3；修复环 Round 1 返回
+   * 完整 plan，mirror loadFallbackModel 同构）：fallbackModelId 有值时加载
+   * 该模型行与所属 provider 行（归属同用户校验 + 只认 llm），**按备选自身
+   * 行参数**经注入的 modelFactory 构造（模型基层换备选行，assistant 上层
+   * 保留）并给出备选自己的 effectiveContextWindow（备选 attempt 截断
+   * 预算）。任一环节缺失或构造抛错（comfyui 备选 provider 等——备选不可
+   * 用不毁主路径）返回 undefined（无 fallback）
    */
   private async loadFallbackModel(
     modelRow: { fallbackModelId: number | null },
     userId: number,
-    merged: { temperature?: number; topP?: number; maxTokens?: number },
-  ): Promise<BaseChatModel | undefined> {
+    /** 模型行之上的参数层（assistant，与主链 mergeParams 同序） */
+    upperLayers: Array<
+      { temperature?: number; topP?: number; maxTokens?: number } | undefined
+    >,
+  ): Promise<
+    | {
+        chatModel: BaseChatModel;
+        contextWindow: number;
+        params: { temperature?: number; topP?: number; maxTokens?: number };
+      }
+    | undefined
+  > {
     if (modelRow.fallbackModelId == null) {
       return undefined;
     }
@@ -1059,26 +1091,56 @@ export class ChatRunnerService {
     if (!fbProvider || fbProvider.userId !== userId) {
       return undefined;
     }
-    return this.deps.modelFactory(
+    // 备选自身采样参数：备选行为基层 + 主链同款上层（assistant）
+    const params = mergeParams([
       {
-        type: fbProvider.type,
-        baseUrl: fbProvider.baseUrl,
-        apiKey:
-          openSecret('provider.apiKey', fbProvider.apiKey ?? null) ??
-          undefined,
-        extraHeaders:
-          openSecret(
-            'provider.extraHeaders',
-            fbProvider.extraHeaders ?? null,
-          ) ?? undefined,
+        temperature: fbModel.temperature ?? undefined,
+        topP: fbModel.topP ?? undefined,
+        maxTokens: fbModel.maxTokens ?? undefined,
       },
-      fbModel.modelId,
-      {
-        temperature: merged.temperature,
-        topP: merged.topP,
-        maxTokens: merged.maxTokens,
-      },
-    );
+      ...upperLayers,
+    ]);
+    try {
+      const chatModel = this.deps.modelFactory(
+        {
+          type: fbProvider.type,
+          baseUrl: fbProvider.baseUrl,
+          apiKey:
+            openSecret('provider.apiKey', fbProvider.apiKey ?? null) ??
+            undefined,
+          extraHeaders:
+            openSecret(
+              'provider.extraHeaders',
+              fbProvider.extraHeaders ?? null,
+            ) ?? undefined,
+        },
+        fbModel.modelId,
+        {
+          temperature: params.temperature,
+          topP: params.topP,
+          maxTokens: params.maxTokens,
+        },
+      );
+      return {
+        chatModel,
+        params,
+        // 备选自己的窗口（server Provider 表无 contextWindow 列，provider 层缺席）
+        contextWindow: effectiveContextWindowOf(
+          fbModel.modelId,
+          fbModel.contextWindow,
+          null,
+        ),
+      };
+    } catch (e) {
+      // 修复环 Minor 2：备选构造抛错（comfyui 备选 provider →
+      // COMFYUI_NOT_CHAT 等）降级为「无 fallback」——不毁主路径错误报告
+      this.logger.warn(
+        `fallback 备选构造失败，降级为无备选（modelId=${fbModel.modelId}）: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return undefined;
+    }
   }
 
   /** 采样参数经构造注入（终审 T9c 口径：不随请求下发模型） */
@@ -1204,6 +1266,7 @@ export class ChatRunnerService {
     return {
       modelRow,
       assistantId: session.assistantId,
+      assistantRow,
       // 安全批 C4：凭证密文源头解密（ctx 消费点直接得明文）
       providerRow: {
         ...providerRow,

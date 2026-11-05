@@ -166,11 +166,32 @@ export interface ChatStreamOptions<
   /**
    * 备用模型（provider-model §6 项 3，Task 9 批 5）：主模型瞬态重试后
    * 仍失败（或配置类错误）且流未产出任何可见块时，切它再试 1 次；全部
-   * 失败报最后一次错误（ChatStreamResult.fallbackUsed 标注走了备选）
+   * 失败报最后一次错误（ChatStreamResult.fallbackUsed 标注走了备选）。
+   *
+   * 两种形态（修复环 Round 1）：
+   * - 裸 BaseChatModel（简式）：备选 attempt 沿用主 attempt 的
+   *   contextWindow/params（截断预算与预留不换算）——测试/简单场景兼容；
+   * - FallbackAttemptPlan（完整形态，生产装配）：备选按自身行参数构造、
+   *   截断预算按备选自己的 contextWindow/params 计算——「64K maxTokens
+   *   主模型 fallback 8K 窗口本地模型」类降级组合不再以备选 400 收场。
    */
-  fallbackModel?: BaseChatModel;
+  fallbackModel?: BaseChatModel | FallbackAttemptPlan;
   /** 瞬态重试退避毫秒（缺省 1.2s；测试注入 0/短值） */
   transientRetryDelayMs?: number;
+}
+
+/**
+ * 备选 attempt 完整形态（修复环 Round 1）：备选的窗口与采样/预留参数
+ * 来自备选模型行（调用方 loadFallbackModel 组装），core 按它重算备选
+ * attempt 的截断——主 attempt 预算零变化。
+ */
+export interface FallbackAttemptPlan {
+  /** 备选 ChatModel（调用方按备选行参数构造） */
+  chatModel: BaseChatModel;
+  /** 备选的截断窗口；缺省沿用主 attempt 的 contextWindow（简式兼容） */
+  contextWindow?: number;
+  /** 备选的采样/预留参数（maxTokens 参与截断预留）；缺省沿用主 params */
+  params?: ChatModelParams;
 }
 
 export interface ChatStreamResult {
@@ -298,37 +319,43 @@ export async function runChatStream<
   TToolDef extends ToolDefinitionLike = ToolDefinitionLike,
   TAgent = unknown,
 >(options: ChatStreamOptions<TToolDef, TAgent>): Promise<ChatStreamResult> {
-  // 解析一次复用：token 估算与模型消息转换共享同一 parse 结果，
-  // 避免长会话下同一批 blocks 被 JSON.parse 两遍；旧轮工具输出先瘦身
-  // （spec §18 项 1）——只影响回喂副本（DB blocks/编辑重发/回看不动），
-  // 截断判定与 token 估算天然消费瘦身后成本；blocksToModelMessages
+  // 截断 + 转换按 attempt 各自预算计算（修复环 Round 1）：主 attempt 用
+  // options.contextWindow/params；备选 plan 携带自身窗口/参数时按备选算
+  // ——token 估算与模型消息转换共享同一 parse 结果，避免长会话下同一批
+  // blocks 被 JSON.parse 两遍；旧轮工具输出先瘦身（spec §18 项 1）——
+  // 只影响回喂副本（DB blocks/编辑重发/回看不动）；blocksToModelMessages
   // 读图转 image_url content block 为 async，逐消息并行后拍平
-  const messages = (
-    await Promise.all(
-      truncateHistory(
-        trimHistoryToolOutputs(options.history),
-        options.contextWindow,
-        {
-          reserveTokens: estimateReserveTokens(
-            options.params.maxTokens,
-            options.system,
-            options.toolDefinitions ?? [],
+  const buildAttemptMessages = async (
+    contextWindow: number | undefined,
+    params: ChatModelParams,
+  ) =>
+    (
+      await Promise.all(
+        truncateHistory(
+          trimHistoryToolOutputs(options.history),
+          contextWindow,
+          {
+            reserveTokens: estimateReserveTokens(
+              params.maxTokens,
+              options.system,
+              options.toolDefinitions ?? [],
+            ),
+          },
+        ).map((m) =>
+          blocksToModelMessages(
+            m.blocks,
+            m.role,
+            options.loadImage,
+            options.loadSkill,
           ),
-        },
-      ).map((m) =>
-        blocksToModelMessages(
-          m.blocks,
-          m.role,
-          options.loadImage,
-          options.loadSkill,
         ),
-      ),
-    )
-  ).flat();
+      )
+    ).flat();
 
   /** 单次尝试：fresh 状态跑一遍 agent 流，返回产出与错误 */
   const attemptOnce = async (
     model: BaseChatModel,
+    messages: Awaited<ReturnType<typeof buildAttemptMessages>>,
   ): Promise<ChatStreamResult> => {
     const blocks: MessageBlock[] = [];
     const toolBlocks = new Map<string, ToolCallBlock>();
@@ -455,10 +482,15 @@ export async function runChatStream<
   const emittedNothing = (result: ChatStreamResult): boolean =>
     result.blocks.length === 0;
 
+  // 主 attempt 预算（窗口/参数）——主链路行为零变化
+  const mainMessages = await buildAttemptMessages(
+    options.contextWindow,
+    options.params,
+  );
   let retried = false;
-  let result = await attemptOnce(options.model);
+  let result = await attemptOnce(options.model, mainMessages);
 
-  // —— 瞬态同模型重试 1 次（流建立前失败）——
+  // —— 瞬态同模型重试 1 次（流建立前失败；同模型沿用主预算）——
   if (
     result.errorCode !== undefined &&
     !options.abortSignal?.aborted &&
@@ -471,11 +503,13 @@ export async function runChatStream<
     // 退避期间用户中止：不再发起（防浪费请求；返回原错误——错误真实发生过）
     if (!options.abortSignal?.aborted) {
       retried = true;
-      result = await attemptOnce(options.model);
+      result = await attemptOnce(options.model, mainMessages);
     }
   }
 
   // —— fallback 备选 1 次（主模型仍失败/配置类失败，且流未产出内容）——
+  // plan 形态按备选自身窗口/参数重算截断（修复环 Round 1）；简式（裸
+  // 模型）沿用主预算
   let fallbackUsed = false;
   if (
     result.errorCode !== undefined &&
@@ -484,7 +518,14 @@ export async function runChatStream<
     emittedNothing(result)
   ) {
     fallbackUsed = true;
-    result = await attemptOnce(options.fallbackModel);
+    const plan = isFallbackAttemptPlan(options.fallbackModel)
+      ? options.fallbackModel
+      : { chatModel: options.fallbackModel };
+    const fallbackMessages = await buildAttemptMessages(
+      plan.contextWindow ?? options.contextWindow,
+      plan.params ?? options.params,
+    );
+    result = await attemptOnce(plan.chatModel, fallbackMessages);
   }
 
   return {
@@ -492,6 +533,19 @@ export async function runChatStream<
     ...(retried ? { retried } : {}),
     ...(fallbackUsed ? { fallbackUsed } : {}),
   };
+}
+
+/** fallbackModel 形态判定：plan 携带 chatModel 键（BaseChatModel 子类
+ *  可能自有 model 字段——ChatOpenAI 等，勿以 model 键判别） */
+function isFallbackAttemptPlan(
+  value: BaseChatModel | FallbackAttemptPlan,
+): value is FallbackAttemptPlan {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "chatModel" in value &&
+    typeof (value as FallbackAttemptPlan).chatModel === "object"
+  );
 }
 
 /** 可注入退避（测试 0/短值；AbortSignal 不可注入计时器——保持极简） */

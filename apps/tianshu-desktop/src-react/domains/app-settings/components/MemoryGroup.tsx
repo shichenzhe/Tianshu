@@ -5,6 +5,9 @@
  * 框，指令由主进程直接应用并落库，成功后失效 ["personalization"] 缓存刷新
  * 展示（无草稿/保存/取消概念）；导入按钮常驻；管理卡头部显示上次整理时间
  * 与失败原因（memoryLastCompiledAt / memoryLastError，失败可观测）。
+ * 批9（2026-11-05）：画像随登录用户命名空间读写（memoryProfileKeyFor）；
+ * 条目行升级——逐条删除 + 来源会话跳转（[日期|#msgId] 溯源）；记忆
+ * 导出/导入 JSON（本地文件面，ImportMemoryDialog 合并语义复用）。
  * 开关复用乐观更新 + revert 失败回滚模式（与 ProfileGroup 的
  * ToggleSection 同构）。
  */
@@ -13,6 +16,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type Dispatch,
   type KeyboardEvent,
@@ -21,11 +25,23 @@ import {
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import { Brain, Info, Loader2, RefreshCw, Send } from "lucide-react";
+import {
+  Brain,
+  Download,
+  Info,
+  Loader2,
+  MessageSquare,
+  RefreshCw,
+  Send,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import IconTooltip from "@/components/common/icon-tooltip";
 import { toast } from "sonner";
 
 import { getDateFnsLocale } from "@/i18n";
+import { downloadBlob } from "@/lib/file-download";
+import { useUserStore } from "@/domains/user/store/user.store";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -41,16 +57,22 @@ import { MemoryApi } from "../api/memory.api";
 import { SettingsApi } from "../api/settings.api";
 import {
   MEMORY_SECTION_DEFS,
+  mergeMemoryMarkdown,
+  parseMemoryEntry,
   parseMemoryMarkdown,
+  removeMemoryEntryLine,
+  stripCodeFence,
   type MemorySectionKey,
   type MemorySections,
 } from "../model/memory-markdown";
 import {
   PERSONALIZATION_KEYS,
   defaultPersonalizationOptions,
+  memoryProfileKeyFor,
   parsePersonalizationOptions,
   savePersonalizationOption,
 } from "../model/personalization-options";
+import { useSettingsUiStore } from "../store/settings-ui.store";
 import { useSaveOrRevert } from "../model/use-save-or-revert";
 import ImportMemoryDialog from "./memory/ImportMemoryDialog";
 import MemoryMarkdown from "./memory/MemoryMarkdown";
@@ -60,15 +82,27 @@ import SettingSwitchRow from "./SettingSwitchRow";
 /** AI 指令输入框限长（M1 前端侧；主进程入口另有 2000 截断兜底） */
 const INSTRUCTION_MAX_LENGTH = 500;
 
-/** 保存函数签名（与 ProfileGroup 的 PersistFn 同构） */
-type PersistFn = (
-  key: (typeof PERSONALIZATION_KEYS)[keyof typeof PERSONALIZATION_KEYS],
-  value: string | boolean,
-) => Promise<void>;
+/** 保存函数签名（与 ProfileGroup 的 PersistFn 同构；批9 接受 per-user 键） */
+type PersistFn = (key: string, value: string | boolean) => Promise<void>;
+
+/** 记忆 JSON 导出格式（version 供未来演进；导入侧只认 memoryProfile 字段） */
+interface MemoryExportPayload {
+  version: 1;
+  exportedAt: string;
+  memoryProfile: string;
+  memory: string;
+}
 
 export default function MemoryGroup() {
   const { t } = useTranslation(["settings"]);
   const queryClient = useQueryClient();
+  // 批9：画像随登录用户命名空间（未登录态 id=0 → 全局键，与旧行为一致）
+  const userId = useUserStore((s) => s.user.id);
+  const scopedUserId = userId > 0 ? userId : undefined;
+  const profileKey =
+    scopedUserId !== undefined
+      ? memoryProfileKeyFor(scopedUserId)
+      : PERSONALIZATION_KEYS.memoryProfile;
   const { data: items } = useQuery({
     queryKey: ["personalization"],
     queryFn: () => SettingsApi.getAll(),
@@ -77,9 +111,9 @@ export default function MemoryGroup() {
   const options = useMemo(
     () =>
       items
-        ? parsePersonalizationOptions(items)
+        ? parsePersonalizationOptions(items, scopedUserId)
         : defaultPersonalizationOptions(),
-    [items],
+    [items, scopedUserId],
   );
   const revert = useSaveOrRevert();
 
@@ -115,24 +149,117 @@ export default function MemoryGroup() {
   const [compiling, setCompiling] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const importJsonInputRef = useRef<HTMLInputElement>(null);
 
   /** 编辑按钮 = 进入指令模式 / 完成按钮 = 退出 */
   const toggleEditing = useCallback(() => {
     setEditing((previous) => !previous);
   }, []);
 
-  /** 重置确认（spec §6.3）：退出指令模式并清空记忆 */
+  /** 重置确认（spec §6.3）：退出指令模式并清空记忆（当前用户命名空间） */
   const confirmReset = useCallback(async () => {
     setEditing(false);
-    await persistQuiet(PERSONALIZATION_KEYS.memoryProfile, "");
-  }, [persistQuiet]);
+    await persistQuiet(profileKey, "");
+  }, [persistQuiet, profileKey]);
 
   /** 导入落库（spec §6.4）：合并结果追加持久化（弹窗侧已 merge） */
   const importMemory = useCallback(
     async (merged: string) => {
-      await persistQuiet(PERSONALIZATION_KEYS.memoryProfile, merged);
+      await persistQuiet(profileKey, merged);
     },
-    [persistQuiet],
+    [persistQuiet, profileKey],
+  );
+
+  /** 批9 逐条删除：按节内行序移除条目行（IA 从「AI 指令」升级为逐条管理） */
+  const deleteEntry = useCallback(
+    async (sectionKey: MemorySectionKey, lineIndex: number) => {
+      const next = removeMemoryEntryLine(
+        options.memoryProfile,
+        sectionKey,
+        lineIndex,
+      );
+      if (next === options.memoryProfile) {
+        return;
+      }
+      await persistQuiet(profileKey, next);
+      toast.success(t("settings:memory.toast.entryDeleted"));
+    },
+    [options.memoryProfile, persistQuiet, profileKey, t],
+  );
+
+  /** 批9 条目溯源跳转：msgId → 来源会话（关闭设置面板直达会话）。
+   *  router 动态 import——避免设置页静态拖入整棵路由树（测试面与打包
+   *  分片同样受益） */
+  const jumpToSource = useCallback(
+    async (msgId: number) => {
+      try {
+        const sources = await MemoryApi.resolveSources([msgId]);
+        const hit = sources[0];
+        if (!hit) {
+          toast.error(t("settings:memory.toast.sourceMissing"));
+          return;
+        }
+        useSettingsUiStore.getState().setSettingsOpen(false);
+        const { router } = await import("@/routes");
+        void router.navigate(`/module/ai?session=${hit.sessionId}`);
+      } catch {
+        toast.error(t("settings:memory.toast.sourceMissing"));
+      }
+    },
+    [t],
+  );
+
+  /** 批9 记忆导出 JSON（本地文件；画像 + 手动记忆一并带走） */
+  const exportMemory = useCallback(() => {
+    const payload: MemoryExportPayload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      memoryProfile: options.memoryProfile,
+      memory: options.memory,
+    };
+    const day = new Date().toISOString().slice(0, 10);
+    downloadBlob(
+      new Blob([JSON.stringify(payload, null, 2)], {
+        type: "application/json",
+      }),
+      `tianshu-memory-${day}.json`,
+    );
+    toast.success(t("settings:memory.toast.exported"));
+  }, [options.memory, options.memoryProfile, t]);
+
+  /** 批9 记忆导入 JSON：画像走 mergeMemoryMarkdown 合并追加（与粘贴导入
+   *  同语义）；手动记忆非空时换行追加；格式非法整体拒绝不动库 */
+  const importJsonFile = useCallback(
+    async (file: File) => {
+      try {
+        const raw = JSON.parse(
+          await file.text(),
+        ) as Partial<MemoryExportPayload>;
+        if (typeof raw.memoryProfile !== "string") {
+          throw new Error("INVALID_MEMORY_JSON");
+        }
+        const mergedProfile =
+          raw.memoryProfile.trim() === ""
+            ? options.memoryProfile
+            : mergeMemoryMarkdown(
+                options.memoryProfile,
+                stripCodeFence(raw.memoryProfile),
+              );
+        const incomingMemory =
+          typeof raw.memory === "string" ? raw.memory.trim() : "";
+        if (incomingMemory !== "") {
+          await persistQuiet(
+            PERSONALIZATION_KEYS.memory,
+            [options.memory, incomingMemory].filter((s) => s !== "").join("\n"),
+          );
+        }
+        await persistQuiet(profileKey, mergedProfile);
+        toast.success(t("settings:memory.toast.importedFile"));
+      } catch {
+        toast.error(t("settings:memory.toast.importInvalid"));
+      }
+    },
+    [options.memory, options.memoryProfile, persistQuiet, profileKey, t],
   );
 
   const submitInstruction = useCallback(async () => {
@@ -241,7 +368,27 @@ export default function MemoryGroup() {
         onToggleEditing={toggleEditing}
         onReset={() => setResetOpen(true)}
         onImport={() => setImportOpen(true)}
+        onExportJson={exportMemory}
+        onImportJsonPick={() => importJsonInputRef.current?.click()}
+        onEntryDelete={(sectionKey, lineIndex) =>
+          void deleteEntry(sectionKey, lineIndex)
+        }
+        onEntryJump={(msgId) => void jumpToSource(msgId)}
         showContent={editing || hasProfile}
+      />
+      {/* 批9 导入 JSON：原生文件选择器（accept 收口 .json），选择即导入 */}
+      <input
+        ref={importJsonInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = ""; // 同文件可重复选择
+          if (file) {
+            void importJsonFile(file);
+          }
+        }}
       />
       <ResetMemoryDialog
         open={resetOpen}
@@ -338,14 +485,21 @@ interface ManageMemoryCardProps {
   onToggleEditing: () => void;
   onReset: () => void;
   onImport: () => void;
+  /** 批9：记忆导出 JSON / 导入 JSON 文件选择 */
+  onExportJson: () => void;
+  onImportJsonPick: () => void;
+  /** 批9 逐条删除 / 来源会话跳转 */
+  onEntryDelete: (sectionKey: MemorySectionKey, lineIndex: number) => void;
+  onEntryJump: (msgId: number) => void;
   showContent: boolean;
 }
 
 /**
  * 管理记忆卡片（spec §6.1 单卡结构）：头部按钮（重置 + 立即整理 +
- * 编辑/完成 + 导入，导入常驻修订 B）+ 整理状态行（上次整理时间 /
- * 失败原因）+ 卡内四板块只读内容区（超高右侧滚动）。指令模式底部追加
- * AI 指令框，应用中「完成」禁用，防指令未落定就退出。
+ * 编辑/完成 + 导入 + 导出/导入 JSON，导入常驻修订 B）+ 整理状态行（上次
+ * 整理时间 / 失败原因）+ 卡内四板块只读内容区（超高右侧滚动；批9：条目
+ * 行 hover 出逐条删除与来源会话跳转）。指令模式底部追加 AI 指令框，
+ * 应用中「完成」禁用，防指令未落定就退出。
  */
 function ManageMemoryCard(props: ManageMemoryCardProps) {
   const { t } = useTranslation(["settings"]);
@@ -364,6 +518,10 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
     onToggleEditing,
     onReset,
     onImport,
+    onExportJson,
+    onImportJsonPick,
+    onEntryDelete,
+    onEntryJump,
     showContent,
   } = props;
 
@@ -442,6 +600,26 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
           >
             {t("settings:memory.actions.import")}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onExportJson}
+            aria-label={t("settings:memory.actions.exportJson")}
+            title={t("settings:memory.actions.exportJson")}
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+          >
+            <Download size={14} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onImportJsonPick}
+            aria-label={t("settings:memory.actions.importJson")}
+            title={t("settings:memory.actions.importJson")}
+            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+          >
+            <Upload size={14} />
+          </Button>
         </div>
       </div>
       {showContent && (
@@ -451,6 +629,8 @@ function ManageMemoryCard(props: ManageMemoryCardProps) {
               key={key}
               sectionKey={key}
               text={sections[key]}
+              onEntryDelete={onEntryDelete}
+              onEntryJump={onEntryJump}
             />
           ))}
         </div>
@@ -572,26 +752,29 @@ function EmptyMemoryCard({
 }
 
 /**
- * 单节（只读）：标题 + 正文 markdown 渲染。条目本身即
- * "[YYYY-MM-DD] - 内容" 格式（自带分隔符），统一以空行分隔逐行成段
- * （markdown 单换行会被合并成段）；不再给近期动态行首补 "- "——
- * 会与条目自带 " - " 叠加渲染成「• [日期] - 内容」双符号（实测回评
- * 2026-10-23"板块前多了两个点"）
+ * 单节（只读 + 逐条管理）：标题 + 逐条目行渲染。条目行即
+ * "[YYYY-MM-DD|#msgId] - 内容" 格式（自带分隔符），逐行成段（markdown
+ * 单换行会被合并成段）；批9：条目行 hover 出「查看来源会话」（有
+ * |#msgId 溯源时）与「删除」操作（对齐 ChatGPT Memories 列表体验）
  */
 function MemorySectionBlock({
   sectionKey,
   text,
+  onEntryDelete,
+  onEntryJump,
 }: {
   sectionKey: MemorySectionKey;
   text: string;
+  onEntryDelete: (sectionKey: MemorySectionKey, lineIndex: number) => void;
+  onEntryJump: (msgId: number) => void;
 }) {
   const { t } = useTranslation(["settings"]);
-  const body = useMemo(
+  const lines = useMemo(
     () =>
       text
         .split("\n")
-        .filter((line) => line.trim() !== "")
-        .join("\n\n"),
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
     [text],
   );
 
@@ -600,7 +783,64 @@ function MemorySectionBlock({
       <h4 className="text-sm font-medium text-foreground">
         {t(`settings:memory.sections.${sectionKey}`)}
       </h4>
-      {body !== "" && <MemoryMarkdown text={body} />}
+      {lines.length > 0 && (
+        <div className="space-y-1">
+          {lines.map((line, index) => (
+            <MemoryEntryRow
+              key={`${index}-${line}`}
+              line={line}
+              onDelete={() => onEntryDelete(sectionKey, index)}
+              onJump={onEntryJump}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 单条目行：正文 markdown 只读 + hover 操作（来源跳转 / 删除） */
+function MemoryEntryRow({
+  line,
+  onDelete,
+  onJump,
+}: {
+  line: string;
+  onDelete: () => void;
+  onJump: (msgId: number) => void;
+}) {
+  const { t } = useTranslation(["settings"]);
+  const entry = parseMemoryEntry(line);
+
+  return (
+    <div className="group/entry flex items-start gap-1">
+      <div className="min-w-0 flex-1">
+        <MemoryMarkdown text={line} />
+      </div>
+      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/entry:opacity-100">
+        {entry.msgId !== null && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onJump(entry.msgId as number)}
+            aria-label={t("settings:memory.entry.jump")}
+            title={t("settings:memory.entry.jump")}
+            className="h-6 w-6 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+          >
+            <MessageSquare size={13} />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onDelete}
+          aria-label={t("settings:memory.entry.delete")}
+          title={t("settings:memory.entry.delete")}
+          className="h-6 w-6 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 size={13} />
+        </Button>
+      </div>
     </div>
   );
 }

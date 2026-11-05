@@ -5,7 +5,9 @@ import {
   buildMemoryMarkdown,
   hasMemoryHeadings,
   mergeMemoryMarkdown,
+  parseMemoryEntry,
   parseMemoryMarkdown,
+  removeMemoryEntryLine,
   sortRecentEntries,
   stripCodeFence,
   truncateMemoryMarkdown,
@@ -136,5 +138,46 @@ describe("mergeMemoryMarkdown", () => {
   it("incoming 无标题 → 全部并入 work", () => {
     const merged = mergeMemoryMarkdown(FULL, "散装文本");
     expect(parseMemoryMarkdown(merged).work).toContain("散装文本");
+  });
+});
+
+describe("parseMemoryEntry（批9 P4 条目溯源）", () => {
+  it("[YYYY-MM-DD|#msgId] - 内容 → 日期 + msgId + 内容", () => {
+    expect(parseMemoryEntry("[2026-11-05|#8421] - 后端用 NestJS")).toEqual({
+      date: "2026-11-05",
+      msgId: 8421,
+      text: "后端用 NestJS",
+    });
+  });
+  it("[YYYY-MM-DD] - 内容（无溯源旧格式）→ msgId null 兼容解析", () => {
+    expect(parseMemoryEntry("[2026-10-01] - 旧条目")).toEqual({
+      date: "2026-10-01",
+      msgId: null,
+      text: "旧条目",
+    });
+  });
+  it("无日期行 → date null 原样文本", () => {
+    expect(parseMemoryEntry("用户参与 Tianshu 项目")).toEqual({
+      date: null,
+      msgId: null,
+      text: "用户参与 Tianshu 项目",
+    });
+  });
+});
+
+describe("removeMemoryEntryLine（批9 逐条删除）", () => {
+  it("按节内行序删除指定条目行，其余行与节序保持", () => {
+    const next = removeMemoryEntryLine(FULL, "recent", 0);
+    const sections = parseMemoryMarkdown(next);
+    expect(sections.recent).toBe("[2026-09-07] - 查询厦门天气");
+    expect(sections.work).toBe("用户参与 Tianshu 项目");
+    expect(sections.current).toBe("[2026-09-08] - UI 界面复刻");
+  });
+  it("节内唯一条目删除后整节消失（不留空节标题）", () => {
+    const next = removeMemoryEntryLine(FULL, "current", 0);
+    expect(next).not.toContain("## 当前关注");
+  });
+  it("越界行序原样返回（防呆）", () => {
+    expect(removeMemoryEntryLine(FULL, "recent", 9)).toBe(FULL);
   });
 });

@@ -179,7 +179,11 @@
     "skillRefOpen": "Click to preview skill {{name}}",
     "skillRefPreviewTitle": "Skill preview: {{name}}",
     "skillRefKind": "Skill reference",
-    "skillRefFailed": "Failed to read skill"
+    "skillRefFailed": "Failed to read skill",
+    "remember": "Save to memory",
+    "rememberHint": "Save this message to long-term memory",
+    "rememberDone": "Saved to memory",
+    "rememberFailed": "Failed to save to memory"
   },
   "codeBlock": {
     "copy": "Copy code",
@@ -1497,7 +1501,8 @@
     "overflow": "Text too long — trim it or switch models",
     "unavailable": "No data (no model configured or session missing)",
     "truncated": "{{count}} early message(s) trimmed (out of window, not sent next turn)",
-    "member": "Member dispatch: {{calls}} calls · {{tokens}} tokens (not in main window)"
+    "member": "Member dispatch: {{calls}} calls · {{tokens}} tokens (not in main window)",
+    "memory": "Memory"
   },
   "artifacts": {
     "open": "Artifacts panel",
@@ -1761,5 +1766,12 @@
   },
   "memberReport": {
     "title": "Member {{member}} · Round {{round}}"
+  },
+  "memoryError": {
+    "MEMORY_DISABLED": "Memory is disabled",
+    "MEMORY_MODEL_MISSING": "No model available for memory",
+    "MEMORY_COMPILE_FAILED": "Memory compile failed, try again later",
+    "MEMORY_NO_MATERIAL": "No conversation material",
+    "MEMORY_BUSY": "Memory compile in progress, try later"
   }
 }

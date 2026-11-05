@@ -24,7 +24,12 @@ import {
 export {
   PERSONALIZATION_KEYS,
   PERSONALIZATION_LIMITS,
+  PERSONALIZATION_USER_FIELDS,
   defaultPersonalization,
+  memoryLastCompiledAtKeyFor,
+  memoryLastErrorKeyFor,
+  memoryProfileKeyFor,
+  personalizationUserKey,
 } from "@tianshu/core";
 export type { PersonalizationConfig, ResponseStyle } from "@tianshu/core";
 

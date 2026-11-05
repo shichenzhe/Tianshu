@@ -65,7 +65,7 @@ export const MEMORY_COMPILER_SYSTEM_PROMPT = [
   "你是用户画像管理器，不是事件记录器。维护一份精炼、聚焦的用户画像，供 AI 在后续对话中更好地服务用户。",
   "",
   "【素材来源】",
-  "画像只从「用户：」开头的内容提炼。「助手：」的消息仅用于理解语境，其中的代码、文档、方案、结论、工具输出一律不进画像（用户明确认可或要求记住的除外）。",
+  "画像只从「用户：」开头的内容提炼（素材行带溯源标记，形如 用户[#消息id]：内容，前缀仍按「用户：/助手：」识别）。「助手：」的消息仅用于理解语境，其中的代码、文档、方案、结论、工具输出一律不进画像（用户明确认可或要求记住的除外）。",
   "",
   "【准入标准】一条信息必须满足其一才可写入：",
   "- 能改变后续对话的回应方式（如偏好、规则、背景）",
@@ -93,6 +93,7 @@ export const MEMORY_COMPILER_SYSTEM_PROMPT = [
   "3. 用户指令只影响指令提到的内容，其余按上述原则维护",
   "4. 同一事件只记一处：仍在推进写当前关注，已完成写近期动态，不得两节重复",
   "5. 条数上限：工作背景 ≤8 条、个人背景 ≤8 条、当前关注 ≤5 条、近期动态 ≤10 条（超出时保留更新、更重要的）",
+  "6. 显式失效（批9 P4）：当前关注与近期动态中的条目，日期距今天超过 30 天且近期对话材料中无新材料支持 → 移出画像（防旧条目永久占坑；「今天」基准见材料头部时间行）",
   "",
   "【判断示例】（材料 → 判断）",
   "「用户：帮我看看这个报错（附 50 行日志）」→ 不写（临时调试）",
@@ -103,7 +104,7 @@ export const MEMORY_COMPILER_SYSTEM_PROMPT = [
   "「用户：修了一下午 code_permission_denied，搞定了」→ 不写（当天已解决的调试；不得升格为技能或当前关注）",
   "",
   "格式：",
-  "- 条目每行一条，格式 [YYYY-MM-DD] - 条目内容，日期未知可省略；近期动态按日期倒序（新的在上）",
+  "- 条目每行一条，格式 [YYYY-MM-DD|#消息id] - 条目内容；消息 id 取自素材行 用户[#消息id]： 的溯源标记（无对应素材或日期未知时可省略对应部分）；近期动态按日期倒序（新的在上）",
   "- 一条一个独立事实，单条 ≤100 字，总长 ≤8000 字",
   "- 只输出 markdown 本体，不要解释，不要代码块围栏",
 ].join("\n");
@@ -172,7 +173,7 @@ export interface ConversationPrismaLike {
   };
 }
 
-function rowToLine(row: { role: string; blocks: string }): string {
+function rowToLine(row: { id: number; role: string; blocks: string }): string {
   const text = parseBlocks(row.blocks)
     .filter((b): b is { type: "text"; text: string } => b.type === "text")
     .map((b) => b.text)
@@ -181,13 +182,17 @@ function rowToLine(row: { role: string; blocks: string }): string {
   if (text === "") {
     return "";
   }
-  return `${row.role === "user" ? "用户" : "助手"}：${text}`;
+  // 批9 P4 条目溯源：素材行携带 [#消息id] 标记，compiler 据此在条目
+  // [YYYY-MM-DD|#消息id] 中回写来源（设置页可跳回来源会话）
+  return `${row.role === "user" ? "用户" : "助手"}[#${row.id}]：${text}`;
 }
 
-/** 组装 where：role/时间窗基础过滤 + 未归档会话 id 集（可选） */
+/** 组装 where：role/时间窗基础过滤 + 未归档会话 id 集（可选；userId
+ *  给定时会话按归属收敛——A 的对话不进 B 的画像素材，批9 P2.1） */
 async function buildConversationWhere(
   prismaLike: ConversationPrismaLike,
   cutoff: Date,
+  userId?: number,
 ): Promise<Record<string, unknown>> {
   const where: Record<string, unknown> = {
     role: { in: ["user", "assistant"] },
@@ -196,7 +201,11 @@ async function buildConversationWhere(
   if (prismaLike.session) {
     const sessions = await prismaLike.session.findMany({
       // 全局画像只消化普通会话：项目动态流（projectId 非空）不进夜间记忆
-      where: { archivedAt: null, projectId: null },
+      where: {
+        archivedAt: null,
+        projectId: null,
+        ...(userId !== undefined ? { userId } : {}),
+      },
       select: { id: true },
     });
     where.sessionId = { in: sessions.map((s) => s.id) };
@@ -218,22 +227,26 @@ function keepRecentLines(lines: string[], charLimit: number): string {
   return kept.join("\n");
 }
 
-/** 近 7 天 user/assistant 消息 → "用户：…\n助手：…" 文本；保最新 charLimit 字符 */
+/**
+ * 近 7 天 user/assistant 消息 → "用户[#id]：…\n助手[#id]：…" 文本；
+ * 保最新 charLimit 字符；userId 给定时素材只取该用户的会话（批9 隔离）
+ */
 export async function fetchRecentConversation(
   prismaLike: ConversationPrismaLike,
   days: number = 7,
   charLimit: number = 30000,
+  userId?: number,
 ): Promise<string> {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const rows = await prismaLike.message.findMany({
-    where: await buildConversationWhere(prismaLike, cutoff),
+    where: await buildConversationWhere(prismaLike, cutoff, userId),
     // 倒序限量取最新（keepRecentLines 只保尾部 charLimit 字符，近 N 天
     // 全量读回是白搬——长用户 7 天消息含大 blocks 可达数十 MB）；取回后
     // 翻转回时间正序再拼接。500 条按平均 60 字符/条下限估算仍覆盖
     // 30000 字符预算
     orderBy: { id: "desc" },
     take: 500,
-    select: { role: true, blocks: true },
+    select: { id: true, role: true, blocks: true },
   });
   rows.reverse();
   return keepRecentLines(

@@ -103,6 +103,19 @@ describe("prompt 构建", () => {
     // 同一事件只记一处（实测当前关注与近期动态重复记同一工作流）
     expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("同一事件只记一处");
   });
+  it("条目溯源（批9 P4）：素材行携带 [#msgId]，条目格式带 |#msgId 溯源", () => {
+    // 素材行格式说明（rowToLine 产出行）
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("用户[#消息id]");
+    // 条目格式：[YYYY-MM-DD|#消息id] - 内容（溯源可跳回来源会话）
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain(
+      "[YYYY-MM-DD|#消息id] - 条目内容",
+    );
+  });
+  it("条目显式失效规则（批9 P4）：当前关注/近期动态超 30 天无新材料支持 → 移出", () => {
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("超过 30 天");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("无新材料支持");
+    expect(MEMORY_COMPILER_SYSTEM_PROMPT).toContain("移出");
+  });
   it("整理 prompt 含当前记忆与材料", () => {
     const p = buildCompileUserPrompt("当前记忆", "对话材料");
     expect(p).toContain("当前记忆");
@@ -188,7 +201,7 @@ describe("fetchRecentConversation", () => {
       },
     };
     const text = await fetchRecentConversation(prismaLike as never, 7, 30000);
-    expect(text).toBe("用户：你好\n助手：在的");
+    expect(text).toBe("用户[#1]：你好\n助手[#3]：在的");
   });
   it("超 charLimit 保最新（丢弃最旧）", async () => {
     const rows = [
@@ -219,11 +232,11 @@ describe("fetchRecentConversation", () => {
       expect.objectContaining({
         orderBy: { id: "desc" },
         take: 500,
-        select: { role: true, blocks: true },
+        select: { id: true, role: true, blocks: true },
       }),
     );
     // 倒序取回后须翻转回时间正序再拼接（保尾部语义不变）
-    expect(text).toBe("用户：你好\n助手：在的");
+    expect(text).toBe("用户[#1]：你好\n助手[#3]：在的");
   });
   it("提供 session delegate 时按未归档会话过滤（schema 无关系、两步查询）", async () => {
     const findMany = vi.fn(async () => [mkRow(1, "user", "你好")]);
@@ -232,7 +245,7 @@ describe("fetchRecentConversation", () => {
       session: { findMany: async () => [{ id: 5 }, { id: 7 }] },
     };
     const text = await fetchRecentConversation(prismaLike as never, 7, 30000);
-    expect(text).toBe("用户：你好");
+    expect(text).toBe("用户[#1]：你好");
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ sessionId: { in: [5, 7] } }),
@@ -240,6 +253,30 @@ describe("fetchRecentConversation", () => {
     );
   });
   it("会话过滤排除项目会话（projectId: null，项目动态流不进全局记忆）", async () => {
+    const sessionFindMany = vi.fn(async () => [{ id: 5 }]);
+    const prismaLike = {
+      message: { findMany: async () => [mkRow(1, "user", "你好")] },
+      session: { findMany: sessionFindMany },
+    };
+    await fetchRecentConversation(prismaLike as never, 7, 30000);
+    expect(sessionFindMany).toHaveBeenCalledWith({
+      where: { archivedAt: null, projectId: null },
+      select: { id: true },
+    });
+  });
+  it("批9 userId 隔离：带 userId 时会话按归属过滤（A 的对话不进 B 的画像素材）", async () => {
+    const sessionFindMany = vi.fn(async () => [{ id: 5 }]);
+    const prismaLike = {
+      message: { findMany: async () => [mkRow(1, "user", "你好")] },
+      session: { findMany: sessionFindMany },
+    };
+    await fetchRecentConversation(prismaLike as never, 7, 30000, 9);
+    expect(sessionFindMany).toHaveBeenCalledWith({
+      where: { archivedAt: null, projectId: null, userId: 9 },
+      select: { id: true },
+    });
+  });
+  it("不带 userId 时会话过滤保持既有全局口径（行为不变）", async () => {
     const sessionFindMany = vi.fn(async () => [{ id: 5 }]);
     const prismaLike = {
       message: { findMany: async () => [mkRow(1, "user", "你好")] },

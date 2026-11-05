@@ -317,7 +317,9 @@
       "reset": "Reset",
       "compileNow": "Compile Now",
       "edit": "Edit",
-      "import": "Import"
+      "import": "Import",
+      "exportJson": "Export Memory (JSON)",
+      "importJson": "Import Memory (JSON)"
     },
     "sections": {
       "work": "Work Background",
@@ -368,7 +370,12 @@
       "imported": "Memories imported successfully",
       "importFallback": "No section headings recognized; all content was saved under Work Background",
       "instructionFailed": "Failed to apply the memory instruction",
-      "copyFailed": "Copy failed; please select and copy manually"
+      "copyFailed": "Copy failed; please select and copy manually",
+      "entryDeleted": "Entry deleted",
+      "sourceMissing": "Source conversation not found or deleted",
+      "exported": "Memory exported",
+      "importedFile": "Memory imported and merged",
+      "importInvalid": "Invalid file (expect Tianshu memory JSON)"
     },
     "error": {
       "MEMORY_DISABLED": "Memory is disabled",
@@ -376,6 +383,10 @@
       "MEMORY_COMPILE_FAILED": "Memory compilation failed, please try again later",
       "MEMORY_NO_MATERIAL": "No conversation content available to compile yet",
       "MEMORY_BUSY": "Memory compilation in progress, please try again shortly"
+    },
+    "entry": {
+      "jump": "Open source conversation",
+      "delete": "Delete entry"
     }
   },
   "security": {

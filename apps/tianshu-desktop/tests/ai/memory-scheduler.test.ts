@@ -22,8 +22,10 @@ vi.mock("electron", () => ({
 
 // 运行时用例（catchUp 消费）经全局 prisma 读写 option/message/workspace，
 // 屏蔽 prisma-client 模块初始化对 electron app 路径的依赖（既有模式）；
-// updateMany/create 回写 stub 行模拟真实落库（成功整理后 tick 应转 noop）
+// updateMany/create 回写 stub 行模拟真实落库（成功整理后 tick 应转 noop）。
+// 批9：user.findMany 供 per-user 整理迭代（默认单用户 1；多用户用例覆写）
 const prismaStubs = vi.hoisted(() => ({
+  userRows: [{ id: 1 }] as Array<{ id: number }>,
   optionRows: [] as Array<{ name: string; value: string }>,
   messageRows: [
     {
@@ -35,6 +37,9 @@ const prismaStubs = vi.hoisted(() => ({
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
+    user: {
+      findMany: vi.fn(async () => prismaStubs.userRows),
+    },
     workspace: { findMany: vi.fn(async () => []) },
     message: {
       findMany: vi.fn(async () => prismaStubs.messageRows),
@@ -257,6 +262,8 @@ describe("catchUp 消费语义（M4，spec §5.2 修订）", () => {
 /** 运行时用例统一复位共享 stub（option 行清空 + 消息材料恢复默认一条） */
 function resetRuntimeStubs() {
   prismaStubs.optionRows.length = 0;
+  prismaStubs.userRows.length = 0;
+  prismaStubs.userRows.push({ id: 1 });
   prismaStubs.messageRows.length = 0;
   prismaStubs.messageRows.push({
     id: 1,
@@ -265,10 +272,10 @@ function resetRuntimeStubs() {
   });
 }
 
-/** 当前 memoryLastError 行值（缺行 = undefined） */
+/** 当前 user 1 memoryLastError 行值（缺行 = undefined；批9 per-user key） */
 const memoryLastErrorValue = () =>
   prismaStubs.optionRows.find(
-    (row) => row.name === "personalization.memoryLastError",
+    (row) => row.name === "personalization.1.memoryLastError",
   )?.value;
 
 function mkScheduler(
@@ -324,12 +331,12 @@ describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
       expect(memoryLastErrorValue()).toBe("");
       expect(
         prismaStubs.optionRows.find(
-          (row) => row.name === "personalization.memoryProfile",
+          (row) => row.name === "personalization.1.memoryProfile",
         )?.value,
       ).toBe(COMPILED_MD);
       expect(
         prismaStubs.optionRows.find(
-          (row) => row.name === "personalization.memoryLastCompiledAt",
+          (row) => row.name === "personalization.1.memoryLastCompiledAt",
         )?.value,
       ).toBeTruthy();
       scheduler.stop();
@@ -345,7 +352,7 @@ describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
       resetRuntimeStubs();
       prismaStubs.messageRows.length = 0; // 无对话材料
       prismaStubs.optionRows.push({
-        name: "personalization.memoryLastError",
+        name: "personalization.1.memoryLastError",
         value: "记忆整理失败：旧原因",
       });
       compileMemoryMock.mockReset();
@@ -358,7 +365,7 @@ describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
       expect(memoryLastErrorValue()).toBe("记忆整理失败：旧原因"); // 不清空
       expect(
         prismaStubs.optionRows.find(
-          (row) => row.name === "personalization.memoryProfile",
+          (row) => row.name === "personalization.1.memoryProfile",
         ),
       ).toBeUndefined(); // 未写 Profile / LastCompiledAt
       scheduler.stop();
@@ -373,7 +380,7 @@ describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
       vi.setSystemTime(atSeconds(1, 0, 0));
       resetRuntimeStubs();
       prismaStubs.optionRows.push({
-        name: "personalization.memoryLastError",
+        name: "personalization.1.memoryLastError",
         value: "记忆整理失败：旧原因",
       });
       compileMemoryMock.mockReset();
@@ -384,6 +391,69 @@ describe("整理失败原因持久化（修订 A：memoryLastError）", () => {
       await vi.advanceTimersByTimeAsync(90_000);
       expect(compileMemoryMock).not.toHaveBeenCalled();
       expect(memoryLastErrorValue()).toBe("记忆整理失败：旧原因");
+      scheduler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("批9 per-user 整理迭代（P2.1）", () => {
+  it("多用户各自整理落各自命名空间（A 不覆盖 B）", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(atSeconds(1, 0, 0));
+      resetRuntimeStubs();
+      prismaStubs.userRows.push({ id: 2 });
+      compileMemoryMock.mockReset();
+      compileMemoryMock.mockResolvedValue(COMPILED_MD);
+
+      const scheduler = mkScheduler();
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(90_000); // 补跑窗口：两用户各编译一次
+      expect(compileMemoryMock).toHaveBeenCalledTimes(2);
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.1.memoryProfile",
+        )?.value,
+      ).toBe(COMPILED_MD);
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.2.memoryProfile",
+        )?.value,
+      ).toBe(COMPILED_MD);
+      scheduler.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("某用户失败不阻断其余用户（失败原因写该用户命名空间）", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(atSeconds(1, 0, 0));
+      resetRuntimeStubs();
+      prismaStubs.userRows.push({ id: 2 });
+      compileMemoryMock.mockReset();
+      // 用户按 id 升序迭代：第 1 次调用即用户 1 → 失败；用户 2 成功
+      compileMemoryMock
+        .mockRejectedValueOnce(new Error("user1 boom"))
+        .mockResolvedValue(COMPILED_MD);
+
+      const scheduler = mkScheduler();
+      scheduler.start();
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(compileMemoryMock).toHaveBeenCalledTimes(2);
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.1.memoryLastError",
+        )?.value,
+      ).toContain("user1 boom");
+      expect(
+        prismaStubs.optionRows.find(
+          (row) => row.name === "personalization.2.memoryProfile",
+        )?.value,
+      ).toBe(COMPILED_MD);
       scheduler.stop();
     } finally {
       vi.useRealTimers();

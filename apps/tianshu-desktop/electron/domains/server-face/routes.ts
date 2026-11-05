@@ -121,9 +121,10 @@ async function handleInfo(): Promise<RouteResult> {
 // 只读（桌面本地 repo 单源桥——automation-tap；与无头端
 // AutomationController 同构，save 全量 upsert/runPage 剔 graphTrace） =====
 
-// ===== 记忆进化批（2026-10-27）：memory 五端点——桌面被控面专属（option
-// 表 app 级配置无 userId 语义，不挂 withUserId；AI 操作错误码透传协议包
-// MemoryErrorCode 五值） =====
+// ===== 记忆进化批（2026-10-27）：memory 五端点——桌面被控面专属；
+// 批9（2026-11-05）画像 per-user 化后挂 withUserId（被控端当前登录用户，
+// 与其余数据面同口径）；AI 操作错误码透传协议包 MemoryErrorCode 五值 =====
+
 // ===== 备份面批（2026-10-27）：backup 三端点——桌面被控面专属（遥控
 // 桌面备份客户端；create 202 受理+事件流推进度） =====
 async function handleBackupList(): Promise<RouteResult> {
@@ -161,57 +162,70 @@ async function handleBackupDelete(body: unknown): Promise<RouteResult> {
 }
 
 async function handleMemoryGet(): Promise<RouteResult> {
-  const memory = faceDeps().memory;
-  if (!memory) return bizError("5000", "记忆面未装配");
-  return memory.get().then(ok).catch(bizErrorFrom);
+  return withUserId(async (userId) => {
+    const memory = faceDeps().memory;
+    if (!memory) return bizError("5000", "记忆面未装配");
+    return memory.get(userId).then(ok).catch(bizErrorFrom);
+  });
 }
 
 async function handleMemorySaveConfig(body: unknown): Promise<RouteResult> {
-  const memory = faceDeps().memory;
-  if (!memory) return bizError("5000", "记忆面未装配");
-  const b = (body ?? {}) as { enabled?: unknown; modelId?: unknown };
-  if (b.enabled !== undefined && typeof b.enabled !== "boolean") {
-    return bizError("5000", "enabled 必须为布尔");
-  }
-  if (
-    b.modelId !== undefined &&
-    b.modelId !== null &&
-    typeof b.modelId !== "number"
-  ) {
-    return bizError("5000", "modelId 必须为数字或 null");
-  }
-  return memory
-    .saveConfig(b as { enabled?: boolean; modelId?: number | null })
-    .then(ok)
-    .catch(bizErrorFrom);
+  return withUserId(async (userId) => {
+    const memory = faceDeps().memory;
+    if (!memory) return bizError("5000", "记忆面未装配");
+    const b = (body ?? {}) as { enabled?: unknown; modelId?: unknown };
+    if (b.enabled !== undefined && typeof b.enabled !== "boolean") {
+      return bizError("5000", "enabled 必须为布尔");
+    }
+    if (
+      b.modelId !== undefined &&
+      b.modelId !== null &&
+      typeof b.modelId !== "number"
+    ) {
+      return bizError("5000", "modelId 必须为数字或 null");
+    }
+    return memory
+      .saveConfig(userId, b as { enabled?: boolean; modelId?: number | null })
+      .then(ok)
+      .catch(bizErrorFrom);
+  });
 }
 
 async function handleMemorySaveProfile(body: unknown): Promise<RouteResult> {
-  const memory = faceDeps().memory;
-  if (!memory) return bizError("5000", "记忆面未装配");
-  const b = (body ?? {}) as { profile?: unknown };
-  if (typeof b.profile !== "string") {
-    return bizError("5000", "profile 必须为字符串");
-  }
-  return memory.saveProfile(b.profile).then(ok).catch(bizErrorFrom);
+  return withUserId(async (userId) => {
+    const memory = faceDeps().memory;
+    if (!memory) return bizError("5000", "记忆面未装配");
+    const b = (body ?? {}) as { profile?: unknown };
+    if (typeof b.profile !== "string") {
+      return bizError("5000", "profile 必须为字符串");
+    }
+    return memory.saveProfile(userId, b.profile).then(ok).catch(bizErrorFrom);
+  });
 }
 
 async function handleMemoryApplyInstruction(
   body: unknown,
 ): Promise<RouteResult> {
-  const memory = faceDeps().memory;
-  if (!memory) return bizError("5000", "记忆面未装配");
-  const b = (body ?? {}) as { instruction?: unknown };
-  if (typeof b.instruction !== "string" || !b.instruction.trim()) {
-    return bizError("5000", "instruction 必填");
-  }
-  return memory.applyInstruction(b.instruction).then(ok).catch(bizErrorFrom);
+  return withUserId(async (userId) => {
+    const memory = faceDeps().memory;
+    if (!memory) return bizError("5000", "记忆面未装配");
+    const b = (body ?? {}) as { instruction?: unknown };
+    if (typeof b.instruction !== "string" || !b.instruction.trim()) {
+      return bizError("5000", "instruction 必填");
+    }
+    return memory
+      .applyInstruction(userId, b.instruction)
+      .then(ok)
+      .catch(bizErrorFrom);
+  });
 }
 
 async function handleMemoryCompile(): Promise<RouteResult> {
-  const memory = faceDeps().memory;
-  if (!memory) return bizError("5000", "记忆面未装配");
-  return memory.compile().then(ok).catch(bizErrorFrom);
+  return withUserId(async (userId) => {
+    const memory = faceDeps().memory;
+    if (!memory) return bizError("5000", "记忆面未装配");
+    return memory.compile(userId).then(ok).catch(bizErrorFrom);
+  });
 }
 
 async function handleAutomationQuery(body: unknown): Promise<RouteResult> {
@@ -2470,7 +2484,9 @@ function handlePlanViewCreate(body: unknown): Promise<RouteResult> {
         ...(p.groupBy !== undefined
           ? { groupBy: p.groupBy as PlanViewCreatePayload["groupBy"] }
           : {}),
-        ...(typeof p.filterJson === "string" ? { filterJson: p.filterJson } : {}),
+        ...(typeof p.filterJson === "string"
+          ? { filterJson: p.filterJson }
+          : {}),
         ...(typeof p.sortJson === "string" ? { sortJson: p.sortJson } : {}),
       }),
   );
@@ -2495,7 +2511,9 @@ function handlePlanViewUpdate(body: unknown): Promise<RouteResult> {
         ...(p.groupBy !== undefined
           ? { groupBy: p.groupBy as PlanViewUpdatePayload["groupBy"] }
           : {}),
-        ...(typeof p.filterJson === "string" ? { filterJson: p.filterJson } : {}),
+        ...(typeof p.filterJson === "string"
+          ? { filterJson: p.filterJson }
+          : {}),
         ...(typeof p.sortJson === "string" ? { sortJson: p.sortJson } : {}),
       }),
   );

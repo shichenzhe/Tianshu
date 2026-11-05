@@ -21,8 +21,10 @@ import {
 } from "./memory-compiler";
 import { loadPersonalization } from "./personalization.repo";
 import {
-  PERSONALIZATION_KEYS,
   PERSONALIZATION_LIMITS,
+  memoryLastErrorKeyFor,
+  memoryLastCompiledAtKeyFor,
+  memoryProfileKeyFor,
 } from "./personalization.config";
 import { abortInflight, acquire, isInflight, release } from "./memory-inflight";
 
@@ -92,7 +94,8 @@ export default class MemoryScheduler {
   private timer: NodeJS.Timeout | null = null;
   private catchUpTimer: NodeJS.Timeout | null = null;
   private catchUpPending = false;
-  private lastAttemptAt = 0;
+  /** I1 失败退避起点（批9 per-user：某用户失败不封锁其余用户的当轮整理） */
+  private lastAttemptAt = new Map<number, number>();
 
   constructor(private deps: MemorySchedulerDeps) {}
 
@@ -126,68 +129,84 @@ export default class MemoryScheduler {
     abortInflight();
   }
 
-  private async loadState(): Promise<MemoryTickState> {
-    const config = await loadPersonalization();
+  private async loadState(userId: number): Promise<MemoryTickState> {
+    const config = await loadPersonalization(userId);
     return {
       enabled: config.memoryEnabled,
       inflight: isInflight(),
       lastCompiledAt: config.memoryLastCompiledAt,
       catchUpPending: this.catchUpPending,
-      lastAttemptAt: this.lastAttemptAt,
+      lastAttemptAt: this.lastAttemptAt.get(userId),
     };
   }
 
+  /**
+   * 批9 P2.1 per-user 迭代：画像按 `personalization.<userId>.*` 命名空间
+   * 拆行后，夜间窗口逐用户决策并整理（id 升序；素材按该用户会话过滤，
+   * A 的对话不进 B 的画像）。单用户失败记录该用户失败原因后继续其余
+   * 用户（退避按用户独立计数——A 失败不封锁 B 的当轮整理）。user 表空
+   * （全新库未注册）→ 无整理对象，静默空转。
+   */
   private async tick(): Promise<void> {
     try {
-      const decision = decideMemoryTick(await this.loadState(), new Date());
-      if (decision === "noop") {
-        return;
+      const users = await prisma.user.findMany({
+        select: { id: true },
+        orderBy: { id: "asc" },
+      });
+      for (const user of users) {
+        const decision = decideMemoryTick(
+          await this.loadState(user.id),
+          new Date(),
+        );
+        if (decision === "noop") {
+          continue;
+        }
+        await this.run(user.id);
       }
-      await this.run();
     } catch (error) {
       Log.warn("记忆定时 tick 异常", error);
     }
   }
 
-  /** 执行一次整理（共享 inflight 互斥；失败记录退避起点） */
-  private async run(): Promise<void> {
+  /** 执行一次整理（共享 inflight 互斥；失败记录退避起点）。catchUp 标志
+   *  不在此消费——per-user 迭代须贯穿整轮（start 的 finally 在整轮
+   *  tick 结束后统一消费，M4 语义不变） */
+  private async run(userId: number): Promise<void> {
     const abort = acquire();
     if (!abort) {
       return;
     }
-    this.catchUpPending = false;
     try {
-      await this.compileOnce(abort.signal);
+      await this.compileOnce(userId, abort.signal);
     } catch (error) {
-      this.lastAttemptAt = Date.now(); // I1：10 分钟退避起点
-      await this.recordError(error); // 失败可观测（修订 A）
+      this.lastAttemptAt.set(userId, Date.now()); // I1：10 分钟退避起点
+      await this.recordError(userId, error); // 失败可观测（修订 A）
       Log.warn("记忆整理失败（10 分钟后重试）", error);
     } finally {
       release(abort);
     }
   }
 
-  /** 失败原因写入 memoryLastError（限长 200）供设置页展示；写失败仅记日志 */
-  private async recordError(error: unknown): Promise<void> {
+  /** 失败原因写入该用户 memoryLastError（限长 200）供设置页展示；写失败仅记日志 */
+  private async recordError(userId: number, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     const reason = `记忆整理失败：${message}`.slice(
       0,
       PERSONALIZATION_LIMITS.memoryLastError,
     );
     try {
-      await setAppOption(
-        prisma.option,
-        PERSONALIZATION_KEYS.memoryLastError,
-        reason,
-      );
+      await setAppOption(prisma.option, memoryLastErrorKeyFor(userId), reason);
     } catch (saveError) {
       Log.warn("写入 memoryLastError 失败", saveError);
     }
   }
 
-  private async compileOnce(signal: AbortSignal): Promise<void> {
-    const config = await loadPersonalization();
-    const material = await fetchRecentConversation(prisma);
+  private async compileOnce(
+    userId: number,
+    signal: AbortSignal,
+  ): Promise<void> {
+    const config = await loadPersonalization(userId);
+    const material = await fetchRecentConversation(prisma, 7, 30000, userId);
     if (material === "") {
       return; // 无对话材料直接跳过（spec §5.3，不更新 LastCompiledAt）
     }
@@ -202,28 +221,29 @@ export default class MemoryScheduler {
       model,
       signal,
     });
-    await this.persist(memory);
+    await this.persist(userId, memory);
   }
 
   private resolveModel(): Promise<MemoryModelContext | null> {
+    // 兜底模型池保持「全体用户启用模型」（listAllEnabledAnyUser，v12
+    // 裁定沿用）：整理是本机后台行为，模型池按机器级取用与开关/强指定
+    // 的 app 级语义一致——「每用户独立候选池」的多用户语义挂账（单机
+    // 多账号下他账号配置的模型可被借用；候选序仍有设置页强指定与
+    // workspace 默认模型在前，日常路径不受影响）
     return resolveMemoryModel(this.deps.providerRepo, this.deps.modelRepo, () =>
       this.deps.modelRepo.listAllEnabledAnyUser(),
     );
   }
 
-  private async persist(memory: string): Promise<void> {
+  private async persist(userId: number, memory: string): Promise<void> {
+    await setAppOption(prisma.option, memoryProfileKeyFor(userId), memory);
     await setAppOption(
       prisma.option,
-      PERSONALIZATION_KEYS.memoryProfile,
-      memory,
-    );
-    await setAppOption(
-      prisma.option,
-      PERSONALIZATION_KEYS.memoryLastCompiledAt,
+      memoryLastCompiledAtKeyFor(userId),
       new Date().toISOString(),
     );
     // 成功清除失败标记（修订 A）；无材料/无模型早退不写不清
     // （跳过不算失败）
-    await setAppOption(prisma.option, PERSONALIZATION_KEYS.memoryLastError, "");
+    await setAppOption(prisma.option, memoryLastErrorKeyFor(userId), "");
   }
 }

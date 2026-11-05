@@ -123,3 +123,49 @@ export function mergeMemoryMarkdown(current: string, incoming: string): string {
     }),
   );
 }
+
+/** 条目溯源解析结果（批9 P4）：行格式 [YYYY-MM-DD|#msgId] - 内容 */
+export interface MemoryEntry {
+  /** 条目日期（YYYY-MM-DD）；无日期前缀为 null */
+  date: string | null;
+  /** 来源消息 id（compiler 溯源标记 |#msgId）；旧格式/无溯源为 null */
+  msgId: number | null;
+  /** 条目正文（剥去 [日期|#msgId] - 前缀后的内容） */
+  text: string;
+}
+
+/** 条目行解析：识别 [YYYY-MM-DD]、[YYYY-MM-DD|#msgId] 与无前缀三形态 */
+export function parseMemoryEntry(line: string): MemoryEntry {
+  const m = /^\[(\d{4}-\d{2}-\d{2})(?:\|#(\d+))?\]\s*-\s*(.*)$/s.exec(
+    line.trim(),
+  );
+  if (m) {
+    return {
+      date: m[1],
+      msgId: m[2] !== undefined ? Number(m[2]) : null,
+      text: m[3],
+    };
+  }
+  return { date: null, msgId: null, text: line.trim() };
+}
+
+/**
+ * 逐条删除（批9 P4 IA 升级）：移除指定节（sectionKey）内第 lineIndex 个
+ * 非空行，重建整份 markdown——节内唯一条目删除后整节消失（不留空节标题）；
+ * 越界行序原样返回
+ */
+export function removeMemoryEntryLine(
+  md: string,
+  sectionKey: MemorySectionKey,
+  lineIndex: number,
+): string {
+  const sections = parseMemoryMarkdown(md);
+  const lines = sections[sectionKey]
+    .split("\n")
+    .filter((line) => line.trim() !== "");
+  if (lineIndex < 0 || lineIndex >= lines.length) {
+    return md;
+  }
+  lines.splice(lineIndex, 1);
+  return buildMemoryMarkdown({ ...sections, [sectionKey]: lines.join("\n") });
+}

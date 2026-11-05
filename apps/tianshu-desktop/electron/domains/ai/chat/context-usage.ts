@@ -35,6 +35,9 @@ export interface ContextUsageBreakdown {
   /** 成员调度累计（可观测性批：llmCallEvent meta 行聚合——真实发生量，
    *  独立于五类估算；无成员调用的会话不携带） */
   member?: MemberUsageSummary;
+  /** 记忆占用（批9 P6）：个性化段实际注入 token（persona/画像/手动记忆/
+   *  指令；已含于 system 项——拆解展示不加总，无个性化行不携带） */
+  memory?: number;
 }
 
 /** 成员调度累计用量（专家团可观测性批） */

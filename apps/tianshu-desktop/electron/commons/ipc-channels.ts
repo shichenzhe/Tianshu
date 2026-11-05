@@ -256,6 +256,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   // 个性化记忆（记忆与进化）
   "personalization:applyMemoryInstruction",
   "personalization:compileMemory",
+  // 批9 P4：条目溯源（msgId → 来源会话，设置页逐条跳转源）
+  "personalization:resolveMemorySources",
   // 设置（通用设置面板）
   "settings:getAll",
   "settings:set",

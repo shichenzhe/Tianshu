@@ -33,4 +33,22 @@ export class MemoryApi {
   static async compileNow(): Promise<MemoryServiceResult> {
     return invoke<MemoryServiceResult>("personalization:compileMemory");
   }
+
+  /** 批9 P4 条目溯源：msgId → 来源会话（设置页「查看来源会话」跳转源；
+   *  归属校验在主进程——他人会话的消息不透出） */
+  static async resolveSources(
+    messageIds: number[],
+  ): Promise<MemorySourceInfo[]> {
+    return invoke<MemorySourceInfo[]>(
+      "personalization:resolveMemorySources",
+      messageIds,
+    );
+  }
+}
+
+/** 条目来源会话（resolveSources 返回项） */
+export interface MemorySourceInfo {
+  messageId: number;
+  sessionId: number;
+  title: string;
 }

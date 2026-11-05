@@ -746,17 +746,20 @@ describe("被控面路由表（T11 查询端点）", () => {
     await expectBizError("POST", "graph/query", {}, "5000");
   });
 
-  // ===== 记忆进化批（2026-10-27）：memory 五端点 =====
+  // ===== 记忆进化批（2026-10-27）：memory 五端点（批9 带 userId——被控端
+  // 当前登录用户 UID，画像 per-user 命名空间） =====
   it("记忆批：memory 五端点信封与透传（get/saveConfig/saveProfile/applyInstruction/compile）", async () => {
     const wired = wireDeps();
     const g = await handleRoute("POST", "memory/get", {});
     expect(g.body.data).toEqual(MEMORY_STATE);
 
     await handleRoute("POST", "memory/saveConfig", { enabled: false });
-    expect(wired.memory.saveConfig).toHaveBeenCalledWith({ enabled: false });
+    expect(wired.memory.saveConfig).toHaveBeenCalledWith(UID, {
+      enabled: false,
+    });
 
     await handleRoute("POST", "memory/saveProfile", { profile: "" });
-    expect(wired.memory.saveProfile).toHaveBeenCalledWith("");
+    expect(wired.memory.saveProfile).toHaveBeenCalledWith(UID, "");
 
     const applied = await handleRoute("POST", "memory/applyInstruction", {
       instruction: "删掉天气相关记忆",
@@ -819,10 +822,7 @@ describe("被控面路由表（T11 查询端点）", () => {
   it("create：projectId/planItemId 透传（项目/任务会话 D1——空间解析与查重内聚 repo）", async () => {
     // 默认空间恒缺位：项目会话空间由 repo 按项目解析（防传错），不被
     // 默认空间缺位挡成 4040（若预解析了即此断言红）
-    const wired = wireDeps(
-      {},
-      { resolveDefaultWorkspaceId: async () => null },
-    );
+    const wired = wireDeps({}, { resolveDefaultWorkspaceId: async () => null });
     const calls: SessionCreateParams[] = [];
     const original = wired.sessions.createSession;
     wired.sessions.createSession = async (p, userId) => {
@@ -865,12 +865,7 @@ describe("被控面路由表（T11 查询端点）", () => {
     });
     expect(r.body).toMatchObject({ success: true, data: "交接摘要文本" });
     expect(wired.chat.handoverSummary).toHaveBeenCalledWith(11, UID);
-    await expectBizError(
-      "POST",
-      ENDPOINTS.session.handoverSummary,
-      {},
-      "5000",
-    );
+    await expectBizError("POST", ENDPOINTS.session.handoverSummary, {}, "5000");
   });
 
   it("create+query+getById+delete 闭环（workspaceId 缺省回落默认空间）", async () => {

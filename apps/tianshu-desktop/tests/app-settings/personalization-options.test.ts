@@ -17,6 +17,7 @@ import {
   PERSONALIZATION_KEYS,
   PERSONALIZATION_LIMITS,
   defaultPersonalizationOptions,
+  memoryProfileKeyFor,
   parsePersonalizationOptions,
   savePersonalizationOption,
 } from "../../src-react/domains/app-settings/model/personalization-options";
@@ -94,5 +95,51 @@ describe("savePersonalizationOption", () => {
     );
     expect(saved).toBe("");
     expect(setMock).toHaveBeenCalledWith(PERSONALIZATION_KEYS.persona, "");
+  });
+
+  it("批9 per-user 键：限长按剥命名空间后的字段查（画像 8000 截断）", async () => {
+    const saved = await savePersonalizationOption(
+      memoryProfileKeyFor(5),
+      "x".repeat(9000),
+    );
+    expect(setMock).toHaveBeenCalledWith(
+      "personalization.5.memoryProfile",
+      "x".repeat(PERSONALIZATION_LIMITS.memoryProfile),
+    );
+    expect(saved).toHaveLength(PERSONALIZATION_LIMITS.memoryProfile);
+  });
+});
+
+describe("parsePersonalizationOptions(userId)（批9 隔离）", () => {
+  it("per-user 行优先于旧全局行（A 读 A 的画像与整理状态）", () => {
+    const options = parsePersonalizationOptions(
+      [
+        { name: "personalization.memoryProfile", value: "旧全局画像" },
+        { name: "personalization.memoryLastCompiledAt", value: "2026-11-01" },
+        { name: "personalization.3.memoryProfile", value: "A 的画像" },
+        { name: "personalization.3.memoryLastCompiledAt", value: "2026-11-05" },
+        { name: "personalization.3.memoryLastError", value: "x" },
+      ],
+      3,
+    );
+    expect(options.memoryProfile).toBe("A 的画像");
+    expect(options.memoryLastCompiledAt).toBe("2026-11-05");
+    expect(options.memoryLastError).toBe("x");
+  });
+
+  it("per-user 行缺席 → 回落旧全局行（升级迁移前后读值连续）", () => {
+    const options = parsePersonalizationOptions(
+      [{ name: "personalization.memoryProfile", value: "旧全局画像" }],
+      4,
+    );
+    expect(options.memoryProfile).toBe("旧全局画像");
+  });
+
+  it("无 userId（未登录态）与既有全局行解析行为一致", () => {
+    const options = parsePersonalizationOptions([
+      { name: "personalization.9.memoryProfile", value: "他人画像" },
+      { name: "personalization.memoryProfile", value: "全局画像" },
+    ]);
+    expect(options.memoryProfile).toBe("全局画像");
   });
 });

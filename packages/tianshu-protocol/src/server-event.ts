@@ -651,6 +651,10 @@ export interface SessionUsageBreakdown {
   truncatedMessages?: number;
   /** 本会话成员调度累计（llmCallEvent meta 行聚合——真实发生量） */
   member?: SessionMemberUsage;
+  /** 记忆占用（批9 P6，2026-11-05）：个性化段（persona/画像/手动记忆/
+   *  自定义指令）实际注入 token——已含于 system 项，拆解展示不加总；
+   *  无个性化注入不携带（旧端向前兼容） */
+  memory?: number;
 }
 
 /** 成员调度累计用量（专家团可观测性批） */

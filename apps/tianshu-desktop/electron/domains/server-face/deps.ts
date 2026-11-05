@@ -603,10 +603,7 @@ export interface ServerFacePlanView {
     params: Omit<PlanViewCreatePayload, "projectId">,
   ): Promise<PlanViewRecordDto>;
   /** 局部更新（仅传键生效；视图不存在 PLAN_VIEW_NOT_FOUND） */
-  update(
-    userId: number,
-    params: PlanViewUpdatePayload,
-  ): Promise<void>;
+  update(userId: number, params: PlanViewUpdatePayload): Promise<void>;
   /** 删除（最后一个拒删 PLAN_VIEW_LAST_ONE） */
   remove(userId: number, id: number): Promise<void>;
   /** Tab 顺序批量更新（逐项归属守卫） */
@@ -701,10 +698,7 @@ export interface ServerFaceAutomation {
   ): Promise<AutomationRunPage>;
   /** 运行节点详情（执行详情批）：桥桌面 GraphRepository.listRunNodes
    *  单源（归属两段校验同款）；graphRepo 缺席的最小部署返回空集 */
-  runNodes(
-    runId: number,
-    userId: number,
-  ): Promise<AutomationRunNodeRecord[]>;
+  runNodes(runId: number, userId: number): Promise<AutomationRunNodeRecord[]>;
 }
 
 /** graph 只读面（automation 创建/编辑选图用；QueryResult 同形壳） */
@@ -727,18 +721,25 @@ export interface ServerFaceBackup {
   delete(backupId: string): Promise<void>;
 }
 
-/** 记忆进化批 memory 面（memory-tap 注入；桌面被控面专属五端点——
- *  option 表 app 级配置无 userId 语义；AI 操作转 MemoryService 公开方法） */
+/** 记忆进化批 memory 面（memory-tap 注入；桌面被控面专属五端点）。
+ *  批9（2026-11-05）：画像三键 per-user 化——五端点均带 userId（routes
+ *  withUserId 解析被控端当前登录用户；开关/整理模型仍本机全局） */
 export interface ServerFaceMemory {
-  get(): Promise<MemoryState>;
-  saveConfig(payload: {
-    enabled?: boolean;
-    modelId?: number | null;
-  }): Promise<MemoryState>;
+  get(userId: number): Promise<MemoryState>;
+  saveConfig(
+    userId: number,
+    payload: {
+      enabled?: boolean;
+      modelId?: number | null;
+    },
+  ): Promise<MemoryState>;
   /** 全量覆写（空串=重置）；超长 8000 保底截断 */
-  saveProfile(profile: string): Promise<MemoryState>;
-  applyInstruction(instruction: string): Promise<MemoryServiceResult>;
-  compile(): Promise<MemoryServiceResult>;
+  saveProfile(userId: number, profile: string): Promise<MemoryState>;
+  applyInstruction(
+    userId: number,
+    instruction: string,
+  ): Promise<MemoryServiceResult>;
+  compile(userId: number): Promise<MemoryServiceResult>;
 }
 
 export interface ServerFaceDeps {

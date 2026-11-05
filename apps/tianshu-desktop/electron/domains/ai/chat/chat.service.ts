@@ -17,6 +17,7 @@ import {
   listWorkspaceFiles,
   readTextFileGuarded,
   runChatStream as runChatStreamCore,
+  trimPersonalizationForBudget,
   type ChatStreamOptions as ChatStreamOptionsCore,
   type ChatStreamResult,
 } from "@tianshu/core";
@@ -1885,9 +1886,7 @@ export default class ChatService {
           (expertRecommend || !EXPERT_RECOMMEND_TOOL_NAMES.has(def.name)) &&
           (!useMcpAdaptive || !def.name.startsWith("mcp__")),
       )
-      .concat(
-        useMcpAdaptive ? mcpAdaptiveDefinitions(modelContextWindow) : [],
-      );
+      .concat(useMcpAdaptive ? mcpAdaptiveDefinitions(modelContextWindow) : []);
     const workspaceScoped = agent.workspacePath
       ? registered
       : registered.filter(
@@ -2419,11 +2418,24 @@ export default class ChatService {
           teamLeadSystem ?? assistantRow?.systemPrompt,
         )
       : (teamLeadSystem ?? assistantRow?.systemPrompt);
-    const personalization = await loadPersonalization();
-    const personalized = buildPersonalizedSystem(
-      personalization,
-      buildModeSystem(mode, base, sessionSkills),
+    // 批9（2026-11-05）记忆域：画像按 userId 命名空间读取（A 画像不进 B
+    // 对话）+ 注入预算治理（P6：超预算按段优先级裁剪，customInstructions >
+    // memory > 工作背景/个人背景 > 当前关注 > 近期动态；预算内逐字节稳定）
+    const personalization = trimPersonalizationForBudget(
+      await loadPersonalization(userId),
+      this.effectiveContextWindow(modelRow, providerRuntimeRow),
     );
+    const modeSystem = buildModeSystem(mode, base, sessionSkills);
+    const personalized = buildPersonalizedSystem(personalization, modeSystem);
+    // 记忆占用（usage 面板透出）：个性化段实际注入 token —— personalized
+    // 与 mode 段的字符差（包含裁剪后的真实注入量；空个性化 = 0）
+    const personalizationTokens = personalized
+      ? Math.max(
+          0,
+          estimateTokens(personalized) -
+            (modeSystem ? estimateTokens(modeSystem) : 0),
+        )
+      : 0;
     // 专家目录段已删（2026-11-01 目录出 system 批，spec 见
     // docs/superpowers/specs/2026-11-01-expert-catalog-to-tool-design.md）：
     // 目录随 list_experts 两跳工具注入面走（collectToolDefinitions
@@ -2492,6 +2504,9 @@ export default class ChatService {
           : null,
       baseSystem,
       systemWithSummary,
+      /** 记忆占用（批9 P6）：个性化段实际注入 token（persona/画像/手动
+       *  记忆/指令等；含于 system 项——usage 面板拆解展示，不加总） */
+      personalizationTokens,
     };
   }
 
@@ -2542,6 +2557,10 @@ export default class ChatService {
         }),
         ...(memberRows.length > 0
           ? { member: summarizeMemberUsage(memberRows) }
+          : {}),
+        // 记忆占用（批9 P6）：个性化段注入 token（含于 system，拆解透出）
+        ...(ctx.personalizationTokens > 0
+          ? { memory: ctx.personalizationTokens }
           : {}),
       };
     } catch {

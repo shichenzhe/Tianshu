@@ -53,13 +53,27 @@ vi.mock("@/lib/ipc", async (importOriginal) => ({
 }));
 
 // memory.api 模块桩：AI 指令走 applyInstruction（IPC，主进程已直接落库），
-// jsdom 无桥接
+// jsdom 无桥接；批9 另增 resolveSources（条目溯源跳转源）
 const applyInstructionMock = vi.hoisted(() => vi.fn());
+const resolveSourcesMock = vi.hoisted(() => vi.fn());
 vi.mock("../../src-react/domains/app-settings/api/memory.api", () => ({
   MemoryApi: {
     applyInstruction: (...args: unknown[]) => applyInstructionMock(...args),
     compileNow: vi.fn(async () => ({ ok: true })),
+    resolveSources: (...args: unknown[]) => resolveSourcesMock(...args),
   },
+}));
+
+// 批9：导出 JSON 走 blob 下载（jsdom 无 createObjectURL）
+const downloadBlobMock = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/file-download", () => ({
+  downloadBlob: (...args: unknown[]) => downloadBlobMock(...args),
+}));
+
+// 批9：来源会话跳转动态 import 的 router（mock 拦截动态导入同静态）
+const routerNavigateMock = vi.hoisted(() => vi.fn());
+vi.mock("@/routes", () => ({
+  router: { navigate: (...args: unknown[]) => routerNavigateMock(...args) },
 }));
 
 // localStorage stub（常规组字体档位读写；与 settings-dialog.test.tsx 同款）
@@ -606,5 +620,246 @@ describe("MemoryGroup AI 指令模式", () => {
     renderGroup();
     const input = await enterInstructionMode();
     expect(input.getAttribute("maxlength")).toBe("500");
+  });
+});
+
+// ===== 批9（2026-11-05）：per-user 读写 + 条目溯源与逐条删除 + 导出/导入 JSON =====
+import { useUserStore } from "../../src-react/domains/user/store/user.store";
+import { useSettingsUiStore } from "../../src-react/domains/app-settings/store/settings-ui.store";
+
+/** 带 |#msgId 溯源的画像（近期动态条目来源可跳转） */
+const TRACED_PROFILE_MD = [
+  "## 工作背景",
+  "后端工程师，主攻分布式存储",
+  "",
+  "## 近期动态",
+  "[2026-11-05|#8421] - 完成记忆溯源改造",
+].join("\n");
+
+describe("MemoryGroup 批9：per-user 画像读写", () => {
+  beforeEach(() => {
+    mockItems = [];
+    setMock.mockClear();
+    useUserStore.setState({
+      user: {
+        id: 3,
+        username: "a",
+        nickname: "a",
+        email: "",
+        token: "t",
+        expiresAt: null,
+      },
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    useUserStore.setState({
+      user: {
+        id: 0,
+        username: "",
+        nickname: "",
+        email: "",
+        token: "",
+        expiresAt: null,
+      },
+    });
+  });
+
+  it("per-user 行优先解析（personalization.3.* 覆盖旧全局行）", async () => {
+    mockItems = [
+      { name: "personalization.memoryProfile", value: "旧全局画像" },
+      { name: "personalization.3.memoryProfile", value: "A 的画像" },
+    ];
+    renderGroup();
+    await waitFor(() => expect(screen.getByText("A 的画像")).toBeTruthy());
+    expect(screen.queryByText("旧全局画像")).toBeNull();
+  });
+
+  it("重置清空当前用户命名空间键（personalization.3.memoryProfile）", async () => {
+    mockItems = [
+      { name: "personalization.3.memoryProfile", value: "A 的画像" },
+    ];
+    renderGroup();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings:memory.actions.reset",
+      }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "settings:memory.resetDialog.confirm",
+      }),
+    );
+    await waitFor(() =>
+      expect(setMock).toHaveBeenCalledWith(
+        "personalization.3.memoryProfile",
+        "",
+      ),
+    );
+  });
+});
+
+describe("MemoryGroup 批9：条目溯源与逐条删除", () => {
+  beforeEach(() => {
+    mockItems = [
+      { name: "personalization.3.memoryProfile", value: TRACED_PROFILE_MD },
+    ];
+    setMock.mockClear();
+    resolveSourcesMock.mockReset();
+    routerNavigateMock.mockReset();
+    useUserStore.setState({
+      user: {
+        id: 3,
+        username: "a",
+        nickname: "a",
+        email: "",
+        token: "t",
+        expiresAt: null,
+      },
+    });
+    useSettingsUiStore.getState().setSettingsOpen(true);
+  });
+  afterEach(() => {
+    cleanup();
+    useUserStore.setState({
+      user: {
+        id: 0,
+        username: "",
+        nickname: "",
+        email: "",
+        token: "",
+        expiresAt: null,
+      },
+    });
+  });
+
+  it("逐条删除：hover 操作按节内行序移除条目并落当前用户键", async () => {
+    renderGroup();
+    await waitFor(() =>
+      expect(screen.getByText("后端工程师，主攻分布式存储")).toBeTruthy(),
+    );
+    const deleteButtons = screen.getAllByRole("button", {
+      name: "settings:memory.entry.delete",
+    });
+    // 删除近期动态条目（第二个节的删除按钮）
+    fireEvent.click(deleteButtons[1]);
+    await waitFor(() => expect(setMock).toHaveBeenCalled());
+    const [key, value] = setMock.mock.calls[0] as [string, string];
+    expect(key).toBe("personalization.3.memoryProfile");
+    // 近期动态整节消失（唯一条目被删），工作背景保留
+    expect(value).toContain("后端工程师");
+    expect(value).not.toContain("记忆溯源改造");
+    expect(value).not.toContain("## 近期动态");
+  });
+
+  it("来源跳转：|#msgId 条目解析后 resolveSources → 关面板导航会话", async () => {
+    resolveSourcesMock.mockResolvedValue([
+      { messageId: 8421, sessionId: 77, title: "来源会话" },
+    ]);
+    renderGroup();
+    await waitFor(() =>
+      expect(
+        screen.getByText("[2026-11-05|#8421] - 完成记忆溯源改造"),
+      ).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.entry.jump" }),
+    );
+    await waitFor(() =>
+      expect(resolveSourcesMock).toHaveBeenCalledWith([8421]),
+    );
+    await waitFor(() =>
+      expect(routerNavigateMock).toHaveBeenCalledWith("/module/ai?session=77"),
+    );
+    expect(useSettingsUiStore.getState().settingsOpen).toBe(false);
+  });
+
+  it("无 |#msgId 的旧格式条目不渲染来源跳转按钮（只有删除）", async () => {
+    mockItems = [
+      { name: "personalization.3.memoryProfile", value: PROFILE_MD },
+    ];
+    renderGroup();
+    await waitFor(() => expect(screen.getByText("常驻上海")).toBeTruthy());
+    expect(
+      screen.queryByRole("button", { name: "settings:memory.entry.jump" }),
+    ).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "settings:memory.entry.delete" })
+        .length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("来源查无 → toast 提示且不导航", async () => {
+    resolveSourcesMock.mockResolvedValue([]);
+    renderGroup();
+    await waitFor(() =>
+      expect(
+        screen.getByText("[2026-11-05|#8421] - 完成记忆溯源改造"),
+      ).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "settings:memory.entry.jump" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "settings:memory.toast.sourceMissing",
+      ),
+    );
+    expect(routerNavigateMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("MemoryGroup 批9：记忆导出/导入 JSON", () => {
+  beforeEach(() => {
+    mockItems = [
+      { name: "personalization.3.memoryProfile", value: "## 工作背景\n画像" },
+      { name: "personalization.memory", value: "手动记忆" },
+    ];
+    setMock.mockClear();
+    downloadBlobMock.mockReset();
+    useUserStore.setState({
+      user: {
+        id: 3,
+        username: "a",
+        nickname: "a",
+        email: "",
+        token: "t",
+        expiresAt: null,
+      },
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    useUserStore.setState({
+      user: {
+        id: 0,
+        username: "",
+        nickname: "",
+        email: "",
+        token: "",
+        expiresAt: null,
+      },
+    });
+  });
+
+  it("导出：画像 + 手动记忆一并入 JSON（blob 下载）", async () => {
+    renderGroup();
+    await waitFor(() => expect(screen.getByText("画像")).toBeTruthy());
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "settings:memory.actions.exportJson",
+      }),
+    );
+    expect(downloadBlobMock).toHaveBeenCalledTimes(1);
+    const [blob, filename] = downloadBlobMock.mock.calls[0] as [Blob, string];
+    expect(filename).toMatch(/^tianshu-memory-\d{4}-\d{2}-\d{2}\.json$/);
+    const text = await blob.text();
+    const parsed = JSON.parse(text);
+    expect(parsed.version).toBe(1);
+    expect(parsed.memoryProfile).toBe("## 工作背景\n画像");
+    expect(parsed.memory).toBe("手动记忆");
+    expect(toast.success).toHaveBeenCalledWith(
+      "settings:memory.toast.exported",
+    );
   });
 });

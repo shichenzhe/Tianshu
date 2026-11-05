@@ -583,7 +583,8 @@ export default class Application {
       automationRepo,
       graphRepo,
       // 记忆进化批：memory 五端点（option 读写 + MemoryService AI 操作；
-      // memoryService 已在上方 238 行构造留档实例）
+      // memoryService 已在上方 238 行构造留档实例）。批9：loadConfig 直传
+      // loadPersonalization(userId)——画像三键按被控端当前用户命名空间读写
       memory: this.memoryService
         ? createMemoryFace({
             loadConfig: loadPersonalization,

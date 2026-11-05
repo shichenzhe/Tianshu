@@ -19,10 +19,14 @@ vi.mock("electron", () => ({
   },
 }));
 
-// scheduler 集成路径经全局 prisma 读 workspace/message/option，
-// 屏蔽 prisma-client 模块初始化对 electron app 路径的依赖（既有模式）
+// scheduler 集成路径经全局 prisma 读 user/workspace/message/option，
+// 屏蔽 prisma-client 模块初始化对 electron app 路径的依赖（既有模式）；
+// 批9：user.findMany 供 scheduler per-user 整理迭代
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
+    user: {
+      findMany: vi.fn(async () => [{ id: 1 }]),
+    },
     workspace: { findMany: vi.fn(async () => []) },
     message: {
       findMany: vi.fn(async () => [
@@ -56,9 +60,14 @@ vi.mock(
 );
 
 import { createMemoryHandlers } from "../../electron/domains/ai/personalization/memory.service";
+import { resolveMemorySources } from "../../electron/domains/ai/personalization/memory.service";
 import type { MemoryModelContext } from "../../electron/domains/ai/personalization/memory-compiler";
 import MemoryScheduler from "../../electron/domains/ai/personalization/memory-scheduler";
-import { PERSONALIZATION_KEYS } from "../../electron/domains/ai/personalization/personalization.config";
+import {
+  PERSONALIZATION_KEYS,
+  memoryLastCompiledAtKeyFor,
+  memoryProfileKeyFor,
+} from "../../electron/domains/ai/personalization/personalization.config";
 import {
   acquire,
   isInflight,
@@ -139,31 +148,66 @@ describe("applyMemoryInstruction", () => {
       save,
       ...mkLockDeps(),
     });
-    expect(await h.applyInstruction("记住我在厦门")).toEqual({
+    expect(await h.applyInstruction(1, "记住我在厦门")).toEqual({
       ok: true,
       memory: fourSectionMemory("新记忆"),
     });
     expect(save).toHaveBeenCalledWith(
-      PERSONALIZATION_KEYS.memoryProfile,
+      memoryProfileKeyFor(1),
       fourSectionMemory("新记忆"),
     );
     // LastCompiledAt 语义为「定时整理时间」，指令应用不算，避免干扰
     // 「当日未整理」判断（修订 2026-09-10 验收反馈）
     expect(save).not.toHaveBeenCalledWith(
-      PERSONALIZATION_KEYS.memoryLastCompiledAt,
+      memoryLastCompiledAtKeyFor(1),
       expect.anything(),
     );
   });
+  it("批9 userId 隔离：落库键随调用用户命名空间拆行（A/B 互不串写）", async () => {
+    const save = vi.fn(async () => {});
+    const loadConfig = vi.fn(async () => ({
+      memoryEnabled: true,
+      memoryProfile: "",
+      memoryLastCompiledAt: "",
+    }));
+    const fetchMaterial = vi.fn(async (userId: number) => `材料-${userId}`);
+    const h = createMemoryHandlers({
+      loadConfig,
+      fetchMaterial,
+      resolveModel: async () => MODEL,
+      compile: async () => fourSectionMemory(),
+      save,
+      ...mkLockDeps(),
+    });
+    await h.applyInstruction(2, "记住");
+    await h.compileNow(7);
+    expect(save).toHaveBeenCalledWith(
+      memoryProfileKeyFor(2),
+      fourSectionMemory(),
+    );
+    expect(save).toHaveBeenCalledWith(
+      memoryProfileKeyFor(7),
+      fourSectionMemory(),
+    );
+    expect(save).toHaveBeenCalledWith(
+      memoryLastCompiledAtKeyFor(7),
+      expect.any(String),
+    );
+    // 读配置/取素材均收到当次 userId
+    expect(loadConfig).toHaveBeenCalledWith(2);
+    expect(loadConfig).toHaveBeenCalledWith(7);
+    expect(fetchMaterial).toHaveBeenCalledWith(7);
+  });
   it("开关关 → MEMORY_DISABLED", async () => {
     const h = mkHandlers({ enabled: false });
-    expect(await h.applyInstruction("x")).toEqual({
+    expect(await h.applyInstruction(1, "x")).toEqual({
       ok: false,
       error: "MEMORY_DISABLED",
     });
   });
   it("无模型 → MEMORY_MODEL_MISSING", async () => {
     const h = mkHandlers({ model: null });
-    expect(await h.applyInstruction("x")).toEqual({
+    expect(await h.applyInstruction(1, "x")).toEqual({
       ok: false,
       error: "MEMORY_MODEL_MISSING",
     });
@@ -183,7 +227,7 @@ describe("applyMemoryInstruction", () => {
       save,
       ...mkLockDeps(),
     });
-    expect(await h.applyInstruction("x")).toEqual({
+    expect(await h.applyInstruction(1, "x")).toEqual({
       ok: false,
       error: "MEMORY_COMPILE_FAILED",
     });
@@ -211,12 +255,12 @@ describe("applyMemoryInstruction", () => {
       acquire: lock.acquire,
       release: lock.release,
     });
-    expect(await h.applyInstruction("x")).toEqual({
+    expect(await h.applyInstruction(1, "x")).toEqual({
       ok: false,
       error: "MEMORY_COMPILE_FAILED",
     });
     expect(lock.isInflight()).toBe(false);
-    expect(await h.applyInstruction("x")).toEqual({
+    expect(await h.applyInstruction(1, "x")).toEqual({
       ok: true,
       memory: fourSectionMemory("恢复"),
     });
@@ -235,7 +279,7 @@ describe("applyMemoryInstruction", () => {
       save: async () => {},
       ...mkLockDeps(),
     });
-    await h.applyInstruction("长".repeat(3000));
+    await h.applyInstruction(1, "长".repeat(3000));
     // 指令模式下 compile 的 material 参数即用户指令
     expect(compile.mock.calls[0][1]).toBe("长".repeat(2000));
   });
@@ -256,11 +300,11 @@ describe("applyMemoryInstruction", () => {
       release: lock.release,
     });
     expect(lock.acquire()).toBeInstanceOf(AbortController); // 预占在途槽
-    await expect(h.applyInstruction("x")).resolves.toEqual({
+    await expect(h.applyInstruction(1, "x")).resolves.toEqual({
       ok: false,
       error: "MEMORY_BUSY",
     });
-    await expect(h.compileNow()).resolves.toEqual({
+    await expect(h.compileNow(1)).resolves.toEqual({
       ok: false,
       error: "MEMORY_BUSY",
     });
@@ -271,7 +315,7 @@ describe("applyMemoryInstruction", () => {
 describe("compileMemory", () => {
   it("无对话材料 → MEMORY_NO_MATERIAL 不报错", async () => {
     const h = mkHandlers({ material: "" });
-    expect(await h.compileNow()).toEqual({
+    expect(await h.compileNow(1)).toEqual({
       ok: false,
       error: "MEMORY_NO_MATERIAL",
     });
@@ -291,7 +335,7 @@ describe("compileMemory", () => {
       save: async () => {},
       ...mkLockDeps(),
     });
-    await expect(h.compileNow()).resolves.toEqual({
+    await expect(h.compileNow(1)).resolves.toEqual({
       ok: false,
       error: "MEMORY_DISABLED",
     });
@@ -313,9 +357,63 @@ describe("compileMemory", () => {
       save: async (name: string) => void saved.push(name),
       ...mkLockDeps(),
     });
-    expect((await h.compileNow()).ok).toBe(true);
-    expect(saved).toContain("personalization.memoryProfile");
-    expect(saved).toContain("personalization.memoryLastCompiledAt");
+    expect((await h.compileNow(1)).ok).toBe(true);
+    expect(saved).toContain(memoryProfileKeyFor(1));
+    expect(saved).toContain(memoryLastCompiledAtKeyFor(1));
+  });
+});
+
+describe("resolveMemorySources（批9 P4 条目溯源：msgId → 来源会话）", () => {
+  const prismaLike = {
+    message: {
+      findMany: vi.fn(async ({ where }: { where: { id: { in: number[] } } }) =>
+        where.id.in.map((id) => ({ id, sessionId: id * 10 })),
+      ),
+    },
+    session: {
+      findMany: vi.fn(
+        async ({
+          where,
+        }: {
+          where: { id: { in: number[] }; userId: number };
+        }) =>
+          where.id.in.map((id) => ({
+            id,
+            userId: where.userId,
+            title: `会话${id}`,
+            archivedAt: null,
+          })),
+      ),
+    },
+  };
+
+  it("消息 id → 归属会话（含标题）；非本人会话的消息被归属过滤剔除", async () => {
+    prismaLike.message.findMany.mockClear();
+    prismaLike.session.findMany.mockClear();
+    const sources = await resolveMemorySources(
+      prismaLike as never,
+      3,
+      [11, 12],
+    );
+    // msg 11 → session 110，msg 12 → session 120（本人）
+    expect(sources).toEqual([
+      { messageId: 11, sessionId: 110, title: "会话110" },
+      { messageId: 12, sessionId: 120, title: "会话120" },
+    ]);
+    expect(prismaLike.session.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ userId: 3 }),
+      }),
+    );
+  });
+
+  it("消息查无 / 会话不属本人 → 该条目缺席（不报错）", async () => {
+    prismaLike.message.findMany.mockResolvedValueOnce([
+      { id: 99, sessionId: 990 },
+    ]);
+    prismaLike.session.findMany.mockResolvedValueOnce([]);
+    const sources = await resolveMemorySources(prismaLike as never, 3, [99]);
+    expect(sources).toEqual([]);
   });
 });
 
@@ -369,11 +467,11 @@ describe("共享在途互斥（scheduler × service，spec §5.2）", () => {
         acquire,
         release,
       });
-      await expect(h.compileNow()).resolves.toEqual({
+      await expect(h.compileNow(1)).resolves.toEqual({
         ok: false,
         error: "MEMORY_BUSY",
       });
-      await expect(h.applyInstruction("记住我在厦门")).resolves.toEqual({
+      await expect(h.applyInstruction(1, "记住我在厦门")).resolves.toEqual({
         ok: false,
         error: "MEMORY_BUSY",
       });
@@ -387,7 +485,7 @@ describe("共享在途互斥（scheduler × service，spec §5.2）", () => {
       for (let i = 0; i < 50; i += 1) {
         await Promise.resolve(); // scheduler 收口（release 因持有权校验为 no-op）
       }
-      expect((await h.compileNow()).ok).toBe(true);
+      expect((await h.compileNow(1)).ok).toBe(true);
     } finally {
       vi.useRealTimers();
     }

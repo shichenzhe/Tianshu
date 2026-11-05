@@ -215,7 +215,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/chat/context-usage.ts",
       "serverPath": "src/core/context-usage.ts",
       "baselineDiff": true,
-      "baselineLines": 30,
+      "baselineLines": 31,
       "note": "上下文用量拆解；server 版类型收敛 ToolDefinitionLike/SkillSummary（RC-T5 裁定双保留入巡检）。2026-11-05 专家团可观测性批：双端同构加 truncated/truncatedMessages（截断丢失提示，chat-core §6 项 5）；member 调度累计（MemberUsageSummary/summarizeMemberUsage）为 mirror 单侧新增（server 无 dispatch 无成员调用面）——基线 12→30 过账"
     },
     {
@@ -391,16 +391,16 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/personalization/personalization.repo.ts",
       "serverPath": "src/core/personalization.ts",
       "baselineDiff": true,
-      "baselineLines": 106,
-      "note": "个性化读段（PL-1，一多对拆两条之一·读段）：loadPersonalization 现查不缓存/异常回退全默认语义逐字——mirror getAppOptionMap+Log.warn vs server db.findMany+Nest Logger 适配；server 文件另含解析段（同 serverPath 与 config 对共比整文件，读段本条基线必然大）"
+      "baselineLines": 133,
+      "note": "个性化读段（PL-1，一多对拆两条之一·读段）：loadPersonalization 现查不缓存/异常回退全默认语义逐字——mirror getAppOptionMap+Log.warn vs server db.findMany+Nest Logger 适配；server 文件另含解析段（同 serverPath 与 config 对共比整文件，读段本条基线必然大）。批9（2026-11-05）mirror 单侧增 userId 隔离读（per-user key 优先 + 旧全局行首读迁移搬入）——server 无头端单租户无用户面保持全局读，有意分叉过账：基线 106→133"
     },
     {
       "id": "personalization-config-parse",
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/personalization/personalization.config.ts",
       "serverPath": "src/core/personalization.ts",
       "baselineDiff": true,
-      "baselineLines": 40,
-      "note": "fromAppOptions 解析段（PL-1，一多对拆两条之二·解析段）：option 行→配置逐字段同构（RESPONSE_STYLES/parseStyle/textValue/fromAppOptions；KEYS/LIMITS/default 经 @tianshu/core 双仓单份）——server 将 mirror import 的 parseBoolOption 内联为本地同语义函数（解析段自包含）"
+      "baselineLines": 45,
+      "note": "fromAppOptions 解析段（PL-1，一多对拆两条之二·解析段）：option 行→配置逐字段同构（RESPONSE_STYLES/parseStyle/textValue/fromAppOptions；KEYS/LIMITS/default 经 @tianshu/core 双仓单份）——server 将 mirror import 的 parseBoolOption 内联为本地同语义函数（解析段自包含）。批9（2026-11-05）mirror 单侧扩 re-export 面（PERSONALIZATION_USER_FIELDS/memoryProfileKeyFor 等 per-user key 单源转发，解析函数本体零改动）——server 直连 @tianshu/core 不需转发，有意分叉过账：基线 40→45"
     },
     {
       "id": "library-repository-search",

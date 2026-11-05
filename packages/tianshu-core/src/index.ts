@@ -50,6 +50,9 @@ export * from "./relay-credential";
 // 依赖留消费方，不随行）
 export * from "./personalization-config";
 export * from "./personalization-prompt";
+// P6 预算治理（批9 2026-11-05）：画像注入预算裁剪纯函数（桌面
+// assembleContext 消费；前端不依赖，主进程与 core 测试同源）
+export * from "./personalization-budget";
 // A7：计划视图筛选引擎 + 日期基础下沉（桌面 src-react 改 re-export，
 // 移动端消费 dist；农历/月历网格/甘特留桌面本地，lunar 不进本包）
 export * from "./plan-view-engine";

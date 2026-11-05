@@ -8,6 +8,12 @@
 import { SettingsApi, type SettingItem } from "../api/settings.api";
 import { parseBoolOption, toOptionMap } from "./app-options";
 import { MEMORY_PROFILE_LIMIT } from "./memory-markdown";
+// 批9 P2.1：per-user key 单源（@tianshu/core——主进程 repo/前端同源；
+// 渲染层禁裸引 barrel，走子路径——renderer-core-subpath-guard）
+import {
+  PERSONALIZATION_USER_FIELDS,
+  personalizationUserKey,
+} from "@tianshu/core/personalization-config";
 
 /** 回复风格枚举（与后端同构） */
 export type ResponseStyle =
@@ -40,6 +46,13 @@ export const PERSONALIZATION_KEYS = {
 /** 个性化 option 名联合（PERSONALIZATION_KEYS 的值；调用方传 PERSONALIZATION_KEYS.xxx） */
 export type PersonalizationOptionName =
   (typeof PERSONALIZATION_KEYS)[keyof typeof PERSONALIZATION_KEYS];
+
+/** 批9 P2.1 per-user key（画像三键随用户命名空间——与主进程同源） */
+export {
+  memoryProfileKeyFor,
+  memoryLastCompiledAtKeyFor,
+  memoryLastErrorKeyFor,
+} from "@tianshu/core/personalization-config";
 
 /** 文本字段限长（与后端一致） */
 export const PERSONALIZATION_LIMITS = {
@@ -123,13 +136,31 @@ export function defaultPersonalizationOptions(): PersonalizationOptions {
   };
 }
 
-/** 设置行 → 结构化配置（非法值回退默认，与后端 fromAppOptions 同语义） */
+/**
+ * 设置行 → 结构化配置（非法值回退默认，与后端 fromAppOptions 同语义）。
+ * 批9 P2.1：userId 给定时画像三键优先读 `personalization.<userId>.*` 行，
+ * 缺席回落旧全局行（与主进程 repo 迁移语义一致——升级读值连续）；
+ * userId 缺省（未登录态）保持旧全局行解析
+ */
 export function parsePersonalizationOptions(
   items: SettingItem[],
+  userId?: number,
 ): PersonalizationOptions {
   const map = toOptionMap(items);
+  // per-user 行优先（仅画像三键；其余键恒全局）
+  const userMap: Record<string, string | undefined> = {};
+  if (userId !== undefined) {
+    for (const field of PERSONALIZATION_USER_FIELDS) {
+      const userKey = personalizationUserKey(userId, field);
+      if (map[userKey] !== undefined) {
+        userMap[PERSONALIZATION_KEYS[field]] = map[userKey];
+      }
+    }
+  }
+  const read = (key: string): string | undefined =>
+    userMap[key] !== undefined ? userMap[key] : map[key];
   const fallback = defaultPersonalizationOptions();
-  const styleRaw = map[PERSONALIZATION_KEYS.responseStyle];
+  const styleRaw = read(PERSONALIZATION_KEYS.responseStyle);
   return {
     responseStyle:
       styleRaw !== undefined &&
@@ -137,42 +168,44 @@ export function parsePersonalizationOptions(
         ? (styleRaw as ResponseStyle)
         : fallback.responseStyle,
     welcomeLoading: parseBoolOption(
-      map[PERSONALIZATION_KEYS.welcomeLoading],
+      read(PERSONALIZATION_KEYS.welcomeLoading),
       fallback.welcomeLoading,
     ),
     fileChangeDetails: parseBoolOption(
-      map[PERSONALIZATION_KEYS.fileChangeDetails],
+      read(PERSONALIZATION_KEYS.fileChangeDetails),
       fallback.fileChangeDetails,
     ),
-    customInstructions: map[PERSONALIZATION_KEYS.customInstructions] ?? "",
-    userNickname: map[PERSONALIZATION_KEYS.userNickname] ?? "",
-    aiName: map[PERSONALIZATION_KEYS.aiName] ?? fallback.aiName,
-    persona: map[PERSONALIZATION_KEYS.persona] ?? "",
-    memory: map[PERSONALIZATION_KEYS.memory] ?? "",
-    memoryProfile: map[PERSONALIZATION_KEYS.memoryProfile] ?? "",
+    customInstructions: read(PERSONALIZATION_KEYS.customInstructions) ?? "",
+    userNickname: read(PERSONALIZATION_KEYS.userNickname) ?? "",
+    aiName: read(PERSONALIZATION_KEYS.aiName) ?? fallback.aiName,
+    persona: read(PERSONALIZATION_KEYS.persona) ?? "",
+    memory: read(PERSONALIZATION_KEYS.memory) ?? "",
+    memoryProfile: read(PERSONALIZATION_KEYS.memoryProfile) ?? "",
     memoryEnabled: parseBoolOption(
-      map[PERSONALIZATION_KEYS.memoryEnabled],
+      read(PERSONALIZATION_KEYS.memoryEnabled),
       fallback.memoryEnabled,
     ),
-    memoryModelId: map[PERSONALIZATION_KEYS.memoryModelId] ?? "",
-    memoryLastCompiledAt: map[PERSONALIZATION_KEYS.memoryLastCompiledAt] ?? "",
-    memoryLastError: map[PERSONALIZATION_KEYS.memoryLastError] ?? "",
+    memoryModelId: read(PERSONALIZATION_KEYS.memoryModelId) ?? "",
+    memoryLastCompiledAt: read(PERSONALIZATION_KEYS.memoryLastCompiledAt) ?? "",
+    memoryLastError: read(PERSONALIZATION_KEYS.memoryLastError) ?? "",
   };
 }
 
-/** option 名 → 文本字段限长（剥去统一前缀后按字段名查；bool/风格两项无截断语义） */
+/** option 名 → 文本字段限长（剥统一前缀与可选 per-user 命名空间段后按
+ *  字段名查；bool/风格两项无截断语义——批9 兼容 personalization.<id>.x 键） */
 function limitOf(key: string): number | undefined {
-  const field = key.replace("personalization.", "");
+  const field = key.replace(/^personalization\.(?:\d+\.)?/, "");
   const limits = PERSONALIZATION_LIMITS as Record<string, number>;
   return field in limits ? limits[field] : undefined;
 }
 
 /**
  * 单项保存包装：文本 trim + 截断（防 IPC 直调绕过 UI）、bool 转字面字符串；
- * 返回实际持久化的值（供调用方回填本地状态）
+ * 返回实际持久化的值（供调用方回填本地状态）。key 接受 per-user 命名空间
+ * 键（批9 画像写入走 memoryProfileKeyFor(userId)）
  */
 export async function savePersonalizationOption(
-  key: PersonalizationOptionName,
+  key: PersonalizationOptionName | string,
   value: string | boolean,
 ): Promise<string> {
   if (typeof value === "boolean") {

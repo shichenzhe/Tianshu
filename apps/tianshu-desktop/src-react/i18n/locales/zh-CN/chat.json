@@ -179,7 +179,11 @@
     "skillRefOpen": "点击预览技能 {{name}}",
     "skillRefPreviewTitle": "技能预览：{{name}}",
     "skillRefKind": "技能引用",
-    "skillRefFailed": "技能读取失败"
+    "skillRefFailed": "技能读取失败",
+    "remember": "存入记忆",
+    "rememberHint": "把这条消息存入长期记忆",
+    "rememberDone": "已存入记忆",
+    "rememberFailed": "存入记忆失败"
   },
   "codeBlock": {
     "copy": "复制代码",
@@ -1497,7 +1501,8 @@
     "overflow": "文本过长，请截断或更换模型",
     "unavailable": "暂无数据（未配置模型或会话不存在）",
     "truncated": "已裁 {{count}} 条早期消息（超出窗口，不进入下次请求）",
-    "member": "成员调度：{{calls}} 次调用 · {{tokens}} token（不计入主窗口）"
+    "member": "成员调度：{{calls}} 次调用 · {{tokens}} token（不计入主窗口）",
+    "memory": "记忆占用"
   },
   "artifacts": {
     "open": "产物面板",
@@ -1761,5 +1766,12 @@
   },
   "memberReport": {
     "title": "成员 {{member}} · 第 {{round}} 轮"
+  },
+  "memoryError": {
+    "MEMORY_DISABLED": "记忆功能已关闭，无法存入",
+    "MEMORY_MODEL_MISSING": "无可用模型处理记忆指令",
+    "MEMORY_COMPILE_FAILED": "记忆整理失败，请稍后重试",
+    "MEMORY_NO_MATERIAL": "无对话材料",
+    "MEMORY_BUSY": "记忆整理进行中，请稍后重试"
   }
 }

@@ -317,7 +317,9 @@
       "reset": "重置",
       "compileNow": "立即整理",
       "edit": "编辑",
-      "import": "导入"
+      "import": "导入",
+      "exportJson": "导出记忆（JSON）",
+      "importJson": "导入记忆（JSON）"
     },
     "sections": {
       "work": "工作背景",
@@ -368,7 +370,12 @@
       "imported": "记忆导入成功",
       "importFallback": "未能识别分类标记，全部内容已存入工作背景",
       "instructionFailed": "记忆指令应用失败",
-      "copyFailed": "复制失败，请手动选择复制"
+      "copyFailed": "复制失败，请手动选择复制",
+      "entryDeleted": "已删除该条记忆",
+      "sourceMissing": "来源会话不存在或已删除",
+      "exported": "已导出记忆文件",
+      "importedFile": "已导入并合并记忆",
+      "importInvalid": "文件格式无效（需为天枢导出的记忆 JSON）"
     },
     "error": {
       "MEMORY_DISABLED": "记忆功能已关闭",
@@ -376,6 +383,10 @@
       "MEMORY_COMPILE_FAILED": "记忆整理失败，请稍后重试",
       "MEMORY_NO_MATERIAL": "暂无可整理的对话内容",
       "MEMORY_BUSY": "记忆整理进行中，请稍后再试"
+    },
+    "entry": {
+      "jump": "查看来源会话",
+      "delete": "删除条目"
     }
   },
   "security": {

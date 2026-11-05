@@ -8,8 +8,16 @@
  */
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, Cpu, Pencil, RotateCcw } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Brain,
+  Check,
+  Copy,
+  Cpu,
+  Loader2,
+  Pencil,
+  RotateCcw,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -21,6 +29,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { ModelApi } from "../../api/model.api";
+import { MemoryApi } from "@/domains/app-settings/api/memory.api";
 import { parseBlocks, type MessageBlock } from "../model/blocks";
 import { splitFileRefPrefix } from "../lib/file-ref-lines";
 import { groupBlocks } from "../lib/group-blocks";
@@ -164,12 +173,15 @@ function HoverTimestamp({
 /**
  * user 消息 hover 操作栏：时间戳（共用 HoverTimestamp）仅 hovered 时按当前
  * 时钟计算（每次进入重新渲染，跨天显示正确）；编辑按钮存在 onEdit 时渲染；
- * hideActions（流式生成中）隐藏编辑与复制、仅余时间戳
+ * 批9「记住这个」按钮存在 onRemember 时渲染（调 applyInstruction 管线）；
+ * hideActions（流式生成中）隐藏编辑/存入记忆与复制、仅余时间戳
  */
 function UserActionBar({
   createdAt,
   messageId,
   onEdit,
+  onRemember,
+  remembering,
   hideActions,
   copied,
   onCopy,
@@ -178,6 +190,10 @@ function UserActionBar({
   createdAt: string;
   messageId: number;
   onEdit?: (messageId: number) => void;
+  /** 「存入记忆」（批9 P7）：点击把该条消息内容送记忆管线 */
+  onRemember?: () => void;
+  /** 记忆管线在途（按钮转圈防重复提交） */
+  remembering?: boolean;
   hideActions?: boolean;
   copied: boolean;
   onCopy: () => void;
@@ -203,6 +219,29 @@ function UserActionBar({
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t("chat:message.editHint")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {!hideActions && onRemember && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRemember}
+                disabled={remembering}
+                aria-label={t("chat:message.remember")}
+                className="h-7 w-7 p-0 text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+              >
+                {remembering ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Brain className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t("chat:message.rememberHint")}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
@@ -232,6 +271,7 @@ function MessageItemImpl({
   parsedBlocks,
 }: MessageItemProps) {
   const { t, i18n } = useTranslation(["chat", "common"]);
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   // hover 态仅为重算时间戳触发重渲染（显隐交给 CSS group-hover；user/
   // assistant 均接线移入移出，assistant 流式期同理仅重算）
@@ -266,6 +306,34 @@ function MessageItemImpl({
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
       toast.error(t("common:copyFailed"));
+    }
+  };
+
+  // 批9「记住这个」（P7）：把该条 user 消息内容送记忆管线（applyInstruction
+  // 现成管线——LLM 按准入判据归并入画像，主进程落当前登录用户命名空间）；
+  // 入口消息级按钮（非输入框指令）——精确选内容、与编辑/复制同区可发现
+  const [remembering, setRemembering] = useState(false);
+  const rememberMessage = async (text: string) => {
+    const body = text.trim().slice(0, 1800);
+    if (body === "") {
+      toast.error(t("chat:message.rememberFailed"));
+      return;
+    }
+    setRemembering(true);
+    try {
+      const result = await MemoryApi.applyInstruction(
+        `用户在会话中要求记住以下内容，请按准入判据归并入画像（含日期）：\n${body}`,
+      );
+      if (result.ok) {
+        toast.success(t("chat:message.rememberDone"));
+        void queryClient.invalidateQueries({ queryKey: ["personalization"] });
+      } else {
+        toast.error(t(`chat:memoryError.${result.error}`));
+      }
+    } catch {
+      toast.error(t("chat:message.rememberFailed"));
+    } finally {
+      setRemembering(false);
     }
   };
 
@@ -408,6 +476,8 @@ function MessageItemImpl({
           createdAt={message.createdAt}
           messageId={message.id}
           onEdit={onEdit}
+          onRemember={() => void rememberMessage(rawText)}
+          remembering={remembering}
           hideActions={hideActions}
           copied={copied}
           onCopy={() => void copyText(rawText)}

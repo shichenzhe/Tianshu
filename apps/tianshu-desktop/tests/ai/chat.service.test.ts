@@ -52,7 +52,8 @@ const prismaStub = {
   /** llmCallEvent.findMany 读通道（成员调度累计，可观测性批）：默认空集
    *  （无成员调用会话不携带 member 字段），成员用量测试覆写返回值 */
   llmCallEventFindMany: vi.fn(
-    async (_args?: unknown) => [] as Array<{ inputTokens: number; outputTokens: number }>,
+    async (_args?: unknown) =>
+      [] as Array<{ inputTokens: number; outputTokens: number }>,
   ),
   /**
    * message.findMany 读通道：模拟 prisma 查询语义（where 过滤 / orderBy /
@@ -152,10 +153,25 @@ const assembleReads = vi.hoisted(() => ({
   assistant: { findUnique: vi.fn() },
 }));
 
+// 批9：个性化 option 行存储（loadPersonalization 消费；默认空 → 全默认
+// 配置，既有逐字节断言不受影响）
+const optionReads = vi.hoisted(() => ({
+  rows: [] as Array<{ name: string; value: string }>,
+}));
+
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     // verifyUserId 用户存在性回查（幻影用户防护批）接线需过
     user: { findUnique: async () => ({ id: 1 }) },
+    // 批9：个性化 option 行（loadPersonalization 经 getAppOptionMap 读）
+    option: {
+      findMany: async (args: { where: { name: { in: string[] } } }) =>
+        optionReads.rows.filter((row) => args.where.name.in.includes(row.name)),
+      // 授权清单（tool-gate）等 findFirst 通道：默认无行
+      findFirst: vi.fn(async () => null),
+      updateMany: vi.fn(async () => ({ count: 0 })),
+      create: vi.fn(async () => undefined),
+    },
     // 成员调度累计（可观测性批 getUsageBreakdown meta 行聚合读通道）
     llmCallEvent: {
       findMany: (args?: unknown) => prismaStub.llmCallEventFindMany(args),
@@ -1912,7 +1928,11 @@ describe("ChatService.assembleContext（专家 2.0 运行时接线）", () => {
           ) => Promise<{
             truncated?: boolean;
             truncatedMessages?: number;
-            member?: { calls: number; inputTokens: number; outputTokens: number };
+            member?: {
+              calls: number;
+              inputTokens: number;
+              outputTokens: number;
+            };
           } | null>;
         }
       ).getUsageBreakdown(1, 1);
@@ -3329,5 +3349,140 @@ describe("loadFallbackModel（备用模型运行时解析）", () => {
       }
     ).loadFallbackModel({ fallbackModelId: 9 }, 1, []);
     expect(plan).toBeUndefined();
+  });
+});
+
+/**
+ * 批9（2026-11-05）记忆域：assembleContext 的 userId 隔离画像注入 +
+ * 注入预算裁剪（P6）+ usage 面板「记忆占用」透出。option 行经 optionReads
+ * 注入（loadPersonalization(userId) 现查现读）；session 行带 userId
+ * （归属比对 + 画像命名空间取用同一 id）。
+ */
+describe("ChatService.assembleContext（批9 记忆 userId 隔离 + 预算治理）", () => {
+  const modelRow = {
+    id: 1,
+    providerId: 2,
+    modelId: "m",
+    temperature: null,
+    topP: null,
+    maxTokens: null,
+    contextWindow: null,
+  };
+  const providerRow = {
+    id: 2,
+    type: "openai-compatible",
+    baseUrl: "https://x.example/v1",
+    apiKey: "k",
+    extraHeaders: null,
+  };
+
+  const makeSvc = (sessionUserId: number, contextWindow: number | null) => {
+    const sessions = {
+      getSession: vi.fn().mockResolvedValue({
+        id: 1,
+        assistantId: 1,
+        workspaceId: 1,
+        mode: null,
+        compactedUpToId: null,
+        summary: null,
+        projectId: null,
+        userId: sessionUserId,
+      }),
+      getEffectiveModelId: vi.fn().mockResolvedValue(1),
+      getWorkspace: vi.fn().mockResolvedValue(null),
+    };
+    assembleReads.model.findUnique.mockResolvedValue({
+      ...modelRow,
+      contextWindow,
+    });
+    assembleReads.provider.findUnique.mockResolvedValue(providerRow);
+    assembleReads.assistant.findUnique.mockResolvedValue({
+      id: 1,
+      systemPrompt: "助手指令",
+      temperature: null,
+      topP: null,
+      maxTokens: null,
+    });
+    prismaStub.messages = [];
+    skillScanStub.skills = [];
+    return new ChatService(sessions as unknown as SessionRepository);
+  };
+
+  const assemble = (service: ChatService, userId: number) =>
+    (
+      service as unknown as {
+        assembleContext: (
+          sessionId: number,
+          userId: number,
+        ) => Promise<{
+          systemWithSummary: string | undefined;
+          personalizationTokens: number;
+        }>;
+      }
+    ).assembleContext(1, userId);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    optionReads.rows.length = 0;
+  });
+
+  it("A 画像进 A 对话、B 画像不进 A 对话（userId 隔离核心断言）", async () => {
+    optionReads.rows.push(
+      { name: "personalization.1.memoryProfile", value: "## 工作背景\nA 画像" },
+      { name: "personalization.2.memoryProfile", value: "## 工作背景\nB 画像" },
+    );
+    const a = await assemble(makeSvc(1, null), 1);
+    expect(a.systemWithSummary).toContain("A 画像");
+    expect(a.systemWithSummary).not.toContain("B 画像");
+    const b = await assemble(makeSvc(2, null), 2);
+    expect(b.systemWithSummary).toContain("B 画像");
+    expect(b.systemWithSummary).not.toContain("A 画像");
+  });
+
+  it("大窗口（无 contextWindow 行）→ 画像全量注入不裁剪（行为与批前一致）", async () => {
+    const profile = `## 工作背景\n${"长画像".repeat(100)}`;
+    optionReads.rows.push({
+      name: "personalization.1.memoryProfile",
+      value: profile,
+    });
+    const ctx = await assemble(makeSvc(1, null), 1);
+    // 全量注入（131072 默认窗口 → 预算 ~15.7K token，画像 300 token 不裁）
+    expect(ctx.systemWithSummary).toContain("长画像".repeat(100));
+    expect(ctx.personalizationTokens).toBeGreaterThan(0);
+  });
+
+  it("小窗口超预算 → 画像按段优先级裁剪（persona 先占预算，画像让位）", async () => {
+    optionReads.rows.push({
+      name: "personalization.1.memoryProfile",
+      value:
+        "## 工作背景\n[2026-11-01] - 稳定背景\n\n## 个人背景\n[2026-11-01] - 个人\n\n## 当前关注\n[2026-11-01] - 关注\n\n## 近期动态\n[2026-11-01] - 动态",
+    });
+    // 8K 窗口 → 预算保底 2048 token；persona 4000 字（2000 t）+ 手动
+    // 记忆 1500 字（750 t）= 2750 t 独占超预算 → 画像余量为负整段清空
+    // （优先序：persona/手动记忆 > 画像）
+    optionReads.rows.push(
+      { name: "personalization.persona", value: "人".repeat(5000) },
+      { name: "personalization.memory", value: "手".repeat(1500) },
+    );
+    const ctx = await assemble(makeSvc(1, 8192), 1);
+    expect(ctx.systemWithSummary).toContain("人".repeat(4000));
+    expect(ctx.systemWithSummary).toContain("手".repeat(1500));
+    // 画像段被裁空（预算被 persona 优先占满）
+    expect(ctx.systemWithSummary).not.toContain("【用户画像记忆】");
+  });
+
+  it("usage 面板透出「记忆占用」（个性化段 token，getUsageBreakdown memory 字段）", async () => {
+    optionReads.rows.push(
+      { name: "personalization.persona", value: "我的固定人设" },
+      { name: "personalization.1.memoryProfile", value: "## 工作背景\nA 画像" },
+    );
+    const service = makeSvc(1, null);
+    const usage = await service.getUsageBreakdown(1, 1);
+    expect(usage).not.toBeNull();
+    expect(usage?.memory).toBeGreaterThan(0);
+    // 无个性化行 → 不携带 memory 字段（灰态不透出）
+    optionReads.rows.length = 0;
+    const bare = await makeSvc(1, null).getUsageBreakdown(1, 1);
+    expect(bare?.memory).toBeUndefined();
   });
 });

@@ -20,8 +20,12 @@ import {
   type MemoryModelContext,
 } from "./memory-compiler";
 import { loadPersonalization } from "./personalization.repo";
-import { PERSONALIZATION_KEYS } from "./personalization.config";
+import {
+  memoryLastCompiledAtKeyFor,
+  memoryProfileKeyFor,
+} from "./personalization.config";
 import { acquire, release } from "./memory-inflight";
+import { handleUser } from "../../../commons/ipc-user";
 import type { MemorySchedulerDeps } from "./memory-scheduler";
 
 export type MemoryErrorCode =
@@ -41,12 +45,13 @@ export interface MemoryServiceResult {
 const MEMORY_INSTRUCTION_LIMIT = 2000;
 
 export interface MemoryHandlerDeps {
-  loadConfig: () => Promise<{
+  /** 批9 P2.1：读配置/取素材/落库均按当次 userId（画像 per-user 命名空间） */
+  loadConfig: (userId: number) => Promise<{
     memoryEnabled: boolean;
     memoryProfile: string;
     memoryLastCompiledAt: string;
   }>;
-  fetchMaterial: () => Promise<string>;
+  fetchMaterial: (userId: number) => Promise<string>;
   resolveModel: () => Promise<MemoryModelContext | null>;
   compile: (
     currentMemory: string,
@@ -74,10 +79,11 @@ type MemoryGate =
 export function createMemoryHandlers(deps: MemoryHandlerDeps) {
   /** 前置闸门：开关关 / 无材料（整理路径，材料惰性求值）/ 无模型 → 错误码 */
   const passGates = async (
+    userId: number,
     getMaterial: () => Promise<string>,
     instructionMode: boolean,
   ): Promise<MemoryGate> => {
-    const config = await deps.loadConfig();
+    const config = await deps.loadConfig(userId);
     if (!config.memoryEnabled) {
       return { ok: false, error: "MEMORY_DISABLED" };
     }
@@ -95,6 +101,7 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
 
   /** 编译（锁内执行）：失败或输出非法 → MEMORY_COMPILE_FAILED；指令模式不更新 LastCompiledAt */
   const execute = async (
+    userId: number,
     gate: Extract<MemoryGate, { ok: true }>,
     instructionMode: boolean,
     signal?: AbortSignal,
@@ -117,11 +124,11 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
     }
     // 指令应用直接落库（修订 2026-09-10 验收反馈）；但不更新
     // memoryLastCompiledAt——该时间戳语义为定时整理时间，指令应用
-    // 不算，避免干扰「当日未整理」判断
-    await deps.save(PERSONALIZATION_KEYS.memoryProfile, memory);
+    // 不算，避免干扰「当日未整理」判断。批9：落库键按 userId 命名空间
+    await deps.save(memoryProfileKeyFor(userId), memory);
     if (!instructionMode) {
       await deps.save(
-        PERSONALIZATION_KEYS.memoryLastCompiledAt,
+        memoryLastCompiledAtKeyFor(userId),
         new Date().toISOString(),
       );
     }
@@ -129,10 +136,11 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
   };
 
   const run = async (
+    userId: number,
     getMaterial: () => Promise<string>,
     instructionMode: boolean,
   ): Promise<MemoryServiceResult> => {
-    const gate = await passGates(getMaterial, instructionMode);
+    const gate = await passGates(userId, getMaterial, instructionMode);
     if (!gate.ok) {
       return gate;
     }
@@ -142,18 +150,67 @@ export function createMemoryHandlers(deps: MemoryHandlerDeps) {
       return { ok: false, error: "MEMORY_BUSY" };
     }
     try {
-      return await execute(gate, instructionMode, lock.signal);
+      return await execute(userId, gate, instructionMode, lock.signal);
     } finally {
       deps.release(lock);
     }
   };
 
   return {
-    applyInstruction: (instruction: string) =>
+    applyInstruction: (userId: number, instruction: string) =>
       // M1：入口限长截断，防 IPC 直调绕过前端 maxLength 撑爆 prompt
-      run(async () => instruction.slice(0, MEMORY_INSTRUCTION_LIMIT), true),
-    compileNow: () => run(deps.fetchMaterial, false),
+      run(
+        userId,
+        async () => instruction.slice(0, MEMORY_INSTRUCTION_LIMIT),
+        true,
+      ),
+    compileNow: (userId: number) =>
+      run(userId, () => deps.fetchMaterial(userId), false),
   };
+}
+
+/** 条目溯源（批9 P4）：msgId → 归属会话（设置页「查看来源会话」跳转源）。
+ *  归属校验：会话必须属当前用户（他人会话的消息不透出）；查无/不属 → 缺席 */
+export async function resolveMemorySources(
+  prismaLike: {
+    message: {
+      findMany(
+        args: unknown,
+      ): Promise<Array<{ id: number; sessionId: number }>>;
+    };
+    session: {
+      findMany(
+        args: unknown,
+      ): Promise<Array<{ id: number; title: string | null }>>;
+    };
+  },
+  userId: number,
+  messageIds: number[],
+): Promise<Array<{ messageId: number; sessionId: number; title: string }>> {
+  const ids = [...new Set(messageIds)].filter((id) => Number.isInteger(id));
+  if (ids.length === 0) {
+    return [];
+  }
+  const messages = await prismaLike.message.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, sessionId: true },
+  });
+  const sessionIds = [...new Set(messages.map((m) => m.sessionId))];
+  if (sessionIds.length === 0) {
+    return [];
+  }
+  const sessions = await prismaLike.session.findMany({
+    where: { id: { in: sessionIds }, userId },
+    select: { id: true, title: true },
+  });
+  const owned = new Map(sessions.map((s) => [s.id, s.title ?? ""]));
+  return messages
+    .filter((m) => owned.has(m.sessionId))
+    .map((m) => ({
+      messageId: m.id,
+      sessionId: m.sessionId,
+      title: owned.get(m.sessionId) ?? "",
+    }));
 }
 
 /** MemoryService 依赖注入面（repo 为 Application 已建实例） */
@@ -170,14 +227,25 @@ export default class MemoryService {
 
   constructor(private deps: MemoryServiceDeps) {}
 
-  /** AI 指令应用（IPC 与 memory-tap 共用入口） */
-  async applyInstruction(instruction: string): Promise<MemoryServiceResult> {
-    return (await this.ensureHandlers()).applyInstruction(instruction);
+  /** AI 指令应用（IPC 与 memory-tap 共用入口）；userId = 画像归属用户 */
+  async applyInstruction(
+    instruction: string,
+    userId: number,
+  ): Promise<MemoryServiceResult> {
+    return (await this.ensureHandlers()).applyInstruction(userId, instruction);
   }
 
   /** 手动整理（同上共用） */
-  async compileNow(): Promise<MemoryServiceResult> {
-    return (await this.ensureHandlers()).compileNow();
+  async compileNow(userId: number): Promise<MemoryServiceResult> {
+    return (await this.ensureHandlers()).compileNow(userId);
+  }
+
+  /** 条目来源会话解析（设置页逐条溯源跳转源） */
+  resolveMemorySources(
+    userId: number,
+    messageIds: number[],
+  ): Promise<Array<{ messageId: number; sessionId: number; title: string }>> {
+    return resolveMemorySources(prisma, userId, messageIds);
   }
 
   private async ensureHandlers(): Promise<
@@ -185,8 +253,9 @@ export default class MemoryService {
   > {
     if (this.handlers === null) {
       this.handlers = createMemoryHandlers({
-        loadConfig: () => loadPersonalization(),
-        fetchMaterial: () => fetchRecentConversation(prisma),
+        loadConfig: (userId) => loadPersonalization(userId),
+        fetchMaterial: (userId) =>
+          fetchRecentConversation(prisma, 7, 30000, userId),
         resolveModel: () =>
           resolveMemoryModel(this.deps.providerRepo, this.deps.modelRepo, () =>
             this.deps.modelRepo.listAllEnabledAnyUser(),
@@ -208,10 +277,19 @@ export default class MemoryService {
   }
 
   registerIpc(): void {
-    ipcMain.handle(
+    // 批9：token → userId（v12 隔离口径），画像按命名空间读写
+    handleUser(
       "personalization:applyMemoryInstruction",
-      (_, instruction: string) => this.applyInstruction(instruction),
+      (_, userId, instruction: string) =>
+        this.applyInstruction(instruction, userId),
     );
-    ipcMain.handle("personalization:compileMemory", () => this.compileNow());
+    handleUser("personalization:compileMemory", (_, userId) =>
+      this.compileNow(userId),
+    );
+    handleUser(
+      "personalization:resolveMemorySources",
+      (_, userId, messageIds: number[]) =>
+        this.resolveMemorySources(userId, messageIds),
+    );
   }
 }

@@ -42,6 +42,8 @@ interface Breakdown {
     inputTokens: number;
     outputTokens: number;
   };
+  /** 记忆占用（批9 P6）：个性化段注入 token（含于 system 项——拆解展示） */
+  memory?: number;
 }
 
 interface ContextUsageButtonProps {
@@ -293,6 +295,19 @@ export default function ContextUsageButton({
                   count: breakdown.truncatedMessages ?? 0,
                 })}
               </p>
+            )}
+            {/* 记忆占用（批9 P6）：个性化段 token——已含于 system 项的
+                拆解展示（不加总，百分比按 contextWindow 对齐各行口径） */}
+            {breakdown.memory != null && breakdown.memory > 0 && (
+              <div className="mt-2 flex items-center justify-between rounded-md border border-border/50 bg-muted/30 px-2.5 py-1.5 text-xs text-muted-foreground">
+                <span>{t("chat:usage.memory")}</span>
+                <span className="tabular-nums">
+                  {formatTokens(breakdown.memory)}
+                  {limit !== null && limit > 0
+                    ? `（${((breakdown.memory / limit) * 100).toFixed(1)}%）`
+                    : ""}
+                </span>
+              </div>
             )}
             {/* 成员调度累计（专家团可观测性批）：真实发生量——独立于五类
                 估算（不计入环形占比，成员上下文不占主对话窗口） */}

@@ -3,7 +3,8 @@
 /** 节点 prompt 模板渲染（spec §4）：{{input.x}}/{{input.x.field[sub].path}}（
  *  json 容器字段路径——首段为输入键，余段下钻：`.field` 取对象字段、
  *  `[N]` 取数组下标（正交：点号一律字段名、方括号一律下标），中途
- *  非容器/缺失/越界同缺引用抛错）/
+ *  非容器/缺失/越界/null 一律抛错——null 不可消费，容器整体 stringify
+ *  时内含 null 例外无损保留）/
  *  {{nodes.<id>.output}}/{{nodes.<id>.errorOutput}}（循环节点死信，未设时
  *  抛错）/{{date}}/{{weekday}}/{{time}}；缺引用抛 GraphTemplateError */
 import { format } from "date-fns";
@@ -74,7 +75,14 @@ export function renderNodePrompt(
           throw new GraphTemplateError(token);
         }
       }
-      return current !== null && typeof current === "object"
+      // 解析结果为 null 一律不可消费（顶层次之/中途/叶子三层次统一）：
+      // 插入字面 "null" 文本会在 HTTP body 等场景产出字符串 "null" 而非
+      // JSON null——坏数据不如缺引用可发现；容器整体 stringify 时内含
+      // null 合法（JSON 文本一部分，无损保留），不经此判定
+      if (current === null) {
+        throw new GraphTemplateError(token);
+      }
+      return typeof current === "object"
         ? JSON.stringify(current)
         : String(current);
     }

@@ -231,8 +231,22 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
     expect(render("{{input.payload.items}}")).toBe('[{"id":1},{"id":2}]');
   });
 
-  it("叶子为 null：插入 \"null\"", () => {
-    expect(render("{{input.payload.nothing}}")).toBe("null");
+  it("叶子为 null：抛 GraphTemplateError（null 不可消费——引用三层次统一）", () => {
+    expect(() => render("{{input.payload.nothing}}")).toThrow(
+      GraphTemplateError,
+    );
+    // 顶层 null（空声明直通场景）同抛
+    expect(() =>
+      renderNodePrompt("{{input.x}}", {
+        inputs: { x: null },
+        nodes: {},
+        now: new Date("2026-11-05T08:00:00"),
+      } as never),
+    ).toThrow(GraphTemplateError);
+  });
+
+  it("容器整体 stringify 时内含 null 合法（JSON 文本一部分，无损保留）", () => {
+    expect(render("{{input.payload}}")).toContain('"nothing":null');
   });
 
   it("字段缺失/下标越界/中途非容器：抛 GraphTemplateError", () => {

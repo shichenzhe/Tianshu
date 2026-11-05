@@ -78,6 +78,22 @@ export function describeValidity(
   });
 }
 
+/** 错过补跑语义明示(批3A §6-1):catchUpOnce 携补跑上限——多轮错过按
+ * 触发点依次补、上限 N 后跳到未来触发点;skip 缺省语义(留痕跳过)不
+ * 追加,避免每行噪音 */
+export function describeMissedPolicy(
+  policy: "skip" | "catchUpOnce",
+  catchUpLimit: number,
+  t: TFunc,
+): string {
+  if (policy !== "catchUpOnce") {
+    return "";
+  }
+  return t("chat:automation.schedule.missedCatchUpHint", {
+    count: catchUpLimit,
+  });
+}
+
 export function validateSchedule(
   cfg: ScheduleConfig | null,
   validity: { startAt?: string; endAt?: string },

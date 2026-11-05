@@ -376,6 +376,29 @@ export function CreateTaskDialog({
                 </Button>
               ))}
             </div>
+            {/* 补跑上限(批3A):catchUpOnce 时生效,1-10 clamp(防补跑风暴) */}
+            {values.missedPolicy === "catchUpOnce" && (
+              <div className="flex items-center gap-1 ml-2">
+                <Label className="text-xs text-muted-foreground shrink-0">
+                  {t("chat:automation.create.missedCatchUpLimit")}
+                </Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={values.catchUpLimit}
+                  onChange={(e) =>
+                    patch({
+                      catchUpLimit: Math.min(
+                        10,
+                        Math.max(1, Number(e.target.value) || 1),
+                      ),
+                    })
+                  }
+                  className="w-16 h-7"
+                />
+              </div>
+            )}
           </div>
 
           <SchedulePicker

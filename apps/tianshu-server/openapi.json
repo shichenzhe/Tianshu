@@ -5857,6 +5857,10 @@
             "type": "number",
             "description": "工作空间过滤"
           },
+          "projectId": {
+            "type": "number",
+            "description": "会话归属项目过滤（项目组深翻页定向拉取；无头端项目会话恒 null）"
+          },
           "keyword": {
             "type": "string",
             "description": "标题关键词（includes 大小写敏感，内存过滤）"
@@ -7059,6 +7063,10 @@
               "catchUpOnce"
             ]
           },
+          "catchUpLimit": {
+            "type": "object",
+            "description": "错过补跑上限（catchUpOnce 生效，缺省 1）"
+          },
           "accessMode": {
             "type": "string",
             "description": "访问模式",
@@ -7124,6 +7132,7 @@
           "scheduleJson",
           "scheduleText",
           "missedPolicy",
+          "catchUpLimit",
           "accessMode",
           "enabled",
           "status",
@@ -7638,6 +7647,10 @@
           "missedPolicy": {
             "type": "string",
             "description": "错过策略：skip | catchUpOnce"
+          },
+          "catchUpLimit": {
+            "type": "number",
+            "description": "错过补跑上限（missedPolicy=catchUpOnce 生效；缺省 1=只补一次，显式携带才写——批3A）"
           },
           "accessMode": {
             "type": "string",

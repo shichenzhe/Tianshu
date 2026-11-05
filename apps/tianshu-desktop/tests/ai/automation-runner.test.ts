@@ -795,3 +795,74 @@ describe("executeTask 项目化(子系统 E:会话归属+项目指令注入)", (
     expect(call.system).toBe(buildSystemPrompt(undefined, skills));
   });
 });
+
+describe("executeTask 调度相位重放 replayAt(批3A §6-1 错过补跑)", () => {
+  /** 间隔 30 分钟任务行:重放断言 nextRunAt = replayAt + 30min */
+  const intervalRow = {
+    ...taskRow,
+    scheduleJson: JSON.stringify({
+      mode: "interval",
+      value: 30,
+      unit: "minute",
+    }),
+  };
+  it("replayAt 传入 → advanceTask 按「仿佛在 replayAt 跑过」推进:lastRunAt=replayAt、nextRunAt=相位下一步", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    const replayAt = new Date(Date.now() - 90 * 60_000);
+    await executeTask(intervalRow as never, {
+      triggerType: "catchUp",
+      attempt: 1,
+      abort: new AbortController().signal,
+      replayAt,
+    });
+    const data = vi.mocked(prisma.automationTask.update).mock.calls[0]?.[0]
+      .data;
+    expect(data).toMatchObject({
+      lastRunAt: replayAt,
+      nextRunAt: new Date(replayAt.getTime() + 30 * 60_000),
+    });
+  });
+  it("replayAt 缺省 → 常规推进(lastRunAt=now,既有行为不变)", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+    const before = Date.now();
+    await executeTask(intervalRow as never, {
+      triggerType: "schedule",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+    const data = vi.mocked(prisma.automationTask.update).mock.calls[0]?.[0]
+      .data;
+    const lastRunAt = data?.lastRunAt as Date;
+    expect(lastRunAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect((data?.nextRunAt as Date).getTime()).toBe(
+      lastRunAt.getTime() + 30 * 60_000,
+    );
+  });
+  it("graph 分流透传 replayAt 给 executeGraphRun", async () => {
+    stubGraphTaskWorkspace();
+    vi.mocked(prisma.graphDefinition.findUnique).mockResolvedValue({
+      id: 5,
+      name: "demo",
+      enabled: true,
+    } as never);
+    vi.mocked(executeGraphRun).mockClear();
+    const { executeTask } =
+      await import("../../electron/domains/ai/automation/automation-runner");
+    const replayAt = new Date(Date.now() - 3_600_000);
+    await executeTask(graphTask as never, {
+      triggerType: "catchUp",
+      attempt: 1,
+      abort: new AbortController().signal,
+      replayAt,
+    });
+    expect(executeGraphRun).toHaveBeenCalledWith(
+      expect.objectContaining({ replayAt }),
+    );
+  });
+});

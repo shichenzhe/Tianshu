@@ -345,3 +345,35 @@ describe("执行体/事件校验（canSubmitForm/validateTaskForm 扩展）", ()
     expect(canSubmitForm(ev, now, false)).toBe(true);
   });
 });
+
+describe("错过补跑上限 catchUpLimit(批3A §6-1)", () => {
+  it("buildInitialValues:task 回填 catchUpLimit;无源缺省 1", () => {
+    expect(
+      buildInitialValues({ task: { ...task, catchUpLimit: 3 } }, t)
+        .catchUpLimit,
+    ).toBe(3);
+    expect(buildInitialValues({}, t).catchUpLimit).toBe(1);
+    // 旧任务行缺列(undefined)回退 1
+    expect(buildInitialValues({ task: { ...task, catchUpLimit: undefined } }, t).catchUpLimit).toBe(1);
+  });
+  it("buildTaskParams:catchUpOnce 携带上限且 scheduleText 明示补跑语义;skip 归 1 不追加文案", () => {
+    const v = buildInitialValues({ task }, t);
+    const catchUp = buildTaskParams(
+      { ...v, missedPolicy: "catchUpOnce", catchUpLimit: 3 },
+      t,
+    );
+    expect(catchUp.catchUpLimit).toBe(3);
+    expect(catchUp.scheduleText).toContain(
+      "chat:automation.schedule.missedCatchUpHint",
+    );
+    const skip = buildTaskParams({ ...v, missedPolicy: "skip" }, t);
+    expect(skip.catchUpLimit).toBe(1);
+    expect(skip.scheduleText).not.toContain("missedCatchUpHint");
+  });
+  it("serializeForm 纳入 catchUpLimit(改值判脏)", () => {
+    const v = buildInitialValues({}, t);
+    expect(serializeForm(v)).not.toBe(
+      serializeForm({ ...v, catchUpLimit: 4 }),
+    );
+  });
+});

@@ -90,6 +90,8 @@ export interface TaskRecord {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  /** 错过补跑上限（missedPolicy=catchUpOnce 生效，缺省 1；批3A） */
+  catchUpLimit: number;
   accessMode: AccessMode;
   enabled: boolean;
   status: AutomationStatus;

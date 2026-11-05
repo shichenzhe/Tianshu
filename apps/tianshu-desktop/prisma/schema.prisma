@@ -219,6 +219,7 @@ model automationTask {
   startAt      DateTime?
   endAt        DateTime?
   missedPolicy String    @default("skip")
+  catchUpLimit Int       @default(1) // 错过补跑上限（missedPolicy=catchUpOnce 时生效，批3A；1=既有只补一次）
   accessMode   String    @default("default")
   enabled      Boolean   @default(true)
   status       String    @default("active")

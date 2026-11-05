@@ -30,6 +30,14 @@ export interface StatsErrorTask {
   statusNote: string;
 }
 
+/** 每日 rollup 趋势日(批3A §6-6):repo 从 automationStat dailyRollup 行
+ * 解析的当前用户桶——过去趋势日单调补全被保留策略裁剪的计数 */
+export interface StatsRollupDay {
+  date: string;
+  success: number;
+  failed: number;
+}
+
 /** attention 的 failedRun 变体(排序需读 startedAt,收窄联合类型) */
 type FailedRunAttention = Extract<
   AutomationStats["attention"][number],
@@ -46,6 +54,7 @@ export function computeStats(
   runs: StatsRunRow[],
   errorTasks: StatsErrorTask[],
   now: Date,
+  rollups: StatsRollupDay[] = [],
 ): AutomationStats {
   const todayKey = localDateKey(now);
   const trend = Array.from({ length: TREND_DAYS }, (_, i) => {
@@ -96,6 +105,21 @@ export function computeStats(
   failedRuns.sort(
     (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
   );
+  // 每日 rollup 单调合并(批3A §6-6):过去趋势日以每日汇总行补全被保留
+  // 策略裁剪的计数(max——run 仍在即以即时聚合为准);今日恒用即时聚合
+  // (rollup 每小时节流写,必然滞后);窗口外日期 trend 不含、天然忽略
+  const rollupByDate = new Map(
+    rollups
+      .filter((r) => r.date !== todayKey)
+      .map((r) => [r.date, r] as const),
+  );
+  for (const day of trend) {
+    const rollup = rollupByDate.get(day.date);
+    if (rollup) {
+      day.success = Math.max(day.success, rollup.success);
+      day.failed = Math.max(day.failed, rollup.failed);
+    }
+  }
   const denominator = today.success + today.failed;
   return {
     today: {

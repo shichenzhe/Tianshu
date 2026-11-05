@@ -50,6 +50,8 @@ export interface TaskRecord {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  /** 错过补跑上限（missedPolicy=catchUpOnce 生效，缺省 1；批3A） */
+  catchUpLimit: number;
   accessMode: AccessMode;
   enabled: boolean;
   status: AutomationStatus;
@@ -79,6 +81,8 @@ export interface TaskCreateParams {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  /** 错过补跑上限（批3A）：缺省 1；未携带时 create 落列默认、update 不碰既有值 */
+  catchUpLimit?: number;
   accessMode?: AccessMode;
   templateSlug?: string;
   /** 所属项目 id；缺省/null = 全局任务（子系统 E） */

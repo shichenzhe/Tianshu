@@ -6,7 +6,9 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 import { ApiProperty, type ApiPropertyOptions } from '@nestjs/swagger';
 import type { ScheduleConfig } from '@tianshu/core';
@@ -173,6 +175,18 @@ export class AutomationSaveDto {
     message: '错过策略必须是 skip 或 catchUpOnce',
   })
   missedPolicy: 'skip' | 'catchUpOnce';
+
+  @ApiProperty({
+    description:
+      '错过补跑上限（missedPolicy=catchUpOnce 生效；缺省 1=只补一次，' +
+      '显式携带才写——批3A）',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt({ message: '补跑上限必须是整数' })
+  @Min(1, { message: '补跑上限最小为 1' })
+  @Max(10, { message: '补跑上限最大为 10' })
+  catchUpLimit?: number;
 
   @ApiProperty({
     description: '无人值守权限：default | full（缺省 default）',

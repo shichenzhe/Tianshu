@@ -36,6 +36,10 @@ export * from "./crypto-envelope";
 // AES-256-GCM 档级流式加密，tsbak:v1 自描述头（旧明文档零迁移兼容）
 export * from "./backup-archive-crypto";
 export * from "./schedule";
+// 批3A（automation-scheduled-tasks §6-4/6-6）：重试指数退避 + 错误分类
+// 可重试面 / 每日统计 rollup 聚合桶——双端调度器同构消费单源
+export * from "./automation-retry";
+export * from "./automation-rollup";
 // E2E-T1：relay 端到端加密核心（X25519+HKDF+GCM 信封+重放窗口，纯
 // node:crypto；信封/握手 kind 常量为跨仓单份 wire 契约）
 export * from "./e2e-crypto";

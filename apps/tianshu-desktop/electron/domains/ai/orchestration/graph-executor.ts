@@ -162,6 +162,9 @@ export interface GraphRunParams {
   codeAuthorized?: boolean;
   /** run 行创建后即回调（webhook 异步响应在图完成前拿 runId 轮询） */
   onRunId?: (runId: number) => void;
+  /** 调度相位重放基点（批3A 错过补跑）：advanceTask 按 replayAt 推进
+   * 任务调度字段（automation-runner 同名注释）；缺省按 now */
+  replayAt?: Date;
 }
 
 /** 依赖注入 seam：测试经模块 mock 替换三件，产线取真实实现 */
@@ -289,6 +292,8 @@ interface FinishParams {
   /** 监控埋点：事件归属用户（task 缺席时由调用方回退图归属） */
   userId?: number | null;
   error?: RunError;
+  /** 调度相位重放基点（批3A）：advanceTaskAfterRun 透传 advanceTask */
+  replayAt?: Date;
 }
 
 /** 图执行结果：status + 终点节点完整 output（子工作流节点消费） */
@@ -337,6 +342,7 @@ export async function runGraphToResult(
       graphId: params.graph.id,
       userId: params.task?.userId ?? params.graph.userId ?? null,
       error: toRunError(e),
+      replayAt: params.replayAt,
     });
     return { status: "failed", output: "" };
   }
@@ -413,6 +419,7 @@ async function runGraph(
     // 监控埋点（spec §4.1 #4）：收尾事件归属图/用户（task 缺席回退图归属）
     graphId: params.graph.id,
     userId: params.task?.userId ?? params.graph.userId ?? null,
+    replayAt: params.replayAt,
   };
   try {
     const result = await compiled.graph.invoke(
@@ -1942,6 +1949,8 @@ async function advanceTaskAfterRun(p: FinishParams): Promise<void> {
     p.status,
     // 子图执行 task 恒 null（上方早退），非空时必为任务级五类触发
     p.triggerType as Parameters<typeof advanceTask>[3],
+    // 批3A 错过补跑：调度相位重放基点透传（缺省按 now 常规推进）
+    p.replayAt,
   );
 }
 

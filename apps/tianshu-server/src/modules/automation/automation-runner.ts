@@ -153,6 +153,10 @@ export interface ExecuteTaskOptions {
   /** graph 任务输入变量（spec §4）：事件触发={outcome}，定时/手动=空对象；
    * prompt 任务不消费 */
   inputs?: Record<string, string>;
+  /** 调度相位重放基点（批3A 错过补跑）：advanceTask 按「仿佛在 replayAt
+   * 跑过」推进 lastRunAt/nextRunAt——多轮错过窗口按触发点依次补
+   * (catchUpLimit)；缺省按 now 常规推进 */
+  replayAt?: Date;
 }
 
 /** running 状态 run 行（按需建：graph 任务 run 由 executor 落库带
@@ -260,6 +264,7 @@ export async function executeTask(
       startedAt,
       sessionId,
       opts.triggerType,
+      opts.replayAt,
     );
   }
 }
@@ -311,6 +316,7 @@ async function executeGraphTask(
     abort: opts.abort,
     workspace,
     disabledTools: opts.disabledTools,
+    replayAt: opts.replayAt,
   });
 }
 
@@ -373,6 +379,7 @@ async function streamAndRecord(
       ctx.startedAt,
       ctx.sessionId,
       opts.triggerType,
+      opts.replayAt,
     );
   }
   const userText = resolution.injected;
@@ -505,6 +512,7 @@ async function streamAndRecord(
     new Date(),
     success ? 'success' : 'failed',
     opts.triggerType,
+    opts.replayAt,
   );
   return success ? 'success' : 'failed';
 }
@@ -517,6 +525,7 @@ async function failRun(
   startedAt: number,
   sessionId: number | undefined,
   triggerType: ExecuteTaskOptions['triggerType'],
+  replayAt?: Date,
 ): Promise<'failed'> {
   await graphExecutorRuntime().db.automationRun.update({
     where: { id: runId },
@@ -540,7 +549,7 @@ async function failRun(
   } else {
     // 非系统失败：once 不置 expired（留 status=active 待重试扫描，见
     // advanceTask 注释——居 executor 副本尾段）
-    await advanceTask(task, new Date(), 'failed', triggerType);
+    await advanceTask(task, new Date(), 'failed', triggerType, replayAt);
   }
   return 'failed';
 }

@@ -24,8 +24,16 @@ import {
   type CreateStatDetail,
   type AutomationStats,
 } from "../../../../src-react/domains/ai/automation/api/automation.api";
-import { computeStats, type StatsRunRow } from "./automation-stats";
-import { computeNextRun } from "./schedule";
+import {
+  computeStats,
+  type StatsRollupDay,
+  type StatsRunRow,
+} from "./automation-stats";
+import {
+  computeNextRun,
+  AUTOMATION_STAT_ROLLUP_EVENT,
+  parseRollupDetail,
+} from "./schedule";
 import { listAutomationTemplates } from "./automation-templates";
 import { recordAutomationEvent } from "./automation-stat";
 import { executeTask } from "./automation-runner";
@@ -74,6 +82,7 @@ export function toTaskRecord(
     startAt: row.startAt?.toISOString(),
     endAt: row.endAt?.toISOString(),
     missedPolicy: row.missedPolicy === "catchUpOnce" ? "catchUpOnce" : "skip",
+    catchUpLimit: row.catchUpLimit ?? 1,
     accessMode: row.accessMode === "full" ? "full" : "default",
     enabled: row.enabled,
     status: row.status as TaskRecord["status"],
@@ -124,6 +133,8 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     startAt,
     endAt: params.endAt ? new Date(params.endAt) : null,
     missedPolicy: params.missedPolicy,
+    // 补跑上限(批3A):显式携带才写——移动端/旧载荷不碰既有值(create 缺省列默认 1)
+    ...(params.catchUpLimit !== undefined && { catchUpLimit: params.catchUpLimit }),
     accessMode: params.accessMode ?? "default",
     templateSlug: params.templateSlug ?? null,
     projectId: params.projectId ?? null,
@@ -654,6 +665,24 @@ export default class AutomationRepository {
           : (graphNames.get(r.graphId ?? -1) ?? "-"),
       graphId: r.graphId ?? undefined,
     }));
+    // 每日 rollup(批3A §6-6):dailyRollup 行取当前用户桶,过去趋势日单调
+    // 补全被保留策略裁剪的计数(run 窗口内重算、出窗冻结,14d 超集直读)
+    const statRows = await prisma.automationStat.findMany({
+      where: {
+        event: AUTOMATION_STAT_ROLLUP_EVENT,
+        createdAt: { gte: new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000) },
+      },
+      select: { detail: true },
+    });
+    const rollupDays: StatsRollupDay[] = statRows
+      .map((row) => {
+        const parsed = parseRollupDetail(row.detail);
+        const bucket = parsed?.byUser[String(userId)];
+        return parsed && bucket
+          ? { date: parsed.date, success: bucket.success, failed: bucket.failed }
+          : null;
+      })
+      .filter((d): d is StatsRollupDay => d !== null);
     return computeStats(
       statsRuns,
       errorTasks.map((e) => ({
@@ -662,6 +691,7 @@ export default class AutomationRepository {
         statusNote: e.statusNote ?? "",
       })),
       now,
+      rollupDays,
     );
   }
 }

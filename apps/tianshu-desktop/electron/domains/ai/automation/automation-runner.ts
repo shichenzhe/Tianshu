@@ -145,6 +145,10 @@ export interface ExecuteTaskOptions {
   /** graph 任务输入变量（spec §4）：事件触发={outcome}，定时/手动=空对象；
    * prompt 任务不消费 */
   inputs?: Record<string, string>;
+  /** 调度相位重放基点（批3A 错过补跑）：advanceTask 按「仿佛在 replayAt
+   * 跑过」推进 lastRunAt/nextRunAt——多轮错过窗口按触发点依次补
+   * (catchUpLimit)；缺省按 now 常规推进 */
+  replayAt?: Date;
 }
 
 /** 模块级数据安全闭包（Application 启动注入；先例 event-bus
@@ -262,6 +266,7 @@ export async function executeTask(
       startedAt,
       sessionId,
       opts.triggerType,
+      opts.replayAt,
     );
   }
 }
@@ -311,6 +316,7 @@ async function executeGraphTask(
     abort: opts.abort,
     workspace,
     disabledTools: opts.disabledTools,
+    replayAt: opts.replayAt,
   });
 }
 
@@ -365,6 +371,7 @@ async function streamAndRecord(
       ctx.startedAt,
       ctx.sessionId,
       opts.triggerType,
+      opts.replayAt,
     );
   }
   const userText = resolution.injected;
@@ -492,6 +499,7 @@ async function streamAndRecord(
     new Date(),
     success ? "success" : "failed",
     opts.triggerType,
+    opts.replayAt,
   );
   return success ? "success" : "failed";
 }
@@ -504,6 +512,7 @@ async function failRun(
   startedAt: number,
   sessionId: number | undefined,
   triggerType: ExecuteTaskOptions["triggerType"],
+  replayAt?: Date,
 ): Promise<"failed"> {
   await prisma.automationRun.update({
     where: { id: runId },
@@ -526,7 +535,7 @@ async function failRun(
     });
   } else {
     // 非系统失败:once 不置 expired(留 status=active 待重试扫描,见 advanceTask 注释)
-    await advanceTask(task, new Date(), "failed", triggerType);
+    await advanceTask(task, new Date(), "failed", triggerType, replayAt);
   }
   return "failed";
 }
@@ -539,23 +548,28 @@ async function failRun(
  * spec §5:不消耗定时调度)。
  * once 的 expired 只在成功路径置位:非系统失败需先走 §7 重试扫描
  * (nextRunAt=null 但 status 保持 active,重试耗尽后由调度器决策树收尾,
- * 不得首次失败即 expired——否则被 tick 的 active 过滤出局,零重试)
+ * 不得首次失败即 expired——否则被 tick 的 active 过滤出局,零重试)。
+ * replayAt(批3A):调度相位重放——lastRunAt/nextRunAt 以 replayAt 为基点
+ * (interval 相位锚/periodic 触发点)推进,仿佛该次运行发生在错过的触发点;
+ * 缺省基点=now(既有行为)。
  */
 export async function advanceTask(
   task: AutomationTaskRow,
   now: Date,
   outcome: "success" | "failed",
   triggerType: ExecuteTaskOptions["triggerType"] | "event",
+  replayAt?: Date,
 ): Promise<void> {
   if (triggerType === "manual" || triggerType === "event") {
     return;
   }
   const schedule = JSON.parse(task.scheduleJson) as ScheduleConfig;
-  const next = computeNextRun(schedule, now, now);
+  const phase = replayAt ?? now;
+  const next = computeNextRun(schedule, phase, phase);
   await prisma.automationTask.update({
     where: { id: task.id },
     data: {
-      lastRunAt: now,
+      lastRunAt: phase,
       nextRunAt: next,
       ...(schedule.mode === "periodic" &&
         schedule.kind === "once" &&

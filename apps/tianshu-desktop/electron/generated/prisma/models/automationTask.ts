@@ -31,6 +31,7 @@ export type AutomationTaskAvgAggregateOutputType = {
   workspaceId: number | null
   modelId: number | null
   temperature: number | null
+  catchUpLimit: number | null
   graphId: number | null
   projectId: number | null
   userId: number | null
@@ -41,6 +42,7 @@ export type AutomationTaskSumAggregateOutputType = {
   workspaceId: number | null
   modelId: number | null
   temperature: number | null
+  catchUpLimit: number | null
   graphId: number | null
   projectId: number | null
   userId: number | null
@@ -58,6 +60,7 @@ export type AutomationTaskMinAggregateOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string | null
+  catchUpLimit: number | null
   accessMode: string | null
   enabled: boolean | null
   status: string | null
@@ -86,6 +89,7 @@ export type AutomationTaskMaxAggregateOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string | null
+  catchUpLimit: number | null
   accessMode: string | null
   enabled: boolean | null
   status: string | null
@@ -114,6 +118,7 @@ export type AutomationTaskCountAggregateOutputType = {
   startAt: number
   endAt: number
   missedPolicy: number
+  catchUpLimit: number
   accessMode: number
   enabled: number
   status: number
@@ -137,6 +142,7 @@ export type AutomationTaskAvgAggregateInputType = {
   workspaceId?: true
   modelId?: true
   temperature?: true
+  catchUpLimit?: true
   graphId?: true
   projectId?: true
   userId?: true
@@ -147,6 +153,7 @@ export type AutomationTaskSumAggregateInputType = {
   workspaceId?: true
   modelId?: true
   temperature?: true
+  catchUpLimit?: true
   graphId?: true
   projectId?: true
   userId?: true
@@ -164,6 +171,7 @@ export type AutomationTaskMinAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  catchUpLimit?: true
   accessMode?: true
   enabled?: true
   status?: true
@@ -192,6 +200,7 @@ export type AutomationTaskMaxAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  catchUpLimit?: true
   accessMode?: true
   enabled?: true
   status?: true
@@ -220,6 +229,7 @@ export type AutomationTaskCountAggregateInputType = {
   startAt?: true
   endAt?: true
   missedPolicy?: true
+  catchUpLimit?: true
   accessMode?: true
   enabled?: true
   status?: true
@@ -335,6 +345,7 @@ export type AutomationTaskGroupByOutputType = {
   startAt: Date | null
   endAt: Date | null
   missedPolicy: string
+  catchUpLimit: number
   accessMode: string
   enabled: boolean
   status: string
@@ -386,6 +397,7 @@ export type automationTaskWhereInput = {
   startAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringFilter<"automationTask"> | string
+  catchUpLimit?: Prisma.IntFilter<"automationTask"> | number
   accessMode?: Prisma.StringFilter<"automationTask"> | string
   enabled?: Prisma.BoolFilter<"automationTask"> | boolean
   status?: Prisma.StringFilter<"automationTask"> | string
@@ -414,6 +426,7 @@ export type automationTaskOrderByWithRelationInput = {
   startAt?: Prisma.SortOrderInput | Prisma.SortOrder
   endAt?: Prisma.SortOrderInput | Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -445,6 +458,7 @@ export type automationTaskWhereUniqueInput = Prisma.AtLeast<{
   startAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringFilter<"automationTask"> | string
+  catchUpLimit?: Prisma.IntFilter<"automationTask"> | number
   accessMode?: Prisma.StringFilter<"automationTask"> | string
   enabled?: Prisma.BoolFilter<"automationTask"> | boolean
   status?: Prisma.StringFilter<"automationTask"> | string
@@ -473,6 +487,7 @@ export type automationTaskOrderByWithAggregationInput = {
   startAt?: Prisma.SortOrderInput | Prisma.SortOrder
   endAt?: Prisma.SortOrderInput | Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -509,6 +524,7 @@ export type automationTaskScalarWhereWithAggregatesInput = {
   startAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   endAt?: Prisma.DateTimeNullableWithAggregatesFilter<"automationTask"> | Date | string | null
   missedPolicy?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
+  catchUpLimit?: Prisma.IntWithAggregatesFilter<"automationTask"> | number
   accessMode?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
   enabled?: Prisma.BoolWithAggregatesFilter<"automationTask"> | boolean
   status?: Prisma.StringWithAggregatesFilter<"automationTask"> | string
@@ -536,6 +552,7 @@ export type automationTaskCreateInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  catchUpLimit?: number
   accessMode?: string
   enabled?: boolean
   status?: string
@@ -564,6 +581,7 @@ export type automationTaskUncheckedCreateInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  catchUpLimit?: number
   accessMode?: string
   enabled?: boolean
   status?: string
@@ -591,6 +609,7 @@ export type automationTaskUpdateInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  catchUpLimit?: Prisma.IntFieldUpdateOperationsInput | number
   accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -619,6 +638,7 @@ export type automationTaskUncheckedUpdateInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  catchUpLimit?: Prisma.IntFieldUpdateOperationsInput | number
   accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -647,6 +667,7 @@ export type automationTaskCreateManyInput = {
   startAt?: Date | string | null
   endAt?: Date | string | null
   missedPolicy?: string
+  catchUpLimit?: number
   accessMode?: string
   enabled?: boolean
   status?: string
@@ -674,6 +695,7 @@ export type automationTaskUpdateManyMutationInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  catchUpLimit?: Prisma.IntFieldUpdateOperationsInput | number
   accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -702,6 +724,7 @@ export type automationTaskUncheckedUpdateManyInput = {
   startAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   missedPolicy?: Prisma.StringFieldUpdateOperationsInput | string
+  catchUpLimit?: Prisma.IntFieldUpdateOperationsInput | number
   accessMode?: Prisma.StringFieldUpdateOperationsInput | string
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -730,6 +753,7 @@ export type automationTaskCountOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -751,6 +775,7 @@ export type automationTaskAvgOrderByAggregateInput = {
   workspaceId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   temperature?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   graphId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -768,6 +793,7 @@ export type automationTaskMaxOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -796,6 +822,7 @@ export type automationTaskMinOrderByAggregateInput = {
   startAt?: Prisma.SortOrder
   endAt?: Prisma.SortOrder
   missedPolicy?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   accessMode?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -817,6 +844,7 @@ export type automationTaskSumOrderByAggregateInput = {
   workspaceId?: Prisma.SortOrder
   modelId?: Prisma.SortOrder
   temperature?: Prisma.SortOrder
+  catchUpLimit?: Prisma.SortOrder
   graphId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
@@ -836,6 +864,7 @@ export type automationTaskSelect<ExtArgs extends runtime.Types.Extensions.Intern
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  catchUpLimit?: boolean
   accessMode?: boolean
   enabled?: boolean
   status?: boolean
@@ -864,6 +893,7 @@ export type automationTaskSelectCreateManyAndReturn<ExtArgs extends runtime.Type
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  catchUpLimit?: boolean
   accessMode?: boolean
   enabled?: boolean
   status?: boolean
@@ -892,6 +922,7 @@ export type automationTaskSelectUpdateManyAndReturn<ExtArgs extends runtime.Type
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  catchUpLimit?: boolean
   accessMode?: boolean
   enabled?: boolean
   status?: boolean
@@ -920,6 +951,7 @@ export type automationTaskSelectScalar = {
   startAt?: boolean
   endAt?: boolean
   missedPolicy?: boolean
+  catchUpLimit?: boolean
   accessMode?: boolean
   enabled?: boolean
   status?: boolean
@@ -936,7 +968,7 @@ export type automationTaskSelectScalar = {
   updatedAt?: boolean
 }
 
-export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "accessMode" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "targetKind" | "graphId" | "eventJson" | "projectId" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
+export type automationTaskOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "prompt" | "workspaceId" | "modelId" | "temperature" | "scheduleJson" | "scheduleText" | "startAt" | "endAt" | "missedPolicy" | "catchUpLimit" | "accessMode" | "enabled" | "status" | "statusNote" | "lastRunAt" | "nextRunAt" | "templateSlug" | "targetKind" | "graphId" | "eventJson" | "projectId" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["automationTask"]>
 
 export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "automationTask"
@@ -953,6 +985,7 @@ export type $automationTaskPayload<ExtArgs extends runtime.Types.Extensions.Inte
     startAt: Date | null
     endAt: Date | null
     missedPolicy: string
+    catchUpLimit: number
     accessMode: string
     enabled: boolean
     status: string
@@ -1401,6 +1434,7 @@ export interface automationTaskFieldRefs {
   readonly startAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly endAt: Prisma.FieldRef<"automationTask", 'DateTime'>
   readonly missedPolicy: Prisma.FieldRef<"automationTask", 'String'>
+  readonly catchUpLimit: Prisma.FieldRef<"automationTask", 'Int'>
   readonly accessMode: Prisma.FieldRef<"automationTask", 'String'>
   readonly enabled: Prisma.FieldRef<"automationTask", 'Boolean'>
   readonly status: Prisma.FieldRef<"automationTask", 'String'>

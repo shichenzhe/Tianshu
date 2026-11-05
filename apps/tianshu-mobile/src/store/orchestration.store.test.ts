@@ -112,6 +112,7 @@ function taskRow(
     startAt: ISO,
     endAt: undefined,
     missedPolicy: "skip",
+    catchUpLimit: 1,
     accessMode: "default",
     enabled: true,
     status: "active",

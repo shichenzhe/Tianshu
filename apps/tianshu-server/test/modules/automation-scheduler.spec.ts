@@ -30,7 +30,12 @@ import { createChatModel } from 'src/core/provider/model-factory';
 import { GraphRepository } from 'src/modules/graph/graph.repository';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationScheduler } from 'src/modules/automation/automation-scheduler';
+import {
+  decideTick,
+  pickRetryTaskIds,
+} from 'src/modules/automation/automation-scheduler';
 import { inflight } from 'src/modules/automation/automation-inflight';
+import { resetRollupThrottleForTest } from 'src/modules/automation/automation-stat';
 import { executeTask } from 'src/modules/automation/automation-runner';
 import {
   installGraphExecutorRuntime,
@@ -291,6 +296,16 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
       triggerType: 'catchUp',
       status: 'success',
     });
+    // 批3A 重放语义：补跑收尾 nextRunAt 落下一错过点(过去),随后 tick 的
+    // advance 决策跳到未来——轮询等推进(≤ 一 tick)
+    await waitForDb(async () => {
+      const row = await db.prisma.automationTask.findUniqueOrThrow({
+        where: { id: catchUpTask.id },
+      });
+      if ((row.nextRunAt?.getTime() ?? 0) <= Date.now()) {
+        throw new Error('advance 未推进到未来');
+      }
+    });
     const catchUpRow = await db.prisma.automationTask.findUniqueOrThrow({
       where: { id: catchUpTask.id },
     });
@@ -489,4 +504,155 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     expect(loggerSpy).toHaveBeenCalledTimes(1);
     expect(String(loggerSpy.mock.calls[0][0])).toContain('first db touch down');
   });
+
+  it('批3A：pickRetryTaskIds 指数退避 + 配置类不重试（@tianshu/core 单源消费面）', () => {
+    const now = new Date();
+    // attempt 2 冷却 180s：90s 未到不重试
+    expect(
+      pickRetryTaskIds(
+        new Map([
+          [
+            1,
+            {
+              status: 'failed',
+              attempt: 2,
+              finishedAt: new Date(Date.now() - 90_000),
+            },
+          ],
+        ]),
+        now,
+      ),
+    ).toEqual([]);
+    // 配置类（AUTH_FAILED）不重试；网络类重试
+    expect(
+      pickRetryTaskIds(
+        new Map([
+          [
+            1,
+            {
+              status: 'failed',
+              attempt: 1,
+              finishedAt: new Date(Date.now() - 61_000),
+              error: 'AUTH_FAILED: bad key',
+            },
+          ],
+          [
+            2,
+            {
+              status: 'failed',
+              attempt: 1,
+              finishedAt: new Date(Date.now() - 61_000),
+              error: 'NETWORK: fetch failed',
+            },
+          ],
+        ]),
+        now,
+      ),
+    ).toEqual([2]);
+  });
+
+  it('批3A：decideTick 补跑预算 catchUpLimit（缺省 1=既有行为；耗尽 advance）', () => {
+    const base = {
+      id: 1,
+      name: 't',
+      prompt: 'p',
+      workspaceId: 1,
+      modelId: 1,
+      temperature: null,
+      scheduleJson: INTERVAL_5MIN,
+      scheduleText: '每 5 分钟',
+      startAt: null,
+      endAt: null,
+      missedPolicy: 'catchUpOnce',
+      enabled: true,
+      status: 'active',
+      statusNote: null,
+      lastRunAt: new Date(Date.now() - 60 * 60_000),
+      nextRunAt: new Date(Date.now() - 30 * 60_000),
+      templateSlug: null,
+      targetKind: 'prompt',
+      graphId: null,
+      eventJson: null,
+      projectId: null,
+      userId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const now = new Date();
+    const boot = new Date(Date.now() - 60_000);
+    expect(decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 2)).toBe(
+      'catchUp',
+    );
+    expect(decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 3)).toBe(
+      'advance',
+    );
+    // 行缺列（旧库/列默认 NULL 不会发生——列 NOT NULL DEFAULT 1,但字面量
+    // 任务行缺字段容错回退 1）
+    expect(decideTick(base as never, now, boot, 1)).toBe('advance');
+    expect(decideTick(base as never, now, boot, 0)).toBe('catchUp');
+  });
+
+  it('批3A：catchUpLimit=3 + 错过多个间隔触发点 → 依次补 3 次后 advance 到未来（重放相位）', async () => {
+    useModel(
+      scriptedChatModel([{ steps: [{ kind: 'text', delta: '补跑' }] }]).model,
+    );
+    // 错过 16 分钟（间隔 5 分钟 = 触发点 -16/-11/-6/-1 均早于进程启动）
+    const task = await createTask(db, wsId, modelId, {
+      missedPolicy: 'catchUpOnce',
+      catchUpLimit: 3,
+      nextRunAt: new Date(Date.now() - 16 * 60_000),
+    });
+    scheduler.start();
+    await waitForDb(async () => {
+      const runs = await db.prisma.automationRun.findMany({
+        where: { taskId: task.id, triggerType: 'catchUp' },
+      });
+      if (runs.length < 3) throw new Error('补跑未达 3 次');
+    });
+    // 预算耗尽后 advance 到未来,静置窗口内不再新增（tick 50ms 轰 10+ 轮）
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    const runs = await db.prisma.automationRun.findMany({
+      where: { taskId: task.id },
+    });
+    expect(runs).toHaveLength(3);
+    expect(runs.every((r) => r.triggerType === 'catchUp')).toBe(true);
+    const row = await db.prisma.automationTask.findUniqueOrThrow({
+      where: { id: task.id },
+    });
+    expect(row.nextRunAt?.getTime()).toBeGreaterThan(Date.now());
+    // 重放相位：末次补跑以错过的触发点为基点 → lastRunAt 落在过去
+    //（错过窗口重放语义,非执行时刻 now）
+    expect(row.lastRunAt?.getTime()).toBeLessThan(Date.now() - 5 * 60_000);
+  }, 20000);
+
+  it('批3A：tick 收尾写每日 rollup 行（automationStat event=dailyRollup）', async () => {
+    useModel(
+      scriptedChatModel([{ steps: [{ kind: 'text', delta: 'rollup' }] }]).model,
+    );
+    // 先手动触发落一条 success run（runNow 不消耗调度字段）；rollup 写方
+    // 节流窗 1h——套件内前序用例的 tick 已消耗窗口，测试前显式重置，保证
+    // 本用例首个 tick（50ms）必跑写方且已能看到完成的 run
+    const task = await createTask(db, wsId, modelId, {
+      nextRunAt: new Date(Date.now() + 60_000),
+    });
+    await automations.runNow(task.id, 1);
+    await waitForDb(async () => {
+      const run = await db.prisma.automationRun.findFirst({
+        where: { taskId: task.id, status: 'success' },
+      });
+      if (!run) throw new Error('未触发');
+    });
+    resetRollupThrottleForTest();
+    scheduler.start();
+    await waitForDb(async () => {
+      const rows = await db.prisma.automationStat.findMany({
+        where: { event: 'dailyRollup' },
+      });
+      if (rows.length === 0) throw new Error('rollup 未落');
+      const detail = JSON.parse(rows[0].detail) as {
+        byUser: Record<string, { total: number; success: number }>;
+      };
+      expect(detail.byUser['1'].success).toBeGreaterThanOrEqual(1);
+    });
+  }, 20000);
 });

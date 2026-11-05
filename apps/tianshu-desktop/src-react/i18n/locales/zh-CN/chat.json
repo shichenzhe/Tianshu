@@ -595,6 +595,7 @@
       "missedPolicy": "错过处理",
       "missedSkip": "跳过",
       "missedCatchUp": "补执行一次",
+      "missedCatchUpLimit": "补跑上限",
       "fullAccessWarn": "该任务默认以受限权限运行（写入类操作将被拒绝）；可在保存后进入任务详情页开启完全访问",
       "attachmentMissing": "引用不存在或读取失败：{{name}}",
       "templateSource": "来自模版：{{name}}",
@@ -688,6 +689,7 @@
       "textYearly": "每年 {{month}} 月 {{day}} 日 {{time}}",
       "textInterval": "{{weekdays}}每 {{value}} {{unit}}执行一次",
       "textRange": "{{start}} 至 {{end}}",
+      "missedCatchUpHint": "错过补跑最多 {{count}} 次",
       "errTimeInPast": "所选时间必须晚于当前时间",
       "errIntervalTooSmall": "最小间隔为 5 分钟",
       "errIncomplete": "请完善时间配置"

@@ -20,6 +20,7 @@ import type {
 import { scheduleSchema, type ScheduleConfig } from "../api/schedule.schema";
 import { camelSlug } from "./camel-slug";
 import {
+  describeMissedPolicy,
   describeSchedule,
   describeValidity,
   validateSchedule,
@@ -53,6 +54,8 @@ export interface TaskFormValues {
   /** 所属项目 id(项目预设注入/任务回填);null = 全局任务 */
   projectId?: number | null;
   missedPolicy: "skip" | "catchUpOnce";
+  /** 错过补跑上限(missedPolicy=catchUpOnce 生效,缺省 1;批3A) */
+  catchUpLimit: number;
   schedule: ScheduleConfig | null;
   validity: { startAt?: string; endAt?: string };
   accessMode: AccessMode;
@@ -145,6 +148,7 @@ export function buildInitialValues(
       workspaceId: e.workspaceId,
       projectId: e.projectId ?? null,
       missedPolicy: e.missedPolicy,
+      catchUpLimit: e.catchUpLimit ?? 1,
       schedule: JSON.parse(e.scheduleJson) as ScheduleConfig,
       validity: {
         startAt: e.startAt
@@ -167,6 +171,7 @@ export function buildInitialValues(
     workspaceId: source.project?.workspaceId ?? null,
     projectId: source.project?.id ?? null,
     missedPolicy: "skip",
+    catchUpLimit: 1,
     schedule: DEFAULT_SCHEDULE,
     validity: {},
     accessMode: "default",
@@ -198,6 +203,7 @@ export function serializeForm(v: TaskFormValues): string {
     v.temperature,
     v.workspaceId,
     v.missedPolicy,
+    v.catchUpLimit,
     v.schedule,
     v.validity,
     v.accessMode,
@@ -206,6 +212,12 @@ export function serializeForm(v: TaskFormValues): string {
     v.graphId,
     v.eventTrigger,
   ]);
+}
+
+/** scheduleText 补跑段(批3A):catchUpOnce 追加「错过补跑最多 N 次」,skip 空 */
+function describeMissedPolicySegment(v: TaskFormValues, t: TFunc): string {
+  const segment = describeMissedPolicy(v.missedPolicy, v.catchUpLimit, t);
+  return segment ? ` · ${segment}` : "";
 }
 
 /** 表单值 → 创建/更新参数(弹窗提交与详情页保存共用) */
@@ -229,7 +241,7 @@ export function buildTaskParams(v: TaskFormValues, t: TFunc): TaskCreateParams {
     scheduleText: `${describeSchedule(schedule, t)} · ${describeValidity(
       v.validity,
       t,
-    )}`,
+    )}${describeMissedPolicySegment(v, t)}`,
     // DatePicker 日期串按本地零点解析(new Date("YYYY-MM-DD") 会按 UTC
     // 解析,时区错位导致「当天开始」被误判过期)
     startAt: v.validity.startAt
@@ -239,6 +251,7 @@ export function buildTaskParams(v: TaskFormValues, t: TFunc): TaskCreateParams {
       ? new Date(`${v.validity.endAt.slice(0, 10)}T23:59:59`).toISOString()
       : undefined,
     missedPolicy: v.missedPolicy,
+    catchUpLimit: v.missedPolicy === "catchUpOnce" ? v.catchUpLimit : 1,
     accessMode: v.accessMode,
     templateSlug: v.templateSlug,
   };

@@ -22,12 +22,19 @@ vi.mock("../../electron/domains/ai/automation/automation-runner", () => ({
   // 返回 resolved promise:launch 内 .catch/.finally 链需要(裸 vi.fn() 返回 undefined 会在 fire 处抛)
   executeTask: vi.fn(() => Promise.resolve("success")),
 }));
+// 每日 rollup(批3A §6-6):模块级节流在真身内部——tick 挂点断言用替身,
+// 聚合正确性由 automation-stat-rollup.test.ts + packages core 测试守护
+vi.mock("../../electron/domains/ai/automation/automation-stat", () => ({
+  recordAutomationEvent: vi.fn(),
+  maybeRollupAutomationStats: vi.fn(),
+}));
 
 import AutomationScheduler, {
   decideTick,
   pickRetryTaskIds,
 } from "../../electron/domains/ai/automation/automation-scheduler";
 import { executeTask } from "../../electron/domains/ai/automation/automation-runner";
+import { maybeRollupAutomationStats } from "../../electron/domains/ai/automation/automation-stat";
 import prisma from "../../electron/commons/prisma-client";
 
 const base = {
@@ -158,6 +165,86 @@ describe("pickRetryTaskIds", () => {
   });
 });
 
+describe("pickRetryTaskIds 指数退避 + 错误分类可重试面(批3A §6-4)", () => {
+  const failed = (attempt: number, error?: string | null) => ({
+    status: "failed",
+    attempt,
+    finishedAt: new Date("2026-09-07T08:30:00"),
+    ...(error !== undefined ? { error } : {}),
+  });
+  it("冷却按 attempt 指数退避:attempt 2 需 180s(60/180/540 序列)", () => {
+    const cooled = (offsetMs: number) =>
+      new Date(new Date("2026-09-07T08:30:00").getTime() + offsetMs);
+    // 60s 已过但 180s 未到 → 不重试
+    expect(pickRetryTaskIds(new Map([[1, failed(2)]]), cooled(60_000))).toEqual(
+      [],
+    );
+    // 179s 仍未到 → 不重试(旧固定 60s 逻辑会误重试)
+    expect(
+      pickRetryTaskIds(new Map([[1, failed(2)]]), cooled(179_000)),
+    ).toEqual([]);
+    expect(
+      pickRetryTaskIds(new Map([[1, failed(2)]]), cooled(180_000)),
+    ).toEqual([1]);
+    // attempt 1 仍 60s;attempt 3 已到 attempt 上限不再重试(540s 序列值
+    // 由 core nextRetryDelay 直测守护,扫描侧被 MAX_ATTEMPT 门先拦)
+    expect(pickRetryTaskIds(new Map([[1, failed(1)]]), cooled(60_000))).toEqual(
+      [1],
+    );
+    expect(
+      pickRetryTaskIds(new Map([[1, failed(3)]]), cooled(180_000)),
+    ).toEqual([]);
+    expect(
+      pickRetryTaskIds(new Map([[1, failed(3)]]), cooled(540_000)),
+    ).toEqual([]);
+  });
+  it("网络/限流/超时类 error → 重试;配置类(AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED)→ 不重试", () => {
+    const m = new Map([
+      [1, failed(1, "RATE_LIMITED: 429")],
+      [2, failed(1, "TIMEOUT: timed out")],
+      [3, failed(1, "AUTH_FAILED: bad key")],
+      [4, failed(1, "MODEL_NOT_FOUND: 404")],
+      [5, failed(1, "IMAGE_UNSUPPORTED: no vision")],
+      // 图运行聚合格式 node:<id> CODE: msg 同样取码判定
+      [6, failed(1, "node:n1 NETWORK: fetch failed")],
+      [7, failed(1, "node:n2 AUTH_FAILED: bad key")],
+      // error 缺席(旧快照形状)→ 默认可重试,不放大破坏面
+      [8, failed(1)],
+    ]);
+    const t = new Date("2026-09-07T08:40:00");
+    expect(pickRetryTaskIds(m, t)).toEqual([1, 2, 6, 8]);
+  });
+});
+
+describe("decideTick 补跑上限 catchUpLimit(批3A §6-1)", () => {
+  const missed = {
+    ...base,
+    missedPolicy: "catchUpOnce",
+    nextRunAt: new Date("2026-09-07T07:00:00"),
+    lastRunAt: new Date("2026-09-06T09:00:00"),
+  };
+  it("缺省上限 1:未补过 → catchUp;已补 1 次 → advance(既有 catchUpOnce 行为)", () => {
+    expect(decideTick(missed as never, now, boot, 0)).toBe("catchUp");
+    expect(decideTick(missed as never, now, boot, 1)).toBe("advance");
+  });
+  it("catchUpLimit=3:已补 2 次 → catchUp;已补 3 次 → advance", () => {
+    const limit3 = { ...missed, catchUpLimit: 3 };
+    expect(decideTick(limit3 as never, now, boot, 2)).toBe("catchUp");
+    expect(decideTick(limit3 as never, now, boot, 3)).toBe("advance");
+  });
+  it("行缺列/脏数据回退 1;上限 clamp 到 10(防补跑风暴)", () => {
+    expect(decideTick(missed as never, now, boot, 1)).toBe("advance");
+    const limit99 = { ...missed, catchUpLimit: 99 };
+    expect(decideTick(limit99 as never, now, boot, 9)).toBe("catchUp");
+    expect(decideTick(limit99 as never, now, boot, 10)).toBe("advance");
+  });
+  it("skip 策略不受上限影响 → skip", () => {
+    expect(
+      decideTick({ ...missed, missedPolicy: "skip" } as never, now, boot, 0),
+    ).toBe("skip");
+  });
+});
+
 describe("AutomationScheduler.tick 调度集合", () => {
   it("只取 enabled 且 status=active 的任务(否则 expired-but-enabled 每 30s 重复 expire+广播)", async () => {
     vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
@@ -171,7 +258,7 @@ describe("AutomationScheduler.tick 调度集合", () => {
 });
 
 describe("AutomationScheduler.loadLatestRuns 查询限量", () => {
-  it("最新 run 快照只取决策四列（不搬 graphTrace 大 JSON，30s 轮询热路径）", async () => {
+  it("最新 run 快照只取决策七列（不搬 graphTrace 大 JSON，30s 轮询热路径；批3A 增 error/triggerType/startedAt——退避可重试面判定 + 补跑计数）", async () => {
     vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
     vi.mocked(prisma.automationRun.findMany).mockResolvedValue([]);
     const scheduler = new AutomationScheduler();
@@ -184,6 +271,9 @@ describe("AutomationScheduler.loadLatestRuns 查询限量", () => {
         status: true,
         attempt: true,
         finishedAt: true,
+        error: true,
+        triggerType: true,
+        startedAt: true,
       },
     });
   });
@@ -226,5 +316,89 @@ describe("AutomationScheduler.tick 重试联动(once 失败不先 expire)", () =
       onceFailed,
       expect.objectContaining({ triggerType: "retry", attempt: 2 }),
     );
+  });
+});
+
+describe("AutomationScheduler.tick 补跑计数与重放相位(批3A §6-1)", () => {
+  // tick 内部用真实时钟(processStartTime = 构造时刻),任务/run 以相对
+  // Date.now() 造数与既有重试用例同款
+  const missedCatchUpTask = () => ({
+    ...base,
+    missedPolicy: "catchUpOnce",
+    nextRunAt: new Date(Date.now() - 3_600_000),
+    lastRunAt: new Date(Date.now() - 7_200_000),
+  });
+  const catchUpRun = (offsetMs: number) => ({
+    taskId: 1,
+    status: "success",
+    attempt: 1,
+    finishedAt: new Date(Date.now() + offsetMs),
+    error: null,
+    triggerType: "catchUp",
+    startedAt: new Date(Date.now() + offsetMs),
+  });
+  it("已补 1 次(catchUp run startedAt ≥ 进程启动)且上限 1 → advance 不再补", async () => {
+    vi.mocked(executeTask).mockClear();
+    vi.mocked(prisma.automationTask.findMany).mockClear();
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([
+      missedCatchUpTask() as never,
+    ]);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      // startedAt 晚于进程启动(调度器刚构造)→ 计数 1
+      catchUpRun(60_000) as never,
+    ]);
+    vi.mocked(prisma.automationTask.update).mockClear();
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    expect(executeTask).not.toHaveBeenCalled();
+    expect(prisma.automationTask.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ nextRunAt: expect.any(Date) }),
+      }),
+    );
+  });
+  it("进程启动前的 catchUp run 不计数(上一进程的补跑)→ 仍 catchUp,且以 task.nextRunAt 为 replayAt 重放", async () => {
+    vi.mocked(executeTask).mockClear();
+    vi.mocked(prisma.automationTask.findMany).mockClear();
+    const task = missedCatchUpTask();
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([task as never]);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      catchUpRun(-3_600_000) as never,
+    ]);
+    vi.mocked(executeTask).mockClear();
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    expect(executeTask).toHaveBeenCalledWith(
+      task,
+      expect.objectContaining({
+        triggerType: "catchUp",
+        replayAt: task.nextRunAt,
+      }),
+    );
+  });
+  it("schedule 触发的 run 不计入补跑数(仅 triggerType=catchUp 计数)", async () => {
+    vi.mocked(prisma.automationTask.findMany).mockClear();
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([
+      missedCatchUpTask() as never,
+    ]);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      { ...catchUpRun(60_000), triggerType: "schedule" } as never,
+    ]);
+    vi.mocked(executeTask).mockClear();
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    expect(executeTask).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 }),
+      expect.objectContaining({ triggerType: "catchUp" }),
+    );
+  });
+  it("tick 收尾触发每日 rollup(节流与聚合在 automation-stat 内部)", async () => {
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([]);
+    vi.mocked(maybeRollupAutomationStats).mockClear();
+    const scheduler = new AutomationScheduler();
+    await (scheduler as unknown as { tick: () => Promise<void> }).tick();
+    expect(maybeRollupAutomationStats).toHaveBeenCalledWith(prisma);
   });
 });

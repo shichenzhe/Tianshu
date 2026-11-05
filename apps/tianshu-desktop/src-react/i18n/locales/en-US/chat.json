@@ -595,6 +595,7 @@
       "missedPolicy": "Missed runs",
       "missedSkip": "Skip",
       "missedCatchUp": "Catch up once",
+      "missedCatchUpLimit": "Catch-up limit",
       "fullAccessWarn": "This task runs with restricted permissions by default (write operations are denied); enable full access on the task detail page after saving.",
       "attachmentMissing": "Attachment missing or unreadable: {{name}}",
       "templateSource": "From template: {{name}}",
@@ -688,6 +689,7 @@
       "textYearly": "Yearly on {{month}}/{{day}} at {{time}}",
       "textInterval": "Every {{value}} {{unit}} on {{weekdays}}",
       "textRange": "{{start}} to {{end}}",
+      "missedCatchUpHint": "Catch up at most {{count}} missed run(s)",
       "errTimeInPast": "The selected time must be later than the current time",
       "errIntervalTooSmall": "The minimum interval is 5 minutes",
       "errIncomplete": "Please complete the schedule"

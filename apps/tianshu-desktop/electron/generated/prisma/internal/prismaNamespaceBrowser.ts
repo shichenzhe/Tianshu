@@ -314,6 +314,7 @@ export const AutomationTaskScalarFieldEnum = {
   startAt: 'startAt',
   endAt: 'endAt',
   missedPolicy: 'missedPolicy',
+  catchUpLimit: 'catchUpLimit',
   accessMode: 'accessMode',
   enabled: 'enabled',
   status: 'status',

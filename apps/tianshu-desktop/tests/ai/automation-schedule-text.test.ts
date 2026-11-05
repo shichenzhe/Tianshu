@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   describeSchedule,
   describeValidity,
+  describeMissedPolicy,
   validateSchedule,
 } from "../../src-react/domains/ai/automation/lib/schedule-text";
 
@@ -86,5 +87,17 @@ describe("validateSchedule", () => {
         now,
       ),
     ).toBe("ok");
+  });
+});
+
+describe("describeMissedPolicy 补跑语义明示(批3A §6-1)", () => {
+  it("catchUpOnce → 携 count 的提示文案;skip → 空串(不追加噪音)", () => {
+    expect(describeMissedPolicy("catchUpOnce", 3, t)).toBe(
+      'chat:automation.schedule.missedCatchUpHint:{"count":3}',
+    );
+    expect(describeMissedPolicy("skip", 3, t)).toBe("");
+    expect(describeMissedPolicy("catchUpOnce", 1, t)).toBe(
+      'chat:automation.schedule.missedCatchUpHint:{"count":1}',
+    );
   });
 });

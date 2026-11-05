@@ -220,6 +220,9 @@ export interface GraphRunParams {
   codeAuthorized?: boolean;
   /** run 行创建后即回调（webhook 异步响应在图完成前拿 runId 轮询） */
   onRunId?: (runId: number) => void;
+  /** 调度相位重放基点（批3A 错过补跑）：advanceTask 按 replayAt 推进
+   * 任务调度字段（automation-runner 同名注释）；缺省按 now */
+  replayAt?: Date;
 }
 
 /** server 日志面（授权面 2 环境适配：mirror commons/Log → Nest Logger） */
@@ -373,6 +376,8 @@ interface FinishParams {
   error?: RunError;
   /** 终态 output（成功路径最后成功节点完整输出——graph.run.updated 投影） */
   finalOutput?: string;
+  /** 调度相位重放基点（批3A）：advanceTaskAfterRun 透传 advanceTask */
+  replayAt?: Date;
 }
 
 /** 图执行结果：status + 终点节点完整 output（子工作流节点消费） */
@@ -421,6 +426,7 @@ export async function runGraphToResult(
       graphId: params.graph.id,
       userId: params.task?.userId ?? params.graph.userId ?? null,
       error: toRunError(e),
+      replayAt: params.replayAt,
     });
     return { status: 'failed', output: '' };
   }
@@ -510,6 +516,7 @@ async function runGraph(
     // 监控埋点（spec §4.1 #4）：收尾事件归属图/用户（task 缺席回退图归属）
     graphId: params.graph.id,
     userId: params.task?.userId ?? params.graph.userId ?? null,
+    replayAt: params.replayAt,
   };
   try {
     const result = await compiled.graph.invoke(
@@ -2067,6 +2074,8 @@ async function advanceTaskAfterRun(p: FinishParams): Promise<void> {
     p.status,
     // 子图执行 task 恒 null（上方早退），非空时必为任务级五类触发
     p.triggerType as Parameters<typeof advanceTask>[3],
+    // 批3A 错过补跑：调度相位重放基点透传（缺省按 now 常规推进）
+    p.replayAt,
   );
 }
 
@@ -5023,22 +5032,26 @@ export function resolveAutomationPermissions(
 }
 
 /** 调度推进（mirror advanceTask 同款）：manual/event 直返；其余按
- * scheduleJson 算下次运行，once+成功 → expired */
+ * scheduleJson 算下次运行，once+成功 → expired。replayAt（批3A）：调度
+ * 相位重放——lastRunAt/nextRunAt 以 replayAt 为基点（interval 相位锚/
+ * periodic 触发点）推进，仿佛该次运行发生在错过的触发点；缺省基点=now */
 export async function advanceTask(
   task: AutomationTaskRow,
   now: Date,
   outcome: 'success' | 'failed',
   triggerType: 'schedule' | 'catchUp' | 'retry' | 'manual' | 'event',
+  replayAt?: Date,
 ): Promise<void> {
   if (triggerType === 'manual' || triggerType === 'event') {
     return;
   }
   const schedule = JSON.parse(task.scheduleJson) as ScheduleConfig;
-  const next = computeNextRun(schedule, now, now);
+  const phase = replayAt ?? now;
+  const next = computeNextRun(schedule, phase, phase);
   await graphExecutorRuntime().db.automationTask.update({
     where: { id: task.id },
     data: {
-      lastRunAt: now,
+      lastRunAt: phase,
       nextRunAt: next,
       ...(schedule.mode === 'periodic' &&
         schedule.kind === 'once' &&

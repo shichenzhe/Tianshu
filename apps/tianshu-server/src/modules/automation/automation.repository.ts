@@ -104,6 +104,8 @@ export interface TaskRecord {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  /** 错过补跑上限（missedPolicy=catchUpOnce 生效，缺省 1；批3A） */
+  catchUpLimit: number;
   accessMode: AccessMode;
   enabled: boolean;
   status: AutomationStatus;
@@ -133,6 +135,8 @@ export interface TaskCreateParams {
   startAt?: string;
   endAt?: string;
   missedPolicy: MissedPolicy;
+  /** 错过补跑上限（批3A）：缺省 1；未携带时 create 落列默认、update 不碰既有值 */
+  catchUpLimit?: number;
   accessMode?: AccessMode;
   templateSlug?: string;
   /** 所属项目 id；缺省/null = 全局任务（子系统 E） */
@@ -198,6 +202,7 @@ export function toTaskRecord(
     startAt: row.startAt?.toISOString(),
     endAt: row.endAt?.toISOString(),
     missedPolicy: row.missedPolicy === 'catchUpOnce' ? 'catchUpOnce' : 'skip',
+    catchUpLimit: row.catchUpLimit ?? 1,
     accessMode: row.accessMode === 'full' ? 'full' : 'default',
     enabled: row.enabled,
     status: row.status as TaskRecord['status'],
@@ -248,6 +253,10 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     startAt,
     endAt: params.endAt ? new Date(params.endAt) : null,
     missedPolicy: params.missedPolicy,
+    // 补跑上限（批3A）：显式携带才写——移动端/旧载荷不碰既有值（create 缺省列默认 1）
+    ...(params.catchUpLimit !== undefined && {
+      catchUpLimit: params.catchUpLimit,
+    }),
     accessMode: params.accessMode ?? 'default',
     templateSlug: params.templateSlug ?? null,
     projectId: params.projectId ?? null,

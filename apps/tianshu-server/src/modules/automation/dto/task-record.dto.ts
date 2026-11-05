@@ -64,6 +64,9 @@ export class TaskRecordDto implements TaskRecord {
   @ApiProperty({ description: '错过后策略', enum: ['skip', 'catchUpOnce'] })
   missedPolicy: TaskRecord['missedPolicy'];
 
+  @ApiProperty({ description: '错过补跑上限（catchUpOnce 生效，缺省 1）' })
+  catchUpLimit: TaskRecord['catchUpLimit'];
+
   @ApiProperty({ description: '访问模式', enum: ['default', 'full'] })
   accessMode: TaskRecord['accessMode'];
 

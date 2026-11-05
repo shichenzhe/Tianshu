@@ -58,7 +58,8 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 PascalCas
 | `targetKind` | `"prompt" \| "graph"`；`graphId` 为 graph 型必填（引用 graphDefinition.id） |
 | `scheduleJson` / `scheduleText` | ScheduleConfig JSON 序列 + 人读文案（列表行直显，编辑器 JSON.parse 还原） |
 | `startAt` / `endAt` | 有效期窗口：startAt 未到 → 决策树 noop；endAt 已过 → expire |
-| `missedPolicy` | `"skip"`（缺省：落一条 skipped run 后照常推进）\| `"catchUpOnce"`（进程重启前错过的触发补跑一次） |
+| `missedPolicy` | `"skip"`（缺省：落一条 skipped run 后照常推进）\| `"catchUpOnce"`（进程重启前错过的触发补跑） |
+| `catchUpLimit` | 错过补跑上限，缺省 1（=只补一次，批3A）；catchUpOnce 时生效，1-10 clamp（dto/表单/clamp 三面同口径，防补跑风暴）——多轮错过按触发点依次补，预算耗尽 advance 到未来触发点 |
 | `accessMode` | `"default"`（只读执行：写类审批被拒不中断，agent 收拒绝反馈继续）\| `"full"`（完全访问+审批放行） |
 | `enabled` / `status` / `statusNote` | status 三态：`active`（唯一参与调度的状态）/ `error`（系统级失败停调度，enabled 同置 false；重新启用时 repo toggleTask 置回 active 清 statusNote）/ `expired`（once 成功、endAt 过、once 重试耗尽收尾） |
 | `lastRunAt` / `nextRunAt` | 调度相位。interval 模式以 lastRunAt 为相位基准（见 §3.1）；决策树核心比较字段 |
@@ -84,6 +85,8 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 PascalCas
 ### 2.3 automationStat（事件埋点表——不是运行统计）
 
 仅三列 `event` / `detail` / `createdAt`（+createdAt 索引）。写入方 `automation-stat.ts` 的 `recordAutomationEvent(prisma, "create", detail)`：detail JSON `{mode, kind, hasEndAt, tabSwitchCount}`——PRD《执行频率》§5 三项**创建行为**统计（fire-and-forget、吞错、prisma 缺席静默）。**运行健康度统计是即时聚合不落表**：IPC `automation:stats` 由 `automation-stats.ts` 的 `computeStats()` 现算（§3.5）。索引由 `ensureEventStatMaintenance` 启动幂等补建（不走 v1 快照，保留期裁剪用）。
+
+**每日 rollup 行（批3A §6-6 已落地）**：`event="dailyRollup"` 新 bucket 类型（免 schema 迁移），`detail` = `{date, byUser: {"<userId>": {total, success, failed, skipped}}}` JSON。写方 `automation-stat.ts maybeRollupAutomationStats`（调度器 tick 收尾 1h 节流、吞错）：窗口 7 天重算、`mergeRollupDetail` 逐用户单调合并（保留策略先于出窗裁掉 run 时重算缩水、旧桶保底防历史回退）、窗口外行冻结、零运行日不建行；聚合纯函数单源 `@tianshu/core/automation-rollup`。桌面端 `automation:stats` 读取当前用户桶：过去趋势日单调补全（今日恒用即时聚合）——run 被裁剪后「上周成功率」仍可回溯。行随 automationStat 90 天保留期统一裁剪。
 
 ## 3. 核心技术方案
 
@@ -118,7 +121,7 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 PascalCas
 
 **桌面 `electron/domains/ai/automation/automation-scheduler.ts`**：
 
-常量：`TICK_MS=30_000`、`RETRY_DELAY_MS=60_000`、`MAX_ATTEMPT=3`；实例字段 `processStartTime = new Date()`。
+常量：`TICK_MS=30_000`、`MAX_ATTEMPT=3`、`MAX_CATCH_UP_LIMIT=10`；冷却序列单源 `@tianshu/core/automation-retry`（`nextRetryDelay`：60/180/540s 指数退避）；实例字段 `processStartTime = new Date()`。
 
 启动序（`start(disabledTools?)`，Application.ts 102/144 行装配；disabledTools 为 SP6 裁定 2 的工具禁用闭包——类字段初始化早于 registerServices 建 securityService，故 start 时注入）：
 
@@ -138,21 +141,27 @@ nextRunAt 为空                  → expire（once 已跑/无下个触发点，
 now < nextRunAt                 → noop
 lastRunAt >= nextRunAt          → once 已跑过：isOnceSchedule ? expire : advance
 到期（now >= nextRunAt）:
-  nextRunAt < processStartTime  → missedPolicy === "catchUpOnce" ? catchUp : skip
+  nextRunAt < processStartTime  → missedPolicy === "catchUpOnce"
+                                   ? (本进程已补跑次数 < catchUpLimit ? catchUp : advance)
+                                 : skip
   否则                          → execute
 ```
 
 tick 主循环（每 30s）：
 
 - 只查 `enabled:true 且 status:"active"`（注释详述：不滤 status 会让 expire 分支每 30s 重写该行引发 updatedAt 抖动 + 全窗无谓广播；error 任务已被 enabled=false 滤掉，重新启用 toggle 置回 active——active+enabled 是唯一应参与调度的集合）
-- `loadLatestRuns()`：automationRun 按 id 倒序取 **500 行**、`select` 只取决策四列（taskId/status/attempt/finishedAt——graphTrace 单条可达数十 KB 不搬）聚合成 per-task 最新 run Map；taskId=null 的图试运行不参与
+- `loadRunSnapshots()`（批3A 起）：automationRun 按 id 倒序取 **500 行**、`select` 取决策七列（taskId/status/attempt/finishedAt + error/triggerType/startedAt——graphTrace 单条可达数十 KB 不搬）聚合两份：per-task 最新 run Map + **本进程 catchUp 补跑计数**（triggerType="catchUp" 且 startedAt ≥ processStartTime 的行数，错过窗口补跑上限判定依据；上一进程的补跑不占本窗口预算）
 - 在途任务（inflight.has）跳过决策——防重试运行中被过期快照误 expire/重复触发
 - 重试预算集 `pickRetryTaskIds(latestRun, now, delay=0)`（delayMs=0：冷却期内同样不许 expire 抢跑）——expire 决策让路给待重试任务
 - 决策执行 `applyDecision`：expire→update status；advance→nextRunAt=computeNextRun；skip→**落一条 skipped run 留痕** + 推进 nextRunAt；execute/catchUp→launch
-- **重试扫描 `pickRetryTaskIds`**：最新 run `failed && attempt<3 && finishedAt 早于 now-60s` → `scanRetries()` 按独立查询取任务行（不复用调度快照——once 失败任务 nextRunAt 已推进仍需可重试）→ `launch(task, "retry", attempt+1)`
+- **重试扫描 `pickRetryTaskIds`**（批3A §6-4 已落地指数退避 + 分类可重试面）：最新 run `failed && attempt<3 && 冷却到期 && isRetryableRunError(error)` → `scanRetries()` 按独立查询取任务行（不复用调度快照——once 失败任务 nextRunAt 已推进仍需可重试）→ `launch(task, "retry", attempt+1)`。冷却按 attempt 指数退避（`nextRetryDelay`：1→60s、2→180s、3→540s）；可重试面按 classifyError 分类——RATE_LIMITED/TIMEOUT/NETWORK/UNKNOWN 等瞬时态重试，AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED 配置类不重试（重试无益；本机配置缺失三元组走 failRun 停调度先例），run.error 取码兼容图运行聚合前缀 `node:<id> CODE: msg`，未收录码/error 缺席默认可重试（保留既有行为）
 - 变更聚合：本轮有任何决策变化才 `emitAutomationChanged()`（CRUD 批 taskId=0 列表级刷新信号）
 
 **launch 互斥**：进程级 `automation-inflight.ts`（Map taskId→AbortController），**与 repo runNow 手动触发共享**——调度执行中连点播放直接拒发 `TASK_ALREADY_RUNNING`；fire 不 await（单次执行可达分钟级），收尾 `.then(publishAutomationEvent(taskFinishedEvent(task, outcome))).finally(inflight.delete + emitAutomationChanged(taskId))`。triggerType 不含 event：事件触发由 event-bus 直调 executeTask（chainDepth 防环在彼处），误经 launch 会以链深 1 重置防环。
+
+**调度相位重放 replayAt（批3A §6-1 已落地）**：catchUp 决策 launch 携 `replayAt=task.nextRunAt`（正在补跑的错过触发点），错过窗口内的 retry 同样携带——advanceTask 以 replayAt 为基点推进 `lastRunAt/nextRunAt`（仿佛该次运行发生在错过的触发点），多轮错过窗口因此能按触发点依次补（上限 catchUpLimit），interval 相位与 periodic 触发点语义均不漂移；正常触发点 replayAt 缺省按 now 常规推进。missedPolicy=skip 与「补跑预算耗尽」都走 advance 跳到未来触发点（skip 另落一条 skipped run 留痕）。
+
+**每日统计 rollup 挂点（批3A §6-6）**：tick 收尾 `maybeRollupAutomationStats(prisma)`（1h 节流、吞错——与保留裁剪同款 fire-and-forget 形态），见 §2.3。
 
 **桌面休眠/关机场景**（如实记录，无显式处理）：
 
@@ -191,6 +200,7 @@ prompt 型主链（`streamAndRecord`）：
 `advanceTask` 关键语义：
 
 - `manual`/`event` 触发**直接 return 不消耗调度**——lastRunAt 若被推进，决策树 `lastRunAt>=nextRunAt` 会把未到触发点的 once 任务提前回收（事件对齐手动，spec §5）
+- 第 5 参 `replayAt`（批3A）：调度相位重放基点——`lastRunAt=replayAt、nextRunAt=computeNextRun(schedule, replayAt, replayAt)`（错过补跑按触发点依次补，见 §3.2）；缺省基点=now（既有行为）
 - schedule/catchUp/retry：lastRunAt=now、nextRunAt=computeNextRun(schedule, now, now)；once 且 success → status=expired
 - once 的 expired **只在成功路径置位**：非系统失败需先走重试扫描（nextRunAt=null 但 status 保持 active），重试耗尽后由调度器决策树收尾——不得首次失败即 expired（否则被 tick 的 active 过滤出局零重试）
 
@@ -207,7 +217,7 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 
 - **健康度总览 `computeStats(runs, errorTasks, now)`**（`automation-stats.ts` 纯函数；IPC `automation:stats` 由 repo 聚合查询喂入，名称联查补位：任务 run 取任务名、图试运行取图名）：
   - today：total/success/failed/running + successRate = success/(success+failed)——**skipped 不进分母**
-  - trend：7 天逐日 success/failed（本地日键 `localDateKey`，设备时区「今日」与用户直觉一致）
+  - trend：7 天逐日 success/failed（本地日键 `localDateKey`，设备时区「今日」与用户直觉一致）；批3A 起可选 `rollups` 参——过去趋势日以每日 rollup 行（§2.3）单调补全（`max`——run 仍在即以即时聚合为准），今日恒用即时聚合（rollup 每小时节流必然滞后）
   - attention：error 任务全列（kind=taskError，跳任务编辑）+ 近 24h failed run（kind=failedRun，跳运行记录/轨迹，startedAt 倒序）；errorTaskCount
 - **保留策略 `automation-retention.ts`**（方案 A，2026-10-22 裁定）：
   - 配置 `RunRetentionConfig`（option 表 `type=app, name=automation.runRetention` 实时读）：enabled/traceDays=3/successDays=7/successKeep=200/failureDays=30/failureKeep=500，逐字段 clamp 防非法值
@@ -232,7 +242,7 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 | `automation:runs:page` | 270 | 运行历史分页（page=20，taskId/status 可选过滤） |
 
 - 内置模板 7 个（`automation-templates.ts` 纯数据不走远端）：`daily-ai-news`/`weekly-report`/`biweekly-review`/`monthly-billing`/`yearly-reminder`/`workdir-monitor`/`standup-prep`——各带 prompt + scheduleJson + temperature；前端 `TemplateMarketView` 映射 lucide 图标与 i18n 文案
-- 调度编辑：`SchedulePicker`（受控）内嵌 `ScheduleDialog`（频率+有效期实时回写）——结构化选 kind/时间/星期/间隔，**无 cron 表达式高级输入**；`schedule-text.ts` 的 `describeSchedule()` 人读文案（i18n，列表行与摘要栏同一实现）+ 校验 `ScheduleValidation: ok | timeInPast | intervalTooSmall | incomplete`
+- 调度编辑：`SchedulePicker`（受控）内嵌 `ScheduleDialog`（频率+有效期实时回写）——结构化选 kind/时间/星期/间隔，**无 cron 表达式高级输入**；`schedule-text.ts` 的 `describeSchedule()` 人读文案（i18n，列表行与摘要栏同一实现）+ 校验 `ScheduleValidation: ok | timeInPast | intervalTooSmall | incomplete`；批3A 起 `describeMissedPolicy()`（catchUpOnce 追加「错过补跑最多 N 次」，skip 不追加防噪音）拼入 `buildTaskParams` 的 scheduleText——错过补跑语义向用户明示；CreateTaskDialog 在 catchUpOnce 选中时透出补跑上限输入（1-10）
 - 事件触发编辑：`lib/task-form.ts`（`toEventJson/parseEventDraft`；taskFinished 允许 targetId 暂缺——目标必选校验在提交层）；`use-task-form.ts` 表单状态
 - 运行时变量：`replaceVariables(prompt, now)`——`{{date}}`（yyyy-MM-dd）/`{{weekday}}`（中文「一」…「日」）/`{{time}}`（HH:mm），**语言不跟随 i18n 固定中文格式**
 
@@ -271,8 +281,8 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 |---|---|---|---|---|---|---|---|
 | 触发表达 | 结构化 ScheduleConfig（两 mode 七 kind）+ 人读文案 | 5/6 段表达式（分-时-日-月-周），表达力强、可读性差 | Schedule/Cron Trigger 节点（cron 输入框或 interval UI） | **cron（强制 UTC）** | launchd StartCalendarInterval/StartInterval；任务计划 daily/weekly/logon 触发器 | **durable cron workflow**（ScheduleSpec，含 jitter/timezone） | cron 触发 + prompt 注入时间上下文——天枢 `replaceVariables` 的 {{date}}/{{weekday}}/{{time}} 正是此范式 |
 | 精度 | 30s tick，触发迟到 ≤30s | 分钟级 | 秒级可配 | **最短 5 分钟且不保证准时**（高峰延迟可达小时级） | 分钟级 | 精确 | 随宿主 |
-| 错过补偿 | 进程重启错过：missedPolicy **skip/catchUpOnce 二选一**；睡眠唤醒隐式补一次；interval 顺延不补轮次 | crontab 无补；anacron 按日粒度补 | 无补 | **不补**（错过即丢） | **可配 StartWhenAvailable**（任务计划）/macOS 唤醒补跑 | **自动补**（catchup window 可配，默认全补） | 随宿主 |
-| 重试 | 固定 60s 冷却 ×3 上限；attempt 逐次落 run 行 | 无（脚本自理） | 每节点 retry（固定/指数 backoff）+ workflow 级 error workflow | job 级手动 re-run / workflow 自动重试策略 | 无 | **RetryPolicy（指数+抖动）+ 活动心跳+超时分离** | 随宿主 |
+| 错过补偿 | 进程重启错过：missedPolicy skip/catchUpOnce + **补跑上限 catchUpLimit（缺省 1，批3A）按触发点依次补**；睡眠唤醒隐式补一次；interval 顺延不补轮次 | crontab 无补；anacron 按日粒度补 | 无补 | **不补**（错过即丢） | **可配 StartWhenAvailable**（任务计划）/macOS 唤醒补跑 | **自动补**（catchup window 可配，默认全补） | 随宿主 |
+| 重试 | **指数退避 60/180/540s ×3 上限 + classifyError 分类可重试面（配置类不重试，批3A）**；attempt 逐次落 run 行 | 无（脚本自理） | 每节点 retry（固定/指数 backoff）+ workflow 级 error workflow | job 级手动 re-run / workflow 自动重试策略 | 无 | **RetryPolicy（指数+抖动）+ 活动心跳+超时分离** | 随宿主 |
 | 执行队列/并发 | 进程内 inflight Map（per-task 互斥）；无队列/优先级 | 无 | **BullMQ（Redis）队列** + 多 worker 水平扩展 + concurrency 限流 | 托管队列 + **concurrency group**（同组取消旧跑） | 每任务独立进程 | task queue + worker 池 | 随宿主 |
 | 防双触发 | 单进程 inflight；**桌面/server 各自独立库天然不冲突**；无分布式锁（多副本未考虑） | flock 文件锁 | Redis 锁 + 队列串行化 | 平台保证 | 系统级单实例策略（任务计划 InstancePolicy） | **workflow ID 唯一性**（同 ID 不重复起） | 随宿主 |
 | 休眠/离线 | 无 powerMonitor；依赖 Electron 常驻进程 | 进程不在即不跑 | 云服务常驻 | 云 | **系统集成最深**：电源事件、唤醒、电池/网络条件触发 | 常驻集群免疫 | 随宿主 |
@@ -297,11 +307,11 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 
 ## 6. 改进空间
 
-1. **错过触发补偿语义**：catchUpOnce 仅补一次；可加「补跑上限 N（缺省 1）」或 catchUp 窗口；interval 顺延与 catchUpOnce 组合（错过多轮只补一次然后 advance）行为正确但未在 UI 向用户解释——建议 scheduleText 里明示。
+1. ✅ 已落地（批3A）：**错过触发补偿参数化**——automationTask 新列 `catchUpLimit`（缺省 1 = 既有 catchUpOnce 只补一次，1-10 clamp）；多轮错过按触发点依次补（调度相位重放 replayAt，§3.2），预算耗尽 advance 到未来；scheduleText 经 `describeMissedPolicy` 明示「错过补跑最多 N 次」、CreateTaskDialog 透出上限输入。残余：移动端表单未透出该字段（server save 显式携带才写，移动端编辑不碰既有值）。
 2. **分布式锁防双触发**：单实例假设目前成立（桌面/server 各自库）；server 未来多副本部署时 scheduler tick 无租约锁会双触发——建议 tick 前抢库级锁（option 表心跳行或 `BEGIN EXCLUSIVE`），与 webhook 面（同样无互斥）一起收口。
 3. **桌面休眠**：接 Electron `powerMonitor` 的 suspend/resume——suspend 时快照在途与 nextRunAt、resume 时显式决策（补/跳）并打点，替代现在「唤醒后首个 30s tick 隐式 execute」的隐式行为；长期看休眠免疫只有把任务托管 server 端（两端口径已同构，迁移成本主要在数据面）。
-4. **重试策略**：60s 固定冷却 → 指数退避（60/180/540s）+ 抖动；按 classifyError 错误分类区分可重试面（网络类重试、配置类已正确停调度）。
+4. ✅ 已落地（批3A）：**重试指数退避 + 分类可重试面**——`nextRetryDelay(attempt)` 60/180/540s 单源 @tianshu/core；`isRetryableRunError` 按 classifyError 分类（RATE_LIMITED/TIMEOUT/NETWORK/UNKNOWN 重试，AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED 不重试；本机配置三元组停调度先例不变）。残余：抖动（jitter）未加——单机任务量级下非必需。
 5. **调度精度与 tick 开销**：30s tick 全表扫 active 任务 + 最近 500 行 run 四列（已 select 裁剪）；任务量大时可改「下次触发时间堆」或 nextRunAt 索引范围查询；tickMs 仅 server 可配，桌面写死 30s（测试需等真实 30s 或注入）。
-6. **统计无历史快照**：automationStat 只记 create 埋点，健康度即时聚合无每日汇总——「上周成功率」无法回溯（run 又被保留策略裁剪）；可加每日 rollup 行。
+6. ✅ 已落地（批3A）：**统计每日 rollup**——automationStat 新 bucket `event="dailyRollup"`（免 schema 迁移），按日 × 按用户聚合桶，1h 节流重算 + 单调合并（保留策略裁剪后历史不回退）、窗口外冻结；桌面 computeStats 过去趋势日单调补全，「上周成功率」可回溯（行随 90 天保留期裁剪——更久归档未做）。
 7. **时区**：computeNextRun 全本地时区（date-fns），runAt 存 UTC ISO 由前端按本地展示；任务无 tz 字段——server 部署跨时区或用户旅行时 daily 语义漂移，Coze 的时区选择器可借鉴。
 8. **webhook 任务级触发**：webhook 只能触发图不能触发 prompt 任务（无任务级 token）；需要「外部事件→prompt 任务」当前只能建单节点图绕行。

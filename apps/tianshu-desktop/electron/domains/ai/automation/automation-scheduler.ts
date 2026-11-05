@@ -3,10 +3,15 @@
  * 互斥:进程级 inflight 注册表(automation-inflight,与 repo runNow 手动
  * 触发共享,taskId → AbortController);退出 abort 全部在途。
  * 推送:执行/过期/异常后向全部窗口发 AUTOMATION_CHANGED_EVENT。
+ * 批3A(spec §6-1/4/6):重试指数退避(60/180/540s,按 classifyError 分类
+ * 区分可重试面)+ 错过补跑上限 catchUpLimit(缺省 1)+ 每日统计 rollup
+ * (tick 收尾节流写,automation-stat.ts)。
  */
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
-import { computeNextRun } from "./schedule";
+// computeNextRun 与批3A 退避/可重试面纯函数均单源 @tianshu/core(schedule.ts
+// re-export 兼容层透传)
+import { computeNextRun, isRetryableRunError, nextRetryDelay } from "./schedule";
 import { executeTask, type AutomationTaskRow } from "./automation-runner";
 import { inflight } from "./automation-inflight";
 import {
@@ -14,12 +19,15 @@ import {
   taskFinishedEvent,
 } from "./automation-event-bus";
 import { maybeTrimAutomationRuns } from "./automation-retention";
+import { maybeRollupAutomationStats } from "./automation-stat";
 import { emitAutomationChanged } from "./automation-change-bus";
 import type { ScheduleConfig } from "../../../../src-react/domains/ai/automation/api/schedule.schema";
 
 const TICK_MS = 30_000;
-const RETRY_DELAY_MS = 60_000;
 const MAX_ATTEMPT = 3;
+/** 补跑上限缺口回退(=既有 catchUpOnce 行为)与 clamp 顶(防补跑风暴) */
+const DEFAULT_CATCH_UP_LIMIT = 1;
+export const MAX_CATCH_UP_LIMIT = 10;
 
 export type TickDecision =
   "execute" | "catchUp" | "skip" | "advance" | "expire" | "noop";
@@ -34,11 +42,25 @@ function isOnceSchedule(scheduleJson: string): boolean {
   }
 }
 
-/** 决策树纯函数(spec §4;once 已跑过 = expire) */
+/** 补跑上限读取:行缺列/脏数据回退 1(=既有 catchUpOnce 只补一次行为) */
+function catchUpLimitOf(task: { catchUpLimit?: number | null }): number {
+  return typeof task.catchUpLimit === "number" &&
+    Number.isFinite(task.catchUpLimit)
+    ? Math.min(
+        Math.max(Math.round(task.catchUpLimit), DEFAULT_CATCH_UP_LIMIT),
+        MAX_CATCH_UP_LIMIT,
+      )
+    : DEFAULT_CATCH_UP_LIMIT;
+}
+
+/** 决策树纯函数(spec §4;once 已跑过 = expire;missedCatchUps = 本进程
+ * 已按 catchUp 补跑的次数——错过窗口多轮触发按 catchUpLimit 上限依次补,
+ * 预算耗尽走 advance 跳到未来触发点) */
 export function decideTick(
   task: AutomationTaskRow,
   now: Date,
   processStartTime: Date,
+  missedCatchUps = 0,
 ): TickDecision {
   if (task.startAt && now < task.startAt) {
     return "noop";
@@ -60,30 +82,38 @@ export function decideTick(
   }
   return task.nextRunAt < processStartTime
     ? task.missedPolicy === "catchUpOnce"
-      ? "catchUp"
+      ? missedCatchUps < catchUpLimitOf(task)
+        ? "catchUp"
+        : "advance"
       : "skip"
     : "execute";
 }
 
-/** 重试扫描纯函数:failed && attempt<3 && finishedAt 早于 now-60s */
+/** 重试扫描纯函数:failed && attempt<3 && 冷却到期 && 错误可重试。
+ * 冷却按 attempt 指数退避(nextRetryDelay 60/180/540s,批3A §6-4);
+ * AUTH_FAILED/MODEL_NOT_FOUND/IMAGE_UNSUPPORTED 配置类不重试(重试无益);
+ * delayMs 覆盖:undefined=退避缺省,0=不看冷却(tick 预算集) */
 export function pickRetryTaskIds(
   latestRunByTask: Map<
     number,
-    { status: string; attempt: number; finishedAt?: Date }
+    { status: string; attempt: number; finishedAt?: Date; error?: string | null }
   >,
   now: Date,
-  delayMs = RETRY_DELAY_MS,
+  delayMs?: number,
 ): number[] {
   const ids: number[] = [];
   for (const [taskId, run] of latestRunByTask) {
-    if (
-      run.status === "failed" &&
-      run.attempt < MAX_ATTEMPT &&
-      run.finishedAt &&
-      now.getTime() - run.finishedAt.getTime() >= delayMs
-    ) {
-      ids.push(taskId);
+    if (run.status !== "failed" || run.attempt >= MAX_ATTEMPT || !run.finishedAt) {
+      continue;
     }
+    if (!isRetryableRunError(run.error)) {
+      continue;
+    }
+    const cooldown = delayMs !== undefined ? delayMs : nextRetryDelay(run.attempt);
+    if (now.getTime() - run.finishedAt.getTime() < cooldown) {
+      continue;
+    }
+    ids.push(taskId);
   }
   return ids;
 }
@@ -148,13 +178,13 @@ export default class AutomationScheduler {
       const tasks = await prisma.automationTask.findMany({
         where: { enabled: true, status: "active" },
       });
-      const latestRun = await this.loadLatestRuns();
-      // 重试预算集(最新 run failed 且 attempt<3;delayMs=0 不看 60s 冷却,
+      const { latestByTask, catchUpCounts } = await this.loadRunSnapshots();
+      // 重试预算集(最新 run failed 且 attempt<3 可重试;delayMs=0 不看冷却,
       // 冷却期内同样不许 expire):once 非系统失败后 nextRunAt=null、status 仍
       // active,若决策树 !nextRunAt 先行 expire,任务会被上面的 active 过滤
       // 出局、永远等不到 scanRetries——故 expire 让路;attempt 耗尽后不再
       // 入选,由 !nextRunAt 分支兜底置 expired 收尾(spec §7 闭环)
-      const retryPending = new Set(pickRetryTaskIds(latestRun, new Date(), 0));
+      const retryPending = new Set(pickRetryTaskIds(latestByTask, new Date(), 0));
       let changed = false;
       for (const task of tasks) {
         // 在途执行不决策(含 runNow 手动触发):防重试运行中被过期快照误
@@ -162,7 +192,14 @@ export default class AutomationScheduler {
         if (inflight.has(task.id)) {
           continue;
         }
-        const decision = decideTick(task, new Date(), this.processStartTime);
+        // 补跑计数:本进程内已按 catchUp 触发的 run 数(错过窗口补跑上限
+        // catchUpLimit 判定依据,批3A §6-1)
+        const decision = decideTick(
+          task,
+          new Date(),
+          this.processStartTime,
+          catchUpCounts.get(task.id) ?? 0,
+        );
         if (decision === "noop") {
           continue;
         }
@@ -172,7 +209,7 @@ export default class AutomationScheduler {
         changed = true;
         await this.applyDecision(task, decision);
       }
-      await this.scanRetries(latestRun);
+      await this.scanRetries(latestByTask);
       if (changed) {
         // CRUD 批：tick 聚合多任务变更无单一 taskId——0 = 列表级刷新信号
         emitAutomationChanged();
@@ -182,6 +219,8 @@ export default class AutomationScheduler {
     }
     // 6h 节流，命中时开销仅一次时间比较
     void maybeTrimAutomationRuns(prisma);
+    // 每日统计 rollup(批3A §6-6):1h 节流,吞错不阻塞调度
+    void maybeRollupAutomationStats(prisma);
   }
 
   private async applyDecision(
@@ -230,31 +269,50 @@ export default class AutomationScheduler {
         await this.launch(task, "schedule", 1);
         return;
       case "catchUp":
-        await this.launch(task, "catchUp", 1);
+        // 补跑重放(批3A):以错过的触发点为调度相位基点——advanceTask 按
+        // replayAt 推进 lastRunAt/nextRunAt,多轮错过窗口继续按触发点依次
+        // 补(上限 catchUpLimit,决策树计数判定)。catchUp 决策必经
+        // nextRunAt 非空分支(decideTick !nextRunAt 先行 expire),null 仅
+        // 类型面兜底
+        await this.launch(
+          task,
+          "catchUp",
+          1,
+          undefined,
+          task.nextRunAt ?? undefined,
+        );
         return;
     }
   }
 
-  /** 每 taskId 取最新一条 run(id 倒序取 500 条内首个) */
-  private async loadLatestRuns(): Promise<
-    Map<number, { status: string; attempt: number; finishedAt?: Date }>
-  > {
+  /** 每 taskId 取最新一条 run(id 倒序取 500 条内首个)+ 本进程 catchUp 补跑
+   * 计数(批3A:决策七列——error 供可重试面判定,triggerType/startedAt 供
+   * 补跑计数;graphTrace 大 JSON 仍不搬) */
+  private async loadRunSnapshots(): Promise<{
+    latestByTask: Map<
+      number,
+      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
+    >;
+    catchUpCounts: Map<number, number>;
+  }> {
     const runs = await prisma.automationRun.findMany({
       orderBy: { id: "desc" },
       take: 500,
-      // 30s 轮询热路径只取决策四列：graphTrace（节点级轨迹大 JSON）
-      // 单条可达数十 KB，500 行全列读回纯属搬运
       select: {
         taskId: true,
         status: true,
         attempt: true,
         finishedAt: true,
+        error: true,
+        triggerType: true,
+        startedAt: true,
       },
     });
     const latest = new Map<
       number,
-      { status: string; attempt: number; finishedAt?: Date }
+      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
     >();
+    const catchUpCounts = new Map<number, number>();
     for (const run of runs) {
       // 图试运行 run(taskId=null)不挂任务,不参与任务重试决策
       if (run.taskId === null) {
@@ -265,17 +323,29 @@ export default class AutomationScheduler {
           status: run.status,
           attempt: run.attempt,
           finishedAt: run.finishedAt ?? undefined,
+          error: run.error,
         });
       }
+      // 仅本进程(≥ processStartTime)的 catchUp run 计入补跑预算;上一
+      // 进程的补跑不占本窗口预算(重启即新窗口)
+      if (
+        run.triggerType === "catchUp" &&
+        run.startedAt >= this.processStartTime
+      ) {
+        catchUpCounts.set(
+          run.taskId,
+          (catchUpCounts.get(run.taskId) ?? 0) + 1,
+        );
+      }
     }
-    return latest;
+    return { latestByTask: latest, catchUpCounts };
   }
 
-  /** 重试扫描:按 run 反查 taskId 独立取任务行(不复用 tick 调度快照——once 失败任务 nextRunAt 已被推进,仍需可重试) */
+  /** 重试扫描:按 run 反查 taskId 独立取任务行(不复用 tick 调度快照——once 失败任务 nextRunAt 已推进,仍需可重试) */
   private async scanRetries(
     latestRun: Map<
       number,
-      { status: string; attempt: number; finishedAt?: Date }
+      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
     >,
   ): Promise<void> {
     const retryIds = pickRetryTaskIds(latestRun, new Date());
@@ -292,7 +362,13 @@ export default class AutomationScheduler {
       const task = byId.get(taskId);
       const attempt = (latestRun.get(taskId)?.attempt ?? 0) + 1;
       if (task) {
-        await this.launch(task, "retry", attempt);
+        // 错过窗口内的重试同样按触发点重放(补跑失败重试成功后继续补余量,
+        // 批3A);正常触发点的重试 replayAt 缺省 = advanceTask 按 now 推进
+        const replayAt =
+          task.nextRunAt && task.nextRunAt < this.processStartTime
+            ? task.nextRunAt
+            : undefined;
+        await this.launch(task, "retry", attempt, undefined, replayAt);
       }
     }
   }
@@ -301,12 +377,15 @@ export default class AutomationScheduler {
    * 收口发布 taskFinished(spec §5 链式事件源):outcome 在 finally 前取得,
    * .catch 兜异常按 failed 发布;finally 保持 inflight 清理 + notifyChanged。
    * triggerType 不含 event:事件触发由 event-bus 直调 executeTask(chainDepth
-   * 防环在彼处),误经此处会以链深 1 重置防环 */
+   * 防环在彼处),误经此处会以链深 1 重置防环。
+   * replayAt(批3A):调度相位重放基点(错过补跑)——advanceTask 按「仿佛在
+   * 该触发点跑过」推进 lastRunAt/nextRunAt,缺省按 now 常规推进 */
   private launch(
     task: AutomationTaskRow,
     triggerType: "schedule" | "catchUp" | "retry",
     attempt: number,
     inputs?: Record<string, string>,
+    replayAt?: Date,
   ): void {
     if (inflight.has(task.id)) {
       return;
@@ -319,6 +398,7 @@ export default class AutomationScheduler {
       abort: abort.signal,
       disabledTools: this.disabledTools,
       inputs,
+      replayAt,
     })
       .catch((e): "failed" => {
         Log.error("自动化执行失败", task.id, e);

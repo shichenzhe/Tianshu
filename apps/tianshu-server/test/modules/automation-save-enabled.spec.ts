@@ -238,4 +238,46 @@ describe('automation/save enabled 显式写入（GA-T9/Ruling 14）', () => {
     });
     expect(row.nextRunAt?.getTime()).toBeGreaterThan(Date.now());
   });
+
+  describe('批3A：save catchUpLimit 显式携带才写（对齐 enabled Ruling 14 形态）', () => {
+  it('create 落上限值；update 未携带保持既有值（移动端旧载荷不碰）；携带才覆盖', async () => {
+    const created = await service.save({
+      ...saveParams(wsId, modelId),
+      missedPolicy: 'catchUpOnce',
+      catchUpLimit: 4,
+    });
+    expect(created.catchUpLimit).toBe(4);
+    let row = await db.prisma.automationTask.findUniqueOrThrow({
+      where: { id: created.id },
+    });
+    expect(row.catchUpLimit).toBe(4);
+
+    // 未携带（移动端编辑载荷不含该字段）：不碰既有值
+    await service.save({ id: created.id, ...saveParams(wsId, modelId) });
+    row = await db.prisma.automationTask.findUniqueOrThrow({
+      where: { id: created.id },
+    });
+    expect(row.catchUpLimit).toBe(4);
+
+    // 显式携带才覆盖
+    await service.save({
+      id: created.id,
+      ...saveParams(wsId, modelId),
+      missedPolicy: 'catchUpOnce',
+      catchUpLimit: 2,
+    });
+    row = await db.prisma.automationTask.findUniqueOrThrow({
+      where: { id: created.id },
+    });
+    expect(row.catchUpLimit).toBe(2);
+  });
+
+  it('create 未携带 → 列默认 1（既有 catchUpOnce 只补一次行为）', async () => {
+    const created = await service.save({
+      ...saveParams(wsId, modelId),
+      missedPolicy: 'catchUpOnce',
+    });
+    expect(created.catchUpLimit).toBe(1);
+  });
+});
 });

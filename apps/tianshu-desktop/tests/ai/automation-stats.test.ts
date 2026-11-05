@@ -267,3 +267,46 @@ describe("computeStats", () => {
     expect(stats.today.successRate).toBe(0);
   });
 });
+
+describe("computeStats rollup 合并(批3A §6-6)", () => {
+  it("过去趋势日以每日 rollup 行单调补全(run 被保留策略裁剪后历史可回溯);今日恒用即时聚合", () => {
+    // 10-02 仅有 1 条 failed run 幸存,rollup 行记录当日 success 5/failed 2
+    const stats = computeStats(
+      [run({ id: 1, status: "failed", startedAt: at(2026, 10, 2, 9) })],
+      [],
+      NOW,
+      [
+        { date: "2026-10-02", success: 5, failed: 2 },
+        // 今日 rollup 每小时节流必然滞后——不覆盖即时聚合
+        { date: "2026-10-03", success: 99, failed: 99 },
+        // 窗口外日期忽略
+        { date: "2026-10-10", success: 7, failed: 7 },
+      ],
+    );
+    const day2 = stats.trend.find((d) => d.date === "2026-10-02");
+    expect(day2).toEqual({ date: "2026-10-02", success: 5, failed: 2 });
+    // 今日即时聚合:rollup 不参与
+    const day3 = stats.trend.find((d) => d.date === "2026-10-03");
+    expect(day3).toEqual({ date: "2026-10-03", success: 0, failed: 0 });
+  });
+  it("rollup 计数低于现存 run 计数时取 max(run 仍在即以 run 为准);无 rollup 行为不变", () => {
+    const runs = [
+      run({ id: 1, status: "success", startedAt: at(2026, 10, 1, 9) }),
+      run({ id: 2, status: "success", startedAt: at(2026, 10, 1, 10) }),
+    ];
+    const merged = computeStats(runs, [], NOW, [
+      { date: "2026-10-01", success: 1, failed: 0 },
+    ]);
+    expect(merged.trend.find((d) => d.date === "2026-10-01")).toEqual({
+      date: "2026-10-01",
+      success: 2,
+      failed: 0,
+    });
+    const noRollup = computeStats(runs, [], NOW);
+    expect(noRollup.trend.find((d) => d.date === "2026-10-01")).toEqual({
+      date: "2026-10-01",
+      success: 2,
+      failed: 0,
+    });
+  });
+});

@@ -42,11 +42,15 @@ import SkillSubMenu from "./skill-sub-menu";
 
 const SESSIONS_KEY = ["sessions"] as const;
 
-/** file:pickAndRead 单项：成功带 content，失败带 error（渲染层 toast 并丢弃） */
+/** file:pickAndRead 单项：成功带 content（图片项 image 标记不读内容），
+ *  失败带 error（渲染层 toast 并丢弃） */
 interface PickedFile {
   path: string;
   content?: string;
   error?: string;
+  /** 图片附件标记（多模态图片批）：主进程跳过文本守卫不读字节——
+      渲染层挂图片 pill 走 image part（不走 @token 文本流） */
+  image?: true;
 }
 
 /** 本地任务开关项数据（项目底栏 T8）：label 由调用方传入——
@@ -66,6 +70,9 @@ interface PlusMenuProps {
   localTask?: LocalTaskToggle;
   /** 选中的文件路径回传 ChatInput 以内联 @token 插入(内容发送时再读) */
   onPickPaths: (paths: string[]) => void;
+  /** 选中文件中的图片项回传 ChatInput 挂图片 pill（多模态图片批）：
+      图片不走 @token 文本流——发送时分流 image part */
+  onPickImagePaths: (paths: string[]) => void;
   /** 资料库选中文件回传 ChatInput 挂引用 pill（storagePath 含空格不入
       @token 流；内容发送时再读） */
   onPickLibraryFiles: (files: PickedLibraryFile[]) => void;
@@ -90,6 +97,7 @@ export default function PlusMenu({
   currentAssistantId,
   localTask,
   onPickPaths,
+  onPickImagePaths,
   onPickLibraryFiles,
   referencedSkills,
   onToggleSkill,
@@ -107,8 +115,9 @@ export default function PlusMenu({
     await queryClient.invalidateQueries({ queryKey: SESSIONS_KEY });
   };
 
-  /** 添加文件：路径以内联 @token 进输入流（内容发送时再读），
-      读取失败项逐个 toast 丢弃，取消（空数组）静默 */
+  /** 添加文件：文本路径以内联 @token 进输入流（内容发送时再读），图片项
+      挂 pill 走多模态通道（多模态图片批）；读取失败项逐个 toast 丢弃，
+      取消（空数组）静默 */
   const handleAddFile = async () => {
     let picked: PickedFile[];
     try {
@@ -118,6 +127,7 @@ export default function PlusMenu({
       return;
     }
     const paths: string[] = [];
+    const imagePaths: string[] = [];
     for (const file of picked) {
       if (file.error !== undefined) {
         toast.error(
@@ -126,12 +136,17 @@ export default function PlusMenu({
             reason: file.error,
           }),
         );
+      } else if (file.image) {
+        imagePaths.push(file.path);
       } else {
         paths.push(file.path);
       }
     }
     if (paths.length > 0) {
       onPickPaths(paths);
+    }
+    if (imagePaths.length > 0) {
+      onPickImagePaths(imagePaths);
     }
   };
 

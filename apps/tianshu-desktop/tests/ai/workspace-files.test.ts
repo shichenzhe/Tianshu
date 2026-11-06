@@ -13,6 +13,7 @@ import {
   readWorkspaceFile,
   resolveFilePath,
   stageImageIntoAttachments,
+  stageOutgoingImages,
 } from "../../electron/domains/ai/chat/workspace-files";
 
 const base = await mkdtemp(path.join(tmpdir(), "ws-files-"));
@@ -268,5 +269,119 @@ describe("stageImageIntoAttachments（workspace 图片收编，T11）", () => {
     const big = path.join(wsOutsideDir, "huge.png");
     await writeFile(big, Buffer.alloc(10 * 1024 * 1024 + 1, 1));
     expect(await stageImageIntoAttachments(attachRoot, big)).toBeNull();
+  });
+});
+
+describe("stageOutgoingImages（发送链图片收编——白名单外全量）", () => {
+  const attachRoot = path.join(base, "attachments");
+  const allowedDirs = [attachRoot, path.join(base, "library")];
+
+  it("空数组原样返回", async () => {
+    expect(await stageOutgoingImages(attachRoot, allowedDirs, "/tmp/ws", [])).toEqual(
+      [],
+    );
+  });
+
+  it("白名单内路径原样保留（不重复复制）", async () => {
+    const p = path.join(attachRoot, "kept.png");
+    await writeFile(p, Buffer.from([0x89]));
+    const staged = await stageOutgoingImages(attachRoot, allowedDirs, "/tmp/ws", [
+      { absPath: p },
+    ]);
+    expect(staged).toEqual([{ absPath: p }]);
+  });
+
+  it("白名单外绝对路径收编进 attachments（含 NUL 的真实 PNG 不受文本守卫影响）", async () => {
+    const src = path.join(wsOutsideDir, "invoice.png");
+    await writeFile(src, Buffer.from([0x89, 0x50, 0x00, 0x0d]));
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      "/tmp/some-ws",
+      [{ absPath: src }],
+      () => true,
+    );
+    expect(staged[0].absPath).not.toBe(src);
+    expect(path.dirname(staged[0].absPath)).toBe(attachRoot);
+    const { readFile } = await import("node:fs/promises");
+    expect(await readFile(staged[0].absPath)).toEqual(
+      Buffer.from([0x89, 0x50, 0x00, 0x0d]),
+    );
+    // 收编后路径命中 imageAttachmentBlocks 白名单（不降级占位）
+    const blocks = await imageAttachmentBlocks(base, allowedDirs, staged);
+    expect(blocks[0]).toMatchObject({ type: "image" });
+  });
+
+  it("workspace 相对路径以绑定目录为基解析后收编（T11 语义）", async () => {
+    const src = path.join(wsOutsideDir, "chart.png");
+    await writeFile(src, Buffer.from([0x89, 0x50]));
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      wsOutsideDir,
+      [{ absPath: "chart.png" }],
+    );
+    expect(path.dirname(staged[0].absPath)).toBe(attachRoot);
+  });
+
+  it("未绑定 workspace 时相对路径原样保留（调用方降级占位）", async () => {
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      undefined,
+      [{ absPath: "rel.png" }],
+    );
+    expect(staged).toEqual([{ absPath: "rel.png" }]);
+  });
+
+  it("收编失败（缺失/超限/坏扩展）保留原路径，发送不中断", async () => {
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      "/tmp/some-ws",
+      [
+        { absPath: path.join(wsOutsideDir, "gone.png") },
+        { absPath: path.join(wsOutsideDir, "a.exe") },
+      ],
+      () => true,
+    );
+    expect(staged).toEqual([
+      { absPath: path.join(wsOutsideDir, "gone.png") },
+      { absPath: path.join(wsOutsideDir, "a.exe") },
+    ]);
+  });
+
+  it("canStageAbs 拒绝的 workspace 外绝对路径不收编（授权门收口——XSS 合成路径维持占位）", async () => {
+    const abs = path.join(wsOutsideDir, "locked.png");
+    await writeFile(abs, Buffer.from([0x89]));
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      "/tmp/some-ws",
+      [{ absPath: abs }],
+      () => false,
+    );
+    expect(staged).toEqual([{ absPath: abs }]);
+  });
+
+  it("workspace 内路径不经授权门直通收编（T11 绑定即授权语义）；../ 穿越出绑定目录的相对路径不收编", async () => {
+    const inside = path.join(wsOutsideDir, "inside.png");
+    await writeFile(inside, Buffer.from([0x89]));
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      wsOutsideDir,
+      [{ absPath: inside }],
+      () => false,
+    );
+    expect(path.dirname(staged[0].absPath)).toBe(attachRoot);
+    const escaped = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      path.join(wsOutsideDir, "sub"),
+      [{ absPath: "../escape.png" }],
+      () => true,
+    );
+    expect(escaped).toEqual([{ absPath: "../escape.png" }]);
   });
 });

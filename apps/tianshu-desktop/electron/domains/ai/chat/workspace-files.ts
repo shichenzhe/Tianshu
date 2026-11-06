@@ -107,7 +107,7 @@ function toImageContent(
 }
 
 /** 扩展名 → 图片 mime（未收录返回 undefined；三个图片分支共用） */
-function imageMimeOf(absPath: string): string | undefined {
+export function imageMimeOf(absPath: string): string | undefined {
   return IMAGE_MIME[path.extname(absPath).toLowerCase()];
 }
 
@@ -294,6 +294,61 @@ export async function stageImageIntoAttachments(
   } catch {
     return null;
   }
+}
+
+/**
+ * 发送链图片收编（T11 workspace 收编泛化——多模态图片批）：attachments/
+ * library 白名单外的用户显式路径（选择器/粘贴/拖拽/@token）复制进
+ * attachments 根——新路径天然命中 imageAttachmentBlocks 白名单落正常
+ * ImageBlock（否则白名单外一律降级「无法读取」占位）。收编放行规则：
+ * - resolve 后落在会话绑定 workspace 目录内（绝对或相对路径）→ 直通
+ *   （绑定即授权读；相对路径 resolve 出目录外视为 ../ 穿越不收编）；
+ * - workspace 外绝对路径 → canStageAbs 授权门（选择器/拖拽登记过的
+ *   路径才收编——渲染层 XSS 合成的任意 absPath 维持占位，安全语义
+ *   不变）；
+ * - 未绑定 workspace 的相对路径保留原样走降级。
+ * 收编失败（缺失/超 10MB/未收录扩展）保留原路径，调用方降级占位，
+ * 发送不中断。
+ */
+export async function stageOutgoingImages<T extends { absPath: string }>(
+  attachmentsRoot: string,
+  allowedDirs: string[],
+  workspaceDir: string | undefined,
+  images: T[],
+  canStageAbs?: (abs: string) => boolean,
+): Promise<T[]> {
+  if (images.length === 0) {
+    return images;
+  }
+  const allowed = allowedDirs.map((dir) => path.resolve(dir));
+  const bound = workspaceDir ? path.resolve(workspaceDir) : null;
+  const staged: T[] = [];
+  for (const image of images) {
+    const isAbs = path.isAbsolute(image.absPath);
+    const resolved = isAbs
+      ? path.resolve(image.absPath)
+      : bound
+        ? resolveFilePath(bound, image.absPath)
+        : null;
+    const inAllowed =
+      resolved !== null &&
+      allowed.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+    const inWorkspace = bound !== null && resolved !== null &&
+      (resolved === bound || resolved.startsWith(bound + path.sep));
+    // 相对路径须落绑定目录内（防穿越）；workspace 外绝对路径走授权门
+    const grantable =
+      inWorkspace ||
+      (isAbs &&
+        resolved !== null &&
+        canStageAbs !== undefined &&
+        canStageAbs(resolved));
+    const dest =
+      resolved !== null && !inAllowed && grantable
+        ? await stageImageIntoAttachments(attachmentsRoot, resolved)
+        : null;
+    staged.push(dest ? { ...image, absPath: dest } : image);
+  }
+  return staged;
 }
 
 export async function readWorkspaceFile(

@@ -12,6 +12,8 @@ import {
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn(), on: vi.fn() },
+  // pickAndRead 测试注入选择器结果（多模态图片批）
+  dialog: { showOpenDialog: vi.fn(async () => ({ canceled: true })) },
   // Log/prisma-client 顶层读取 app.getPath("userData")/getAppPath/isPackaged
   // 计算日志与数据目录（data-root 冷迁移链路）
   app: {
@@ -251,7 +253,11 @@ import {
 } from "../../electron/domains/ai/agent/recommend-expert-tool";
 import type { ToolDefinition } from "../../electron/domains/ai/agent/file-tools";
 import type { ToolGroupGate } from "../../electron/domains/ai/agent/tool-groups";
-import { ipcMain } from "electron";
+import { dialog, ipcMain } from "electron";
+import {
+  grantExternalPaths,
+  resetExternalGrants,
+} from "../../electron/domains/ai/chat/external-file-gate";
 import { generateUserToken } from "../../electron/commons/ipc-user";
 import { PermissionStore } from "../../electron/domains/ai/agent/permission-mode";
 import type { SecurityEvent } from "../../src-react/domains/security/model/types";
@@ -2872,6 +2878,32 @@ describe("ChatService.send workspace 图片附件收编（T11 文件窗图片 ta
       });
     }
   });
+
+  it("授权路径（选择器/拖拽经 external-file-gate 登记）在空间外也收编成 ImageBlock", async () => {
+    resetExternalGrants();
+    const wsDir = await mkdtemp(nodePath.join(tmpdir(), "tianshu-ws-"));
+    const foreign = await mkdtemp(nodePath.join(tmpdir(), "tianshu-notws-"));
+    const img = nodePath.join(foreign, "picked.png");
+    await writeFile(img, Buffer.from([0x89, 0x50, 0x00, 0x0d]));
+    // 选择器 = 用户显式给出：pickAndRead 返回前登记授权（同产线链路）
+    grantExternalPaths([img]);
+    const { sessions, service } = makeSendService({
+      id: 7,
+      directoryPath: wsDir,
+    });
+    await expect(
+      service.send(
+        { sessionId: 1, content: "这是什么图", images: [{ absPath: img }] },
+        1,
+      ),
+    ).rejects.toThrow("NO_MODEL");
+    // 收编副本命中白名单 → 正常 ImageBlock（不再降级占位）
+    expect(sendBlocksOf(sessions)[1]).toMatchObject({
+      type: "image",
+      mime: "image/png",
+    });
+    resetExternalGrants();
+  });
 });
 
 describe("ChatService 自动压缩（spec §18 项 2）", () => {
@@ -3484,5 +3516,55 @@ describe("ChatService.assembleContext（批9 记忆 userId 隔离 + 预算治理
     optionReads.rows.length = 0;
     const bare = await makeSvc(1, null).getUsageBreakdown(1, 1);
     expect(bare?.memory).toBeUndefined();
+  });
+});
+
+/**
+ * ＋菜单「添加文件」选读一体 IPC（多模态图片批修复）：图片扩展跳过
+ * 512KB/NUL 文本守卫（真实 PNG 必含 NUL 曾被判「二进制文件不支持」丢弃），
+ * 返回 image 标记交渲染层挂图片 pill 走多模态通道；文本行为不变。
+ */
+describe("ChatService pickAndRead 图片放行", () => {
+  const handlerOf = (channel: string) => {
+    const calls = (ipcMain.handle as unknown as Mock).mock.calls.filter(
+      ([name]) => name === channel,
+    );
+    const latest = calls[calls.length - 1];
+    if (!latest) {
+      throw new Error(`IPC 未注册: ${channel}`);
+    }
+    return latest[1] as () => unknown;
+  };
+
+  beforeEach(() => {
+    (ipcMain.handle as unknown as Mock).mockClear();
+  });
+
+  it("图片（含 NUL 字节）返回 image 标记不读内容；同批文本照常读", async () => {
+    const dir = await mkdtemp(nodePath.join(tmpdir(), "pick-read-"));
+    const png = nodePath.join(dir, "invoice.png");
+    const txt = nodePath.join(dir, "note.md");
+    await writeFile(png, Buffer.from([0x89, 0x50, 0x00, 0x0d]));
+    await writeFile(txt, "# hi");
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: false,
+      filePaths: [png, txt],
+    } as never);
+    new ChatService({} as never);
+    const picked = (await handlerOf("file:pickAndRead")()) as Array<
+      Record<string, unknown>
+    >;
+    expect(picked).toHaveLength(2);
+    expect(picked[0]).toEqual({ path: png, content: "", image: true });
+    expect(picked[1]).toEqual({ path: txt, content: "# hi" });
+  });
+
+  it("取消选择返回空数组", async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValueOnce({
+      canceled: true,
+      filePaths: [],
+    } as never);
+    new ChatService({} as never);
+    expect(await handlerOf("file:pickAndRead")()).toEqual([]);
   });
 });

@@ -212,3 +212,60 @@ describe("@ 文件 token 出界回退", () => {
     ]);
   });
 });
+
+describe("@ 图片 token 分流（多模态图片批）", () => {
+  it("绝对路径图片 → image part，不经 readWorkspaceFile/readExternalFile 文本链", async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      throw new Error("unexpected channel " + channel);
+    });
+    const textarea = renderInput();
+    await act(async () => {
+      send(textarea, "@/Users/x/pics/invoice.png 看图");
+    });
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledTimes(1);
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(onSend.mock.calls[0][1]).toEqual([
+      {
+        path: "/Users/x/pics/invoice.png",
+        content: "",
+        kind: "localFile",
+        image: true,
+      },
+    ]);
+  });
+
+  it("agent 会话 workspace 相对路径图片 → image part（不走 fileRef——图片无法 AI 自读文本）", async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      throw new Error("unexpected channel " + channel);
+    });
+    const textarea = renderInput();
+    await act(async () => {
+      send(textarea, "@dataset/shot.png 这是什么");
+    });
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledTimes(1);
+    });
+    expect(invokeMock).not.toHaveBeenCalled();
+    expect(onSend.mock.calls[0][1]).toEqual([
+      { path: "dataset/shot.png", content: "", kind: "localFile", image: true },
+    ]);
+  });
+
+  it("ask 会话相对路径图片 → 同样 image part（多模态输入无模式门）", async () => {
+    invokeMock.mockImplementation(async (channel: string) => {
+      throw new Error("unexpected channel " + channel);
+    });
+    const textarea = renderInput({ currentMode: "ask" });
+    await act(async () => {
+      send(textarea, "@dataset/shot.png 识别");
+    });
+    await waitFor(() => {
+      expect(onSend).toHaveBeenCalledTimes(1);
+    });
+    expect(onSend.mock.calls[0][1]).toEqual([
+      { path: "dataset/shot.png", content: "", kind: "localFile", image: true },
+    ]);
+  });
+});

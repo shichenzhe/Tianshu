@@ -52,9 +52,11 @@ import {
 } from "./context-usage";
 import {
   imageAttachmentBlocks,
+  imageMimeOf,
+  IMAGE_READ_LIMIT,
   readImageAsDataUrl,
   readWorkspaceFile,
-  stageImageIntoAttachments,
+  stageOutgoingImages,
 } from "./workspace-files";
 import { savePastedImage } from "./pasted-image-store";
 // 聊天输出导出批：dataUrl 图片另存为纯函数（file:saveDataUrl 消费）
@@ -713,12 +715,17 @@ export default class ChatService {
       return dir;
     });
     // P3 文件引用：多选弹窗 + 逐文件读取文本（≤512KB、NUL 视为二进制拒绝）。
-    // 单文件失败不影响其余（带 error 返回，渲染层 toast 后丢弃）；取消返回空数组
+    // 单文件失败不影响其余（带 error 返回，渲染层 toast 后丢弃）；取消返回空数组。
+    // 图片扩展跳过文本守卫（多模态图片批：真实 PNG/JPEG 必含 NUL 曾被整批
+    // 判「二进制文件不支持」；不读字节带 image 标记返回，渲染层挂图片 pill
+    // 走 image part；10MB 上限入口预检，收编/落块侧同限兜底）
     ipcMain.handle(
       "file:pickAndRead",
       async (): Promise<
         Array<
-          { path: string; content: string } | { path: string; error: string }
+          | { path: string; content: string }
+          | { path: string; error: string }
+          | { path: string; content: string; image: true }
         >
       > => {
         const result = await dialog.showOpenDialog({
@@ -735,6 +742,12 @@ export default class ChatService {
           result.filePaths.map(async (filePath) => {
             try {
               const stat = await fs.stat(filePath);
+              if (imageMimeOf(filePath)) {
+                if (stat.size > IMAGE_READ_LIMIT) {
+                  return { path: filePath, error: "图片超过 10MB 上限" };
+                }
+                return { path: filePath, content: "", image: true as const };
+              }
               if (stat.size > 512 * 1024) {
                 return { path: filePath, error: "超过 512KB 上限" };
               }
@@ -965,33 +978,32 @@ export default class ChatService {
   }
 
   /**
-   * workspace 图片附件收编（T11 文件窗图片 tab）：落在会话工作空间绑定
-   * 目录内的附件先复制进 attachments 根（stageImageIntoAttachments），
-   * 让 ImageBlock 走数据根相对路径（展示/回喂读回通道全兼容）；收编
-   * 失败保留原路径（imageAttachmentBlocks 降级占位，发送不中断）。
-   * 非空间内路径/未绑定目录原样透传——白名单安全语义不变
+   * 发送链图片收编入口（T11 泛化——多模态图片批）：查会话绑定 workspace
+   * 目录（相对路径解析基）后交 stageOutgoingImages——attachments/library
+   * 白名单外的用户显式路径全量收编进 attachments 根，新路径命中
+   * imageAttachmentBlocks 白名单落正常 ImageBlock。绝对路径收编收口在
+   * external-file-gate 授权门（选择器/拖拽登记过的路径才收编——渲染层
+   * XSS 合成的任意 absPath 维持白名单降级占位，安全语义不变）；相对
+   * 路径以 workspace 绑定目录为基（绑定即授权读）；收编失败保留原路径
+   * （降级占位，发送不中断）
    */
   private async stageWorkspaceImages<T extends { absPath: string }>(
     session: { workspaceId?: number | null },
     images: T[],
   ): Promise<T[]> {
-    if (images.length === 0 || !session.workspaceId) return images;
-    const workspace = await this.sessions.getWorkspace(session.workspaceId);
-    const bound = workspace?.directoryPath?.trim();
-    if (!bound) return images;
-    const dir = normalizeWorkspacePath(bound);
-    const staged: T[] = [];
-    for (const image of images) {
-      const abs = path.resolve(image.absPath);
-      const inWorkspace = abs === dir || abs.startsWith(dir + path.sep);
-      const stagedPath = inWorkspace
-        ? await stageImageIntoAttachments(attachmentsDir(), abs)
-        : null;
-      staged.push(
-        stagedPath ? ({ ...image, absPath: stagedPath } as T) : image,
-      );
+    let bound: string | undefined;
+    if (session.workspaceId) {
+      const workspace = await this.sessions.getWorkspace(session.workspaceId);
+      const dir = workspace?.directoryPath?.trim();
+      bound = dir ? normalizeWorkspacePath(dir) : undefined;
     }
-    return staged;
+    return stageOutgoingImages(
+      attachmentsDir(),
+      [attachmentsDir(), libraryDir()],
+      bound,
+      images,
+      isExternalReadAllowed,
+    );
   }
 
   /** full 会话总览（SP6 spec §4.1）：标题查询失败行回落「会话 #id」不整表失败（spec §8）；A10 批提 public——server-face permission 面桥消费（全局运行态，与 IPC 同口径） */

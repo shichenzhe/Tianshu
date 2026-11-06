@@ -20,10 +20,14 @@ import { invoke } from "@/lib/ipc";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
 import SkillSubMenu from "../../chat/components/skill-sub-menu";
 
+/** file:pickAndRead 单项：成功带 content（图片项 image 标记——任务模板
+ *  为文本注入不支持图片），失败带 error（渲染层 toast 并丢弃） */
 interface PickedFile {
   path: string;
   content?: string;
   error?: string;
+  /** 图片附件标记（多模态图片批）：任务模板无处安放——明确提示丢弃 */
+  image?: true;
 }
 
 export interface TaskPlusMenuProps {
@@ -67,6 +71,10 @@ export default function TaskPlusMenu({
         toast.error(
           t("chat:attach.readFailed", { path: file.path, reason: file.error }),
         );
+      } else if (file.image) {
+        // 任务模板为文本注入（resolve-attachments 只认 text，运行时
+        // attachment_missing 更晚更糊）——入口即明确提示并丢弃
+        toast.warning(t("chat:attach.imageUnsupported"));
       } else {
         paths.push(file.path);
       }

@@ -133,7 +133,8 @@
   },
   "attach": {
     "remove": "移除引用文件",
-    "readFailed": "读取失败：{{path}}（{{reason}}）"
+    "readFailed": "读取失败：{{path}}（{{reason}}）",
+    "imageUnsupported": "图片附件暂不支持加入任务模板"
   },
   "plus": {
     "title": "扩展菜单",

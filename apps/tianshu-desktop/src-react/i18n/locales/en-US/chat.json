@@ -133,7 +133,8 @@
   },
   "attach": {
     "remove": "Remove attached file",
-    "readFailed": "Failed to read: {{path}} ({{reason}})"
+    "readFailed": "Failed to read: {{path}} ({{reason}})",
+    "imageUnsupported": "Image attachments are not supported in task templates"
   },
   "plus": {
     "title": "Extension menu",

@@ -537,6 +537,15 @@ export default function ChatInput({
       const contentRefs: Array<{ path: string; content: string }> = [];
       const failures: string[] = [];
       for (const filePath of new Set(fileTokens)) {
+        // 图片一律走多模态 image part（多模态图片批修复）：文本读取链对
+        // 图片必失败（readWorkspaceFile 判二进制）、fileRef 的 AI 自读对
+        // 图片无意义——本地链在此直接分流，路径原样透传（相对路径由主
+        // 进程收编侧以绑定 workspace 为基解析）；远程链保持既有读取行为
+        // （远端图片 base64 链另批收口）
+        if (remoteConnId() == null && isImagePath(filePath)) {
+          files.push({ path: filePath, content: "", kind: "localFile", image: true });
+          continue;
+        }
         // 引用式（引用式批 2026-10-21）：agent/plan 会话的工作空间相对路径
         // 引用不读全文——只注路径 + read 指示，AI 处理时自读（面板只
         // 显示路径行，对齐文件窗 library 首条注入语义）；ask 会话无工具集
@@ -752,6 +761,18 @@ export default function ChatInput({
     },
     [t],
   );
+
+  /** ＋菜单「添加文件」图片项挂 pill（多模态图片批修复）：与 Finder 粘贴
+   *  本地图片同形态（不预检——10MB 上限在主进程入口与收编侧兜底），
+   *  发送时按 isImagePath 分流 image part */
+  const attachImageFile = useCallback((absPath: string) => {
+    const name = absPath.split(/[\\/]/).pop() ?? absPath;
+    setPastedFiles((prev) =>
+      prev.some((f) => f.path === absPath)
+        ? prev
+        : [...prev, { name, path: absPath }],
+    );
+  }, []);
 
   /** 粘贴附件（WorkBuddy 剪贴板管线经验移植，spec 2026-10-10）：有文件才
    *  preventDefault（纯文本粘贴零干扰）；Finder 复制文件经 preload
@@ -1366,6 +1387,11 @@ export default function ChatInput({
             onPickPaths={(paths) => {
               for (const filePath of paths) {
                 insertAtCaret(`@${filePath} `);
+              }
+            }}
+            onPickImagePaths={(paths) => {
+              for (const filePath of paths) {
+                attachImageFile(filePath);
               }
             }}
             onPickLibraryFiles={(files) => {

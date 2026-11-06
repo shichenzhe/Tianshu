@@ -3,7 +3,7 @@ import { useState } from "react";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Pressable, Image, ScrollView, Switch, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   BarChart3,
@@ -42,6 +42,8 @@ import {
   type ThemeMode,
   type ThemeName,
 } from "@/theme/colors";
+import { SKIN_WALLPAPERS } from "@/theme/skins-assets";
+import { SKINS, type SkinDef } from "@/theme/skins";
 
 type Locale = "zh-CN" | "en-US";
 
@@ -110,6 +112,43 @@ function ThemeCard({
   );
 }
 
+/** 精选皮肤卡：壁纸缩略（cover）+ 名称 + 选中 primary 描边（与 ThemeCard
+ *  同款交互形态；缩略图自身即皮肤明暗示意，不另做明暗角标） */
+function SkinCard({
+  skin,
+  label,
+  selected,
+  onPress,
+}: {
+  skin: SkinDef;
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      className="flex-1 items-center gap-2 rounded-lg border-2 py-2"
+      style={({ pressed }) => ({
+        borderColor: selected ? colors.primary : "transparent",
+        opacity: pressed ? 0.65 : 1,
+      })}
+    >
+      <Image
+        source={SKIN_WALLPAPERS[skin.id]}
+        className="h-14 w-full rounded"
+        resizeMode="cover"
+      />
+      <Text className="text-xs" style={{ color: colors.primaryActive }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 /** 通知开关行（M3）：label + Switch；disabled 置灰（总开关关时子开关不可用） */
 function ToggleRow({
   label,
@@ -166,6 +205,8 @@ export default function SettingsScreen() {
   const colors = useThemeColors();
   const themeName = useThemeStore((s) => s.themeName);
   const setTheme = useThemeStore((s) => s.setTheme);
+  const skinId = useThemeStore((s) => s.skinId);
+  const setSkin = useThemeStore((s) => s.setSkin);
   const mode = useThemeStore((s) => s.mode);
   const setMode = useThemeStore((s) => s.setMode);
   const notifyEnabled = useNotifyStore((s) => s.enabled);
@@ -281,11 +322,36 @@ export default function SettingsScreen() {
                 key={name}
                 name={name}
                 label={t(THEME_LABEL_KEYS[name])}
-                selected={themeName === name}
+                selected={themeName === name && skinId === null}
                 onPress={() => setTheme(name)}
               />
             ))}
           </View>
+        </GroupSection>
+
+        {/* 精选皮肤：整套换肤（色相+明暗随皮肤，壁纸在聊天界面显示）；
+            选纯色主题卡即退出皮肤（setTheme 清 skinId）。
+            两行×两张确定性布局（flex-wrap+宽度百分比在 Yoga 下换行不稳） */}
+        <GroupSection label={t("skinSection")}>
+          {[SKINS.slice(0, 2), SKINS.slice(2, 4)].map((row, rowIndex) => (
+            <View
+              key={rowIndex}
+              className={rowIndex === 0 ? "flex-row gap-3" : "flex-row gap-3 pt-3"}
+            >
+              {row.map((skin) => (
+                <SkinCard
+                  key={skin.id}
+                  skin={skin}
+                  label={t(skin.labelKey)}
+                  selected={skinId === skin.id}
+                  onPress={() => setSkin(skin.id)}
+                />
+              ))}
+            </View>
+          ))}
+          <Text className="px-4 pb-3 pt-1 text-xs leading-4 text-label3 dark:text-[#EBEBF54D]">
+            {t("skinSectionHint")}
+          </Text>
         </GroupSection>
 
         <GroupSection label={t("notifications")}>

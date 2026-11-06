@@ -10,10 +10,12 @@ import {
   type ThemeMode,
   type ThemeName,
 } from "../theme/colors";
+import { getSkin, isSkinId, type SkinId } from "../theme/skins";
 
 /** 持久化 key（对齐 connections.store 的 tianshu-mobile.* 命名段） */
 const STORAGE_KEY = "tianshu-mobile.theme";
 const MODE_STORAGE_KEY = "tianshu-mobile.mode";
+const SKIN_STORAGE_KEY = "tianshu-mobile.skin";
 
 const THEME_NAMES = Object.keys(THEME_PRESETS) as ThemeName[];
 const MODES: ThemeMode[] = ["system", "light", "dark"];
@@ -36,20 +38,30 @@ function applyMode(mode: ThemeMode) {
 interface ThemeState {
   themeName: ThemeName;
   mode: ThemeMode;
+  /** 精选皮肤（null=纯色主题；皮肤生效时 hue/mode 随皮肤三元组） */
+  skinId: SkinId | null;
   setTheme: (name: ThemeName) => void;
   setMode: (mode: ThemeMode) => void;
+  setSkin: (id: SkinId) => void;
 }
 
 /** 主题名 zustand 装配（M1 接 AsyncStorage 持久化：写 fire-and-forget、创建即恢复；
- *  T11 增明暗模式 mode——system 跟随系统、light/dark 手动钉死） */
+ *  T11 增明暗模式 mode——system 跟随系统、light/dark 手动钉死；
+ *  精选皮肤批增 skinId——setSkin 三联动（hue/mode 随皮肤，明暗覆写一次），
+ *  setTheme（纯色卡）即退出皮肤） */
 export const useThemeStore = create<ThemeState>((set) => ({
   themeName: DEFAULT_THEME,
   mode: DEFAULT_MODE,
+  skinId: null,
   setTheme: (themeName) => {
-    set({ themeName });
+    // 选纯色主题 = 退出皮肤：清 skinId 并移除皮肤存档
+    set({ themeName, skinId: null });
     // fire-and-forget：写失败不阻塞交互，下次切换覆写重试
     void AsyncStorage.setItem(STORAGE_KEY, themeName).catch(() => {
       /* 静默：quota/IO 失败无需上抛 */
+    });
+    void AsyncStorage.removeItem(SKIN_STORAGE_KEY).catch(() => {
+      /* 静默：同上 */
     });
   },
   setMode: (mode) => {
@@ -59,33 +71,61 @@ export const useThemeStore = create<ThemeState>((set) => ({
       /* 静默：quota/IO 失败无需上抛 */
     });
   },
+  setSkin: (skinId) => {
+    const skin = getSkin(skinId);
+    if (!skin) return; // 未知 id 防御：不变不写档
+    // 三联动：皮肤携带 hue/mode（明暗档被覆写一次，随后仍可手动改）
+    set({ skinId, themeName: skin.hue, mode: skin.mode });
+    applyMode(skin.mode);
+    void AsyncStorage.setItem(SKIN_STORAGE_KEY, skinId).catch(() => {
+      /* 静默：quota/IO 失败无需上抛 */
+    });
+    void AsyncStorage.setItem(STORAGE_KEY, skin.hue).catch(() => {
+      /* 静默：同上 */
+    });
+    void AsyncStorage.setItem(MODE_STORAGE_KEY, skin.mode).catch(() => {
+      /* 静默：同上 */
+    });
+  },
 }));
 
-// store 创建即恢复存档（fire-and-forget；非法值/坏档静默保持 DEFAULT_THEME）。
-// 恢复守卫（M4）：getItem 异步窗口内用户已手动切换（当前已非缺省主题）则
-// 不覆写——存档是旧值，迟到的恢复不得吃掉用户刚做的选择
-void AsyncStorage.getItem(STORAGE_KEY)
-  .then((saved) => {
+// store 创建即恢复存档（fire-and-forget；非法值/坏档静默保持缺省）。
+// 恢复守卫：恢复窗口内用户已手动切换（任一维度已非缺省）则整体不覆写——
+// 存档是旧值，迟到的恢复不得吃掉用户刚做的选择。
+// 皮肤档优先：skin 存档在则整体生效（hue/mode 随皮肤三元组），否则回落
+// 纯色路径分别恢复 theme/mode 档（三档单窗口统一恢复，杜绝多 promise
+// 竞态下「theme 先恢复致皮肤档被 pristine 校验误杀」的时序漏洞）。
+void Promise.all([
+  AsyncStorage.getItem(STORAGE_KEY),
+  AsyncStorage.getItem(MODE_STORAGE_KEY),
+  AsyncStorage.getItem(SKIN_STORAGE_KEY),
+])
+  .then(([savedTheme, savedMode, savedSkin]) => {
+    const state = useThemeStore.getState();
     if (
-      isThemeName(saved) &&
-      useThemeStore.getState().themeName === DEFAULT_THEME
+      state.skinId !== null ||
+      state.themeName !== DEFAULT_THEME ||
+      state.mode !== DEFAULT_MODE
     ) {
-      useThemeStore.setState({ themeName: saved });
+      return;
     }
-  })
-  .catch(() => {
-    /* 静默：原生模块读取异常不阻断启动 */
-  });
-
-// 明暗档恢复：守卫同上（恢复窗口内已手动切换则不覆写），命中即施加
-void AsyncStorage.getItem(MODE_STORAGE_KEY)
-  .then((saved) => {
-    if (
-      isThemeMode(saved) &&
-      useThemeStore.getState().mode === DEFAULT_MODE
-    ) {
-      useThemeStore.setState({ mode: saved });
-      applyMode(saved);
+    if (isSkinId(savedSkin)) {
+      const skin = getSkin(savedSkin);
+      if (!skin) return;
+      useThemeStore.setState({
+        skinId: savedSkin,
+        themeName: skin.hue,
+        mode: skin.mode,
+      });
+      applyMode(skin.mode);
+      return;
+    }
+    if (isThemeName(savedTheme)) {
+      useThemeStore.setState({ themeName: savedTheme });
+    }
+    if (isThemeMode(savedMode)) {
+      useThemeStore.setState({ mode: savedMode });
+      applyMode(savedMode);
     }
   })
   .catch(() => {

@@ -40,6 +40,7 @@ import { PermissionChip } from "@/components/PermissionChip";
 import { SkillRefPicker } from "@/components/SkillRefPicker";
 import { SessionFilesSheet } from "@/components/SessionFilesSheet";
 import { SessionSearchBar } from "@/components/SessionSearchBar";
+import { SkinWallpaper } from "@/components/SkinWallpaper";
 import { UsageChip } from "@/components/UsageChip";
 import { tapLight } from "@/lib/haptics";
 import { relativeTimeLabel } from "@/lib/relative-time-label";
@@ -72,6 +73,7 @@ import {
 } from "@/store/connections.store";
 import { useStreamStore } from "@/store/stream.store";
 import { useThemeColors } from "@/store/theme";
+import { useSkinWallpaper } from "@/theme/skins-assets";
 import type { TransportState } from "@/transport/types";
 import { wireRequest } from "@/transport/wire";
 
@@ -117,6 +119,8 @@ export default function SessionScreen() {
   const sessionId = Number(id);
   const { t } = useTranslation("chat");
   const colors = useThemeColors();
+  // 精选皮肤壁纸（null=纯色主题）：壁纸层置内容树首位、根底色透明透出
+  const skinWallpaper = useSkinWallpaper();
   const activeConnId = useConnectionsStore((s) => s.activeConnId);
 
   const entry = useStreamStore((s) => s.bySession[sessionId]);
@@ -799,7 +803,13 @@ export default function SessionScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
-      <View className="flex-1 bg-white dark:bg-black">
+      {/* 壁纸生效时根底色透明（透出 SkinWallpaper），纯色主题保持双态实色 */}
+      <View
+        className={
+          skinWallpaper ? "flex-1" : "flex-1 bg-white dark:bg-black"
+        }
+      >
+        <SkinWallpaper />
         <Stack.Screen
           options={{
             title: entry?.sessionTitle ?? t("untitled"),

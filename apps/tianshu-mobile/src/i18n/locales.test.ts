@@ -105,6 +105,21 @@ describe("i18n 双语 key 齐平（防单语漏 key）", () => {
     expect(enChat).toHaveProperty("approveUnsupported");
   });
 
+  it("settings namespace 含精选皮肤 key（皮肤名/区段标题，双语齐备）", () => {
+    const skinKeys = [
+      "skinSection",
+      "skinSectionHint",
+      "skinRipple",
+      "skinOceanSky",
+      "skinWarmSand",
+      "skinInk",
+    ] as const;
+    for (const key of skinKeys) {
+      expect(zhSettings).toHaveProperty(key);
+      expect(enSettings).toHaveProperty(key);
+    }
+  });
+
   it("附件移除操作在两种语言下均提供包含名称的读屏标签", async () => {
     const keys = [
       "removeImage",

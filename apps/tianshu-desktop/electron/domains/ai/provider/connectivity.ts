@@ -387,6 +387,12 @@ export async function listRemoteModels(
     url = joinUrl(provider.baseUrl, "v1/models");
     headers["x-api-key"] = provider.apiKey ?? "";
     headers["anthropic-version"] = "2023-06-01";
+    // Anthropic 协议中转站（one-api/new-api 系）的 /v1/models 多为 OpenAI
+    // 风格路由只认 Bearer（旧版 x-api-key 兼容仅覆盖 /v1/messages）——
+    // 双头同值并存：官方实测与单头响应一致，服务端取任一头结果相同
+    if (provider.apiKey) {
+      headers.Authorization = `Bearer ${provider.apiKey}`;
+    }
   } else {
     // gemini baseUrl 约定含 /v1beta（与 @langchain/google-genai 默认端点同款），先剥再拼避免重复
     const geminiBase = provider.baseUrl.replace(/\/v1beta\/?$/, "");

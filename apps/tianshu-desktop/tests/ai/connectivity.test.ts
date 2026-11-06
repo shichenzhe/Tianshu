@@ -393,7 +393,7 @@ describe("listRemoteModels", () => {
     }
   });
 
-  it("anthropic：x-api-key + anthropic-version，v1/models 路径", async () => {
+  it("anthropic：x-api-key + anthropic-version + Bearer 兼容中转，v1/models 路径", async () => {
     const stub = stubFetch([
       {
         match: (u) => u.endsWith("/v1/models"),
@@ -411,6 +411,8 @@ describe("listRemoteModels", () => {
       const headers = stub.calls[0].init?.headers as Record<string, string>;
       expect(headers["x-api-key"]).toBe("k");
       expect(headers["anthropic-version"]).toBe("2023-06-01");
+      // 中转站（one-api/new-api 系）/v1/models 只认 Bearer：双头同值并存
+      expect(headers.Authorization).toBe("Bearer k");
     } finally {
       stub.restore();
     }

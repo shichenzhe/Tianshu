@@ -6,7 +6,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { ModelApi } from "../../api/model.api";
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 export default function NewTaskView() {
   const { t } = useTranslation(["newTask", "common"]);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const scenario = useNewTaskStore((s) => s.scenario);
   const setScenario = useNewTaskStore((s) => s.setScenario);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -75,13 +76,13 @@ export default function NewTaskView() {
   const handleSubmit = useCallback(async () => {
     setSending(true);
     try {
-      await dispatchNewTask({ navigate });
+      await dispatchNewTask({ navigate, queryClient });
     } catch (e) {
       toast.error(mapDispatchError(e));
     } finally {
       setSending(false);
     }
-  }, [navigate]);
+  }, [navigate, queryClient]);
 
   return (
     <div className="flex h-full w-full flex-col justify-center gap-4 p-4">

@@ -31,12 +31,15 @@ vi.mock("@/i18n", () => ({
   default: { t: (key: string) => `mapped:${key}` },
 }));
 
-const { invokeMock, toastMock } = vi.hoisted(() => ({
+const { invokeMock, toastMock, invalidateMock } = vi.hoisted(() => ({
   invokeMock: vi.fn(),
   toastMock: { error: vi.fn() },
+  invalidateMock: vi.fn(async () => {}),
 }));
 vi.mock("@/lib/ipc", () => ({ invoke: invokeMock }));
 vi.mock("sonner", () => ({ toast: toastMock }));
+
+import type { QueryClient } from "@tanstack/react-query";
 
 import {
   dispatchNewTask,
@@ -45,6 +48,11 @@ import {
 import { useNewTaskStore } from "@/domains/ai/new-task/store/new-task-store";
 
 const navigate = vi.fn();
+
+/** 假 queryClient：只记录 invalidateQueries（dispatch 唯一用到的方法） */
+const queryClient = {
+  invalidateQueries: invalidateMock,
+} as unknown as QueryClient;
 
 const SESSION = { id: 9, workspaceId: 2, title: "x", mode: "agent" };
 
@@ -62,6 +70,8 @@ describe("dispatchNewTask", () => {
   beforeEach(() => {
     invokeMock.mockReset();
     navigate.mockReset();
+    invalidateMock.mockReset();
+    invalidateMock.mockImplementation(async () => {});
     useNewTaskStore.getState().resetDraft();
     // 三配置跨用例持久（resetDraft 不清）——显式回基线避免用例间顺序耦合
     useNewTaskStore.getState().setWorkspaceId(2);
@@ -71,7 +81,7 @@ describe("dispatchNewTask", () => {
 
   it("标准流程：create→send→navigate，不调 setPermission，成功清草稿", async () => {
     mockInvokeDefault();
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(invokeMock).toHaveBeenNthCalledWith(1, "session:create", {
       workspaceId: 2,
       scenario: "daily",
@@ -91,10 +101,20 @@ describe("dispatchNewTask", () => {
     expect(useNewTaskStore.getState().content).toBe("");
   });
 
+  it('创建落库后失效 ["sessions"] 缓存且先于导航：跳转落点 ChatView 从缓存 find，30s staleTime 内 fresh 缓存不重拉，缺此步新会话不在缓存、落点成空态提示页', async () => {
+    mockInvokeDefault();
+    await dispatchNewTask({ navigate, queryClient });
+    expect(invalidateMock).toHaveBeenCalledWith({ queryKey: ["sessions"] });
+    // await 失效（active observer 重拉完成）→ 再 navigate：ChatView 挂载即命中
+    expect(invalidateMock.mock.invocationCallOrder[0]).toBeLessThan(
+      navigate.mock.invocationCallOrder[0],
+    );
+  });
+
   it("高危：create 后 setPermission 再 send", async () => {
     useNewTaskStore.getState().setAccessMode("full");
     mockInvokeDefault();
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     const channels = invokeMock.mock.calls.map((c) => c[0]);
     expect(channels).toEqual(["session:create", "permission:set", "chat:send"]);
     expect(invokeMock).toHaveBeenNthCalledWith(2, "permission:set", 9, "full");
@@ -104,7 +124,7 @@ describe("dispatchNewTask", () => {
     useNewTaskStore.getState().setAssistantId(5);
     useNewTaskStore.getState().setMode("plan");
     mockInvokeDefault();
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     const channels = invokeMock.mock.calls.map((c) => c[0]);
     expect(channels).toEqual([
       "session:create",
@@ -121,7 +141,7 @@ describe("dispatchNewTask", () => {
     useNewTaskStore.getState().setMode("plan");
     useNewTaskStore.getState().setAccessMode("full");
     mockInvokeDefault();
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
       "session:create",
       "session:setAssistant",
@@ -134,7 +154,7 @@ describe("dispatchNewTask", () => {
   it("草稿选了模型：create 后 setModel 落库（必须先于 send）再 send", async () => {
     useNewTaskStore.getState().setModelId(11);
     mockInvokeDefault();
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(invokeMock.mock.calls.map((c) => c[0])).toEqual([
       "session:create",
       "session:setModel",
@@ -154,7 +174,7 @@ describe("dispatchNewTask", () => {
       }
       return Promise.resolve(null);
     });
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(invokeMock).toHaveBeenCalledWith("session:setModel", 9, 11);
     expect(invokeMock).toHaveBeenCalledWith("chat:send", expect.anything());
     expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
@@ -173,7 +193,7 @@ describe("dispatchNewTask", () => {
       }
       return Promise.resolve(null);
     });
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
       replace: true,
     });
@@ -192,7 +212,7 @@ describe("dispatchNewTask", () => {
       }
       return Promise.resolve(null);
     });
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     expect(navigate).toHaveBeenCalledWith("/module/ai?session=9", {
       replace: true,
     });
@@ -216,7 +236,7 @@ describe("dispatchNewTask", () => {
       }
       return Promise.resolve(null);
     });
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     // 引用式（引用式批 2026-10-21）：工作空间引用不再读全文（无
     // readWorkspaceFile 调用），AI 处理时 read 自读
     expect(
@@ -251,7 +271,7 @@ describe("dispatchNewTask", () => {
       }
       return Promise.resolve(null);
     });
-    await dispatchNewTask({ navigate });
+    await dispatchNewTask({ navigate, queryClient });
     const sendCall = invokeMock.mock.calls.find((c) => c[0] === "chat:send");
     // 图片不读进文本（无占位标记），以 images 数组随消息直发
     expect((sendCall![1] as { content: string }).content).not.toContain(

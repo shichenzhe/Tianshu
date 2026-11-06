@@ -5,12 +5,14 @@
  * 同口径 buildInjectedContent）→ create(scenario)
  * → [专家/模式/模型草稿落库（PlusMenu 对齐）：setAssistant / setMode /
  * setModel（send 前完成，失败降级继续）] →
- * [full: setPermission] → send（发起即继续不等流结束）→ 清草稿跳会话。
+ * [full: setPermission] → 失效 ["sessions"] 缓存 → send（发起即继续不等流
+ * 结束）→ 清草稿跳会话。
  * create/读引用失败抛错（调用方 NewTaskView catch 后 toast）草稿保留落地页；
  * send 例外——session 已建立仅早期失败 toast，仍导航
  */
 import i18n from "@/i18n";
 import { toast } from "sonner";
+import type { QueryClient } from "@tanstack/react-query";
 
 import SessionApi from "../../api/session.api";
 import ChatApi from "../../api/chat.api";
@@ -26,6 +28,7 @@ import { useNewTaskStore } from "../store/new-task-store";
 
 export interface DispatchParams {
   navigate: (to: string, options?: { replace?: boolean }) => void;
+  queryClient: QueryClient;
 }
 
 /** 单条 pending 引用 → 注入块（读失败直接抛错中断本次发送——落地页逐引用可用才可发） */
@@ -56,6 +59,7 @@ async function readPendingRef(ref: PendingRef): Promise<PendingFile> {
 /** 读取 store 当前草稿并发起任务；任一步失败抛错（调用方 toast），输入保留 */
 export async function dispatchNewTask({
   navigate,
+  queryClient,
 }: DispatchParams): Promise<void> {
   const {
     content,
@@ -100,6 +104,14 @@ export async function dispatchNewTask({
   if (accessMode === "full") {
     await ChatApi.setPermission(created.id, "full");
   }
+  // 会话行已写定（专家/模式/模型/权限）：失效 ["sessions"] 缓存并等 active
+  // observer（侧栏任务树）重拉完成再跳——ChatView 落点从 ["sessions","all"]
+  // find，全局 staleTime 30s 内 fresh 缓存挂载不重拉，缺此步新会话不在
+  // 缓存、跳转落点成空态提示页（openTaskSession 同款，task-session.ts）；
+  // 刷新失败不阻断导航——session 已建立，落点缓存后续失效自愈
+  await queryClient
+    .invalidateQueries({ queryKey: ["sessions"] })
+    .catch(() => {});
   // chat:send 的 IPC 契约是"整个流式生成完成才 resolve"（后端 send 内部
   // await streamAndPersist）——落地页发起即继续、不等流：ChatView 挂载后经
   // chat:status/流事件恢复进度；早期失败（无模型等，发生在流开始前）在此

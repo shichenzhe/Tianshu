@@ -30,6 +30,7 @@ import { SessionActionsSheet } from "@/components/SessionActionsSheet";
 import { SessionRenameDialog } from "@/components/SessionRenameDialog";
 import { SessionRow } from "@/components/SessionRow";
 import { SkeletonSessionList } from "@/components/SkeletonSessionList";
+import { SkinWallpaper } from "@/components/SkinWallpaper";
 import {
   archiveWithUndo,
   undoArchive,
@@ -46,6 +47,7 @@ import { useConnectionsStore } from "@/store/connections.store";
 import { useSearchUiStore } from "@/store/search-ui";
 import { useSessionsStore, type SessionBrief } from "@/store/sessions.store";
 import { useThemeColors } from "@/store/theme";
+import { useSkinWallpaper } from "@/theme/skins-assets";
 
 /** 会话列表页（T13）：防抖搜索 + 归档筛选 + 分页 FlatList +
  * 长按操作面板（置顶/归档/删除）；连接管理与新建会话入口在聊天 Tab 顶栏。
@@ -223,6 +225,8 @@ const SessionEntryRow = memo(function SessionEntryRow({
 export default function SessionsScreen() {
   const { t } = useTranslation(["chat", "common"]);
   const colors = useThemeColors();
+  // 精选皮肤壁纸（null=纯色主题）：壁纸层置根首位、组卡保持实色浮卡形态
+  const skinWallpaper = useSkinWallpaper();
   const router = useRouter();
 
   const activeConnId = useConnectionsStore((s) => s.activeConnId);
@@ -675,7 +679,14 @@ export default function SessionsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={["bottom"]}>
-      <View className="flex-1 bg-grouped dark:bg-black">
+      {/* 壁纸生效时根底色透明（透出 SkinWallpaper），纯色主题保持双态实色；
+          会话组卡/搜索框自带实色底，浮卡于壁纸上（可读性由卡底保障） */}
+      <View
+        className={
+          skinWallpaper ? "flex-1" : "flex-1 bg-grouped dark:bg-black"
+        }
+      >
+        <SkinWallpaper />
         {/* 搜索框（顶栏放大镜展开；store 内 400ms 防抖）。微信式：归档
             筛选收进搜索面板（细分线 + 居中的「未归档/全部」选项），
             收起搜索即复位「未归档」（search-ui store 内联动） */}

@@ -5,7 +5,7 @@ import {
   dropAllTables,
   readSnapshotHash,
   recordSnapshotHash,
-  shouldResetDatabase,
+  resolveResetDecision,
 } from "./infrastructure/version/snapshot-guard";
 import UserRepository from "./domains/user/user.repo";
 import OptionRepository from "./domains/option/option.repo";
@@ -186,7 +186,10 @@ export default class Application {
       }
 
       // 快照守卫（snapshot-guard）：版本倒挂或同版本指纹不符（发布前
-      // 改 v1 快照不加版）→ drop 全部业务表重放 v1 全量重建（开发期数据可弃）
+      // 改 v1 快照不加版）→ 仅开发态（未打包）drop 全部业务表重放 v1
+      // 全量重建（开发期数据可弃）；打包态（稳定版）永不重置——用户
+      // 数据优先，仅记错误日志以现有结构继续启动（倒挂即降级安装，
+      // 旧代码跑新库，SQLite 增量列无害）
       const snapshotPath = path.join(
         __dirname,
         "script",
@@ -194,14 +197,14 @@ export default class Application {
         "upgrade-table.sql",
       );
       const snapshotHash = await readSnapshotHash(snapshotPath);
-      if (
-        await shouldResetDatabase(
-          prisma.option,
-          currentVersion,
-          this.databaseVerson,
-          snapshotHash,
-        )
-      ) {
+      const resetDecision = await resolveResetDecision(
+        prisma.option,
+        currentVersion,
+        this.databaseVerson,
+        snapshotHash,
+        /* allowReset */ !app.isPackaged,
+      );
+      if (resetDecision.reset) {
         Log.warn(
           "数据库结构与 v1 全量快照不一致（版本倒挂或快照已修改），重置开发库重建",
         );
@@ -211,6 +214,11 @@ export default class Application {
         });
         await VersionRepository.initTable();
         currentVersion = 0;
+      } else if (resetDecision.reason) {
+        Log.error(
+          `数据库结构与 v1 全量快照不一致（${resetDecision.reason}），` +
+            "稳定版不重置用户数据，以现有结构继续启动",
+        );
       }
 
       if (currentVersion < this.databaseVerson) {

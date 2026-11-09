@@ -1,5 +1,6 @@
 /**
- * v1 快照守卫单测：重置判定（倒挂/同版本指纹不符/待升级/指纹匹配）、
+ * v1 快照守卫单测：重置判定（倒挂/同版本指纹不符/待升级/指纹匹配）×
+ * 重置策略门（allowReset：开发态可重置，打包态恒不重置仅上报原因）、
  * 指纹落库闭环、drop 全部业务表（保留 sqlite 内部表）、快照文件指纹稳定性
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -14,7 +15,7 @@ import {
   dropAllTables,
   readSnapshotHash,
   recordSnapshotHash,
-  shouldResetDatabase,
+  resolveResetDecision,
   type RawSqlExecutor,
 } from "../../electron/infrastructure/version/snapshot-guard";
 
@@ -68,42 +69,96 @@ function sqliteRaw(db: DatabaseSync): RawSqlExecutor {
   };
 }
 
-describe("shouldResetDatabase", () => {
-  it("版本倒挂（库来自被弃 v2–v14 增量路线）→ 重置", async () => {
-    expect(await shouldResetDatabase(optionStub(), 10, 1, HASH)).toBe(true);
+describe("resolveResetDecision（allowReset=true 开发态）", () => {
+  it("版本倒挂（库来自被弃 v2–v14 增量路线）→ 重置，原因 inversion", async () => {
+    expect(await resolveResetDecision(optionStub(), 10, 1, HASH, true)).toEqual({
+      reset: true,
+      reason: "inversion",
+    });
   });
 
-  it("全新库/待升级（0）→ 不重置，跑完快照自然对齐", async () => {
-    expect(await shouldResetDatabase(optionStub(), 0, 1, HASH)).toBe(false);
+  it("全新库/待升级（0）→ 不重置无原因，跑完快照自然对齐", async () => {
+    expect(await resolveResetDecision(optionStub(), 0, 1, HASH, true)).toEqual({
+      reset: false,
+      reason: null,
+    });
   });
 
-  it("同版本但无指纹记录（旧 v1 库首跑守卫）→ 重置", async () => {
-    expect(await shouldResetDatabase(optionStub(), 1, 1, HASH)).toBe(true);
+  it("同版本但无指纹记录（旧 v1 库首跑守卫）→ 重置，原因 snapshotMismatch", async () => {
+    expect(await resolveResetDecision(optionStub(), 1, 1, HASH, true)).toEqual({
+      reset: true,
+      reason: "snapshotMismatch",
+    });
   });
 
-  it("同版本且指纹匹配 → 不重置", async () => {
+  it("同版本且指纹匹配 → 不重置无原因", async () => {
     const stub = optionStub(new Map([[SNAPSHOT_HASH_OPTION_KEY, HASH]]));
-    expect(await shouldResetDatabase(stub, 1, 1, HASH)).toBe(false);
+    expect(await resolveResetDecision(stub, 1, 1, HASH, true)).toEqual({
+      reset: false,
+      reason: null,
+    });
   });
 
-  it("同版本但指纹不符（快照已改列）→ 重置", async () => {
+  it("同版本但指纹不符（快照已改列）→ 重置，原因 snapshotMismatch", async () => {
     const stub = optionStub(
       new Map([[SNAPSHOT_HASH_OPTION_KEY, "b".repeat(64)]]),
     );
-    expect(await shouldResetDatabase(stub, 1, 1, HASH)).toBe(true);
+    expect(await resolveResetDecision(stub, 1, 1, HASH, true)).toEqual({
+      reset: true,
+      reason: "snapshotMismatch",
+    });
   });
 
-  it("option 结构旧到指纹不可读 → 重置", async () => {
-    expect(await shouldResetDatabase(brokenOption, 1, 1, HASH)).toBe(true);
+  it("option 结构旧到指纹不可读 → 重置，原因 unreadableOption", async () => {
+    expect(
+      await resolveResetDecision(brokenOption, 1, 1, HASH, true),
+    ).toEqual({ reset: true, reason: "unreadableOption" });
+  });
+});
+
+describe("resolveResetDecision（allowReset=false 打包态）", () => {
+  it("版本倒挂 → 不重置保数据，原因仍上报 inversion", async () => {
+    expect(
+      await resolveResetDecision(optionStub(), 10, 1, HASH, false),
+    ).toEqual({ reset: false, reason: "inversion" });
+  });
+
+  it("同版本指纹不符 → 不重置保数据，原因仍上报 snapshotMismatch", async () => {
+    const stub = optionStub(
+      new Map([[SNAPSHOT_HASH_OPTION_KEY, "b".repeat(64)]]),
+    );
+    expect(await resolveResetDecision(stub, 1, 1, HASH, false)).toEqual({
+      reset: false,
+      reason: "snapshotMismatch",
+    });
+  });
+
+  it("option 结构旧到指纹不可读 → 不重置保数据，原因仍上报 unreadableOption", async () => {
+    expect(
+      await resolveResetDecision(brokenOption, 1, 1, HASH, false),
+    ).toEqual({ reset: false, reason: "unreadableOption" });
+  });
+
+  it("同版本且指纹匹配 → 不重置且无原因（不误报）", async () => {
+    const stub = optionStub(new Map([[SNAPSHOT_HASH_OPTION_KEY, HASH]]));
+    expect(await resolveResetDecision(stub, 1, 1, HASH, false)).toEqual({
+      reset: false,
+      reason: null,
+    });
   });
 });
 
 describe("recordSnapshotHash", () => {
-  it("落库后同指纹判定不重置（读写闭环）", async () => {
+  it("落库后同指纹不重置、指纹不符可判出（读写闭环）", async () => {
     const stub = optionStub();
     await recordSnapshotHash(stub, HASH);
-    expect(await shouldResetDatabase(stub, 1, 1, HASH)).toBe(false);
-    expect(await shouldResetDatabase(stub, 1, 1, "c".repeat(64))).toBe(true);
+    expect(await resolveResetDecision(stub, 1, 1, HASH, true)).toEqual({
+      reset: false,
+      reason: null,
+    });
+    expect(
+      await resolveResetDecision(stub, 1, 1, "c".repeat(64), true),
+    ).toEqual({ reset: true, reason: "snapshotMismatch" });
   });
 });
 
@@ -132,7 +187,7 @@ describe("readSnapshotHash", () => {
     writeFileSync(fileA, "CREATE TABLE t (id INTEGER);");
     const hashA = await readSnapshotHash(fileA);
     expect(hashA).toMatch(/^[0-9a-f]{64}$/);
-    writeFileSync(fileA, "CREATE TABLE t (id INTEGER, name TEXT);");
+    writeFileSync(fileA, "CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);");
     expect(await readSnapshotHash(fileA)).not.toBe(hashA);
     // 重新写入相同内容 → 指纹还原（幂等基准）
     writeFileSync(fileA, "CREATE TABLE t (id INTEGER);");

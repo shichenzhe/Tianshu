@@ -119,7 +119,7 @@ npm run typecheck -w apps/tianshu-mobile   # tsc
 - Schema 定义：`prisma/schema.prisma`
 - Prisma Client 输出：`electron/generated/prisma`
 - 当前数据库版本：1（`electron/Constants.ts`；v1 为发布前全量建表脚本，已并入原 v2–v14 的全部变更；发布后 schema 变更再逐版新增 `script/vN`；业务表带 userId 隔离，IPC 层经 token 解出 userId，前端不传用户 id）
-- 快照指纹守卫（`electron/infrastructure/version/snapshot-guard.ts`）：发布前直接改 v1 快照不加版——旧库 `CREATE TABLE IF NOT EXISTS` 不补列，靠快照 sha256 指纹（存 option 表 `db.v1SnapshotHash`）识别「同版本但快照已变」及版本倒挂，自动 drop 全部业务表重放 v1 重建（开发期数据可弃）
+- 快照指纹守卫（`electron/infrastructure/version/snapshot-guard.ts`）：发布前直接改 v1 快照不加版——旧库 `CREATE TABLE IF NOT EXISTS` 不补列，靠快照 sha256 指纹（存 option 表 `db.v1SnapshotHash`）识别「同版本但快照已变」及版本倒挂；仅开发态（未打包，`allowReset=!app.isPackaged`）自动 drop 全部业务表重放 v1 重建（开发期数据可弃），**打包态（稳定版）永不重置**——仅记错误日志以现有结构继续启动，安装/升级/降级均不动用户数据
 
 主要数据表（schema 共 31 张）：`user`、`db_version`、`option`、`provider`、`model`、`assistant`、`workspace`、`session`、`message`、`artifact`、`artifactFavorite`、`mcpServer`、`toolPermission`、`skillRecord`、`skillStat`、`automationTask`、`automationRun`、`automationStat`、`graphDefinition`、`graphRunNode`（图运行节点级执行详情，`ensureGraphRunNodeTable` 启动幂等补建）、`project`、`projectMember`、`projectBinding`、`planItem`、`planView`、`planItemAttachment`、`libraryItem`、`vectorChunk`、`llmCallEvent`、`toolCallEvent`、`securityAuditLog`
 

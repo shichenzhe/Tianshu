@@ -26,6 +26,15 @@ describe("IPC 事件白名单", () => {
     expect(isEventAllowed("automation:tasks-changed")).toBe(true);
   });
 
+  it("放行 workspace/project/session 三个 changed 推送（repo 写面失效链）", () => {
+    // 2026-11-06 修复：批③ workspace:changed/project:changed 漏登白名单
+    // 静默失效（渲染层 on 被 preload 拒听，console.error 后返回空退订——
+    // 监听从未建立）；session:changed 随同批补登
+    expect(isEventAllowed("workspace:changed")).toBe(true);
+    expect(isEventAllowed("project:changed")).toBe(true);
+    expect(isEventAllowed("session:changed")).toBe(true);
+  });
+
   it("放行动态前缀 chat:stream:<sessionId>，拒绝未知名通道", () => {
     expect(isEventAllowed("chat:stream:42")).toBe(true);
     expect(isEventAllowed("orchestration:unknown-event")).toBe(false);

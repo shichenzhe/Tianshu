@@ -55,6 +55,8 @@ const prismaStub = vi.hoisted(() => ({
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
   shell: { openPath: vi.fn() },
+  // 结构性写面埋点（2026-11-06）经 session-change-bus 全窗扇出——空窗集
+  BrowserWindow: { getAllWindows: () => [] },
 }));
 // session.repo 引 commons/Log（Winston，模块加载即建 transport）——mock 掉避免测试写日志
 vi.mock("../../electron/commons/Log", () => ({

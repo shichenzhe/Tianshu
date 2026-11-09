@@ -11,6 +11,7 @@ import { on } from "@/lib/ipc";
 import { AUTOMATION_CHANGED_EVENT } from "@/domains/ai/automation/api/automation.api";
 import { GRAPH_CHANGED_EVENT } from "@/domains/ai/orchestration/api/orchestration.api";
 import { WORKSPACE_CHANGED_EVENT } from "@/domains/ai/api/workspace.api";
+import { SESSION_CHANGED_EVENT } from "@/domains/ai/api/session.api";
 import { PROJECT_CHANGED_EVENT } from "@/domains/project/api/project.api";
 
 export function registerQueryInvalidation(client: QueryClient): void {
@@ -24,6 +25,11 @@ export function registerQueryInvalidation(client: QueryClient): void {
   // 分组树缓存失效（前缀失效覆盖 ["projects", user.id] 子 key）
   on(WORKSPACE_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["workspaces"] });
+  });
+  // 会话结构性写面（2026-11-06）：移动端经 server-face 建/删/归档/置顶/
+  // 改名会话 → 侧栏会话树缓存失效（前缀失效覆盖 ["sessions", "all"]）
+  on(SESSION_CHANGED_EVENT, () => {
+    void client.invalidateQueries({ queryKey: ["sessions"] });
   });
   on(PROJECT_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["projects"] });

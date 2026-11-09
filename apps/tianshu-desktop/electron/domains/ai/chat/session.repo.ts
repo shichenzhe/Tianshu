@@ -25,6 +25,7 @@ import { summarizeLastMessage } from "@tianshu/core/last-message";
 import type { SessionLastMessage, SessionReadResult } from "@tianshu/protocol";
 import { revokeSession } from "../file-window/granted-paths";
 import { emitWorkspaceChanged } from "./workspace-change-bus";
+import { emitSessionChanged } from "./session-change-bus";
 import type { ArtifactListItem } from "../../../../src-react/domains/ai/api/artifact.api";
 import { classifyFileType } from "../library/library.utils";
 import { PROJECT_NOT_FOUND } from "../../project/project.entity";
@@ -481,6 +482,10 @@ export class SessionRepository {
       await this.assertAssistantOwnedByUser(p.assistantId, userId);
     }
     const row = await this.createSessionRow(p, workspaceId, userId);
+    // 写后广播（本地 UI 与 face tap 共用本方法——单点双路径覆盖）：移动端
+    // 经 server-face 建会话后桌面侧栏树实时失效重拉（planItemId 复用分支
+    // 无写入不扇出）
+    emitSessionChanged();
     return this.toSession(row);
   }
 
@@ -814,6 +819,7 @@ export class SessionRepository {
       where: { id },
       data: { pinnedAt: pinned ? new Date() : null },
     });
+    emitSessionChanged();
   }
 
   /** v5 归档：归档任务从列表/搜索消失，撤销即清空 */
@@ -827,6 +833,7 @@ export class SessionRepository {
       where: { id },
       data: { archivedAt: archived ? new Date() : null },
     });
+    emitSessionChanged();
   }
 
   /**
@@ -1147,6 +1154,7 @@ export class SessionRepository {
   ): Promise<void> {
     await this.assertSessionOwned(id, userId);
     await prisma.session.update({ where: { id }, data: { title } });
+    emitSessionChanged();
   }
 
   async deleteSession(id: number, userId: number): Promise<void> {
@@ -1164,6 +1172,7 @@ export class SessionRepository {
     // 会话级路径授权随删回收（T28 spec §16 项 1）：删除成功后尽力回收
     // （主进程内直连，不加通道；revoke 内部自吞错不影响删除结果）
     await revokeSession(id, userId);
+    emitSessionChanged();
   }
 
   async setSessionModel(

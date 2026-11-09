@@ -201,4 +201,10 @@ export interface MessagePage {
   nextBeforeId: number | null;
 }
 
+/** 会话变更事件通道（WORKSPACE_CHANGED_EVENT 同款跨引先例）：主进程
+ *  session repo 结构性写面（建/删/归档/置顶/改名）成功后推送——渲染层
+ *  React Query ["sessions"] 失效；移动端经 server-face 远程写本地库后
+ *  桌面侧栏树实时刷新（2026-11-06 修复，主进程 change-bus 引本常量） */
+export const SESSION_CHANGED_EVENT = "session:changed";
+
 export default SessionApi;

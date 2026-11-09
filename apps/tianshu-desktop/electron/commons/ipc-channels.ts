@@ -473,6 +473,14 @@ export const IPC_EVENT_ALLOWLIST = [
   // orchestration:graphs-changed 图试运行收尾推送（先例同上）
   "automation:tasks-changed",
   "orchestration:graphs-changed",
+  // repo 写面变更推送 → 渲染层 React Query 失效（query-invalidate-events
+  // 常驻监听）：批③（2026-11-01）workspace/project 两通道漏登白名单——
+  // preload 拒听非白名单事件，失效链自此静默失效（主进程 send 正常、
+  // 渲染层 on 被 console.error 拒绝，2026-11-06 修复时发现）；session
+  // 通道随同批补登（远程建会话桌面树实时刷新）
+  "workspace:changed",
+  "project:changed",
+  "session:changed",
   // 图试运行/运行中的节点状态实时推送（GraphEditorView 画布高亮监听；
   // preload 拒听非白名单事件，缺此通道高亮会静默失效）
   "orchestration:node-status",

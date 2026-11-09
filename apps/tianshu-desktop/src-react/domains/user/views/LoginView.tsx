@@ -37,6 +37,7 @@ interface RegisterForm {
   nickname: string;
   email: string;
   password: string;
+  confirmPassword: string;
 }
 
 export default function LoginView() {
@@ -57,6 +58,7 @@ export default function LoginView() {
     nickname: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
 
   // 状态
@@ -74,6 +76,7 @@ export default function LoginView() {
     username?: string;
     email?: string;
     password?: string;
+    confirmPassword?: string;
   }>({});
 
   // 输入框引用
@@ -148,6 +151,11 @@ export default function LoginView() {
     }
     if (!registerForm.password) {
       errors.password = t("user:register.passwordRequired");
+    }
+    if (!registerForm.confirmPassword) {
+      errors.confirmPassword = t("user:register.confirmPasswordRequired");
+    } else if (registerForm.confirmPassword !== registerForm.password) {
+      errors.confirmPassword = t("user:register.passwordMismatch");
     }
 
     setRegisterErrors(errors);
@@ -233,6 +241,7 @@ export default function LoginView() {
         nickname: "",
         email: "",
         password: "",
+        confirmPassword: "",
       });
       setRegisterErrors({});
     } catch (error) {
@@ -247,6 +256,13 @@ export default function LoginView() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleLogin();
+    }
+  };
+
+  // 处理回车键注册（注册中防重复提交）
+  const handleRegisterKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !registerLoading) {
+      handleRegister();
     }
   };
 
@@ -393,6 +409,7 @@ export default function LoginView() {
                       username: e.target.value,
                     }))
                   }
+                  onKeyDown={handleRegisterKeyDown}
                   className="pl-9"
                 />
               </div>
@@ -420,6 +437,7 @@ export default function LoginView() {
                       nickname: e.target.value,
                     }))
                   }
+                  onKeyDown={handleRegisterKeyDown}
                   className="pl-9"
                 />
               </div>
@@ -444,6 +462,7 @@ export default function LoginView() {
                       email: e.target.value,
                     }))
                   }
+                  onKeyDown={handleRegisterKeyDown}
                   className="pl-9"
                 />
               </div>
@@ -473,12 +492,43 @@ export default function LoginView() {
                       password: e.target.value,
                     }))
                   }
+                  onKeyDown={handleRegisterKeyDown}
                   className="pl-9"
                 />
               </div>
               {registerErrors.password && (
                 <p className="text-sm text-destructive">
                   {registerErrors.password}
+                </p>
+              )}
+            </div>
+
+            {/* 确认密码 */}
+            <div className="space-y-2">
+              <Label htmlFor="reg-confirm-password">
+                {t("user:register.confirmPassword")}{" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  id="reg-confirm-password"
+                  type="password"
+                  placeholder={t("user:register.confirmPasswordPlaceholder")}
+                  value={registerForm.confirmPassword}
+                  onChange={(e) =>
+                    setRegisterForm((prev) => ({
+                      ...prev,
+                      confirmPassword: e.target.value,
+                    }))
+                  }
+                  onKeyDown={handleRegisterKeyDown}
+                  className="pl-9"
+                />
+              </div>
+              {registerErrors.confirmPassword && (
+                <p className="text-sm text-destructive">
+                  {registerErrors.confirmPassword}
                 </p>
               )}
             </div>

@@ -129,11 +129,13 @@ export default function GlobalSidebar() {
             macOS 主机切换器挪位批：Logo/名称/版本右侧（ml-auto 行末）承载
             HostSwitcher——全局数据源切换入口与品牌行同排；侧栏收起时本行
             随侧栏裁掉，切换器由 AiTopbarActions 折叠分支回顶栏兜底。
-            Windows 不放（自绘标题栏已有实例，避免双入口） */}
+            Windows 不放（自绘标题栏已有实例，避免双入口）。
+            行宽 w-64 有限：品牌名 shrink-0 恒完整（不遮 logo 名称），
+            空间不足的截断压力全部留给切换器侧（compact 收紧 + 冒泡全称） */}
         {(isMac || isWindows) && (
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">
             <AppLogo className="h-5 w-5" />
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground select-none">
+            <span className="shrink-0 text-sm font-semibold tracking-tight text-foreground select-none">
               {t("common:appName")}
             </span>
             <span className="shrink-0 text-xs text-muted-foreground select-none">
@@ -141,7 +143,7 @@ export default function GlobalSidebar() {
             </span>
             {isMac && (
               <div className="ml-auto">
-                <HostSwitcher />
+                <HostSwitcher compact />
               </div>
             )}
           </div>

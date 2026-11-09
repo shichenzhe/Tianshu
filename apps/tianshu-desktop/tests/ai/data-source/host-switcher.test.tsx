@@ -83,7 +83,7 @@ function LocationProbe() {
   );
 }
 
-function renderSwitcher() {
+function renderSwitcher(compact?: boolean) {
   // 与 main.tsx 同款装配：queryKeyHashFn 按主机隔离（批3B）
   const client = new QueryClient({
     defaultOptions: {
@@ -94,7 +94,7 @@ function renderSwitcher() {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/module/ai"]}>
         <LocationProbe />
-        <HostSwitcher />
+        <HostSwitcher compact={compact} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -279,5 +279,42 @@ describe("HostSwitcher", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["messages"] });
     // 本地主机不订阅
     expect(remoteEventListeners.size).toBe(1);
+  });
+});
+
+describe("HostSwitcher 名称截断与冒泡提示（Logo 行挪位批）", () => {
+  const LONG_NAME = "非常长非常长的远程主机名称示例ABCDEFG";
+
+  beforeEach(() => {
+    serverApi.listConnections.mockResolvedValue({
+      connections: [conn("remote-long", "connected", LONG_NAME)],
+    });
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "remote-long" },
+    });
+  });
+
+  it("默认形态（顶栏位）：名称 span max-w-28 truncate", async () => {
+    renderSwitcher();
+    const nameSpan = await screen.findByText(LONG_NAME);
+    expect(nameSpan.classList).toContain("max-w-28");
+    expect(nameSpan.classList).toContain("truncate");
+  });
+
+  it("compact 形态（侧栏 Logo 行位）：名称 span 收紧 max-w-16", async () => {
+    renderSwitcher(true);
+    const nameSpan = await screen.findByText(LONG_NAME);
+    expect(nameSpan.classList).toContain("max-w-16");
+    expect(nameSpan.classList).toContain("truncate");
+  });
+
+  it("冒泡提示：聚焦触发钮显示完整主机名（名称被截断时可看全称）", async () => {
+    renderSwitcher(true);
+    const trigger = await screen.findByTestId("host-switcher");
+    fireEvent.focus(trigger);
+    await waitFor(() => {
+      const tip = document.querySelector('[role="tooltip"]');
+      expect(tip?.textContent).toContain(LONG_NAME);
+    });
   });
 });

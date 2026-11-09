@@ -46,7 +46,9 @@ vi.mock("@/components/common/AppLogo", () => ({
   default: () => <div data-testid="app-logo" />,
 }));
 vi.mock("@/domains/ai/layout/components/HostSwitcher", () => ({
-  default: () => <div data-testid="host-switcher" />,
+  default: ({ compact }: { compact?: boolean }) => (
+    <div data-testid="host-switcher" data-compact={compact ? "1" : "0"} />
+  ),
 }));
 
 import GlobalSidebar from "../../src-react/components/layout/GlobalSidebar";
@@ -121,6 +123,19 @@ describe("GlobalSidebar Logo 行主机切换器（macOS 挪位批）", () => {
     expect(row.contains(hostSwitcher)).toBe(true);
     // 视觉序：切换器由 ml-auto 推至行内末位（行最后一个子元素承载）
     expect(row.lastElementChild!.contains(hostSwitcher)).toBe(true);
+  });
+
+  it("darwin：品牌名永不截断（shrink-0）+ 切换器 compact 形态收紧主机名", () => {
+    window.platform = "darwin";
+    renderSidebar();
+    // 品牌名 shrink-0：行内空间不足时被挤压的是切换器侧（其内部截断），
+    // 天枢名称/版本恒完整（用户裁定：不要把 logo 的名称遮住）
+    const appName = screen.getByText("common:appName");
+    expect(appName.classList).toContain("shrink-0");
+    // compact 透传：切换器内部主机名收紧 max-w-16 截断 + 冒泡全称
+    expect(screen.getByTestId("host-switcher").getAttribute("data-compact")).toBe(
+      "1",
+    );
   });
 
   it("win32：Logo 行不含主机切换器（Windows 走自绘标题栏，避免双入口）", () => {

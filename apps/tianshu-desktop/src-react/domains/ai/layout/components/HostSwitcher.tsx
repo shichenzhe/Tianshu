@@ -23,6 +23,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import ServerApi, { onRemoteEvent } from "../../server/api/server.api";
 import { CONNECTIONS_QUERY_KEY } from "../../server/components/ConnectionDialog";
 import { useHostStore, type ActiveHost } from "../../data-source/host.store";
@@ -35,7 +41,14 @@ function stateDotClass(state: string): string {
   return "bg-muted-foreground/40";
 }
 
-export default function HostSwitcher() {
+interface HostSwitcherProps {
+  /** 紧凑形态（侧栏 Logo 行位）：主机名收紧截断（max-w-16）——行宽 w-64
+   *  有限，把截断压力留在主机名侧（品牌名 shrink-0 恒完整）；顶栏位
+   *  维持默认 max-w-28。两种形态下名称被截断时均可冒泡看全称 */
+  compact?: boolean;
+}
+
+export default function HostSwitcher({ compact = false }: HostSwitcherProps) {
   const { t } = useTranslation(["layout"]);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -83,23 +96,40 @@ export default function HostSwitcher() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="sm"
-          data-testid="host-switcher"
-          className="h-7 gap-1 px-2 text-xs hover:bg-primary-subtle hover:text-primary"
-          aria-label={t("layout:hostSwitcher.tooltip")}
-        >
-          {activeHost.kind === "local" ? (
-            <Monitor className="h-4 w-4" />
-          ) : (
-            <Server className="h-4 w-4" />
-          )}
-          <span className="max-w-28 truncate">{activeName}</span>
-          <ChevronDown className="h-3 w-3 opacity-60" />
-        </Button>
-      </DropdownMenuTrigger>
+      {/* 冒泡全称（Logo 行挪位批）：主机名被截断时悬停/聚焦可看全名——
+          Tooltip 包在 DropdownMenuTrigger 外层（IconTooltip asChild 铁律）；
+          自带 Provider（侧栏 Logo 行无外层 Provider 语境） */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="host-switcher"
+                className="h-7 gap-1 px-2 text-xs hover:bg-primary-subtle hover:text-primary"
+                aria-label={t("layout:hostSwitcher.tooltip")}
+              >
+                {activeHost.kind === "local" ? (
+                  <Monitor className="h-4 w-4" />
+                ) : (
+                  <Server className="h-4 w-4" />
+                )}
+                <span
+                  className={cn(
+                    "truncate",
+                    compact ? "max-w-16" : "max-w-28",
+                  )}
+                >
+                  {activeName}
+                </span>
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{activeName}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       <DropdownMenuContent
         align="start"
         className="border border-border/50 rounded-lg shadow-lg"

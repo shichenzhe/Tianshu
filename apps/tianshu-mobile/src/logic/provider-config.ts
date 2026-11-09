@@ -1,5 +1,8 @@
 import type { ModelSaveItem, ProviderSaveItem } from "@tianshu/protocol";
-import { guessModelType } from "@tianshu/core";
+// 深路径导入（勿改成裸 @tianshu/core）：主 barrel 聚合 node:fs/node:crypto
+// 等 Node-only 模块，RN 打包必炸（2026-11-06 实证）；model-type 为自包含
+// 纯函数——由 src/core-import-guard.test.ts 守卫依赖闭包
+import { guessModelType } from "@tianshu/core/dist/model-type";
 
 export interface ProviderFormValues {
   name: string;

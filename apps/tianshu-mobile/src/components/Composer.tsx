@@ -129,6 +129,9 @@ export function Composer({
   }, [prefill, sending, editing]);
 
   const canSend = text.trim() !== "" && !busy;
+  // 发送/中止键按压态（实底按钮的按压反馈——nativewind 栈函数式 style
+  // 不可靠，state 承载；两键互斥渲染共用一个 state）
+  const [actionPressed, setActionPressed] = useState(false);
 
   async function handleSend() {
     if (!canSend) return;
@@ -352,28 +355,34 @@ export function Composer({
           {sending ? (
             <Pressable
               onPress={onStop}
+              onPressIn={() => setActionPressed(true)}
+              onPressOut={() => setActionPressed(false)}
               accessibilityRole="button"
               accessibilityLabel={t("stop")}
               className="h-11 w-11 items-center justify-center rounded-full"
-              style={({ pressed }) => ({
-                backgroundColor: STOP_BG,
-                opacity: pressed ? 0.72 : 1,
-              })}
+              // 实底必须对象式（nativewind 栈铁律：className 共存时函数式
+              // style 的 backgroundColor 静默丢弃——浅色下实底丢失即白底
+              // 白图标不可见，2026-11-06 修复；按压态由 state 承载，
+              // 守卫见 composer-solid-bg-guard.test.ts）
+              style={{ backgroundColor: STOP_BG, opacity: actionPressed ? 0.72 : 1 }}
             >
               <Square size={12} color="#fff" fill="#fff" />
             </Pressable>
           ) : (
             <Pressable
               onPress={() => void handleSend()}
+              onPressIn={() => setActionPressed(true)}
+              onPressOut={() => setActionPressed(false)}
               disabled={!canSend}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}
               accessibilityLabel={t("send")}
               className="h-11 w-11 items-center justify-center rounded-full"
-              style={({ pressed }) => ({
+              // 同上：实底对象式（opacity 随 canSend/actionPressed 渲染更新）
+              style={{
                 backgroundColor: colors.primary,
-                opacity: !canSend ? 0.4 : pressed ? 0.72 : 1,
-              })}
+                opacity: !canSend ? 0.4 : actionPressed ? 0.72 : 1,
+              }}
             >
               <AppIcon
                 name="arrow.up"

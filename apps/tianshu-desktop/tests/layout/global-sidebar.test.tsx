@@ -45,6 +45,9 @@ vi.mock("../../src-react/components/layout/UserMenu", () => ({
 vi.mock("@/components/common/AppLogo", () => ({
   default: () => <div data-testid="app-logo" />,
 }));
+vi.mock("@/domains/ai/layout/components/HostSwitcher", () => ({
+  default: () => <div data-testid="host-switcher" />,
+}));
 
 import GlobalSidebar from "../../src-react/components/layout/GlobalSidebar";
 
@@ -104,5 +107,26 @@ describe("GlobalSidebar Logo 行", () => {
     expect(screen.queryByTestId("app-logo")).toBeNull();
     expect(screen.queryByText("common:appName")).toBeNull();
     expect(screen.queryByText("0.0.0-test")).toBeNull();
+  });
+});
+
+describe("GlobalSidebar Logo 行主机切换器（macOS 挪位批）", () => {
+  it("darwin：主机切换器落在 Logo 行内（logo/名称/版本右侧）", () => {
+    window.platform = "darwin";
+    renderSidebar();
+    const logo = screen.getByTestId("app-logo");
+    const row = logo.parentElement!;
+    const hostSwitcher = screen.getByTestId("host-switcher");
+    // 切换器与 logo 同行（同一 h-9 首行容器内，外包 ml-auto 定位层）
+    expect(row.contains(hostSwitcher)).toBe(true);
+    // 视觉序：切换器由 ml-auto 推至行内末位（行最后一个子元素承载）
+    expect(row.lastElementChild!.contains(hostSwitcher)).toBe(true);
+  });
+
+  it("win32：Logo 行不含主机切换器（Windows 走自绘标题栏，避免双入口）", () => {
+    window.platform = "win32";
+    renderSidebar();
+    expect(screen.getByTestId("app-logo")).toBeTruthy();
+    expect(screen.queryByTestId("host-switcher")).toBeNull();
   });
 });

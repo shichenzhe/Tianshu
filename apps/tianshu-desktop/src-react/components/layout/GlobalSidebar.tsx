@@ -22,6 +22,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import AppLogo from "@/components/common/AppLogo";
+import HostSwitcher from "@/domains/ai/layout/components/HostSwitcher";
 import SessionTreePanel from "@/domains/ai/layout/components/SessionTreePanel";
 import { useAiLayoutKeybindings } from "@/domains/ai/layout/hooks/use-ai-layout-keybindings";
 import WorkspaceApi from "@/domains/ai/api/workspace.api";
@@ -124,7 +125,11 @@ export default function GlobalSidebar() {
         data-sidebar-shell=""
         className="flex h-full w-64 shrink-0 flex-col border-r border-border/50"
       >
-        {/* macOS/Windows 共用顶部 Logo 行（Linux 标题仍在 TopBar） */}
+        {/* macOS/Windows 共用顶部 Logo 行（Linux 标题仍在 TopBar）。
+            macOS 主机切换器挪位批：Logo/名称/版本右侧（ml-auto 行末）承载
+            HostSwitcher——全局数据源切换入口与品牌行同排；侧栏收起时本行
+            随侧栏裁掉，切换器由 AiTopbarActions 折叠分支回顶栏兜底。
+            Windows 不放（自绘标题栏已有实例，避免双入口） */}
         {(isMac || isWindows) && (
           <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/50 px-3">
             <AppLogo className="h-5 w-5" />
@@ -134,6 +139,11 @@ export default function GlobalSidebar() {
             <span className="shrink-0 text-xs text-muted-foreground select-none">
               {__APP_VERSION__}
             </span>
+            {isMac && (
+              <div className="ml-auto">
+                <HostSwitcher />
+              </div>
+            )}
           </div>
         )}
 

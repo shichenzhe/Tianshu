@@ -56,6 +56,7 @@ import {
   ConnectionRegistry,
   LOCAL_CONNECTION_ID,
   localServerStatus,
+  restoreActiveConnection,
   startLocalServer,
   stopLocalServer,
   type ConnectionConfig,
@@ -265,8 +266,16 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
     expect(afterSave.connections[0]).toMatchObject({
       id: "conn-1",
       mode: "direct",
-      state: "idle",
     });
+    // 保存即建链（2026-11-09 修复）：返回值不再是死锁态 idle——entry 已建
+    // （openSecretFields 走 crypto 线程池宏任务，不可达端口的
+    // ECONNREFUSED 可能抢在 list() 映射前落地，connecting/reconnecting
+    // 两端皆合法；唯一不合法的是无 entry 的 idle）
+    expect(
+      ["connecting", "reconnecting"].includes(
+        afterSave.connections[0].state ?? "",
+      ),
+    ).toBe(true);
     // 安全批 D1：token 密封落表（enc:v1: 前缀 + base64；其余字段原样）
     const persisted = readPersistedShape().connections[0] as typeof DIRECT_CONFIG & { token: string };
     expect(persisted.id).toBe(DIRECT_CONFIG.id);
@@ -972,5 +981,78 @@ describe("本地无头端（Supervisor 装配）", () => {
     } finally {
       fs.rmSync(emptyDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("保存即建链 + 启动恢复（2026-11-09 激活死锁修复）", () => {
+  /** 轮询连接视图状态（SSE 建连是真实异步——50ms 步进至 deadline） */
+  async function untilConnState(
+    registry: ConnectionRegistry,
+    id: string,
+    state: string,
+    timeoutMs = 3_000,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const view = (await registry.list()).connections.find((c) => c.id === id);
+      if (view?.state === state) return true;
+      if (Date.now() > deadline) return false;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  it("save 后自动建链：直连连接不再困死 idle——state 转 connected + caps 就位", async () => {
+    const port = await reservePort();
+    const face = await FakeFace.start(port, "face-token");
+    const registry = newRegistry();
+    try {
+      const afterSave = await registry.saveConnection({
+        ...DIRECT_CONFIG,
+        baseUrl: `http://127.0.0.1:${port}`,
+      });
+      // 保存即建链（fire-and-forget）：entry 已建不再 idle；建链是真实
+      // 异步（fetch 宏任务），save 返回时 connecting/connected 皆可能
+      expect(
+        ["connecting", "connected"].includes(
+          afterSave.connections[0].state ?? "",
+        ),
+      ).toBe(true);
+      // SSE 首帧 server.connected → connected + 运行时 caps 上报
+      expect(await untilConnState(registry, "conn-1", "connected")).toBe(true);
+      const view = (await registry.list()).connections.find(
+        (c) => c.id === "conn-1",
+      );
+      expect(view?.capabilities).toEqual(["chat", "provider"]);
+    } finally {
+      await face.kill();
+    }
+  });
+
+  it("restoreActiveConnection：重启（新注册表实例）后恢复活动连接建链", async () => {
+    const port = await reservePort();
+    const face = await FakeFace.start(port, "face-token");
+    const first = newRegistry();
+    try {
+      await first.saveConnection({
+        ...DIRECT_CONFIG,
+        baseUrl: `http://127.0.0.1:${port}`,
+      });
+      await first.activate("conn-1");
+      first.closeAll(); // 模拟旧实例退出（内存 entries 全空，option 表留存）
+
+      const restarted = newRegistry(); // 重启后的新注册表（同持久层）
+      expect((await restarted.list()).connections[0].state).toBe("idle");
+      await restoreActiveConnection(restarted);
+      expect(readPersistedShape().activeConnId).toBe("conn-1");
+      expect(await untilConnState(restarted, "conn-1", "connected")).toBe(true);
+    } finally {
+      await face.kill();
+    }
+  });
+
+  it("restoreActiveConnection：无活动连接时 no-op 不抛错", async () => {
+    const registry = newRegistry();
+    await registry.saveConnection(DIRECT_CONFIG); // 只存不激活
+    await expect(restoreActiveConnection(registry)).resolves.toBeUndefined();
   });
 });

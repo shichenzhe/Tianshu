@@ -90,7 +90,7 @@ import {
 import { registerServerIpc, shutdownServerConsole } from "./domains/server/ipc";
 import { createMemoryFace } from "./domains/server-face/memory-tap";
 import { loadPersonalization } from "./domains/ai/personalization/personalization.repo";
-import { serverConnections } from "./domains/server/connections";
+import { serverConnections, restoreActiveConnection } from "./domains/server/connections";
 import { RelayTransport } from "./domains/server/relay-transport";
 import { installTerminalAuditSink } from "./domains/ai/terminal/terminal-ipc";
 import { registerBackupIpc, type BackupIpcDeps } from "./domains/backup/ipc";
@@ -608,6 +608,12 @@ export default class Application {
     // 控制端（T16）：连接注册表 + server:* IPC 面（连接 CRUD/测试、本地
     // 无头端启停、session 遥控透传与 server:chunk:*/server:event:* 事件桥）
     registerServerIpc();
+    // 主机连接启动恢复（2026-11-09 激活死锁修复）：上次活动连接立即
+    // 建链——不恢复则重启后 HostSwitcher 永远禁选（fire-and-forget，
+    // 失败仅日志，仿 restorePersistedSettings 启动习语）
+    void restoreActiveConnection(serverConnections).catch((e) =>
+      Log.error("主机连接启动恢复失败", e),
+    );
     // 备份域（spec 2026-10-27 §4）：四 invoke 通道 + progress 事件
     // （backupDeps 已前移共享——被控面 backup-tap 同源）
     registerBackupIpc(backupDeps);

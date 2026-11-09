@@ -477,11 +477,20 @@ export class ConnectionRegistry {
           : new Date().toISOString();
     }
     const rest = shape.connections.filter((c) => c.id !== config.id);
+    const connections = [...rest, config];
     await this.persistence.save({
-      connections: [...rest, config],
+      connections,
       activeConnId: shape.activeConnId,
     });
     this.closeEntry(config.id);
+    // 保存即建链（2026-11-09 激活死锁修复）：手动连接此前无激活路径——
+    // activate 无 IPC 通道（唯一调用方 startLocalServer）、HostSwitcher
+    // 禁用非 connected 项、数据面请求需先切主机才发生，三者互等致 state
+    // 永困 idle（左上角永远不可选）。fire-and-forget 与 activate() 同款
+    // 语义：建链失败由 transport 自身重连兜底，错误在请求路径暴露
+    void this.transportFor(config.id, connections).catch(() => {
+      /* 同 activate：占位/建链失败不阻塞保存返回 */
+    });
     return this.list();
   }
 
@@ -995,6 +1004,27 @@ export function localServerStatus(): LocalServerStatus {
     port: lastHandshake?.port ?? null,
     instanceId: lastHandshake?.instanceId ?? null,
   };
+}
+
+/**
+ * 启动恢复（2026-11-09 激活死锁修复）：重启后注册表内存 entries 全空，
+ * 持久化活动连接若不重建链，HostSwitcher（禁用非 connected 项）永远选
+ * 不回上次在用的远程主机。读持久化 activeConnId → activate（持久化不动
+ * + 立即建链）；无活动连接 no-op。调用方 fire-and-forget（启动习语，
+ * 失败仅日志）
+ */
+export async function restoreActiveConnection(
+  registry: ConnectionRegistry,
+): Promise<void> {
+  const { activeConnId } = await registry.list();
+  if (!activeConnId) return;
+  try {
+    await registry.activate(activeConnId);
+  } catch (e) {
+    // 幽灵 activeConnId（持久层与连接行理论上一致性由 delete 清除兜底，
+    // 此处防御不炸启动）
+    Log.warn("启动恢复活动连接失败", e);
+  }
 }
 
 /** 全局注册表单例（Application 装配与 IPC 层共用；测试用独立实例注入） */

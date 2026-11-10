@@ -54,6 +54,7 @@ import { pushRecent } from "../lib/recent-files";
 import { pushSession, recentSessionOf } from "../lib/session-map";
 import { recycleIfEmpty } from "../lib/session-recycle";
 import { markFileWindowScope } from "../lib/window-scope";
+import { initFileWindowHostSync } from "@/domains/ai/data-source/host-window-sync";
 import FileWindowTabBar from "../components/FileWindowTabBar";
 import FileTabContent from "../components/FileTabContent";
 import FileChatPanel from "../components/FileChatPanel";
@@ -106,6 +107,20 @@ export default function FileWindowView() {
     };
   }, [isLoginValid, reset, user.token, windowId]);
 
+  const queryClient = useQueryClient();
+  useFileChanged(queryClient);
+
+  // 主机态跟随主窗（webview 批 2026-11-11）：文件窗无 HostSwitcher——
+  // localStorage 快照取初值 + storage 事件随主窗切换（kick/caps 回填语
+  // 义对齐 switchToHost，见 host-window-sync 头注释）
+  useEffect(
+    () =>
+      initFileWindowHostSync({
+        kickQueries: () => void queryClient.resetQueries({ type: "active" }),
+      }),
+    [queryClient],
+  );
+
   // 窗口标题（T21）：主进程建窗 title=「天枢 文件浏览器」会被页面
   // <title>天枢</title> 覆盖——挂载即按当前语言重设（spec §13 项 1）
   useEffect(() => {
@@ -115,9 +130,6 @@ export default function FileWindowView() {
   // 窗口入口编排：快照恢复/deliver 投递 + 防抖落盘
   useEffect(() => bootstrapWindow(windowId), [windowId]);
   useSessionSnapshot(windowId);
-  // fileChanged 联动（T12）：外部写盘 → 非脏 tab 静默重载/脏 tab 冲突条
-  const queryClient = useQueryClient();
-  useFileChanged(queryClient);
 
   // 最近打开接线（T15）：新增 tab（openTab 成功）→ pushRecent 置顶去重
   useEffect(

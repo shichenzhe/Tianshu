@@ -24,6 +24,7 @@ import {
   isSameHost,
   type ActiveHost,
 } from "./host.store";
+import { publishActiveHost } from "./host-window-sync";
 import { useSessionSearchStore } from "../store/session-search.store";
 import { useChatStore } from "../chat/store/chat.store";
 import ServerApi from "../server/api/server.api";
@@ -41,6 +42,8 @@ export async function switchToHost(
       useChatStore.getState().resetAll();
     },
   });
+  // 跨窗快照（webview 批 2026-11-11）：文件独立窗口经 storage 事件跟随
+  publishActiveHost(next);
   if (next.kind === "remote") {
     // caps 回填：注册表运行时上报（连接查无——已删/注册表过期，保持空面）
     const { connections } = await ServerApi.listConnections();

@@ -33,3 +33,5 @@ dist-ssr
 
 # 双 ABI 根治：node-ABI better-sqlite3 副本（setup-native-node.mjs 装配）
 .native-node
+# server bundle 本地运行配置落点（构建产物，不入库）
+apps/config/

@@ -182,7 +182,18 @@ export type ServerEvent =
   | FaceEvent
   | { type: "graph.run.updated"; payload: GraphRunUpdatedPayload }
   | { type: "automation.changed"; payload: AutomationChangedPayload }
+  | { type: "graph.changed"; payload: GraphChangedPayload }
   | { type: "tool.request"; payload: ToolRequestPayload };
+
+/** graph.changed 事件载荷（orchestration 路由化批 2026-11-10）：图定义
+ * 级变更信号——无头端写面（graph 模块端点 + workflow_write 对话工具）
+ * create/update/delete 成功后发布，控制端编排页据此失效重拉。与
+ * automation.changed 同为「刷新信号非状态镜像」语义：graphId 必带，
+ * 字段级差异不携带——消费端一律以重拉列表为准（多端并发写时以库为准，
+ * 事件只做触达） */
+export interface GraphChangedPayload {
+  graphId: number;
+}
 
 /** 能力清单（无头端面，spec §3.1+§4.2：tianshu-server /info 与 relay
  * register 报此值；GA-T6 增 graph——编排/自动化/webhook/定时归并单一
@@ -480,6 +491,9 @@ export const ENDPOINTS = {
     delete: "graph/delete",
     run: "graph/run",
     runAbort: "graph/runAbort",
+    // orchestration 路由化批（2026-11-10）：控制端编排页 toggle 通道的
+    // 远端等价（无乐观锁轻量 update；成功后 server 发 graph.changed）
+    toggle: "graph/toggle",
   },
   automation: {
     query: "automation/query",
@@ -493,6 +507,11 @@ export const ENDPOINTS = {
     // AutomationRunNodeRecord[]，graphRunNode 表透传；图 run 专有，
     // prompt run 恒空数组）
     runNodes: "automation/runNodes",
+    // automation/library 路由化批（2026-11-10）：健康度总览原始行集——
+    // since（ISO）起的精简 run 行 + error 任务行；「今日」/趋势日键取
+    // 设备时区，聚合在客户端 computeStats（@tianshu/core 单源）完成，
+    // 端点不做时区假设
+    stats: "automation/stats",
   },
   tool: {
     respond: "tool/respond",

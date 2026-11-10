@@ -1,8 +1,9 @@
 /**
  * 工作空间 API
- * HD-A2 主机路由化：list 本地 invoke 原通道参数逐字；远程走
- * workspaceList（形状转换见 data-source/remote-catalog——侧栏远端树）。
- * 写方法与文件系统面（目录/git）本地专属。
+ * HD-A2 主机路由化：list/create/update/delete 本地 invoke 原通道参数
+ * 逐字；远程走 workspace 写面透传（形状转换见 data-source/remote-catalog
+ * ——2026-11-09 批接线，face A8 端点）。绑定/解绑目录与文件系统面
+ * （目录/git）本地专属（spec §1.4——远程态入口由组件门控隐藏）。
  */
 
 import { invoke } from "@/lib/ipc";
@@ -60,16 +61,26 @@ export class WorkspaceApi {
     );
   }
 
+  /** 新建（远程态不支持 directoryPath——face 写面无此字段，类型即收口） */
   static async create(params: WorkspaceCreateParams): Promise<WorkspaceRecord> {
-    return invoke<WorkspaceRecord>("workspace:create", params);
+    return routeInvoke(
+      { ch: "workspace:create", args: [params] },
+      (connId) => remote.remoteWorkspaceCreate(params, connId),
+    );
   }
 
   static async update(params: WorkspaceUpdateParams): Promise<WorkspaceRecord> {
-    return invoke<WorkspaceRecord>("workspace:update", params);
+    return routeInvoke(
+      { ch: "workspace:update", args: [params] },
+      (connId) => remote.remoteWorkspaceUpdate(params, connId),
+    );
   }
 
   static async delete(id: number): Promise<void> {
-    return invoke<void>("workspace:delete", id);
+    return routeInvoke(
+      { ch: "workspace:delete", args: [id] },
+      (connId) => remote.remoteWorkspaceDelete(id, connId),
+    );
   }
 
   /** P1：弹系统目录选择框绑定工作空间目录；用户取消返回 null */

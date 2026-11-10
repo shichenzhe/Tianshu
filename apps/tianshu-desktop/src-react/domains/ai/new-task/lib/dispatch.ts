@@ -23,6 +23,11 @@ import { type PendingFile, splitImageFiles } from "../../chat/lib/pending-file";
 import { isImagePath } from "../../chat/lib/image-file";
 import { readExternalFile } from "./attach";
 import { checkSensitive } from "./sensitive-check";
+import { remoteConnId } from "../../data-source/host-route";
+import {
+  remoteLibraryImage,
+  remoteLibraryText,
+} from "../../data-source/remote-catalog";
 import type { PendingRef } from "../store/new-task-store";
 import { useNewTaskStore } from "../store/new-task-store";
 
@@ -31,13 +36,37 @@ export interface DispatchParams {
   queryClient: QueryClient;
 }
 
-/** 单条 pending 引用 → 注入块（读失败直接抛错中断本次发送——落地页逐引用可用才可发） */
-async function readPendingRef(ref: PendingRef): Promise<PendingFile> {
+/** 单条 pending 引用 → 注入块（读失败直接抛错中断本次发送——落地页逐引用可用才可发）；
+ *  2026-11-10 挂账收口导出供路由单测直证（远程资料库 pill 按 id 走远端读取） */
+export async function readPendingRef(ref: PendingRef): Promise<PendingFile> {
   if (ref.kind === "skill") {
     const result = await SkillApi.readSkill(ref.ref);
     return { path: ref.ref, content: result.content, kind: "skill" };
   }
   if (ref.kind === "localFile") {
+    // 远程资料库 pill（library 路由化批挂账收口 2026-11-10）：ref 无本地
+    // 路径语义——图片判据回退展示名，内容读按 id 走远端 read/readImage
+    //（图片 readImage→base64 随行，FA-T3 image part 通道同款）
+    const connId = remoteConnId();
+    if (connId != null && ref.id !== undefined) {
+      if (isImagePath(ref.label)) {
+        const dataUrl = await remoteLibraryImage(ref.id, connId);
+        const marker = "base64,";
+        const idx = dataUrl.indexOf(marker);
+        if (idx === -1) {
+          throw new Error(`read-failed:${ref.label}`);
+        }
+        return {
+          path: ref.label,
+          content: "",
+          kind: "localFile",
+          image: true,
+          base64: dataUrl.slice(idx + marker.length),
+        };
+      }
+      const content = await remoteLibraryText(ref.id, connId);
+      return { path: ref.label, content, kind: "localFile" };
+    }
     // 图片附件不读内容：分流为多模态 image part（主进程侧校验/落块）
     if (isImagePath(ref.ref)) {
       return { path: ref.ref, content: "", kind: "localFile", image: true };

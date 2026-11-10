@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { WorkspaceRecord } from "../../api/workspace.api";
+import { useHostStore } from "../../data-source/host.store";
 import { mapIpcError } from "../lib/error-message";
 import { shortenPath } from "../lib/shorten-path";
 import { bindWorkspaceDirectory } from "../lib/workspace-actions";
@@ -31,6 +32,13 @@ function WorkspacePathChipImpl({ workspace }: WorkspacePathChipProps) {
   const queryClient = useQueryClient();
   const [unbinding, setUnbinding] = useState(false);
   const directoryPath = workspace.directoryPath ?? "";
+  // 远程主机态（2026-11-09 门控）：重绑/解绑是本地 invoke 通道——远程态
+  // 点击会打到控制端本地库（被控端 workspace id 撞本地同 id 空间时静默
+  // 错绑目录），整个 chip 不渲染（绑定/解绑目录按 spec §1.4 留桌面端）
+  const isRemoteHost = useHostStore((s) => s.activeHost.kind === "remote");
+  if (isRemoteHost) {
+    return null;
+  }
 
   /** 重新绑定：用户取消选目录时后端返回 null，静默不提示 */
   const handleRebind = async () => {

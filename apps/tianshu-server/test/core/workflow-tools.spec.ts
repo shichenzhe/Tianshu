@@ -325,3 +325,71 @@ describe('run_workflow json 输入（容器保型，2026-11-05）', () => {
     expect(deps.runGraph).not.toHaveBeenCalled();
   });
 });
+
+describe('workflow_tools 图变更广播（orchestration 路由化批 2026-11-10）', () => {
+  const GRAPH = {
+    version: 1,
+    inputSchema: {},
+    nodes: [{ id: 'start', name: '开始', kind: 'start', variables: [] }],
+    edges: [{ from: 'start', to: 'END' }],
+  };
+
+  function writeTool(deps: { prisma: unknown; runGraph: unknown }) {
+    return makeWorkflowTools({
+      prisma: deps.prisma as never,
+      runGraph: deps.runGraph as never,
+    }).find((t) => t.name === 'workflow_write')!;
+  }
+
+  it('新建/更新成功各发一次 graph.changed（graphId 正确）；未注入不炸', async () => {
+    const events: number[] = [];
+    const deps = makeDeps();
+    const tool = makeWorkflowTools({
+      prisma: deps.prisma as never,
+      runGraph: deps.runGraph as never,
+      publishGraphChanged: (p) => events.push(p.graphId),
+    }).find((t) => t.name === 'workflow_write')!;
+
+    const created = await tool.execute(CTX, {
+      name: '对话建图',
+      graphJson: GRAPH,
+    });
+    expect(created).toContain('已创建');
+    expect(events).toEqual([9]); // 替身 create 固定 id=9
+
+    const updated = await tool.execute(CTX, {
+      id: 1,
+      version: 1,
+      name: '对话改图',
+    });
+    expect(updated).toContain('已更新');
+    expect(events).toEqual([9, 1]);
+
+    // 未注入钩子（旧装配/测试环境）静默不发
+    const bare = writeTool(makeDeps());
+    await expect(
+      bare.execute(CTX, { name: '无钩子', graphJson: GRAPH }),
+    ).resolves.toContain('已创建');
+  });
+
+  it('更新版本冲突不发事件（刷新信号只报成功写）', async () => {
+    const events: number[] = [];
+    const deps = makeDeps();
+    (deps.prisma.graphDefinition.updateMany as jest.Mock).mockResolvedValueOnce(
+      { count: 0 },
+    );
+    const tool = makeWorkflowTools({
+      prisma: deps.prisma as never,
+      runGraph: deps.runGraph as never,
+      publishGraphChanged: (p) => events.push(p.graphId),
+    }).find((t) => t.name === 'workflow_write')!;
+
+    const result = await tool.execute(CTX, {
+      id: 1,
+      version: 1,
+      name: '冲突',
+    });
+    expect(result).toContain('版本冲突');
+    expect(events).toEqual([]);
+  });
+});

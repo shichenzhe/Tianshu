@@ -15,6 +15,7 @@ import type { GraphRecord } from './graph.repository';
 import { GraphQueryDto } from './dto/graph-query.dto';
 import { GraphSaveDto } from './dto/graph-save.dto';
 import { GraphIdDto } from './dto/graph-id.dto';
+import { GraphToggleDto } from './dto/graph-toggle.dto';
 import { GraphRunDto } from './dto/graph-run.dto';
 import { GraphRunAbortDto } from './dto/graph-run-abort.dto';
 
@@ -61,6 +62,17 @@ export class GraphController {
   @ApiWrappedOk()
   async delete(@Body() dto: GraphIdDto): Promise<void> {
     await this.graphService.delete(dto.id);
+  }
+
+  /**
+   * 启停图（orchestration 路由化批 2026-11-10：控制端 toggle 通道等价）
+   */
+  @Post('toggle')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '启停图（无乐观锁轻量 update）' })
+  @ApiWrappedOk(GraphRecordDto)
+  async toggle(@Body() dto: GraphToggleDto): Promise<GraphRecord> {
+    return await this.graphService.toggle(dto.id, dto.enabled);
   }
 
   /**

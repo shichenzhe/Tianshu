@@ -3,9 +3,32 @@
  * 自动化任务/运行记录/模板 API(IPC 封装)。
  * 日期字段由主进程 toISOString() 归一;source 为后端派生
  * (workspace.directoryPath 有值 = project,无值 = local,spec §0)。
+ *
+ * 主机路由化（automation/library 批 2026-11-10）：数据面（list/create/
+ * update/remove/toggle/runNow/runs）远程态经 remote-catalog 适配器走
+ * 无头端 automation 端点——toggle 无专端点（save 全量携 enabled 读改写，
+ * Ruling 12）。templates 为本地静态清单（无数据面）远程态直接复用；
+ * stat 埋点远程态静默丢弃（fire-and-forget，无远端聚合表）；stats 健康度
+ * 聚合依赖本地 automationStat 表即时聚合（server 无等价端点）——远程态
+ * 显式拒绝，AutomationStatsPanel 感知主机态渲染占位（挂账：远端聚合端点）。
  */
 import { invoke } from "@/lib/ipc";
+import { routeInvoke, remoteConnId } from "@/domains/ai/data-source/host-route";
+import {
+  remoteAutomationDelete,
+  remoteAutomationList,
+  remoteAutomationRunNow,
+  remoteAutomationRuns,
+  remoteAutomationSave,
+  remoteAutomationStats,
+  remoteAutomationToggle,
+} from "@/domains/ai/data-source/remote-catalog";
+// 健康度总览 wire 类型（core 单源 re-export——2026-11-10 收编：主进程
+// IPC 聚合与远程态适配器（automation/stats 原始行端点）同源同口径）
+import type { AutomationStats } from "@tianshu/core/automation-stats";
 import type { ScheduleConfig } from "./schedule.schema";
+
+export type { AutomationStats };
 
 export type AutomationStatus = "active" | "error" | "expired";
 export type AutomationSource = "local" | "project";
@@ -117,36 +140,6 @@ export interface RunPage {
   items: RunRecord[];
 }
 
-/** 健康度总览聚合(spec §6，IPC automation:stats 即时聚合返回) */
-export interface AutomationStats {
-  today: {
-    total: number;
-    success: number;
-    failed: number;
-    running: number;
-    successRate: number;
-  };
-  trend: Array<{ date: string; success: number; failed: number }>;
-  /** 「需要关注」清单：任务级异常(跳任务编辑) + 近 24h 失败 run(跳运行记录/轨迹) */
-  attention: Array<
-    | {
-        kind: "taskError";
-        taskId: number;
-        name: string;
-        statusNote: string;
-      }
-    | {
-        kind: "failedRun";
-        runId: number;
-        name: string;
-        graphId?: number;
-        error: string;
-        startedAt: string;
-      }
-  >;
-  errorTaskCount: number;
-}
-
 export interface TemplateRecord {
   slug: string;
   icon: string;
@@ -167,31 +160,47 @@ export interface CreateStatDetail {
 
 export class AutomationApi {
   static async list(): Promise<TaskRecord[]> {
-    return invoke<TaskRecord[]>("automation:list");
+    return routeInvoke({ ch: "automation:list", args: [] }, (connId) =>
+      remoteAutomationList(connId),
+    );
   }
 
   static async create(params: TaskCreateParams): Promise<TaskRecord> {
-    return invoke<TaskRecord>("automation:create", params);
+    return routeInvoke(
+      { ch: "automation:create", args: [params] },
+      (connId) => remoteAutomationSave(params, undefined, connId),
+    );
   }
 
   static async update(
     id: number,
     params: TaskUpdateParams,
   ): Promise<TaskRecord> {
-    return invoke<TaskRecord>("automation:update", id, params);
+    return routeInvoke(
+      { ch: "automation:update", args: [id, params] },
+      (connId) => remoteAutomationSave(params, id, connId),
+    );
   }
 
   static async remove(ids: number[]): Promise<void> {
-    return invoke<void>("automation:delete", ids);
+    return routeInvoke({ ch: "automation:delete", args: [ids] }, (connId) =>
+      remoteAutomationDelete(ids, connId),
+    );
   }
 
   static async toggle(id: number, enabled: boolean): Promise<TaskRecord> {
-    return invoke<TaskRecord>("automation:toggle", id, enabled);
+    return routeInvoke(
+      { ch: "automation:toggle", args: [id, enabled] },
+      (connId) => remoteAutomationToggle(id, enabled, connId),
+    );
   }
 
-  /** 手动触发一次执行(返回即触发完成,结果经 tasks-changed 事件刷新) */
+  /** 手动触发一次执行(返回即触发完成,结果经 tasks-changed 事件刷新；
+   *  远程态 202 受理同语义——收尾经 automation.changed 事件桥刷新) */
   static async runNow(id: number): Promise<void> {
-    return invoke<void>("automation:runNow", id);
+    return routeInvoke({ ch: "automation:runNow", args: [id] }, (connId) =>
+      remoteAutomationRunNow(id, connId),
+    );
   }
 
   static async templates(): Promise<TemplateRecord[]> {
@@ -203,16 +212,28 @@ export class AutomationApi {
     taskId?: number,
     status?: RunStatus,
   ): Promise<RunPage> {
-    return invoke<RunPage>("automation:runs:page", page, taskId, status);
+    return routeInvoke(
+      { ch: "automation:runs:page", args: [page, taskId, status] },
+      (connId) => remoteAutomationRuns(page, taskId, status, connId),
+    );
   }
 
+  /** 创建埋点(PRD《执行频率》§5)——远程态静默丢弃（本地统计表聚合，
+   *  埋点不阻塞不报错语义保持） */
   static async stat(detail: CreateStatDetail): Promise<void> {
+    if (remoteConnId() != null) {
+      return;
+    }
     return invoke<void>("automation:stat", detail);
   }
 
-  /** 健康度总览聚合(spec §6,主进程即时聚合无分页) */
+  /** 健康度总览聚合(spec §6)：本地主进程即时聚合（automationStat rollup
+   *  补全）；远程态经 remote-catalog 拉原始行集客户端聚合（时区口径在
+   *  computeStats 单源，不跨端假设） */
   static async stats(): Promise<AutomationStats> {
-    return invoke<AutomationStats>("automation:stats");
+    return routeInvoke({ ch: "automation:stats", args: [] }, (connId) =>
+      remoteAutomationStats(connId),
+    );
   }
 }
 

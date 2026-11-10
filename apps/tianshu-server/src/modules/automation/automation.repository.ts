@@ -607,6 +607,7 @@ export class AutomationRepository {
     taskId: number | undefined,
     status: RunStatus | undefined,
     userId: number,
+    graphId?: number,
   ): Promise<Prisma.AutomationRunWhereInput | null> {
     if (taskId !== undefined) {
       const owned = await this.prisma.automationTask.findFirst({
@@ -615,6 +616,16 @@ export class AutomationRepository {
       });
       if (!owned) return null;
       return { taskId, ...(status ? { status } : {}) };
+    }
+    // 图口径（orchestration 路由化批 2026-11-10）：graphId 归属校验后
+    // 直接按图过滤（不并任务 run）
+    if (graphId !== undefined) {
+      const ownedGraph = await this.prisma.graphDefinition.findFirst({
+        where: { id: graphId, userId },
+        select: { id: true },
+      });
+      if (!ownedGraph) return null;
+      return { graphId, ...(status ? { status } : {}) };
     }
     const ownedTasks = await this.prisma.automationTask.findMany({
       where: { userId },
@@ -643,8 +654,9 @@ export class AutomationRepository {
     taskId: number | undefined,
     status: RunStatus | undefined,
     userId: number,
+    graphId?: number,
   ): Promise<AutomationRunPage> {
-    const where = await this.buildRunWhere(taskId, status, userId);
+    const where = await this.buildRunWhere(taskId, status, userId, graphId);
     if (where === null) return { total: 0, items: [] };
     const PAGE_SIZE = 20;
     const [total, rows] = await Promise.all([
@@ -692,6 +704,53 @@ export class AutomationRepository {
       where: { runId },
       orderBy: { id: 'asc' },
     });
+  }
+
+  /** 健康度总览原始行集（automation/library 路由化批 2026-11-10）：
+   *  since 起的本人 run（任务集 OR 图集，同 buildRunWhere 全量口径）
+   *  精简行 desc 取 STAT_RUN_ROW_LIMIT 条 + error 任务行。时区敏感的
+   *  日键聚合在客户端 computeStats 完成；行数上限防高频任务打爆 wire
+   *  （desc 保最近——极端超限 trend 低估，挂账：server 侧预聚合） */
+  async statsRaw(
+    since: Date,
+    userId: number,
+  ): Promise<{
+    runs: AutomationRunRecord[];
+    errorTasks: Array<{ id: number; name: string; statusNote: string | null }>;
+  }> {
+    const ownedTasks = await this.prisma.automationTask.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+    const ownedGraphIds = (
+      await this.prisma.graphDefinition.findMany({
+        where: { userId },
+        select: { id: true },
+      })
+    ).map((row) => row.id);
+    const STAT_RUN_ROW_LIMIT = 2000;
+    const [rows, errorTasks] = await Promise.all([
+      this.prisma.automationRun.findMany({
+        where: {
+          OR: [
+            { taskId: { in: ownedTasks.map((row) => row.id) } },
+            { graphId: { in: ownedGraphIds } },
+          ],
+          startedAt: { gte: since },
+        },
+        orderBy: { startedAt: 'desc' },
+        take: STAT_RUN_ROW_LIMIT,
+      }),
+      this.prisma.automationTask.findMany({
+        where: { userId, status: 'error' },
+        select: { id: true, name: true, statusNote: true },
+        orderBy: { updatedAt: 'desc' },
+      }),
+    ]);
+    return {
+      runs: await hydrateRunNames(this.prisma, rows),
+      errorTasks,
+    };
   }
 }
 

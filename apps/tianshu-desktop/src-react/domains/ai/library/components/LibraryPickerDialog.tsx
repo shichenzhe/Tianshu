@@ -23,6 +23,9 @@ import { sortItems } from "../lib/library-view-model";
 export interface PickedLibraryFile {
   name: string;
   storagePath: string;
+  /** 条目 id（library 路由化批 2026-11-10）：远程行 storagePath 恒空，
+   *  附件预检/发送读取按 id 走远端 read/readImage */
+  id?: number;
 }
 
 interface LibraryPickerDialogProps {
@@ -160,8 +163,7 @@ export default function LibraryPickerDialog({
                     name: item.name,
                     storagePath: item.storagePath ?? "",
                   })
-                }
-              >
+                }              >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border/50">
                   {selected.has(item.id) && (
                     <Check className="h-3 w-3 text-primary" />

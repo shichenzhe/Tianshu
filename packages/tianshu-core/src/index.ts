@@ -40,6 +40,10 @@ export * from "./schedule";
 // 可重试面 / 每日统计 rollup 聚合桶——双端调度器同构消费单源
 export * from "./automation-retry";
 export * from "./automation-rollup";
+// automation/library 路由化批（2026-11-10）：健康度总览聚合纯函数 +
+// AutomationStats wire 类型单源（桌面主进程 IPC 聚合与渲染层远程态
+// 适配器双消费；mobile 深路径可用）
+export * from "./automation-stats";
 // E2E-T1：relay 端到端加密核心（X25519+HKDF+GCM 信封+重放窗口，纯
 // node:crypto；信封/握手 kind 常量为跨仓单份 wire 契约）
 export * from "./e2e-crypto";

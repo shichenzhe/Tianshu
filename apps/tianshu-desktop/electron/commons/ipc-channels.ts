@@ -345,6 +345,10 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:connectionList",
   "server:connectionSave",
   "server:connectionDelete",
+  // 连接激活（HostSwitcher 切换即连批 2026-11-10）：idle 连接点击切换时
+  // 自动建链（activate 持久化 activeConnId + fire-and-forget 建链——
+  // 此前无 IPC 通道，非活动连接重启后永困 idle）
+  "server:connectionActivate",
   // TOFU 指纹用户确认（P0-1 确认仪式）：确认卡「核对后确认」动作
   "server:connectionConfirmFingerprint",
   "server:testConnection",
@@ -377,6 +381,12 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:assistantQuery",
   // 单 UI 远程态侧栏分组树（HD-A1）：workspace 概要列表
   "server:workspaceList",
+  // 工作空间写面透传（2026-11-09 批）：face A8 端点（create/update/
+  // delete）控制端接线——远程态「新建空间」可用；bindDirectory 按
+  // spec §1.4 留桌面端本地，无透传
+  "server:workspaceCreate",
+  "server:workspaceUpdate",
+  "server:workspaceDelete",
   // 聊天面板对齐（CU 批）：编辑重发 + 会话权限模式
   "server:sessionEditResend",
   "server:sessionAccessMode",
@@ -407,10 +417,45 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:graphDelete",
   "server:graphRun",
   "server:graphRunAbort",
+  // 编排页路由化（orchestration 批 2026-11-10）：toggle 直达端点 + 图
+  // 运行历史两读面（automation/runPage graphId 过滤 + runNodes）
+  "server:graphToggle",
+  "server:graphRuns",
+  "server:graphRunNodes",
   "server:automationQuery",
   "server:automationSave",
   "server:automationDelete",
   "server:automationRunNow",
+  // 自动化任务页路由化（automation/library 批 2026-11-10）：runPage 的
+  // taskId+status 任务口径（graphRuns 为 graphId 图口径）+ stats 健康度
+  // 原始行集（客户端聚合）
+  "server:automationRuns",
+  "server:automationStats",
+  // 资料库路由化（automation/library 批）：library/* 十七端点透传
+  // （uploadFile 未接——「添加文件/导入文件夹」本地盘扫描深水门控）
+  "server:libraryList",
+  "server:libraryTree",
+  "server:librarySearch",
+  "server:libraryListRecent",
+  "server:libraryListFavorites",
+  "server:libraryCreateFolder",
+  "server:libraryCreateFile",
+  "server:libraryAddLink",
+  "server:libraryRename",
+  "server:libraryMove",
+  "server:libraryDelete",
+  "server:librarySubtreeCount",
+  "server:libraryToggleFavorite",
+  "server:libraryMarkViewed",
+  "server:libraryRead",
+  "server:libraryReadImage",
+  "server:libraryWriteContent",
+  // 跨端上传组合（automation/library 批挂账收口 2026-11-10）：控制端
+  // 本地文件（选择器授权路径）读盘 base64 → 远端 uploadFile 逐个入库
+  //（3MB 对齐 server 上限）；目录导入组合（2026-11-11）：递归建层 +
+  // 逐文件上传同构本地 importFolder
+  "server:libraryAddFiles",
+  "server:libraryImportFolder",
   // webhook 配置遥控（WH 消费端批）
   "server:webhookEnable",
   "server:webhookDisable",

@@ -42,6 +42,9 @@ import SkillSubMenu from "../../chat/components/skill-sub-menu";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
 import { useNewTaskStore } from "../store/new-task-store";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
+import { remoteLibraryText } from "@/domains/ai/data-source/remote-catalog";
+import { isImagePath } from "../../chat/lib/image-file";
 
 const MCP_ROUTE = "/module/ai/experts?tab=connectors";
 
@@ -59,6 +62,11 @@ export default function AttachMenu() {
   const addLocalFile = useLocalFileAttach();
   const [importOpen, setImportOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // 远程主机（library 路由化批挂账收口）：资料库选中走远端预检+按 id
+  // 挂 pill（ref 无本地路径语义，dispatch 时按 id 走远端 read/readImage）
+  const remoteHost = useHostStore((s) =>
+    s.activeHost.kind === "remote" ? s.activeHost : null,
+  );
   // 子面板打开时才拉清单（关闭后缓存复用，空间切换重拉）
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const workspaceFiles = useWorkspaceFiles(workspaceId, workspaceOpen);
@@ -203,9 +211,34 @@ export default function AttachMenu() {
         open={libraryOpen}
         onClose={() => setLibraryOpen(false)}
         onPick={(files) => {
-          for (const file of files) {
-            void addLocalFile(file.storagePath);
-          }
+          // 远程态：逐条远端 read 预检（512KiB 同口径守卫在服务端）+
+          // 按 id 挂 pill；本地态：storagePath 走 addLocalFile 既有链
+          void (async () => {
+            const failed: string[] = [];
+            for (const file of files) {
+              if (remoteHost && file.id !== undefined) {
+                if (isImagePath(file.name)) {
+                  addPending({ label: file.name, ref: file.name, kind: "localFile", id: file.id });
+                  continue;
+                }
+                try {
+                  await remoteLibraryText(file.id, remoteHost.connId);
+                  addPending({ label: file.name, ref: file.name, kind: "localFile", id: file.id });
+                } catch {
+                  failed.push(file.name);
+                }
+              } else {
+                await addLocalFile(file.storagePath);
+              }
+            }
+            if (failed.length > 0) {
+              toast.error(
+                t("chat:library.pickAttachFailed", {
+                  names: failed.join("、"),
+                }),
+              );
+            }
+          })();
         }}
       />
     </>

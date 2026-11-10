@@ -5,6 +5,15 @@
  * /定时任务后切列表页，30s staleTime 内不重拉看不到新数据——组件未挂载
  * 时广播无人接）。main.tsx 创建 client 后调用一次；invalidate 按前缀
  * 匹配，覆盖列表/运行历史/模板等全部子 key。
+ *
+ * 远程桥（orchestration 路由化批 2026-11-10；automation/library 批补
+ * automation.changed）：活动主机为远程时订阅 server:event:<connId>，
+ * graph.changed（无头端图定义级变更——端点写面/对话工具建图/启停）→
+ * 失效 ["orchestration"]；automation.changed（无头端调度执行/过期/异常/
+ * 远程任务页写面）→ 失效 ["automation"]（本地 AUTOMATION_CHANGED_EVENT
+ * 同款键）。主机切换经 zustand subscribe 感知，旧订阅退订；invalidate
+ * 前缀匹配跨主机同标脏（非活动主机仅标脏不重取，host-query.ts 头注释
+ * 语义），无数据面影响。
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { on } from "@/lib/ipc";
@@ -13,6 +22,7 @@ import { GRAPH_CHANGED_EVENT } from "@/domains/ai/orchestration/api/orchestratio
 import { WORKSPACE_CHANGED_EVENT } from "@/domains/ai/api/workspace.api";
 import { SESSION_CHANGED_EVENT } from "@/domains/ai/api/session.api";
 import { PROJECT_CHANGED_EVENT } from "@/domains/project/api/project.api";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
 
 export function registerQueryInvalidation(client: QueryClient): void {
   on(GRAPH_CHANGED_EVENT, () => {
@@ -34,4 +44,29 @@ export function registerQueryInvalidation(client: QueryClient): void {
   on(PROJECT_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["projects"] });
   });
+
+  // —— 远程 graph.changed / automation.changed 桥（见头注释）——
+  let unsubscribeRemote: (() => void) | null = null;
+  const bindRemote = (connId: string): void => {
+    unsubscribeRemote?.();
+    unsubscribeRemote = on(`server:event:${connId}`, (_, event) => {
+      const type = (event as { type?: string } | null)?.type;
+      if (type === "graph.changed") {
+        void client.invalidateQueries({ queryKey: ["orchestration"] });
+      } else if (type === "automation.changed") {
+        void client.invalidateQueries({ queryKey: ["automation"] });
+      }
+    });
+  };
+  const syncRemoteBinding = (): void => {
+    const host = useHostStore.getState().activeHost;
+    if (host.kind === "remote") {
+      bindRemote(host.connId);
+    } else if (unsubscribeRemote) {
+      unsubscribeRemote();
+      unsubscribeRemote = null;
+    }
+  };
+  syncRemoteBinding();
+  useHostStore.subscribe(syncRemoteBinding);
 }

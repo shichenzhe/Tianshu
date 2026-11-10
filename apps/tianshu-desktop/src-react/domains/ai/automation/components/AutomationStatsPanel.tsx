@@ -203,6 +203,8 @@ export function AutomationStatsPanel() {
   const { t } = useTranslation(["chat"]);
   const setStatusFilter = useAutomationStore((s) => s.setStatusFilter);
   const [moreOpen, setMoreOpen] = useState(false);
+  // 主机路由化（挂账收口 2026-11-10）：本地主进程即时聚合 / 远程态拉
+  // 原始行集客户端聚合（computeStats core 单源，时区口径两端一致）
   const { data, isLoading } = useQuery({
     queryKey: ["automation", "stats"],
     queryFn: () => AutomationApi.stats(),

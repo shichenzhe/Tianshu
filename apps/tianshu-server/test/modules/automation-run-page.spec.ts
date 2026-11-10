@@ -128,6 +128,25 @@ describe('automation/runPage 运行历史分页（移动端 CRUD 批）', () => 
     expect(page.items[0]?.error).toBe('bo' + 'om');
   });
 
+  it('graphId 图口径（orchestration 路由化批）：只回该图 run、不并任务 run、图名补位', async () => {
+    const page = await service.runPage({ page: 1, graphId });
+    expect(page.total).toBe(1);
+    expect(page.items[0]?.taskId).toBeNull();
+    expect(page.items[0]?.graphId).toBe(graphId);
+    expect(page.items[0]?.taskName).toBe('编排图一');
+  });
+
+  it('graphId 非本人图：空页（归属校验，不暴露存在性）', async () => {
+    const othersGraph = (
+      await db.prisma.graphDefinition.create({
+        data: { name: '他人图', graphJson: '{}', userId: 2 },
+      })
+    ).id;
+    const page = await service.runPage({ page: 1, graphId: othersGraph });
+    expect(page.total).toBe(0);
+    expect(page.items).toEqual([]);
+  });
+
   it('契约字段直证：耗时/tokens/attempt/triggerType/ISO 时间', async () => {
     const page = await service.runPage({ page: 1, taskId: taskA, status: 'success' });
     const run = page.items[0];

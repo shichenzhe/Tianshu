@@ -243,6 +243,7 @@ describe("@tianshu/protocol 协议包", () => {
         delete: "graph/delete",
         run: "graph/run",
         runAbort: "graph/runAbort",
+        toggle: "graph/toggle",
       },
       automation: {
         query: "automation/query",
@@ -253,6 +254,8 @@ describe("@tianshu/protocol 协议包", () => {
         runPage: "automation/runPage",
         // 移动端执行详情批：节点级执行详情（38f724ce 加端点漏更本钉测试）
         runNodes: "automation/runNodes",
+        // automation/library 路由化批挂账收口：健康度总览原始行集
+        stats: "automation/stats",
       },
       // tool 一段（TB，终审补录）：无头端工具桥应答回传入口——server
       // tool.controller @Controller('tool') + @Post('respond') 实际路由

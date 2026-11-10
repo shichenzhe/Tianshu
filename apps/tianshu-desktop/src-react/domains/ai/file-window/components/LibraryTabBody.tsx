@@ -41,6 +41,11 @@ import { cmLanguageOfPath } from "../lib/cm-language";
 import { libraryItemOf } from "../lib/library-item";
 import { registerTabFlush, unregisterTabFlush } from "../lib/tab-save-flush";
 import { useFileWindowStore } from "../store/file-window.store";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
+import {
+  remoteLibraryImage,
+  remoteLibraryText,
+} from "@/domains/ai/data-source/remote-catalog";
 import FileWindowApi from "../api/file-window.api";
 import FileTabHeader from "./FileTabHeader";
 import FileWindowEditor from "./FileWindowEditor";
@@ -60,6 +65,11 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
   const patchTab = useFileWindowStore((s) => s.patchTab);
   const tab = useFileWindowStore((s) => s.tabs.find((x) => x.id === tabId));
   const itemId = tab?.resource.kind === "library" ? tab.resource.itemId : null;
+  // 远程主机（library 路由化批）：行 storagePath 恒空——内容读按 id 走
+  // 远端 read/readImage，webview 直链与 Finder 定位无远端等价（占位/隐藏）
+  const activeHost = useHostStore((s) => s.activeHost);
+  const isRemote = activeHost.kind === "remote";
+  const connId = isRemote ? activeHost.connId : null;
 
   const itemQuery = useQuery({
     queryKey: ["fw-library-item", itemId],
@@ -87,13 +97,27 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
   }, [item, patchTab, tabId]);
 
   // 内容读取：文本类（md/csv/text）+ dev 图片 dataUrl；webview 类直开
-  // file:// 不读内容；512KB 上限沿用（超限/二进制回 error 走 Finder 兜底）
-  const needsText = editable || (import.meta.env.DEV && kind === "image");
+  // file:// 不读内容；512KB 上限沿用（超限/二进制回 error 走 Finder 兜底）。
+  // 远程态：图片 dev/生产同走远端 readImage→dataUrl（无本地路径可直链）
+  const needsText = editable || ((import.meta.env.DEV || isRemote) && kind === "image");
   const contentQuery = useQuery({
-    queryKey: ["fw-library-content", itemId, item?.storagePath],
-    queryFn: () =>
-      invoke<ExternalFileContent>("file:readExternalFile", item!.storagePath!),
-    enabled: !!item?.storagePath && needsText,
+    queryKey: ["fw-library-content", itemId, item?.storagePath, connId],
+    queryFn: async (): Promise<ExternalFileContent> => {
+      if (item == null) {
+        return { error: "missing" };
+      }
+      if (connId != null) {
+        if (kind === "image") {
+          return { kind: "image", dataUrl: await remoteLibraryImage(item.id, connId) };
+        }
+        return { kind: "text", content: await remoteLibraryText(item.id, connId) };
+      }
+      return invoke<ExternalFileContent>(
+        "file:readExternalFile",
+        item.storagePath!,
+      );
+    },
+    enabled: (isRemote ? itemId !== null : !!item?.storagePath) && needsText,
     retry: false,
   });
 
@@ -196,7 +220,8 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
     try {
       // updatedAt 基线：保存前重取条目（query 缓存可能陈旧，直取 tree）
       const fresh = await libraryItemOf(itemId);
-      if (!fresh?.storagePath) {
+      // 远程态行无 storagePath（wire 刻意剔除）——存在性即判据
+      if (!fresh || (!fresh.storagePath && !isRemote)) {
         patchTab(tabId, { saveStatus: "unsaved" });
         toast.error(t("chat:fileWindow.chat.itemMissing"));
         return;
@@ -314,9 +339,13 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
     [],
   );
 
-  // webview 类直开（守卫同 workspace：外跳全拦/失败降级）
+  // webview 类直开（守卫同 workspace：外跳全拦/失败降级）；远程态无本地
+  // 路径可链（流式端点未备）——null 走下方不支持占位
   const webviewSrc =
-    item?.storagePath && !editable && kind !== "image"
+    !isRemote &&
+    item?.storagePath &&
+    !editable &&
+    kind !== "image"
       ? fileUrlOf(item.storagePath)
       : null;
   const { ref: webviewRef, failed: webviewFailed } =
@@ -324,7 +353,7 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
 
   if (itemQuery.isPending)
     return <p className="p-3 text-xs text-muted-foreground">…</p>;
-  if (!itemId || !item?.storagePath)
+  if (!itemId || !item || (!item.storagePath && !isRemote))
     return (
       <div className="flex h-full flex-col">
         <FileTabHeader
@@ -344,14 +373,21 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
       toast.error(mapIpcError(e)),
     );
 
-  // 读失败/二进制 error 回传/webview 加载失败 → Finder 兜底（同 workspace 分支）
+  // 读失败/二进制 error 回传/webview 加载失败 → Finder 兜底（同 workspace
+  // 分支；远程态按钮隐藏——条目在远端服务器磁盘无从定位）
   const failed =
-    loadFailed ||
-    webviewFailed ||
-    (needsText &&
-      (!!contentQuery.error ||
-        (!contentQuery.isPending && !contentQuery.data) ||
-        !!contentQuery.data?.error));
+    !isRemote &&
+    (loadFailed ||
+      webviewFailed ||
+      (needsText &&
+        (!!contentQuery.error ||
+          (!contentQuery.isPending && !contentQuery.data) ||
+          !!contentQuery.data?.error)));
+  // 远程态读失败（read/readImage 报错）单列——仍显示失败态但不给 Finder
+  const remoteReadFailed =
+    isRemote &&
+    needsText &&
+    (!!contentQuery.error || (!contentQuery.isPending && !contentQuery.data));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -362,24 +398,26 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
         onResolveConflict={handleResolveConflict}
       />
       <div className="min-h-0 flex-1 overflow-auto p-3">
-        {failed ? (
+        {failed || remoteReadFailed ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
             <FileX className="h-8 w-8" />
             <p className="text-xs">{t("chat:artifacts.previewFailed")}</p>
-            <button
-              type="button"
-              onClick={reveal}
-              className="inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-1 text-xs hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            >
-              <FolderSearch className="h-3.5 w-3.5" />
-              {t("chat:artifacts.actionReveal")}
-            </button>
+            {!isRemote && (
+              <button
+                type="button"
+                onClick={reveal}
+                className="inline-flex items-center gap-1 rounded-md border border-border/50 px-2 py-1 text-xs hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              >
+                <FolderSearch className="h-3.5 w-3.5" />
+                {t("chat:artifacts.actionReveal")}
+              </button>
+            )}
           </div>
         ) : kind === "image" ? (
           <div className="flex h-full items-center justify-center">
-            {/* dev：dataUrl 读取中占位（直链 file:// 跨源被拒不能提前挂
-                src 误降级）；生产直链 file:// */}
-            {import.meta.env.DEV ? (
+            {/* dev/远程：dataUrl 读取中占位（直链 file:// 跨源被拒或无本地
+                路径，不能提前挂 src 误降级）；本地生产直链 file:// */}
+            {import.meta.env.DEV || isRemote ? (
               contentQuery.data?.dataUrl ? (
                 <img
                   src={contentQuery.data.dataUrl}
@@ -391,7 +429,7 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
               )
             ) : (
               <img
-                src={fileUrlOf(item.storagePath)}
+                src={fileUrlOf(item.storagePath!)}
                 alt={item.name}
                 onError={() => setLoadFailed(true)}
                 className="max-h-full max-w-full object-contain"
@@ -406,6 +444,12 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
             partition="library-preview"
             className="h-full min-h-0 w-full rounded-md border border-border/50"
           />
+        ) : isRemote && !editable ? (
+          /* 远程态 webview 类（html/pdf/音视频）：本地 file:// 直链语义，
+             远端无路径可链（流式端点未备），占位挂账 */
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
+            <p className="text-xs">{t("chat:library.previewUnsupported")}</p>
+          </div>
         ) : editable ? (
           kind === "md" ? (
             <FileWindowMdEditor

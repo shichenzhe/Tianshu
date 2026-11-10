@@ -2732,6 +2732,55 @@
         ]
       }
     },
+    "/graph/toggle": {
+      "post": {
+        "operationId": "GraphController_toggle",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphToggleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/GraphRecordDto"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "启停图（无乐观锁轻量 update）",
+        "tags": [
+          "编排图"
+        ]
+      }
+    },
     "/graph/run": {
       "post": {
         "operationId": "GraphController_run",
@@ -3369,6 +3418,89 @@
           }
         },
         "summary": "运行节点级执行详情（图 run，空集语义不暴露存在性）",
+        "tags": [
+          "自动化"
+        ]
+      }
+    },
+    "/automation/stats": {
+      "post": {
+        "operationId": "AutomationController_stats",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutomationStatsQueryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "runs": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/AutomationRunRecordDto"
+                          }
+                        },
+                        "errorTasks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "number"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "statusNote": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "runs",
+                        "errorTasks"
+                      ]
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "健康度总览原始行集（客户端聚合）",
         "tags": [
           "自动化"
         ]
@@ -6861,6 +6993,10 @@
           "graphJson": {
             "type": "string",
             "description": "图定义 JSON 字符串（全量）"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "启用/停用；缺席不动（创建走默认 true）"
           }
         },
         "required": [
@@ -6878,6 +7014,23 @@
         },
         "required": [
           "id"
+        ]
+      },
+      "GraphToggleDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "图标识"
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "目标启停态"
+          }
+        },
+        "required": [
+          "id",
+          "enabled"
         ]
       },
       "GraphRunDto": {
@@ -7741,6 +7894,10 @@
             "type": "number",
             "description": "任务标识（任务口径筛选，归属校验）"
           },
+          "graphId": {
+            "type": "number",
+            "description": "图标识（图口径筛选，归属校验）"
+          },
           "status": {
             "type": "string",
             "description": "运行状态筛选",
@@ -7766,6 +7923,18 @@
         },
         "required": [
           "runId"
+        ]
+      },
+      "AutomationStatsQueryDto": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string",
+            "description": "统计窗口起点（ISO，客户端 7 天窗口）"
+          }
+        },
+        "required": [
+          "since"
         ]
       },
       "PermissionRememberedWireDto": {

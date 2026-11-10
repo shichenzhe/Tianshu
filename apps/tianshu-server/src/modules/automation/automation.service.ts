@@ -14,11 +14,13 @@ import { QueryResult } from 'src/commons/query/query-result';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { PrismaService } from 'src/commons/database/prisma.service';
+import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { AutomationRepository, type TaskRecord } from './automation.repository';
 import { recordAutomationEvent } from './automation-stat';
 import type { AutomationQueryDto } from './dto/automation-query.dto';
 import type { AutomationSaveDto } from './dto/automation-save.dto';
 import type { AutomationRunQueryDto } from './dto/automation-run-query.dto';
+import type { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
 
 @Injectable()
 export class AutomationService {
@@ -100,6 +102,7 @@ export class AutomationService {
       dto.taskId,
       dto.status,
       COMPANION_USER_ID,
+      dto.graphId,
     );
   }
 
@@ -107,5 +110,15 @@ export class AutomationService {
    * 节点级执行详情（全文输入/输出/工具调用摘要），prompt run 恒空集 */
   async runNodes(runId: number): Promise<AutomationRunNodeRecord[]> {
     return await this.repository.listRunNodes(runId, COMPANION_USER_ID);
+  }
+
+  /** 健康度总览原始行集（automation/library 路由化批 2026-11-10）：
+   *  时区敏感聚合在客户端 computeStats 完成，端点只出精简行集 */
+  async statsRaw(dto: AutomationStatsQueryDto) {
+    const since = new Date(dto.since);
+    if (Number.isNaN(since.getTime())) {
+      throw new BusinessException('since 必须是合法的 ISO 时间', 'AUTOMATION_BAD_SINCE');
+    }
+    return await this.repository.statsRaw(since, COMPANION_USER_ID);
   }
 }

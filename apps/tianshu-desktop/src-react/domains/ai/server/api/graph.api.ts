@@ -76,6 +76,8 @@ export interface RemoteTaskRecord {
   startAt?: string;
   endAt?: string;
   missedPolicy: "skip" | "catchUpOnce";
+  /** 错过补跑上限（server toDto 兜底 1；批3A 字段） */
+  catchUpLimit: number;
   accessMode: "default" | "full";
   enabled: boolean;
   status: "active" | "error" | "expired";
@@ -112,6 +114,8 @@ export interface RemoteTaskSaveParams {
   startAt?: string;
   endAt?: string;
   missedPolicy: "skip" | "catchUpOnce";
+  /** 错过补跑上限（缺省不动；批3A） */
+  catchUpLimit?: number;
   accessMode?: "default" | "full";
   templateSlug?: string;
   projectId?: number | null;
@@ -145,6 +149,7 @@ export function toTaskSaveParams(
     startAt: task.startAt,
     endAt: task.endAt,
     missedPolicy: task.missedPolicy,
+    catchUpLimit: task.catchUpLimit,
     accessMode: task.accessMode,
     templateSlug: task.templateSlug,
     projectId: task.projectId,
@@ -178,6 +183,85 @@ export default class GraphApi {
 
   static async graphDelete(id: number, connId: string): Promise<void> {
     await requestRemote("server:graphDelete", { id }, connId);
+  }
+
+  /** 启停（orchestration 路由化批 2026-11-10）：graph/toggle 轻量端点
+   * （无乐观锁；成功后无头端发 graph.changed） */
+  static async graphToggle(
+    id: number,
+    enabled: boolean,
+    connId: string,
+  ): Promise<RemoteGraphRecord> {
+    return requestRemote<RemoteGraphRecord>(
+      "server:graphToggle",
+      { id, enabled },
+      connId,
+    );
+  }
+
+  /** 图口径运行历史（orchestration 路由化批）：automation/runPage 的
+   * graphId 过滤（归属校验；wire = AutomationRunRecord 剔 graphTrace
+   * 精简面——节点级详情走 graphRunNodes） */
+  static async graphRuns(
+    graphId: number,
+    page: number,
+    connId: string,
+    status?: "running" | "success" | "failed" | "skipped",
+  ): Promise<{ total: number; items: unknown[] }> {
+    return requestRemote<{ total: number; items: unknown[] }>(
+      "server:graphRuns",
+      { page, graphId, ...(status ? { status } : {}) },
+      connId,
+    );
+  }
+
+  /** run 节点级行（automation/runNodes；wire = AutomationRunNodeRecord
+   * 与编排页 GraphRunNodeRow 同构零转换） */
+  static async graphRunNodes(
+    runId: number,
+    connId: string,
+  ): Promise<unknown[]> {
+    return requestRemote<unknown[]>("server:graphRunNodes", { runId }, connId);
+  }
+
+  /** 任务口径运行历史（automation 路由化批 2026-11-10）：automation/
+   *  runPage 的 taskId+status 过滤（wire 与 graphRuns 同端点同构——
+   *  AutomationRunRecord 剔 graphTrace 精简面，as 断言由适配层收口） */
+  static async automationRuns(
+    page: number,
+    connId: string,
+    taskId?: number,
+    status?: "running" | "success" | "failed" | "skipped",
+  ): Promise<{ total: number; items: unknown[] }> {
+    return requestRemote<{ total: number; items: unknown[] }>(
+      "server:automationRuns",
+      {
+        page,
+        ...(taskId !== undefined ? { taskId } : {}),
+        ...(status ? { status } : {}),
+      },
+      connId,
+    );
+  }
+
+  /** 健康度总览原始行集（automation 批挂账收口 2026-11-10）：since 起
+   *  精简 run 行 + error 任务行——时区敏感聚合在调用方 computeStats
+   *  （core 单源）完成 */
+  static async automationStatsRaw(
+    since: string,
+    connId: string,
+  ): Promise<{
+    runs: Array<{
+      id: number;
+      status: string;
+      error?: string;
+      startedAt: string;
+      taskName: string;
+      graphId?: number;
+    }>;
+    errorTasks: Array<{ id: number; name: string; statusNote: string | null }>;
+  }> {
+    return requestRemote("server:automationStats", { since }, connId);
   }
 
   /** webhook 配置（WH 消费端批）：开启（重开换 token 旧失效）——config
@@ -218,15 +302,21 @@ export default class GraphApi {
     );
   }
 
-  /** 触发试运行：202 受理即回 {runId}，执行流经 graph.run.updated 事件回传 */
+  /** 触发试运行：202 受理即回 {runId}，执行流经 graph.run.updated 事件回传
+   * （workspaceId 可选——缺省挂默认空间；编排页试跑传远端空间 id） */
   static async graphRun(
     graphId: number,
     connId: string,
     inputs?: Record<string, string>,
+    workspaceId?: number,
   ): Promise<{ runId: number }> {
     return requestRemote<{ runId: number }>(
       "server:graphRun",
-      inputs ? { graphId, inputs } : { graphId },
+      {
+        graphId,
+        ...(inputs ? { inputs } : {}),
+        ...(workspaceId != null ? { workspaceId } : {}),
+      },
       connId,
     );
   }
@@ -282,10 +372,13 @@ export default class GraphApi {
 }
 
 /** 编排区消费的合并通道事件（server:event:<connId> 载荷子集；事件类型
- * 自 @tianshu/protocol 单份权威源派生，server.connected 供重连全量刷新） */
+ * 自 @tianshu/protocol 单份权威源派生，server.connected 供重连全量刷新；
+ * graph.changed 为 orchestration 路由化批 2026-11-10 增——图定义级
+ * 变更刷新信号（增删改/启停/对话工具建图） */
 export type RemoteOrchestrationEvent =
   | { type: "graph.run.updated"; payload: GraphRunUpdatedPayload }
   | { type: "automation.changed"; payload: AutomationChangedPayload }
+  | { type: "graph.changed"; payload: { graphId: number } }
   | {
       type: "server.connected";
       payload: { instanceId: string; capabilities: string[] };
@@ -304,6 +397,7 @@ export function onRemoteGraphEvent(
     if (
       type === "graph.run.updated" ||
       type === "automation.changed" ||
+      type === "graph.changed" ||
       type === "server.connected"
     ) {
       listener(event as RemoteOrchestrationEvent);

@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -33,4 +33,16 @@ export class GraphSaveDto {
   @ApiProperty({ description: '图定义 JSON 字符串（全量）' })
   @IsString({ message: '图定义必须是 JSON 字符串' })
   graphJson: string;
+
+  /** 启停（orchestration 路由化批 2026-11-10）：可选——缺席不动库内值
+   * （创建缺席走 schema 默认 true）；携带即写。控制端 toggle 通道的
+   * 远端等价（automation save 全量携 enabled 同先例），兼供 save 全量
+   * 更新时一并携带 */
+  @ApiProperty({
+    description: '启用/停用；缺席不动（创建走默认 true）',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: '启停必须是布尔值' })
+  enabled?: boolean;
 }

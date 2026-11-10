@@ -34,6 +34,7 @@ import {
 } from 'src/core/tools/display-tools';
 import { unregisterTools, registerTools } from 'src/core/tools/tool-registry';
 import { installWorkflowTools } from 'src/core/tools/workflow-toolbox';
+import type { GraphChangedPayload } from '@tianshu/protocol';
 
 /** 运行时安装 provider token（无消费面——Nest 启动期实例化工厂即安装） */
 export const GRAPH_EXECUTOR_RUNTIME = Symbol('GRAPH_EXECUTOR_RUNTIME');
@@ -51,14 +52,23 @@ export const GRAPH_TOOLS_REGISTRATION = Symbol('GRAPH_TOOLS_REGISTRATION');
   providers: [
     // GA-T3 改造点 4 钩子接线（GA-T7）：deleteGraph 的 webhook 注册清理
     // no-op 缺省替换为真实实现（mirror graph.repo 动态 import
-    // webhook-server 的无头端等价）
+    // webhook-server 的无头端等价）。orchestration 路由化批
+    // （2026-11-10）：图变更广播接线 EventBusService（automation.changed
+    // 同先例）——create/update/delete/toggle 成功后发 graph.changed
     {
       provide: GraphRepository,
-      useFactory: (prisma: PrismaService, webhook: WebhookService) =>
-        new GraphRepository(prisma, (graphId: number) =>
-          webhook.unregisterWebhook(graphId),
+      useFactory: (
+        prisma: PrismaService,
+        webhook: WebhookService,
+        bus: EventBusService,
+      ) =>
+        new GraphRepository(
+          prisma,
+          (graphId: number) => webhook.unregisterWebhook(graphId),
+          (payload: GraphChangedPayload) =>
+            bus.publish({ type: 'graph.changed', payload }),
         ),
-      inject: [PrismaService, WebhookService],
+      inject: [PrismaService, WebhookService, EventBusService],
     },
     {
       provide: GRAPH_EXECUTOR_RUNTIME,
@@ -101,12 +111,21 @@ export const GRAPH_TOOLS_REGISTRATION = Symbol('GRAPH_TOOLS_REGISTRATION');
     // 图内 LLM 两者互补（结论备案）
     {
       provide: GRAPH_TOOLS_REGISTRATION,
-      inject: [PrismaService, GraphService],
-      useFactory: (prisma: PrismaService, graphService: GraphService) => {
+      inject: [PrismaService, GraphService, EventBusService],
+      useFactory: (
+        prisma: PrismaService,
+        graphService: GraphService,
+        bus: EventBusService,
+      ) => {
         const toolbox = [
           ...makeWorkflowTools({
             prisma: prisma as never,
             runGraph: (dto) => graphService.run(dto),
+            // orchestration 路由化批（2026-11-10）：对话工具写面同发
+            // graph.changed——「对话建图 → 控制端编排页刷新」事件闭环
+            // （F1 移植时无消费面省略的 notify 在此补上）
+            publishGraphChanged: (payload) =>
+              bus.publish({ type: 'graph.changed', payload }),
           }),
           ...makeDisplayTools(),
         ];

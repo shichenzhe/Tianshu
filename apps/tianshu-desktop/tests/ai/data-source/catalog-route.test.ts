@@ -25,6 +25,9 @@ const serverApi = vi.hoisted(() => ({
   skillsRead: vi.fn(),
   skillsSetEnabled: vi.fn(),
   workspaceList: vi.fn(),
+  workspaceCreate: vi.fn(),
+  workspaceUpdate: vi.fn(),
+  workspaceDelete: vi.fn(),
   sessionCreate: vi.fn(),
 }));
 vi.mock("../../../src-react/domains/ai/server/api/server.api", () => ({
@@ -291,6 +294,57 @@ describe("workspace 域主机路由化（HD-A2：侧栏远端树）", () => {
     expect(spaces[1].directoryPath).toBeUndefined();
     expect(spaces[1].defaultModelId).toBeUndefined();
     expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("写面路由化（2026-11-09 批）：本地 invoke 原通道；远程走透传 + Brief 形状转换", async () => {
+    // 本地：invoke 原通道参数逐字
+    invoke.mockResolvedValue({ id: 1, name: "本地新建" });
+    await WorkspaceApi.create({ name: "本地新建" });
+    expect(invoke).toHaveBeenCalledWith("workspace:create", {
+      name: "本地新建",
+    });
+    await WorkspaceApi.update({ id: 1, name: "本地改名" });
+    expect(invoke).toHaveBeenCalledWith("workspace:update", {
+      id: 1,
+      name: "本地改名",
+    });
+    invoke.mockResolvedValue(undefined);
+    await WorkspaceApi.delete(1);
+    expect(invoke).toHaveBeenCalledWith("workspace:delete", 1);
+    expect(serverApi.workspaceCreate).not.toHaveBeenCalled();
+
+    // 远程：透传通道 + Brief → Record（时间戳缺省空串）
+    useHostStore.getState().switchHost({ kind: "remote", connId: "c2" });
+    serverApi.workspaceCreate.mockResolvedValue({
+      id: 8,
+      name: "远端新建",
+      directoryPath: null,
+      defaultModelId: null,
+    });
+    const created = await WorkspaceApi.create({ name: "远端新建" });
+    expect(serverApi.workspaceCreate).toHaveBeenCalledWith(
+      { name: "远端新建" },
+      "c2",
+    );
+    expect(created).toMatchObject({ id: 8, name: "远端新建", createdAt: "" });
+    expect(created.directoryPath).toBeUndefined();
+
+    serverApi.workspaceUpdate.mockResolvedValue({
+      id: 8,
+      name: "远端改名",
+      directoryPath: null,
+      defaultModelId: null,
+    });
+    await WorkspaceApi.update({ id: 8, name: "远端改名" });
+    expect(serverApi.workspaceUpdate).toHaveBeenCalledWith(
+      { id: 8, name: "远端改名" },
+      "c2",
+    );
+
+    await WorkspaceApi.delete(8);
+    expect(serverApi.workspaceDelete).toHaveBeenCalledWith(8, "c2");
+    // 远程分支不经本地 invoke
+    expect(invoke).not.toHaveBeenCalledWith("workspace:create");
   });
 
   it("远程新建会话：sessionCreate 携 workspaceId（远端空间内建）", async () => {

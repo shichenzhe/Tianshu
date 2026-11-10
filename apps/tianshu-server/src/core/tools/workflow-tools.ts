@@ -107,6 +107,11 @@ export type RunGraphFn = (dto: {
 export function makeWorkflowTools(deps: {
   prisma: WorkflowPrismaLike;
   runGraph: RunGraphFn;
+  /** 图变更广播（orchestration 路由化批 2026-11-10，可选——未注入不发）：
+   *  create/update 成功后发 graph.changed，控制端编排页刷新闭环 */
+  publishGraphChanged?: (payload: {
+    graphId: number;
+  }) => void;
 }): ToolDefinition[] {
   const userIdOf = (ctx: ToolContext): number => ctx.userId ?? FALLBACK_USER_ID;
 
@@ -348,6 +353,7 @@ export function makeWorkflowTools(deps: {
               userId,
             },
           });
+          deps.publishGraphChanged?.({ graphId: row.id });
           // E3 软提示（精简复刻）：read 路由依据是名称+描述+类型摘要
           const hints: string[] = [];
           if (!args.description || args.description.trim() === '') {
@@ -416,6 +422,7 @@ export function makeWorkflowTools(deps: {
           ? `错误: 版本冲突（当前 version=${exists.version}），请重新 workflow_read 后再更新`
           : '错误: 工作流不存在（可先用 workflow_read 核对 id）';
       }
+      deps.publishGraphChanged?.({ graphId: args.id });
       return `成功: 工作流 id=${args.id} 已更新（新 version=${args.version + 1}）${hints.length ? `\n${hints.join('\n')}` : ''}`;
     },
   };

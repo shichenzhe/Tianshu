@@ -63,6 +63,7 @@ import LibraryDetailPanel from "../components/LibraryDetailPanel";
 import LibraryCommandDialog from "../components/LibraryCommandDialog";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { invoke } from "@/lib/ipc";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
 
 const TYPE_FILTERS = ["all", ...Object.keys(TYPE_LABEL_KEY)];
 
@@ -73,6 +74,8 @@ type ListQueryData =
 export default function LibraryView() {
   const { t } = useTranslation(["chat", "common"]);
   const queryClient = useQueryClient();
+  // 远程主机（library 路由化批）：链接外开走 openExternal（见 openDetail）
+  const isRemote = useHostStore((s) => s.activeHost.kind === "remote");
   const navigate = useNavigate();
   // 主区视图路由（spec §5）：默认「最近」；folder 为文件夹层（null=根）
   const [view, setView] = useState<LibraryViewRoute>({ type: "recent" });
@@ -319,7 +322,13 @@ export default function LibraryView() {
    *  打点失败不阻断预览）；link 不进详情——外开浏览器并打点进「最近」 */
   const openDetail = (item: LibraryItem) => {
     if (item.kind === "link") {
-      void LibraryApi.openLink(item.id)
+      // 远程态（library 路由化批）：主进程 openLink 为本地 shell 语义，
+      // 外开改走通用 openExternal（行内已有 url），打点/刷新同链
+      const open =
+        isRemote && item.url
+          ? invoke<null>("browser:openExternal", item.url)
+          : LibraryApi.openLink(item.id);
+      void open
         .then(async () => {
           await LibraryApi.markViewed(item.id).catch(() => undefined);
           await invalidate();

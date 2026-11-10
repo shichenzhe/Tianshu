@@ -50,6 +50,7 @@ export class GraphService {
           description: dto.description,
           graphJson: dto.graphJson,
           version: dto.version,
+          ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
         },
         COMPANION_USER_ID,
       );
@@ -59,9 +60,17 @@ export class GraphService {
         name: dto.name,
         description: dto.description,
         graphJson: dto.graphJson,
+        ...(dto.enabled !== undefined ? { enabled: dto.enabled } : {}),
       },
       COMPANION_USER_ID,
     );
+  }
+
+  /** 启停（orchestration 路由化批 2026-11-10）：控制端 toggle 通道的
+   * 远端等价——无乐观锁轻量 update（repo toggleGraph），成功后仓储发
+   * graph.changed */
+  async toggle(id: number, enabled: boolean): Promise<GraphRecord> {
+    return await this.repository.toggleGraph(id, enabled, COMPANION_USER_ID);
   }
 
   async delete(id: number): Promise<void> {

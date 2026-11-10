@@ -27,6 +27,7 @@ import { AutomationDeleteDto } from './dto/automation-delete.dto';
 import { TaskIdDto } from './dto/task-id.dto';
 import { RunIdDto } from './dto/run-id.dto';
 import { AutomationRunQueryDto } from './dto/automation-run-query.dto';
+import { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
 
 /**
  * 自动化任务控制器（spec §4.1 四端点 + CRUD 批 runPage + 执行详情批
@@ -117,5 +118,39 @@ export class AutomationController {
   })
   async runNodes(@Body() dto: RunIdDto): Promise<AutomationRunNodeRecord[]> {
     return await this.automationService.runNodes(dto.runId);
+  }
+
+  /**
+   * 健康度总览原始行集（automation/library 路由化批 2026-11-10）：since
+   * 起的精简 run 行 + error 任务行——时区敏感的日键聚合在客户端
+   * computeStats（@tianshu/core 单源）完成，端点不做时区假设
+   */
+  @Post('stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '健康度总览原始行集（客户端聚合）' })
+  @ApiWrappedOk({
+    type: 'object',
+    properties: {
+      runs: {
+        type: 'array',
+        items: { $ref: getSchemaPath(AutomationRunRecordDto) },
+      },
+      errorTasks: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'number' },
+            name: { type: 'string' },
+            statusNote: { type: 'string', nullable: true },
+          },
+          required: ['id', 'name'],
+        },
+      },
+    },
+    required: ['runs', 'errorTasks'],
+  })
+  async stats(@Body() dto: AutomationStatsQueryDto) {
+    return await this.automationService.statsRaw(dto);
   }
 }

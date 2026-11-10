@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 // HostSwitcher 顶栏主机切换器（HD-T4）：无连接隐藏零打扰；有连接渲染
-// 触发钮，菜单列本机+连接（connected 可选/其余禁用）；点击 connected
-// 连接切 activeHost 并清 react-query 缓存。
+// 触发钮，菜单列本机+连接；点击 connected 连接切 activeHost 并清
+// react-query 缓存。切换即连（2026-11-10）：非 connected 项可点——
+// activate 建链 → 轮询等 connected 再切；invalid-token 失败 toast 不切。
 import {
   beforeAll,
   beforeEach,
@@ -46,7 +47,10 @@ vi.mock("@/lib/ipc", () => ({
   on: () => () => {},
 }));
 
-const serverApi = vi.hoisted(() => ({ listConnections: vi.fn() }));
+const serverApi = vi.hoisted(() => ({
+  listConnections: vi.fn(),
+  activateConnection: vi.fn(),
+}));
 /** onRemoteEvent 捕获池：用例触发 server.connected 断言失效重取 */
 const remoteEventListeners = new Map<string, Array<(event: unknown) => void>>();
 vi.mock("../../../src-react/domains/ai/server/api/server.api", () => ({
@@ -157,7 +161,7 @@ describe("HostSwitcher", () => {
     );
   });
 
-  it("有连接：触发钮常驻；菜单列本机+连接，非 connected 项禁用", async () => {
+  it("有连接：触发钮常驻；菜单列本机+连接，idle 项可点（切换即连）", async () => {
     serverApi.listConnections.mockResolvedValue({
       activeConnId: null,
       connections: [
@@ -180,10 +184,62 @@ describe("HostSwitcher", () => {
       await screen.findByRole("menuitem", { name: "公司无头端" }),
     ).toBeDefined();
 
-    // idle 连接禁用（未连通不可切——数据面拉不动）
+    // idle 连接可点（切换即连批：不再禁用——点击触发 activate）
     const idleItem = await screen.findByRole("menuitem", { name: "家中桌面" });
-    expect(idleItem.getAttribute("aria-disabled")).toBe("true");
+    expect(idleItem.getAttribute("aria-disabled")).not.toBe("true");
     expect(localItem).toBeDefined();
+  });
+
+  it("切换即连：点击 idle 连接 → activate 建链 → 轮询 connected 后自动切远程", async () => {
+    // 首次拉取 idle；点击后轮询拉取 connected（refetchInterval 加速）
+    serverApi.listConnections
+      .mockResolvedValueOnce({
+        activeConnId: null,
+        connections: [conn("c2", "idle", "家中桌面")],
+      })
+      .mockResolvedValue({
+        activeConnId: "c2",
+        connections: [conn("c2", "connected", "家中桌面")],
+      });
+    serverApi.activateConnection.mockResolvedValue(undefined);
+    renderSwitcher();
+
+    const trigger = await screen.findByTestId("host-switcher");
+    openMenu(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "家中桌面" }));
+
+    // 点击即触发激活（不要求已连接）
+    await waitFor(() =>
+      expect(serverApi.activateConnection).toHaveBeenCalledWith("c2"),
+    );
+    // 连上后自动切换
+    await waitFor(() =>
+      expect(useHostStore.getState().activeHost).toEqual({
+        kind: "remote",
+        connId: "c2",
+      }),
+    );
+  });
+
+  it("切换即连失败：activate 后 state=invalid-token → 不切换", async () => {
+    serverApi.listConnections.mockResolvedValue({
+      activeConnId: null,
+      connections: [conn("c2", "invalid-token", "坏令牌主机")],
+    });
+    serverApi.activateConnection.mockResolvedValue(undefined);
+    renderSwitcher();
+
+    const trigger = await screen.findByTestId("host-switcher");
+    openMenu(trigger);
+    fireEvent.click(await screen.findByRole("menuitem", { name: "坏令牌主机" }));
+
+    await waitFor(() =>
+      expect(serverApi.activateConnection).toHaveBeenCalledWith("c2"),
+    );
+    // 失败终态：不切换（activeHost 保持本机），等待清空（可再点）
+    await waitFor(() =>
+      expect(useHostStore.getState().activeHost).toEqual({ kind: "local" }),
+    );
   });
 
   it("点击 connected 连接：activeHost 切远程；同 key 缓存按主机隔离且回切保留", async () => {

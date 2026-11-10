@@ -14,6 +14,7 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Bot, Send, X, Zap } from "lucide-react";
 
 import IconTooltip from "@/components/common/icon-tooltip";
@@ -30,16 +31,21 @@ import { checkSensitive } from "../lib/sensitive-check";
 import { useLocalFileAttach } from "../hooks/use-local-file-attach";
 import { useWorkspaceFiles } from "../hooks/use-workspace-files";
 import { useNewTaskStore } from "../store/new-task-store";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
+import { remoteLibraryText } from "@/domains/ai/data-source/remote-catalog";
+import { isImagePath } from "../../chat/lib/image-file";
 import AttachMenu from "./AttachMenu";
 import PolishButton from "./polish-button";
 import QuickMenu from "./QuickMenu";
 
-/** @ 联想候选：工作空间文件 + 资料库文件（分组渲染，选中转 pending） */
+/** @ 联想候选：工作空间文件 + 资料库文件（分组渲染，选中转 pending；
+ *  id 为远程资料库条目标识——远程行 ref 恒空，按 id 走远端读取链） */
 interface MentionCandidate {
   label: string;
   ref: string;
   kind: "file" | "localFile";
   group: "workspace" | "library";
+  id?: number;
 }
 
 interface NewTaskInputCardProps {
@@ -98,13 +104,18 @@ export default function NewTaskInputCard({
   const workspaceFiles = useWorkspaceFiles(workspaceId, suggest !== null);
 
   // 资料库候选：suggest 激活时按 query 跨层搜索（空 query 后端返 []，
-  // bare @ 不出资料库组）；300ms 防抖——避免每击键一发 IPC
+  // bare @ 不出资料库组）；300ms 防抖——避免每击键一发 IPC。远程态走
+  // id 引用链（library 路由化批挂账收口）：ref 无本地路径语义，选中按
+  // id 远端预检挂 pill，dispatch 时按 id 走远端 read/readImage
   const debouncedQuery = useDebouncedValue(suggest?.query ?? "", 300);
   const libraryQuery = useQuery({
     queryKey: ["librarySearch", debouncedQuery],
     queryFn: () => LibraryApi.search(debouncedQuery),
     enabled: suggest !== null,
   });
+  const remoteHost = useHostStore((s) =>
+    s.activeHost.kind === "remote" ? s.activeHost : null,
+  );
   const suggestCandidates = useMemo<MentionCandidate[]>(() => {
     if (!suggest || !workspaceFiles) {
       return [];
@@ -119,14 +130,18 @@ export default function NewTaskInputCard({
         kind: "file",
         group: "workspace",
       }));
-    const library: MentionCandidate[] = (libraryQuery.data ?? [])
-      .slice(0, MENTION_LIMIT)
-      .map((item) => ({
-        label: item.name,
-        ref: item.storagePath ?? "",
-        kind: "localFile",
-        group: "library",
-      }));
+    // 资料库候选（library 路由化批挂账收口）：本地行 ref=storagePath 走
+    // addLocalFile 既有链；远程行 storagePath 恒空——id 随候选，选中走
+    // 远端预检挂 pill（dispatch 按 id 走远端 read/readImage）
+    const library: MentionCandidate[] = libraryQuery.data
+      ? libraryQuery.data.slice(0, MENTION_LIMIT).map((item) => ({
+          label: item.name,
+          ref: item.storagePath ?? "",
+          kind: "localFile" as const,
+          group: "library" as const,
+          id: item.id,
+        }))
+      : [];
     return [...workspace, ...library];
   }, [suggest, workspaceFiles, libraryQuery.data]);
 
@@ -141,8 +156,9 @@ export default function NewTaskInputCard({
   const showSuggestList = panelActive;
 
   /** 面板选中：候选转 pending pill（file=工作空间相对路径），并从文本删除
-   *  @query 触发片段；资料库候选（localFile）走 addLocalFile——512KB/二进制
-   *  预检 + 失败 toast + pill label 同「＋引用」入口同源（统一口径） */
+   *  @query 触发片段；资料库候选（localFile）——本地行走 addLocalFile
+   *  512KB/二进制预检（失败 toast），远程行按 id 远端 read 预检挂 pill
+   *  （pill label 同「＋引用」入口同源，统一口径） */
   const selectCandidate = (candidate: MentionCandidate) => {
     const textarea = textareaRef.current;
     const caret = textarea?.selectionStart ?? content.length;
@@ -156,7 +172,33 @@ export default function NewTaskInputCard({
     );
     setSuggest(null);
     if (candidate.kind === "localFile") {
-      void addLocalFile(candidate.ref);
+      if (remoteHost && candidate.id !== undefined) {
+        const itemId = candidate.id;
+        if (isImagePath(candidate.label)) {
+          addPending({
+            label: candidate.label,
+            ref: candidate.label,
+            kind: "localFile",
+            id: itemId,
+          });
+        } else {
+          void (async () => {
+            try {
+              await remoteLibraryText(itemId, remoteHost.connId);
+              addPending({
+                label: candidate.label,
+                ref: candidate.label,
+                kind: "localFile",
+                id: itemId,
+              });
+            } catch {
+              toast.error(t("chat:library.readFailed"));
+            }
+          })();
+        }
+      } else {
+        void addLocalFile(candidate.ref);
+      }
     } else {
       addPending({
         label: candidate.label,

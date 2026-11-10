@@ -36,6 +36,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import WorkspaceApi from "../../api/workspace.api";
+import { useHostStore } from "../../data-source/host.store";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { cn } from "@/lib/utils";
 import { useNewTaskStore } from "../store/new-task-store";
@@ -56,6 +57,10 @@ export default function WorkspacePickerMenu() {
   const queryClient = useQueryClient();
   const workspaceId = useNewTaskStore((s) => s.workspaceId);
   const setWorkspaceId = useNewTaskStore((s) => s.setWorkspaceId);
+  // 远程主机态（2026-11-09 门控）：空间选择与「新建空间」已路由化可用
+  // （写面透传 server:workspaceCreate 等）；「打开本地空间」仍是本地
+  // invoke 通道（目录选择在控制端机器上，跨主机无意义）——远程态隐藏
+  const isRemoteHost = useHostStore((s) => s.activeHost.kind === "remote");
   const [menuOpen, setMenuOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   // 「+ 新建空间」名称输入对话框（菜单先关避免叠层）
@@ -219,6 +224,7 @@ export default function WorkspacePickerMenu() {
           )}
           <div className="my-1.5 h-px bg-border/50" />
           <div className="space-y-0.5">
+            {/* 新建空间：写面已路由化（远程态可用） */}
             <button
               type="button"
               onClick={openCreateDialog}
@@ -227,14 +233,18 @@ export default function WorkspacePickerMenu() {
               <FolderPlus className="h-4 w-4 shrink-0 text-muted-foreground" />
               {t("newTask:context.newWorkspace")}
             </button>
-            <button
-              type="button"
-              onClick={() => void handleOpenLocal()}
-              className={ACTION_ITEM_CLASS}
-            >
-              <FolderInput className="h-4 w-4 shrink-0 text-muted-foreground" />
-              {t("newTask:context.openLocal")}
-            </button>
+            {/* 打开本地空间：本地 invoke 专属（目录选择在控制端机器上，
+                跨主机无意义——isRemoteHost 门控隐藏） */}
+            {!isRemoteHost && (
+              <button
+                type="button"
+                onClick={() => void handleOpenLocal()}
+                className={ACTION_ITEM_CLASS}
+              >
+                <FolderInput className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {t("newTask:context.openLocal")}
+              </button>
+            )}
           </div>
         </PopoverContent>
       </Popover>

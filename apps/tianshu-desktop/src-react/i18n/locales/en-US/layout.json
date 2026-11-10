@@ -62,6 +62,9 @@
   "hostSwitcher": {
     "local": "This device",
     "tooltip": "Switch data host",
-    "manage": "Manage hosts"
+    "manage": "Manage hosts",
+    "connecting": "Connecting…",
+    "connectFailed": "Connection failed. Check the address and token in host settings",
+    "connectTimeout": "Connection timed out. Retry later or check host settings"
   }
 }

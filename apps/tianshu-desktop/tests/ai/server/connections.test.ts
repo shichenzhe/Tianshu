@@ -757,7 +757,7 @@ describe("session 透传与 invalid-token 连接态", () => {
 });
 
 describe("IPC 装配（registerServerIpc）", () => {
-  it("52 通道注册（P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats；TOFU 仪式批 +connectionConfirmFingerprint）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
+  it("77 通道注册（orchestration 批 +graphToggle/graphRuns/graphRunNodes、切换即连批 +connectionActivate；automation/library 批 +automationRuns+library 十七端点、挂账收口批 +automationStats/libraryAddFiles/libraryImportFolder；P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats；TOFU 仪式批 +connectionConfirmFingerprint）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
     const port = await reservePort();
     const face = await FakeFace.start(port, "face-token");
     const registry = newRegistry();
@@ -776,8 +776,11 @@ describe("IPC 装配（registerServerIpc）", () => {
         "server:automationDelete",
         "server:automationQuery",
         "server:automationRunNow",
+        "server:automationRuns",
         "server:automationSave",
+        "server:automationStats",
         "server:bridgeDecision",
+        "server:connectionActivate",
         "server:connectionConfirmFingerprint",
         "server:connectionDelete",
         "server:connectionList",
@@ -789,7 +792,29 @@ describe("IPC 装配（registerServerIpc）", () => {
         "server:graphQuery",
         "server:graphRun",
         "server:graphRunAbort",
+        "server:graphRunNodes",
+        "server:graphRuns",
         "server:graphSave",
+        "server:graphToggle",
+        "server:libraryAddFiles",
+        "server:libraryAddLink",
+        "server:libraryCreateFile",
+        "server:libraryCreateFolder",
+        "server:libraryDelete",
+        "server:libraryImportFolder",
+        "server:libraryList",
+        "server:libraryListFavorites",
+        "server:libraryListRecent",
+        "server:libraryMarkViewed",
+        "server:libraryMove",
+        "server:libraryRead",
+        "server:libraryReadImage",
+        "server:libraryRename",
+        "server:librarySearch",
+        "server:librarySubtreeCount",
+        "server:libraryToggleFavorite",
+        "server:libraryTree",
+        "server:libraryWriteContent",
         "server:localStart",
         "server:localStatus",
         "server:localStop",
@@ -824,7 +849,10 @@ describe("IPC 装配（registerServerIpc）", () => {
         "server:webhookDisable",
         "server:webhookEnable",
         "server:webhookStatus",
+        "server:workspaceCreate",
+        "server:workspaceDelete",
         "server:workspaceList",
+        "server:workspaceUpdate",
       ]);
 
       await handlers.get("server:connectionSave")!({} as never, {

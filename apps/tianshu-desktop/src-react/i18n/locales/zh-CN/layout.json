@@ -62,6 +62,9 @@
   "hostSwitcher": {
     "local": "本机",
     "tooltip": "切换数据主机",
-    "manage": "主机配置"
+    "manage": "主机配置",
+    "connecting": "连接中…",
+    "connectFailed": "连接失败，请到主机配置检查地址与令牌",
+    "connectTimeout": "连接超时，请稍后重试或检查主机配置"
   }
 }

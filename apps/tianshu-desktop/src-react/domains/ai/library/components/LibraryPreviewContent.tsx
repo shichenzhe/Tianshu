@@ -25,6 +25,11 @@ import { Button } from "@/components/ui/button";
 import { mapIpcError } from "@/domains/ai/chat/lib/error-message";
 import { useWebviewGuard } from "@/domains/ai/chat/lib/use-webview-guard";
 import { invoke } from "@/lib/ipc";
+import { useHostStore } from "@/domains/ai/data-source/host.store";
+import {
+  remoteLibraryImage,
+  remoteLibraryText,
+} from "@/domains/ai/data-source/remote-catalog";
 import type { LibraryItem } from "../api/library.api";
 import {
   fileUrlOf,
@@ -54,6 +59,12 @@ export default function LibraryPreviewContent({
   onItemUpdate,
 }: LibraryPreviewContentProps) {
   const { t } = useTranslation(["chat", "common"]);
+  // 远程主机（library 路由化批）：行 storagePath 恒空，内容读按 id 走
+  // 远端 read/readImage；webview（html/pdf/音视频 file:// 直链）与 Finder
+  // 定位无远端等价——占位与隐藏按钮
+  const activeHost = useHostStore((s) => s.activeHost);
+  const isRemote = activeHost.kind === "remote";
+  const connId = isRemote ? activeHost.connId : null;
   // inline-text 只读预览文本
   const [text, setText] = useState<string | null>(null);
   // md 编辑内容（null=读取中）
@@ -129,15 +140,20 @@ export default function LibraryPreviewContent({
       mode === "inline-csv" ||
       mode === "inline-text"
     ) {
-      invoke<{ kind: "text" | "image"; content?: string }>(
-        "file:readExternalFile",
-        item.storagePath ?? "",
-      )
-        .then((result) => {
+      // 远程态按 id 走远端 read（512KiB/NUL 守卫在服务端）；本地链
+      // readExternalFile 直读（512KB 上限沿用，超限降级 Finder）
+      const readText: Promise<string> =
+        connId != null
+          ? remoteLibraryText(item.id, connId)
+          : invoke<{ kind: "text" | "image"; content?: string }>(
+              "file:readExternalFile",
+              item.storagePath ?? "",
+            ).then((result) => result.content ?? "");
+      readText
+        .then((content) => {
           if (stale) {
             return;
           }
-          const content = result.content ?? "";
           if (mode === "inline-csv") {
             setCsvGrid(toCsvGrid(parseCsv(content)));
           } else if (mode === "inline-md") {
@@ -152,21 +168,35 @@ export default function LibraryPreviewContent({
           }
         });
     }
-    if (mode === "inline-image" && import.meta.env.DEV) {
-      invoke<{
-        kind: "text" | "image";
-        content?: string;
-        dataUrl?: string;
-      }>("file:readExternalFile", item.storagePath ?? "")
-        .then((result) => {
+    if (mode === "inline-image") {
+      // 远程态 dev/生产同链 readImage→dataUrl（无本地路径可直链）；
+      // 本地 dev 经 readExternalFile 取 dataUrl 内联（生产 file:// 直链）
+      const readImage: Promise<string | null> =
+        connId != null
+          ? remoteLibraryImage(item.id, connId)
+          : import.meta.env.DEV
+            ? invoke<{
+                kind: "text" | "image";
+                content?: string;
+                dataUrl?: string;
+              }>("file:readExternalFile", item.storagePath ?? "").then(
+                (result) => result.dataUrl ?? null,
+              )
+            : Promise.resolve(null);
+      readImage
+        .then((dataUrl) => {
           if (stale) {
             return;
           }
-          if (!result.dataUrl) {
+          if (connId == null && !import.meta.env.DEV) {
+            // 本地生产直链分支（占位态立即解除由 img 直链承担）
+            return;
+          }
+          if (!dataUrl) {
             setLoadFailed(true);
             return;
           }
-          setDataUrl(result.dataUrl);
+          setDataUrl(dataUrl);
         })
         .catch(() => {
           if (!stale) {
@@ -181,7 +211,7 @@ export default function LibraryPreviewContent({
     };
     // 仅按 item.id 重置重读（本仓 ESLint 未注册 react-hooks 规则，无法
     // eslint-disable exhaustive-deps，以注释说明；若启用需抑制该行）
-  }, [item?.id]);
+  }, [item?.id, connId]);
 
   // webview 外跳拦截/失败降级守卫（T28 收敛共享 hook，语义见其头注释）。
   // 与 FilePreview 的差异仅归并口径：此处 failed 并入 loadFailed 同一
@@ -247,18 +277,21 @@ export default function LibraryPreviewContent({
               ? t("chat:library.previewFailed")
               : t("chat:library.previewUnsupported")}
           </p>
-          <Button
-            variant="outline"
-            className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
-            onClick={() =>
-              void LibraryApi.revealItem(item.id).catch((e) =>
-                toast.error(mapIpcError(e)),
-              )
-            }
-          >
-            <FolderSearch className="mr-1 h-4 w-4" />
-            {t("chat:library.openInFinder")}
-          </Button>
+          {/* Finder 定位为本地磁盘语义——远程态条目在远端服务器，无从定位 */}
+          {!isRemote && (
+            <Button
+              variant="outline"
+              className="hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
+              onClick={() =>
+                void LibraryApi.revealItem(item.id).catch((e) =>
+                  toast.error(mapIpcError(e)),
+                )
+              }
+            >
+              <FolderSearch className="mr-1 h-4 w-4" />
+              {t("chat:library.openInFinder")}
+            </Button>
+          )}
         </div>
       ) : mode === "inline-md" ? (
         // 标准编辑器：工具栏 + 左编辑右预览 + 快捷键/续行/缩进/滚动同步
@@ -288,18 +321,27 @@ export default function LibraryPreviewContent({
         </pre>
       ) : mode === "inline-image" ? (
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto">
-          {/* dev：dataUrl 读取中显示占位（此时直链 file:// 会因跨源被拒，
-              不能提前挂 src 触发 onError 误降级）；生产直链 file:// */}
-          {import.meta.env.DEV && dataUrl === null ? (
+          {/* dev/远程：dataUrl 读取中显示占位（此时直链 file:// 会因跨源被
+              拒或根本无本地路径，不能提前挂 src 触发 onError 误降级）；
+              本地生产直链 file:// */}
+          {(import.meta.env.DEV || isRemote) && dataUrl === null ? (
             "…"
           ) : (
             <img
-              src={import.meta.env.DEV ? (dataUrl ?? "") : url}
+              src={
+                import.meta.env.DEV || isRemote ? (dataUrl ?? "") : url
+              }
               alt={item.name}
               onError={() => setLoadFailed(true)}
               className="max-h-full max-w-full object-contain"
             />
           )}
+        </div>
+      ) : isRemote ? (
+        /* webview 预览（html/pdf/音视频）为本地 file:// 直链语义——远程态
+           无本地路径可链（流式端点未备），占位挂账 */
+        <div className="flex flex-1 flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
+          <p>{t("chat:library.previewUnsupported")}</p>
         </div>
       ) : (
         // allowpopups 刻意不写：Electron 按 DOM 属性「存在性」取值

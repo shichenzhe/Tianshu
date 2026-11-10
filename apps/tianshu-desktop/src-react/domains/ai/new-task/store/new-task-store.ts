@@ -19,6 +19,9 @@ export interface PendingRef {
   /** 发送时读内容的定位：kind=file → 相对路径；kind=localFile → 绝对路径；kind=skill → 技能名 */
   ref: string;
   kind: "file" | "localFile" | "skill";
+  /** 资料库条目 id（library 路由化批挂账收口 2026-11-10）：远程库 pill
+   *  ref 无本地路径语义，发送时按 id 走远端 read/readImage */
+  id?: number;
 }
 
 interface NewTaskState {

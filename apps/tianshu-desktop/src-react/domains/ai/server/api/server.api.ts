@@ -354,6 +354,12 @@ export default class ServerApi {
     return invoke<ConnectionListResult>("server:connectionDelete", id);
   }
 
+  /** 激活连接（切换即连批 2026-11-10）：持久化 activeConnId + 立即建链
+   *  （fire-and-forget——连上与否由 connectionList 轮询感知） */
+  static async activateConnection(id: string): Promise<void> {
+    await invoke<void>("server:connectionActivate", id);
+  }
+
   /** TOFU 指纹用户确认（P0-1）：协商指纹钉扎 + confirmedAt 落档，重建
    * transport 转 expectedFingerprint 强制校验（其后不匹配 → mitm-suspect） */
   static async confirmFingerprint(id: string): Promise<ConnectionListResult> {
@@ -469,9 +475,13 @@ export default class ServerApi {
     );
   }
 
-  /** 删除会话（双端均有 session/delete；headless 级联清消息） */
+  /** 删除会话（双端均有 session/delete；headless 级联清消息）。
+   *  wire 用 {id}——两端被控端同名字段（桌面 face handleDelete 读
+   *  body.id、无头端 SessionIdDto.id）；此前误发 {sessionId} 致
+   *  asInt(null) → 4040「会话不存在」（2026-11-09 修复，形状由
+   *  server-api-wire.test 锁定） */
   static async sessionDelete(sessionId: number, connId: string): Promise<void> {
-    await requestRemote("server:sessionDelete", { sessionId }, connId);
+    await requestRemote("server:sessionDelete", { id: sessionId }, connId);
   }
 
   /** 模型配置全量（providers+models；providers 密钥字段脱敏回显） */
@@ -714,6 +724,43 @@ export default class ServerApi {
       {},
       connId,
     );
+  }
+
+  /** 工作空间写面（2026-11-09 批：face A8 端点接线——wire 对齐
+   *  parseWorkspaceSavePayload；create name 必填、update/delete 需 id；
+   *  不含 directoryPath——绑定/解绑目录按 spec §1.4 留桌面端本地） */
+  static async workspaceCreate(
+    input: { name: string; icon?: string; defaultModelId?: number },
+    connId: string,
+  ): Promise<RemoteWorkspaceBrief> {
+    return requestRemote<RemoteWorkspaceBrief>(
+      "server:workspaceCreate",
+      input,
+      connId,
+    );
+  }
+
+  static async workspaceUpdate(
+    input: {
+      id: number;
+      name?: string;
+      icon?: string;
+      defaultModelId?: number;
+    },
+    connId: string,
+  ): Promise<RemoteWorkspaceBrief> {
+    return requestRemote<RemoteWorkspaceBrief>(
+      "server:workspaceUpdate",
+      input,
+      connId,
+    );
+  }
+
+  static async workspaceDelete(
+    id: number,
+    connId: string,
+  ): Promise<void> {
+    await requestRemote("server:workspaceDelete", { id }, connId);
   }
 
   /** 用量监控聚合（P0-1：monitor/stats 只读面——scene 缺省全量，载荷

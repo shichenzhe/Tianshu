@@ -59,6 +59,10 @@ import type { ChatModelParams } from "../../api/chat.api";
 import type { SessionMode } from "../../api/session.api";
 import { useHostCaps } from "../../data-source/host.store";
 import { routeInvoke, remoteConnId } from "../../data-source/host-route";
+import {
+  remoteLibraryImage,
+  remoteLibraryText,
+} from "../../data-source/remote-catalog";
 import * as remoteFiles from "../../data-source/remote-files";
 
 /** 远程图片上限（FA-T3）：3MB——relay 单帧 4MiB 余量（与被控端
@@ -103,7 +107,13 @@ type SuggestCandidate =
   | { kind: "command"; name: string }
   | { kind: "skill"; name: string }
   | { kind: "file"; path: string }
-  | { kind: "library"; name: string; storagePath: string }
+  | {
+      kind: "library";
+      name: string;
+      storagePath: string;
+      /** 远程行条目 id（storagePath 恒空，读取按 id 走远端） */
+      libraryId?: number;
+    }
   | { kind: "todo"; id: number; title: string };
 
 /** 项目待办引用数据源(计划事项记录;ProjectChatBar 注入,AI 模块不传) */
@@ -396,6 +406,7 @@ export default function ChatInput({
           kind: "library" as const,
           name: item.name,
           storagePath: item.storagePath ?? "",
+          libraryId: item.id,
         }))
       : [];
     const files = workspaceFilesQuery.data;
@@ -645,7 +656,35 @@ export default function ChatInput({
         // 两种 pill 形状并流：资料库 storagePath / 粘贴 path（in 窄化取一）
         const storagePath =
           "storagePath" in file ? file.storagePath : file.path;
-        if (isImagePath(storagePath)) {
+        // 远程资料库 pill（library 路由化批）：storagePath 恒空——图片
+        // 判据回退文件名，内容读按 id 走远端 read/readImage
+        const libraryId = "id" in file ? file.id : undefined;
+        const connId = remoteConnId();
+        const isRemoteLib = connId != null && libraryId !== undefined;
+        const pathLike = storagePath || file.name;
+        if (isImagePath(pathLike)) {
+          if (isRemoteLib) {
+            // 远端图片读 base64 随行（FA-T3 远程链 image part 的 base64
+            // 通道——远端无本地路径，读不到字节则并入 libFailures）
+            try {
+              const dataUrl = await remoteLibraryImage(libraryId, connId);
+              const marker = "base64,";
+              const idx = dataUrl.indexOf(marker);
+              if (idx === -1) {
+                throw new Error("bad dataUrl");
+              }
+              files.push({
+                path: file.name,
+                content: "",
+                kind: "localFile",
+                image: true,
+                base64: dataUrl.slice(idx + marker.length),
+              });
+            } catch {
+              libFailures.push(file.name);
+            }
+            continue;
+          }
           files.push({
             path: storagePath,
             content: "",
@@ -657,13 +696,19 @@ export default function ChatInput({
           continue;
         }
         try {
-          const result = await invoke<{ content?: string }>(
-            "file:readExternalFile",
-            storagePath,
-          );
+          let content: string;
+          if (isRemoteLib) {
+            content = await remoteLibraryText(libraryId, connId);
+          } else {
+            const result = await invoke<{ content?: string }>(
+              "file:readExternalFile",
+              storagePath,
+            );
+            content = result.content ?? "";
+          }
           contentRefs.push({
             path: file.name,
-            content: result.content ?? "",
+            content,
           });
         } catch {
           libFailures.push(file.name);
@@ -733,12 +778,26 @@ export default function ChatInput({
    *  readExternalFile 预检（512KB 上限/二进制/权限），失败按超限/读取失败
    *  区分 toast 且不挂 pill（同 new-task addLocalFile 口径）；图片附件跳过
    *  预检（多模态通道不走 512KB 文本上限，主进程侧 10MB 校验兜底）；通过
-   *  后按 storagePath 去重合并。silent 批量场景不逐条 toast（调用方合并提示） */
+   *  后按 storagePath 去重合并。silent 批量场景不逐条 toast（调用方合并提示）。
+   *  远程主机（library 路由化批）：行 storagePath 恒空——图片判据回退
+   *  文件名，文本预检走远端 library/read（512KiB 同口径守卫在服务端），
+   *  pill 携 id 供发送时按 id 读取 */
   const attachLibraryFile = useCallback(
-    async (name: string, storagePath: string, silent = false) => {
-      if (!isImagePath(storagePath)) {
+    async (
+      name: string,
+      storagePath: string,
+      silent = false,
+      libraryId?: number,
+    ) => {
+      const pathLike = storagePath || name;
+      if (!isImagePath(pathLike)) {
         try {
-          await invoke("file:readExternalFile", storagePath);
+          const connId = remoteConnId();
+          if (connId != null && libraryId !== undefined) {
+            await remoteLibraryText(libraryId, connId);
+          } else {
+            await invoke("file:readExternalFile", storagePath);
+          }
         } catch (e) {
           if (!silent) {
             toast.error(
@@ -753,9 +812,9 @@ export default function ChatInput({
         }
       }
       setLibraryFiles((prev) =>
-        prev.some((f) => f.storagePath === storagePath)
+        prev.some((f) => (f.storagePath || f.name) === pathLike)
           ? prev
-          : [...prev, { name, storagePath }],
+          : [...prev, { name, storagePath, id: libraryId }],
       );
       return true;
     },
@@ -939,7 +998,12 @@ export default function ChatInput({
         setContent(next);
         setSuggest(null);
         // 挂 pill 前预检：读取失败（超限/二进制/权限）toast 且不挂 pill
-        void attachLibraryFile(candidate.name, candidate.storagePath);
+        void attachLibraryFile(
+          candidate.name,
+          candidate.storagePath,
+          false,
+          candidate.libraryId,
+        );
         requestAnimationFrame(() => {
           const pos = suggest ? suggest.startIndex : caret;
           textarea?.focus();
@@ -1404,6 +1468,7 @@ export default function ChatInput({
                     file.name,
                     file.storagePath,
                     true,
+                    file.id,
                   );
                   if (!ok) {
                     failed.push(file.name);

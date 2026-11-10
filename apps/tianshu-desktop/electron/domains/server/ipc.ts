@@ -21,6 +21,8 @@
 // session 类通道末参可选 connId：显式指定即透传该连接并切换活动连接（粘性），
 // 省略走当前活动连接（activeConnId，注册表维护、option 持久化）。
 import { BrowserWindow, ipcMain } from "electron";
+import fs from "node:fs";
+import path from "node:path";
 import { ENDPOINTS } from "@tianshu/protocol";
 import {
   localServerStatus,
@@ -34,6 +36,7 @@ import {
   destroyBridgeWindow,
   handleBridgeToolRequest,
 } from "./bridge-executor";
+import { isExternalReadAllowed } from "../ai/chat/external-file-gate";
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -86,6 +89,9 @@ export function registerServerIpc(
       event.type === "server.connected" ||
       event.type === "graph.run.updated" ||
       event.type === "automation.changed" ||
+      // 编排页路由化（orchestration 批 2026-11-10）：图定义级变更刷新
+      // 信号（无头端写面/对话工具建图/启停 → 编排页列表失效重拉）
+      event.type === "graph.changed" ||
       // 批③（2026-11-01）：空间/项目变更列表级刷新信号——远程主机态侧栏
       // 分组树失效消费（HostSwitcher onRemoteEvent 分支）
       event.type === "workspace.changed" ||
@@ -97,6 +103,11 @@ export function registerServerIpc(
   ipcMain.handle("server:connectionList", () => registry.list());
   ipcMain.handle("server:connectionSave", (_event, raw) =>
     registry.saveConnection(raw),
+  );
+  // 切换即连（2026-11-10）：HostSwitcher 对 idle 连接触发建链（activate
+  // 持久化 activeConnId + fire-and-forget 建链；渲染层轮询 connected 再切）
+  ipcMain.handle("server:connectionActivate", (_event, id: string) =>
+    registry.activate(id),
   );
   ipcMain.handle("server:connectionDelete", (_event, raw) =>
     registry.deleteConnection(String(raw ?? "")),
@@ -219,6 +230,21 @@ export function registerServerIpc(
     "server:workspaceList",
     remoteHandler(registry, ENDPOINTS.workspace.query),
   );
+  // —— 工作空间写面透传（2026-11-09 批：face A8 端点已装配，控制端补
+  //    接线——远程态「新建空间」可用；bindDirectory 仍按 spec §1.4 留
+  //    桌面端本地，无透传）——
+  ipcMain.handle(
+    "server:workspaceCreate",
+    remoteHandler(registry, ENDPOINTS.workspace.create),
+  );
+  ipcMain.handle(
+    "server:workspaceUpdate",
+    remoteHandler(registry, ENDPOINTS.workspace.update),
+  );
+  ipcMain.handle(
+    "server:workspaceDelete",
+    remoteHandler(registry, ENDPOINTS.workspace.delete),
+  );
   // —— 监控读面（P0-1，spec monitoring.md §6）：monitor/stats 透传——
   //  monitor.api 主机路由化（本地 monitor:stats / 远程此通道），两端
   //  被控面均含 monitor capability ——
@@ -231,6 +257,21 @@ export function registerServerIpc(
   ipcMain.handle(
     "server:graphRunAbort",
     remoteHandler(registry, ENDPOINTS.graph.runAbort),
+  );
+  // —— 编排页路由化（orchestration 批 2026-11-10）：toggle 直达端点 +
+  //   图运行历史两读面（automation/runPage graphId 过滤 + runNodes
+  //   节点级行；编排页 GraphApi.runs/runNodes 的远程通道） ——
+  ipcMain.handle(
+    "server:graphToggle",
+    remoteHandler(registry, ENDPOINTS.graph.toggle),
+  );
+  ipcMain.handle(
+    "server:graphRuns",
+    remoteHandler(registry, ENDPOINTS.automation.runPage),
+  );
+  ipcMain.handle(
+    "server:graphRunNodes",
+    remoteHandler(registry, ENDPOINTS.automation.runNodes),
   );
   ipcMain.handle(
     "server:automationQuery",
@@ -247,6 +288,254 @@ export function registerServerIpc(
   ipcMain.handle(
     "server:automationRunNow",
     remoteHandler(registry, ENDPOINTS.automation.runNow),
+  );
+  // —— 自动化任务页路由化（automation/library 批 2026-11-10）：运行历史
+  //   任务口径（taskId+status 过滤；graphRuns 为图口径同端点） ——
+  ipcMain.handle(
+    "server:automationRuns",
+    remoteHandler(registry, ENDPOINTS.automation.runPage),
+  );
+  // —— 健康度总览原始行集（automation/library 批挂账收口 2026-11-10）：
+  //   时区敏感聚合在渲染层 computeStats（core 单源）完成 ——
+  ipcMain.handle(
+    "server:automationStats",
+    remoteHandler(registry, ENDPOINTS.automation.stats),
+  );
+  // —— 资料库路由化（automation/library 批）：library/* 十七端点同款
+  //   透传（结构 CRUD + 收藏/打点 + read/readImage 内容读 + writeContent
+  //   内容写；uploadFile 未接——本地盘导入深水门控挂账） ——
+  ipcMain.handle("server:libraryList", remoteHandler(registry, ENDPOINTS.library.list));
+  ipcMain.handle("server:libraryTree", remoteHandler(registry, ENDPOINTS.library.tree));
+  ipcMain.handle("server:librarySearch", remoteHandler(registry, ENDPOINTS.library.search));
+  ipcMain.handle(
+    "server:libraryListRecent",
+    remoteHandler(registry, ENDPOINTS.library.listRecent),
+  );
+  ipcMain.handle(
+    "server:libraryListFavorites",
+    remoteHandler(registry, ENDPOINTS.library.listFavorites),
+  );
+  ipcMain.handle(
+    "server:libraryCreateFolder",
+    remoteHandler(registry, ENDPOINTS.library.createFolder),
+  );
+  ipcMain.handle(
+    "server:libraryCreateFile",
+    remoteHandler(registry, ENDPOINTS.library.createFile),
+  );
+  ipcMain.handle("server:libraryAddLink", remoteHandler(registry, ENDPOINTS.library.addLink));
+  ipcMain.handle("server:libraryRename", remoteHandler(registry, ENDPOINTS.library.rename));
+  ipcMain.handle("server:libraryMove", remoteHandler(registry, ENDPOINTS.library.move));
+  ipcMain.handle("server:libraryDelete", remoteHandler(registry, ENDPOINTS.library.delete));
+  ipcMain.handle(
+    "server:librarySubtreeCount",
+    remoteHandler(registry, ENDPOINTS.library.subtreeCount),
+  );
+  ipcMain.handle(
+    "server:libraryToggleFavorite",
+    remoteHandler(registry, ENDPOINTS.library.toggleFavorite),
+  );
+  ipcMain.handle(
+    "server:libraryMarkViewed",
+    remoteHandler(registry, ENDPOINTS.library.markViewed),
+  );
+  ipcMain.handle("server:libraryRead", remoteHandler(registry, ENDPOINTS.library.read));
+  ipcMain.handle(
+    "server:libraryReadImage",
+    remoteHandler(registry, ENDPOINTS.library.readImage),
+  );
+  ipcMain.handle(
+    "server:libraryWriteContent",
+    remoteHandler(registry, ENDPOINTS.library.writeContent),
+  );
+  // —— 跨端上传组合（automation/library 批挂账收口 2026-11-10）——
+  //   控制端本地文件（选择器/拖拽授权路径）读盘 base64 → 远端
+  //   library/uploadFile 逐个入库；paths 过 external-file-gate 授权门
+  //   （未授权路径直接拒——与 file:readExternalFile 同口径防任意读），
+  //   ≤3MB 对齐 server 上限（超限入 failed 不发往返）；同层重名序号在
+  //   server 侧。importFolder（目录树组合）仍门控挂账。
+  ipcMain.handle(
+    "server:libraryAddFiles",
+    async (_event, raw: unknown, connId?: unknown) => {
+      const body = (raw ?? {}) as { paths?: unknown; parentId?: unknown };
+      const pathsIn = Array.isArray(body.paths) ? body.paths : [];
+      const parentId =
+        typeof body.parentId === "number" ? body.parentId : null;
+      const targetConnId =
+        typeof connId === "string" && connId ? connId : null;
+      const UPLOAD_LIMIT_BYTES = 3 * 1024 * 1024;
+      const added: unknown[] = [];
+      const failed: Array<{ path: string; reason: string }> = [];
+      for (const rawPath of pathsIn) {
+        const absPath = typeof rawPath === "string" ? rawPath : "";
+        if (!absPath) {
+          continue;
+        }
+        const name = path.basename(absPath);
+        try {
+          if (!isExternalReadAllowed(absPath)) {
+            throw new Error("未授权的文件路径");
+          }
+          const stat = await fs.promises.stat(absPath);
+          if (!stat.isFile()) {
+            throw new Error("非普通文件");
+          }
+          if (stat.size > UPLOAD_LIMIT_BYTES) {
+            throw new Error("超过 3MB 上限");
+          }
+          const buf = await fs.promises.readFile(absPath);
+          // registry.request 出原始信封 {status, body}——同渲染层
+          // requestRemote 拆封语义（success=false 的业务错入 failed）
+          const envelope = (await registry.request(
+            targetConnId,
+            "POST",
+            ENDPOINTS.library.uploadFile,
+            {
+              name,
+              base64: buf.toString("base64"),
+              ...(parentId !== null ? { parentId } : {}),
+            },
+          )) as { body?: { success?: boolean; data?: unknown; message?: unknown } };
+          const wire = envelope?.body;
+          if (!wire || wire.success !== true) {
+            throw new Error(
+              typeof wire?.message === "string" ? wire.message : "上传失败",
+            );
+          }
+          added.push(wire.data);
+        } catch (e) {
+          failed.push({
+            path: absPath,
+            reason: e instanceof Error ? e.message : "上传失败",
+          });
+        }
+      }
+      return { added, failed };
+    },
+  );
+  // —— 跨端目录导入组合（挂账收口 2026-11-11）：本地 importFolder 同构
+  //   （目录名建根 → 递归建层 + 逐文件上传；隐藏文件跳过；单条失败不
+  //   阻断批次）——dirPath 来自主进程目录选择器（不经渲染层授权链，与
+  //   本地 library:importFolder 同口径）；建层/入库走远端
+  //   createFolder/uploadFile，信封拆封同上。
+  ipcMain.handle(
+    "server:libraryImportFolder",
+    async (_event, raw: unknown, connId?: unknown) => {
+      const body = (raw ?? {}) as { dirPath?: unknown; parentId?: unknown };
+      const dirPath = typeof body.dirPath === "string" ? body.dirPath : "";
+      const parentId =
+        typeof body.parentId === "number" ? body.parentId : null;
+      const targetConnId =
+        typeof connId === "string" && connId ? connId : null;
+      const UPLOAD_LIMIT_BYTES = 3 * 1024 * 1024;
+      const request = async (
+        endpoint: string,
+        payload: object,
+      ): Promise<{ id?: number }> => {
+        const envelope = (await registry.request(
+          targetConnId,
+          "POST",
+          endpoint,
+          payload,
+        )) as {
+          body?: { success?: boolean; data?: unknown; message?: unknown };
+        };
+        const wire = envelope?.body;
+        if (!wire || wire.success !== true) {
+          throw new Error(
+            typeof wire?.message === "string" ? wire.message : "请求失败",
+          );
+        }
+        return wire.data as { id?: number };
+      };
+      /** 递归铺目录内容（镜像本地 importDirContents 语义） */
+      const importDir = async (
+        dir: string,
+        folderId: number,
+      ): Promise<{
+        added: unknown[];
+        failed: Array<{ path: string; reason: string }>;
+      }> => {
+        const entries = await fs.promises.readdir(dir, {
+          withFileTypes: true,
+        });
+        const result = {
+          added: [] as unknown[],
+          failed: [] as Array<{ path: string; reason: string }>,
+        };
+        for (const entry of entries) {
+          if (entry.name.startsWith(".")) {
+            continue;
+          }
+          const absPath = path.join(dir, entry.name);
+          try {
+            if (entry.isDirectory()) {
+              const sub = await request(ENDPOINTS.library.createFolder, {
+                name: entry.name,
+                parentId: folderId,
+              });
+              const subResult = await importDir(
+                absPath,
+                typeof sub.id === "number" ? sub.id : folderId,
+              );
+              result.added.push(...subResult.added);
+              result.failed.push(...subResult.failed);
+            } else if (entry.isFile()) {
+              const stat = await fs.promises.stat(absPath);
+              if (stat.size > UPLOAD_LIMIT_BYTES) {
+                throw new Error("超过 3MB 上限");
+              }
+              const buf = await fs.promises.readFile(absPath);
+              const row = await request(ENDPOINTS.library.uploadFile, {
+                name: entry.name,
+                base64: buf.toString("base64"),
+                parentId: folderId,
+              });
+              result.added.push(row);
+            }
+          } catch (e) {
+            result.failed.push({
+              path: absPath,
+              reason: e instanceof Error ? e.message : "导入失败",
+            });
+          }
+        }
+        return result;
+      };
+      try {
+        const stat = await fs.promises.stat(dirPath);
+        if (!stat.isDirectory()) {
+          throw new Error("源路径不是目录");
+        }
+      } catch (e) {
+        return {
+          added: [],
+          failed: [
+            {
+              path: dirPath,
+              reason: e instanceof Error ? e.message : "源目录不存在",
+            },
+          ],
+        };
+      }
+      try {
+        const root = await request(ENDPOINTS.library.createFolder, {
+          name: path.basename(dirPath),
+          parentId,
+        });
+        return importDir(dirPath, typeof root.id === "number" ? root.id : 0);
+      } catch (e) {
+        return {
+          added: [],
+          failed: [
+            {
+              path: dirPath,
+              reason: e instanceof Error ? e.message : "导入失败",
+            },
+          ],
+        };
+      }
+    },
   );
   // —— webhook 配置遥控（WH 消费端批）：无头端 graph/webhook/* 三端点
   // 同款透传（enable 重开换 token；路径带 graph/ 前缀是 WH 批安全裁定

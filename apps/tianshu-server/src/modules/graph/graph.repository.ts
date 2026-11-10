@@ -89,6 +89,9 @@ export interface GraphCreateParams {
   name: string;
   description?: string;
   graphJson: string;
+  /** 启停（orchestration 路由化批 2026-11-10）：缺席走 schema 默认
+   *  （create true / update 不动）——GraphSaveDto.enabled 透传 */
+  enabled?: boolean;
 }
 
 export interface GraphUpdateParams extends GraphCreateParams {
@@ -163,6 +166,10 @@ export class GraphRepository {
   /** webhook 注册清理钩子（默认 no-op；T7 webhook service 注入真实实现，
    *  先例 mirror disabledTools 闭包注入）。GA-T6：@Optional 标注缺省参——
    *  Nest DI 对带默认值的构造参数仍尝试解析（Function token 无 provider） */
+  /** 图变更广播钩子（orchestration 路由化批 2026-11-10，默认 no-op）：
+   *  create/update/delete 成功后发布 graph.changed 协议事件（module
+   *  工厂注入 EventBusService.publish——automation.changed 同先例）；
+   *  刷新信号语义，消费端重拉列表 */
   constructor(
     private readonly prisma: PrismaService,
     @Optional()
@@ -170,6 +177,10 @@ export class GraphRepository {
       graphId: number,
       userId: number,
     ) => Promise<void> = async () => {},
+    @Optional()
+    private readonly publishGraphChanged: (
+      payload: import('@tianshu/protocol').GraphChangedPayload,
+    ) => void = () => {},
   ) {}
 
   /** 校验图归当前用户（不存在与他人所有同报错，不泄露存在性） */
@@ -238,8 +249,10 @@ export class GraphRepository {
         description: p.description ?? null,
         graphJson,
         userId,
+        ...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
       },
     });
+    this.publishGraphChanged({ graphId: row.id });
     return toGraphRecord(row);
   }
 
@@ -303,11 +316,13 @@ export class GraphRepository {
         description: p.description ?? null,
         graphJson,
         version: { increment: 1 },
+        ...(p.enabled !== undefined ? { enabled: p.enabled } : {}),
       },
     });
     if (res.count === 0) {
       throw new Error('VERSION_CONFLICT');
     }
+    this.publishGraphChanged({ graphId: id });
     const row = await this.prisma.graphDefinition.findUniqueOrThrow({
       where: { id },
     });
@@ -365,6 +380,7 @@ export class GraphRepository {
       this.prisma.automationRun.deleteMany({ where: { graphId: id } }),
       this.prisma.graphDefinition.deleteMany({ where: { id, userId } }),
     ]);
+    this.publishGraphChanged({ graphId: id });
   }
 
   /** 启停（mirror private 经 IPC 暴露，server 改 public 供 service） */
@@ -378,6 +394,7 @@ export class GraphRepository {
       where: { id },
       data: { enabled },
     });
+    this.publishGraphChanged({ graphId: id });
     return toGraphRecord(row);
   }
 

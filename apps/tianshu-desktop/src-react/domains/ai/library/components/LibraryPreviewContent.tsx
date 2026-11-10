@@ -28,6 +28,7 @@ import { invoke } from "@/lib/ipc";
 import { useHostStore } from "@/domains/ai/data-source/host.store";
 import {
   remoteLibraryImage,
+  remoteLibraryStreamUrl,
   remoteLibraryText,
 } from "@/domains/ai/data-source/remote-catalog";
 import type { LibraryItem } from "../api/library.api";
@@ -60,8 +61,7 @@ export default function LibraryPreviewContent({
 }: LibraryPreviewContentProps) {
   const { t } = useTranslation(["chat", "common"]);
   // 远程主机（library 路由化批）：行 storagePath 恒空，内容读按 id 走
-  // 远端 read/readImage；webview（html/pdf/音视频 file:// 直链）与 Finder
-  // 定位无远端等价——占位与隐藏按钮
+  // 远端 read/readImage；Finder 定位无远端等价——隐藏按钮
   const activeHost = useHostStore((s) => s.activeHost);
   const isRemote = activeHost.kind === "remote";
   const connId = isRemote ? activeHost.connId : null;
@@ -73,6 +73,9 @@ export default function LibraryPreviewContent({
   const [csvGrid, setCsvGrid] = useState<string[][] | null>(null);
   // dev 图片预览 dataUrl（生产恒 null——<img> 直链 file://）
   const [dataUrl, setDataUrl] = useState<string | null>(null);
+  // 远程态 webview 流式 URL（webview 批 2026-11-11：direct 连接拼
+  // baseUrl+query token；relay 无直连 HTTP 面为 null 走不支持占位）
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   // 防抖实时保存：待写内容（含条目 id，flush 幂等）+ 定时器
@@ -213,13 +216,50 @@ export default function LibraryPreviewContent({
     // eslint-disable exhaustive-deps，以注释说明；若启用需抑制该行）
   }, [item?.id, connId]);
 
+  // 远程态 webview 类流式 URL（webview 批 2026-11-11）：direct 连接拼
+  // baseUrl+query token（server GET library/stream，Range seek 由 webview
+  // 自带）；relay 无直连 HTTP 面 → unsupported 占位
+  const [streamUnsupported, setStreamUnsupported] = useState(false);
+  useEffect(() => {
+    setStreamUrl(null);
+    setStreamUnsupported(false);
+    if (connId == null || item?.kind !== "file") {
+      return;
+    }
+    if (previewModeOf(item) !== "webview") {
+      return;
+    }
+    let stale = false;
+    void remoteLibraryStreamUrl(item.id, connId)
+      .then((url) => {
+        if (stale) {
+          return;
+        }
+        if (url) {
+          setStreamUrl(url);
+        } else {
+          setStreamUnsupported(true);
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setLoadFailed(true);
+        }
+      });
+    return () => {
+      stale = true;
+    };
+  }, [item?.id, connId]);
+
   // webview 外跳拦截/失败降级守卫（T28 收敛共享 hook，语义见其头注释）。
   // 与 FilePreview 的差异仅归并口径：此处 failed 并入 loadFailed 同一
-  // 降级位（读失败/图片 onerror 同走），src 变更（条目切换）复位
+  // 降级位（读失败/图片 onerror 同走），src 变更（条目切换）复位。
+  // 远程态 src 为流式 URL（http 直连，外跳拦截同样适用）
   const mode = previewModeOf(item);
   const url = item.storagePath ? fileUrlOf(item.storagePath) : "";
+  const guardSrc = isRemote ? streamUrl : url;
   const { ref: webviewRef, failed: webviewFailed } = useWebviewGuard(
-    mode === "webview" && url ? url : null,
+    mode === "webview" && guardSrc ? guardSrc : null,
   );
 
   // 卸载 flush（只写盘不回传——详情关闭/组件销毁不再触发 setDetailItem）
@@ -328,21 +368,33 @@ export default function LibraryPreviewContent({
             "…"
           ) : (
             <img
-              src={
-                import.meta.env.DEV || isRemote ? (dataUrl ?? "") : url
-              }
+              src={import.meta.env.DEV || isRemote ? (dataUrl ?? "") : url}
               alt={item.name}
               onError={() => setLoadFailed(true)}
               className="max-h-full max-w-full object-contain"
             />
           )}
         </div>
-      ) : isRemote ? (
-        /* webview 预览（html/pdf/音视频）为本地 file:// 直链语义——远程态
-           无本地路径可链（流式端点未备），占位挂账 */
-        <div className="flex flex-1 flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
-          <p>{t("chat:library.previewUnsupported")}</p>
-        </div>
+      ) : isRemote && !editable ? (
+        /* 远程态 webview 类（html/pdf/音视频）：direct 连接走 server 流式
+           端点直连（query token）；relay 无直连 HTTP 面不支持——占位 */
+        streamUrl ? (
+          // allowpopups 刻意不写：不写即默认拒绝弹窗（同本地分支）
+          <webview
+            ref={webviewRef}
+            src={streamUrl}
+            partition="library-preview"
+            className="min-h-0 flex-1 rounded-md border border-border/50"
+          />
+        ) : streamUnsupported ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
+            <p>{t("chat:library.previewUnsupported")}</p>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            …
+          </div>
+        )
       ) : (
         // allowpopups 刻意不写：Electron 按 DOM 属性「存在性」取值
         // （hasAttribute），写 "false" 反而会放行弹窗；不写即默认拒绝

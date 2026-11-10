@@ -44,6 +44,7 @@ import { useFileWindowStore } from "../store/file-window.store";
 import { useHostStore } from "@/domains/ai/data-source/host.store";
 import {
   remoteLibraryImage,
+  remoteLibraryStreamUrl,
   remoteLibraryText,
 } from "@/domains/ai/data-source/remote-catalog";
 import FileWindowApi from "../api/file-window.api";
@@ -99,7 +100,8 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
   // 内容读取：文本类（md/csv/text）+ dev 图片 dataUrl；webview 类直开
   // file:// 不读内容；512KB 上限沿用（超限/二进制回 error 走 Finder 兜底）。
   // 远程态：图片 dev/生产同走远端 readImage→dataUrl（无本地路径可直链）
-  const needsText = editable || ((import.meta.env.DEV || isRemote) && kind === "image");
+  const needsText =
+    editable || ((import.meta.env.DEV || isRemote) && kind === "image");
   const contentQuery = useQuery({
     queryKey: ["fw-library-content", itemId, item?.storagePath, connId],
     queryFn: async (): Promise<ExternalFileContent> => {
@@ -108,9 +110,15 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
       }
       if (connId != null) {
         if (kind === "image") {
-          return { kind: "image", dataUrl: await remoteLibraryImage(item.id, connId) };
+          return {
+            kind: "image",
+            dataUrl: await remoteLibraryImage(item.id, connId),
+          };
         }
-        return { kind: "text", content: await remoteLibraryText(item.id, connId) };
+        return {
+          kind: "text",
+          content: await remoteLibraryText(item.id, connId),
+        };
       }
       return invoke<ExternalFileContent>(
         "file:readExternalFile",
@@ -339,15 +347,36 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
     [],
   );
 
-  // webview 类直开（守卫同 workspace：外跳全拦/失败降级）；远程态无本地
-  // 路径可链（流式端点未备）——null 走下方不支持占位
+  // webview 类直开（守卫同 workspace：外跳全拦/失败降级）；远程态走
+  // server 流式端点直连（webview 批 2026-11-11，direct 连接；relay 无
+  // 直连面 streamUrl 为 null 走不支持占位）
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  useEffect(() => {
+    setStreamUrl(null);
+    if (
+      connId == null ||
+      item?.kind !== "file" ||
+      editable ||
+      libraryContentKindOf(item.fileType) === "image"
+    ) {
+      return;
+    }
+    let stale = false;
+    void remoteLibraryStreamUrl(item.id, connId)
+      .then((u) => {
+        if (!stale && u) setStreamUrl(u);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [item?.id, connId, editable]);
   const webviewSrc =
-    !isRemote &&
-    item?.storagePath &&
-    !editable &&
-    kind !== "image"
-      ? fileUrlOf(item.storagePath)
-      : null;
+    isRemote && !editable && kind !== "image"
+      ? streamUrl
+      : !isRemote && item?.storagePath && !editable && kind !== "image"
+        ? fileUrlOf(item.storagePath)
+        : null;
   const { ref: webviewRef, failed: webviewFailed } =
     useWebviewGuard(webviewSrc);
 
@@ -445,8 +474,8 @@ export default function LibraryTabBody({ tabId }: { tabId: string }) {
             className="h-full min-h-0 w-full rounded-md border border-border/50"
           />
         ) : isRemote && !editable ? (
-          /* 远程态 webview 类（html/pdf/音视频）：本地 file:// 直链语义，
-             远端无路径可链（流式端点未备），占位挂账 */
+          /* 远程态 webview 类（html/pdf/音视频）：流式 URL 未就位或 relay
+             连接无直连 HTTP 面（不支持）——统一占位 */
           <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
             <p className="text-xs">{t("chat:library.previewUnsupported")}</p>
           </div>

@@ -4642,6 +4642,21 @@
         ]
       }
     },
+    "/library/stream": {
+      "get": {
+        "operationId": "LibraryController_stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "webview 预览流式读（GET+Range；query token 鉴权）",
+        "tags": [
+          "资料库"
+        ]
+      }
+    },
     "/monitor/stats": {
       "post": {
         "operationId": "MonitorController_stats",

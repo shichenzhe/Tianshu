@@ -19,6 +19,7 @@ import { LibraryDiskRepository } from 'src/core/library/library-disk.repository'
 import {
   LibraryService,
   toLibraryItemDto,
+  parseStreamRange,
 } from 'src/modules/library/library.service';
 import { LibraryController } from 'src/modules/library/library.controller';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
@@ -878,5 +879,51 @@ describe('向量化入库接线（spec 2026-11-02-library-vectorize-server-desig
     expect(v.deletedSources).toEqual(['旧名.md']);
     await service.delete([file.id]);
     expect(v.deletedSources).toEqual(['旧名.md', '新名.md']);
+  });
+});
+
+describe('webview 流式面（webview 批 2026-11-11）', () => {
+  it('readStreamMeta：mime 按扩展名推断 + size/absPath；非文件/不存在拒', async () => {
+    const { prisma } = makePrismaDouble();
+    const svc = makeService(prisma);
+    const html = await svc.createFile('页面.html', null);
+    writeFileSync(
+      path.join(libraryRoot, String(html.id), '页面.html'),
+      '<h1>hi</h1>',
+    );
+    const meta = await svc.readStreamMeta(html.id);
+    expect(meta.mimeType).toBe('text/html; charset=utf-8');
+    expect(meta.size).toBe(11);
+    expect(meta.absPath).toContain('页面.html');
+
+    const folder = await svc.createFolder('d', null);
+    await expectBiz(svc.readStreamMeta(folder.id), 'LIBRARY_NOT_FILE');
+    await expectBiz(svc.readStreamMeta(99999), 'LIBRARY_NOT_FOUND');
+
+    const mp4 = await svc.createFile('片段.mp4', null);
+    writeFileSync(
+      path.join(libraryRoot, String(mp4.id), '片段.mp4'),
+      Buffer.alloc(4),
+    );
+    expect((await svc.readStreamMeta(mp4.id)).mimeType).toBe('video/mp4');
+  });
+
+  it('parseStreamRange 三形态/越界/非法', () => {
+    // bytes=start-end
+    expect(parseStreamRange('bytes=0-4', 10)).toEqual({ start: 0, end: 4 });
+    // end 超界收敛
+    expect(parseStreamRange('bytes=5-99', 10)).toEqual({ start: 5, end: 9 });
+    // bytes=start-（至末尾）
+    expect(parseStreamRange('bytes=7-', 10)).toEqual({ start: 7, end: 9 });
+    // bytes=-suffix（末 N 字节）
+    expect(parseStreamRange('bytes=-3', 10)).toEqual({ start: 7, end: 9 });
+    expect(parseStreamRange('bytes=-99', 10)).toEqual({ start: 0, end: 9 });
+    // 越界/倒置 → invalid（controller 416）
+    expect(parseStreamRange('bytes=10-', 10)).toBe('invalid');
+    expect(parseStreamRange('bytes=5-2', 10)).toBe('invalid');
+    // 非法格式/缺省 → null（200 全量）
+    expect(parseStreamRange('bytes=', 10)).toBeNull();
+    expect(parseStreamRange('chars=1-2', 10)).toBeNull();
+    expect(parseStreamRange(undefined, 10)).toBeNull();
   });
 });

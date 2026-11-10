@@ -552,7 +552,12 @@ export async function remoteGraphRunTest(
       connId,
     );
   }
-  await RemoteGraphApi.graphRun(id, connId, inputs as Record<string, string>, workspaceId);
+  await RemoteGraphApi.graphRun(
+    id,
+    connId,
+    inputs as Record<string, string>,
+    workspaceId,
+  );
 }
 
 /** 中止试运行：远端 runAbort 按 runId——查该图最新 running run 归位
@@ -779,7 +784,10 @@ export async function remoteLibraryAddFiles(
   paths: string[],
   folderId: number | undefined,
   connId: string,
-): Promise<{ added: LibraryItem[]; failed: Array<{ path: string; reason: string }> }> {
+): Promise<{
+  added: LibraryItem[];
+  failed: Array<{ path: string; reason: string }>;
+}> {
   const result = await invokeIpc<{
     added: RemoteLibraryItem[];
     failed: Array<{ path: string; reason: string }>;
@@ -796,11 +804,18 @@ export async function remoteLibraryImportFolder(
   dirPath: string,
   parentId: number | undefined,
   connId: string,
-): Promise<{ added: LibraryItem[]; failed: Array<{ path: string; reason: string }> }> {
+): Promise<{
+  added: LibraryItem[];
+  failed: Array<{ path: string; reason: string }>;
+}> {
   const result = await invokeIpc<{
     added: RemoteLibraryItem[];
     failed: Array<{ path: string; reason: string }>;
-  }>("server:libraryImportFolder", { dirPath, parentId: parentId ?? null }, connId);
+  }>(
+    "server:libraryImportFolder",
+    { dirPath, parentId: parentId ?? null },
+    connId,
+  );
   return {
     added: (result.added ?? []).map(toLibraryItem),
     failed: result.failed ?? [],
@@ -936,7 +951,9 @@ export async function remoteLibraryWriteContent(
   content: string,
   connId: string,
 ): Promise<LibraryItem> {
-  return toLibraryItem(await RemoteLibraryApi.writeContent(id, content, connId));
+  return toLibraryItem(
+    await RemoteLibraryApi.writeContent(id, content, connId),
+  );
 }
 
 /** 远端文本内容读（512KiB/NUL 守卫在服务端——预览与附件预检/发送共用） */
@@ -956,4 +973,22 @@ export async function remoteLibraryImage(
 ): Promise<string> {
   const result = await RemoteLibraryApi.readImage(id, connId);
   return `data:${result.mime};base64,${result.dataBase64}`;
+}
+
+/** webview 类预览直连流式 URL（webview 批 2026-11-11）：direct 连接拼
+ *  baseUrl + query token（StaticTokenGuard 双形态鉴权，webview src 导航
+ *  带不了 Bearer）；relay 连接无直连 HTTP 面——返回 null 由调用方维持
+ *  不支持占位（token 为实例级静态密钥，桌面本地已持有，URL 不出本机
+ *  webview partition） */
+export async function remoteLibraryStreamUrl(
+  id: number,
+  connId: string,
+): Promise<string | null> {
+  const list = await ServerApi.listConnections();
+  const conn = list.connections.find((c) => c.id === connId);
+  if (!conn?.baseUrl || !conn.token) {
+    return null;
+  }
+  const base = conn.baseUrl.replace(/\/+$/, "");
+  return `${base}/library/stream?id=${id}&token=${encodeURIComponent(conn.token)}`;
 }

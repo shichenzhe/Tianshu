@@ -83,6 +83,9 @@ response:
     - /actuator/health
     # SSE 事件流（GET /event）由 reply.raw 直写，不可统一包装（T7）
     - /event
+    # webview 流式预览（GET /library/stream）hijack+raw 直写字节流，
+    # 统一包装会触发二次 send（webview 批 2026-11-11）
+    - /library/stream
     - /actuator/metrics
     - /actuator/metrics/config
     - /actuator/metrics/reset

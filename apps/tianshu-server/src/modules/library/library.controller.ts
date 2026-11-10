@@ -10,7 +10,19 @@
  * skills/files 同口径），StaticTokenGuard 全局仍守。稳定错误码
  * LIBRARY_* 由服务层 BusinessException 承载。
  */
-import { Controller, Post, Body, HttpStatus, HttpCode } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpStatus,
+  HttpCode,
+  Get,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import fs from 'node:fs';
 import {
   ApiOperation,
   ApiExtraModels,
@@ -35,7 +47,7 @@ import {
   inlineSchemas,
 } from 'src/commons/swagger/wrapped-response';
 import { LibraryItemWireDto } from './dto/library-item-wire.dto';
-import { LibraryService } from './library.service';
+import { LibraryService, parseStreamRange } from './library.service';
 
 class LibraryParentId {
   @ApiPropertyOptional({
@@ -354,5 +366,76 @@ export class LibraryController {
   @ApiWrappedOk(LibraryItemWireDto)
   async uploadFile(@Body() dto: LibraryUploadFileDto) {
     return await this.libraryService.uploadFile(dto);
+  }
+
+  /**
+   * webview 类预览流式读（webview 批 2026-11-11）：控制端 <webview> 直连
+   * 本端点渲染 html/pdf/音视频——GET + Range 206（音视频 seek）；鉴权走
+   * StaticTokenGuard 的 query token 形态（webview src 导航带不了 Bearer，
+   * ?token= 实例级静态密钥，guard 已双形态支持）。本端点流式回字节：
+   * reply.hijack() + reply.raw 直写（同 /event SSE 先例——@Res passthrough
+   * 下 ResponseInterceptor 会把 void 结果包成对象二次 send，撞 hijack 前
+   * 的流式 send；路径已入 config.yml response.excludePaths 双保险）；归
+   * 属校验在 service.readStreamMeta（LIBRARY_NOT_FOUND 不泄露存在性）。
+   * relay 连接无直连 HTTP 面——桌面侧对 relay 连接维持不支持占位。
+   */
+  @Get('stream')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'webview 预览流式读（GET+Range；query token 鉴权）',
+  })
+  async stream(
+    @Query('id') idRaw: unknown,
+    @Req() req: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<void> {
+    // hijack 后 Fastify 不再接管本响应，Nest/interceptor 二次 send 全绕开
+    //（/event 同款）；后续校验与流式回写全走 raw
+    reply.hijack();
+    const raw = reply.raw;
+    const writeJson = (status: number, body: Record<string, unknown>) => {
+      raw.writeHead(status, {
+        'Content-Type': 'application/json; charset=utf-8',
+      });
+      raw.end(JSON.stringify(body));
+    };
+    const id = Number(idRaw);
+    if (!Number.isInteger(id) || id <= 0) {
+      writeJson(400, { success: false, message: 'id 必须是正整数' });
+      return;
+    }
+    let meta: { absPath: string; mimeType: string; size: number };
+    try {
+      meta = await this.libraryService.readStreamMeta(id);
+    } catch {
+      // hijack 后异常过滤器接管不了——raw 直出错误体（BusinessException
+      // 的 code 语义对本端点消费方（webview src）无意义，统一 message）
+      writeJson(200, { success: false, data: null, message: '读取失败' });
+      return;
+    }
+    raw.setHeader('Content-Type', meta.mimeType);
+    raw.setHeader('Accept-Ranges', 'bytes');
+    const range = parseStreamRange(
+      req.headers?.range as string | undefined,
+      meta.size,
+    );
+    if (range === 'invalid') {
+      raw.writeHead(416, { 'Content-Range': `bytes */${meta.size}` });
+      raw.end();
+      return;
+    }
+    if (range) {
+      raw.writeHead(206, {
+        'Content-Range': `bytes ${range.start}-${range.end}/${meta.size}`,
+        'Content-Length': String(range.end - range.start + 1),
+      });
+      fs.createReadStream(meta.absPath, {
+        start: range.start,
+        end: range.end,
+      }).pipe(raw);
+      return;
+    }
+    raw.writeHead(200, { 'Content-Length': String(meta.size) });
+    fs.createReadStream(meta.absPath).pipe(raw);
   }
 }

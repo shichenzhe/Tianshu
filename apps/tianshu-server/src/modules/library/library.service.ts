@@ -40,6 +40,25 @@ const IMAGE_MAX_BYTES = 10 * 1024 * 1024;
  *  4MiB 余量；spec §1.1） */
 const UPLOAD_MAX_BYTES = 3 * 1024 * 1024;
 
+/** webview 类预览流式 mime 表（webview 批 2026-11-11）：预览分级判定
+ *  的 html/pdf/audio/video 四类 + 常见编码容器；未列扩展名回落
+ *  application/octet-stream（下载语义，浏览器自判） */
+const STREAM_MIME_BY_EXT: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
+  '.pdf': 'application/pdf',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+  '.flac': 'audio/flac',
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.mov': 'video/quicktime',
+  '.mkv': 'video/x-matroska',
+};
+
 /** base64 形状校验：标准字母表 + padding 对齐（解码前拒——Node
  *  Buffer.from 对坏串 lenient 吞错，无法事后判定） */
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/;
@@ -133,6 +152,31 @@ export class LibraryService {
       throw new BusinessException('读取失败', 'LIBRARY_READ_FAILED');
     }
     return item.storagePath;
+  }
+
+  /** webview 类预览流式读元数据（webview 批 2026-11-11）：归属/文件
+   *  校验同 read 口径，出绝对路径 + 推断 mime + 字节数——字节流与
+   *  Range 分段由 controller 直接操作 Fastify reply（不走统一包装） */
+  async readStreamMeta(id: number): Promise<{
+    absPath: string;
+    mimeType: string;
+    size: number;
+  }> {
+    const item = await this.mustFile(id);
+    const absPath = this.diskPathOf(item);
+    let size = 0;
+    try {
+      size = (await fs.stat(absPath)).size;
+    } catch {
+      throw new BusinessException('读取失败', 'LIBRARY_READ_FAILED');
+    }
+    return {
+      absPath,
+      mimeType:
+        STREAM_MIME_BY_EXT[path.extname(absPath).toLowerCase()] ??
+        'application/octet-stream',
+      size,
+    };
   }
 
   async list(parentId: number | null): Promise<{
@@ -347,4 +391,31 @@ export class LibraryService {
       throw new BusinessException('写入失败', 'LIBRARY_WRITE_FAILED');
     }
   }
+}
+
+/** Range 头解析（webview 批 2026-11-11，纯函数单测）：bytes=start-end /
+ *  start- / -suffix 三形态；越界/倒置返回 'invalid'（controller 出
+ *  416）；非法格式返回 null（controller 视为无 Range 走 200 全量） */
+export function parseStreamRange(
+  range: string | undefined,
+  size: number,
+): { start: number; end: number } | 'invalid' | null {
+  if (typeof range !== 'string' || range.trim() === '') {
+    return null;
+  }
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (!match || (!match[1] && !match[2])) {
+    return null;
+  }
+  const [, startRaw, endRaw] = match;
+  let start = startRaw ? Number(startRaw) : 0;
+  let end = endRaw ? Number(endRaw) : size - 1;
+  if (!startRaw && endRaw) {
+    start = Math.max(0, size - Number(endRaw));
+    end = size - 1;
+  }
+  if (start > end || start >= size) {
+    return 'invalid';
+  }
+  return { start, end: Math.min(end, size - 1) };
 }

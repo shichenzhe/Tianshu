@@ -18,6 +18,8 @@ import { Sparkles } from "lucide-react";
 
 import SkillApi from "../../skills/api/skill.api";
 import {
+  detectMention,
+  MENTION_LIMIT,
   parseInlineTokens,
   renderTokenSegments,
   toggleSkillToken,
@@ -26,37 +28,10 @@ import PermissionCapsule from "../../chat/components/PermissionCapsule";
 import TaskModelPicker from "./TaskModelPicker";
 import TaskPlusMenu from "./TaskPlusMenu";
 
-/** @token 允许字符(照 ChatInput) */
-const MENTION_TOKEN_RE = /[\w\-./]/;
-const MENTION_LIMIT = 8;
-
 type SuggestCandidate =
   { kind: "skill"; name: string } | { kind: "file"; path: string };
 
-function detectMention(
-  value: string,
-  caret: number,
-): { startIndex: number; query: string } | null {
-  const upto = value.slice(0, caret);
-  const at = upto.lastIndexOf("@");
-  if (at === -1) {
-    return null;
-  }
-  const token = upto.slice(at + 1);
-  if (
-    token.length > 0 &&
-    ![...token].every((ch) => MENTION_TOKEN_RE.test(ch))
-  ) {
-    return null;
-  }
-  const prev = at > 0 ? upto[at - 1] : "";
-  if (prev && !/\s/.test(prev)) {
-    return null;
-  }
-  return { startIndex: at, query: token };
-}
-
-/** ⚡ 触发检测(光标前最近,前须行首/空白) */
+/** ⚡ 触发检测(光标前最近,前须行首/空白；含 CJK——中文技能名联想触发) */
 function detectSkillTrigger(
   value: string,
   caret: number,
@@ -67,7 +42,7 @@ function detectSkillTrigger(
     return null;
   }
   const token = upto.slice(idx + 1);
-  if (token.length > 0 && !/^[\w-]*$/.test(token)) {
+  if (token.length > 0 && !/^[\w\u4e00-\u9fff-]*$/.test(token)) {
     return null;
   }
   const prev = idx > 0 ? upto[idx - 1] : "";

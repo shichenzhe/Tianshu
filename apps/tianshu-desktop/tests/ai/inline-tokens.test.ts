@@ -162,6 +162,47 @@ describe("detectMention @ 触发检测", () => {
   it("光标前的最后 @ 生效", () => {
     expect(detectMention("@a @b", 5)).toEqual({ startIndex: 3, query: "b" });
   });
+
+  it("中文 query 触发（CJK token 支持——中文文件名联想不灭面板）", () => {
+    expect(detectMention("@远程笔记", 5)).toEqual({
+      startIndex: 0,
+      query: "远程笔记",
+    });
+    expect(detectMention("看 @需求", 5)).toEqual({
+      startIndex: 2,
+      query: "需求",
+    });
+  });
+});
+
+describe("CJK token 支持（2026-11-11 批：中文名文件/技能）", () => {
+  it("parseInlineTokens：中文文件名与中文技能名成 token", () => {
+    const result = parseInlineTokens("总结 @会议纪要.md 要点 ⚡代码审查");
+    expect(result.fileTokens).toEqual(["会议纪要.md"]);
+    expect(result.skillTokens).toEqual(["代码审查"]);
+    expect(result.text).toBe("总结 要点");
+  });
+
+  it("中文 token 后紧跟中文不被截断（负向断言含 CJK）", () => {
+    const result = parseInlineTokens("@会议纪要的备份.md");
+    expect(result.fileTokens).toEqual(["会议纪要的备份.md"]);
+  });
+
+  it("renderTokenSegments：中文 token 渲染 pill 段", () => {
+    expect(renderTokenSegments("看 @会议纪要.md")).toEqual([
+      { text: "看 ", isToken: false },
+      { text: "@会议纪要.md", isToken: true },
+    ]);
+  });
+
+  it("toggleSkillToken：中文名追加/移除/边界", () => {
+    expect(toggleSkillToken("", "代码审查")).toBe("⚡代码审查 ");
+    expect(toggleSkillToken("⚡代码审查 ", "代码审查")).toBe("");
+    // 名后跟中文字符不误判边界（完整名匹配才移除）
+    expect(toggleSkillToken("⚡代码审查的补充 ", "代码审查")).toBe(
+      "⚡代码审查的补充 ⚡代码审查 ",
+    );
+  });
 });
 
 describe("toggleSkillToken ＋菜单技能引用切换", () => {

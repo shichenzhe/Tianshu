@@ -21,9 +21,17 @@ export interface TokenSegments {
 /** 内置斜杠命令词表(/ 面板候选与 token 识别共用) */
 export const SLASH_COMMANDS = ["compact"] as const;
 
+/** CJK 统一表意基本区：中文文件名/技能名 token 支持（2026-11-11 批——
+ *  此前 \w 不含中文，@ 联想输中文 query 灭面板、中文 ⚡技能名发送解析
+ *  不出 token，资料库/工作空间中文名条目在联想里永远选不中） */
+const CJK_CLASS = "\\u4e00-\\u9fff";
+
 /** token 整体(含符号前缀):@path / ⚡name / /compact / #id;前导空白作边界 */
-const TOKEN_RE =
-  /(^|\s)(@[\w\-./]+|⚡[\w-]+|\/(?:compact)|#\d+(?!\d))(?![\w\-./])/g;
+const TOKEN_RE = new RegExp(
+  `(^|\\s)(@[\\w\\-./${CJK_CLASS}]+|⚡[\\w${CJK_CLASS}-]+|` +
+    `/(?:compact)|#\\d+(?!\\d))(?![\\w\\-./${CJK_CLASS}])`,
+  "g",
+);
 
 /** 解析输入文本:提取 token 并产出移除 token 后的消息文本 */
 export function parseInlineTokens(input: string): TokenSegments {
@@ -117,17 +125,18 @@ export function detectSlash(
   return { startIndex: slash, query: token };
 }
 
-/** @token 允许字符（@ 后连续输入的部分） */
-export const MENTION_TOKEN_RE = /[\w\-./]/;
+/** @token 允许字符（@ 后连续输入的部分；含 CJK——中文文件名联想触发） */
+export const MENTION_TOKEN_RE = new RegExp(`[\\w\\-./${CJK_CLASS}]`);
 
 /** 切换 ⚡技能 引用（＋菜单技能子菜单消费）：未引用则末尾追加 token
  *  （保空白边界），已引用则按 TOKEN_RE 同边界语义全量移除并收敛空白 */
 export function toggleSkillToken(input: string, name: string): string {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const tokenRe = new RegExp(`(^|\\s)⚡${escaped}(?![\\w-])`, "g");
+  // 负向断言含 CJK：中文名后跟中文字符不误判 token 结束
+  const tokenRe = new RegExp(`(^|\\s)⚡${escaped}(?![\\w${CJK_CLASS}-])`, "g");
   if (tokenRe.test(input)) {
     return input
-      .replace(new RegExp(`(^|\\s)⚡${escaped}(?![\\w-])`, "g"), "")
+      .replace(new RegExp(`(^|\\s)⚡${escaped}(?![\\w${CJK_CLASS}-])`, "g"), "")
       .split("\n")
       .map((line) => line.replace(/[^\S\n]+/g, " ").trim())
       .join("\n")

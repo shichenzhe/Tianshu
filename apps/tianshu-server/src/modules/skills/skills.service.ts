@@ -53,7 +53,11 @@ export class SkillsService {
       dir: string;
     }>
   > {
-    const { loadSkills } = await import('src/core/tools/skill-loader');
+    // 相对路径动态 import（保持懒加载）：tsc 的 baseUrl/paths 只做类型
+    // 解析不改写产物——非相对 'src/...' 说明符编译后原样落 dist，node
+    // 运行时按 node_modules 链解析必炸（jest moduleNameMapper 掩盖该错，
+    // dist 直跑才暴露）；仓库其余 skill-loader 引用均为相对路径同此因
+    const { loadSkills } = await import('../../core/tools/skill-loader');
     // 与 chat-runner collectSkills 同口径（用户级目录；enabled 过滤由
     // 调用方 skillRecord 过滤——联想清单展示全部，禁用技能发送侧拒）
     const skills = loadSkills([{ dir: this.skillsDir(), source: 'user' }]);

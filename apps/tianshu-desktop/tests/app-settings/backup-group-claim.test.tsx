@@ -34,12 +34,15 @@ import { invoke } from "@/lib/ipc";
 import ServerApi from "@/domains/ai/server/api/server.api";
 import type { ConnectionListResult } from "@/domains/ai/server/api/server.api";
 
-/** 单直连（自动选中，免 Radix Select 交互）；backupToken 按景注入 */
+/** 单直连（自动选中，免 Radix Select 交互）；backupToken 按景注入。
+ *  capabilities=[]＝无头端语义（capabilities 含 "backup" 的桌面 face
+ *  连接会被备份主机下拉过滤——见 backup-group-host-filter.test） */
 function setupConnection(backupToken?: string): void {
   const conn = {
     id: "c1",
     mode: "direct",
     name: "主机 A",
+    capabilities: [],
     ...(backupToken ? { backupToken } : {}),
   };
   vi.mocked(ServerApi.listConnections).mockResolvedValue({

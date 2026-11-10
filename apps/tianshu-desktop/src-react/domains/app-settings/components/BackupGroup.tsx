@@ -1,7 +1,11 @@
 /**
- * 备份组（spec 2026-10-27 §4 + 2026-10-28 多用户扩展）：目标主机（仅直连）
- * 选择 + 立即备份（可选备注）+ backup:progress 四相进度条 + 备份列表
- * （恢复/删除，均二次确认 AlertDialog；admin 视角行内 owner 徽标）+ 邀请码
+ * 备份组（spec 2026-10-27 §4 + 2026-10-28 多用户扩展）：目标主机（仅
+ * 直连且仅无头端——capabilities 含 "backup" 的桌面 face 连接被过滤，
+ * 2026-11-09 修复：face 的 /backup/list 是「遥控它读它自己的备份」语义，
+ * 当存储端会得到嵌套 200/5000+401/4010 错）选择 + 立即备份（可选备注）
+ * + backup:progress 四相进度条 + 备份列表（恢复/删除，均二次确认
+ * AlertDialog；admin 视角行内 owner 徽标）+ 自动拉列表失败不弹全局
+ * toast（组内行内错误，进设置页不被轰炸）+ 邀请码
  * 申领小节（未配 backupToken、或 list 判定既有凭据已失效〔被踢除等，
  * 终审 I3〕的连接显示——成功自动回填，连接状态即时刷新）
  * + admin 管理小节（viewer.kind==='admin'：邀请码生成/列表/复制/撤销 +
@@ -125,11 +129,18 @@ export default function BackupGroup() {
   const [generating, setGenerating] = useState(false);
   const [clients, setClients] = useState<BackupClientRecord[] | null>(null);
 
-  /** 连接列表载入/刷新：只取 direct（备份不开放 relay——spec §1 裁定）；
-   *  选中保持不变（初载才按活动连接/首个 direct 默认选中） */
+  /** 连接列表载入/刷新：只取 direct 且排除桌面被控端（备份不开放
+   *  relay——spec §1 裁定；capabilities 含 "backup" 的连接是桌面 face
+   *  ——该能力为被控面专属，protocol DESKTOP_CAPABILITIES 注记「无头端
+   *  不报（它是存储端）」；face 的 backup 端点是遥控语义（backup-tap
+   *  取它自配的主机转发请求），把桌面端当备份存储端必错）；选中保持
+   *  不变（初载才按活动连接/首个 direct 默认选中——face 被过滤后活动
+   *  连接不命中自动落到无头端） */
   const loadConnections = useCallback(async (): Promise<void> => {
     const result = await ServerApi.listConnections();
-    const direct = result.connections.filter((c) => c.mode === "direct");
+    const direct = result.connections.filter(
+      (c) => c.mode === "direct" && !c.capabilities?.includes("backup"),
+    );
     setConnections(direct);
     setSelectedConnId(
       (prev) =>
@@ -165,27 +176,35 @@ export default function BackupGroup() {
     [],
   );
 
+  /** backup:list 失败文案（组内行内显示；null=无错） */
+  const [listError, setListError] = useState<string | null>(null);
+
   const refreshBackups = useCallback(async (connId: string) => {
     try {
       const result = await invoke<BackupListResult>("backup:list", connId);
       setBackups(result.backups);
       setViewer(result.viewer);
       setTokenInvalid(false);
+      setListError(null);
     } catch (e) {
       // 被踢除设备恢复路径（终审 I3）：backupToken 成死凭据时只 toast 会
       // 把申领入口锁死（小节原按「已配 backupToken」隐藏）——置失效旗标
       // 放宽小节显隐，重新申领将自动覆盖回填
       if (isTokenRejection(e)) setTokenInvalid(true);
-      toast.error(errorMessage(e));
+      // 挂载自动拉列表失败不弹全局 toast（进设置页即被轰炸——2026-11-09
+      // 修复）：错误就地显示在备份列表区；手动操作（备份/恢复/删除）失败
+      // 各自的操作路径已有 toast 反馈
+      setListError(errorMessage(e));
     }
   }, []);
 
-  // 备份列表随连接切换重拉（viewer/tokenInvalid 一并复位——admin 小节按
-  // 新连接身份收敛；失效旗标由本次 list 结果重新判定）
+  // 备份列表随连接切换重拉（viewer/tokenInvalid/listError 一并复位——
+  // admin 小节按新连接身份收敛；失效旗标与错误文案由本次 list 结果重判）
   useEffect(() => {
     setBackups(null);
     setViewer(null);
     setTokenInvalid(false);
+    setListError(null);
     if (selectedConnId) void refreshBackups(selectedConnId);
   }, [selectedConnId, refreshBackups]);
 
@@ -487,7 +506,7 @@ export default function BackupGroup() {
         </div>
         {!connectionsLoading && connections.length === 0 && (
           <p className="text-xs text-muted-foreground">
-            {t("settings:backupOnlyDirect")}
+            {t("settings:backupNoHeadlessHost")}
           </p>
         )}
         <Input
@@ -623,9 +642,13 @@ export default function BackupGroup() {
           </div>
         )}
 
-      {/* 备份列表：时间/版本/大小/note + 恢复/删除（admin 视角行内 owner 徽标） */}
+      {/* 备份列表：载入中/载入失败（行内错误）/空态/行列表（admin 视角行内 owner 徽标） */}
       <div className="space-y-2">
-        {backups === null || connectionsLoading ? (
+        {listError ? (
+          <p className="break-all text-xs text-destructive">
+            {t("settings:backupListLoadFailed", { message: listError })}
+          </p>
+        ) : backups === null || connectionsLoading ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             {t("common:loading")}

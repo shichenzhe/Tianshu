@@ -9,8 +9,12 @@
  *
  * 载荷口径按本地安装版 dist 核对（@langchain/core 1.2.17 + langgraph 1.5.0）：
  * - on_chat_model_stream：data.chunk = AIMessageChunk，content 为 string 或
- *   ContentBlock[]（text 块 {type:"text", text}）；reasoning 走
- *   additional_kwargs.reasoning_content（OpenAI 兼容系深度思考字段）；usage_metadata
+ *   ContentBlock[]（text 块 {type:"text", text}）；reasoning 三形态：
+ *   additional_kwargs.reasoning_content（OpenAI 兼容系深度思考字段）、
+ *   content 数组 thinking 块 {type:"thinking", thinking}（anthropic
+ *   extended thinking，@langchain/anthropic 1.5.12 流式实证）、新版
+ *   reasoning 块 {type:"reasoning", reasoning}（content-block-centric
+ *   流协议）；usage_metadata
  *   {input_tokens, output_tokens} 每轮上报（OpenAI 末 chunk 单报；anthropic
  *   在 message_start 报 input、message_delta 报终值 output；google 分 chunk
  *   报增量），且同一轮 on_chat_model_end 聚合消息再报一次——直接累加会双计，
@@ -111,6 +115,24 @@ const isTextBlock = (part: unknown): part is { text: string } =>
   (part as { type?: unknown }).type === "text" &&
   typeof (part as { text?: unknown }).text === "string";
 
+/** anthropic extended thinking 流式块（@langchain/anthropic
+ *  _makeMessageChunkFromAnthropicEvent 对 content_block_start(type=thinking)
+ *  的产出形态，1.5.12 dist 实证）：thinking 增量在 .thinking 字段 */
+const isThinkingBlock = (part: unknown): part is { thinking: string } =>
+  typeof part === "object" &&
+  part !== null &&
+  (part as { type?: unknown }).type === "thinking" &&
+  typeof (part as { thinking?: unknown }).thinking === "string";
+
+/** 新版 content block 协议 reasoning 块（@langchain/anthropic
+ *  _streamChatModelEvents 的 stream_events.js 映射形态）：reasoning 增量
+ *  在 .reasoning 字段（未来切该流路径零改动兼容） */
+const isReasoningBlock = (part: unknown): part is { reasoning: string } =>
+  typeof part === "object" &&
+  part !== null &&
+  (part as { type?: unknown }).type === "reasoning" &&
+  typeof (part as { reasoning?: unknown }).reasoning === "string";
+
 /**
  * 工具输出归一为 string：StringContent 直取 string；ToolMessage 形状取
  * .content 递归；content block 数组拼 text 块；其余 JSON.stringify 截断
@@ -130,7 +152,11 @@ function stringifyOutput(output: unknown): string {
   return truncatedJson(output);
 }
 
-/** 单个流式 chunk → reasoning/text/usage 回调（reasoning 先行，golden A 序） */
+/** 单个流式 chunk → reasoning/text/usage 回调（reasoning 先行，golden A 序）。
+ *  reasoning 三形态：OpenAI 兼容系 additional_kwargs.reasoning_content、
+ *  anthropic thinking content block（.thinking）、新版 reasoning block
+ *  （.reasoning）——数组内按块序逐块派发（anthropic 输出序 thinking 在
+ *  text 前，天然保持 golden A 序） */
 function emitModelChunk(chunk: ModelStreamChunk, cb: EmitterCallbacks): void {
   const reasoning = chunk.additional_kwargs?.reasoning_content;
   if (typeof reasoning === "string" && reasoning) {
@@ -140,7 +166,13 @@ function emitModelChunk(chunk: ModelStreamChunk, cb: EmitterCallbacks): void {
     if (chunk.content) cb.onTextDelta(chunk.content);
   } else if (Array.isArray(chunk.content)) {
     for (const part of chunk.content) {
-      if (isTextBlock(part) && part.text) cb.onTextDelta(part.text);
+      if (isThinkingBlock(part) && part.thinking) {
+        cb.onReasoningDelta(part.thinking);
+      } else if (isReasoningBlock(part) && part.reasoning) {
+        cb.onReasoningDelta(part.reasoning);
+      } else if (isTextBlock(part) && part.text) {
+        cb.onTextDelta(part.text);
+      }
     }
   }
 }

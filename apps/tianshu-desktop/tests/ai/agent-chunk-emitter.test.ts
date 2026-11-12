@@ -169,6 +169,57 @@ describe("consumeAgentStream（StreamEvent → onChunk 映射）", () => {
     expect(rec.log).toEqual(["reasoning|想一想", "text|你好", "finish|none"]);
   });
 
+  it("B2 anthropic thinking content block → onReasoningDelta：@langchain/anthropic 流式把 extended thinking 落 content 数组 {type:\"thinking\", thinking}（1.5.12 dist 实证 message_outputs.js），块序保持 thinking 在 text 前", async () => {
+    const rec = makeRecorder();
+
+    await consumeAgentStream(
+      asyncOf<SyntheticEvent>([
+        streamChunk("m1", {
+          content: [
+            // @langchain/anthropic _makeMessageChunkFromAnthropicEvent 对
+            // content_block_start(type=thinking) 的产出形态（spread 原块+index）
+            { index: 0, type: "thinking", thinking: "先想" },
+          ],
+        }),
+        streamChunk("m1", {
+          content: [{ index: 0, type: "thinking", thinking: "清楚" }],
+        }),
+        streamChunk("m1", {
+          content: [{ index: 1, type: "text", text: "答案" }],
+        }),
+      ]),
+      rec,
+      () => false,
+    );
+
+    expect(rec.log).toEqual([
+      "reasoning|先想",
+      "reasoning|清楚",
+      "text|答案",
+      "finish|none",
+    ]);
+  });
+
+  it("B3 新版 content block 协议 {type:\"reasoning\", reasoning} → onReasoningDelta（@langchain/anthropic _streamChatModelEvents 的 stream_events.js 映射形态，未来切换该路径时零改动兼容）；redacted_thinking 不可读不发射", async () => {
+    const rec = makeRecorder();
+
+    await consumeAgentStream(
+      asyncOf<SyntheticEvent>([
+        streamChunk("m1", {
+          content: [
+            { type: "reasoning", reasoning: "推理" },
+            { type: "redacted_thinking", data: "…" },
+            { type: "text", text: "结论" },
+          ],
+        }),
+      ]),
+      rec,
+      () => false,
+    );
+
+    expect(rec.log).toEqual(["reasoning|推理", "text|结论", "finish|none"]);
+  });
+
   it("C 工具往返：on_tool_start(含 args) → onToolCall；on_tool_end 解包 ToolMessage 取 content → onToolResult", async () => {
     const rec = makeRecorder();
 

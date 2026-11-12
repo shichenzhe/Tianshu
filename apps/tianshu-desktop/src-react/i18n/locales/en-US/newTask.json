@@ -56,7 +56,11 @@
     "oversize": "File size exceeds the limit",
     "readFailed": "Failed to read file",
     "selectWorkspaceFirst": "Select a workspace first",
-    "clearExpert": "Remove expert"
+    "clearExpert": "Remove expert",
+    "app": "App",
+    "appEmpty": "No apps yet",
+    "appGoCreate": "Create in Apps page",
+    "clearApp": "Remove app binding"
   },
   "polish": {
     "title": "AI Polish",

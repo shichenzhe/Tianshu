@@ -15,13 +15,14 @@ import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Bot, Send, X, Zap } from "lucide-react";
+import { Bot, LayoutGrid, Send, X, Zap } from "lucide-react";
 
 import IconTooltip from "@/components/common/icon-tooltip";
 
 import { Button } from "@/components/ui/button";
 import { MENTION_LIMIT, detectMention } from "../../chat/lib/inline-tokens";
 import AssistantApi from "../../api/assistant.api";
+import AppApi from "../../api/app.api";
 import LibraryApi from "../../library/api/library.api";
 import { MODES } from "../../chat/components/PlusMenu";
 import ModelPicker from "../../chat/components/ModelPicker";
@@ -79,6 +80,8 @@ export default function NewTaskInputCard({
   const setAccessMode = useNewTaskStore((s) => s.setAccessMode);
   const modelId = useNewTaskStore((s) => s.modelId);
   const setModelId = useNewTaskStore((s) => s.setModelId);
+  const appId = useNewTaskStore((s) => s.appId);
+  const setAppId = useNewTaskStore((s) => s.setAppId);
   const addLocalFile = useLocalFileAttach();
 
   // 专家名徽章：+ 菜单草稿选中态的可见反馈（ExpertSubMenu 同缓存键
@@ -90,6 +93,16 @@ export default function NewTaskInputCard({
   const assistantName = useMemo(
     () => (assistantsQuery.data ?? []).find((a) => a.id === assistantId)?.name,
     [assistantsQuery.data, assistantId],
+  );
+  // 应用名徽章：＋菜单应用草稿选中态的可见反馈（AttachMenu 子面板同缓存
+  // 键 ["apps"]，管理页增删失效后此处随刷新）
+  const appsQuery = useQuery({
+    queryKey: ["apps"],
+    queryFn: () => AppApi.list(),
+  });
+  const appName = useMemo(
+    () => (appsQuery.data ?? []).find((a) => a.id === appId)?.name,
+    [appsQuery.data, appId],
   );
   const modeLabelKey = MODES.find((m) => m.value === mode)?.labelKey;
   const [suggest, setSuggest] = useState<{
@@ -445,6 +458,22 @@ export default function NewTaskInputCard({
                 type="button"
                 aria-label={t("newTask:attach.clearExpert")}
                 onClick={() => setAssistantId(null)}
+                className="shrink-0"
+              >
+                <X className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />
+              </button>
+            </IconTooltip>
+          </span>
+        )}
+        {appName && (
+          <span className="ml-1 inline-flex max-w-40 items-center gap-1 rounded-full border border-border/50 bg-primary-subtle px-2 py-0.5 text-[10px] text-primary">
+            <LayoutGrid className="h-2.5 w-2.5 shrink-0" />
+            <span className="truncate">{appName}</span>
+            <IconTooltip label={t("newTask:attach.clearApp")}>
+              <button
+                type="button"
+                aria-label={t("newTask:attach.clearApp")}
+                onClick={() => setAppId(null)}
                 className="shrink-0"
               >
                 <X className="h-2.5 w-2.5 opacity-60 hover:opacity-100" />

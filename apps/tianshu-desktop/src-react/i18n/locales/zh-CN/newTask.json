@@ -60,7 +60,11 @@
     "oversize": "文件大小超出限制",
     "readFailed": "文件读取失败",
     "selectWorkspaceFirst": "请先选择工作空间",
-    "clearExpert": "移除专家"
+    "clearExpert": "移除专家",
+    "app": "应用",
+    "appEmpty": "暂无应用",
+    "appGoCreate": "去应用页新建",
+    "clearApp": "移除应用绑定"
   },
   "polish": {
     "title": "AI 润色",

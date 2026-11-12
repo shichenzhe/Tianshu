@@ -36,6 +36,9 @@ interface NewTaskState {
   assistantId: number | null;
   /** 模型选择草稿（ModelPicker 对齐）：dispatch create 后在 send 前 setModel 落库 */
   modelId: number | null;
+  /** 应用绑定草稿（AttachMenu 应用子面板，2026-11-12 优化）：dispatch create
+   *  后 setApp 落库——待创建会话的预先绑定入口 */
+  appId: number | null;
   setContent(s: string): void;
   setScenario(k: ScenarioKey): void;
   setWorkspaceId(id: number | null): void;
@@ -43,6 +46,7 @@ interface NewTaskState {
   setMode(m: SessionMode): void;
   setAssistantId(id: number | null): void;
   setModelId(id: number | null): void;
+  setAppId(id: number | null): void;
   /** label+kind 去重后追加（同展示名同来源视为同一引用） */
   addPending(ref: PendingRef): void;
   /** 按 ref 移除 */
@@ -60,11 +64,13 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
   mode: "agent",
   assistantId: null,
   modelId: null,
+  appId: null,
   setContent: (s) => set({ content: s }),
-  // mode/assistantId/modelId 为任务级草稿（与三配置区分）：不持久化、resetDraft 清
+  // mode/assistantId/modelId/appId 为任务级草稿（与三配置区分）：不持久化、resetDraft 清
   setMode: (m) => set({ mode: m }),
   setAssistantId: (id) => set({ assistantId: id }),
   setModelId: (id) => set({ modelId: id }),
+  setAppId: (id) => set({ appId: id }),
   // 三配置 setter 内部写回持久化快照；content/pending 为草稿不持久化
   setScenario: (k) => {
     set({ scenario: k });
@@ -96,6 +102,7 @@ export const useNewTaskStore = create<NewTaskState>((set) => ({
       mode: "agent",
       assistantId: null,
       modelId: null,
+      appId: null,
     }),
 }));
 

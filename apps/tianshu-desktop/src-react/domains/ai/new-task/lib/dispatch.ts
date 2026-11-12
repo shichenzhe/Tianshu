@@ -99,6 +99,7 @@ export async function dispatchNewTask({
     mode,
     assistantId,
     modelId,
+    appId,
   } = useNewTaskStore.getState();
   if (workspaceId === null) {
     throw new Error("no-workspace");
@@ -116,6 +117,12 @@ export async function dispatchNewTask({
   // 默认值（无专家/agent）跳过——create 默认即该值，省两次 IPC
   if (assistantId !== null) {
     await SessionApi.setAssistant(created.id, assistantId);
+  }
+  // 应用绑定草稿落库（2026-11-12 优化：待创建会话的预先绑定）：setApp
+  // 在 send 前完成——工作流工具面作用域随会话首发即生效；失败抛错与
+  // setAssistant 同段（调用方 toast 草稿保留）
+  if (appId !== null) {
+    await SessionApi.setApp(created.id, appId);
   }
   if (mode !== "agent") {
     await SessionApi.setMode(created.id, mode);

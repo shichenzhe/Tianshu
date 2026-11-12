@@ -8,7 +8,8 @@
  * 草稿组：模式（PlusMenu 导出 MODES 复用，✓ 草稿态写 store，dispatch 时
  *   setMode 落库）、专家（ExpertSubMenu onPick 草稿分支，同 dispatch 落库）、
  *   技能（SkillSubMenu 引用选择器复用——仅启用技能可见，选中挂 skill
- *   pending pill，启停收口管理页）；
+ *   pending pill，启停收口管理页）、应用（AppApi.list 子面板，2026-11-12
+ *   优化——待创建会话预先绑定应用，dispatch setApp 落库；空态导航应用页）；
  * 连接器：导航专家页 connectors Tab（ChatView MCP_ROUTE 同目标）。
  * 文案复用 chat:plus.* 词条（两侧一致），触发钮样式同 PlusMenu
  */
@@ -17,7 +18,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, FilePlus, Library, Plug, Plus, Sparkles } from "lucide-react";
+import { Check, FilePlus, LayoutGrid, Library, Plug, Plus, Sparkles } from "lucide-react";
 import IconTooltip from "@/components/common/icon-tooltip";
 
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ import {
 import { invoke } from "@/lib/ipc";
 import type { SessionMode } from "../../api/session.api";
 import WorkspaceApi from "../../api/workspace.api";
+import AppApi from "../../api/app.api";
 import SkillImportDialog from "../../skills/components/SkillImportDialog";
 import LibraryPickerDialog from "../../library/components/LibraryPickerDialog";
 import { MODES } from "../../chat/components/PlusMenu";
@@ -47,6 +49,7 @@ import { remoteLibraryText } from "@/domains/ai/data-source/remote-catalog";
 import { isImagePath } from "../../chat/lib/image-file";
 
 const MCP_ROUTE = "/module/ai/experts?tab=connectors";
+const APPS_ROUTE = "/module/ai/apps";
 
 export default function AttachMenu() {
   const { t } = useTranslation(["chat", "newTask"]);
@@ -59,6 +62,8 @@ export default function AttachMenu() {
   const setMode = useNewTaskStore((s) => s.setMode);
   const assistantId = useNewTaskStore((s) => s.assistantId);
   const setAssistantId = useNewTaskStore((s) => s.setAssistantId);
+  const appId = useNewTaskStore((s) => s.appId);
+  const setAppId = useNewTaskStore((s) => s.setAppId);
   const addLocalFile = useLocalFileAttach();
   const [importOpen, setImportOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -76,6 +81,11 @@ export default function AttachMenu() {
     queryFn: () => WorkspaceApi.list(),
   });
   const hasWorkspaces = (workspacesQuery.data ?? []).length > 0;
+  // 应用清单（AppsView 同缓存键 ["apps"]，管理页增删此处随失效刷新）
+  const appsQuery = useQuery({
+    queryKey: ["apps"],
+    queryFn: () => AppApi.list(),
+  });
 
   /** 技能引用（落地页形态 = pending pill）：勾选态按 skill pill 计，
       切换增删（dispatch 发送时 readSkill 读全文注入，对齐会话 ⚡token 语义） */
@@ -194,6 +204,39 @@ export default function AttachMenu() {
             onPick={setAssistantId}
             currentAssistantId={assistantId ?? undefined}
           />
+          {/* 应用绑定子面板（2026-11-12 优化）：待创建会话预先绑定——草稿态
+              写 store，dispatch setApp 落库；空态给导航入口（应用页新建） */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <LayoutGrid />
+              {t("newTask:attach.app")}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-64 w-64 overflow-y-auto border border-border/50 rounded-lg shadow-lg">
+              {(appsQuery.data ?? []).length > 0 ? (
+                (appsQuery.data ?? []).map((app) => (
+                  <DropdownMenuItem
+                    key={app.id}
+                    title={app.description ?? app.name}
+                    onClick={() => setAppId(app.id)}
+                  >
+                    <span className="truncate">{app.name}</span>
+                    {app.id === appId && (
+                      <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))
+              ) : (
+                <>
+                  <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                    {t("newTask:attach.appEmpty")}
+                  </p>
+                  <DropdownMenuItem onClick={() => navigate(APPS_ROUTE)}>
+                    {t("newTask:attach.appGoCreate")}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <SkillSubMenu
             onImport={() => setImportOpen(true)}
             referencedSkills={referencedSkills}

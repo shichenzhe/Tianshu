@@ -9,6 +9,9 @@ import type { SecurityConfig } from "../../../src-react/domains/security/model/t
 /** 15 项安全配置默认值（read-time fallback 的唯一事实源） */
 export const SECURITY_DEFAULTS: SecurityConfig = {
   sandboxEnabled: true,
+  // OS 级沙箱（OS 沙箱 spec §2 裁定 #1）：默认关，安全中心自开——
+  // 新特性灰度姿态，不动存量会话行为
+  osSandboxEnabled: false,
   fileAllowlist: [],
   fileBlocklist: [],
   cmdAllow: [{ prefix: ["git", "push"] }, { prefix: ["npm", "install"] }],

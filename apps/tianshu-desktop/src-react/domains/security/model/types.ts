@@ -7,6 +7,9 @@ export type CmdRule = { prefix: string[]; reason?: string };
 
 export type SecurityConfig = {
   sandboxEnabled: boolean;
+  /** OS 级沙箱（OS 沙箱 spec §6）：macOS Seatbelt 越界写硬网；与
+   * sandboxEnabled（命令判定门总开关）语义无关，独立 key 消歧 */
+  osSandboxEnabled: boolean;
   fileAllowlist: string[];
   fileBlocklist: string[];
   cmdAllow: CmdRule[];

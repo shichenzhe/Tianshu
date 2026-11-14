@@ -2,8 +2,8 @@
   "title": "安全中心",
   "loadFailed": "加载失败，请重试",
   "sandbox": {
-    "title": "沙箱安全",
-    "enabled": "沙箱安全",
+    "title": "安全策略",
+    "enabled": "安全策略",
     "enabledDesc": "开启后，AI 的所有执行操作均受文件、命令、网络安全规则约束",
     "file": "文件安全",
     "fileDesc": "管理文件读写权限与黑白名单",
@@ -13,6 +13,13 @@
     "networkDesc": "管理网络出入站请求与域名名单",
     "runtime": "运行时工具",
     "runtimeDesc": "控制 AI 可用的内置工具"
+  },
+  "osSandbox": {
+    "title": "系统沙箱",
+    "enabled": "系统沙箱（macOS）",
+    "enabledDesc": "开启后，bash 命令在工作空间与临时目录之外的写入将被操作系统级拒绝",
+    "unsupported": "当前平台暂不支持，仅 macOS 提供系统沙箱",
+    "unavailable": "沙箱组件不可用（sandbox-exec 缺失），命令将不经沙箱执行"
   },
   "dataSafety": {
     "title": "数据安全",

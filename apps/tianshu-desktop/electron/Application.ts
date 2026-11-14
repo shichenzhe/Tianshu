@@ -46,6 +46,7 @@ import {
   installCommandWatchlist,
   makeCommandDecider,
 } from "./domains/security/command-gate";
+import { installSandboxRunner } from "./domains/security/sandbox/runner";
 import { installFileGate, makeFileDecider } from "./domains/security/file-gate";
 import { tianshuRoot, fileHistoryDir } from "./commons/paths";
 import { FileHistoryService } from "./domains/security/file-history";
@@ -397,6 +398,9 @@ export default class Application {
         ? securityService.getConfigValue().programBlacklist
         : [],
     );
+    // OS 级沙箱（OS 沙箱 spec §3）：bash 执行层包装——osSandboxEnabled ×
+    // 平台可用 × 非 full 三条件在 runner 内逐命令合成，fail-open 透传
+    installSandboxRunner(() => securityService.getConfigValue());
     // 文件安全判定门（SP3）：extraBuiltin = userData 自我保护（spec §4.1）；
     // 数据库等用户数据已迁 ~/.tianshu（见 commons/paths.ts），一并纳入保护
     installFileGate(

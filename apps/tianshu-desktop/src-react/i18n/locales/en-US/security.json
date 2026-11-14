@@ -2,8 +2,8 @@
   "title": "Security Center",
   "loadFailed": "Failed to load, please retry",
   "sandbox": {
-    "title": "Sandbox Security",
-    "enabled": "Sandbox security",
+    "title": "Security Policy",
+    "enabled": "Security policy",
     "enabledDesc": "When enabled, all AI execution is governed by file, command, and network security rules",
     "file": "File Security",
     "fileDesc": "Manage file read/write permissions and allow/block lists",
@@ -13,6 +13,13 @@
     "networkDesc": "Manage network requests and domain lists",
     "runtime": "Runtime tools",
     "runtimeDesc": "Control built-in tools available to AI"
+  },
+  "osSandbox": {
+    "title": "OS Sandbox",
+    "enabled": "OS sandbox (macOS)",
+    "enabledDesc": "When enabled, bash writes outside the workspace and temp directories are rejected at the OS level",
+    "unsupported": "Not supported on this platform; the OS sandbox is macOS only",
+    "unavailable": "Sandbox component unavailable (sandbox-exec missing); commands will run without sandboxing"
   },
   "dataSafety": {
     "title": "Data Safety",

@@ -138,6 +138,8 @@ const FIELD_PARSERS: {
   [K in SecurityConfigKey]: (raw: string | undefined) => SecurityConfig[K];
 } = {
   sandboxEnabled: (raw) => parseBoolOption(raw, true),
+  // OS 沙箱（OS 沙箱 spec §2 裁定 #1）：缺省关，与 SECURITY_DEFAULTS 对齐
+  osSandboxEnabled: (raw) => parseBoolOption(raw, false),
   fileAllowlist: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
   fileBlocklist: (raw) => pickStringArray(parseJsonArray(raw ?? "[]")),
   cmdAllow: (raw) =>

@@ -304,6 +304,8 @@ export const IPC_INVOKE_ALLOWLIST = [
   "security:resetFileRules",
   // 加密降级状态（批1A 设置页警示条）
   "security:masterKeyStatus",
+  // OS 沙箱状态（OS 沙箱 spec §6.2）：平台支持 × sandbox-exec 探测
+  "security:osSandboxStatus",
   // 更新日志
   "update-log:getContent",
   "update-log:getConfig",

@@ -23,6 +23,7 @@ import { fileGate } from "../../security/file-gate";
 import type { FileAccessDecision } from "../../security/file-policy";
 import { countFilesForEstimate } from "../../security/file-history";
 import type { BackupFileResult } from "../../security/file-history";
+import { getSandboxRunner } from "../../security/sandbox/runner";
 
 /** write 工具被用户拒绝时的回喂文案（spec 决策 #4：拒绝后循环继续） */
 const TOOL_DENIED_OUTPUT = "用户拒绝了此操作";
@@ -218,6 +219,7 @@ async function executeToolSafe(
   def: ToolDefinition,
   agent: AgentStreamOptions,
   input: unknown,
+  abortSignal: AbortSignal | undefined,
 ): Promise<string> {
   try {
     return await def.execute(
@@ -238,6 +240,12 @@ async function executeToolSafe(
         onSecurityEvent: agent.onSecurityEvent,
         // SP2 子进程黑名单（会话与 automation 统一监控；win32 在 child-monitor 内 no-op）
         commandWatchBlacklist: commandWatchBlacklist(),
+        // OS 级沙箱包装（OS 沙箱 spec §5）：单点注入覆盖 chat/automation/
+        // graph 三路——enabled×available×非 full 在 runner 内逐命令合成，
+        // 未安装 fail-open 透传（判定链零改动）
+        osSandbox: getSandboxRunner(),
+        // 流中止信号（spec §4.5）：bash 结算收割进程组用
+        abortSignal,
         // SP4 数据安全：删除保护与备份回调（装配快照，每流一次）
         deleteProtection: agent.deleteProtection,
         onBackupFile: agent.onBackupFile,
@@ -710,7 +718,7 @@ export async function runToolCall(
     state: "running",
   });
   const output = await raceWithAbort(
-    executeToolSafe(def, agent, input),
+    executeToolSafe(def, agent, input, abortSignal),
     abortSignal,
     () => {
       finalStates?.set(toolCallId, "error");

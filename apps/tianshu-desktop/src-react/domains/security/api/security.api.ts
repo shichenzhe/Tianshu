@@ -57,6 +57,17 @@ export class SecurityApi {
     return invoke<{ degraded: boolean }>("security:masterKeyStatus");
   }
 
+  /** OS 沙箱状态（OS 沙箱 spec §6.2/§11.4）：平台支持 × 组件可用——
+   *  开关卡置灰与「生效中」提示依据 */
+  static osSandboxStatus(): Promise<{
+    supported: boolean;
+    available: boolean;
+  }> {
+    return invoke<{ supported: boolean; available: boolean }>(
+      "security:osSandboxStatus",
+    );
+  }
+
   static listFullGrants(): Promise<
     Array<{ sessionId: number; title: string }>
   > {

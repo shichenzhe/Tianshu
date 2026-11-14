@@ -14,6 +14,7 @@ import type {
 import { SecurityApi } from "../api/security.api";
 import { useSaveOrRevert } from "@/domains/app-settings/model/use-save-or-revert";
 import SandboxCard from "./SandboxCard";
+import OsSandboxCard from "./OsSandboxCard";
 import DataSafetyCard from "./DataSafetyCard";
 import SystemGrantCard from "./SystemGrantCard";
 import AuditCenter from "./AuditCenter";
@@ -156,6 +157,9 @@ export default function SecurityCenter() {
           onOpenNetwork={() => setView("network")}
           onOpenRuntime={() => setView("runtime")}
         />
+      </SettingsGroup>
+      <SettingsGroup title={t("security:osSandbox.title")}>
+        <OsSandboxCard config={config} onToggle={updateConfig} />
       </SettingsGroup>
       <SettingsGroup title={t("security:dataSafety.title")}>
         <DataSafetyCard config={config} onUpdate={updateConfig} />

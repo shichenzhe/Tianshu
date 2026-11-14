@@ -9,6 +9,7 @@ import { fileHistoryDir } from "../../commons/paths";
 import fs from "node:fs/promises";
 import prisma from "../../commons/prisma-client";
 import { getMasterKeyStatus } from "./master-key";
+import { osSandboxStatus } from "./sandbox/runner";
 import type {
   SecurityConfig,
   SecurityConfigKey,
@@ -40,6 +41,7 @@ import {
 /** 各 key 写入时的校验/清洗：bool 严格真、名单重校验、数值钳制 */
 const NORMALIZERS: Record<SecurityConfigKey, (v: unknown) => unknown> = {
   sandboxEnabled: (v) => v === true,
+  osSandboxEnabled: (v) => v === true,
   blockAllNetwork: (v) => v === true,
   maliciousDomainProtection: (v) => v === true,
   fileBackupEnabled: (v) => v === true,
@@ -167,6 +169,8 @@ export default class SecurityService {
     // 加密降级状态透出（批1A）：主密钥 hex 明文降级（safeStorage 不可用）
     // 时设置页警示；getMasterKeyStatus 自带冷进程加载，不漏报
     handleUser("security:masterKeyStatus", () => getMasterKeyStatus());
+    // OS 沙箱状态透出（OS 沙箱 spec §6.2）：平台支持 × sandbox-exec 探测
+    handleUser("security:osSandboxStatus", () => osSandboxStatus());
     handleUser(
       "security:setConfig",
       (_, _userId, key: SecurityConfigKey, value: unknown) =>

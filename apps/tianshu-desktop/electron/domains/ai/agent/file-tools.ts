@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { BackupFileResult } from "../../security/file-history";
+import type { SandboxRunner } from "../../security/sandbox/runner";
 import type { SecurityEventSink } from "../../../../src-react/domains/security/model/types";
 
 export interface ToolContext {
@@ -57,6 +58,11 @@ export interface ToolContext {
     event: "detailPanel:openBrowser",
     payload: { url: string },
   ) => void;
+  /** OS 级沙箱包装（OS 沙箱 spec §5）：bash 执行前最后一刻包装；
+   *  executeToolSafe 单点注入，缺席零开销透传 */
+  osSandbox?: Pick<SandboxRunner, "wrap">;
+  /** 流中止信号（OS 沙箱 spec §4.5）：bash 结算收割进程组用；缺席无收割 */
+  abortSignal?: AbortSignal;
 }
 
 export interface ToolDefinition<TArgs = unknown> {

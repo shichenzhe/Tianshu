@@ -22,6 +22,7 @@
 | 10 | [provider-model.md](provider-model.md) | 服务商/模型管理 | 五协议类型收口 createChatModel（LangChain 四家 ChatModel 分派，栈在 devDependencies 内联+external 互锁）；apiKey AES-256-GCM 信封（safeStorage/TIANSHU_MASTER_KEY 主密钥）+ 传输脱敏 | ⚠️ 疑似未收口：桌面 chat.service 四处直读 provider 行未走 openSecret（加密机器上或致 AUTH_FAILED，需核实）；无 fallback 路由/测速/价格元数据 |
 | 11 | [skills-tools-mcp.md](skills-tools-mcp.md) | 技能/工具/MCP | SKILL.md（name/description frontmatter）每 send 重扫 + system 清单注入 + read_skill 渐进披露；约 30 件内建工具静态注册、场景门控+用户禁用两层注入过滤；20 老名→15 新名别名单源 core；MCP http（StreamableHTTP+SSRF 门）+ stdio 读面、4K token 超线折叠；权限核心在执行侧 runToolCall 硬门 | 每 send 重扫无缓存（性能）；注入过滤与执行门禁的边界需在文档与代码中持续对齐 |
 | 12 | [multi-host-server-relay.md](multi-host-server-relay.md) | 单UI多主机/无头端/中继 | data-source 层 routeInvoke 双通道（本地 invoke / 远程适配器闭包）令 UI 零感知，caps 九面按连接运行时上报门控；被控端两类（NestJS 无头端/桌面 server-face）；Direct 与 Relay 同构 Transport，relay 链路 X25519+HKDF+AES-GCM 对中继零明文；relay-admin 多租户（Ed25519 AK→短效 access+CRL+kick） | queryKey 主机化；E2E 密钥棘轮（前向保密）；relay 多副本水平扩展 |
+| 13 | [os-sandbox.md](os-sandbox.md) | OS 级沙箱（security 子篇） | macOS Seatbelt 包装 bash 执行（sandbox-exec + 动态 sbpl：deny file-write* + workspace/TMPDIR 白名单），`command-tool.ts` runExec 一处嵌入、判定链零改动的纯加法兜底网；默认关、沙箱内网络全放行（2026-11-14 两裁定）；win32/Linux 诚实 no-op | 网络收紧预留位（deny network* + 仅放行本地代理）未启用；Linux Landlock/bubblewrap 二批裁定 |
 
 ## 跨模块共性观察
 
@@ -63,7 +64,7 @@
 **大工程类（建议独立 spec 立项）**：
 - 工作流 checkpointer/断点恢复 + HITL/interrupt（需审中心支撑）｜#3
 - sqlite-vec 真向量索引（双 ABI 链纳入 setup:native）｜#6
-- E2E 密钥双棘轮（前向保密，wire 契约演进）+ OS 级沙箱（sandbox-exec/Landlock）｜#2 #12
+- E2E 密钥双棘轮（前向保密，wire 契约演进）｜#2 #12（OS 级沙箱部分已立项设计 2026-11-14，spec 见 [os-sandbox.md](os-sandbox.md)，实施待排期）
 - chat.service 拆分（六域职责巨石）｜#9
 - 多主机并发会话（per-host 会话视图）+ relay 多副本/注册表外置｜#12
 - 会话分叉树 + text/thinking 块 id 协议变更｜#9

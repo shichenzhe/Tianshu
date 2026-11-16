@@ -34,9 +34,14 @@ COPY apps/tianshu-server apps/tianshu-server
 # 宿主（darwin/win）生成物，其平台 engine 二进制会残留混入镜像——先 rm 再
 # 生成，产物 engine 仅 builder 平台（linux-musl，与 runner 同源）；root
 # .dockerignore 另将 src/generated 挡在 context 外（双保险）
+# relay-admin 独立库 client 同理必须生成（nest build 全量编译 src/，ra 的
+# prisma.service 顶层 import 该产物；runner 镜像不跑 ra 入口，纯过 tsc 类型）
+# ——rm 清宿主副本逻辑与 PG 对称，.dockerignore 已挡 context 双保险
 RUN cd apps/tianshu-server && npx prisma generate \
  && npm run prisma:pg:derive && rm -rf src/generated \
- && npx prisma generate --schema prisma/pg/schema.prisma
+ && npx prisma generate --schema prisma/pg/schema.prisma \
+ && rm -rf src/relay-admin/generated \
+ && npx prisma generate --schema prisma/relay-admin/schema.prisma
 # 先清宿主随 context 带入的两包 dist（防陈旧产物顶替/误过产物闸）；
 # tianshu-core 的 tsc 因 @langchain peer 存在 6 项既有类型报错而 exit 2
 # ——host 侧同判（exit code 不作判据，Dockerfile.relay 已验证模式）：

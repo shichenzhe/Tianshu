@@ -504,8 +504,14 @@ const USTAR_MAGIC_END = 263;
  */
 export async function verifyTarGzIntegrity(archivePath: string): Promise<void> {
   // 首 header 经对象属性承载（TS 对闭包捕获 let 的外层收窄会误判 never，
-  // 属性访问不收窄——行为无差）
-  const state: { head: Buffer | null } = { head: null };
+  // 属性访问不收窄——行为无差）；badMagic 同理：魔数不符不直接 throw 穿
+  // pipeline——提前销毁流时底层 fs 读可能以 AbortError 结算，慢机竞态下
+  // 会覆盖业务错误（CI 实锤「The operation was aborted」），置标志排干、
+  // catch 优先还原
+  const state: { head: Buffer | null; badMagic: boolean } = {
+    head: null,
+    badMagic: false,
+  };
   try {
     await pipeline(
       createReadStream(archivePath),
@@ -522,17 +528,26 @@ export async function verifyTarGzIntegrity(archivePath: string): Promise<void> {
           if (buffered.length >= USTAR_MAGIC_END) {
             const magic = buffered.toString("binary", 257, USTAR_MAGIC_END);
             if (magic !== "ustar\0" && magic !== "ustar ") {
-              throw new Error("非 ustar tar.gz 档案（魔数不符）");
+              state.badMagic = true;
+              break;
             }
           }
         }
       },
     );
   } catch (err) {
+    if (state.badMagic) {
+      throw new Error("备份档案校验失败：非 ustar tar.gz 档案（魔数不符）", {
+        cause: err,
+      });
+    }
     throw new Error(
       `备份档案校验失败：${err instanceof Error ? err.message : String(err)}`,
       { cause: err },
     );
+  }
+  if (state.badMagic) {
+    throw new Error("备份档案校验失败：非 ustar tar.gz 档案（魔数不符）");
   }
   // 解压总量不足一个 header（空档/碎档）——按魔数缺失报错
   if (state.head === null || state.head.length < USTAR_MAGIC_END) {

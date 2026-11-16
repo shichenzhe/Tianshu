@@ -1,5 +1,5 @@
 import WebSocket from 'ws';
-import { Agent } from 'undici';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { execSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -713,10 +713,12 @@ describe('relay 原生 TLS（安全批 I：--cert/--key 可选通道）', () => 
       keyFile: key,
     });
     try {
-      // /health 走 https（dispatcher 为 undici 扩展项，标准类型外 cast）
-      const health = await fetch(`https://127.0.0.1:${relay.port}/health`, {
+      // /health 走 https；fetch 与 Agent 必须同源 npm undici——全局 fetch 是
+      // Node 内嵌 undici（CI node22 内嵌 6.x 与包 8.x dispatcher 协议不匹配，
+      // InvalidArgumentError: invalid onRequestStart method）
+      const health = await undiciFetch(`https://127.0.0.1:${relay.port}/health`, {
         dispatcher: new Agent({ connect: { rejectUnauthorized: false } }),
-      } as RequestInit);
+      });
       expect(health.status).toBe(200);
       // wss 客户端首帧 auth 接入（TLS 通道上协议行为不变）
       const ws = new WebSocket(`wss://127.0.0.1:${relay.port}/ws`, {

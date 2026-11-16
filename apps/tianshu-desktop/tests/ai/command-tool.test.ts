@@ -1,12 +1,19 @@
-import { exec, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // execFile：command-tool 传递依赖 child-monitor 顶层 promisify 需要
-// （本文件不触子进程监控，watchCommandTree 不被调用）
-vi.mock("node:child_process", () => ({ exec: vi.fn(), execFile: vi.fn() }));
+// （本文件不触子进程监控，watchCommandTree 不被调用）；spawn：OS 沙箱批
+// 起 runExec 改 spawn("/bin/sh",["-c"]) 自建进程组（exec 丢 detached），
+// 测试 mock 已对齐 spawn 契约（此前停留在 exec 回调形态致 9 用例红）
+vi.mock("node:child_process", () => ({
+  exec: vi.fn(),
+  execFile: vi.fn(),
+  spawn: vi.fn(),
+}));
 // network-gate 传递依赖 Log（→ electron，终审 S2），经 vi.mock 替换
 vi.mock("../../electron/commons/Log", () => ({
   default: { error: vi.fn() },
@@ -17,42 +24,66 @@ import {
   makeRunCommandTool,
 } from "../../electron/domains/ai/agent/command-tool";
 
-/** exec 回调签名（code 放宽为 number/string/null：数值退出码、错误码串、超时 null） */
-type ExecCallback = (
-  error: (Error & { code?: number | string | null; killed?: boolean }) | null,
-  stdout: string,
-  stderr: string,
-) => void;
+type SpawnOptionsShape = { cwd?: string; timeout?: number };
+type SpawnCall = [string, string[], SpawnOptionsShape];
 
-type ExecOptionsShape = { cwd?: string; timeout?: number; maxBuffer?: number };
+const mockSpawn = vi.mocked(spawn);
 
-const mockExec = vi.mocked(exec);
-
-/** 注入可控的 exec 假实现：同步回调吐出预设结果
- * （SP2 起真实契约须返回 ChildProcess——runExec 透出 child.pid 供监控挂载；
- * 无黑名单时 startChildWatch 直接跳过，不触 watchCommandTree） */
-function fakeExec(result: {
-  error?: Error & { code?: number | string | null; killed?: boolean };
-  stdout?: string;
-  stderr?: string;
-}): void {
-  mockExec.mockImplementation(((
-    _command: string,
-    _options: ExecOptionsShape,
-    cb: ExecCallback,
-  ) => {
-    cb(result.error ?? null, result.stdout ?? "", result.stderr ?? "");
-    return { pid: 4321 } as ChildProcess;
-  }) as unknown as typeof exec);
+/** 伪子进程：stdio 以 EventEmitter 代流（runExec 仅挂 data 监听）；pid
+ * 留空——reapProcessGroup 与 startChildWatch 对无 pid 均空转，不真杀进程组 */
+interface FakeChild extends EventEmitter {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  kill: ReturnType<typeof vi.fn>;
 }
 
-function lastCall(): [string, ExecOptionsShape, ExecCallback] {
-  const calls = mockExec.mock.calls;
-  return calls[calls.length - 1] as unknown as [
-    string,
-    ExecOptionsShape,
-    ExecCallback,
-  ];
+/** 注入可控的 spawn 假实现：setImmediate 异步触发事件序列（runExec 在
+ * spawn 返回后才注册流与事件监听，必须待注册完毕再 emit）。溢出语义对齐
+ * 手工重建的 maxBuffer：先推 baseline 已捕获输出，再推超 1MB chunk 杀流 */
+function fakeSpawn(result: {
+  error?: Error;
+  stdout?: string;
+  stderr?: string;
+  signal?: NodeJS.Signals;
+  exitCode?: number | null;
+  overflowBaseline?: string;
+}): void {
+  mockSpawn.mockImplementation(((
+    _cmd: string,
+    _args: string[],
+    _opts: SpawnOptionsShape,
+  ) => {
+    const child = new EventEmitter() as FakeChild;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = vi.fn();
+    setImmediate(() => {
+      if (result.error) {
+        child.emit("error", result.error);
+        return;
+      }
+      if (result.stdout) {
+        child.stdout.emit("data", Buffer.from(result.stdout));
+      }
+      if (result.stderr) {
+        child.stderr.emit("data", Buffer.from(result.stderr));
+      }
+      if (result.overflowBaseline !== undefined) {
+        child.stdout.emit("data", Buffer.from(result.overflowBaseline));
+        child.stdout.emit("data", Buffer.alloc(1024 * 1024 + 1));
+      }
+      const code = result.exitCode ?? 0;
+      const signal = result.signal ?? null;
+      child.emit("exit", code, signal);
+      child.emit("close", code, signal);
+    });
+    return child as unknown as ChildProcess;
+  }) as unknown as typeof spawn);
+}
+
+function lastCall(): SpawnCall {
+  const calls = mockSpawn.mock.calls;
+  return calls[calls.length - 1] as unknown as SpawnCall;
 }
 
 const DANGEROUS: string[] = [
@@ -142,70 +173,53 @@ describe("bash execute", () => {
   // 注：箭头体必须加大括号——mockClear 返回 mock 本身，会被 Vitest 误认为
   // hook 清理函数而在 afterEach 以零参调用（回调签名即崩）
   beforeEach(() => {
-    mockExec.mockClear();
+    mockSpawn.mockClear();
   });
 
-  it("退出码 0 → 成功串，cwd=工作空间根且带 timeout/maxBuffer", async () => {
-    fakeExec({ stdout: "hello\n" });
+  it("退出码 0 → 成功串，经 sh -c 执行且 cwd=工作空间根带 timeout", async () => {
+    fakeSpawn({ stdout: "hello\n" });
     const out = await tool.execute(defaultCtx(), { command: "echo hi" });
     expect(out).toBe("退出码 0\nhello\n");
-    const [cmd, opts] = lastCall();
-    expect(cmd).toBe("echo hi");
+    const [cmd, args, opts] = lastCall();
+    expect(cmd).toBe("/bin/sh");
+    expect(args).toEqual(["-c", "echo hi"]);
     expect(opts.cwd).toBe(ws);
     expect(opts.timeout).toBe(60_000);
-    expect(opts.maxBuffer).toBe(1024 * 1024);
   });
 
   it("非零退出码 → 错误串含退出码与 stdout/stderr 合并输出", async () => {
-    const error = Object.assign(new Error("Command failed"), { code: 2 });
-    fakeExec({ error, stdout: "partial out", stderr: "err line" });
+    fakeSpawn({ exitCode: 2, stdout: "partial out", stderr: "err line" });
     const out = await tool.execute(defaultCtx(), { command: "failing-cmd" });
     expect(out).toBe("错误: 命令失败（退出码 2）\npartial out\nerr line");
   });
 
-  it("killed 超时 → 错误串带/超时标记", async () => {
-    const error = Object.assign(new Error("spawn timeout"), {
-      killed: true,
-      code: null,
-    });
-    fakeExec({ error, stdout: "", stderr: "terminated" });
+  it("SIGTERM 结算 → 错误串带/超时标记", async () => {
+    fakeSpawn({ exitCode: null, signal: "SIGTERM", stderr: "terminated" });
     const out = await tool.execute(defaultCtx(), { command: "sleep 999" });
     expect(out).toBe("错误: 命令失败（退出码 -/超时）\nterminated");
   });
 
-  it("maxBuffer 溢出 → 标注输出超限且保留已捕获输出（经 8KB 截断）", async () => {
-    // 真实 Node 中溢出错误 killed 亦为 true——验证 maxBuffer 判定优先于超时
-    const byCode = Object.assign(new Error("stdout maxBuffer exceeded"), {
-      code: "ERR_CHILD_PROCESS_STDIO_MAXBUFFER",
-      killed: true,
-    });
-    fakeExec({ error: byCode, stdout: "y".repeat(1024 * 1024 + 1) });
+  it("stdout 超 1MB 溢出 → 标注输出超限且保留已捕获输出（经 8KB 截断）", async () => {
+    // 溢出 chunk 不入聚合（与 exec 时代 maxBuffer 丢弃语义一致），
+    // 已捕获的 9000 字节经 mergeOutput 截 8KB 加标记
+    fakeSpawn({ overflowBaseline: "y".repeat(9000) });
     const out = await tool.execute(defaultCtx(), { command: "npm install" });
     expect(out.startsWith("错误: 命令失败（退出码 -/输出超限）\n")).toBe(true);
     expect(out.endsWith("…（已截断）")).toBe(true);
-    // 旧版 Node 无错误码，仅 message 含 maxBuffer
-    const byMessage = Object.assign(
-      new Error("stdout maxBuffer length exceeded"),
-      {
-        killed: true,
-      },
-    );
-    fakeExec({ error: byMessage, stdout: "captured tail" });
-    const out2 = await tool.execute(defaultCtx(), { command: "npm install" });
-    expect(out2).toBe("错误: 命令失败（退出码 -/输出超限）\ncaptured tail");
+    expect(out.length).toBeLessThan(9000);
   });
 
-  it("spawn 级失败（字符串错误码）→ 命令启动失败且不带输出", async () => {
+  it("spawn 级失败（error 事件）→ 命令启动失败且不带输出", async () => {
     const error = Object.assign(new Error("spawn npm ENOMEM"), {
       code: "ENOMEM",
     });
-    fakeExec({ error, stdout: "leak", stderr: "leak" });
+    fakeSpawn({ error });
     const out = await tool.execute(defaultCtx(), { command: "npm install" });
     expect(out).toBe("错误: 命令启动失败（spawn npm ENOMEM）");
   });
 
   it("输出超 8KB 截断并追加标记", async () => {
-    fakeExec({ stdout: "x".repeat(9000) });
+    fakeSpawn({ stdout: "x".repeat(9000) });
     const out = await tool.execute(defaultCtx(), { command: "big-output" });
     expect(out.startsWith("退出码 0\n")).toBe(true);
     expect(out.endsWith("…（已截断）")).toBe(true);
@@ -213,15 +227,15 @@ describe("bash execute", () => {
   });
 
   it("default 态 cwd 越界回退工作空间根，界内相对路径正常解析", async () => {
-    fakeExec({ stdout: "ok" });
+    fakeSpawn({ stdout: "ok" });
     await tool.execute(defaultCtx(), { command: "ls", cwd: "../../etc" });
-    expect(lastCall()[1].cwd).toBe(ws);
+    expect(lastCall()[2].cwd).toBe(ws);
     await tool.execute(defaultCtx(), { command: "ls", cwd: "sub" });
-    expect(lastCall()[1].cwd).toBe(path.join(ws, "sub"));
+    expect(lastCall()[2].cwd).toBe(path.join(ws, "sub"));
   });
 
   it("未绑定目录（空串 workspacePath）default 态以家目录为锚：默认落家、界内解析、越界回退+审计", async () => {
-    fakeExec({ stdout: "ok" });
+    fakeSpawn({ stdout: "ok" });
     const home = os.homedir();
     const onSecurityEvent = vi.fn();
     const unboundCtx = () => ({
@@ -231,13 +245,13 @@ describe("bash execute", () => {
     });
     // 未传 cwd → 家目录（与终端 tab 无工作空间落家目录同构）
     await tool.execute(unboundCtx(), { command: "ls" });
-    expect(lastCall()[1].cwd).toBe(home);
+    expect(lastCall()[2].cwd).toBe(home);
     // 家目录内相对路径正常解析
     await tool.execute(unboundCtx(), { command: "ls", cwd: "Desktop" });
-    expect(lastCall()[1].cwd).toBe(path.join(home, "Desktop"));
+    expect(lastCall()[2].cwd).toBe(path.join(home, "Desktop"));
     // 界外绝对路径回退家目录并上报审计事件
     await tool.execute(unboundCtx(), { command: "ls", cwd: "/etc" });
-    expect(lastCall()[1].cwd).toBe(home);
+    expect(lastCall()[2].cwd).toBe(home);
     expect(onSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: "command-safety.cwd-fallback",
@@ -248,19 +262,19 @@ describe("bash execute", () => {
   });
 
   it("fullAccess 态 cwd 任意直传，未传时不回退工作空间根", async () => {
-    fakeExec({ stdout: "ok" });
+    fakeSpawn({ stdout: "ok" });
     await tool.execute(fullCtx(), { command: "ls", cwd: "/tmp/elsewhere" });
-    expect(lastCall()[1].cwd).toBe("/tmp/elsewhere");
+    expect(lastCall()[2].cwd).toBe("/tmp/elsewhere");
     await tool.execute(fullCtx(), { command: "ls" });
-    expect(lastCall()[1].cwd).toBeUndefined();
+    expect(lastCall()[2].cwd).toBeUndefined();
   });
 
-  it("危险命令拦截优先于执行（exec 不被调用）；删文件类附 rm 指引", async () => {
-    fakeExec({ stdout: "should-not-run" });
+  it("危险命令拦截优先于执行（spawn 不被调用）；删文件类附 rm 指引", async () => {
+    fakeSpawn({ stdout: "should-not-run" });
     const out = await tool.execute(fullCtx(), { command: "rm -rf /" });
     expect(out).toBe(
       "错误: 该命令被安全策略拦截（高风险破坏性操作）；删除文件请改用 rm 工具",
     );
-    expect(mockExec).not.toHaveBeenCalled();
+    expect(mockSpawn).not.toHaveBeenCalled();
   });
 });

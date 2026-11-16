@@ -163,7 +163,8 @@ export default function LibraryPickerDialog({
                     name: item.name,
                     storagePath: item.storagePath ?? "",
                   })
-                }              >
+                }
+              >
                 <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border/50">
                   {selected.has(item.id) && (
                     <Check className="h-3 w-3 text-primary" />

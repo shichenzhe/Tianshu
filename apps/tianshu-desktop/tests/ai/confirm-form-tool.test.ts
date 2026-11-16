@@ -19,7 +19,10 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, shell: {}, ipcMain: { handle: vi.fn() } }));
+  },
+  shell: {},
+  ipcMain: { handle: vi.fn() },
+}));
 vi.mock("../../electron/domains/ai/agent/tool-registry", () => ({
   registry: { find: vi.fn(() => undefined) },
 }));

@@ -169,7 +169,7 @@ describe("consumeAgentStream（StreamEvent → onChunk 映射）", () => {
     expect(rec.log).toEqual(["reasoning|想一想", "text|你好", "finish|none"]);
   });
 
-  it("B2 anthropic thinking content block → onReasoningDelta：@langchain/anthropic 流式把 extended thinking 落 content 数组 {type:\"thinking\", thinking}（1.5.12 dist 实证 message_outputs.js），块序保持 thinking 在 text 前", async () => {
+  it('B2 anthropic thinking content block → onReasoningDelta：@langchain/anthropic 流式把 extended thinking 落 content 数组 {type:"thinking", thinking}（1.5.12 dist 实证 message_outputs.js），块序保持 thinking 在 text 前', async () => {
     const rec = makeRecorder();
 
     await consumeAgentStream(
@@ -200,7 +200,7 @@ describe("consumeAgentStream（StreamEvent → onChunk 映射）", () => {
     ]);
   });
 
-  it("B3 新版 content block 协议 {type:\"reasoning\", reasoning} → onReasoningDelta（@langchain/anthropic _streamChatModelEvents 的 stream_events.js 映射形态，未来切换该路径时零改动兼容）；redacted_thinking 不可读不发射", async () => {
+  it('B3 新版 content block 协议 {type:"reasoning", reasoning} → onReasoningDelta（@langchain/anthropic _streamChatModelEvents 的 stream_events.js 映射形态，未来切换该路径时零改动兼容）；redacted_thinking 不可读不发射', async () => {
     const rec = makeRecorder();
 
     await consumeAgentStream(

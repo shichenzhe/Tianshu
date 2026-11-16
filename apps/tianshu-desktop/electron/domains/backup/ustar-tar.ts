@@ -502,9 +502,7 @@ const USTAR_MAGIC_END = 263;
  * header ustar 魔数嗅探（与 parseHeader 同接受面）拦非本格式档案。
  * 全程零落盘；放在断库/保护副本之前，坏档不付 GB 级快照成本。
  */
-export async function verifyTarGzIntegrity(
-  archivePath: string,
-): Promise<void> {
+export async function verifyTarGzIntegrity(archivePath: string): Promise<void> {
   // 首 header 经对象属性承载（TS 对闭包捕获 let 的外层收窄会误判 never，
   // 属性访问不收窄——行为无差）
   const state: { head: Buffer | null } = { head: null };
@@ -533,6 +531,7 @@ export async function verifyTarGzIntegrity(
   } catch (err) {
     throw new Error(
       `备份档案校验失败：${err instanceof Error ? err.message : String(err)}`,
+      { cause: err },
     );
   }
   // 解压总量不足一个 header（空档/碎档）——按魔数缺失报错

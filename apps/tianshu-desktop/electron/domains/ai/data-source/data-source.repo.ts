@@ -153,7 +153,7 @@ export class DataSourceRepository {
               // 安全批 E1：同 create 密封；清空路径 null 透传
               password: p.password?.trim()
                 ? await sealSecret("dataSource.password", p.password)
-                : p.password ?? null,
+                : (p.password ?? null),
             }
           : {}),
         ...(p.ssl !== undefined ? { ssl: p.ssl } : {}),
@@ -182,7 +182,10 @@ export class DataSourceRepository {
     // 安全批 E1：连通性测试读侧透明解密
     const client = new Client(
       toPgClientConfig(
-        { ...row, password: await openSecret("dataSource.password", row.password) },
+        {
+          ...row,
+          password: await openSecret("dataSource.password", row.password),
+        },
         TEST_TIMEOUT_MS,
       ),
     );

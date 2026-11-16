@@ -119,7 +119,13 @@ function createWindow() {
     return { action: "deny" };
   });
   win.webContents.on("will-navigate", (event, url) => {
-    if (!shouldAllowNavigation(url, VITE_DEV_SERVER_URL, path.join(RENDERER_DIST, "index.html"))) {
+    if (
+      !shouldAllowNavigation(
+        url,
+        VITE_DEV_SERVER_URL,
+        path.join(RENDERER_DIST, "index.html"),
+      )
+    ) {
       event.preventDefault();
     }
   });

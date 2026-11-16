@@ -8,8 +8,6 @@
  * 实例（构造器会 ipcMain.handle，二次 new 因重复注册抛错，故构造注入
  * 复用）。
  */
-import { ipcMain } from "electron";
-
 import prisma from "../../../commons/prisma-client";
 import { setAppOption } from "../../app-settings/option-store";
 import {

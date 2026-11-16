@@ -219,9 +219,7 @@ async function defaultPickSavePath(): Promise<string | null> {
 async function defaultPickArchivePath(): Promise<string | null> {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],
-    filters: [
-      { name: "备份档案 (tar.gz)", extensions: ["gz", "tar.gz"] },
-    ],
+    filters: [{ name: "备份档案 (tar.gz)", extensions: ["gz", "tar.gz"] }],
   });
   return result.canceled || result.filePaths.length === 0
     ? null
@@ -294,12 +292,13 @@ async function runRestoreChain(
   emit: BackupEmit,
 ): Promise<{ relaunchRequired: true }> {
   emit({ phase: "restoring", current: 0, total: 0 });
-  const safetyTempDir = mkdtempSync(path.join(tianshuRoot(), ".backup-safety-"));
+  const safetyTempDir = mkdtempSync(
+    path.join(tianshuRoot(), ".backup-safety-"),
+  );
   try {
     // 先断 Prisma 再动文件（Windows rename 打开句柄必败；恢复后由
     // relaunch 重建连接，macOS/Linux POSIX 句柄语义本就宽松）
-    const disconnect =
-      deps.disconnectDatabase ?? (() => prisma.$disconnect());
+    const disconnect = deps.disconnectDatabase ?? (() => prisma.$disconnect());
     await disconnect();
     // 保护副本（旧数据快照 → 数据根 backups-local/，分组外不被切换波及）
     await (deps.safety ?? createLocalSafetyCopy)(safetyTempDir);
@@ -447,7 +446,7 @@ export function registerBackupIpc(deps: BackupIpcDeps): void {
     const picked = await (deps.pickArchivePath ?? defaultPickArchivePath)();
     if (!picked) return null;
     // TOCTOU/坏路径统一收敛为「不存在」（不抛裸 ENOENT）
-    let isRegularFile = false;
+    let isRegularFile: boolean;
     try {
       isRegularFile = statSync(picked).isFile();
     } catch {

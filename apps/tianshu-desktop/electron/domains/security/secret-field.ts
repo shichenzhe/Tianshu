@@ -4,11 +4,7 @@
  * 透明解密（无前缀=旧明文原样返回，懒迁移由写侧回写完成）。
  * 主密钥不可用（safeStorage 损坏）时读写均走明文——业务不阻断。
  */
-import {
-  decryptField,
-  encryptField,
-  isEncryptedField,
-} from "@tianshu/core";
+import { decryptField, encryptField, isEncryptedField } from "@tianshu/core";
 import { getMasterKey } from "./master-key";
 
 /** 写侧：加密单字段（null 透传；主密钥不可用或已是密文则原样） */

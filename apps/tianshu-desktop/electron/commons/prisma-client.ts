@@ -69,9 +69,9 @@ export async function ensureArtifactTable(): Promise<void> {
  * EXISTS 形态，先查 pragma_table_info 判列存在再补。
  */
 export async function ensureProviderColumns(): Promise<void> {
-  const columns = await prisma.$queryRawUnsafe<
-    Array<{ name: string }>
-  >("SELECT name FROM pragma_table_info('provider')");
+  const columns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    "SELECT name FROM pragma_table_info('provider')",
+  );
   if (columns.some((col) => col.name === "contextWindow")) return;
   await prisma.$executeRawUnsafe(
     "ALTER TABLE provider ADD COLUMN contextWindow INTEGER",
@@ -100,9 +100,9 @@ export async function ensureMonitorTables(): Promise<void> {
   `);
   // meta 列补建（专家团可观测性批 2026-11-05，ensureProviderColumns 先例）：
   // CREATE TABLE IF NOT EXISTS 不补列，旧库经 pragma 判缺席后 ALTER
-  const llmColumns = await prisma.$queryRawUnsafe<
-    Array<{ name: string }>
-  >("SELECT name FROM pragma_table_info('llmCallEvent')");
+  const llmColumns = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    "SELECT name FROM pragma_table_info('llmCallEvent')",
+  );
   if (!llmColumns.some((col) => col.name === "meta")) {
     await prisma.$executeRawUnsafe(
       "ALTER TABLE llmCallEvent ADD COLUMN meta TEXT",

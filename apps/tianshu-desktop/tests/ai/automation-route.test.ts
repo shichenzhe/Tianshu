@@ -26,7 +26,10 @@ vi.mock("../../src-react/domains/ai/server/api/graph.api", () => ({
   default: remoteGraphApi,
   // toTaskSaveParams 为真实现的浅 stub（scheduleJson 反序列化 + enabled
   // 回填——toggle 用例断言依据），避免 mock 工厂缺命名导出成 undefined
-  toTaskSaveParams: (task: { id: number; scheduleJson: string }, enabled: boolean) => ({
+  toTaskSaveParams: (
+    task: { id: number; scheduleJson: string },
+    enabled: boolean,
+  ) => ({
     id: task.id,
     schedule: JSON.parse(task.scheduleJson),
     enabled,
@@ -98,15 +101,30 @@ describe("自动化任务页本地主机（零行为变化）", () => {
     await AutomationApi.toggle(5, false);
     expect(invoke).toHaveBeenCalledWith("automation:toggle", 5, false);
     await AutomationApi.runs(1, 9);
-    expect(invoke).toHaveBeenCalledWith("automation:runs:page", 1, 9, undefined);
+    expect(invoke).toHaveBeenCalledWith(
+      "automation:runs:page",
+      1,
+      9,
+      undefined,
+    );
     expect(remoteGraphApi.automationList).not.toHaveBeenCalled();
   });
 
   it("templates/stat/stats 本地可用", async () => {
     invoke.mockResolvedValue([]);
     await AutomationApi.templates();
-    await AutomationApi.stat({ mode: "periodic", kind: "d", hasEndAt: false, tabSwitchCount: 0 });
-    invoke.mockResolvedValue({ today: { total: 0 }, trend: [], attention: [], errorTaskCount: 0 });
+    await AutomationApi.stat({
+      mode: "periodic",
+      kind: "d",
+      hasEndAt: false,
+      tabSwitchCount: 0,
+    });
+    invoke.mockResolvedValue({
+      today: { total: 0 },
+      trend: [],
+      attention: [],
+      errorTaskCount: 0,
+    });
     await AutomationApi.stats();
     expect(invoke).toHaveBeenCalledWith("automation:stats");
   });
@@ -160,7 +178,10 @@ describe("自动化任务页远程主机（适配器映射）", () => {
   it("remove/runNow：直达端点（delete ids / runNow 202 受理）", async () => {
     remoteGraphApi.automationDelete.mockResolvedValue(undefined);
     await AutomationApi.remove([3, 4]);
-    expect(remoteGraphApi.automationDelete).toHaveBeenCalledWith([3, 4], "conn-x");
+    expect(remoteGraphApi.automationDelete).toHaveBeenCalledWith(
+      [3, 4],
+      "conn-x",
+    );
 
     remoteGraphApi.automationRunNow.mockResolvedValue({ accepted: true });
     await AutomationApi.runNow(3);
@@ -172,7 +193,10 @@ describe("自动化任务页远程主机（适配器映射）", () => {
       total: 1,
       records: [REMOTE_ROW],
     });
-    remoteGraphApi.automationSave.mockResolvedValue({ ...REMOTE_ROW, enabled: false });
+    remoteGraphApi.automationSave.mockResolvedValue({
+      ...REMOTE_ROW,
+      enabled: false,
+    });
     const row = await AutomationApi.toggle(3, false);
     expect(remoteGraphApi.automationSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -191,7 +215,12 @@ describe("自动化任务页远程主机（适配器映射）", () => {
       items: [{ id: 9, taskId: 3, status: "success" }],
     });
     const page = await AutomationApi.runs(1, 3, "success");
-    expect(remoteGraphApi.automationRuns).toHaveBeenCalledWith(1, "conn-x", 3, "success");
+    expect(remoteGraphApi.automationRuns).toHaveBeenCalledWith(
+      1,
+      "conn-x",
+      3,
+      "success",
+    );
     expect(page.total).toBe(1);
     expect(page.items[0]).toMatchObject({ taskId: 3, status: "success" });
   });
@@ -200,9 +229,17 @@ describe("自动化任务页远程主机（适配器映射）", () => {
     invoke.mockResolvedValue([{ slug: "t" }]);
     const templates = await AutomationApi.templates();
     expect(templates).toEqual([{ slug: "t" }]);
-    await AutomationApi.stat({ mode: "periodic", kind: "d", hasEndAt: false, tabSwitchCount: 0 });
+    await AutomationApi.stat({
+      mode: "periodic",
+      kind: "d",
+      hasEndAt: false,
+      tabSwitchCount: 0,
+    });
     expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).not.toHaveBeenCalledWith("automation:stat", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "automation:stat",
+      expect.anything(),
+    );
   });
 
   it("stats：远程态拉原始行集 → computeStats 客户端聚合（挂账收口）", async () => {

@@ -142,9 +142,7 @@ async function scalar(
 /** journal 行直查（public._prisma_migrations；①fresh/③幂等/②baseline 三
  * 组断言锚。时间戳 ::text 化——pg 驱动默认把无时区戳解析为 Date，取文本
  * 便于失败明细 JSON 化） */
-async function journalRows(
-  pool: PgPoolLike,
-): Promise<
+async function journalRows(pool: PgPoolLike): Promise<
   Array<{
     migration_name: string;
     finished_at: string | null;
@@ -208,7 +206,7 @@ async function waitForHealth(
   ) => Promise<RequestResult>,
 ): Promise<void> {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
-  let last = "（未探测）";
+  let last: string;
   for (;;) {
     try {
       const result = await request("GET", "/actuator/health");
@@ -371,7 +369,10 @@ async function main(): Promise<number> {
     );
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info.port !== port) {
+    if (
+      info.token !== "e2e-main-pg-token-0123456789abcdef0123456789" ||
+      info.port !== port
+    ) {
       fail(
         "server spawn+握手",
         `token/port 未按 env 回显（token=${info.token} port=${info.port} ≠ 配置 ${port}）`,
@@ -405,7 +406,7 @@ async function main(): Promise<number> {
     }
     const graphTable = await scalar(
       pool,
-      `SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'graphDefinition'`,
+      "SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'graphDefinition'",
     );
     if (graphTable !== 1) {
       fail("首启建库（boot migrate deploy）", "graphDefinition 表不在 PG 中");
@@ -430,7 +431,7 @@ async function main(): Promise<number> {
     }
     const graphRows = await scalar(
       pool,
-      `SELECT COUNT(*)::int AS n FROM "graphDefinition" WHERE id = $1`,
+      'SELECT COUNT(*)::int AS n FROM "graphDefinition" WHERE id = $1',
       [graph.id],
     );
     if (graphRows !== 1) {
@@ -556,7 +557,10 @@ async function main(): Promise<number> {
     );
     child = respawned.child;
     const info2 = parseHandshake(respawned.matched);
-    if (info2.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info2.port !== port) {
+    if (
+      info2.token !== "e2e-main-pg-token-0123456789abcdef0123456789" ||
+      info2.port !== port
+    ) {
       fail(
         "重启握手（two-boot）",
         `token/port 未按 env 回显（token=${info2.token} port=${info2.port} ≠ 配置 ${port}）`,
@@ -685,7 +689,10 @@ async function main(): Promise<number> {
     );
     child = baselineBoot.child;
     const info3 = parseHandshake(baselineBoot.matched);
-    if (info3.token !== "e2e-main-pg-token-0123456789abcdef0123456789" || info3.port !== port) {
+    if (
+      info3.token !== "e2e-main-pg-token-0123456789abcdef0123456789" ||
+      info3.port !== port
+    ) {
       fail(
         "baseline 首启握手",
         `token/port 未按 env 回显（token=${info3.token} port=${info3.port} ≠ 配置 ${port}）`,

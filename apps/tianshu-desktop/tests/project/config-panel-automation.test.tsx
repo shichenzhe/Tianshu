@@ -473,10 +473,7 @@ describe("ConfigPanel 失效挂载清理（批8 P6）", () => {
     expect(screen.getByText(/project:panel\.invalidBindings/)).toBeTruthy();
 
     const client = new QueryClient();
-    const invalidateSpy = vi.spyOn(
-      QueryClient.prototype,
-      "invalidateQueries",
-    );
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     fireEvent.click(cleanButton);
 
     await waitFor(() =>

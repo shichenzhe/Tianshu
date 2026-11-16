@@ -21,9 +21,7 @@ describe("crypto-envelope", () => {
   });
 
   it("旧明文零前缀原样返回（懒迁移兼容）；空串与非字符串边界", () => {
-    expect(decryptField(key, "provider.apiKey", "sk-plain")).toBe(
-      "sk-plain",
-    );
+    expect(decryptField(key, "provider.apiKey", "sk-plain")).toBe("sk-plain");
     expect(decryptField(key, "provider.apiKey", "")).toBe("");
     expect(isEncryptedField("sk-plain")).toBe(false);
   });

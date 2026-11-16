@@ -14,7 +14,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, Loader2, Monitor, Server, Settings2 } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Loader2,
+  Monitor,
+  Server,
+  Settings2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -96,9 +103,7 @@ export default function HostSwitcher({ compact = false }: HostSwitcherProps) {
     ServerApi.activateConnection(conn.id).catch((e) => {
       // activate 同步拒绝（连接不存在等）——终止等待
       setPendingConnId(null);
-      toast.error(
-        t("layout:hostSwitcher.connectFailed"),
-      );
+      toast.error(t("layout:hostSwitcher.connectFailed"));
       console.error("activateConnection failed", e);
     });
   };
@@ -179,10 +184,7 @@ export default function HostSwitcher({ compact = false }: HostSwitcherProps) {
                   <Server className="h-4 w-4" />
                 )}
                 <span
-                  className={cn(
-                    "truncate",
-                    compact ? "max-w-16" : "max-w-28",
-                  )}
+                  className={cn("truncate", compact ? "max-w-16" : "max-w-28")}
                 >
                   {activeName}
                 </span>

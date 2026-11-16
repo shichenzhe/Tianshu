@@ -113,9 +113,7 @@ describe("SP2 默认值演进", () => {
     // 网络外发类命令纳回 cmdAsk——NetworkGate 只拦 undici/fetch，bash
     // 子进程的 curl/wget/ssh 直连不走域门，default 档免审即注入面
     expect(SECURITY_DEFAULTS.programBlacklist).toEqual([]);
-    expect(
-      SECURITY_DEFAULTS.cmdAsk.map((rule) => rule.prefix[0]),
-    ).toEqual([
+    expect(SECURITY_DEFAULTS.cmdAsk.map((rule) => rule.prefix[0])).toEqual([
       "curl",
       "wget",
       "nc",

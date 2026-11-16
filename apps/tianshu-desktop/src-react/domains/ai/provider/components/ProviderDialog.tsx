@@ -90,7 +90,10 @@ export default function ProviderDialog({
     const parsedContextWindow = contextWindow.trim()
       ? Number(contextWindow.trim())
       : undefined;
-    if (parsedContextWindow !== undefined && !Number.isInteger(parsedContextWindow)) {
+    if (
+      parsedContextWindow !== undefined &&
+      !Number.isInteger(parsedContextWindow)
+    ) {
       toast.error(t("ai:provider.contextWindowInvalid"));
       return;
     }

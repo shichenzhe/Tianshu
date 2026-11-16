@@ -423,7 +423,9 @@ describe("HandoverDialog 转办弹框（批 12）", () => {
     fireEvent.click(screen.getByRole("button", { name: "common:confirm" }));
 
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith("project:handover.created"),
+      expect(toastMock.success).toHaveBeenCalledWith(
+        "project:handover.created",
+      ),
     );
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     // 唯一的 error toast 源是主流程异常；记忆失败静默不追加
@@ -443,7 +445,9 @@ describe("HandoverDialog 转办弹框（批 12）", () => {
     fireEvent.click(screen.getByRole("button", { name: "common:confirm" }));
 
     await waitFor(() =>
-      expect(toastMock.success).toHaveBeenCalledWith("project:handover.created"),
+      expect(toastMock.success).toHaveBeenCalledWith(
+        "project:handover.created",
+      ),
     );
     expect(appendMemoryMock).not.toHaveBeenCalled();
   });

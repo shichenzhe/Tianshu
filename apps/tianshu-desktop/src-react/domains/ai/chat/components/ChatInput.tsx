@@ -481,12 +481,9 @@ export default function ChatInput({
 
   /** ＋菜单技能引用切换：输入流 ⚡token 增删（纯前端文本操作，
       全文发送时经 skill:readSkill 读取注入；启停收口管理页与标签行） */
-  const handleToggleSkill = useCallback(
-    (name: string) => {
-      setContent((prev) => toggleSkillToken(prev, name));
-    },
-    [],
-  );
+  const handleToggleSkill = useCallback((name: string) => {
+    setContent((prev) => toggleSkillToken(prev, name));
+  }, []);
 
   /** 在光标处插入 token 文本(替换正在输入的触发片段),光标落在 token 后空格 */
   const insertAtCaret = useCallback(
@@ -554,7 +551,12 @@ export default function ChatInput({
         // 进程收编侧以绑定 workspace 为基解析）；远程链保持既有读取行为
         // （远端图片 base64 链另批收口）
         if (remoteConnId() == null && isImagePath(filePath)) {
-          files.push({ path: filePath, content: "", kind: "localFile", image: true });
+          files.push({
+            path: filePath,
+            content: "",
+            kind: "localFile",
+            image: true,
+          });
           continue;
         }
         // 引用式（引用式批 2026-10-21）：agent/plan 会话的工作空间相对路径
@@ -605,7 +607,10 @@ export default function ChatInput({
                   "file:readExternalFile",
                   filePath,
                 );
-                contentRefs.push({ path: filePath, content: ext.content ?? "" });
+                contentRefs.push({
+                  path: filePath,
+                  content: ext.content ?? "",
+                });
                 continue;
               } catch {
                 failures.push(filePath);
@@ -728,7 +733,11 @@ export default function ChatInput({
           t("chat:mention.tokenReadFailed", { names: failures.join(", ") }),
         );
       }
-      if (messageText.trim() === "" && files.length === 0 && contentRefs.length === 0) {
+      if (
+        messageText.trim() === "" &&
+        files.length === 0 &&
+        contentRefs.length === 0
+      ) {
         if (commands.length === 0 || failures.length > 0) {
           // 既无正文也无可用注入(且非纯命令成功):恢复输入避免吞掉
           // (资料库/粘贴 pill 不在文本中,须随输入一并恢复)

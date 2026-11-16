@@ -8,7 +8,6 @@
 import type PlanViewRepository from "../project/plan-view.repo";
 import type ProjectRepository from "../project/project.repo";
 import type {
-  PlanViewCreatePayload,
   PlanViewReorderPayload,
   PlanViewUpdatePayload,
 } from "@tianshu/protocol";

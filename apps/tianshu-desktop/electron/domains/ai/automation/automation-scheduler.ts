@@ -11,7 +11,11 @@ import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
 // computeNextRun 与批3A 退避/可重试面纯函数均单源 @tianshu/core(schedule.ts
 // re-export 兼容层透传)
-import { computeNextRun, isRetryableRunError, nextRetryDelay } from "./schedule";
+import {
+  computeNextRun,
+  isRetryableRunError,
+  nextRetryDelay,
+} from "./schedule";
 import { executeTask, type AutomationTaskRow } from "./automation-runner";
 import { inflight } from "./automation-inflight";
 import {
@@ -96,20 +100,30 @@ export function decideTick(
 export function pickRetryTaskIds(
   latestRunByTask: Map<
     number,
-    { status: string; attempt: number; finishedAt?: Date; error?: string | null }
+    {
+      status: string;
+      attempt: number;
+      finishedAt?: Date;
+      error?: string | null;
+    }
   >,
   now: Date,
   delayMs?: number,
 ): number[] {
   const ids: number[] = [];
   for (const [taskId, run] of latestRunByTask) {
-    if (run.status !== "failed" || run.attempt >= MAX_ATTEMPT || !run.finishedAt) {
+    if (
+      run.status !== "failed" ||
+      run.attempt >= MAX_ATTEMPT ||
+      !run.finishedAt
+    ) {
       continue;
     }
     if (!isRetryableRunError(run.error)) {
       continue;
     }
-    const cooldown = delayMs !== undefined ? delayMs : nextRetryDelay(run.attempt);
+    const cooldown =
+      delayMs !== undefined ? delayMs : nextRetryDelay(run.attempt);
     if (now.getTime() - run.finishedAt.getTime() < cooldown) {
       continue;
     }
@@ -184,7 +198,9 @@ export default class AutomationScheduler {
       // active,若决策树 !nextRunAt 先行 expire,任务会被上面的 active 过滤
       // 出局、永远等不到 scanRetries——故 expire 让路;attempt 耗尽后不再
       // 入选,由 !nextRunAt 分支兜底置 expired 收尾(spec §7 闭环)
-      const retryPending = new Set(pickRetryTaskIds(latestByTask, new Date(), 0));
+      const retryPending = new Set(
+        pickRetryTaskIds(latestByTask, new Date(), 0),
+      );
       let changed = false;
       for (const task of tasks) {
         // 在途执行不决策(含 runNow 手动触发):防重试运行中被过期快照误
@@ -291,7 +307,12 @@ export default class AutomationScheduler {
   private async loadRunSnapshots(): Promise<{
     latestByTask: Map<
       number,
-      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
+      {
+        status: string;
+        attempt: number;
+        finishedAt?: Date;
+        error?: string | null;
+      }
     >;
     catchUpCounts: Map<number, number>;
   }> {
@@ -310,7 +331,12 @@ export default class AutomationScheduler {
     });
     const latest = new Map<
       number,
-      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
+      {
+        status: string;
+        attempt: number;
+        finishedAt?: Date;
+        error?: string | null;
+      }
     >();
     const catchUpCounts = new Map<number, number>();
     for (const run of runs) {
@@ -332,10 +358,7 @@ export default class AutomationScheduler {
         run.triggerType === "catchUp" &&
         run.startedAt >= this.processStartTime
       ) {
-        catchUpCounts.set(
-          run.taskId,
-          (catchUpCounts.get(run.taskId) ?? 0) + 1,
-        );
+        catchUpCounts.set(run.taskId, (catchUpCounts.get(run.taskId) ?? 0) + 1);
       }
     }
     return { latestByTask: latest, catchUpCounts };
@@ -345,7 +368,12 @@ export default class AutomationScheduler {
   private async scanRetries(
     latestRun: Map<
       number,
-      { status: string; attempt: number; finishedAt?: Date; error?: string | null }
+      {
+        status: string;
+        attempt: number;
+        finishedAt?: Date;
+        error?: string | null;
+      }
     >,
   ): Promise<void> {
     const retryIds = pickRetryTaskIds(latestRun, new Date());

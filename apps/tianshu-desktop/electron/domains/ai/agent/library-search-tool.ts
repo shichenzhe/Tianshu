@@ -10,10 +10,7 @@
  * electron），deps 注入面（db/embed/search）供 vitest 替身。
  */
 import { z } from "zod";
-import {
-  LIBRARY_VECTOR_COLLECTION,
-  type EmbedTexts,
-} from "@tianshu/core";
+import { LIBRARY_VECTOR_COLLECTION, type EmbedTexts } from "@tianshu/core";
 import prisma from "../../../commons/prisma-client";
 import { searchChunks, type VectorHit } from "../orchestration/vector-store";
 import { fail, type ToolDefinition } from "./file-tools";
@@ -34,13 +31,7 @@ const argsSchema = z.object({
     .string()
     .min(1)
     .describe("检索问题或关键词（语义匹配文件内容，未建索引时降级匹配文件名）"),
-  topK: z
-    .number()
-    .int()
-    .min(1)
-    .max(20)
-    .optional()
-    .describe("返回条数，缺省 5"),
+  topK: z.number().int().min(1).max(20).optional().describe("返回条数，缺省 5"),
 });
 
 export type LibrarySearchArgs = z.infer<typeof argsSchema>;
@@ -115,7 +106,9 @@ async function searchByFilename(
   const lines = rows.map(
     (row) =>
       `- 条目 #${row.id}｜${row.name}（${row.mimeType ?? "未知类型"}${
-        row.size != null ? `，${Math.max(1, Math.round(row.size / 1024))}KB` : ""
+        row.size != null
+          ? `，${Math.max(1, Math.round(row.size / 1024))}KB`
+          : ""
       }，更新于 ${row.updatedAt.toISOString().slice(0, 10)}）`,
   );
   return `资料库命中 ${rows.length} 条：\n${lines.join("\n")}`;

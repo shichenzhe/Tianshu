@@ -29,7 +29,9 @@ const catalogLines = MARKET_EXPERTS.map(
 
 const listArgsSchema = z.object({});
 
-export function makeListExpertsTool(): ToolDefinition<z.infer<typeof listArgsSchema>> {
+export function makeListExpertsTool(): ToolDefinition<
+  z.infer<typeof listArgsSchema>
+> {
   return {
     name: LIST_TOOL_NAME,
     description:

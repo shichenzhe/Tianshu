@@ -379,7 +379,10 @@ describe("plan-view-tap（A7 桌面被控面）", () => {
     const face = createPlanViewFace(projectRepo, viewRepo);
 
     await face.create(UID, 3, { projectId: 3, type: "kanban" });
-    expect(viewRepo.create).toHaveBeenCalledWith({ projectId: 3, type: "kanban" });
+    expect(viewRepo.create).toHaveBeenCalledWith({
+      projectId: 3,
+      type: "kanban",
+    });
     await face.update(UID, { id: 1, name: "改名" });
     expect(viewRepo.update).toHaveBeenCalledWith({ id: 1, name: "改名" });
     await face.remove(UID, 1);
@@ -407,9 +410,11 @@ describe("plan-view-tap（A7 桌面被控面）", () => {
     };
     const face = createPlanViewFace(projectRepo, viewRepo);
 
-    await expect(face.update(UID, { id: 99, name: "x" })).rejects.toMatchObject({
-      code: "PLAN_VIEW_NOT_FOUND",
-    });
+    await expect(face.update(UID, { id: 99, name: "x" })).rejects.toMatchObject(
+      {
+        code: "PLAN_VIEW_NOT_FOUND",
+      },
+    );
     await expect(face.remove(UID, 99)).rejects.toMatchObject({
       code: "PLAN_VIEW_NOT_FOUND",
     });
@@ -417,9 +422,9 @@ describe("plan-view-tap（A7 桌面被控面）", () => {
       face.create(UID, 3, { projectId: 3, type: "table" }),
     ).rejects.toMatchObject({ code: "PROJECT_NOT_FOUND" });
     viewRepo.getViewById.mockResolvedValueOnce(VIEW);
-    await expect(face.reorder(UID, [{ id: 1, sortOrder: 1 }])).rejects.toMatchObject(
-      { code: "PROJECT_NOT_FOUND" },
-    );
+    await expect(
+      face.reorder(UID, [{ id: 1, sortOrder: 1 }]),
+    ).rejects.toMatchObject({ code: "PROJECT_NOT_FOUND" });
     expect(viewRepo.create).not.toHaveBeenCalled();
     expect(viewRepo.update).not.toHaveBeenCalled();
     expect(viewRepo.remove).not.toHaveBeenCalled();
@@ -601,9 +606,9 @@ describe("project-asset-tap（A7 桌面被控面）", () => {
       code: "ASSET_UPLOAD_INVALID",
     });
     const big = Buffer.alloc(3 * 1024 * 1024 + 1).toString("base64");
-    await expect(
-      face.upload(UID, 3, "", "big.bin", big),
-    ).rejects.toMatchObject({ code: "ASSET_UPLOAD_INVALID" });
+    await expect(face.upload(UID, 3, "", "big.bin", big)).rejects.toMatchObject(
+      { code: "ASSET_UPLOAD_INVALID" },
+    );
     expect(base.uploadBuffer).not.toHaveBeenCalled();
 
     const projectRepo = {

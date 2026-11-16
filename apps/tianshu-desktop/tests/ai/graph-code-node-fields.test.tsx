@@ -66,7 +66,12 @@ describe("CodeNodeFields pythonCommand 下拉", () => {
     cleanup();
     render(
       <CodeNodeFields
-        node={{ ...pyNode, id: "b1", language: "bash", pythonCommand: undefined }}
+        node={{
+          ...pyNode,
+          id: "b1",
+          language: "bash",
+          pythonCommand: undefined,
+        }}
         onPatch={vi.fn()}
       />,
     );

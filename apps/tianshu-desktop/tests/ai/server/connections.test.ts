@@ -277,7 +277,8 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
       ),
     ).toBe(true);
     // 安全批 D1：token 密封落表（enc:v1: 前缀 + base64；其余字段原样）
-    const persisted = readPersistedShape().connections[0] as typeof DIRECT_CONFIG & { token: string };
+    const persisted = readPersistedShape()
+      .connections[0] as typeof DIRECT_CONFIG & { token: string };
     expect(persisted.id).toBe(DIRECT_CONFIG.id);
     expect(persisted.token).toMatch(/^enc:v1:/);
     expect(persisted.token).not.toContain(DIRECT_CONFIG.token);
@@ -359,7 +360,11 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
     ).toMatchObject({ e2eMode: "required" });
 
     // 显式 auto 的新建：尊重用户选择
-    await registry.saveConnection({ ...relayBase, id: "c-auto", e2eMode: "auto" });
+    await registry.saveConnection({
+      ...relayBase,
+      id: "c-auto",
+      e2eMode: "auto",
+    });
     expect(
       readPersistedShape().connections.find((c) => c.id === "c-auto"),
     ).toMatchObject({ e2eMode: "auto" });
@@ -372,8 +377,7 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
       readPersistedShape().connections.find((c) => c.id === "c-auto"),
     ).toMatchObject({ name: "改名" });
     expect(
-      readPersistedShape().connections.find((c) => c.id === "c-auto")
-        ?.e2eMode,
+      readPersistedShape().connections.find((c) => c.id === "c-auto")?.e2eMode,
     ).toBeUndefined();
   });
 
@@ -420,7 +424,9 @@ describe("连接注册表 CRUD（option 表持久化）", () => {
 
 describe("TOFU 指纹确认仪式（P0-1，design/security §6）", () => {
   /** 直插一行既有连接（模拟旧版自动回填落库的存量数据） */
-  function seedLegacyRelayConnection(over: Partial<ConnectionConfig> = {}): void {
+  function seedLegacyRelayConnection(
+    over: Partial<ConnectionConfig> = {},
+  ): void {
     const config: ConnectionConfig = {
       id: "c-legacy",
       name: "存量中继",
@@ -480,9 +486,7 @@ describe("TOFU 指纹确认仪式（P0-1，design/security §6）", () => {
     // 手工录入指纹（新连接）= 用户带外核对行为 → confirmedAt 落档
     await registry.saveConnection({ ...relayBase, id: "c-fp" });
     const saved = readPersistedShape().connections.find((c) => c.id === "c-fp");
-    expect(saved?.confirmedAt).toMatch(
-      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
-    );
+    expect(saved?.confirmedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
 
     // 指纹未动改其它字段：confirmedAt 保留（不重置）
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -524,9 +528,7 @@ describe("TOFU 指纹确认仪式（P0-1，design/security §6）", () => {
       /不存在/,
     );
     await registry.saveConnection(DIRECT_CONFIG);
-    await expect(registry.confirmFingerprint("conn-1")).rejects.toThrow(
-      /中继/,
-    );
+    await expect(registry.confirmFingerprint("conn-1")).rejects.toThrow(/中继/);
     // relay 连接从未建链（无协商指纹）：拒绝（UI 确认卡只在协商后出现）
     await registry.saveConnection({
       id: "c-relay",
@@ -563,9 +565,9 @@ describe("TOFU 指纹确认仪式（P0-1，design/security §6）", () => {
       }),
     });
     const list = await registry.confirmFingerprint("c-pinned");
-    expect(
-      list.connections.find((c) => c.id === "c-pinned")?.confirmedAt,
-    ).toBe("2020-01-01T00:00:00.000Z");
+    expect(list.connections.find((c) => c.id === "c-pinned")?.confirmedAt).toBe(
+      "2020-01-01T00:00:00.000Z",
+    );
     expect(
       readPersistedShape().connections.find((c) => c.id === "c-pinned")
         ?.fingerprint,

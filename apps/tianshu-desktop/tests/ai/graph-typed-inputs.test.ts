@@ -20,7 +20,9 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, ipcMain: { handle: vi.fn() } }));
+  },
+  ipcMain: { handle: vi.fn() },
+}));
 // better-sqlite3 真库经 .native-node node-ABI 副本可跑（2026-11-04 双 ABI
 // 根治）；本文件沿用「两路替身法」先例：stub 只断言绑定值形态（toSqliteValue
 // 归一逻辑）
@@ -49,7 +51,6 @@ import { normalizeGraphInputs } from "../../../../packages/tianshu-core/src/grap
 import { validateGraph } from "../../../../packages/tianshu-core/src/graph-schema";
 
 /** stub 捕获的最近一次绑定值 */
-// eslint-disable-next-line import/order
 import DatabaseStub from "better-sqlite3";
 
 describe("db-client typed 参数（原生类型绑定，stub 捕获绑定值）", () => {

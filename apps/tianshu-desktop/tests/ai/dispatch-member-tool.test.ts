@@ -121,10 +121,12 @@ describe("onMemberCall 埋点（专家团可观测性批）", () => {
   it("onUsage 回报后随事件携带 usage", async () => {
     const { modelText, abortSignal } = makeDeps();
     const onMemberCall = vi.fn();
-    modelText.mockImplementation(async (args: { onUsage?: (u: unknown) => void }) => {
-      args.onUsage?.({ inputTokens: 120, outputTokens: 80 });
-      return "成员产出";
-    });
+    modelText.mockImplementation(
+      async (args: { onUsage?: (u: unknown) => void }) => {
+        args.onUsage?.({ inputTokens: 120, outputTokens: 80 });
+        return "成员产出";
+      },
+    );
     const tool = makeDispatchMemberTool({
       members,
       modelText,

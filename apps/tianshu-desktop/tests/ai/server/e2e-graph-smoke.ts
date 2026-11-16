@@ -287,9 +287,24 @@ async function seedHybridChunks(): Promise<void> {
     db.prepare("DELETE FROM vectorChunk WHERE collection = ?").run(
       HYBRID_COLLECTION,
     );
-    insert.run(HYBRID_COLLECTION, HYBRID_TARGET_SOURCE, 0, "高可用架构在设计阶段须引入容错机制，故障隔离与优雅降级是容错设计的第一道防线。");
-    insert.run(HYBRID_COLLECTION, HYBRID_TARGET_SOURCE, 1, "容错设计要求重试、熔断与幂等配合，避免局部故障在设计不当的链路上被放大为全局雪崩。");
-    insert.run(HYBRID_COLLECTION, HYBRID_OFF_TOPIC_SOURCE, 0, "今天的行程是京都的寺庙巡礼与宇治抹茶甜品，傍晚沿鸭川散步。");
+    insert.run(
+      HYBRID_COLLECTION,
+      HYBRID_TARGET_SOURCE,
+      0,
+      "高可用架构在设计阶段须引入容错机制，故障隔离与优雅降级是容错设计的第一道防线。",
+    );
+    insert.run(
+      HYBRID_COLLECTION,
+      HYBRID_TARGET_SOURCE,
+      1,
+      "容错设计要求重试、熔断与幂等配合，避免局部故障在设计不当的链路上被放大为全局雪崩。",
+    );
+    insert.run(
+      HYBRID_COLLECTION,
+      HYBRID_OFF_TOPIC_SOURCE,
+      0,
+      "今天的行程是京都的寺庙巡礼与宇治抹茶甜品，傍晚沿鸭川散步。",
+    );
   } finally {
     db.close();
   }
@@ -826,9 +841,7 @@ async function main(): Promise<number> {
     fs.rmSync(dataRoot, { recursive: true, force: true });
   }
 
-  return printSummary(
-    "（provider/model 行按名幂等留存——e2e-smoke 先例）",
-  ) > 0
+  return printSummary("（provider/model 行按名幂等留存——e2e-smoke 先例）") > 0
     ? 1
     : 0;
 }

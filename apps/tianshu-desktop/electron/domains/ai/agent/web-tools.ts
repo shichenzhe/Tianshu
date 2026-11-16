@@ -148,8 +148,7 @@ function makeWebFetchTool(
 function makeOpenBrowserTool(): ToolDefinition<{ url: string }> {
   return {
     name: "browse",
-    description:
-      "打开网页展示于右侧面板浏览器（不返回内容）；取内容用 fetch",
+    description: "打开网页展示于右侧面板浏览器（不返回内容）；取内容用 fetch",
     parameters: z.object({ url: z.string().describe("要展示的网页地址") }),
     kind: "read",
     execute: async (ctx, { url }) => {

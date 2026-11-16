@@ -91,7 +91,10 @@ import {
 import { registerServerIpc, shutdownServerConsole } from "./domains/server/ipc";
 import { createMemoryFace } from "./domains/server-face/memory-tap";
 import { loadPersonalization } from "./domains/ai/personalization/personalization.repo";
-import { serverConnections, restoreActiveConnection } from "./domains/server/connections";
+import {
+  serverConnections,
+  restoreActiveConnection,
+} from "./domains/server/connections";
 import { RelayTransport } from "./domains/server/relay-transport";
 import { installTerminalAuditSink } from "./domains/ai/terminal/terminal-ipc";
 import { registerBackupIpc, type BackupIpcDeps } from "./domains/backup/ipc";

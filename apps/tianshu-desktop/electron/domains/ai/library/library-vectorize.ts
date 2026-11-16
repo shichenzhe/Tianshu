@@ -19,7 +19,10 @@ import {
 } from "@tianshu/core";
 import prisma from "../../../commons/prisma-client";
 import Log from "../../../commons/Log";
-import { deleteSourceChunks, upsertChunks } from "../orchestration/vector-store";
+import {
+  deleteSourceChunks,
+  upsertChunks,
+} from "../orchestration/vector-store";
 
 export { LIBRARY_VECTOR_COLLECTION };
 export type {

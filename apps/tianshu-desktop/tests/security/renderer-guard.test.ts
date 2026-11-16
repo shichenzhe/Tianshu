@@ -93,10 +93,18 @@ describe("shouldAllowNavigation", () => {
     // 安全批 S1：file:// 前缀全放行曾使磁盘植入 HTML 可拿 IPC 桥——
     // 收窄到应用自身渲染入口（pathToFileURL 归一比较）
     expect(
-      shouldAllowNavigation("file:///app/dist/index.html", undefined, "/app/dist/index.html"),
+      shouldAllowNavigation(
+        "file:///app/dist/index.html",
+        undefined,
+        "/app/dist/index.html",
+      ),
     ).toBe(true);
     expect(
-      shouldAllowNavigation("file:///app/dist/evil.html", undefined, "/app/dist/index.html"),
+      shouldAllowNavigation(
+        "file:///app/dist/evil.html",
+        undefined,
+        "/app/dist/index.html",
+      ),
     ).toBe(false);
     // 未提供入口路径（fail-closed）与旧语义 file:// 全放行不再成立
     expect(shouldAllowNavigation("file:///app/index.html", undefined)).toBe(

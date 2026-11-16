@@ -6,7 +6,15 @@
 //   连接清单失效重取）
 // - encrypted + confirmedAt：静默卡显示指纹与确认时间，无确认按钮
 // - mitm-suspect：期望 vs 实际指纹对照（重配指引），无确认按钮
-import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -135,9 +143,9 @@ describe("E2eFingerprintCard：TOFU 指纹核对卡", () => {
       "0123456789abcdef",
     );
     // 确认时间文案在场（i18n key 锚 + 插值时间）
-    expect(screen.getByTestId("fingerprint-confirmed-at").textContent).toContain(
-      "2026",
-    );
+    expect(
+      screen.getByTestId("fingerprint-confirmed-at").textContent,
+    ).toContain("2026");
     expect(screen.queryByTestId("fingerprint-confirm")).toBeNull();
   });
 

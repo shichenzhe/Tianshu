@@ -39,8 +39,9 @@ describe("parseFrontmatter（tools 字段）", () => {
 
   it("空格/中文逗号混合分隔：workflow, expert 双组", () => {
     expect(
-      parseFrontmatter("---\nname: a\ndescription: d\ntools: workflow， expert\n---\n")
-        .tools,
+      parseFrontmatter(
+        "---\nname: a\ndescription: d\ntools: workflow， expert\n---\n",
+      ).tools,
     ).toEqual(["workflow", "expert"]);
   });
 
@@ -48,15 +49,16 @@ describe("parseFrontmatter（tools 字段）", () => {
     expect(parseFrontmatter("---\nname: a\ndescription: d\n---\n").tools).toBe(
       undefined,
     );
-    expect(parseFrontmatter("---\nname: a\ndescription: d\ntools:\n---\n").tools).toBe(
-      undefined,
-    );
+    expect(
+      parseFrontmatter("---\nname: a\ndescription: d\ntools:\n---\n").tools,
+    ).toBe(undefined);
   });
 
   it("未知组名原样保留（值域过滤在门控层收口——loader 保持零依赖）", () => {
     expect(
-      parseFrontmatter("---\nname: a\ndescription: d\ntools: bogus workflow\n---\n")
-        .tools,
+      parseFrontmatter(
+        "---\nname: a\ndescription: d\ntools: bogus workflow\n---\n",
+      ).tools,
     ).toEqual(["bogus", "workflow"]);
   });
 });
@@ -76,11 +78,7 @@ describe("loadSkills（tools 随 SkillInfo 透出）", () => {
         "with-tools",
         "---\nname: with-tools\ndescription: d\ntools: workflow\n---\n正文",
       );
-      makeSkill(
-        root,
-        "plain",
-        "---\nname: plain\ndescription: d\n---\n正文",
-      );
+      makeSkill(root, "plain", "---\nname: plain\ndescription: d\n---\n正文");
       const skills = loadSkills([{ dir: root, source: "user" }]);
       const withTools = skills.find((s) => s.name === "with-tools");
       const plain = skills.find((s) => s.name === "plain");
@@ -132,7 +130,10 @@ describe("skillDeclaredGroups + filterToolsBySession（挂载信号源）", () =
 
   it("expert 声明挂载专家组（未绑专家/非 experts 场景同挂）", () => {
     const kept = names(
-      filterToolsBySession(spectrum(), gate({ skillGroups: new Set(["expert"]) })),
+      filterToolsBySession(
+        spectrum(),
+        gate({ skillGroups: new Set(["expert"]) }),
+      ),
     );
     expect(kept).toContain("create_expert");
     expect(kept).toContain("update_expert");
@@ -141,7 +142,9 @@ describe("skillDeclaredGroups + filterToolsBySession（挂载信号源）", () =
   });
 
   it("无声明会话行为不变：daily 空门控不带门控组（零漂移）", () => {
-    const kept = names(filterToolsBySession(spectrum(), gate({ scenario: "daily" })));
+    const kept = names(
+      filterToolsBySession(spectrum(), gate({ scenario: "daily" })),
+    );
     expect(kept).not.toContain("workflow_write");
     expect(kept).not.toContain("create_expert");
     expect(kept).toContain("mcp__srv__tool");

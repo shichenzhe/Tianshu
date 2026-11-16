@@ -16,17 +16,23 @@ describe("graphHttpUrlError", () => {
     expect(graphHttpUrlError("https://example.com:8443/x?a=b")).toBeNull();
   });
 
-describe('graphHttpUrlErrorDns（安全批 F1：DNS 解析级分类）', () => {
-  it('解析到私网 IP 的域名拒（localtest.me → 127.0.0.1 标准解析）', async () => {
-    const r = await graphHttpUrlErrorDns('http://localtest.me/x');
-    expect(r).toContain('禁止');
-  }, 10_000);
-  it('公网域名放行；字面 IP 直达字面层；NXDOMAIN 放行', async () => {
-    expect(await graphHttpUrlErrorDns('https://api.example.com/v1')).toBeNull();
-    expect(await graphHttpUrlErrorDns('http://127.0.0.1:3000/')).toContain('禁止');
-    expect(await graphHttpUrlErrorDns('http://nonexistent-xyz-a1b2.invalid/')).toBeNull();
-  }, 15_000);
-});
+  describe("graphHttpUrlErrorDns（安全批 F1：DNS 解析级分类）", () => {
+    it("解析到私网 IP 的域名拒（localtest.me → 127.0.0.1 标准解析）", async () => {
+      const r = await graphHttpUrlErrorDns("http://localtest.me/x");
+      expect(r).toContain("禁止");
+    }, 10_000);
+    it("公网域名放行；字面 IP 直达字面层；NXDOMAIN 放行", async () => {
+      expect(
+        await graphHttpUrlErrorDns("https://api.example.com/v1"),
+      ).toBeNull();
+      expect(await graphHttpUrlErrorDns("http://127.0.0.1:3000/")).toContain(
+        "禁止",
+      );
+      expect(
+        await graphHttpUrlErrorDns("http://nonexistent-xyz-a1b2.invalid/"),
+      ).toBeNull();
+    }, 15_000);
+  });
 
   it("协议白名单：非 http(s) 拒（file/ftp/无协议裸串）", () => {
     expect(graphHttpUrlError("file:///etc/passwd")).toContain("http(s)");
@@ -63,9 +69,7 @@ describe('graphHttpUrlErrorDns（安全批 F1：DNS 解析级分类）', () => {
     expect(graphHttpUrlError("http://[::]/x")).toContain("禁止");
     expect(graphHttpUrlError("http://[fd00::1]/x")).toContain("禁止");
     expect(graphHttpUrlError("http://[fe80::1]/x")).toContain("禁止");
-    expect(graphHttpUrlError("http://[::ffff:127.0.0.1]/x")).toContain(
-      "禁止",
-    );
+    expect(graphHttpUrlError("http://[::ffff:127.0.0.1]/x")).toContain("禁止");
   });
 
   it("数字编码 IP 形态拒（十进制/十六进制——http://2130706433 = 127.0.0.1）", () => {
@@ -85,15 +89,21 @@ describe("graphHttpUrlErrorDns policy 逃生口", () => {
   const OPEN: GraphHttpUrlPolicy = { allowPrivateNetwork: true };
 
   it("allowPrivateNetwork：环回/localhost/私网/CGNAT/编码/IPv6 ULA 全放行", async () => {
-    expect(await graphHttpUrlErrorDns("http://127.0.0.1:3000/", OPEN)).toBeNull();
-    expect(await graphHttpUrlErrorDns("http://localhost:18411/", OPEN)).toBeNull();
+    expect(
+      await graphHttpUrlErrorDns("http://127.0.0.1:3000/", OPEN),
+    ).toBeNull();
+    expect(
+      await graphHttpUrlErrorDns("http://localhost:18411/", OPEN),
+    ).toBeNull();
     expect(await graphHttpUrlErrorDns("http://10.1.2.3/", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://192.168.1.10/", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://172.16.0.5/", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://100.64.0.1/", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://[::1]/x", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://[fd00::1]/x", OPEN)).toBeNull();
-    expect(await graphHttpUrlErrorDns("http://[::ffff:127.0.0.1]/x", OPEN)).toBeNull();
+    expect(
+      await graphHttpUrlErrorDns("http://[::ffff:127.0.0.1]/x", OPEN),
+    ).toBeNull();
     expect(await graphHttpUrlErrorDns("http://2130706433/", OPEN)).toBeNull();
     expect(await graphHttpUrlErrorDns("http://0x7f000001/", OPEN)).toBeNull();
   });
@@ -136,15 +146,15 @@ describe("graphHttpUrlErrorDns policy 逃生口", () => {
       "禁止",
     );
     // 未登记的私网 IP 仍拦
-    expect(await graphHttpUrlErrorDns("http://10.0.0.1/", p)).toContain(
-      "禁止",
-    );
+    expect(await graphHttpUrlErrorDns("http://10.0.0.1/", p)).toContain("禁止");
   }, 15_000);
 
   it("allowlist CIDR：段内字面 IP 与解析落段域名放行，段外仍拦", async () => {
     const p: GraphHttpUrlPolicy = { allowlist: ["192.168.1.0/24"] };
     expect(await graphHttpUrlErrorDns("http://192.168.1.55/api", p)).toBeNull();
-    expect(await graphHttpUrlErrorDns("http://192.168.1.255/api", p)).toBeNull();
+    expect(
+      await graphHttpUrlErrorDns("http://192.168.1.255/api", p),
+    ).toBeNull();
     expect(await graphHttpUrlErrorDns("http://192.168.2.55/api", p)).toContain(
       "禁止",
     );
@@ -155,7 +165,11 @@ describe("graphHttpUrlErrorDns policy 逃生口", () => {
 
   it("allowlist 不能豁免硬边界（metadata/链路本地登记也不放行）", async () => {
     const p: GraphHttpUrlPolicy = {
-      allowlist: ["169.254.169.254", "169.254.170.2", "metadata.google.internal"],
+      allowlist: [
+        "169.254.169.254",
+        "169.254.170.2",
+        "metadata.google.internal",
+      ],
     };
     expect(await graphHttpUrlErrorDns("http://169.254.169.254/x", p)).toContain(
       "metadata",

@@ -49,8 +49,14 @@ describe("Seatbelt 真跑集成（spec §10）", () => {
 
   itDarwin("TMPDIR 内写文件成功（写白名单第二锚）", async () => {
     const ws = makeWorkspace();
-    const tmpProbe = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "probe-")), "t.txt");
-    const { code } = await runInSandbox(`echo t > ${JSON.stringify(tmpProbe)}`, ws);
+    const tmpProbe = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), "probe-")),
+      "t.txt",
+    );
+    const { code } = await runInSandbox(
+      `echo t > ${JSON.stringify(tmpProbe)}`,
+      ws,
+    );
     expect(code).toBe(0);
     expect(fs.existsSync(tmpProbe)).toBe(true);
   });

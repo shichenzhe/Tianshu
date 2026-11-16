@@ -17,7 +17,9 @@ describe("IPC 事件白名单", () => {
   });
 
   it("invoke 放行 server:connectionConfirmFingerprint（TOFU 指纹确认仪式，P0-1）", () => {
-    expect(IPC_INVOKE_ALLOWLIST).toContain("server:connectionConfirmFingerprint");
+    expect(IPC_INVOKE_ALLOWLIST).toContain(
+      "server:connectionConfirmFingerprint",
+    );
     expect(isInvokeAllowed("server:connectionConfirmFingerprint")).toBe(true);
   });
 

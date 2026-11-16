@@ -15,7 +15,12 @@ import path from "node:path";
 // 资产目录断言口径 = 数据根 dev 分组（projectsDir 同源；全局 setup 已隔离）
 const { USER_DATA, fsStub } = vi.hoisted(() => ({
   USER_DATA: `${process.env.TIANSHU_DATA_ROOT}/dev`,
-  fsStub: { mkdir: vi.fn(), rm: vi.fn(), readFile: vi.fn(), writeFile: vi.fn() },
+  fsStub: {
+    mkdir: vi.fn(),
+    rm: vi.fn(),
+    readFile: vi.fn(),
+    writeFile: vi.fn(),
+  },
 }));
 
 vi.mock("electron", () => ({
@@ -688,7 +693,11 @@ describe("ProjectRepository.appendMemory（批8 P0）", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // 默认：可见项目（owner=UID）+ 已有资产空间行
-    prismaStub.project.findUnique.mockResolvedValue({ id: 11, ownerId: UID, name: "p" });
+    prismaStub.project.findUnique.mockResolvedValue({
+      id: 11,
+      ownerId: UID,
+      name: "p",
+    });
     prismaStub.workspace.findFirst.mockResolvedValue({
       id: 30,
       directoryPath: assetsDir(11),
@@ -723,7 +732,10 @@ describe("ProjectRepository.appendMemory（批8 P0）", () => {
   });
 
   it("追加：已有内容保留，新条目接在尾（时间序）", async () => {
-    const existing = mergeMemoryContent(null, { title: "旧条目", summary: "a" });
+    const existing = mergeMemoryContent(null, {
+      title: "旧条目",
+      summary: "a",
+    });
     fsStub.readFile.mockResolvedValue(existing);
     await repo.appendMemory(11, { title: "新条目", summary: "b" }, UID);
     const content = fsStub.writeFile.mock.calls[0][1] as string;

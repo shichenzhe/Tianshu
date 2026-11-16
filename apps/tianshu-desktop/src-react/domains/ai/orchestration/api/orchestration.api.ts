@@ -221,8 +221,12 @@ export class GraphApi {
     draftJson?: string,
   ): Promise<void> {
     return routeInvoke(
-      { ch: "orchestration:runTest", args: [id, inputs, workspaceId, draftJson] },
-      (connId) => remoteGraphRunTest(id, inputs, workspaceId, draftJson, connId),
+      {
+        ch: "orchestration:runTest",
+        args: [id, inputs, workspaceId, draftJson],
+      },
+      (connId) =>
+        remoteGraphRunTest(id, inputs, workspaceId, draftJson, connId),
     );
   }
 

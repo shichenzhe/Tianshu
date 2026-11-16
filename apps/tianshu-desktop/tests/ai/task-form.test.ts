@@ -354,7 +354,10 @@ describe("错过补跑上限 catchUpLimit(批3A §6-1)", () => {
     ).toBe(3);
     expect(buildInitialValues({}, t).catchUpLimit).toBe(1);
     // 旧任务行缺列(undefined)回退 1
-    expect(buildInitialValues({ task: { ...task, catchUpLimit: undefined } }, t).catchUpLimit).toBe(1);
+    expect(
+      buildInitialValues({ task: { ...task, catchUpLimit: undefined } }, t)
+        .catchUpLimit,
+    ).toBe(1);
   });
   it("buildTaskParams:catchUpOnce 携带上限且 scheduleText 明示补跑语义;skip 归 1 不追加文案", () => {
     const v = buildInitialValues({ task }, t);
@@ -372,8 +375,6 @@ describe("错过补跑上限 catchUpLimit(批3A §6-1)", () => {
   });
   it("serializeForm 纳入 catchUpLimit(改值判脏)", () => {
     const v = buildInitialValues({}, t);
-    expect(serializeForm(v)).not.toBe(
-      serializeForm({ ...v, catchUpLimit: 4 }),
-    );
+    expect(serializeForm(v)).not.toBe(serializeForm({ ...v, catchUpLimit: 4 }));
   });
 });

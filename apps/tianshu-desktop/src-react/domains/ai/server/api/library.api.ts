@@ -59,15 +59,11 @@ export default class RemoteLibraryApi {
     return requestRemote("server:librarySearch", { keyword }, connId);
   }
 
-  static async listRecent(
-    connId: string,
-  ): Promise<RemoteLibraryItem[]> {
+  static async listRecent(connId: string): Promise<RemoteLibraryItem[]> {
     return requestRemote("server:libraryListRecent", {}, connId);
   }
 
-  static async listFavorites(
-    connId: string,
-  ): Promise<RemoteLibraryItem[]> {
+  static async listFavorites(connId: string): Promise<RemoteLibraryItem[]> {
     return requestRemote("server:libraryListFavorites", {}, connId);
   }
 
@@ -76,7 +72,11 @@ export default class RemoteLibraryApi {
     parentId: number | null,
     connId: string,
   ): Promise<RemoteLibraryItem> {
-    return requestRemote("server:libraryCreateFolder", { name, parentId }, connId);
+    return requestRemote(
+      "server:libraryCreateFolder",
+      { name, parentId },
+      connId,
+    );
   }
 
   static async createFile(
@@ -84,7 +84,11 @@ export default class RemoteLibraryApi {
     parentId: number | null,
     connId: string,
   ): Promise<RemoteLibraryItem> {
-    return requestRemote("server:libraryCreateFile", { name, parentId }, connId);
+    return requestRemote(
+      "server:libraryCreateFile",
+      { name, parentId },
+      connId,
+    );
   }
 
   static async addLink(

@@ -16,7 +16,10 @@ interface OsSandboxCardProps {
   onToggle: (key: SecurityConfigKey, value: unknown) => void;
 }
 
-export default function OsSandboxCard({ config, onToggle }: OsSandboxCardProps) {
+export default function OsSandboxCard({
+  config,
+  onToggle,
+}: OsSandboxCardProps) {
   const { t } = useTranslation(["security"]);
   const [status, setStatus] = useState<{
     supported: boolean;

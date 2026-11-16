@@ -54,7 +54,10 @@ vi.mock("../../../electron/commons/prisma-client", () => ({
   default: { $disconnect: mocks.disconnect },
 }));
 
-import { registerBackupIpc, type BackupIpcDeps } from "../../../electron/domains/backup/ipc";
+import {
+  registerBackupIpc,
+  type BackupIpcDeps,
+} from "../../../electron/domains/backup/ipc";
 
 /** 数据根（tests/setup.ts 注入的隔离临时根） */
 const dataRoot = process.env.TIANSHU_DATA_ROOT!;
@@ -559,7 +562,7 @@ describe("backup 本地链路（无服务端）", () => {
   ) {
     return vi.fn(async (opts: { tempDir: string }) => {
       tempDirs.push(opts.tempDir);
-      const archivePath = path.join(opts.tempDir, `backup-test.tar.gz`);
+      const archivePath = path.join(opts.tempDir, "backup-test.tar.gz");
       writeFileSync(archivePath, bytes);
       return {
         archivePath,
@@ -567,10 +570,12 @@ describe("backup 本地链路（无服务端）", () => {
           appVersion: "1.0.0",
           schemaVersion: 1,
           fileSize: Buffer.byteLength(bytes),
-          sha256: sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
+          sha256:
+            sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
           chunkCount: 1,
         },
-        sha256: sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
+        sha256:
+          sha256Override ?? createHash("sha256").update(bytes).digest("hex"),
         fileCount: 2,
       };
     });
@@ -669,8 +674,8 @@ describe("backup 本地链路（无服务端）", () => {
 
   it("backup:restore:local：档案不存在 → 断库前拦截报错（零损伤）", async () => {
     const { deps, ctx } = makeDeps(DIRECT);
-    deps.pickArchivePath = vi.fn(
-      async () => path.join(dataRoot, "ghost.tar.gz"),
+    deps.pickArchivePath = vi.fn(async () =>
+      path.join(dataRoot, "ghost.tar.gz"),
     );
     registerBackupIpc(deps);
     await expect(call("backup:restore:local")).rejects.toThrow(

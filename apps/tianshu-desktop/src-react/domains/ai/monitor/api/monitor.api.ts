@@ -7,7 +7,6 @@
  * （server:monitorStats 透传 POST monitor/stats，被控面端点与 capability
  * 位两侧均齐备）。UI 组件对路由透明（MonitorApi 形状不变）。
  */
-import { invoke } from "@/lib/ipc";
 import { routeInvoke } from "@/domains/ai/data-source/host-route";
 import ServerApi from "@/domains/ai/server/api/server.api";
 import type { MonitorScene, MonitorStats } from "@tianshu/protocol";

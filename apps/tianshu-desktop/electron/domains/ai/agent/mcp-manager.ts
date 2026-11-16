@@ -444,7 +444,9 @@ export class McpManager {
   private toAggregateTools(
     row: McpServerConfig,
     client: McpClientLike,
-    tools: Array<Awaited<ReturnType<McpClientLike["listTools"]>>["tools"][number]>,
+    tools: Array<
+      Awaited<ReturnType<McpClientLike["listTools"]>>["tools"][number]
+    >,
   ): ToolDefinition<z.infer<typeof callToolArgsSchema>>[] {
     const callName = `${toolPrefix(row.name)}call_tool`;
     const listing = tools

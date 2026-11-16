@@ -39,7 +39,10 @@ import ServerApi, {
   type ConnectionMode,
   type TestConnectionResult,
 } from "../api/server.api";
-import { isPlainHttpRemote, isProtocolOutdated } from "../lib/connection-safety";
+import {
+  isPlainHttpRemote,
+  isProtocolOutdated,
+} from "../lib/connection-safety";
 
 export const CONNECTIONS_QUERY_KEY = ["server", "connections"] as const;
 

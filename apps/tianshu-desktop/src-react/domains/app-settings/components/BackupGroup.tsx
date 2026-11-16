@@ -360,9 +360,10 @@ export default function BackupGroup() {
     setBusy("create:local");
     setProgress({ phase: "packing", current: 0, total: 0 });
     try {
-      const result = await invoke<
-        { destPath: string; fileSize: number } | null
-      >("backup:create:local", passphrase);
+      const result = await invoke<{
+        destPath: string;
+        fileSize: number;
+      } | null>("backup:create:local", passphrase);
       if (result) {
         toast.success(
           t("settings:backupLocalCreatedToast", {
@@ -943,9 +944,7 @@ export default function BackupGroup() {
       >
         <DialogContent className="rounded-lg border-border/50 shadow-lg">
           <DialogHeader>
-            <DialogTitle>
-              {t("settings:backupPassphraseTitle")}
-            </DialogTitle>
+            <DialogTitle>{t("settings:backupPassphraseTitle")}</DialogTitle>
             <DialogDescription>
               {t("settings:backupPassphraseDesc")}
             </DialogDescription>
@@ -1002,7 +1001,8 @@ export default function BackupGroup() {
             </Button>
             <Button
               disabled={
-                busy !== null || (exportPass.trim() !== "" && exportPass !== exportPassConfirm)
+                busy !== null ||
+                (exportPass.trim() !== "" && exportPass !== exportPassConfirm)
               }
               onClick={() => void confirmExportPassphrase()}
             >

@@ -593,7 +593,7 @@ const BenchScriptedModel = class extends BaseChatModel {
       throw error;
     }
   }
-  async _generate(messages: BaseMessage[]): Promise<ChatResult> {
+  async _generate(_messages: BaseMessage[]): Promise<ChatResult> {
     const text = this.opts.deltas.join("");
     return {
       generations: [

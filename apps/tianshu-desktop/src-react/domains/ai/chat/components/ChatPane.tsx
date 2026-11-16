@@ -188,7 +188,12 @@ export default function ChatPane({
         appendOptimisticMessage(
           queryClient,
           resolvedId,
-          buildOptimisticUserMessage(resolvedId, finalContent, skillRefs, contentRefs),
+          buildOptimisticUserMessage(
+            resolvedId,
+            finalContent,
+            skillRefs,
+            contentRefs,
+          ),
         );
         try {
           await ChatApi.send({
@@ -197,9 +202,7 @@ export default function ChatPane({
             overrides,
             images: [...images, ...(resolved.images ?? [])],
             ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
-            ...(contentRefs && contentRefs.length > 0
-              ? { contentRefs }
-              : {}),
+            ...(contentRefs && contentRefs.length > 0 ? { contentRefs } : {}),
           });
         } catch (e) {
           useChatStore.getState().finishStream(resolvedId);

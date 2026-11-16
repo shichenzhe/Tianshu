@@ -15,7 +15,9 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, ipcMain: { handle: vi.fn() } }));
+  },
+  ipcMain: { handle: vi.fn() },
+}));
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));

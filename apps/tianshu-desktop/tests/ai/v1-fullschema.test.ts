@@ -339,9 +339,7 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     const db = createDb();
     expect(columnsOf(db, "automationRun")).toContain("graphJsonSnapshot");
     const col = (
-      db
-        .prepare("PRAGMA table_info(automationRun)")
-        .all() as Array<{
+      db.prepare("PRAGMA table_info(automationRun)").all() as Array<{
         name: string;
         notnull: number;
         dflt_value: unknown;
@@ -392,19 +390,19 @@ describe("v1 全量建表脚本(合并 v2-v14 后的最终结构)", () => {
     );
     // 整工具行（pattern NULL）+ 参数级行（git *）共存——参数级记忆与整工具记忆并列
     db.exec(
-      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', NULL)`,
+      "INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', NULL)",
     );
     db.exec(
-      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')`,
+      "INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')",
     );
     db.exec(
-      `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'npm *')`,
+      "INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'npm *')",
     );
     // 同 pattern 重复落行被唯一索引拒绝（写路径幂等由 findFirst+create 保证，
     // 索引兜底防手写竞态）
     expect(() =>
       db.exec(
-        `INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')`,
+        "INSERT INTO toolPermission (workspaceId, toolName, pattern) VALUES (1, 'bash', 'git *')",
       ),
     ).toThrow();
     // lastUsedAt 缺省 NULL（落行后从未命中）

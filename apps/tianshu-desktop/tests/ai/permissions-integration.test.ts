@@ -406,9 +406,7 @@ describe("两级审批判定（send 级集成）", () => {
 
   it("工作空间记忆（P4 allowed-tools）：命中 toolPermission 表免审直执行", async () => {
     // 无 pattern 行 = 旧全等语义（任意参数命中）
-    prismaStub.toolPermissions = [
-      { toolName: "test_write", pattern: null },
-    ];
+    prismaStub.toolPermissions = [{ toolName: "test_write", pattern: null }];
     registerTools([fakeWrite]);
     const ws = mkdtempSync(path.join(os.tmpdir(), "p4-remember-"));
     const { model } = scriptedModel([
@@ -481,7 +479,9 @@ describe("两级审批判定（send 级集成）", () => {
       expect(hasApprovalChunk(chunks)).toBe(false);
       expect(
         chunks.some(
-          (c) => c.type === "tool-update" && (c.state === "done" || c.state === "error"),
+          (c) =>
+            c.type === "tool-update" &&
+            (c.state === "done" || c.state === "error"),
         ),
       ).toBe(true);
       expect(prismaStub.permissionUpdates.length).toBe(1);

@@ -58,7 +58,6 @@ describe("hybridSearch/rerank timeoutMs schema 界", () => {
   });
 });
 
-
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
   Notification: vi.fn(),
@@ -101,11 +100,7 @@ import {
   type NodeContext,
   type TraceEntry,
 } from "../../electron/domains/ai/orchestration/graph-executor";
-import type {
-  HybridSearchNode,
-  NodeResult,
-  RerankNode,
-} from "@tianshu/core";
+import type { HybridSearchNode, NodeResult, RerankNode } from "@tianshu/core";
 
 const fetchMock = vi.fn();
 beforeAll(() => {

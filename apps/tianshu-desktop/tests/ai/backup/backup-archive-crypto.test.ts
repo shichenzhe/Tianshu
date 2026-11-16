@@ -42,7 +42,9 @@ describe("backup-archive-crypto", () => {
     await decryptBackupArchive("正确口令-123", dest, out);
     expect(readFileSync(out).equals(PLAIN)).toBe(true);
     // 返回的 sha256 是密文档自身哈希（落盘对拍口径）
-    expect(sha256).toBe(createHash("sha256").update(readFileSync(dest)).digest("hex"));
+    expect(sha256).toBe(
+      createHash("sha256").update(readFileSync(dest)).digest("hex"),
+    );
   });
 
   it("同明文同口令两次加密产不同密文（随机 salt/nonce），且各自可解", async () => {

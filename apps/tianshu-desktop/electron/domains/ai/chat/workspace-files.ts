@@ -332,8 +332,12 @@ export async function stageOutgoingImages<T extends { absPath: string }>(
         : null;
     const inAllowed =
       resolved !== null &&
-      allowed.some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
-    const inWorkspace = bound !== null && resolved !== null &&
+      allowed.some(
+        (dir) => resolved === dir || resolved.startsWith(dir + path.sep),
+      );
+    const inWorkspace =
+      bound !== null &&
+      resolved !== null &&
       (resolved === bound || resolved.startsWith(bound + path.sep));
     // 相对路径须落绑定目录内（防穿越）；workspace 外绝对路径走授权门
     const grantable =

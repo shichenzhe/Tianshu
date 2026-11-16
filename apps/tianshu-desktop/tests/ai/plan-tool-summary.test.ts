@@ -59,11 +59,7 @@ describe("planToolDigest 四工具解析（批 11 D15）", () => {
 
   it("todo_read：输出「共 N 项」解析计数（含空清单 0 项）", () => {
     expect(
-      planToolDigest(
-        "todo_read",
-        {},
-        "当前项目计划清单（共 3 项）：\n#1《a》",
-      ),
+      planToolDigest("todo_read", {}, "当前项目计划清单（共 3 项）：\n#1《a》"),
     ).toEqual({ key: "chat:tool.plan.list", values: { count: 3 } });
     expect(
       planToolDigest("todo_read", {}, "当前项目计划清单为空（共 0 项）"),

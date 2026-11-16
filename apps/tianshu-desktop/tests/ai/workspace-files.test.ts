@@ -277,17 +277,20 @@ describe("stageOutgoingImages（发送链图片收编——白名单外全量）
   const allowedDirs = [attachRoot, path.join(base, "library")];
 
   it("空数组原样返回", async () => {
-    expect(await stageOutgoingImages(attachRoot, allowedDirs, "/tmp/ws", [])).toEqual(
-      [],
-    );
+    expect(
+      await stageOutgoingImages(attachRoot, allowedDirs, "/tmp/ws", []),
+    ).toEqual([]);
   });
 
   it("白名单内路径原样保留（不重复复制）", async () => {
     const p = path.join(attachRoot, "kept.png");
     await writeFile(p, Buffer.from([0x89]));
-    const staged = await stageOutgoingImages(attachRoot, allowedDirs, "/tmp/ws", [
-      { absPath: p },
-    ]);
+    const staged = await stageOutgoingImages(
+      attachRoot,
+      allowedDirs,
+      "/tmp/ws",
+      [{ absPath: p }],
+    );
     expect(staged).toEqual([{ absPath: p }]);
   });
 

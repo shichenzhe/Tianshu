@@ -603,8 +603,7 @@ export const FILE_TOOLS: ToolDefinition[] = [
 
 /** 按名取内置文件工具（SP3 集成测试直调单工具用） */
 export function makeFileTool(
-  name:
-    "read" | "write" | "ls" | "grep" | "rm",
+  name: "read" | "write" | "ls" | "grep" | "rm",
 ): ToolDefinition<never> {
   const tool = FILE_TOOLS.find((t) => t.name === name);
   if (!tool) throw new Error(`未知文件工具: ${name}`);

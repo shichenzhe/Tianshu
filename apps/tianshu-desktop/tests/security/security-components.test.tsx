@@ -219,7 +219,9 @@ describe("SystemGrantCard（SP6 系统授权卡）", () => {
   });
 
   it("记忆治理（批7 security P1-3）：pattern 展示 + lastUsedAt 时间 + 90 天未用徽标 + 工作空间量统计", async () => {
-    const stale = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString();
+    const stale = new Date(
+      Date.now() - 120 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     stubGrants(
       [],
       [
@@ -325,12 +327,8 @@ describe("RuntimeDetailView（SP6 运行时工具二级页）", () => {
     expect(screen.getByText("security:runtimeDetail.groupExpert")).toBeTruthy();
     expect(screen.getByText("security:runtimeDetail.groupPlan")).toBeTruthy();
     expect(screen.getAllByRole("switch")).toHaveLength(17);
-    expect(
-      screen.getByText("security:runtimeDetail.tools.read"),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("security:runtimeDetail.tools.bash"),
-    ).toBeTruthy();
+    expect(screen.getByText("security:runtimeDetail.tools.read")).toBeTruthy();
+    expect(screen.getByText("security:runtimeDetail.tools.bash")).toBeTruthy();
     expect(
       screen.getByText("security:runtimeDetail.tools.recommend_expert"),
     ).toBeTruthy();

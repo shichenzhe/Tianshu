@@ -9,7 +9,13 @@
  * 直替，@/lib/ipc 与 server.api 按通道打桩）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
@@ -109,8 +115,12 @@ describe("BackupGroup 本地链路（无服务端）", () => {
       screen.getByLabelText("settings:backupPassphraseRepeatLabel"),
       { target: { value: "bbb" } },
     );
-    expect(await screen.findByText("settings:backupPassphraseMismatch")).toBeTruthy();
-    const action = screen.getByText("settings:backupPassphraseAction").closest("button")!;
+    expect(
+      await screen.findByText("settings:backupPassphraseMismatch"),
+    ).toBeTruthy();
+    const action = screen
+      .getByText("settings:backupPassphraseAction")
+      .closest("button")!;
     expect(action.hasAttribute("disabled")).toBe(true);
     expect(vi.mocked(invoke)).not.toHaveBeenCalled();
   });
@@ -120,9 +130,7 @@ describe("BackupGroup 本地链路（无服务端）", () => {
     render(<BackupGroup />);
     await openExportDialog();
     fireEvent.click(screen.getByText("common:cancel"));
-    await waitFor(() =>
-      expect(vi.mocked(invoke)).not.toHaveBeenCalled(),
-    );
+    await waitFor(() => expect(vi.mocked(invoke)).not.toHaveBeenCalled());
   });
 
   it("从本地档案恢复：确认弹窗含口令框，留空 → invoke backup:restore:local（undefined）→ 重启横条", async () => {
@@ -143,9 +151,7 @@ describe("BackupGroup 本地链路（无服务端）", () => {
         undefined,
       ),
     );
-    expect(
-      await screen.findByText("settings:backupRelaunching"),
-    ).toBeTruthy();
+    expect(await screen.findByText("settings:backupRelaunching")).toBeTruthy();
   });
 
   it("从本地档案恢复：填口令 → invoke 带口令；错口令 → toast 透传主进程文案", async () => {

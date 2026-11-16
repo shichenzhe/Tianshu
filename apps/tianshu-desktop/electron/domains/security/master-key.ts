@@ -23,7 +23,6 @@ import { randomBytes } from "node:crypto";
 import prisma from "../../commons/prisma-client";
 import { masterKeyFromHex, type MasterKey } from "@tianshu/core";
 
-const OPTION_KEY = "security.masterKey";
 /** option 表 name/type 列口径（与 connections 的 serverConnections 行同款） */
 const OPTION_NAME = "security";
 const OPTION_TYPE = "app";
@@ -84,7 +83,7 @@ export async function getMasterKey(): Promise<MasterKey | null> {
   const stored = await readOptionValue();
   if (stored === null) {
     const fresh = randomBytes(32);
-    let persisted = true;
+    let persisted: boolean;
     if (safeStorageAvailable()) {
       const wrapped = safeStorage.encryptString(fresh.toString("hex"));
       persisted = await writeOptionValue(`ss:v1:${wrapped.toString("base64")}`);

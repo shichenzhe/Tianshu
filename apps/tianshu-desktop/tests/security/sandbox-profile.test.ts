@@ -37,7 +37,10 @@ describe("normalizeMacPrivatePath（/private 符号链接归一）", () => {
 
 describe("buildSeatbeltProfile（workspace-write profile 生成）", () => {
   it("普通 workspace：写白名单 = workspace + TMPDIR + 设备节点", () => {
-    const profile = buildSeatbeltProfile("/Users/hjx/ws", "/private/var/folders/ab/T");
+    const profile = buildSeatbeltProfile(
+      "/Users/hjx/ws",
+      "/private/var/folders/ab/T",
+    );
     expect(profile).toContain("(version 1)");
     expect(profile).toContain("(allow default)");
     expect(profile).toContain("(deny file-write*)");
@@ -51,9 +54,7 @@ describe("buildSeatbeltProfile（workspace-write profile 生成）", () => {
       '/Users/hjx/我的 空间"quote',
       "/private/var/folders/ab/T",
     );
-    expect(profile).toContain(
-      '(subpath "/Users/hjx/我的 空间\\"quote")',
-    );
+    expect(profile).toContain('(subpath "/Users/hjx/我的 空间\\"quote")');
   });
 
   it("TMPDIR 传 /var 形态时归一为 /private/var", () => {
@@ -63,7 +64,10 @@ describe("buildSeatbeltProfile（workspace-write profile 生成）", () => {
   });
 
   it("网络与读零约束：profile 不含 network/read 拒绝行", () => {
-    const profile = buildSeatbeltProfile("/Users/hjx/ws", "/private/var/folders/ab/T");
+    const profile = buildSeatbeltProfile(
+      "/Users/hjx/ws",
+      "/private/var/folders/ab/T",
+    );
     expect(profile).not.toMatch(/network/);
     expect(profile).not.toMatch(/file-read/);
   });

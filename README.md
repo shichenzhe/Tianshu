@@ -1,179 +1,196 @@
-# 天枢 · Tianshu
+<div align="center">
 
-> 天枢者，北斗第一星（Dubhe）——斗柄所指，众星拱之。核心枢纽，由此开启。
+# Tianshu
 
-**本地优先的 AI 桌面工作台**：对话与 Agent、多厂商模型、MCP 连接器、技能、长期记忆、自动化、内置浏览器、流程编排、项目与计划、用量监控——全部装进一个 Electron 应用，数据留在你自己的电脑上；配套无头服务端，桌面单界面可切换并全功能遥控远程主机。
+**A local-first AI desktop workspace**
 
-[English](README.en.md) · [特性](#-特性) · [快速开始](#-快速开始) · [架构](#-架构) · [安全说明](#-安全说明)
+Chat & agents, multi-vendor models, MCP connectors, skills, long-term memory, automation, a built-in browser, workflow orchestration, projects & planning, and usage monitoring — all in one Electron app, with your data staying on your own machine. A companion headless server lets the same desktop UI switch to and fully remote-control remote hosts.
 
-![License](https://img.shields.io/badge/license-MIT-green)
-![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)
+*Dubhe, the first star of the Big Dipper — the pivot from which everything begins.*
 
-![天枢主界面](docs/images/screenshot.jpg)
+English · [简体中文](README.zh-CN.md)
 
-## ✨ 特性
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](#)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)](#)
+[![Prisma](https://img.shields.io/badge/Prisma-7-2D3748?logo=prisma&logoColor=white)](#)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#-contributing)
 
-### 🤖 多模型对话
+**[Features](#-features)** · **[Getting Started](#-getting-started)** · **[Architecture](#-architecture)** · **[Security Notes](#-security-notes)**
 
-- 接入 **OpenAI 兼容**、**Anthropic**、**Gemini** 与 **Ollama**（本地模型）四类服务商，模型统一管理、随时切换
-- 助手预设（专家）、技能、MCP 连接器在统一入口管理，可在会话中直接选用
-- Markdown 渲染 + Shiki 代码高亮，`@` 引用本地文本文件随消息发送
+</div>
 
-### 🛠 Agent 能力
+<p align="center">
+  <img src="docs/images/screenshot-1.png" alt="Tianshu" />
+</p>
 
-- **文件工具**：会话绑定工作空间目录后，AI 获得 `read` / `write` / `ls` / `grep` 四个工具，路径全部限定在该目录内
-- **终端工具**：`bash` 执行 shell 命令，60s 超时、输出截断回喂；`rm -rf /`、fork 炸弹等破坏性命令硬拦截，与权限级别无关
-- **两级权限**：默认权限下文件写与命令逐次审批；切换「完全访问」需全屏风险确认，且为会话级内存态，重启即回默认
-- **三种会话模式**：Agent（全能力）/ 问答 ASK（纯对话）/ 计划 PLAN（先出完整计划、确认后才动手）
+<p align="center">
+  <img src="docs/images/screenshot-2.png" alt="Tianshu" />
+</p>
 
-### 🔌 MCP 连接器
+## ✨ Features
 
-- 接入任意 [Model Context Protocol](https://modelcontextprotocol.io) 服务器，支持 **stdio** 与 **streamable HTTP**（含 Bearer 认证）两种传输
-- 启动时自动连接全部启用项，页面提供连接状态徽标与启停/重连；标注只读的工具免审直接执行
+### 🤖 Multi-Model Chat
 
-### 📜 技能系统
+- Connect to **OpenAI-compatible**, **Anthropic**, **Gemini**, and **Ollama** (local models) providers, with unified model management and instant switching
+- Assistants (experts), skills, and MCP connectors managed in one place and usable directly in conversations
+- Markdown rendering with Shiki syntax highlighting, plus `@` file references that attach local text files to messages
 
-- 技能即一个带 frontmatter 的 `SKILL.md`：用户级放 `<userData>/skills/`，工作空间级放 `.tianshu/skills/`，放目录即生效、免重启
-- 技能清单注入 system prompt，模型按需读取正文；AI 也可以在对话中直接为你创建技能
+### 🛠 Agent Capabilities
 
-### 🧠 长期记忆
+- **File tools**: once a session is bound to a workspace directory, the AI gets `read` / `write` / `ls` / `grep`, all sandboxed to that directory
+- **Terminal tool**: `bash` runs shell commands with a 60s timeout and truncated output; destructive commands (`rm -rf /`, fork bombs, …) are hard-blocked regardless of permission level
+- **Two-tier permissions**: under Default, file writes and commands require per-action approval; Full Access requires an explicit risk confirmation and lives only in session memory — a restart resets it
+- **Three session modes**: Agent (full capability) / Ask (pure Q&A) / Plan (produce a complete plan first, act only after confirmation)
 
-- 对话之外维护一份本地 Profile 记忆：后台定时整理 + 手动触发，经模型编译后持久化，让 AI 越用越懂你
+### 🔌 MCP Connectors
 
-### ⏱ 自动化
+- Connect any [Model Context Protocol](https://modelcontextprotocol.io) server via **stdio** or **streamable HTTP** (with Bearer auth)
+- All enabled servers reconnect automatically on launch, with status badges and start/stop/reconnect controls; tools marked read-only execute without approval
 
-- 定时调度的 AI 任务（cron 式配置），自动拉起会话执行并留存每次运行记录与统计
+### 📜 Skills
 
-### 🔀 流程编排
+- A skill is just a `SKILL.md` with frontmatter: user-level in `<userData>/skills/`, workspace-level in `.tianshu/skills/` — drop it in and it takes effect, no restart needed
+- Skill manifests are injected into the system prompt and read on demand; the AI can even create skills for you mid-conversation
 
-- 可视化编排图编辑器：画布与 JSON 源码双模式双向同步、实时校验、错误点击定位节点
-- 试运行（变量表单 + 工作空间选择）、运行历史、版本乐观锁；编排图可挂到自动化任务调度执行
+### 🧠 Long-Term Memory
 
-### 🌐 内置浏览器
+- Maintains a local Profile memory alongside chats: compiled by the model via background scheduled runs plus manual triggers, so the AI knows you better over time
 
-- AI 模块内置多标签浏览器：页内导航工具栏、查找条、设备模拟，每个标签常驻独立 webview
+### ⏱ Automation
 
-### 📊 用量监控
+- Scheduled AI tasks with cron-style configuration that spin up sessions automatically, keeping full run history and statistics
 
-- LLM 调用与工具调用全程留痕，监控页按场景聚合：KPI、7 天趋势、模型分布、工具排行
+### 🔀 Orchestration
 
-### 🖥 无头服务端与多主机
+- Visual graph editor with two-way sync between canvas and JSON source, live validation, and click-to-locate on validation errors
+- Trial runs (variable form + workspace picker), run history, and optimistic version locking; graphs can be attached to automation tasks for scheduled execution
 
-- `apps/tianshu-server`：同一套核心逻辑打包为独立无头服务端（NestJS），可部署到服务器常驻运行
-- 桌面端「主机」页管理无头端连接；经主机切换器在本地与远程主机间无缝切换——聊天、会话、模型配置、专家、技能、审批对远程主机全功能可用
-- 连接支持直连与中继（relay），中继链路端到端加密
+### 🌐 Built-in Browser
 
-### 📁 项目与计划
+- Multi-tab browser inside the AI module: in-page navigation toolbar, find bar, and device emulation — each tab keeps its own persistent webview
 
-- 项目 hub + 项目工作台：项目成员、能力挂载（把专家/技能/MCP 绑定到项目）
-- 计划项支持 **表格 / 列表 / 看板 / 甘特 / 日历** 五种视图，任务与 AI 会话双向关联
+### 📊 Usage Monitoring
 
-### 📚 资料库
+- LLM and tool calls are logged end to end; the monitor page aggregates per scene: KPIs, 7-day trends, model distribution, and tool rankings
 
-- 沉淀对话中值得留存的资料，供后续会话引用
+### 🖥 Headless Server & Multi-Host
 
-### 🎨 外观与本地化
+- `apps/tianshu-server`: the same core logic packaged as a standalone headless server (NestJS), deployable to a server for always-on operation
+- The desktop "Hosts" page manages headless connections; a host switcher moves seamlessly between local and remote hosts — chat, sessions, model config, experts, skills, and approvals all work against a remote host
+- Connections support direct and relay transports, with end-to-end encryption over the relay link
 
-- 浅色 / 深色模式 + 多套壁纸皮肤主题，卡片式预览即点即换
-- 中英双语（zh-CN / en-US），界面语言一键切换
+### 📁 Projects & Planning
 
-### 🏗 工程基础
+- Project hub + workspace, with project members and capability bindings (attach experts, skills, or MCP servers to a project)
+- Plan items render in **table / list / kanban / gantt / calendar** views, with two-way linkage between tasks and AI sessions
 
-- **本地认证**：多账号 + JWT 守卫，v12 起所有业务表按 userId 隔离
-- **版本化迁移**：Prisma + SQLite，`script/vN` 逐版本升级，启动时自动执行
-- **自动更新**：electron-updater + generic 更新源，未配置时自动禁用
-- **日志与审计**：Winston 按日轮转；安全审计日志留痕敏感操作
-- **测试**：Vitest 单测覆盖核心逻辑（Agent 循环、权限、迁移、仓储等）
+### 📚 Library
 
-## 🧱 架构
+- Collect materials worth keeping from conversations for later sessions to reference
 
-三端 `apps/*` 对称布局（桌面端 / 无头服务端 / 移动端），仓库根为纯 workspace 壳（workspaces + 委托脚本 + 工具链）：
+### 🎨 Theming & i18n
 
-```
-├── apps/                             # 三端子应用（npm workspaces 管理；server / mobile 经 git subtree 并入）
-│   ├── tianshu-desktop/              # 桌面端（Electron + React）
-│   │   ├── electron/                 # 主进程
-│   │   │   ├── Application.ts        # 启动入口与 IPC 接线
-│   │   │   ├── commons/              # 日志 / Prisma / IPC 工具
-│   │   │   ├── infrastructure/       # 版本化 SQL 迁移脚本
-│   │   │   └── domains/              # 业务域：ai / project / option / user / app-settings /
-│   │   │                             #       security / server / server-face（entity + repo）
-│   │   ├── src-react/                # 渲染进程
-│   │   │   ├── components/           # shadcn/ui 公共组件
-│   │   │   ├── domains/              # 业务域前端（api / views / components / store）
-│   │   │   ├── i18n/                 # zh-CN / en-US 翻译
-│   │   │   └── routes/ lib/ styles/
-│   │   ├── prisma/schema.prisma      # 数据模型
-│   │   ├── tests/                    # Vitest 单测
-│   │   └── scripts/                  # 脚手架脚本（init 等）
-│   ├── tianshu-server/               # 无头服务端（NestJS）
-│   └── tianshu-mobile/               # 移动控制端（Expo / React Native）
-└── packages/                         # 三端共享包
-    ├── tianshu-protocol/             # 协议与常量（纯类型，零运行时依赖）
-    └── tianshu-core/                 # 共享核心逻辑（chat 工具循环、blocks 序列化、E2E 加密）
-```
+- Light / dark modes plus multiple wallpaper skin themes, switchable from card previews in one click
+- Bilingual UI (zh-CN / en-US) with instant language switching
 
-**技术栈**：Electron 44 · React 19 · TypeScript 5.9 · Vite 8 · Prisma 7 + SQLite (better-sqlite3) · Tailwind CSS 4 · shadcn/ui + Radix · Zustand · React Query · React Router 7 · LangChain（@langchain/core + Anthropic / OpenAI / Gemini / Ollama）· MCP SDK · NestJS（无头端）· Vitest
+### 🏗 Engineering
 
-每个业务域前后端一一对应（`electron/domains/<x>` ↔ `src-react/domains/<x>`），新增域的七步流程见 [docs/guide.md](docs/guide.md)。
+- **Local auth**: multi-account with JWT guard; since v12 all business tables are isolated by userId
+- **Versioned migrations**: Prisma + SQLite with per-version `script/vN` upgrade scripts, executed automatically on launch
+- **Auto-update**: electron-updater with a generic feed, automatically disabled when unconfigured
+- **Logging & audit**: daily-rotating Winston logs plus a security audit trail for sensitive operations
+- **Tests**: Vitest unit tests covering core logic (agent loop, permissions, migrations, repositories, …)
 
-## 🚀 快速开始
+## 🚀 Getting Started
 
-**前置要求**：Node.js ≥ 22.12（Electron 44 要求）；全局安装 node-gyp（native 依赖编译需要）：
+**Prerequisites**: Node.js ≥ 22.12 (required by Electron 44), plus a global node-gyp install (required for native deps):
 
 ```bash
 npm i -g node-gyp
 
-# 安装依赖
+# Install dependencies
 npm install
 
-# 开发调试
+# Run in dev mode
 npm run dev
 ```
 
-首次启动会自动创建本地 SQLite 并执行建表脚本；在登录页**注册第一个账号**即可使用。
+On first launch the local SQLite database is created and initialized automatically. **Register the first account** on the login page to get started.
 
 ```bash
-npm run test        # 单测（Vitest）
+npm run test        # Unit tests (Vitest)
 npm run lint        # ESLint
-npm run typecheck   # 类型检查
-npm run build       # 打包
-npm run check:drift # 双仓漂移巡检（与 tianshu-server 仍双份文件的基线守护）
+npm run typecheck   # Type check
+npm run build       # Package for release
+npm run check:drift # Drift patrol for files still duplicated with tianshu-server
 ```
 
-> 想基于天枢改造成自己的应用（改名 / appId / 更新源）？运行 `npm run init`（幂等）。
+> Want to fork Tianshu into your own app (name / appId / update feed)? Run `npm run init` (idempotent).
 
-## 🧩 各端开发
+## 🧱 Architecture
 
-三端与共享包的开发启动/编译（在仓库根执行，`-w` 作用于对应 workspace）：
+Three apps sit symmetrically under `apps/*` (desktop / headless server / mobile), with the repo root as a pure workspace shell (workspaces + delegating scripts + toolchain):
 
-| 端 | 开发启动 | 编译 / 产物 |
+```
+├── apps/                             # Three apps (npm workspaces; server / mobile merged via git subtree)
+│   ├── tianshu-desktop/              # Desktop app (Electron + React)
+│   │   ├── electron/                 # Main process
+│   │   │   ├── Application.ts        # Bootstrap & IPC wiring
+│   │   │   ├── commons/              # Logging, Prisma, IPC utils
+│   │   │   ├── infrastructure/       # Versioned SQL migrations
+│   │   │   └── domains/              # Domains: ai / project / option / user / app-settings /
+│   │   │                             #       security / server / server-face (entity + repo)
+│   │   ├── src-react/                # Renderer process
+│   │   │   ├── components/           # Shared UI components (shadcn/ui)
+│   │   │   ├── domains/              # Frontend domains (api / views / components / store)
+│   │   │   ├── i18n/                 # zh-CN / en-US translations
+│   │   │   └── routes/ lib/ styles/
+│   │   ├── prisma/schema.prisma      # Data model
+│   │   ├── tests/                    # Unit tests (Vitest)
+│   │   └── scripts/                  # Scaffold scripts (init, …)
+│   ├── tianshu-server/               # Headless server (NestJS)
+│   └── tianshu-mobile/               # Mobile control app (Expo / React Native)
+└── packages/                         # Packages shared across all three apps
+    ├── tianshu-protocol/             # Protocol & constants (pure types, zero runtime deps)
+    └── tianshu-core/                 # Shared core logic (chat tool loop, blocks serialization, E2E crypto)
+```
+
+**Tech stack**: Electron 44 · React 19 · TypeScript 5.9 · Vite 8 · Prisma 7 + SQLite (better-sqlite3) · Tailwind CSS 4 · shadcn/ui + Radix · Zustand · React Query · React Router 7 · LangChain (@langchain/core + Anthropic / OpenAI / Gemini / Ollama) · MCP SDK · NestJS (headless server) · Vitest
+
+Each domain maps one-to-one across processes (`electron/domains/<x>` ↔ `src-react/domains/<x>`). See [docs/guide.md](docs/guide.md) (in Chinese) for the seven steps to add a new one.
+
+## 🧩 Developing Each App
+
+Dev & build for the three apps and shared packages (run from the repo root; `-w` targets the workspace):
+
+| App | Dev | Build / output |
 | --- | --- | --- |
-| 桌面端 `apps/tianshu-desktop` | `npm run dev` | `npm run build`（Electron 安装包；tianshu-server 独立部署，不内嵌） |
-| 无头服务端 `apps/tianshu-server` | `npm run start:dev -w apps/tianshu-server`（NestJS watch） | `npm run build -w apps/tianshu-server`（`dist/`；独立部署 `start:prod` / Dockerfile） |
-| 移动控制端 `apps/tianshu-mobile` | `npm run start -w apps/tianshu-mobile`（Expo；`android` / `ios` 子命令挂模拟器） | —（经 Expo / EAS 发布） |
-| 共享包 `packages/*` | 桌面端经 alias 直引源码，即改即用 | 改包后 `npm --prefix packages/tianshu-core run build` 重建 dist（server / mobile 消费） |
+| Desktop `apps/tianshu-desktop` | `npm run dev` | `npm run build` (Electron installer; tianshu-server deploys independently — not embedded) |
+| Headless server `apps/tianshu-server` | `npm run start:dev -w apps/tianshu-server` (NestJS watch) | `npm run build -w apps/tianshu-server` (`dist/`; deploy standalone via `start:prod` / Dockerfile) |
+| Mobile control app `apps/tianshu-mobile` | `npm run start -w apps/tianshu-mobile` (Expo; `android` / `ios` subcommands attach emulators) | — (ship via Expo / EAS) |
+| Shared packages `packages/*` | Desktop reads source via aliases — no build needed | After changes, `npm --prefix packages/tianshu-core run build` rebuilds dist (consumed by server / mobile) |
 
-## 📖 文档
+## 📖 Docs
 
-- [如何添加业务域 & AI 模块演进（P1–P3）](docs/guide.md)
-- [自建更新服务器](docs/update-server.md)
+- [Adding a domain & the AI module evolution (P1–P3)](docs/guide.md) (in Chinese)
+- [Self-hosted update server](docs/update-server.md)
 
-## 🔐 安全说明
+## 🔐 Security Notes
 
-天枢沿用本地认证模式，适用于「防止路人直接打开应用」的单机场景：
+Tianshu ships a local-auth model suited to "keep casual passers-by out" on a single machine:
 
-- **JWT 签名密钥为内置常量**：介意者应在 `electron/domains/user/user.repo.ts` 的 `JWT_SECRET` 处替换为自己的随机密钥
-- **密码为本地 SQLite 明文存储**：数据库文件仅存在于本机用户目录
-- 该模式**不适用于**多用户或联网威胁模型；如需处理敏感数据，请自行加强（密码哈希、密钥管理、传输加密等）
+- **The JWT signing secret is a built-in constant**: replace `JWT_SECRET` in `electron/domains/user/user.repo.ts` with your own random key if this matters to you
+- **Passwords are stored in plaintext** in the local SQLite database, which lives only in your user directory
+- This model is **not** intended for multi-user or networked threat models; harden it yourself (password hashing, secret management, transport encryption, …) before handling sensitive data
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎 Issue 与 PR，中英文均可。提交前请跑 `npm run lint`、`npm run typecheck` 与 `npm run test`。
+Issues and PRs are welcome, in Chinese or English. Please run `npm run lint`, `npm run typecheck`, and `npm run test` before submitting.
 
-## 📄 许可证
+## 📄 License
 
 [MIT](LICENSE)
+
+<p align="right"><a href="#top">Back to top ↑</a></p>

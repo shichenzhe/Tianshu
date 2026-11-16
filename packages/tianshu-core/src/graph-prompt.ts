@@ -75,7 +75,9 @@ function renderInputPath(
   if (current === null) {
     throw new GraphTemplateError(token);
   }
-  return typeof current === "object" ? JSON.stringify(current) : String(current);
+  return typeof current === "object"
+    ? JSON.stringify(current)
+    : String(current);
 }
 
 export function renderNodePrompt(

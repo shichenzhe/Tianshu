@@ -16,10 +16,7 @@ export const RETRY_MAX_DELAY_MS = 540_000;
  * 冷却毫秒——1→60s、2→180s、3→540s；attempt<1 与非法输入按第 1 级 */
 export function nextRetryDelay(attempt: number): number {
   const level = Number.isFinite(attempt) && attempt > 1 ? attempt : 1;
-  return Math.min(
-    RETRY_BASE_MS * 3 ** (level - 1),
-    RETRY_MAX_DELAY_MS,
-  );
+  return Math.min(RETRY_BASE_MS * 3 ** (level - 1), RETRY_MAX_DELAY_MS);
 }
 
 /** classifyError 配置类错误码：重试无益，不进重试扫描 */
@@ -39,9 +36,7 @@ export function isRetryableErrorCode(code: string): boolean {
 /** run.error 提取错误码：剥离图运行聚合前缀 `node:<id> ` 后取首个
  * `:` 前段（prompt 型 `CODE: message` / 裸码 `interrupted`）；
  * null/空白 → 空串 */
-export function parseRunErrorCode(
-  error: string | null | undefined,
-): string {
+export function parseRunErrorCode(error: string | null | undefined): string {
   if (!error) {
     return "";
   }
@@ -52,9 +47,7 @@ export function parseRunErrorCode(
 
 /** run 行错误可重试判定（重试扫描消费）：error 缺席无法判定 → true，
  * 不放大破坏面 */
-export function isRetryableRunError(
-  error: string | null | undefined,
-): boolean {
+export function isRetryableRunError(error: string | null | undefined): boolean {
   if (!error) {
     return true;
   }

@@ -77,9 +77,9 @@ describe("isRetryableRunError run 行错误可重试判定", () => {
     expect(isRetryableRunError("node:n1 AUTH_FAILED: invalid api key")).toBe(
       false,
     );
-    expect(
-      isRetryableRunError("node:n2 MODEL_NOT_FOUND: no such model"),
-    ).toBe(false);
+    expect(isRetryableRunError("node:n2 MODEL_NOT_FOUND: no such model")).toBe(
+      false,
+    );
   });
   it("error 缺席（旧调用面/图禁用等）→ 默认可重试（不放大破坏面）", () => {
     expect(isRetryableRunError(null)).toBe(true);

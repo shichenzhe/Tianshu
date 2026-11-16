@@ -101,10 +101,7 @@ function ipv4OfLong(n: number): string {
 }
 
 /** policy 通道放行：内网面整体放开，或该 host/IP 命中白名单 */
-function releasedByPolicy(
-  host: string,
-  policy?: GraphHttpUrlPolicy,
-): boolean {
+function releasedByPolicy(host: string, policy?: GraphHttpUrlPolicy): boolean {
   if (policy?.allowPrivateNetwork) return true;
   return allowlistMatches(host, policy?.allowlist);
 }
@@ -137,7 +134,7 @@ function allowlistMatches(host: string, allowlist?: string[]): boolean {
 
 function ipv4ToLong(host: string): number {
   const [a, b, c, d] = host.split(".").map(Number);
-  return (((a << 24) | (b << 16) | (c << 8) | d) >>> 0);
+  return ((a << 24) | (b << 16) | (c << 8) | d) >>> 0;
 }
 
 function ipv4InCidr(host: string, net: string, bits: number): boolean {

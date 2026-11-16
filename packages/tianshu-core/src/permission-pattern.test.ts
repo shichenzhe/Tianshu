@@ -86,7 +86,7 @@ describe("matchPermissionPattern（bash 命令前缀）", () => {
     ).toBe(false);
   });
 
-  it("前缀引号剥离：`git *` 命中带引号参数的 git commit -m \"x\"", () => {
+  it('前缀引号剥离：`git *` 命中带引号参数的 git commit -m "x"', () => {
     expect(
       matchPermissionPattern("git *", "bash", bash('git commit -m "fix"')),
     ).toBe(true);
@@ -118,9 +118,9 @@ describe("matchPermissionPattern（write/rm 路径 glob）", () => {
     expect(matchPermissionPattern("src/**", "write", write("src/a.ts"))).toBe(
       true,
     );
-    expect(
-      matchPermissionPattern("src/**", "write", write("src/x/y.ts")),
-    ).toBe(true);
+    expect(matchPermissionPattern("src/**", "write", write("src/x/y.ts"))).toBe(
+      true,
+    );
   });
 
   it("段内 * 不跨分隔符：`*.ts` 命中 a.ts 不命中 src/a.ts", () => {
@@ -163,9 +163,9 @@ describe("matchPermissionPattern（write/rm 路径 glob）", () => {
   });
 
   it("绝对路径不命中（仅工作空间相对声明可匹配）", () => {
-    expect(
-      matchPermissionPattern("**", "write", write("/etc/passwd")),
-    ).toBe(false);
+    expect(matchPermissionPattern("**", "write", write("/etc/passwd"))).toBe(
+      false,
+    );
     expect(matchPermissionPattern("**", "write", write("C:\\x\\y.ts"))).toBe(
       false,
     );
@@ -179,9 +179,7 @@ describe("matchPermissionPattern（write/rm 路径 glob）", () => {
 
   it("rm 同 write 语义；其余工具保守不命中", () => {
     expect(matchPermissionPattern("src/**", "rm", write("src/a"))).toBe(true);
-    expect(
-      matchPermissionPattern("src/**", "ls", write("src/a")),
-    ).toBe(false);
+    expect(matchPermissionPattern("src/**", "ls", write("src/a"))).toBe(false);
     expect(
       matchPermissionPattern("{}", "mcp__srv__tool", { any: "thing" }),
     ).toBe(false);
@@ -227,7 +225,10 @@ describe("isRememberedPermission（记忆查表 + lastUsedAt 回写）", () => {
           findMany: async () => rows,
           update: async (args: { where: { id: number }; data: unknown }) => {
             const { id } = args.where;
-            updates.push({ id, lastUsedAt: (args.data as { lastUsedAt: Date }).lastUsedAt });
+            updates.push({
+              id,
+              lastUsedAt: (args.data as { lastUsedAt: Date }).lastUsedAt,
+            });
             return {};
           },
         },

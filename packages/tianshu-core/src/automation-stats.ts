@@ -140,9 +140,7 @@ export function computeStats(
   // 策略裁剪的计数(max——run 仍在即以即时聚合为准);今日恒用即时聚合
   // (rollup 每小时节流写,必然滞后);窗口外日期 trend 不含、天然忽略
   const rollupByDate = new Map(
-    rollups
-      .filter((r) => r.date !== todayKey)
-      .map((r) => [r.date, r] as const),
+    rollups.filter((r) => r.date !== todayKey).map((r) => [r.date, r] as const),
   );
   for (const day of trend) {
     const rollup = rollupByDate.get(day.date);

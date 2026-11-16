@@ -40,10 +40,7 @@ export function encryptField(
     cipher.final(),
   ]);
   const tag = cipher.getAuthTag();
-  return (
-    ENC_PREFIX +
-    Buffer.concat([nonce, encrypted, tag]).toString("base64")
-  );
+  return ENC_PREFIX + Buffer.concat([nonce, encrypted, tag]).toString("base64");
 }
 
 /** 解密单字段：非密文形态（无前缀）原样返回（旧明文兼容）；
@@ -63,8 +60,7 @@ export function decryptField(
     decipher.setAAD(Buffer.from(field, "utf8"));
     decipher.setAuthTag(tag);
     return (
-      decipher.update(ciphertext).toString("utf8") +
-      decipher.final("utf8")
+      decipher.update(ciphertext).toString("utf8") + decipher.final("utf8")
     );
   } catch {
     return null;

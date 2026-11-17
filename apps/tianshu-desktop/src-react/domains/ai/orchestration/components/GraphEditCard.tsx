@@ -83,14 +83,25 @@ interface GraphEditCardProps {
   message: MessageRecord;
   /** 当前画布 canonicalJson（卡片据此构造候选图与撤销可用性） */
   graphJson: string;
+  /** 本轮会话起点（epoch ms）：早于该时刻的历史消息只展示不自动应用——
+   *  持久会话重开/翻页重挂载时，旧回复绝不可再改当前画布（数据损坏
+   *  防线）；新回复（createdAt 在起点之后）走自动应用 */
+  autoApplyAfter: number;
   onApplyOps: (ops: GraphOp[]) => void;
   onApplyFull: (json: GraphJson) => void;
   onUndo: () => void;
 }
 
+/** 消息是否本轮新生成（5s 容差吸收序列化/时钟抖动） */
+function isFreshMessage(createdAt: string, autoApplyAfter: number): boolean {
+  const ts = Date.parse(createdAt);
+  return Number.isFinite(ts) && ts >= autoApplyAfter - 5_000;
+}
+
 export default function GraphEditCard({
   message,
   graphJson,
+  autoApplyAfter,
   onApplyOps,
   onApplyFull,
   onUndo,
@@ -107,9 +118,10 @@ export default function GraphEditCard({
     [message.blocks],
   );
 
-  // 自动应用（单次守卫）：解析成功即跑校验链，通过自动落画布
+  // 自动应用（单次守卫）：仅本轮新回复；历史消息重挂载绝不触发
   useEffect(() => {
     if (!extraction || triedRef.current) return;
+    if (!isFreshMessage(message.createdAt, autoApplyAfter)) return;
     triedRef.current = true;
     const current = parseOrKeep(graphJson).parsed;
     if (!current) {
@@ -191,6 +203,9 @@ export default function GraphEditCard({
   }, [extraction, graphJson, t]);
 
   if (!extraction) return null;
+  // 历史消息：无持久化应用记录可查，不渲染卡片（AI 原文中的代码块仍
+  // 可见，但不会再次改画布）
+  if (!isFreshMessage(message.createdAt, autoApplyAfter)) return null;
 
   const canUndo =
     appliedAtJson !== null && canUndoReceipt(appliedAtJson, graphJson);

@@ -8,7 +8,7 @@
  *   哨兵 id=-1 + 首条惰建；会话已删善后清绑定再发即新建。
  * - 模型目录注入 ModelApi.listAll（AI 不得臆造 modelId，spec 复审裁定）。
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -43,6 +43,8 @@ export default function GraphAiPanel(p: {
   graphName: string;
   description?: string;
   graphJson: string;
+  /** 当前选中节点 id（视图层过滤后；注入快照供 AI 定位改动对象） */
+  selectedNodeIds?: string[];
   aiSessionId: number | undefined;
   onBindingChange: (sessionId: number | undefined) => void;
   onApplyOps: (ops: GraphOp[]) => void;
@@ -102,6 +104,7 @@ export default function GraphAiPanel(p: {
     graphJson: p.graphJson,
     models,
     boundSessionId,
+    selectedNodeIds: p.selectedNodeIds,
     onBindingChange: p.onBindingChange,
   });
 
@@ -136,10 +139,13 @@ export default function GraphAiPanel(p: {
     [sessionRecord, workspaces],
   );
 
-  const hasModel = Boolean(
-    sessionRecord?.currentModelId ??
-    workspaces?.find((w) => w.id === paneWorkspace?.id)?.defaultModelId,
-  );
+  // 模型目录未就绪（在飞/失败）时禁发：空目录注入会瓦解 modelId 幻觉
+  // 防御（评审 Important 5）——复用 hasModel 门，ChatPane 无模型态引导配置
+  const hasModel =
+    Boolean(
+      sessionRecord?.currentModelId ??
+      workspaces?.find((w) => w.id === paneWorkspace?.id)?.defaultModelId,
+    ) && modelsQuery.isSuccess;
 
   // 快捷指令（纯问答，不改图）
   const quickPrompts = useMemo(
@@ -157,6 +163,10 @@ export default function GraphAiPanel(p: {
     ],
     [t],
   );
+
+  // 本轮会话起点：只有晚于该时刻生成的 AI 回复才可自动应用——持久
+  // 会话重开编辑器/翻页重挂载历史卡片时绝不重复改画布
+  const sessionStartRef = useRef(Date.now());
 
   // resolver 失败提示归面板（单点 toast，防双弹）
   const handleResolveSession =
@@ -266,6 +276,7 @@ export default function GraphAiPanel(p: {
                 <GraphEditCard
                   message={message}
                   graphJson={p.graphJson}
+                  autoApplyAfter={sessionStartRef.current}
                   onApplyOps={p.onApplyOps}
                   onApplyFull={p.onApplyFull}
                   onUndo={p.onUndo}

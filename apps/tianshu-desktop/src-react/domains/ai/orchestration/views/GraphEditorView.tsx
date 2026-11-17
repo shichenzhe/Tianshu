@@ -1268,9 +1268,9 @@ export default function GraphEditorView() {
               />
             </GraphHasStartContext.Provider>
           </div>
-          {panelState === "collapsed" ? (
-            <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2">
-              {(
+          <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2">
+            {panelState === "collapsed" &&
+              (
                 [
                   [
                     "props",
@@ -1303,137 +1303,141 @@ export default function GraphEditorView() {
                   </button>
                 </IconTooltip>
               ))}
-            </div>
-          ) : (
-            <div
-              data-panel-state={panelState}
-              className={
-                panelState === "full"
+          </div>
+          {/* 面板树常驻（collapsed 仅 hidden 显隐——卸载即断流式，
+                spec 5c）；右缘把手叠放于其上 */}
+          <div
+            data-panel-state={panelState}
+            className={
+              panelState === "collapsed"
+                ? "hidden"
+                : panelState === "full"
                   ? "absolute inset-4 z-20 flex flex-col rounded-lg border border-border/50 bg-white shadow-lg"
                   : "absolute inset-y-4 right-4 z-20 flex w-[440px] max-w-[55vw] flex-col rounded-lg border border-border/50 bg-white shadow-lg"
-              }
-            >
-              <div className="flex items-center gap-1 border-b border-border/50 px-3 py-1.5">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setPanelTab("props")}
-                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      panelTab === "props"
-                        ? "bg-primary-subtle text-primary"
-                        : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-                    }`}
-                  >
-                    <Settings2 className="h-3.5 w-3.5" />
-                    {t("chat:orchestration.editor.panelSettings")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isNew) {
-                        toast.info(
-                          t("chat:orchestration.editor.ai.unsavedToast"),
-                        );
-                        return;
-                      }
-                      setPanelTab("ai");
-                    }}
-                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
-                      panelTab === "ai"
-                        ? "bg-primary-subtle text-primary"
-                        : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
-                    }`}
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {t("chat:orchestration.editor.ai.tab")}
-                  </button>
-                </div>
-                <div className="ml-auto flex items-center gap-0.5">
-                  {panelState === "float" && (
-                    <IconTooltip
-                      label={t("chat:orchestration.editor.panelTile")}
+            }
+          >
+            <div className="flex items-center gap-1 border-b border-border/50 px-3 py-1.5">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPanelTab("props")}
+                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    panelTab === "props"
+                      ? "bg-primary-subtle text-primary"
+                      : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                  }`}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  {t("chat:orchestration.editor.panelSettings")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isNew) {
+                      toast.info(
+                        t("chat:orchestration.editor.ai.unsavedToast"),
+                      );
+                      return;
+                    }
+                    setPanelTab("ai");
+                  }}
+                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                    panelTab === "ai"
+                      ? "bg-primary-subtle text-primary"
+                      : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {t("chat:orchestration.editor.ai.tab")}
+                </button>
+              </div>
+              <div className="ml-auto flex items-center gap-0.5">
+                {panelState === "float" && (
+                  <IconTooltip label={t("chat:orchestration.editor.panelTile")}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-primary"
+                      aria-label={t("chat:orchestration.editor.panelTile")}
+                      onClick={() => setPanelState("full")}
                     >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                        aria-label={t("chat:orchestration.editor.panelTile")}
-                        onClick={() => setPanelState("full")}
-                      >
-                        <Maximize2 className="h-4 w-4" />
-                      </Button>
-                    </IconTooltip>
-                  )}
-                  {panelState === "full" && (
-                    <IconTooltip
-                      label={t("chat:orchestration.editor.panelFloat")}
-                    >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-primary"
-                        aria-label={t("chat:orchestration.editor.panelFloat")}
-                        onClick={() => setPanelState("float")}
-                      >
-                        <Minimize2 className="h-4 w-4" />
-                      </Button>
-                    </IconTooltip>
-                  )}
+                      <Maximize2 className="h-4 w-4" />
+                    </Button>
+                  </IconTooltip>
+                )}
+                {panelState === "full" && (
                   <IconTooltip
-                    label={t("chat:orchestration.editor.panelCollapse")}
+                    label={t("chat:orchestration.editor.panelFloat")}
                   >
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-primary"
-                      aria-label={t("chat:orchestration.editor.panelCollapse")}
-                      onClick={() => setPanelState("collapsed")}
+                      aria-label={t("chat:orchestration.editor.panelFloat")}
+                      onClick={() => setPanelState("float")}
                     >
-                      <ChevronsRight className="h-4 w-4" />
+                      <Minimize2 className="h-4 w-4" />
                     </Button>
                   </IconTooltip>
-                </div>
-              </div>
-              <div className="@container min-h-0 flex-1 overflow-y-auto">
-                {/* 两 tab 常驻挂载、CSS hidden 显隐：useChatSend 卸载即断
-                    流式监听，生成中切 tab/收起不打断（spec 5c） */}
-                <div className={panelTab === "props" ? "" : "hidden"}>
-                  <NodePropertiesPanel
-                    graph={graph}
-                    name={name}
-                    description={description}
-                    selectedId={selectedId}
-                    onPatchNode={patchNode}
-                    onSwitchKind={switchNodeKindOf}
-                    onRenameNode={handleRenameNode}
-                    onRemoveNode={handleRemoveNode}
-                    onRemoveEdge={removeEdgeById}
-                    onPatchEdgeCondition={patchEdgeCondition}
-                    onGraphMeta={patchGraphMeta}
-                    idLocked={(nodeId) => baselineNodeIds.has(nodeId)}
-                  />
-                </div>
-                {!isNew && (
-                  <div
-                    className={`h-full ${panelTab === "ai" ? "" : "hidden"}`}
-                  >
-                    <GraphAiPanel
-                      graphId={graphId}
-                      graphName={name}
-                      description={description}
-                      graphJson={currentJson}
-                      aiSessionId={boundAiSessionId}
-                      onBindingChange={setBoundAiSessionId}
-                      onApplyOps={handleApplyOps}
-                      onApplyFull={handleApplyFull}
-                      onUndo={handleAiUndo}
-                      onCollapse={() => setPanelState("collapsed")}
-                    />
-                  </div>
                 )}
+                <IconTooltip
+                  label={t("chat:orchestration.editor.panelCollapse")}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-primary"
+                    aria-label={t("chat:orchestration.editor.panelCollapse")}
+                    onClick={() => setPanelState("collapsed")}
+                  >
+                    <ChevronsRight className="h-4 w-4" />
+                  </Button>
+                </IconTooltip>
               </div>
             </div>
-          )}
+            <div className="@container min-h-0 flex-1 overflow-y-auto">
+              {/* 两 tab 常驻挂载、CSS hidden 显隐：useChatSend 卸载即断
+                    流式监听，生成中切 tab/收起不打断（spec 5c） */}
+              <div className={panelTab === "props" ? "" : "hidden"}>
+                <NodePropertiesPanel
+                  graph={graph}
+                  name={name}
+                  description={description}
+                  selectedId={selectedId}
+                  onPatchNode={patchNode}
+                  onSwitchKind={switchNodeKindOf}
+                  onRenameNode={handleRenameNode}
+                  onRemoveNode={handleRemoveNode}
+                  onRemoveEdge={removeEdgeById}
+                  onPatchEdgeCondition={patchEdgeCondition}
+                  onGraphMeta={patchGraphMeta}
+                  idLocked={(nodeId) => baselineNodeIds.has(nodeId)}
+                />
+              </div>
+              {!isNew && (
+                <div className={`h-full ${panelTab === "ai" ? "" : "hidden"}`}>
+                  <GraphAiPanel
+                    graphId={graphId}
+                    graphName={name}
+                    description={description}
+                    graphJson={currentJson}
+                    selectedNodeIds={
+                      selectedId !== null &&
+                      graph.nodes.some((n) => n.id === selectedId)
+                        ? [selectedId]
+                        : undefined
+                    }
+                    aiSessionId={boundAiSessionId}
+                    onBindingChange={setBoundAiSessionId}
+                    onApplyOps={handleApplyOps}
+                    onApplyFull={handleApplyFull}
+                    onUndo={handleAiUndo}
+                    onCollapse={() => setPanelState("collapsed")}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="flex flex-1 flex-col p-3 pt-2">

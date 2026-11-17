@@ -92,12 +92,49 @@ describe("GraphEditCard", () => {
       <GraphEditCard
         message={message}
         graphJson={serializeGraph(validGraph())}
+        autoApplyAfter={0}
         onApplyOps={handlers.onApplyOps ?? (() => {})}
         onApplyFull={handlers.onApplyFull ?? (() => {})}
         onUndo={handlers.onUndo ?? (() => {})}
       />,
     );
   }
+
+  it("历史消息（早于本次会话起点）不自动应用且不渲染卡片", () => {
+    const onApplyOps = vi.fn();
+    const msg = opsMessage([{ op: "addNode", node: validNode }]);
+    msg.createdAt = "2026-11-01T00:00:00.000Z";
+    render(
+      <GraphEditCard
+        message={msg}
+        graphJson={serializeGraph(validGraph())}
+        autoApplyAfter={Date.now()}
+        onApplyOps={onApplyOps as (ops: never[]) => void}
+        onApplyFull={() => {}}
+        onUndo={() => {}}
+      />,
+    );
+    expect(onApplyOps).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("graph-edit-card")).toBeNull();
+  });
+
+  it("重挂载同一历史消息仍不重复应用（模块级守卫）", () => {
+    const onApplyOps = vi.fn();
+    const msg = opsMessage([{ op: "addNode", node: validNode }]);
+    msg.createdAt = "2026-11-01T00:00:00.000Z";
+    const props = {
+      message: msg,
+      graphJson: serializeGraph(validGraph()),
+      autoApplyAfter: Date.now(),
+      onApplyOps: onApplyOps as (ops: never[]) => void,
+      onApplyFull: () => {},
+      onUndo: () => {},
+    };
+    const first = render(<GraphEditCard {...props} />);
+    first.unmount();
+    render(<GraphEditCard {...props} />);
+    expect(onApplyOps).not.toHaveBeenCalled();
+  });
 
   it("合法变更单自动应用一次并显示回执", () => {
     const onApplyOps = vi.fn();
@@ -121,6 +158,7 @@ describe("GraphEditCard", () => {
       <GraphEditCard
         message={msg}
         graphJson={serializeGraph(validGraph())}
+        autoApplyAfter={0}
         onApplyOps={onApplyOps as (ops: never[]) => void}
         onApplyFull={() => {}}
         onUndo={() => {}}

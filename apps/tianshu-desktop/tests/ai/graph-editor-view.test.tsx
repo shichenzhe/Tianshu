@@ -246,28 +246,35 @@ describe("GraphEditorView 属性面板三态", () => {
       screen.getByText("chat:orchestration.editor.panelGraphTitle"),
     ).toBeTruthy();
 
-    // 收缩：面板整体隐藏，右缘双把手（属性 / AI 编排）常驻
+    // 收缩：面板树常驻（hidden 显隐——useChatSend 卸载即断流，spec 5c），
+    // 右缘双把手（属性 / AI 编排）常驻
     fireEvent.click(
       screen.getByRole("button", {
         name: "chat:orchestration.editor.panelCollapse",
       }),
     );
-    expect(document.querySelector("[data-panel-state]")).toBeNull();
+    const collapsedPanel = document.querySelector("[data-panel-state]");
+    expect(collapsedPanel).toBeTruthy();
+    expect(collapsedPanel?.className).toContain("hidden");
+    // 面板内容仍挂载（不可见；jsdom 不计算 Tailwind，走 aria-label 精确取把手）
     expect(
-      screen.queryByText("chat:orchestration.editor.panelGraphTitle"),
-    ).toBeNull();
-    const propsHandle = screen.getByRole("button", {
-      name: "chat:orchestration.editor.panelSettings",
-    });
+      screen.getByText("chat:orchestration.editor.panelGraphTitle"),
+    ).toBeTruthy();
+    const propsHandle = document.querySelector(
+      'button[aria-label="chat:orchestration.editor.panelSettings"]',
+    );
     expect(propsHandle).toBeTruthy();
     // AI 编排把手并排常驻（新建图点击仅提示，不展开）
     expect(
-      screen.getByRole("button", { name: "chat:orchestration.editor.ai.tab" }),
+      document.querySelector(
+        'button[aria-label="chat:orchestration.editor.ai.tab"]',
+      ),
     ).toBeTruthy();
 
-    // 属性把手点开 → 回浮动（选中属性 tab）
+    // 属性把手点开 → 回浮动（选中属性 tab，hidden 卸下）
     fireEvent.click(propsHandle);
-    expect(document.querySelector('[data-panel-state="float"]')).toBeTruthy();
+    const floatedPanel = document.querySelector("[data-panel-state]");
+    expect(floatedPanel?.className).not.toContain("hidden");
     expect(
       screen.getByText("chat:orchestration.editor.panelGraphTitle"),
     ).toBeTruthy();

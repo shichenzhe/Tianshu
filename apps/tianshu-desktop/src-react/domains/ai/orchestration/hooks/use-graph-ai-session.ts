@@ -38,6 +38,8 @@ export function useGraphAiSession(p: {
   graphJson: string;
   models: GraphAiModelRef[];
   boundSessionId: number | undefined;
+  /** 当前选中节点 id（视图层已过滤：仅节点 id，边稳定串不得混入） */
+  selectedNodeIds?: string[];
   onBindingChange: (sessionId: number | undefined) => void;
 }) {
   const { t } = useTranslation(["chat"]);
@@ -51,8 +53,9 @@ export function useGraphAiSession(p: {
         description: p.description,
         graphJson: p.graphJson,
         models: p.models,
+        selectedNodeIds: p.selectedNodeIds,
       }),
-    [t, p.graphName, p.description, p.graphJson, p.models],
+    [t, p.graphName, p.description, p.graphJson, p.models, p.selectedNodeIds],
   );
 
   const ensureSession = useCallback(async (): Promise<number> => {
@@ -76,8 +79,10 @@ export function useGraphAiSession(p: {
     return ensuringRef.current;
   }, [p.graphId, p.graphName, p.boundSessionId, p.onBindingChange]);
 
-  /** 占位会话首条发送（ChatPane sessionResolver）：会话落地 + 首条前缀
-   *  （固定指令 + 快照）；失败抛错，提示归面板包装层（防双弹） */
+  /** 占位会话首条发送（ChatPane sessionResolver）：会话落地 + 首条前缀。
+   *  前缀只含固定指令——图快照统一由 buildSendPrefix 注入（ChatPane 哨兵
+   *  路径 resolver 前缀与 sendPrefix 都拼），避免首条双份快照（评审
+   *  Important 3）。失败抛错，提示归面板包装层（防双弹） */
   const prepareFirstSend =
     useCallback(async (): Promise<SessionResolverResult> => {
       const sessionId = await ensureSession();
@@ -91,10 +96,9 @@ export function useGraphAiSession(p: {
       };
       return {
         session: stub,
-        contentPrefix:
-          buildGraphAiInstruction(t, p.models) + "\n\n" + snapshotPrefix(),
+        contentPrefix: buildGraphAiInstruction(t, p.models),
       };
-    }, [ensureSession, p.graphName, p.models, snapshotPrefix, t]);
+    }, [ensureSession, p.graphName, p.models, t]);
 
   /** 每条发送注入的最新图快照（首条之后的常规发送） */
   const buildSendPrefix = useCallback(

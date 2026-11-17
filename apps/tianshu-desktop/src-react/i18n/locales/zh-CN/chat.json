@@ -1398,7 +1398,17 @@
         "itemAddEdge": "连接 {{from}} → {{to}}",
         "itemRemoveEdge": "断开 {{from}} → {{to}}",
         "itemRenameNode": "重命名 {{from}} → {{to}}",
-        "itemFullReplace": "整体替换（{{nodes}} 节点 / {{edges}} 边）"
+        "itemFullReplace": "整体替换（{{nodes}} 节点 / {{edges}} 边）",
+        "tab": "AI 编排",
+        "panelTitle": "AI 编排",
+        "newSession": "新建会话",
+        "collapse": "收起面板",
+        "sendFailed": "发送失败，请稍后重试",
+        "unsavedToast": "保存工作流后可使用 AI 编排",
+        "quickExplain": "解释当前图",
+        "quickExplainPrompt": "请解释当前工作流的结构与执行流程。",
+        "quickSuggest": "优化建议",
+        "quickSuggestPrompt": "请检查当前工作流并给出改进建议（不要修改图）。"
       }
     },
     "templates": {

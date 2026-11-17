@@ -1398,7 +1398,17 @@
         "itemAddEdge": "Connect {{from}} → {{to}}",
         "itemRemoveEdge": "Disconnect {{from}} → {{to}}",
         "itemRenameNode": "Rename {{from}} → {{to}}",
-        "itemFullReplace": "Full replace ({{nodes}} nodes / {{edges}} edges)"
+        "itemFullReplace": "Full replace ({{nodes}} nodes / {{edges}} edges)",
+        "tab": "AI",
+        "panelTitle": "AI orchestration",
+        "newSession": "New session",
+        "collapse": "Collapse panel",
+        "sendFailed": "Send failed, please retry",
+        "unsavedToast": "Save the workflow to use AI orchestration",
+        "quickExplain": "Explain this graph",
+        "quickExplainPrompt": "Explain the structure and execution flow of the current workflow.",
+        "quickSuggest": "Optimization tips",
+        "quickSuggestPrompt": "Review the current workflow and suggest improvements (do not modify the graph)."
       }
     },
     "templates": {

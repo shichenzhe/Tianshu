@@ -468,6 +468,8 @@ model graphDefinition {
   graphJson   String
   version     Int      @default(1)
   enabled     Boolean  @default(true)
+  /// AI 编排会话绑定（1:1，null=未绑定；资源侧拥有，随图行消亡）
+  aiSessionId Int?
   userId      Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

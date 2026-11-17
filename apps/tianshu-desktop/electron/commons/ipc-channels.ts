@@ -201,6 +201,7 @@ export const IPC_INVOKE_ALLOWLIST = [
   "orchestration:update",
   "orchestration:delete",
   "orchestration:toggle",
+  "orchestration:bindAiSession",
   "orchestration:templates",
   "orchestration:runTest",
   "orchestration:cancelTestRun",

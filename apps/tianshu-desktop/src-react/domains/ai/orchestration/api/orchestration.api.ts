@@ -51,6 +51,8 @@ export interface GraphRecord {
   createdAt: string;
   updatedAt: string;
   nodeCount: number;
+  /** AI 编排会话绑定（1:1，null/undefined=未绑定） */
+  aiSessionId?: number | null;
 }
 
 export interface GraphCreateParams {
@@ -142,6 +144,15 @@ export class GraphApi {
       { ch: "orchestration:toggle", args: [id, enabled] },
       (connId) => remoteGraphToggle(id, enabled, connId),
     );
+  }
+
+  /** AI 编排会话绑定回写（1:1；null=解绑）——本地编辑器能力，远程态门控 */
+  static async bindAiSession(
+    id: number,
+    aiSessionId: number | null,
+  ): Promise<GraphRecord> {
+    rejectOnRemote("AI 编排会话绑定");
+    return invoke<GraphRecord>("orchestration:bindAiSession", id, aiSessionId);
   }
 
   static async templates(): Promise<GraphTemplate[]> {

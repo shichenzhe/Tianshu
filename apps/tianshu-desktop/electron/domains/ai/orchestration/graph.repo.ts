@@ -81,6 +81,8 @@ export interface GraphRecord {
   createdAt: string;
   updatedAt: string;
   nodeCount: number;
+  /** AI 编排会话绑定（1:1，null=未绑定） */
+  aiSessionId: number | null;
 }
 
 /** DB 行 → 前端记录（历史脏行坏 JSON 容错 nodeCount=0，不炸列表） */
@@ -95,6 +97,7 @@ export function toGraphRecord(row: GraphRow): GraphRecord {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     nodeCount: countNodes(row.graphJson),
+    aiSessionId: row.aiSessionId ?? null,
   };
 }
 
@@ -224,6 +227,13 @@ export default class GraphRepository {
     );
     handleUser("orchestration:delete", (_, userId, id: number) =>
       this.deleteGraph(id, userId),
+    );
+    // AI 编排会话绑定（1:1，资源侧拥有）：局部 update 不动 graphJson/
+    // version——绑定回写走此专用通道，避免全量覆盖 update 误清
+    handleUser(
+      "orchestration:bindAiSession",
+      (_, userId, id: number, aiSessionId: number | null) =>
+        this.bindAiSession(id, aiSessionId, userId),
     );
     handleUser(
       "orchestration:toggle",
@@ -713,6 +723,27 @@ export default class GraphRepository {
     });
     if (res.count === 0) {
       throw new Error("VERSION_CONFLICT");
+    }
+    const row = await prisma.graphDefinition.findUniqueOrThrow({
+      where: { id },
+    });
+    return toGraphRecord(row);
+  }
+
+  /** AI 编排会话绑定回写：归属校验 + 局部更新 aiSessionId（null=解绑），
+   *  不触碰 graphJson/version（与全量覆盖的 updateGraph 互不影响） */
+  private async bindAiSession(
+    id: number,
+    aiSessionId: number | null,
+    userId: number,
+  ): Promise<GraphRecord> {
+    await this.assertGraphOwned(id, userId);
+    const res = await prisma.graphDefinition.updateMany({
+      where: { id, userId },
+      data: { aiSessionId },
+    });
+    if (res.count === 0) {
+      throw new Error("GRAPH_NOT_FOUND");
     }
     const row = await prisma.graphDefinition.findUniqueOrThrow({
       where: { id },

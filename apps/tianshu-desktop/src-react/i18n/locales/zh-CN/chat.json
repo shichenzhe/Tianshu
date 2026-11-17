@@ -1384,7 +1384,8 @@
         "prefixSummary": "【工作流编排上下文】\n名称：{{name}}\n描述：{{description}}\n可用模型目录（id 显示名）：\n{{models}}\n当前选中节点：{{selected}}\n当前图结构摘要（完整 JSON 超出注入上限，共 {{nodeCount}} 节点/{{edgeCount}} 边）：\n{{summary}}",
         "prefixSelectedNodes": "无",
         "truncatedNote": "（完整图 JSON 超出注入上限，已降级为结构摘要）",
-        "applyBlocked": "AI 改动未通过校验，未应用到画布"
+        "applyBlocked": "AI 改动未通过校验，未应用到画布",
+        "sessionGone": "AI 会话已被删除，再发消息将新建会话"
       }
     },
     "templates": {

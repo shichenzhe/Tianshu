@@ -1384,7 +1384,8 @@
         "prefixSummary": "[Workflow orchestration context]\nName: {{name}}\nDescription: {{description}}\nAvailable models (id display name):\n{{models}}\nSelected nodes: {{selected}}\nGraph structure summary (full JSON exceeds injection limit, {{nodeCount}} nodes/{{edgeCount}} edges):\n{{summary}}",
         "prefixSelectedNodes": "none",
         "truncatedNote": "(Full graph JSON exceeds the injection limit; downgraded to a structure summary)",
-        "applyBlocked": "AI changes failed validation and were not applied to the canvas"
+        "applyBlocked": "AI changes failed validation and were not applied to the canvas",
+        "sessionGone": "The AI session was deleted; sending again will create a new one"
       }
     },
     "templates": {

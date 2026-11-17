@@ -48,9 +48,10 @@ const mainVersion = JSON.parse(
   ),
 ).version;
 
-// 副本目录预置 package.json：npm 11 install-scripts 白名单按安装根判定，
-// 预置同名条目防止 --prefix 安装把 prebuild-install 拦在门外（拿不到
-// node-ABI 预编译产物）
+// 副本目录预置 package.json（纯占位）。npm 11.19+ 项目作用域安装只认
+// 项目根 package.json 的 allowScripts 字段——根白名单已含 better-sqlite3，
+// 此处再写 allowScripts 会触发 EALLOWSCRIPTS（"--allow-scripts is not
+// allowed in project-scoped installs"）把整段装配打挂（2026-11-17 实测）
 fs.mkdirSync(targetDir, { recursive: true });
 fs.writeFileSync(
   path.join(targetDir, "package.json"),
@@ -58,7 +59,6 @@ fs.writeFileSync(
     {
       name: "tianshu-native-node",
       private: true,
-      allowScripts: { [`better-sqlite3@${mainVersion}`]: true },
     },
     null,
     2,
@@ -66,6 +66,11 @@ fs.writeFileSync(
 );
 
 console.log(`[setup-native-node] better-sqlite3@${mainVersion} → ${targetDir}`);
+// npm run 上下文会把用户 .npmrc 的 allow-scripts 导出为
+// npm_config_allow_scripts——子 npm 视作 --allow-scripts 旗标，在项目
+// 作用域安装里直接 EALLOWSCRIPTS（2026-11-17 实测）。装配前剥掉该变量
+const childEnv = { ...process.env };
+delete childEnv.npm_config_allow_scripts;
 execFileSync(
   process.execPath,
   [
@@ -78,7 +83,7 @@ execFileSync(
     "--no-audit",
     "--no-fund",
   ],
-  { stdio: "inherit", cwd: repoRoot },
+  { stdio: "inherit", cwd: repoRoot, env: childEnv },
 );
 
 // 装配自检：副本必须在系统 node 下可加载（node-ABI）；失败即非零退出，

@@ -4,7 +4,7 @@
  * 图快照统一由 buildSendPrefix 注入——首条不得双份快照（大图时上下文
  * 直接翻倍）。会话惰建 + 绑定回写经 mock invoke 验证。
  */
-import { cleanup, renderHook, act } from "@testing-library/react";
+import { cleanup, renderHook, waitFor, act } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 afterEach(cleanup);
@@ -91,6 +91,25 @@ describe("useGraphAiSession", () => {
     const prefix = result.current.buildSendPrefix();
     const prefixOpts = JSON.parse(prefix.slice(prefix.indexOf("{")));
     expect(prefixOpts.selected).toBe("node-1");
+  });
+
+  it("会话被删善后：清绑定失败也乐观解除本地绑定（不卡占位态）", async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === "orchestration:bindAiSession") {
+        return Promise.reject(new Error("IPC_DOWN"));
+      }
+      return Promise.resolve(undefined);
+    });
+    const onBindingChange = vi.fn();
+    const { result } = renderHook(() =>
+      useGraphAiSession({ ...baseParams, onBindingChange }),
+    );
+    await act(async () => {
+      result.current.handleSessionGone();
+    });
+    await waitFor(() =>
+      expect(onBindingChange).toHaveBeenCalledWith(undefined),
+    );
   });
 
   it("已绑定会话直接复用，不再 create/bind", async () => {

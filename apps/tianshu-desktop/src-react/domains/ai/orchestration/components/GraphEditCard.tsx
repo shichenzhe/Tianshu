@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { toast } from "sonner";
 import {
   CheckCircle2,
   Link2,
@@ -98,6 +99,30 @@ function isFreshMessage(createdAt: string, autoApplyAfter: number): boolean {
   return Number.isFinite(ts) && ts >= autoApplyAfter - 5_000;
 }
 
+/** 应用器错误码 → i18n key（graph-ai-ops 抛 code:detail 形态；未识别码
+ *  回落通用键，detail 原样带出） */
+const OP_ERROR_KEYS: Record<string, string> = {
+  "node-missing": "errNodeMissing",
+  "node-exists": "errNodeExists",
+  "id-kind-immutable": "errIdKindImmutable",
+  "edge-self-loop": "errEdgeSelfLoop",
+  "edge-duplicate": "errEdgeDuplicate",
+  "edge-missing": "errEdgeMissing",
+};
+
+type Translate = (key: string, opts?: Record<string, unknown>) => string;
+
+function localizeApplyError(e: unknown, t: Translate): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  const sep = raw.indexOf(":");
+  const code = sep > 0 ? raw.slice(0, sep) : "";
+  const detail = sep > 0 ? raw.slice(sep + 1) : raw;
+  const key = OP_ERROR_KEYS[code];
+  return key
+    ? t(`${AI_KEY}.${key}`, { detail })
+    : t(`${AI_KEY}.errUnknown`, { detail: raw });
+}
+
 export default function GraphEditCard({
   message,
   graphJson,
@@ -125,7 +150,7 @@ export default function GraphEditCard({
     triedRef.current = true;
     const current = parseOrKeep(graphJson).parsed;
     if (!current) {
-      setError("current graph unparseable");
+      setError(t(`${AI_KEY}.currentUnparseable`));
       setState("failed");
       return;
     }
@@ -144,8 +169,9 @@ export default function GraphEditCard({
       }
       setAppliedAtJson(serializeGraph(validated.value));
       setState("applied");
+      toast.success(t(`${AI_KEY}.applyOk`));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(localizeApplyError(e, t));
       setState("failed");
     }
     // 有意单次执行：triedRef 守卫 + 回调/图快照以渲染时点为准
@@ -250,7 +276,7 @@ export default function GraphEditCard({
             ))
           ) : (
             <p className="text-destructive">
-              · {t(`${AI_KEY}.opsError`, { message: error ?? "?" })}
+              · {error ?? t(`${AI_KEY}.errUnknown`, { detail: "?" })}
             </p>
           )}
           <p className="text-muted-foreground">

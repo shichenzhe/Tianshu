@@ -256,6 +256,7 @@ export default function ChatPane({
       send,
       setEditing,
       queryClient,
+      buildSendPrefix,
     ],
   );
 

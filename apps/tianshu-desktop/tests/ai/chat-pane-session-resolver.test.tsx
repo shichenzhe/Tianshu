@@ -254,3 +254,42 @@ describe("ChatPane 占位会话直发（T26 sessionResolver）", () => {
     );
   });
 });
+
+describe("ChatPane buildSendPrefix（图 AI 快照注入）", () => {
+  it("重渲染后发送用最新前缀（闭包不陈旧）", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    let snapshot = "SNAP-v1";
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <ChatPane
+          session={REAL_SESSION}
+          workspace={{ id: 7 }}
+          hasModel
+          onOpenSettings={() => undefined}
+          buildSendPrefix={() => snapshot}
+        />
+      </QueryClientProvider>,
+    );
+    await vi.waitFor(() => expect(inputProps.current?.onSend).toBeTruthy());
+    // 模拟图被 AI/用户改动 → 前缀构建器闭包值更新（prop 身份随之变化）
+    snapshot = "SNAP-v2";
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <ChatPane
+          session={REAL_SESSION}
+          workspace={{ id: 7 }}
+          hasModel
+          onOpenSettings={() => undefined}
+          buildSendPrefix={() => snapshot}
+        />
+      </QueryClientProvider>,
+    );
+    await vi.waitFor(() => expect(inputProps.current?.onSend).toBeTruthy());
+    await inputProps.current!.onSend!("问题", []);
+    const sendCall = invokeMock.mock.calls.find((c) => c[0] === "chat:send");
+    expect(sendCall?.[1].content).toBe("SNAP-v2\n\n问题");
+    expect(sendCall?.[1].content).not.toContain("SNAP-v1");
+  });
+});

@@ -12,6 +12,8 @@ vi.mock("react-i18next", () => ({
   }),
   initReactI18next: { type: "3rdParty", init: () => {} },
 }));
+const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
+vi.mock("sonner", () => ({ toast: toastMock }));
 
 import {
   canUndoReceipt,
@@ -177,6 +179,29 @@ describe("GraphEditCard", () => {
     expect(onApplyOps).not.toHaveBeenCalled();
     const card = screen.getByTestId("graph-edit-card").textContent ?? "";
     expect(card).toContain("chat:orchestration.editor.ai.receiptFailed");
+  });
+
+  it("操作前置失败（节点不存在）显示本地化错误码，不裸抛中文串", () => {
+    const onApplyOps = vi.fn();
+    renderCard(
+      opsMessage([{ op: "updateNode", id: "ghost", patch: { name: "x" } }]),
+      { onApplyOps: onApplyOps as (ops: never[]) => void },
+    );
+    expect(onApplyOps).not.toHaveBeenCalled();
+    const card = screen.getByTestId("graph-edit-card").textContent ?? "";
+    expect(card).toContain("chat:orchestration.editor.ai.errNodeMissing");
+    expect(card).not.toContain("节点不存在");
+  });
+
+  it("应用成功出成功 toast（卡片之外的统一反馈）", () => {
+    const msg = opsMessage([
+      { op: "addNode", node: validNode },
+      { op: "addEdge", edge: { from: "node-1", to: "code-1" } },
+    ]);
+    renderCard(msg);
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "chat:orchestration.editor.ai.applyOk{}",
+    );
   });
 
   it("无可提取内容时返回 null", () => {

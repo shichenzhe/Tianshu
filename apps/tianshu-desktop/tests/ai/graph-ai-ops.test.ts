@@ -176,4 +176,47 @@ describe("mergeSurvivingPositions", () => {
     expect(merged.nodes[1].position).toEqual({ x: 5, y: 5 });
     expect(merged.endPosition).toEqual({ x: 9, y: 9 });
   });
+
+  it("同 id 存活节点省略 position 时继承画布现坐标（AI 常省略未改节点）", () => {
+    const current: GraphJson = {
+      ...emptyGraph(),
+      endPosition: { x: 9, y: 9 },
+      nodes: emptyGraph().nodes.map((n) => ({
+        ...n,
+        position: { x: 3, y: 4 },
+      })),
+    };
+    // AI 回传：node-1 未带 position（模型省略），start 原样带回
+    const next: GraphJson = {
+      ...current,
+      nodes: [
+        { ...current.nodes[0] },
+        { ...current.nodes[1], position: undefined },
+      ],
+    };
+    delete (next.nodes[1] as { position?: { x: number; y: number } }).position;
+    const merged = mergeSurvivingPositions(current, next);
+    expect(merged.nodes[0].position).toEqual({ x: 3, y: 4 });
+    expect(merged.nodes[1].position).toEqual({ x: 3, y: 4 });
+    // endPosition 同理继承（next 未带时）
+    const withoutEnd: GraphJson = { ...next, endPosition: undefined };
+    delete (withoutEnd as { endPosition?: { x: number; y: number } })
+      .endPosition;
+    expect(mergeSurvivingPositions(current, withoutEnd).endPosition).toEqual({
+      x: 9,
+      y: 9,
+    });
+  });
+
+  it("next 自带 endPosition 时不被 current 覆盖", () => {
+    const current: GraphJson = {
+      ...emptyGraph(),
+      endPosition: { x: 9, y: 9 },
+    };
+    const next: GraphJson = { ...current, endPosition: { x: 1, y: 1 } };
+    expect(mergeSurvivingPositions(current, next).endPosition).toEqual({
+      x: 1,
+      y: 1,
+    });
+  });
 });

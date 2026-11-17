@@ -116,11 +116,15 @@ export function useGraphAiSession(p: {
     await clearBinding();
   }, [clearBinding]);
 
-  /** 会话被外部删除善后：清绑定 + 提示，面板回占位再发即新建 */
+  /** 会话被外部删除善后：乐观清本地绑定（占位 UI 立即可再发新建，不卡
+   *  「占位 + 旧绑定」态——评审 Minor 7）；落库解绑后台补，失败提示 */
   const handleSessionGone = useCallback(() => {
-    clearBinding().catch(() => undefined);
+    p.onBindingChange(undefined);
+    GraphApi.bindAiSession(p.graphId, null).catch(() => {
+      toast.error(t("chat:orchestration.editor.ai.unbindFailed"));
+    });
     toast.error(t("chat:orchestration.editor.ai.sessionGone"));
-  }, [clearBinding, t]);
+  }, [p.graphId, p.onBindingChange, t]);
 
   return {
     prepareFirstSend,

@@ -57,9 +57,15 @@ export const graphChangeSetSchema: z.ZodType<GraphChangeSet> = z.object({
   ops: z.array(graphOpSchema).min(1),
 });
 
+/** 稳定错误码（message = code:detail）：卡片/调用方按码本地化，不裸抛
+ *  自然语言串（评审 Minor 9 的 i18n 收口） */
+function opError(code: string, detail: string): Error {
+  return new Error(`${code}:${detail}`);
+}
+
 function nodeOf(graph: GraphJson, id: string): GraphNode {
   const node = graph.nodes.find((n) => n.id === id);
-  if (!node) throw new Error(`节点不存在: ${id}`);
+  if (!node) throw opError("node-missing", id);
   return node;
 }
 
@@ -67,14 +73,14 @@ function applyOne(graph: GraphJson, op: GraphOp): GraphJson {
   switch (op.op) {
     case "addNode": {
       if (graph.nodes.some((n) => n.id === op.node.id)) {
-        throw new Error(`节点已存在: ${op.node.id}`);
+        throw opError("node-exists", op.node.id);
       }
       return { ...graph, nodes: [...graph.nodes, op.node] };
     }
     case "updateNode": {
       nodeOf(graph, op.id);
       if ("id" in op.patch || "kind" in op.patch) {
-        throw new Error(`updateNode 不得修改 id/kind: ${op.id}`);
+        throw opError("id-kind-immutable", op.id);
       }
       return {
         ...graph,
@@ -94,7 +100,7 @@ function applyOne(graph: GraphJson, op: GraphOp): GraphJson {
     case "renameNode": {
       nodeOf(graph, op.from);
       if (graph.nodes.some((n) => n.id === op.to)) {
-        throw new Error(`renameNode 目标 id 已存在: ${op.to}`);
+        throw opError("node-exists", op.to);
       }
       return renameNode(graph, op.from, op.to);
     }
@@ -102,14 +108,14 @@ function applyOne(graph: GraphJson, op: GraphOp): GraphJson {
       const { from, to, condition } = op.edge;
       nodeOf(graph, from);
       nodeOf(graph, to);
-      if (from === to) throw new Error(`addEdge 不支持自环: ${from}`);
+      if (from === to) throw opError("edge-self-loop", `${from}→${to}`);
       const duplicated = graph.edges.some(
         (e) =>
           e.from === from &&
           e.to === to &&
           (e.condition?.value ?? null) === (condition?.value ?? null),
       );
-      if (duplicated) throw new Error(`边已存在: ${from} → ${to}`);
+      if (duplicated) throw opError("edge-duplicate", `${from}→${to}`);
       return { ...graph, edges: [...graph.edges, op.edge] };
     }
     case "removeEdge": {
@@ -118,7 +124,7 @@ function applyOne(graph: GraphJson, op: GraphOp): GraphJson {
         return (e.condition?.value ?? undefined) !== op.conditionValue;
       });
       if (kept.length === graph.edges.length) {
-        throw new Error(`边不存在: ${op.from} → ${op.to}`);
+        throw opError("edge-missing", `${op.from}→${op.to}`);
       }
       return { ...graph, edges: kept };
     }

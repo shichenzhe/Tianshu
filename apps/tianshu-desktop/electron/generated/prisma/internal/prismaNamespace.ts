@@ -3374,6 +3374,7 @@ export const GraphDefinitionScalarFieldEnum = {
   graphJson: 'graphJson',
   version: 'version',
   enabled: 'enabled',
+  aiSessionId: 'aiSessionId',
   userId: 'userId',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'

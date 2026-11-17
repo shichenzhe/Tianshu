@@ -29,12 +29,14 @@ export type AggregateGraphDefinition = {
 export type GraphDefinitionAvgAggregateOutputType = {
   id: number | null
   version: number | null
+  aiSessionId: number | null
   userId: number | null
 }
 
 export type GraphDefinitionSumAggregateOutputType = {
   id: number | null
   version: number | null
+  aiSessionId: number | null
   userId: number | null
 }
 
@@ -45,6 +47,7 @@ export type GraphDefinitionMinAggregateOutputType = {
   graphJson: string | null
   version: number | null
   enabled: boolean | null
+  aiSessionId: number | null
   userId: number | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -57,6 +60,7 @@ export type GraphDefinitionMaxAggregateOutputType = {
   graphJson: string | null
   version: number | null
   enabled: boolean | null
+  aiSessionId: number | null
   userId: number | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -69,6 +73,7 @@ export type GraphDefinitionCountAggregateOutputType = {
   graphJson: number
   version: number
   enabled: number
+  aiSessionId: number
   userId: number
   createdAt: number
   updatedAt: number
@@ -79,12 +84,14 @@ export type GraphDefinitionCountAggregateOutputType = {
 export type GraphDefinitionAvgAggregateInputType = {
   id?: true
   version?: true
+  aiSessionId?: true
   userId?: true
 }
 
 export type GraphDefinitionSumAggregateInputType = {
   id?: true
   version?: true
+  aiSessionId?: true
   userId?: true
 }
 
@@ -95,6 +102,7 @@ export type GraphDefinitionMinAggregateInputType = {
   graphJson?: true
   version?: true
   enabled?: true
+  aiSessionId?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -107,6 +115,7 @@ export type GraphDefinitionMaxAggregateInputType = {
   graphJson?: true
   version?: true
   enabled?: true
+  aiSessionId?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -119,6 +128,7 @@ export type GraphDefinitionCountAggregateInputType = {
   graphJson?: true
   version?: true
   enabled?: true
+  aiSessionId?: true
   userId?: true
   createdAt?: true
   updatedAt?: true
@@ -218,6 +228,7 @@ export type GraphDefinitionGroupByOutputType = {
   graphJson: string
   version: number
   enabled: boolean
+  aiSessionId: number | null
   userId: number | null
   createdAt: Date
   updatedAt: Date
@@ -253,6 +264,7 @@ export type graphDefinitionWhereInput = {
   graphJson?: Prisma.StringFilter<"graphDefinition"> | string
   version?: Prisma.IntFilter<"graphDefinition"> | number
   enabled?: Prisma.BoolFilter<"graphDefinition"> | boolean
+  aiSessionId?: Prisma.IntNullableFilter<"graphDefinition"> | number | null
   userId?: Prisma.IntNullableFilter<"graphDefinition"> | number | null
   createdAt?: Prisma.DateTimeFilter<"graphDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"graphDefinition"> | Date | string
@@ -265,6 +277,7 @@ export type graphDefinitionOrderByWithRelationInput = {
   graphJson?: Prisma.SortOrder
   version?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -280,6 +293,7 @@ export type graphDefinitionWhereUniqueInput = Prisma.AtLeast<{
   graphJson?: Prisma.StringFilter<"graphDefinition"> | string
   version?: Prisma.IntFilter<"graphDefinition"> | number
   enabled?: Prisma.BoolFilter<"graphDefinition"> | boolean
+  aiSessionId?: Prisma.IntNullableFilter<"graphDefinition"> | number | null
   userId?: Prisma.IntNullableFilter<"graphDefinition"> | number | null
   createdAt?: Prisma.DateTimeFilter<"graphDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"graphDefinition"> | Date | string
@@ -292,6 +306,7 @@ export type graphDefinitionOrderByWithAggregationInput = {
   graphJson?: Prisma.SortOrder
   version?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   userId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -312,6 +327,7 @@ export type graphDefinitionScalarWhereWithAggregatesInput = {
   graphJson?: Prisma.StringWithAggregatesFilter<"graphDefinition"> | string
   version?: Prisma.IntWithAggregatesFilter<"graphDefinition"> | number
   enabled?: Prisma.BoolWithAggregatesFilter<"graphDefinition"> | boolean
+  aiSessionId?: Prisma.IntNullableWithAggregatesFilter<"graphDefinition"> | number | null
   userId?: Prisma.IntNullableWithAggregatesFilter<"graphDefinition"> | number | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"graphDefinition"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"graphDefinition"> | Date | string
@@ -323,6 +339,7 @@ export type graphDefinitionCreateInput = {
   graphJson: string
   version?: number
   enabled?: boolean
+  aiSessionId?: number | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -335,6 +352,7 @@ export type graphDefinitionUncheckedCreateInput = {
   graphJson: string
   version?: number
   enabled?: boolean
+  aiSessionId?: number | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -346,6 +364,7 @@ export type graphDefinitionUpdateInput = {
   graphJson?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiSessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -358,6 +377,7 @@ export type graphDefinitionUncheckedUpdateInput = {
   graphJson?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiSessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -370,6 +390,7 @@ export type graphDefinitionCreateManyInput = {
   graphJson: string
   version?: number
   enabled?: boolean
+  aiSessionId?: number | null
   userId?: number | null
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -381,6 +402,7 @@ export type graphDefinitionUpdateManyMutationInput = {
   graphJson?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiSessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -393,6 +415,7 @@ export type graphDefinitionUncheckedUpdateManyInput = {
   graphJson?: Prisma.StringFieldUpdateOperationsInput | string
   version?: Prisma.IntFieldUpdateOperationsInput | number
   enabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiSessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   userId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -405,6 +428,7 @@ export type graphDefinitionCountOrderByAggregateInput = {
   graphJson?: Prisma.SortOrder
   version?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -413,6 +437,7 @@ export type graphDefinitionCountOrderByAggregateInput = {
 export type graphDefinitionAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   version?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
 }
 
@@ -423,6 +448,7 @@ export type graphDefinitionMaxOrderByAggregateInput = {
   graphJson?: Prisma.SortOrder
   version?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -435,6 +461,7 @@ export type graphDefinitionMinOrderByAggregateInput = {
   graphJson?: Prisma.SortOrder
   version?: Prisma.SortOrder
   enabled?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -443,6 +470,7 @@ export type graphDefinitionMinOrderByAggregateInput = {
 export type graphDefinitionSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   version?: Prisma.SortOrder
+  aiSessionId?: Prisma.SortOrder
   userId?: Prisma.SortOrder
 }
 
@@ -455,6 +483,7 @@ export type graphDefinitionSelect<ExtArgs extends runtime.Types.Extensions.Inter
   graphJson?: boolean
   version?: boolean
   enabled?: boolean
+  aiSessionId?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -467,6 +496,7 @@ export type graphDefinitionSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   graphJson?: boolean
   version?: boolean
   enabled?: boolean
+  aiSessionId?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -479,6 +509,7 @@ export type graphDefinitionSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   graphJson?: boolean
   version?: boolean
   enabled?: boolean
+  aiSessionId?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -491,12 +522,13 @@ export type graphDefinitionSelectScalar = {
   graphJson?: boolean
   version?: boolean
   enabled?: boolean
+  aiSessionId?: boolean
   userId?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type graphDefinitionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "graphJson" | "version" | "enabled" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["graphDefinition"]>
+export type graphDefinitionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "graphJson" | "version" | "enabled" | "aiSessionId" | "userId" | "createdAt" | "updatedAt", ExtArgs["result"]["graphDefinition"]>
 
 export type $graphDefinitionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "graphDefinition"
@@ -508,6 +540,10 @@ export type $graphDefinitionPayload<ExtArgs extends runtime.Types.Extensions.Int
     graphJson: string
     version: number
     enabled: boolean
+    /**
+     * AI 编排会话绑定（1:1，null=未绑定；资源侧拥有，随图行消亡）
+     */
+    aiSessionId: number | null
     userId: number | null
     createdAt: Date
     updatedAt: Date
@@ -940,6 +976,7 @@ export interface graphDefinitionFieldRefs {
   readonly graphJson: Prisma.FieldRef<"graphDefinition", 'String'>
   readonly version: Prisma.FieldRef<"graphDefinition", 'Int'>
   readonly enabled: Prisma.FieldRef<"graphDefinition", 'Boolean'>
+  readonly aiSessionId: Prisma.FieldRef<"graphDefinition", 'Int'>
   readonly userId: Prisma.FieldRef<"graphDefinition", 'Int'>
   readonly createdAt: Prisma.FieldRef<"graphDefinition", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"graphDefinition", 'DateTime'>

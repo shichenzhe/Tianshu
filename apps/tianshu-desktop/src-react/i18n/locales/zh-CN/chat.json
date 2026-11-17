@@ -1385,7 +1385,20 @@
         "prefixSelectedNodes": "无",
         "truncatedNote": "（完整图 JSON 超出注入上限，已降级为结构摘要）",
         "applyBlocked": "AI 改动未通过校验，未应用到画布",
-        "sessionGone": "AI 会话已被删除，再发消息将新建会话"
+        "sessionGone": "AI 会话已被删除，再发消息将新建会话",
+        "receiptApplied": "已应用到画布",
+        "receiptUndo": "撤销",
+        "receiptFailed": "未通过校验，未应用",
+        "receiptFailedHint": "可继续追问 AI 修正",
+        "opsError": "无法应用：{{message}}",
+        "itemAddNode": "新增节点 {{id}}（{{kind}}）",
+        "itemUpdateNode": "修改 {{id}}",
+        "itemRemoveNode": "删除节点 {{id}}",
+        "itemRemoveNodeCascade": "删除节点 {{id}}（级联删除 {{count}} 条边）",
+        "itemAddEdge": "连接 {{from}} → {{to}}",
+        "itemRemoveEdge": "断开 {{from}} → {{to}}",
+        "itemRenameNode": "重命名 {{from}} → {{to}}",
+        "itemFullReplace": "整体替换（{{nodes}} 节点 / {{edges}} 边）"
       }
     },
     "templates": {

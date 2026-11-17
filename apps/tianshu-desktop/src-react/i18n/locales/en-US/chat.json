@@ -1385,7 +1385,20 @@
         "prefixSelectedNodes": "none",
         "truncatedNote": "(Full graph JSON exceeds the injection limit; downgraded to a structure summary)",
         "applyBlocked": "AI changes failed validation and were not applied to the canvas",
-        "sessionGone": "The AI session was deleted; sending again will create a new one"
+        "sessionGone": "The AI session was deleted; sending again will create a new one",
+        "receiptApplied": "Applied to canvas",
+        "receiptUndo": "Undo",
+        "receiptFailed": "Failed validation, not applied",
+        "receiptFailedHint": "Ask the AI to fix it and try again",
+        "opsError": "Cannot apply: {{message}}",
+        "itemAddNode": "Add node {{id}} ({{kind}})",
+        "itemUpdateNode": "Modify {{id}}",
+        "itemRemoveNode": "Remove node {{id}}",
+        "itemRemoveNodeCascade": "Remove node {{id}} (cascades {{count}} edges)",
+        "itemAddEdge": "Connect {{from}} → {{to}}",
+        "itemRemoveEdge": "Disconnect {{from}} → {{to}}",
+        "itemRenameNode": "Rename {{from}} → {{to}}",
+        "itemFullReplace": "Full replace ({{nodes}} nodes / {{edges}} edges)"
       }
     },
     "templates": {

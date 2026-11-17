@@ -104,7 +104,9 @@ describe("applyGraphOps", () => {
   it("addEdge 自环与重复边抛错", () => {
     const graph = emptyGraph();
     expect(() =>
-      applyGraphOps(graph, [{ op: "addEdge", edge: { from: "start", to: "start" } }]),
+      applyGraphOps(graph, [
+        { op: "addEdge", edge: { from: "start", to: "start" } },
+      ]),
     ).toThrow();
     expect(() =>
       applyGraphOps(graph, [
@@ -127,7 +129,11 @@ describe("applyGraphOps", () => {
       ...emptyGraph(),
       edges: [
         { from: "start", to: "node-1" },
-        { from: "start", to: "node-1", condition: { type: "branch", value: "b" } },
+        {
+          from: "start",
+          to: "node-1",
+          condition: { type: "branch", value: "b" },
+        },
       ],
     };
     const next = applyGraphOps(graph, [

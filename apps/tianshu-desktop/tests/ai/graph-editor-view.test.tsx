@@ -246,7 +246,7 @@ describe("GraphEditorView 属性面板三态", () => {
       screen.getByText("chat:orchestration.editor.panelGraphTitle"),
     ).toBeTruthy();
 
-    // 收缩：面板整体隐藏，右缘把手（展开钮）常驻
+    // 收缩：面板整体隐藏，右缘双把手（属性 / AI 编排）常驻
     fireEvent.click(
       screen.getByRole("button", {
         name: "chat:orchestration.editor.panelCollapse",
@@ -256,13 +256,17 @@ describe("GraphEditorView 属性面板三态", () => {
     expect(
       screen.queryByText("chat:orchestration.editor.panelGraphTitle"),
     ).toBeNull();
-    const expandHandle = screen.getByRole("button", {
-      name: "chat:orchestration.editor.panelExpand",
+    const propsHandle = screen.getByRole("button", {
+      name: "chat:orchestration.editor.panelSettings",
     });
-    expect(expandHandle).toBeTruthy();
+    expect(propsHandle).toBeTruthy();
+    // AI 编排把手并排常驻（新建图点击仅提示，不展开）
+    expect(
+      screen.getByRole("button", { name: "chat:orchestration.editor.ai.tab" }),
+    ).toBeTruthy();
 
-    // 把手点开 → 回浮动
-    fireEvent.click(expandHandle);
+    // 属性把手点开 → 回浮动（选中属性 tab）
+    fireEvent.click(propsHandle);
     expect(document.querySelector('[data-panel-state="float"]')).toBeTruthy();
     expect(
       screen.getByText("chat:orchestration.editor.panelGraphTitle"),

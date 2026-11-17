@@ -36,7 +36,8 @@ function validGraph() {
   };
 }
 
-const opsBlock = "```json\n" +
+const opsBlock =
+  "```json\n" +
   JSON.stringify({ ops: [{ op: "addNode", node: validNode }] }) +
   "\n```";
 

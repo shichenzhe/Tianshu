@@ -35,6 +35,7 @@ import {
   Redo2,
   Save,
   Settings2,
+  Sparkles,
   Undo2,
   Webhook,
   Wand2,
@@ -85,6 +86,7 @@ import {
 } from "../api/orchestration.api";
 import GraphCanvas from "../components/GraphCanvas";
 import GraphJsonEditor from "../components/GraphJsonEditor";
+import GraphAiPanel from "../components/GraphAiPanel";
 import GraphRunHistoryDialog from "../components/GraphRunHistoryDialog";
 import GraphTestRunDialog from "../components/GraphTestRunDialog";
 import HighlightTextarea from "../components/HighlightTextarea";
@@ -100,6 +102,11 @@ import {
   END_NODE_ID,
   layoutOf,
 } from "../lib/graph-canvas-model";
+import {
+  applyGraphOps,
+  mergeSurvivingPositions,
+  type GraphOp,
+} from "../lib/graph-ai-ops";
 import {
   canonicalJson,
   dedupeUniqueEntry,
@@ -313,6 +320,17 @@ export default function GraphEditorView() {
   const [panelState, setPanelState] = useState<"float" | "full" | "collapsed">(
     "float",
   );
+  // 右栏标签页：节点属性 / AI 编排（两 tab 常驻挂载 CSS 显隐——useChatSend
+  // 卸载即断流，生成中切 tab 不得打断流式）
+  const [panelTab, setPanelTab] = useState<"props" | "ai">("props");
+  // AI 编排会话绑定（graphDefinition.aiSessionId 的本地镜像；record 加载/
+  // 外部变化时同步，面板首条发送落地/新建会话时本地回写）
+  const [boundAiSessionId, setBoundAiSessionId] = useState<number | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    setBoundAiSessionId(record?.aiSessionId ?? undefined);
+  }, [record?.aiSessionId]);
   // ── 运行实时高亮：executor 逐节点推状态，按图过滤 ──
   const [nodeStatus, setNodeStatus] = useState<Record<string, string>>({});
   const runningNodeIds = useMemo(
@@ -657,6 +675,54 @@ export default function GraphEditorView() {
     commitGraph((current) => switchNodeKind(current, nodeId, kind));
   }
 
+  /** 选中清理：AI 应用后选中物可能已不存在（节点被删/边被级联） */
+  function pruneSelection(next: GraphJson) {
+    setSelectedId((sel) => {
+      if (sel === null) return sel;
+      const nodeAlive = next.nodes.some((n) => n.id === sel);
+      const edgeAlive = next.edges.some((e) =>
+        sel.startsWith(`${e.from}->${e.to}`),
+      );
+      return nodeAlive || edgeAlive ? sel : null;
+    });
+  }
+
+  /** 图 AI 变更单应用（GraphEditCard 已跑校验链，此处防御线再拦）：
+   *  候选图不过校验绝不落画布（spec 反目标） */
+  function handleApplyOps(ops: GraphOp[]) {
+    let candidate: GraphJson;
+    try {
+      candidate = normalizeGraph(applyGraphOps(graph, ops));
+    } catch {
+      return;
+    }
+    const validated = validateGraph(candidate);
+    if (!validated.ok) {
+      toast.error(t("chat:orchestration.editor.ai.applyBlocked"));
+      return;
+    }
+    commitGraph(() => validated.value);
+    pruneSelection(validated.value);
+  }
+
+  /** 图 AI 全量图应用：先按节点 id 合并存活节点坐标（spec 5b，AI 常
+   *  省略未改节点 position），再过校验链落画布 */
+  function handleApplyFull(json: GraphJson) {
+    const merged = mergeSurvivingPositions(graph, json);
+    const validated = validateGraph(merged);
+    if (!validated.ok) {
+      toast.error(t("chat:orchestration.editor.ai.applyBlocked"));
+      return;
+    }
+    commitGraph(() => validated.value);
+    pruneSelection(validated.value);
+  }
+
+  /** 回执卡片撤销：回退 AI 应用的那一步（撤销栈顶即最近一次 commit） */
+  function handleAiUndo() {
+    undoGraph();
+  }
+
   function patchGraphMeta(patch: { name?: string; description?: string }) {
     if (patch.name !== undefined) {
       setName(patch.name);
@@ -883,6 +949,8 @@ export default function GraphEditorView() {
       // 闪烁；重拉到位后 record 即刻就绪
       await queryClient.invalidateQueries({ queryKey: ["orchestration"] });
       if (isNew) {
+        // 新图保存前 AI tab 禁用（无 graphId 绑不了会话），落地后绑定重置
+        setBoundAiSessionId(undefined);
         navigate(`${GRAPHS_BASE}/${saved.id}`, { replace: true });
       }
     } catch (e) {
@@ -1201,22 +1269,41 @@ export default function GraphEditorView() {
             </GraphHasStartContext.Provider>
           </div>
           {panelState === "collapsed" ? (
-            <IconTooltip
-              label={t("chat:orchestration.editor.panelExpand")}
-              side="left"
-            >
-              <button
-                type="button"
-                aria-label={t("chat:orchestration.editor.panelExpand")}
-                className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col items-center gap-1.5 rounded-l-lg border border-r-0 border-border/50 bg-white py-3 pl-1.5 pr-1 text-muted-foreground shadow-lg transition-colors hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
-                onClick={() => setPanelState("float")}
-              >
-                <Settings2 className="h-4 w-4" />
-                <span className="text-xs [writing-mode:vertical-rl]">
-                  {t("chat:orchestration.editor.panelSettings")}
-                </span>
-              </button>
-            </IconTooltip>
+            <div className="absolute right-0 top-1/2 z-20 flex -translate-y-1/2 flex-col gap-2">
+              {(
+                [
+                  [
+                    "props",
+                    Settings2,
+                    t("chat:orchestration.editor.panelSettings"),
+                  ],
+                  ["ai", Sparkles, t("chat:orchestration.editor.ai.tab")],
+                ] as const
+              ).map(([tab, Icon, label]) => (
+                <IconTooltip key={tab} label={label} side="left">
+                  <button
+                    type="button"
+                    aria-label={label}
+                    className="flex flex-col items-center gap-1.5 rounded-l-lg border border-r-0 border-border/50 bg-white py-3 pl-1.5 pr-1 text-muted-foreground shadow-lg transition-colors hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
+                    onClick={() => {
+                      if (tab === "ai" && isNew) {
+                        toast.info(
+                          t("chat:orchestration.editor.ai.unsavedToast"),
+                        );
+                        return;
+                      }
+                      setPanelTab(tab);
+                      setPanelState("float");
+                    }}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="text-xs [writing-mode:vertical-rl]">
+                      {label}
+                    </span>
+                  </button>
+                </IconTooltip>
+              ))}
+            </div>
           ) : (
             <div
               data-panel-state={panelState}
@@ -1226,12 +1313,42 @@ export default function GraphEditorView() {
                   : "absolute inset-y-4 right-4 z-20 flex w-[440px] max-w-[55vw] flex-col rounded-lg border border-border/50 bg-white shadow-lg"
               }
             >
-              <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-1.5">
-                <span className="flex items-center gap-1.5 text-xs font-medium text-foreground">
-                  <Settings2 className="h-3.5 w-3.5 text-primary" />
-                  {t("chat:orchestration.editor.panelSettings")}
-                </span>
-                <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1 border-b border-border/50 px-3 py-1.5">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPanelTab("props")}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      panelTab === "props"
+                        ? "bg-primary-subtle text-primary"
+                        : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                    }`}
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    {t("chat:orchestration.editor.panelSettings")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isNew) {
+                        toast.info(
+                          t("chat:orchestration.editor.ai.unsavedToast"),
+                        );
+                        return;
+                      }
+                      setPanelTab("ai");
+                    }}
+                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                      panelTab === "ai"
+                        ? "bg-primary-subtle text-primary"
+                        : "text-muted-foreground hover:bg-primary-subtle hover:text-primary"
+                    }`}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {t("chat:orchestration.editor.ai.tab")}
+                  </button>
+                </div>
+                <div className="ml-auto flex items-center gap-0.5">
                   {panelState === "float" && (
                     <IconTooltip
                       label={t("chat:orchestration.editor.panelTile")}
@@ -1278,20 +1395,42 @@ export default function GraphEditorView() {
                 </div>
               </div>
               <div className="@container min-h-0 flex-1 overflow-y-auto">
-                <NodePropertiesPanel
-                  graph={graph}
-                  name={name}
-                  description={description}
-                  selectedId={selectedId}
-                  onPatchNode={patchNode}
-                  onSwitchKind={switchNodeKindOf}
-                  onRenameNode={handleRenameNode}
-                  onRemoveNode={handleRemoveNode}
-                  onRemoveEdge={removeEdgeById}
-                  onPatchEdgeCondition={patchEdgeCondition}
-                  onGraphMeta={patchGraphMeta}
-                  idLocked={(nodeId) => baselineNodeIds.has(nodeId)}
-                />
+                {/* 两 tab 常驻挂载、CSS hidden 显隐：useChatSend 卸载即断
+                    流式监听，生成中切 tab/收起不打断（spec 5c） */}
+                <div className={panelTab === "props" ? "" : "hidden"}>
+                  <NodePropertiesPanel
+                    graph={graph}
+                    name={name}
+                    description={description}
+                    selectedId={selectedId}
+                    onPatchNode={patchNode}
+                    onSwitchKind={switchNodeKindOf}
+                    onRenameNode={handleRenameNode}
+                    onRemoveNode={handleRemoveNode}
+                    onRemoveEdge={removeEdgeById}
+                    onPatchEdgeCondition={patchEdgeCondition}
+                    onGraphMeta={patchGraphMeta}
+                    idLocked={(nodeId) => baselineNodeIds.has(nodeId)}
+                  />
+                </div>
+                {!isNew && (
+                  <div
+                    className={`h-full ${panelTab === "ai" ? "" : "hidden"}`}
+                  >
+                    <GraphAiPanel
+                      graphId={graphId}
+                      graphName={name}
+                      description={description}
+                      graphJson={currentJson}
+                      aiSessionId={boundAiSessionId}
+                      onBindingChange={setBoundAiSessionId}
+                      onApplyOps={handleApplyOps}
+                      onApplyFull={handleApplyFull}
+                      onUndo={handleAiUndo}
+                      onCollapse={() => setPanelState("collapsed")}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           )}

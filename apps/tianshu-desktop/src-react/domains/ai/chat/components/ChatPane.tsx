@@ -9,7 +9,13 @@
  * props 签名与导出名不变
  * （AI 模块 ChatView 等消费方零改动），行为与拆分前一致
  */
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { Archive } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -202,7 +208,12 @@ export default function ChatPane({
         appendOptimisticMessage(
           queryClient,
           resolvedId,
-          buildOptimisticUserMessage(resolvedId, finalContent, skillRefs, contentRefs),
+          buildOptimisticUserMessage(
+            resolvedId,
+            finalContent,
+            skillRefs,
+            contentRefs,
+          ),
         );
         try {
           await ChatApi.send({
@@ -211,9 +222,7 @@ export default function ChatPane({
             overrides,
             images: [...images, ...(resolved.images ?? [])],
             ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
-            ...(contentRefs && contentRefs.length > 0
-              ? { contentRefs }
-              : {}),
+            ...(contentRefs && contentRefs.length > 0 ? { contentRefs } : {}),
           });
         } catch (e) {
           useChatStore.getState().finishStream(resolvedId);
@@ -231,14 +240,7 @@ export default function ChatPane({
       const prefix = buildSendPrefix?.() ?? "";
       const final = prefix.length > 0 ? `${prefix}\n\n${injected}` : injected;
       try {
-        await send(
-          final,
-          undefined,
-          overrides,
-          images,
-          skillRefs,
-          contentRefs,
-        );
+        await send(final, undefined, overrides, images, skillRefs, contentRefs);
         // 防呆：成功发出新消息后退出编辑态，避免随后的编辑重发静默截断刚发的消息
         setEditing(null);
       } catch (e) {

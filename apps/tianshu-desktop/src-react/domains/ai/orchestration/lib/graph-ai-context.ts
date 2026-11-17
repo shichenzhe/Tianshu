@@ -13,15 +13,9 @@ import {
   graphJsonSchema,
   type GraphJson,
 } from "@/domains/ai/orchestration/api/graph.schema";
-import {
-  graphChangeSetSchema,
-  type GraphChangeSet,
-} from "./graph-ai-ops";
+import { graphChangeSetSchema, type GraphChangeSet } from "./graph-ai-ops";
 
-export type TFunc = (
-  key: string,
-  opts?: Record<string, unknown>,
-) => string;
+export type TFunc = (key: string, opts?: Record<string, unknown>) => string;
 
 const AI_KEY = "chat:orchestration.editor.ai";
 
@@ -51,8 +45,8 @@ interface GraphLike {
 }
 
 function summaryOf(graph: GraphLike): string {
-  const nodeLines = graph.nodes.map(
-    (n) => `${n.id} (${n.kind}) ${n.name}`.trimEnd(),
+  const nodeLines = graph.nodes.map((n) =>
+    `${n.id} (${n.kind}) ${n.name}`.trimEnd(),
   );
   const edgeLines = graph.edges.map((e) => `${e.from} -> ${e.to}`);
   return [...nodeLines, ...edgeLines].join("\n");
@@ -81,7 +75,7 @@ export function buildGraphContextPrefix(
   if (p.graphJson.length <= INJECT_LIMIT) {
     return t(`${AI_KEY}.prefixFull`, { ...base, graph: p.graphJson });
   }
-  let summary = "";
+  let summary: string;
   let nodeCount = 0;
   let edgeCount = 0;
   try {

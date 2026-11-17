@@ -88,9 +88,7 @@ function applyOne(graph: GraphJson, op: GraphOp): GraphJson {
       return {
         ...graph,
         nodes: graph.nodes.filter((n) => n.id !== op.id),
-        edges: graph.edges.filter(
-          (e) => e.from !== op.id && e.to !== op.id,
-        ),
+        edges: graph.edges.filter((e) => e.from !== op.id && e.to !== op.id),
       };
     }
     case "renameNode": {

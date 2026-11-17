@@ -1377,6 +1377,14 @@
         "enum": "枚举",
         "date": "日期",
         "json": "JSON"
+      },
+      "ai": {
+        "instruction": "你是工作流编排助手。用户会给你当前工作流的 JSON 定义。规则：1) 新建图或改动超过半数节点时，回复必须恰好包含一个 ```json 代码块，内容为修改后的完整图定义；2) 局部修改时，回复必须恰好包含一个 ```json 代码块，内容为变更单 JSON（{\"ops\": [...]}），操作类型仅 addNode/updateNode/removeNode/renameNode/addEdge/removeEdge，只列实际改动，removeNode 无需列级联边；3) 节点 id 必须 kebab-case 且图内唯一；4) llm/intent/vectorize/imageGen 等节点的 modelId 只能用下方目录中的 id，无法确定时置 0（用户手动换绑），不得臆造；5) 全量形态必须原样保留未修改节点的 position；6) 用户不要求改图时正常问答，不输出代码块。代码块外的文字用于向用户解释。可用模型目录（id 显示名）：\n{{models}}",
+        "prefixFull": "【工作流编排上下文】\n名称：{{name}}\n描述：{{description}}\n可用模型目录（id 显示名）：\n{{models}}\n当前选中节点：{{selected}}\n当前图定义（JSON）：\n{{graph}}",
+        "prefixSummary": "【工作流编排上下文】\n名称：{{name}}\n描述：{{description}}\n可用模型目录（id 显示名）：\n{{models}}\n当前选中节点：{{selected}}\n当前图结构摘要（完整 JSON 超出注入上限，共 {{nodeCount}} 节点/{{edgeCount}} 边）：\n{{summary}}",
+        "prefixSelectedNodes": "无",
+        "truncatedNote": "（完整图 JSON 超出注入上限，已降级为结构摘要）",
+        "applyBlocked": "AI 改动未通过校验，未应用到画布"
       }
     },
     "templates": {

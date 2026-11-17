@@ -10,6 +10,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowDown } from "lucide-react";
@@ -53,6 +54,8 @@ interface MessageListProps {
   onEditCancel?: () => void;
   /** 会话当前专家 icon（emoji）：assistant 头像列与流式状态行共用 */
   assistantIcon?: string;
+  /** 消息级插槽（图 AI 回执卡片等）：透传 MessageItem 渲染在气泡下方 */
+  renderExtra?: (message: MessageRecord) => ReactNode;
 }
 
 /** ApprovalBanner 接口必需的决议回调；可见性纯 store 态门控，本地无需记标记。
@@ -80,6 +83,7 @@ export default function MessageList({
   onEditSubmit,
   onEditCancel,
   assistantIcon,
+  renderExtra,
 }: MessageListProps) {
   const { t } = useTranslation(["chat", "common"]);
   const isStreaming = useChatStore((state) =>
@@ -405,6 +409,7 @@ export default function MessageList({
                       : undefined
                   }
                   assistantIcon={assistantIcon}
+                  renderExtra={renderExtra}
                 />
                 {/* 压缩点标记:钉在压缩轮消息之后,新消息自然排其下方 */}
                 {message.id === compactedUpToId && (

@@ -9,7 +9,7 @@
  * props 签名与导出名不变
  * （AI 模块 ChatView 等消费方零改动），行为与拆分前一致
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Archive } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import {
@@ -20,7 +20,11 @@ import {
 } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import type { MessagePage, SessionRecord } from "../../api/session.api";
+import type {
+  MessagePage,
+  MessageRecord,
+  SessionRecord,
+} from "../../api/session.api";
 import ChatApi, {
   type ChatModelParams,
   type ChatSendImage,
@@ -83,6 +87,13 @@ interface ChatPaneProps {
    *  （initialDraft 回灌 / onDraftUnmount 卸载上报）；缺省不传零改动 */
   initialDraft?: string;
   onDraftUnmount?: (draft: string) => void;
+  /** 每条发送前调取的前缀构建器（图 AI 面板注入当前图快照）：
+   *  哨兵首条拼在 resolver.contentPrefix 之后，常设消息拼在输入之前；
+   *  缺省不传零行为变化 */
+  buildSendPrefix?: () => string;
+  /** 消息级插槽（图 AI 回执卡片）：透传 ChatMessages → MessageList →
+   *  MessageItem，渲染在气泡下方；缺省不传零变化 */
+  renderMessageExtra?: (message: MessageRecord) => ReactNode;
 }
 
 /**
@@ -103,6 +114,8 @@ export default function ChatPane({
   onSessionResolved,
   initialDraft,
   onDraftUnmount,
+  buildSendPrefix,
+  renderMessageExtra,
 }: ChatPaneProps) {
   const { t } = useTranslation(["chat", "common"]);
   const queryClient = useQueryClient();
@@ -180,9 +193,10 @@ export default function ChatPane({
         const injected = buildInjectedContent(content, textFiles);
         const resolved = await sessionResolver();
         const resolvedId = resolved.session.id;
-        const finalContent = resolved.contentPrefix
-          ? `${resolved.contentPrefix}\n\n${injected}`
-          : injected;
+        const sendPrefix = buildSendPrefix?.() ?? "";
+        const finalContent = [resolved.contentPrefix, sendPrefix, injected]
+          .filter((part) => (part?.length ?? 0) > 0)
+          .join("\n\n");
         useChatStore.getState().startStream(resolvedId);
         // 乐观插入（同 useChatSend.send 口径）：哨兵直发不等流末才见用户消息
         appendOptimisticMessage(
@@ -214,9 +228,11 @@ export default function ChatPane({
       }
       const { textFiles, images } = splitImageFiles(files);
       const injected = buildInjectedContent(content, textFiles);
+      const prefix = buildSendPrefix?.() ?? "";
+      const final = prefix.length > 0 ? `${prefix}\n\n${injected}` : injected;
       try {
         await send(
-          injected,
+          final,
           undefined,
           overrides,
           images,
@@ -439,6 +455,7 @@ export default function ChatPane({
       onEditSubmit={handleEditSubmit}
       onEditCancel={handleEditCancel}
       assistantIcon={assistantIcon}
+      renderMessageExtra={renderMessageExtra}
     >
       {/* 归档只读横幅：消息可查看，操作不可用；一键取消归档恢复 */}
       {isArchived && (

@@ -6,7 +6,7 @@
  * 共用 HoverTimestamp）；流式态由
  * MessageList 以伪消息 + streaming 传入
  */
-import { memo, useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -93,6 +93,8 @@ interface MessageItemProps {
   /** 结构化 blocks 直传（M8）：流式 liveMessage 免 serialize→parse 的
    *  全量 JSON 往返；缺省走 message.blocks 解析（历史消息） */
   parsedBlocks?: MessageBlock[];
+  /** 消息级插槽（图 AI 回执卡片等）：渲染在气泡与操作行下方；未提供不渲染 */
+  renderExtra?: (message: MessageRecord) => ReactNode;
 }
 
 function UsageBlockView({ input, output }: { input: number; output: number }) {
@@ -269,6 +271,7 @@ function MessageItemImpl({
   remoteModelName,
   workspaceId,
   parsedBlocks,
+  renderExtra,
 }: MessageItemProps) {
   const { t, i18n } = useTranslation(["chat", "common"]);
   const queryClient = useQueryClient();
@@ -658,6 +661,7 @@ function MessageItemImpl({
             className="ml-2"
           />
         </div>
+        {renderExtra?.(message)}
       </div>
     </div>
   );

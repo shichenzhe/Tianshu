@@ -7,7 +7,7 @@
  */
 import type { ReactNode } from "react";
 
-import type { SessionRecord } from "../../api/session.api";
+import type { MessageRecord, SessionRecord } from "../../api/session.api";
 import type { WorkspaceRecord } from "../../api/workspace.api";
 import MessageList from "./MessageList";
 
@@ -29,6 +29,8 @@ interface ChatMessagesProps {
   assistantIcon?: string;
   /** 底部插槽：组合壳/调用方注入进度条与输入区（AgentProgress + ChatInput） */
   children?: ReactNode;
+  /** 消息级插槽（图 AI 回执卡片等）：透传 MessageList → MessageItem */
+  renderMessageExtra?: (message: MessageRecord) => ReactNode;
 }
 
 export default function ChatMessages({
@@ -41,6 +43,7 @@ export default function ChatMessages({
   onEditCancel,
   assistantIcon,
   children,
+  renderMessageExtra,
 }: ChatMessagesProps) {
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1">
@@ -55,6 +58,7 @@ export default function ChatMessages({
           onEditSubmit={onEditSubmit}
           onEditCancel={onEditCancel}
           assistantIcon={assistantIcon}
+          renderExtra={renderMessageExtra}
         />
         {children}
       </div>

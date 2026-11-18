@@ -97,6 +97,9 @@ interface ChatPaneProps {
    *  哨兵首条拼在 resolver.contentPrefix 之后，常设消息拼在输入之前；
    *  缺省不传零行为变化 */
   buildSendPrefix?: () => string;
+  /** 占位会话的模型草稿选择（图 AI 新建首发）：只下传给哨兵会话，
+   *  真会话仍走 ModelPicker 原有 setModel；缺省不传零变化 */
+  onPickModel?: (modelId: number) => void;
   /** 消息级插槽（图 AI 回执卡片）：透传 ChatMessages → MessageList →
    *  MessageItem，渲染在气泡下方；缺省不传零变化 */
   renderMessageExtra?: (message: MessageRecord) => ReactNode;
@@ -121,6 +124,7 @@ export default function ChatPane({
   initialDraft,
   onDraftUnmount,
   buildSendPrefix,
+  onPickModel,
   renderMessageExtra,
 }: ChatPaneProps) {
   const { t } = useTranslation(["chat", "common"]);
@@ -485,6 +489,7 @@ export default function ChatPane({
           currentMode={session.mode}
           currentAssistantId={session.assistantId}
           currentModelId={session.currentModelId}
+          onPickModel={session.id < 0 ? onPickModel : undefined}
           workspaceId={workspace?.id ?? null}
           onAccessModeChange={(mode) => void handleAccessModeChange(mode)}
           onOpenMcp={() => onOpenSettings("mcp")}

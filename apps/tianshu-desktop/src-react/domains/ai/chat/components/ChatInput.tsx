@@ -141,6 +141,9 @@ interface ChatInputProps {
   currentMode: SessionMode;
   currentAssistantId?: number;
   currentModelId?: number;
+  /** 哨兵会话模型草稿分支（图 AI 新建首发）：透传 ModelPicker；
+   *  缺省保持哨兵锁定提示，真会话不受影响 */
+  onPickModel?: (modelId: number) => void;
   /** 工作空间（@ 文件联想与读取）；未绑定为 null */
   workspaceId: number | null;
   /** 项目待办引用（# 联想数据源）；缺省不启用 # 触发（AI 模块行为不变） */
@@ -222,6 +225,7 @@ export default function ChatInput({
   currentMode,
   currentAssistantId,
   currentModelId,
+  onPickModel,
   workspaceId,
   todoItems,
   localTask,
@@ -1513,7 +1517,11 @@ export default function ChatInput({
             sending={sending}
             draft={content}
           />
-          <ModelPicker sessionId={sessionId} currentModelId={currentModelId} />
+          <ModelPicker
+            sessionId={sessionId}
+            currentModelId={currentModelId}
+            onPickModel={onPickModel}
+          />
           {sending ? (
             /* 停止:黑底圆钮 + 白色实心方块 */
             <IconTooltip label={t("chat:input.stop")}>

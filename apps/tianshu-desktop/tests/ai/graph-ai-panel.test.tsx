@@ -4,7 +4,7 @@
  * false（禁发——空目录注入会瓦解 modelId 幻觉防御）；目录就绪且空间
  * 有默认模型时放行。ChatPane 以捕获桩替代。
  */
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,9 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), info: vi.fn() } }));
 
 interface CapturedPaneProps {
   hasModel?: boolean;
+  session?: { currentModelId?: number };
+  onPickModel?: (modelId: number) => void;
+  sessionResolver?: () => Promise<unknown>;
 }
 const paneProps = vi.hoisted(() => ({
   current: null as CapturedPaneProps | null,
@@ -113,5 +116,36 @@ describe("GraphAiPanel 模型目录门控", () => {
     renderPanel();
     await waitFor(() => expect(paneProps.current).toBeTruthy());
     await waitFor(() => expect(paneProps.current!.hasModel).toBe(false));
+  });
+
+  it("无默认模型时可选草稿模型并发送首条：选后放行，建会话后先 setModel", async () => {
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === "model:listAll") {
+        return Promise.resolve([{ id: 3, modelId: "gpt-4o", name: "GPT-4o" }]);
+      }
+      if (channel === "workspace:list") {
+        return Promise.resolve([{ id: 7 }]);
+      }
+      if (channel === "session:create") return Promise.resolve({ id: 5 });
+      return Promise.resolve(undefined);
+    });
+    renderPanel();
+    await waitFor(() => expect(paneProps.current?.onPickModel).toBeTruthy());
+    expect(paneProps.current!.hasModel).toBe(false);
+    act(() => paneProps.current!.onPickModel!(3));
+    expect(paneProps.current!.hasModel).toBe(true);
+    expect(paneProps.current!.session?.currentModelId).toBe(3);
+    await act(async () => {
+      await paneProps.current!.sessionResolver!();
+    });
+    expect(invokeMock).toHaveBeenCalledWith("session:setModel", 5, 3);
+    const createIndex = invokeMock.mock.calls.findIndex(
+      (c) => c[0] === "session:create",
+    );
+    const setModelIndex = invokeMock.mock.calls.findIndex(
+      (c) => c[0] === "session:setModel",
+    );
+    expect(createIndex).toBeGreaterThanOrEqual(0);
+    expect(setModelIndex).toBeGreaterThan(createIndex);
   });
 });

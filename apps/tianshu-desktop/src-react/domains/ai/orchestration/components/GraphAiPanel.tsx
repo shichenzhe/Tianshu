@@ -8,7 +8,7 @@
  *   哨兵 id=-1 + 首条惰建；会话已删善后清绑定再发即新建。
  * - 模型目录注入 ModelApi.listAll（AI 不得臆造 modelId，spec 复审裁定）。
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -115,6 +115,10 @@ export default function GraphAiPanel(p: {
     if (sessionGone) handleSessionGone();
   }, [sessionGone, handleSessionGone]);
 
+  // 占位会话的模型草稿：ModelPicker 哨兵分支只入草稿，不直接写不存在的
+  // 会话；首条发送建会话后在 resolver 内落库（新建任务 dispatch 同链路）
+  const [draftModelId, setDraftModelId] = useState<number | null>(null);
+
   // 占位哨兵会话（未绑定时 ChatPane 恒渲染，首条经 resolver 惰建）
   const placeholderSession = useMemo<SessionRecord>(
     () => ({
@@ -122,10 +126,11 @@ export default function GraphAiPanel(p: {
       workspaceId: workspaces?.[0]?.id ?? -1,
       title: "",
       mode: "agent",
+      currentModelId: draftModelId ?? undefined,
       createdAt: "",
       updatedAt: "",
     }),
-    [workspaces],
+    [workspaces, draftModelId],
   );
   const paneSession = sessionRecord ?? placeholderSession;
 
@@ -144,6 +149,7 @@ export default function GraphAiPanel(p: {
   const hasModel =
     Boolean(
       sessionRecord?.currentModelId ??
+      draftModelId ??
       workspaces?.find((w) => w.id === paneWorkspace?.id)?.defaultModelId,
     ) && modelsQuery.isSuccess;
 
@@ -172,12 +178,17 @@ export default function GraphAiPanel(p: {
   const handleResolveSession =
     useCallback(async (): Promise<SessionResolverResult> => {
       try {
-        return await prepareFirstSend();
+        const resolved = await prepareFirstSend();
+        // 模型草稿必须在 chat:send 前落到真会话：发送链起流即读会话模型
+        if (draftModelId !== null) {
+          await SessionApi.setModel(resolved.session.id, draftModelId);
+        }
+        return resolved;
       } catch (e) {
         toast.error(mapIpcError(e));
         throw e;
       }
-    }, [prepareFirstSend]);
+    }, [prepareFirstSend, draftModelId]);
 
   const handleSessionResolved = useCallback(
     (s: SessionRecord) => {
@@ -271,6 +282,7 @@ export default function GraphAiPanel(p: {
             sessionResolver={handleResolveSession}
             onSessionResolved={handleSessionResolved}
             buildSendPrefix={buildSendPrefix}
+            onPickModel={setDraftModelId}
             renderMessageExtra={(message) =>
               message.role === "assistant" ? (
                 <GraphEditCard

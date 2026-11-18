@@ -181,6 +181,25 @@ describe("GraphEditCard", () => {
     expect(card).toContain("chat:orchestration.editor.ai.receiptFailed");
   });
 
+  it("新建图占位草稿未过 schema 时，合法全量替换仍可应用", () => {
+    const onApplyFull = vi.fn();
+    const full = "```json\n" + serializeGraph(validGraph()) + "\n```";
+    render(
+      <GraphEditCard
+        message={assistantMessage(full)}
+        graphJson={serializeGraph(emptyGraph())}
+        autoApplyAfter={0}
+        onApplyOps={() => {}}
+        onApplyFull={onApplyFull as (json: unknown) => void}
+        onUndo={() => {}}
+      />,
+    );
+    expect(onApplyFull).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByTestId("graph-edit-card").textContent,
+    ).toContain("chat:orchestration.editor.ai.receiptApplied");
+  });
+
   it("操作前置失败（节点不存在）显示本地化错误码，不裸抛中文串", () => {
     const onApplyOps = vi.fn();
     renderCard(

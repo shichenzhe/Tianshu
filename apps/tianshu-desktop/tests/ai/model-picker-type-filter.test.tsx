@@ -155,6 +155,17 @@ describe("选择器按模型类型过滤", () => {
     expect(setModelMock).not.toHaveBeenCalled();
   });
 
+  it("哨兵会话带 onPickModel：进入草稿分支，不提示锁定（图 AI 新建首发）", async () => {
+    const onPickModel = vi.fn();
+    withClient(<ModelPicker sessionId={-1} onPickModel={onPickModel} />);
+    openDropdownMenu();
+    expect(await screen.findByText("硅基流动")).toBeTruthy();
+    fireEvent.click(screen.getAllByText(LLM_ID)[0]);
+    expect(onPickModel).toHaveBeenCalledWith(1);
+    expect(setModelMock).not.toHaveBeenCalled();
+    expect(toast.info).not.toHaveBeenCalledWith("发送第一条消息后可用");
+  });
+
   it("自动化 TaskModelPicker 只列 llm", async () => {
     withClient(<TaskModelPicker modelId={1} onChange={() => {}} />);
     openDropdownMenu();

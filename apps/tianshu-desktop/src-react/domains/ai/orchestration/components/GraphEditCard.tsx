@@ -80,6 +80,25 @@ function candidateOf(
   return normalizeGraph(raw);
 }
 
+/** 当前草稿解析：新建图的占位节点尚未满足严格 schema（name/modelId/
+ *  prompt 空），不能因此拒绝合法全量替换；宽松回退仅用于构造候选图，
+ *  最终仍必须过 normalizeGraph + validateGraph */
+function currentGraphOf(graphJson: string): GraphJson | null {
+  const strict = parseOrKeep(graphJson).parsed;
+  if (strict) return strict;
+  try {
+    const raw = JSON.parse(graphJson) as {
+      nodes?: unknown;
+      edges?: unknown;
+    };
+    return Array.isArray(raw.nodes) && Array.isArray(raw.edges)
+      ? (raw as GraphJson)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 interface GraphEditCardProps {
   message: MessageRecord;
   /** 当前画布 canonicalJson（卡片据此构造候选图与撤销可用性） */
@@ -148,7 +167,7 @@ export default function GraphEditCard({
     if (!extraction || triedRef.current) return;
     if (!isFreshMessage(message.createdAt, autoApplyAfter)) return;
     triedRef.current = true;
-    const current = parseOrKeep(graphJson).parsed;
+    const current = currentGraphOf(graphJson);
     if (!current) {
       setError(t(`${AI_KEY}.currentUnparseable`));
       setState("failed");
@@ -188,7 +207,7 @@ export default function GraphEditCard({
         }),
       ];
     }
-    const current = parseOrKeep(graphJson).parsed;
+    const current = currentGraphOf(graphJson);
     return extraction.changeSet.ops.map((op) => {
       switch (op.op) {
         case "addNode":

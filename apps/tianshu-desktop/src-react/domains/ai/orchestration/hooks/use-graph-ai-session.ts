@@ -69,7 +69,11 @@ export function useGraphAiSession(p: {
           workspaceId: target.id,
           title: p.graphName,
         })) as { id: number };
-        await GraphApi.bindAiSession(p.graphId, created.id);
+        // 新建（未保存）图无 graphId 可挂：会话不绑定（用户裁定——新建期
+        // 可用 AI 编排、可不存历史）；保存落地后由视图层补绑
+        if (p.graphId > 0) {
+          await GraphApi.bindAiSession(p.graphId, created.id);
+        }
         p.onBindingChange(created.id);
         return created.id;
       })().finally(() => {
@@ -106,9 +110,12 @@ export function useGraphAiSession(p: {
     [snapshotPrefix],
   );
 
-  /** 清绑定（新建会话入口；再发即 ensureSession 重建） */
+  /** 清绑定（新建会话入口；再发即 ensureSession 重建）。未保存图无绑定
+   *  可清，仅本地态回置 */
   const clearBinding = useCallback(async () => {
-    await GraphApi.bindAiSession(p.graphId, null);
+    if (p.graphId > 0) {
+      await GraphApi.bindAiSession(p.graphId, null);
+    }
     p.onBindingChange(undefined);
   }, [p.graphId, p.onBindingChange]);
 
@@ -120,9 +127,11 @@ export function useGraphAiSession(p: {
    *  「占位 + 旧绑定」态——评审 Minor 7）；落库解绑后台补，失败提示 */
   const handleSessionGone = useCallback(() => {
     p.onBindingChange(undefined);
-    GraphApi.bindAiSession(p.graphId, null).catch(() => {
-      toast.error(t("chat:orchestration.editor.ai.unbindFailed"));
-    });
+    if (p.graphId > 0) {
+      GraphApi.bindAiSession(p.graphId, null).catch(() => {
+        toast.error(t("chat:orchestration.editor.ai.unbindFailed"));
+      });
+    }
     toast.error(t("chat:orchestration.editor.ai.sessionGone"));
   }, [p.graphId, p.onBindingChange, t]);
 

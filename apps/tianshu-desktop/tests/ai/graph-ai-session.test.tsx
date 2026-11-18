@@ -112,6 +112,24 @@ describe("useGraphAiSession", () => {
     );
   });
 
+  it("未保存图（graphId=0）建会话但不绑定——新建期可用 AI 编排、不存历史", async () => {
+    const onBindingChange = vi.fn();
+    const { result } = renderHook(() =>
+      useGraphAiSession({ ...baseParams, graphId: 0, onBindingChange }),
+    );
+    let resolved: Awaited<
+      ReturnType<typeof result.current.prepareFirstSend>
+    > | null = null;
+    await act(async () => {
+      resolved = await result.current.prepareFirstSend();
+    });
+    expect(resolved!.session.id).toBe(5);
+    expect(onBindingChange).toHaveBeenCalledWith(5);
+    expect(
+      invokeMock.mock.calls.some((c) => c[0] === "orchestration:bindAiSession"),
+    ).toBe(false);
+  });
+
   it("已绑定会话直接复用，不再 create/bind", async () => {
     const { result } = renderHook(() =>
       useGraphAiSession({ ...baseParams, boundSessionId: 9 }),

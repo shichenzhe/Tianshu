@@ -949,8 +949,13 @@ export default function GraphEditorView() {
       // 闪烁；重拉到位后 record 即刻就绪
       await queryClient.invalidateQueries({ queryKey: ["orchestration"] });
       if (isNew) {
-        // 新图保存前 AI tab 禁用（无 graphId 绑不了会话），落地后绑定重置
-        setBoundAiSessionId(undefined);
+        // 新建期 AI 编排已可用（会话不绑定）；保存落地后把期间产生的
+        // 会话绑定到新图，历史随图走（无会话则无操作）
+        if (boundAiSessionId !== undefined) {
+          GraphApi.bindAiSession(saved.id, boundAiSessionId).catch(() => {
+            toast.error(t("chat:orchestration.editor.ai.bindFailed"));
+          });
+        }
         navigate(`${GRAPHS_BASE}/${saved.id}`, { replace: true });
       }
     } catch (e) {
@@ -1286,12 +1291,6 @@ export default function GraphEditorView() {
                     aria-label={label}
                     className="flex flex-col items-center gap-1.5 rounded-l-lg border border-r-0 border-border/50 bg-white py-3 pl-1.5 pr-1 text-muted-foreground shadow-lg transition-colors hover:border-primary/30 hover:bg-primary-subtle hover:text-primary"
                     onClick={() => {
-                      if (tab === "ai" && isNew) {
-                        toast.info(
-                          t("chat:orchestration.editor.ai.unsavedToast"),
-                        );
-                        return;
-                      }
                       setPanelTab(tab);
                       setPanelState("float");
                     }}
@@ -1332,15 +1331,7 @@ export default function GraphEditorView() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (isNew) {
-                      toast.info(
-                        t("chat:orchestration.editor.ai.unsavedToast"),
-                      );
-                      return;
-                    }
-                    setPanelTab("ai");
-                  }}
+                  onClick={() => setPanelTab("ai")}
                   className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
                     panelTab === "ai"
                       ? "bg-primary-subtle text-primary"
@@ -1414,28 +1405,28 @@ export default function GraphEditorView() {
                   idLocked={(nodeId) => baselineNodeIds.has(nodeId)}
                 />
               </div>
-              {!isNew && (
-                <div className={`h-full ${panelTab === "ai" ? "" : "hidden"}`}>
-                  <GraphAiPanel
-                    graphId={graphId}
-                    graphName={name}
-                    description={description}
-                    graphJson={currentJson}
-                    selectedNodeIds={
-                      selectedId !== null &&
-                      graph.nodes.some((n) => n.id === selectedId)
-                        ? [selectedId]
-                        : undefined
-                    }
-                    aiSessionId={boundAiSessionId}
-                    onBindingChange={setBoundAiSessionId}
-                    onApplyOps={handleApplyOps}
-                    onApplyFull={handleApplyFull}
-                    onUndo={handleAiUndo}
-                    onCollapse={() => setPanelState("collapsed")}
-                  />
-                </div>
-              )}
+              {/* 新建图同样可用 AI 编排（spec 修订）：会话不绑定（无 graphId
+                  可挂），保存成功后再绑定——见 handleSave */}
+              <div className={`h-full ${panelTab === "ai" ? "" : "hidden"}`}>
+                <GraphAiPanel
+                  graphId={graphId}
+                  graphName={name}
+                  description={description}
+                  graphJson={currentJson}
+                  selectedNodeIds={
+                    selectedId !== null &&
+                    graph.nodes.some((n) => n.id === selectedId)
+                      ? [selectedId]
+                      : undefined
+                  }
+                  aiSessionId={boundAiSessionId}
+                  onBindingChange={setBoundAiSessionId}
+                  onApplyOps={handleApplyOps}
+                  onApplyFull={handleApplyFull}
+                  onUndo={handleAiUndo}
+                  onCollapse={() => setPanelState("collapsed")}
+                />
+              </div>
             </div>
           </div>
         </div>

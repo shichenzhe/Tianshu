@@ -48,6 +48,15 @@ vi.mock("@/components/layout/page-header.store", () => ({
 vi.mock("@/domains/ai/orchestration/views/GraphListView", () => ({
   useGraphs: () => ({ data: [], isLoading: false }),
 }));
+// GraphAiPanel 桩：视图测试只验证编辑器接线（tabs/挂载/传参），面板
+// 行为有组件级单测（graph-ai-panel.test.tsx）与冒烟覆盖
+vi.mock("@/domains/ai/orchestration/components/GraphAiPanel", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      createElement("div", { "data-testid": "graph-ai-panel" }, "AI 编排面板"),
+  };
+});
 vi.mock("react-router-dom", () => ({
   useNavigate: () => navigateMock,
   useLocation: () => ({
@@ -278,6 +287,24 @@ describe("GraphEditorView 属性面板三态", () => {
     expect(
       screen.getByText("chat:orchestration.editor.panelGraphTitle"),
     ).toBeTruthy();
+  });
+
+  it("新建（未保存）图可用 AI 编排：点 AI tab 直接切换且面板挂载（会话不绑定）", () => {
+    render(<GraphEditorView />);
+    // 头部 AI tab（新建图不再禁用——2026-11-18 用户裁定）
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /chat:orchestration.editor.ai.tab/,
+      }),
+    );
+    expect(screen.getByTestId("graph-ai-panel")).toBeTruthy();
+    // 切回属性 tab，AI 面板仍常驻（hidden 显隐）
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /chat:orchestration.editor.panelSettings/,
+      }),
+    );
+    expect(screen.getByTestId("graph-ai-panel")).toBeTruthy();
   });
 
   it("平铺 ↔ 还原浮动：data-panel-state 随钮切换", () => {

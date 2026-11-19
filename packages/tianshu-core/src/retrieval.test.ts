@@ -26,7 +26,9 @@ describe("chunkText 递归字符切分", () => {
   });
 
   it("换行层级回退：无空行的长文按 \\n 行边界组块", () => {
-    const lines = Array.from({ length: 30 }, (_, i) => `line${i}`.padEnd(30, "x"));
+    const lines = Array.from({ length: 30 }, (_, i) =>
+      `line${i}`.padEnd(30, "x"),
+    );
     const chunks = chunkText(lines.join("\n"), 120, 0);
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
@@ -36,7 +38,9 @@ describe("chunkText 递归字符切分", () => {
   });
 
   it("重叠携带：次块以首块尾部整段子块起头（不产生跨块拦腰新缝）", () => {
-    const lines = Array.from({ length: 30 }, (_, i) => `line${i}`.padEnd(30, "x"));
+    const lines = Array.from({ length: 30 }, (_, i) =>
+      `line${i}`.padEnd(30, "x"),
+    );
     const chunks = chunkText(lines.join("\n"), 120, 60);
     expect(chunks.length).toBeGreaterThan(2);
     expect(chunks[1].startsWith(lines[2])).toBe(true); // 首块 3 行（92 字），携带末行
@@ -67,9 +71,8 @@ describe("chunkText 递归字符切分", () => {
   });
 
   it("无任何分隔符的超长串退固定字符窗口 + 重叠（v1 形态兜底）", () => {
-    const text = Array.from(
-      { length: 1200 },
-      (_, i) => String.fromCharCode(97 + (i % 26)),
+    const text = Array.from({ length: 1200 }, (_, i) =>
+      String.fromCharCode(97 + (i % 26)),
     ).join("");
     const chunks = chunkText(text, 500, 100);
     expect(chunks.map((c) => c.length)).toEqual([500, 500, 400]);
@@ -77,7 +80,9 @@ describe("chunkText 递归字符切分", () => {
   });
 
   it("缺省参数 500/100：任意长文本每块 ≤ 500", () => {
-    const text = Array.from({ length: 60 }, (_, i) => `段落${i}。`.repeat(20)).join("\n\n");
+    const text = Array.from({ length: 60 }, (_, i) =>
+      `段落${i}。`.repeat(20),
+    ).join("\n\n");
     for (const chunk of chunkText(text)) {
       expect(chunk.length).toBeLessThanOrEqual(500);
     }

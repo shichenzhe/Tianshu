@@ -30,7 +30,6 @@ import {
 } from "../../../../packages/tianshu-core/src/tool-alias";
 import {
   filterDisabledTools,
-  registerTools,
   registry,
 } from "../../electron/domains/ai/agent/tool-registry";
 import { runChatStream } from "../../electron/domains/ai/chat/chat.service";
@@ -131,7 +130,7 @@ describe("filterDisabledTools（禁用名单老名归一）", () => {
 });
 
 describe("registry.find（老名查找归一）", () => {
-  it("find(\"read_file\") 归一命中内置新名 read 工具", () => {
+  it('find("read_file") 归一命中内置新名 read 工具', () => {
     // registry 初始集已含改名后的内置 read（file-tools），老名经归一
     // 命中同名工具（toBe 具体实例在初始集先行注册时不成立，按名断言）
     expect(registry.find("read_file")?.name).toBe("read");
@@ -161,8 +160,7 @@ describe("runChatStream 别名分发（模型发老名 → 新名工具执行）
           return {
             toolCallId: message.tool_call_id,
             toolName: message.name ?? "",
-            value:
-              typeof message.content === "string" ? message.content : "",
+            value: typeof message.content === "string" ? message.content : "",
           };
         }
       }

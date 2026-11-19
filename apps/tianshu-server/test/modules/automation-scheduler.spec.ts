@@ -354,12 +354,25 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     // stop：abort 全部在途 → 执行收尾（中止非错误：errorCode 不落，run 以
     // 已生成部分记 success——core runChatStream 中止语义，chat-runner
     // abort 用例同款）、注册表清空
+    // stop 前先把任务摘出调度集合：stop 的同步 clear 与在途 tick 的
+    // findMany→fire 存在交错窗口——tick 查表先于 clear 发生即可再次拉起
+    // 该任务（runNow 不消耗调度字段，nextRunAt 仍在过去且 enabled 仍
+    // 命中），新一轮 set 进 inflight 且建第二条 run 行（waitForDb 取
+    // 首行还会掩盖）致末尾断言 flaky（2026-11-18 CI 实证）；先失效再
+    // stop 使在途 tick 无任务可拉，交错无害
+    await db.prisma.automationTask.update({
+      where: { id: task.id },
+      data: { enabled: false },
+    });
     scheduler.stop();
+    // run 落库收尾与执行链 .finally 的 inflight.delete 间另有微任务窗口
+    // （then 事件发布 → finally 删注册表）——清空并入轮询条件一并等待
     await waitForDb(async () => {
       const [run] = await db.prisma.automationRun.findMany({
         where: { taskId: task.id },
       });
       if (run.status === 'running') throw new Error('未收尾');
+      if (inflight.has(task.id)) throw new Error('inflight 未清空');
     });
     expect(inflight.has(task.id)).toBe(false);
   });

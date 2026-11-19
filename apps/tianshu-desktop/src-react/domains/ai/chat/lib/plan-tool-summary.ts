@@ -97,9 +97,7 @@ const listDigest = (output?: string): PlanToolDigest | null => {
 /** todo_write 单项 → 摘要：新建 → 流转 → 进展 逐级回落 */
 function writeDigest(args: unknown): PlanToolDigest | null {
   const item = firstItem(args);
-  return (
-    createDigest(item) ?? updateDigest(item) ?? appendDigest(item)
-  );
+  return createDigest(item) ?? updateDigest(item) ?? appendDigest(item);
 }
 
 /** 富化摘要解析：非计划工具或可得字段缺失 → null（回退现有文本形态）。

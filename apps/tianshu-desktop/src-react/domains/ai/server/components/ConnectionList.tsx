@@ -117,7 +117,11 @@ const WARN_BADGE_CLASS =
 
 /** 直连明文警示徽标（批3B，design §5 项7）：http:// 非局域网地址——token
  * 与业务面全程明文（局域网内明文风险可控不警示；https 恒安全态） */
-function ConnectionPlainHttpBadge({ connection }: { connection: ConnectionView }) {
+function ConnectionPlainHttpBadge({
+  connection,
+}: {
+  connection: ConnectionView;
+}) {
   const { t } = useTranslation("ai");
   if (connection.mode !== "direct" || !isPlainHttpRemote(connection.baseUrl)) {
     return null;
@@ -137,7 +141,11 @@ function ConnectionPlainHttpBadge({ connection }: { connection: ConnectionView }
 /** 协议版本「建议升级」徽标（批3B，design §5 项9）：被控端 protocolVersion
  * 低于控制端基线（PROTOCOL_VERSION 单源协议包）；老被控端未上报
  * （undefined）不告警——增量兼容 */
-function ConnectionProtocolBadge({ connection }: { connection: ConnectionView }) {
+function ConnectionProtocolBadge({
+  connection,
+}: {
+  connection: ConnectionView;
+}) {
   const { t } = useTranslation("ai");
   if (!isProtocolOutdated(connection.protocolVersion)) {
     return null;

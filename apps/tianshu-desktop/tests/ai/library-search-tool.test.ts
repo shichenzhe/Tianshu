@@ -28,7 +28,6 @@ import {
   LIBRARY_SEARCH_EMPTY,
   LIBRARY_SEARCH_TOOL_NAME,
   makeLibrarySearchTool,
-  type LibrarySearchToolDeps,
 } from "../../electron/domains/ai/agent/library-search-tool";
 import type { VectorHit } from "../../electron/domains/ai/orchestration/vector-store";
 
@@ -47,9 +46,8 @@ function makeDb(opts: {
       ),
     },
     libraryItem: {
-      findMany: vi.fn(
-        async (args: { where: Record<string, unknown> }) =>
-          opts.byWhere(args.where),
+      findMany: vi.fn(async (args: { where: Record<string, unknown> }) =>
+        opts.byWhere(args.where),
       ),
     },
   };
@@ -79,7 +77,10 @@ describe("makeLibrarySearchTool 语义向量版", () => {
     const search = vi.fn(async (params: { model: string; topK: number }) => {
       expect(params.model).toBe("9");
       expect(params.topK).toBe(5);
-      return [hit("笔记.md", "命中片段甲", 0.87), hit("孤儿.txt", "片段乙", 0.42)];
+      return [
+        hit("笔记.md", "命中片段甲", 0.87),
+        hit("孤儿.txt", "片段乙", 0.42),
+      ];
     });
     const out = await makeLibrarySearchTool({ db, embed, search }).execute(
       ctx(),

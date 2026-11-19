@@ -133,7 +133,11 @@ function isValidKdf(kdf: { n: number; r: number; p: number }): boolean {
 
 /** 读档头：魔数 + JSON 行；格式无效抛 BackupArchiveFormatError。
  * 返回头行原始字节（AAD 用）与解析结果 */
-function readHeader(file: string): { headerLine: Buffer; header: ArchiveHeader; fileLength: number } {
+function readHeader(file: string): {
+  headerLine: Buffer;
+  header: ArchiveHeader;
+  fileLength: number;
+} {
   const size = statSync(file).size;
   let fd: number;
   try {
@@ -151,21 +155,34 @@ function readHeader(file: string): { headerLine: Buffer; header: ArchiveHeader; 
       probe.subarray(0, BACKUP_ARCHIVE_MAGIC.length).toString("utf8") !==
         BACKUP_ARCHIVE_MAGIC
     ) {
-      throw new BackupArchiveFormatError("备份档格式无效（非加密备份档或已损坏）");
+      throw new BackupArchiveFormatError(
+        "备份档格式无效（非加密备份档或已损坏）",
+      );
     }
     let header: ArchiveHeader;
     try {
-      header = JSON.parse(probe.subarray(BACKUP_ARCHIVE_MAGIC.length, newline).toString("utf8"));
+      header = JSON.parse(
+        probe.subarray(BACKUP_ARCHIVE_MAGIC.length, newline).toString("utf8"),
+      );
     } catch {
       throw new BackupArchiveFormatError("备份档头损坏（无法解析）");
     }
-    if (header?.v !== 1 || !isValidKdf(header.kdf) || !header.salt || !header.nonce) {
+    if (
+      header?.v !== 1 ||
+      !isValidKdf(header.kdf) ||
+      !header.salt ||
+      !header.nonce
+    ) {
       throw new BackupArchiveFormatError("备份档头参数无效");
     }
     if (size <= newline + 1 + TAG_BYTES) {
       throw new BackupArchiveFormatError("备份档密文缺失（文件过短）");
     }
-    return { headerLine: probe.subarray(0, newline + 1), header, fileLength: size };
+    return {
+      headerLine: probe.subarray(0, newline + 1),
+      header,
+      fileLength: size,
+    };
   } finally {
     closeSync(fd);
   }
@@ -190,7 +207,11 @@ export async function encryptBackupArchive(
 ): Promise<{ sha256: string }> {
   const salt = randomBytes(SALT_BYTES);
   const nonce = randomBytes(NONCE_BYTES);
-  const key = await deriveKey(passphrase, salt, { n: KDF_N, r: KDF_R, p: KDF_P });
+  const key = await deriveKey(passphrase, salt, {
+    n: KDF_N,
+    r: KDF_R,
+    p: KDF_P,
+  });
   const header: ArchiveHeader = {
     v: 1,
     kdf: { n: KDF_N, r: KDF_R, p: KDF_P },
@@ -251,7 +272,11 @@ export async function decryptBackupArchive(
   destPath: string,
 ): Promise<void> {
   const { headerLine, header, fileLength } = readHeader(srcPath);
-  const key = await deriveKey(passphrase, Buffer.from(header.salt, "base64"), header.kdf);
+  const key = await deriveKey(
+    passphrase,
+    Buffer.from(header.salt, "base64"),
+    header.kdf,
+  );
   const nonce = Buffer.from(header.nonce, "base64");
   const tag = Buffer.alloc(TAG_BYTES);
   let fd: number;
@@ -279,7 +304,7 @@ export async function decryptBackupArchive(
       createWriteStream(tmp),
     );
     renameSync(tmp, destPath);
-  } catch (err) {
+  } catch {
     try {
       unlinkSync(tmp);
     } catch {

@@ -72,9 +72,7 @@ export function parseFrontmatter(raw: string): {
   return {
     name: fields.name,
     description: fields.description,
-    ...(fields.tools != null
-      ? { tools: parseToolGroups(fields.tools) }
-      : {}),
+    ...(fields.tools != null ? { tools: parseToolGroups(fields.tools) } : {}),
   };
 }
 

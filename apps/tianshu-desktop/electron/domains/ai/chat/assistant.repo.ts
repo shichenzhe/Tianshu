@@ -17,7 +17,10 @@ import {
   teamMemberSchema,
   validateTeamMembers,
 } from "../agent/create-expert";
-import { makeListExpertsTool, makeRecommendExpertTool } from "../agent/recommend-expert-tool";
+import {
+  makeListExpertsTool,
+  makeRecommendExpertTool,
+} from "../agent/recommend-expert-tool";
 import { parseJsonStringArray } from "./expert-catalog";
 import { parseTeamMembers, type TeamMember } from "./expert-team";
 import type {

@@ -3,7 +3,15 @@
 // 直连警示徽标（复用 relay E2E plaintext 徽标视觉语言）；被控端协议版本
 // 低于控制端基线 → 「建议升级」徽标；局域网 http / 版本达标 / 老被控端
 // 未上报（undefined）均不出徽标。
-import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import {
+  beforeAll,
+  beforeEach,
+  afterEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PROTOCOL_VERSION } from "@tianshu/protocol";
@@ -62,9 +70,15 @@ function renderList(connections: Array<Record<string, unknown>>) {
   });
   return render(
     <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
     >
-      <ConnectionList selectedConnId={null} onSelect={() => {}} variant="page" />
+      <ConnectionList
+        selectedConnId={null}
+        onSelect={() => {}}
+        variant="page"
+      />
     </QueryClientProvider>,
   );
 }
@@ -83,18 +97,10 @@ describe("直连明文警示徽标", () => {
       conn({ id: "rly", mode: "relay", relayUrl: "ws://127.0.0.1:1/ws" }),
     ]);
 
-    expect(
-      await screen.findByTestId("connection-plain-http-pub"),
-    ).toBeTruthy();
-    expect(
-      screen.queryByTestId("connection-plain-http-lan"),
-    ).toBeNull();
-    expect(
-      screen.queryByTestId("connection-plain-http-tls"),
-    ).toBeNull();
-    expect(
-      screen.queryByTestId("connection-plain-http-rly"),
-    ).toBeNull();
+    expect(await screen.findByTestId("connection-plain-http-pub")).toBeTruthy();
+    expect(screen.queryByTestId("connection-plain-http-lan")).toBeNull();
+    expect(screen.queryByTestId("connection-plain-http-tls")).toBeNull();
+    expect(screen.queryByTestId("connection-plain-http-rly")).toBeNull();
   });
 });
 
@@ -110,12 +116,8 @@ describe("协议版本「建议升级」徽标", () => {
     expect(
       await screen.findByTestId("connection-protocol-outdated-old"),
     ).toBeTruthy();
-    expect(
-      screen.queryByTestId("connection-protocol-outdated-fit"),
-    ).toBeNull();
-    expect(
-      screen.queryByTestId("connection-protocol-outdated-new"),
-    ).toBeNull();
+    expect(screen.queryByTestId("connection-protocol-outdated-fit")).toBeNull();
+    expect(screen.queryByTestId("connection-protocol-outdated-new")).toBeNull();
     expect(
       screen.queryByTestId("connection-protocol-outdated-legacy"),
     ).toBeNull();

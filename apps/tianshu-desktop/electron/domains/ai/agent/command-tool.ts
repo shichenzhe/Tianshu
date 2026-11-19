@@ -235,8 +235,7 @@ function runExec(
     // 用户中止收割（spec §4.5）：结算/中止双向解绑防泄漏
     const onAbort = () => reapProcessGroup(child);
     ctx.abortSignal?.addEventListener("abort", onAbort, { once: true });
-    const detach = () =>
-      ctx.abortSignal?.removeEventListener("abort", onAbort);
+    const detach = () => ctx.abortSignal?.removeEventListener("abort", onAbort);
     child.on("error", (error) => {
       detach();
       reapProcessGroup(child);

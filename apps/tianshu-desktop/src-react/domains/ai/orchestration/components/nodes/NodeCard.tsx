@@ -353,8 +353,7 @@ function KindSummary({
       return (
         <div className="mt-1">
           <span className={node.source ? dim : dimEmpty}>
-            {node.source ||
-              t("chat:orchestration.editor.rerankSourceEmpty")}
+            {node.source || t("chat:orchestration.editor.rerankSourceEmpty")}
           </span>
         </div>
       );

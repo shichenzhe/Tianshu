@@ -30,7 +30,9 @@ describe("makeListExpertsTool", () => {
     );
     const item = MARKET_EXPERTS.find((e) => e.slug === "code-review-expert");
     expect(item).toBeDefined();
-    expect(out).toContain(`- ${item!.slug}｜${item!.name}（${item!.subtitle}）`);
+    expect(out).toContain(
+      `- ${item!.slug}｜${item!.name}（${item!.subtitle}）`,
+    );
   });
 
   it("description 含信号规则与两跳指引，不含目录本体", () => {

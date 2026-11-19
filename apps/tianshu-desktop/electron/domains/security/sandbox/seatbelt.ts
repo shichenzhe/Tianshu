@@ -7,7 +7,11 @@
  */
 import fs from "node:fs";
 import os from "node:os";
-import type { SandboxRunner, SandboxWrapOptions, SandboxWrapResult } from "./runner";
+import type {
+  SandboxRunner,
+  SandboxWrapOptions,
+  SandboxWrapResult,
+} from "./runner";
 import { buildSeatbeltProfile, normalizeMacPrivatePath } from "./profile";
 
 const SANDBOX_EXEC = "/usr/bin/sandbox-exec";

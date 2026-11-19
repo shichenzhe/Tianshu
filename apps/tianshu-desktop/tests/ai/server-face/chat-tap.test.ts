@@ -13,12 +13,15 @@ import {
 } from "vitest";
 
 // 桌面渲染层窗口替身（chat:stream 全窗口广播测试用）：数组供用例增删
-const fakeWindows = vi.hoisted(() => [] as Array<{
-  webContents: {
-    send: ReturnType<typeof vi.fn>;
-    isDestroyed: () => boolean;
-  };
-}>);
+const fakeWindows = vi.hoisted(
+  () =>
+    [] as Array<{
+      webContents: {
+        send: ReturnType<typeof vi.fn>;
+        isDestroyed: () => boolean;
+      };
+    }>,
+);
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn(), on: vi.fn() },

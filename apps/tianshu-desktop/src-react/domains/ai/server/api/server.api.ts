@@ -756,10 +756,7 @@ export default class ServerApi {
     );
   }
 
-  static async workspaceDelete(
-    id: number,
-    connId: string,
-  ): Promise<void> {
+  static async workspaceDelete(id: number, connId: string): Promise<void> {
     await requestRemote("server:workspaceDelete", { id }, connId);
   }
 
@@ -801,7 +798,9 @@ export default class ServerApi {
           ? {
               remember: true,
               toolName: remember.toolName,
-              ...(remember.pattern != null ? { pattern: remember.pattern } : {}),
+              ...(remember.pattern != null
+                ? { pattern: remember.pattern }
+                : {}),
             }
           : {}),
       },

@@ -25,12 +25,14 @@ import {
 /** prisma 替身：rollup 写方消费的四个模型面（显式参数类型,断言取参可判型） */
 type StatCreateArgs = { data: { event: string; detail: string } };
 type StatUpdateArgs = { where: { id: number }; data: { detail: string } };
-function makePrisma(overrides: {
-  runs?: Array<Record<string, unknown>>;
-  tasks?: Array<Record<string, unknown>>;
-  graphs?: Array<Record<string, unknown>>;
-  stats?: Array<Record<string, unknown>>;
-} = {}) {
+function makePrisma(
+  overrides: {
+    runs?: Array<Record<string, unknown>>;
+    tasks?: Array<Record<string, unknown>>;
+    graphs?: Array<Record<string, unknown>>;
+    stats?: Array<Record<string, unknown>>;
+  } = {},
+) {
   return {
     automationRun: {
       findMany: vi.fn(async () => overrides.runs ?? []),
@@ -49,8 +51,7 @@ function makePrisma(overrides: {
   };
 }
 
-const daysAgo = (n: number) =>
-  new Date(Date.now() - n * 24 * 60 * 60 * 1000);
+const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
 beforeEach(() => {
   resetRollupThrottleForTest();
@@ -172,7 +173,9 @@ describe("maybeRollupAutomationStats 写方接线", () => {
     };
     await expect(maybeRollupAutomationStats(broken)).resolves.toBeUndefined();
     // prisma 缺席静默(照 recordAutomationEvent 先例)
-    await expect(maybeRollupAutomationStats(undefined)).resolves.toBeUndefined();
+    await expect(
+      maybeRollupAutomationStats(undefined),
+    ).resolves.toBeUndefined();
   });
 
   it("窗口外冻结:仅重算窗口内 7 天,窗口外既有行不触碰", async () => {

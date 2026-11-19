@@ -147,7 +147,11 @@ describe("资料库远程主机（适配器映射）", () => {
   it("createFolder/createFile/addLink/rename/move/delete：写面直达", async () => {
     remoteLibraryApi.createFolder.mockResolvedValue(REMOTE_ITEM);
     await LibraryApi.createFolder("新夹", 2);
-    expect(remoteLibraryApi.createFolder).toHaveBeenCalledWith("新夹", 2, "conn-x");
+    expect(remoteLibraryApi.createFolder).toHaveBeenCalledWith(
+      "新夹",
+      2,
+      "conn-x",
+    );
 
     remoteLibraryApi.rename.mockResolvedValue(REMOTE_ITEM);
     await LibraryApi.rename(7, "改名");
@@ -173,7 +177,11 @@ describe("资料库远程主机（适配器映射）", () => {
 
     remoteLibraryApi.writeContent.mockResolvedValue(REMOTE_ITEM);
     await LibraryApi.writeFileContent(7, "新内容");
-    expect(remoteLibraryApi.writeContent).toHaveBeenCalledWith(7, "新内容", "conn-x");
+    expect(remoteLibraryApi.writeContent).toHaveBeenCalledWith(
+      7,
+      "新内容",
+      "conn-x",
+    );
   });
 
   it("内容读：read 文本 / readImage 拼 dataUrl（按 id，无路径凭证）", async () => {

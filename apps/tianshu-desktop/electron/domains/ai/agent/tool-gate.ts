@@ -329,12 +329,7 @@ function emitCommandEvent(
 
 const FILE_UNATTENDED_OUTPUT =
   "错误: 无人值守任务不可访问黑名单路径，请调整名单或改为人工会话执行";
-const FILE_GATE_TOOLS = new Set([
-  "read",
-  "write",
-  "ls",
-  "rm",
-]);
+const FILE_GATE_TOOLS = new Set(["read", "write", "ls", "rm"]);
 
 /** 批量删除 unattended 强拒文案（SP4） */
 const BULK_UNATTENDED_OUTPUT =

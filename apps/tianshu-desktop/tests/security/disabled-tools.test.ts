@@ -48,9 +48,10 @@ describe("BUILTIN_TOOLS 注册表（spec §3.1）", () => {
 
 describe("pickDisabledTools（白名单清洗）", () => {
   it("只收已知名，去重保注册表序", () => {
-    expect(
-      pickDisabledTools(["bash", "nope", "rm", "bash"]),
-    ).toEqual(["bash", "rm"]);
+    expect(pickDisabledTools(["bash", "nope", "rm", "bash"])).toEqual([
+      "bash",
+      "rm",
+    ]);
   });
   it("非数组/含 mcp__ 前缀一律回落空或剔除", () => {
     expect(pickDisabledTools(undefined)).toEqual([]);

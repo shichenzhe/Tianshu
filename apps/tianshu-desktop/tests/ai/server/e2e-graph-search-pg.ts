@@ -62,7 +62,9 @@ const CORE_RETRIEVAL = path.join(
 
 const PG_URL = process.env.SEARCH_E2E_PG_URL;
 if (!PG_URL) {
-  console.log("SKIP: SEARCH_E2E_PG_URL 未配置（docker compose up search-pg 后设置）");
+  console.log(
+    "SKIP: SEARCH_E2E_PG_URL 未配置（docker compose up search-pg 后设置）",
+  );
   process.exit(0);
 }
 
@@ -92,7 +94,10 @@ const { upsertSeed, countCollection } = createPgSeeder({
 // —— 主流程 ——
 
 async function main(): Promise<number> {
-  log("PG 检索层 e2e 启动", `SEARCH_E2E_PG_URL=${PG_URL.replace(/:[^:@/]+@/, ":***@")}`);
+  log(
+    "PG 检索层 e2e 启动",
+    `SEARCH_E2E_PG_URL=${PG_URL.replace(/:[^:@/]+@/, ":***@")}`,
+  );
 
   if (!fs.existsSync(CORE_RETRIEVAL)) {
     fail(
@@ -100,11 +105,14 @@ async function main(): Promise<number> {
       `${CORE_RETRIEVAL} 不存在——先重建共享包 dist（根 npm --prefix packages/tianshu-core run build）`,
     );
   }
-  const { tokenize } = (await import(
-    pathToFileURL(CORE_RETRIEVAL).href
-  )) as { tokenize: (text: string) => string[] };
+  const { tokenize } = (await import(pathToFileURL(CORE_RETRIEVAL).href)) as {
+    tokenize: (text: string) => string[];
+  };
   if (typeof tokenize !== "function") {
-    fail("core 包分词模块", "dist 导出缺 tokenize（陈旧产物？重建共享包 dist）");
+    fail(
+      "core 包分词模块",
+      "dist 导出缺 tokenize（陈旧产物？重建共享包 dist）",
+    );
   }
 
   if (!process.env.TIANSHU_E2E_SKIP_BUILD) {
@@ -153,14 +161,19 @@ async function main(): Promise<number> {
       "高可用架构在设计阶段须引入容错机制，故障隔离与优雅降级是容错设计的第一道防线。",
       "容错设计要求重试、熔断与幂等配合，避免局部故障在设计不当的链路上被放大为全局雪崩。",
     ];
-    const offTopicTexts = ["今天的行程是京都的寺庙巡礼与宇治抹茶甜品，傍晚沿鸭川散步。"];
+    const offTopicTexts = [
+      "今天的行程是京都的寺庙巡礼与宇治抹茶甜品，傍晚沿鸭川散步。",
+    ];
     await upsertSeed(pool, tokenize, TARGET_SOURCE, targetTexts);
     await upsertSeed(pool, tokenize, OFF_TOPIC_SOURCE, offTopicTexts);
     const seeded = await countCollection(pool);
     if (seeded !== 3) {
       fail("中文样本直插", `首播计数期望 3 实为 ${seeded}`);
     }
-    pass("中文样本直插", `「${TARGET_SOURCE}」×2 +「${OFF_TOPIC_SOURCE}」×1，collection 计数 ${seeded}`);
+    pass(
+      "中文样本直插",
+      `「${TARGET_SOURCE}」×2 +「${OFF_TOPIC_SOURCE}」×1，collection 计数 ${seeded}`,
+    );
 
     // 3. spawn server 子进程：主库指临时 SQLite（e2e-graph-smoke 的 SERVER_DB
     //    模式），检索库注入 SEARCH_DB_URL 指向真 PG
@@ -184,7 +197,10 @@ async function main(): Promise<number> {
     );
     child = spawned.child;
     const info = parseHandshake(spawned.matched);
-    if (info.token !== "e2e-graph-pg-token-0123456789abcdef0123456789" || info.port !== port) {
+    if (
+      info.token !== "e2e-graph-pg-token-0123456789abcdef0123456789" ||
+      info.port !== port
+    ) {
       fail(
         "server spawn+握手",
         `token/port 未按 env 回显（token=${info.token} port=${info.port} ≠ 配置 ${port}）`,
@@ -276,7 +292,10 @@ async function main(): Promise<number> {
         `重播后 collection 计数期望 3（不翻倍）实为 ${reseeded}`,
       );
     }
-    pass("upsert 幂等", `同键重播后计数 ${seeded} → ${reseeded}（DELETE+INSERT 事务不翻倍）`);
+    pass(
+      "upsert 幂等",
+      `同键重播后计数 ${seeded} → ${reseeded}（DELETE+INSERT 事务不翻倍）`,
+    );
 
     // 收敛：图删除（临时主库随之弃置）
     await call(request, "graph/delete 收敛", "graph/delete", { id: graph.id });
@@ -298,7 +317,9 @@ async function main(): Promise<number> {
 main()
   .then((code) => process.exit(code))
   .catch((e) => {
-    console.error(`[e2e-graph-pg] 阶段失败：${e instanceof Error ? e.message : e}`);
+    console.error(
+      `[e2e-graph-pg] 阶段失败：${e instanceof Error ? e.message : e}`,
+    );
     const failed = outcomes.filter((o) => !o.ok);
     for (const o of failed) {
       console.log(`  FAIL  ${o.label} — ${o.detail}`);

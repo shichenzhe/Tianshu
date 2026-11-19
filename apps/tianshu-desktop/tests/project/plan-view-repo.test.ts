@@ -15,7 +15,9 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, ipcMain: { handle: vi.fn() } }));
+  },
+  ipcMain: { handle: vi.fn() },
+}));
 
 // Log 依赖 electron app.getPath（userData 建 winston 文件传输），测试用内存桩
 vi.mock("../../electron/commons/Log", () => ({

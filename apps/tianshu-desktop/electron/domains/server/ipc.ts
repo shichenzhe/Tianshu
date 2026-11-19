@@ -131,7 +131,10 @@ export function registerServerIpc(
     "server:sessionGet",
     remoteHandler(registry, ENDPOINTS.session.getById),
   );
-  ipcMain.handle("server:sessionSend", remoteHandler(registry, ENDPOINTS.session.send));
+  ipcMain.handle(
+    "server:sessionSend",
+    remoteHandler(registry, ENDPOINTS.session.send),
+  );
   ipcMain.handle(
     "server:sessionAbort",
     remoteHandler(registry, ENDPOINTS.session.abort),
@@ -192,7 +195,10 @@ export function registerServerIpc(
     remoteHandler(registry, ENDPOINTS.session.accessMode),
   );
   // —— P1 尾未读角标：已读推进透传（session/read，与移动端上报同语义） ——
-  ipcMain.handle("server:sessionRead", remoteHandler(registry, ENDPOINTS.session.read));
+  ipcMain.handle(
+    "server:sessionRead",
+    remoteHandler(registry, ENDPOINTS.session.read),
+  );
   // —— 会话内工具批（A9）：压缩 202 受理 + 润色同步透传（两端被控面
   //  session/compact、session/polish 齐备——修复前缺注册致远程恒走
   //  本地通道） ——
@@ -205,8 +211,14 @@ export function registerServerIpc(
     remoteHandler(registry, ENDPOINTS.session.polish),
   );
   // —— 文件面（FA-T3，spec 2026-10-20）：files 三端点透传 ——
-  ipcMain.handle("server:filesList", remoteHandler(registry, ENDPOINTS.files.list));
-  ipcMain.handle("server:filesRead", remoteHandler(registry, ENDPOINTS.files.read));
+  ipcMain.handle(
+    "server:filesList",
+    remoteHandler(registry, ENDPOINTS.files.list),
+  );
+  ipcMain.handle(
+    "server:filesRead",
+    remoteHandler(registry, ENDPOINTS.files.read),
+  );
   ipcMain.handle(
     "server:filesUploadImage",
     remoteHandler(registry, ENDPOINTS.files.uploadImage),
@@ -216,8 +228,14 @@ export function registerServerIpc(
     "server:sessionUsage",
     remoteHandler(registry, ENDPOINTS.session.usage),
   );
-  ipcMain.handle("server:skillsQuery", remoteHandler(registry, ENDPOINTS.skills.query));
-  ipcMain.handle("server:skillsRead", remoteHandler(registry, ENDPOINTS.skills.read));
+  ipcMain.handle(
+    "server:skillsQuery",
+    remoteHandler(registry, ENDPOINTS.skills.query),
+  );
+  ipcMain.handle(
+    "server:skillsRead",
+    remoteHandler(registry, ENDPOINTS.skills.read),
+  );
   ipcMain.handle(
     "server:skillsSetEnabled",
     remoteHandler(registry, ENDPOINTS.skills.setEnabled),
@@ -248,12 +266,27 @@ export function registerServerIpc(
   // —— 监控读面（P0-1，spec monitoring.md §6）：monitor/stats 透传——
   //  monitor.api 主机路由化（本地 monitor:stats / 远程此通道），两端
   //  被控面均含 monitor capability ——
-  ipcMain.handle("server:monitorStats", remoteHandler(registry, ENDPOINTS.monitor.stats));
+  ipcMain.handle(
+    "server:monitorStats",
+    remoteHandler(registry, ENDPOINTS.monitor.stats),
+  );
   // —— 编排区遥控（GA-T8）：graph 五端点 + automation 四端点（同款透传） ——
-  ipcMain.handle("server:graphQuery", remoteHandler(registry, ENDPOINTS.graph.query));
-  ipcMain.handle("server:graphSave", remoteHandler(registry, ENDPOINTS.graph.save));
-  ipcMain.handle("server:graphDelete", remoteHandler(registry, ENDPOINTS.graph.delete));
-  ipcMain.handle("server:graphRun", remoteHandler(registry, ENDPOINTS.graph.run));
+  ipcMain.handle(
+    "server:graphQuery",
+    remoteHandler(registry, ENDPOINTS.graph.query),
+  );
+  ipcMain.handle(
+    "server:graphSave",
+    remoteHandler(registry, ENDPOINTS.graph.save),
+  );
+  ipcMain.handle(
+    "server:graphDelete",
+    remoteHandler(registry, ENDPOINTS.graph.delete),
+  );
+  ipcMain.handle(
+    "server:graphRun",
+    remoteHandler(registry, ENDPOINTS.graph.run),
+  );
   ipcMain.handle(
     "server:graphRunAbort",
     remoteHandler(registry, ENDPOINTS.graph.runAbort),
@@ -304,9 +337,18 @@ export function registerServerIpc(
   // —— 资料库路由化（automation/library 批）：library/* 十七端点同款
   //   透传（结构 CRUD + 收藏/打点 + read/readImage 内容读 + writeContent
   //   内容写；uploadFile 未接——本地盘导入深水门控挂账） ——
-  ipcMain.handle("server:libraryList", remoteHandler(registry, ENDPOINTS.library.list));
-  ipcMain.handle("server:libraryTree", remoteHandler(registry, ENDPOINTS.library.tree));
-  ipcMain.handle("server:librarySearch", remoteHandler(registry, ENDPOINTS.library.search));
+  ipcMain.handle(
+    "server:libraryList",
+    remoteHandler(registry, ENDPOINTS.library.list),
+  );
+  ipcMain.handle(
+    "server:libraryTree",
+    remoteHandler(registry, ENDPOINTS.library.tree),
+  );
+  ipcMain.handle(
+    "server:librarySearch",
+    remoteHandler(registry, ENDPOINTS.library.search),
+  );
   ipcMain.handle(
     "server:libraryListRecent",
     remoteHandler(registry, ENDPOINTS.library.listRecent),
@@ -323,10 +365,22 @@ export function registerServerIpc(
     "server:libraryCreateFile",
     remoteHandler(registry, ENDPOINTS.library.createFile),
   );
-  ipcMain.handle("server:libraryAddLink", remoteHandler(registry, ENDPOINTS.library.addLink));
-  ipcMain.handle("server:libraryRename", remoteHandler(registry, ENDPOINTS.library.rename));
-  ipcMain.handle("server:libraryMove", remoteHandler(registry, ENDPOINTS.library.move));
-  ipcMain.handle("server:libraryDelete", remoteHandler(registry, ENDPOINTS.library.delete));
+  ipcMain.handle(
+    "server:libraryAddLink",
+    remoteHandler(registry, ENDPOINTS.library.addLink),
+  );
+  ipcMain.handle(
+    "server:libraryRename",
+    remoteHandler(registry, ENDPOINTS.library.rename),
+  );
+  ipcMain.handle(
+    "server:libraryMove",
+    remoteHandler(registry, ENDPOINTS.library.move),
+  );
+  ipcMain.handle(
+    "server:libraryDelete",
+    remoteHandler(registry, ENDPOINTS.library.delete),
+  );
   ipcMain.handle(
     "server:librarySubtreeCount",
     remoteHandler(registry, ENDPOINTS.library.subtreeCount),
@@ -339,7 +393,10 @@ export function registerServerIpc(
     "server:libraryMarkViewed",
     remoteHandler(registry, ENDPOINTS.library.markViewed),
   );
-  ipcMain.handle("server:libraryRead", remoteHandler(registry, ENDPOINTS.library.read));
+  ipcMain.handle(
+    "server:libraryRead",
+    remoteHandler(registry, ENDPOINTS.library.read),
+  );
   ipcMain.handle(
     "server:libraryReadImage",
     remoteHandler(registry, ENDPOINTS.library.readImage),
@@ -359,10 +416,8 @@ export function registerServerIpc(
     async (_event, raw: unknown, connId?: unknown) => {
       const body = (raw ?? {}) as { paths?: unknown; parentId?: unknown };
       const pathsIn = Array.isArray(body.paths) ? body.paths : [];
-      const parentId =
-        typeof body.parentId === "number" ? body.parentId : null;
-      const targetConnId =
-        typeof connId === "string" && connId ? connId : null;
+      const parentId = typeof body.parentId === "number" ? body.parentId : null;
+      const targetConnId = typeof connId === "string" && connId ? connId : null;
       const UPLOAD_LIMIT_BYTES = 3 * 1024 * 1024;
       const added: unknown[] = [];
       const failed: Array<{ path: string; reason: string }> = [];
@@ -395,7 +450,9 @@ export function registerServerIpc(
               base64: buf.toString("base64"),
               ...(parentId !== null ? { parentId } : {}),
             },
-          )) as { body?: { success?: boolean; data?: unknown; message?: unknown } };
+          )) as {
+            body?: { success?: boolean; data?: unknown; message?: unknown };
+          };
           const wire = envelope?.body;
           if (!wire || wire.success !== true) {
             throw new Error(
@@ -423,10 +480,8 @@ export function registerServerIpc(
     async (_event, raw: unknown, connId?: unknown) => {
       const body = (raw ?? {}) as { dirPath?: unknown; parentId?: unknown };
       const dirPath = typeof body.dirPath === "string" ? body.dirPath : "";
-      const parentId =
-        typeof body.parentId === "number" ? body.parentId : null;
-      const targetConnId =
-        typeof connId === "string" && connId ? connId : null;
+      const parentId = typeof body.parentId === "number" ? body.parentId : null;
+      const targetConnId = typeof connId === "string" && connId ? connId : null;
       const UPLOAD_LIMIT_BYTES = 3 * 1024 * 1024;
       const request = async (
         endpoint: string,
@@ -559,8 +614,14 @@ export function registerServerIpc(
     "server:uiOpenSession",
     remoteHandler(registry, ENDPOINTS.ui.openSession),
   );
-  ipcMain.handle("server:uiNotify", remoteHandler(registry, ENDPOINTS.ui.notify));
-  ipcMain.handle("server:uiOpenRoute", remoteHandler(registry, ENDPOINTS.ui.openRoute));
+  ipcMain.handle(
+    "server:uiNotify",
+    remoteHandler(registry, ENDPOINTS.ui.notify),
+  );
+  ipcMain.handle(
+    "server:uiOpenRoute",
+    remoteHandler(registry, ENDPOINTS.ui.openRoute),
+  );
   // —— 桥审批应答（TB-T2，spec §4.2）：渲染层审批卡 → 主进程收敛挂起审批
   // （命中消费返回 true；未知/已超时返回 false——渲染层示 stale） ——
   ipcMain.handle("server:bridgeDecision", (_event, raw) => {

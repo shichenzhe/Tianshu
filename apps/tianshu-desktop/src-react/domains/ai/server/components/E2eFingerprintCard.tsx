@@ -17,7 +17,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Copy, Loader2, ShieldAlert, ShieldCheck, ShieldQuestionMark } from "lucide-react";
+import {
+  Copy,
+  Loader2,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldQuestionMark,
+} from "lucide-react";
 
 import IconTooltip from "@/components/common/icon-tooltip";
 import { Button } from "@/components/ui/button";
@@ -81,7 +87,8 @@ export default function E2eFingerprintCard({
   const pending = connection.e2e === "pending-confirm";
   const mitm = connection.e2e === "mitm-suspect";
   // 常显当前指纹：协商值（本次连接实际核对到的）优先，回落钉扎值
-  const currentFingerprint = connection.e2eFingerprint ?? connection.fingerprint;
+  const currentFingerprint =
+    connection.e2eFingerprint ?? connection.fingerprint;
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -117,7 +124,10 @@ export default function E2eFingerprintCard({
       )}
     >
       {pending ? (
-        <div className="flex flex-col gap-2" data-testid="fingerprint-card-pending">
+        <div
+          className="flex flex-col gap-2"
+          data-testid="fingerprint-card-pending"
+        >
           <div className="flex items-start gap-1.5">
             <ShieldQuestionMark className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div className="min-w-0">
@@ -154,7 +164,10 @@ export default function E2eFingerprintCard({
           </Button>
         </div>
       ) : mitm ? (
-        <div className="flex flex-col gap-2" data-testid="fingerprint-card-mitm">
+        <div
+          className="flex flex-col gap-2"
+          data-testid="fingerprint-card-mitm"
+        >
           <div className="flex items-start gap-1.5">
             <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <p className="text-xs font-medium text-destructive">
@@ -182,7 +195,10 @@ export default function E2eFingerprintCard({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5" data-testid="fingerprint-card-info">
+        <div
+          className="flex flex-col gap-1.5"
+          data-testid="fingerprint-card-info"
+        >
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1 text-xs font-medium text-foreground">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />

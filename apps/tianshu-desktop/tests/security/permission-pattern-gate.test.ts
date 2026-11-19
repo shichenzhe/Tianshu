@@ -75,7 +75,13 @@ describe("runToolCall 记忆抑制面（参数级审批批）", () => {
       decideCommand: () => "ask" as const,
       requestApproval,
     });
-    const out = await runToolCall(bashDef, agent, "t1", { command: "x" }, undefined);
+    const out = await runToolCall(
+      bashDef,
+      agent,
+      "t1",
+      { command: "x" },
+      undefined,
+    );
     expect(requestApproval).not.toHaveBeenCalled();
     expect(out).toBe("done");
   });

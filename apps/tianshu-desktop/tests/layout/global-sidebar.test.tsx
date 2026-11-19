@@ -133,9 +133,9 @@ describe("GlobalSidebar Logo 行主机切换器（macOS 挪位批）", () => {
     const appName = screen.getByText("common:appName");
     expect(appName.classList).toContain("shrink-0");
     // compact 透传：切换器内部主机名收紧 max-w-16 截断 + 冒泡全称
-    expect(screen.getByTestId("host-switcher").getAttribute("data-compact")).toBe(
-      "1",
-    );
+    expect(
+      screen.getByTestId("host-switcher").getAttribute("data-compact"),
+    ).toBe("1");
   });
 
   it("win32：Logo 行不含主机切换器（Windows 走自绘标题栏，避免双入口）", () => {

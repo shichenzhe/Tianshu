@@ -42,9 +42,7 @@ function isLanHost(hostname: string): boolean {
 
 /** 明文直连判定：http:// 承载且主机不在局域网白名单（https/wss 恒安全
  *  态；URL 非法不警示——表单校验另行拦截） */
-export function isPlainHttpRemote(
-  baseUrl: string | undefined | null,
-): boolean {
+export function isPlainHttpRemote(baseUrl: string | undefined | null): boolean {
   if (!baseUrl) return false;
   let url: URL;
   try {

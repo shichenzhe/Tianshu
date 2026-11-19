@@ -1120,7 +1120,7 @@ describe("testSingleNode（单节点测试）", () => {
  * node-ABI 副本，系统 node 宿主亦可真跑（2026-11-04 双 ABI 根治）；副本
  * 缺失/坏时优雅跳过而非误报。裸 require 不经 alias——必打到主树 Electron
  * ABI 被 catch 吞成 skip */
-let sqliteNative = false;
+let sqliteNative: boolean;
 try {
   const mod = await import("better-sqlite3");
   const D = ((mod as { default?: unknown }).default ??

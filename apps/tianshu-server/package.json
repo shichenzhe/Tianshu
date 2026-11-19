@@ -20,7 +20,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "prisma:generate": "prisma generate",
+    "prisma:generate": "prisma generate && prisma generate --schema prisma/relay-admin/schema.prisma",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:pg": "prisma migrate dev --schema prisma/pg/schema.prisma",
     "prisma:deploy": "prisma migrate deploy",
@@ -121,7 +121,8 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.20.0"
+    "typescript-eslint": "^8.20.0",
+    "undici": "^8.10.2"
   },
   "jest": {
     "moduleFileExtensions": [

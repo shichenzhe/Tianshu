@@ -117,8 +117,7 @@ export class RelayTransport extends TransportBase {
   /** 安全批 S2：明文降级通知器（单例安装，Application 接 auditLogService
    *  ——穿构造链需三层装配，单例安装为项目惯用 installX 同款） */
   private static degradedNotifier:
-    | ((info: { connectionId: string; relayUrl: string }) => void)
-    | null = null;
+    ((info: { connectionId: string; relayUrl: string }) => void) | null = null;
 
   /** 装配明文降级审计出口（安全审查 2026-11-02：auto 降级曾仅 UI 橙标，
    *  恶意 relay 扣发握手帧即可静默强制降级——降级必须留痕审计链） */

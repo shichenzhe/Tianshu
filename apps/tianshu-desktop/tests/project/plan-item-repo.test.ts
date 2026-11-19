@@ -887,8 +887,20 @@ describe("PlanItemRepository.appendAiSummary（工具专用通道，v8）", () =
 
 describe("PlanItemRepository.listAttachments 存在性（批8 P3）", () => {
   const rows = [
-    { id: 5, planItemId: 1, fileName: "在.pdf", assetPath: "attachments/在.pdf", createdAt: now },
-    { id: 6, planItemId: 1, fileName: "丢.pdf", assetPath: "attachments/丢.pdf", createdAt: now },
+    {
+      id: 5,
+      planItemId: 1,
+      fileName: "在.pdf",
+      assetPath: "attachments/在.pdf",
+      createdAt: now,
+    },
+    {
+      id: 6,
+      planItemId: 1,
+      fileName: "丢.pdf",
+      assetPath: "attachments/丢.pdf",
+      createdAt: now,
+    },
   ];
 
   beforeEach(() => {

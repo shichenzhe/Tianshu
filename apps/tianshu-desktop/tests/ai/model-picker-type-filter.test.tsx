@@ -222,9 +222,7 @@ describe("选择器按模型类型过滤", () => {
     withClient(<HybridSearchNodeFields node={node} onPatch={() => {}} />);
     // hybrid 模式下模式单选也是 combobox（keyword 模式不渲染模型下拉），
     // 模型下拉为第二个
-    const options = await openSelectOptions(
-      screen.getAllByRole("combobox")[1],
-    );
+    const options = await openSelectOptions(screen.getAllByRole("combobox")[1]);
     const labels = options.map((o) => o.textContent);
     expect(labels).toContain(EMBED_ID);
     expect(labels).not.toContain(LLM_ID);
@@ -271,7 +269,11 @@ describe("选择器按模型类型过滤", () => {
       { id: "writer", name: "写作", kind: "llm", modelId: 1, prompt: "p" },
     ] as unknown as GraphNode[];
     withClient(
-      <RerankNodeFields node={node} onPatch={() => {}} graphNodes={graphNodes} />,
+      <RerankNodeFields
+        node={node}
+        onPatch={() => {}}
+        graphNodes={graphNodes}
+      />,
     );
     const options = await openSelectOptions(screen.getAllByRole("combobox")[0]);
     const labels = options.map((o) => o.textContent);

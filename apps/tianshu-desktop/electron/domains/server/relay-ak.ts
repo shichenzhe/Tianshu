@@ -79,9 +79,8 @@ const AK_INVALID_401_REASONS = new Set(["disabled", "expired", "bad-secret"]);
 /** 401 信封 → 粘滞凭证失效判定（data.reason ∈ 粘滞集；无 body/未知
  * reason → false 按瞬态） */
 function isAkInvalid401(payload: unknown): boolean {
-  const reason = (
-    payload as { data?: { reason?: unknown } } | null
-  )?.data?.reason;
+  const reason = (payload as { data?: { reason?: unknown } } | null)?.data
+    ?.reason;
   return typeof reason === "string" && AK_INVALID_401_REASONS.has(reason);
 }
 
@@ -151,9 +150,9 @@ async function requestAccess(
       message: `token 端点异常状态 ${response.status}`,
     };
   }
-  const payload = (await response
-    .json()
-    .catch(() => null)) as { data?: Partial<StoredRelayAccess> } | null;
+  const payload = (await response.json().catch(() => null)) as {
+    data?: Partial<StoredRelayAccess>;
+  } | null;
   const data = payload?.data;
   if (
     !data ||
@@ -201,7 +200,10 @@ export async function resolveRelayAccessToken(
     stored.adminUrl === creds.adminUrl
       ? stored
       : null;
-  if (usable !== null && !shouldRenew(usable.expiresAt, usable.maxAgeSec, now)) {
+  if (
+    usable !== null &&
+    !shouldRenew(usable.expiresAt, usable.maxAgeSec, now)
+  ) {
     return { ok: true, accessToken: usable.accessToken };
   }
   const renewed = await requestAccess(creds, io);
@@ -214,10 +216,7 @@ export async function resolveRelayAccessToken(
     return { ok: false, reason: renewed.reason, message: renewed.message };
   }
   if (usable !== null && usable.expiresAt > now) {
-    Log.warn(
-      "[server] access 换新失败，降级用未过期存量连接",
-      renewed.message,
-    );
+    Log.warn("[server] access 换新失败，降级用未过期存量连接", renewed.message);
     return { ok: true, accessToken: usable.accessToken };
   }
   return {

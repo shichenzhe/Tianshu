@@ -136,178 +136,178 @@ export const router = createHashRouter([
       </AppShell>
     ),
     children: [
-  {
-    path: "/",
-    // 应用默认落地新建任务页（用户裁定；/module/ai index 仍是对话视图，
-    // 供侧边栏「对话」入口与 ?session= 会话直达）
-    element: <Navigate to="/module/ai/new" replace />,
-  },
-  {
-    path: "/login",
-    element: <LoginView />,
-  },
-  {
-    // 文件独立窗口（与 /login 平级，无侧边栏；windowId 经 hash query 携带）
-    path: "/file-window",
-    element: (
-      <LazyWrapper>
-        <FileWindowView />
-      </LazyWrapper>
-    ),
-  },
-  {
-    path: "/module",
-    element: <ModuleRouteGuard />,
-    children: [
       {
-        index: true,
+        path: "/",
+        // 应用默认落地新建任务页（用户裁定；/module/ai index 仍是对话视图，
+        // 供侧边栏「对话」入口与 ?session= 会话直达）
         element: <Navigate to="/module/ai/new" replace />,
       },
       {
-        path: "ai",
+        path: "/login",
+        element: <LoginView />,
+      },
+      {
+        // 文件独立窗口（与 /login 平级，无侧边栏；windowId 经 hash query 携带）
+        path: "/file-window",
         element: (
           <LazyWrapper>
-            <AiLayout />
+            <FileWindowView />
           </LazyWrapper>
         ),
+      },
+      {
+        path: "/module",
+        element: <ModuleRouteGuard />,
         children: [
           {
             index: true,
+            element: <Navigate to="/module/ai/new" replace />,
+          },
+          {
+            path: "ai",
             element: (
               <LazyWrapper>
-                <ChatView />
+                <AiLayout />
+              </LazyWrapper>
+            ),
+            children: [
+              {
+                index: true,
+                element: (
+                  <LazyWrapper>
+                    <ChatView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "new",
+                element: (
+                  <LazyWrapper>
+                    <NewTaskView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "providers",
+                element: (
+                  <LazyWrapper>
+                    <ProviderSettingsView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "data-sources",
+                element: (
+                  <LazyWrapper>
+                    <DataSourceSettingsView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "apps",
+                element: (
+                  <LazyWrapper>
+                    <AppsView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "experts",
+                element: (
+                  <LazyWrapper>
+                    <ExpertsView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "library",
+                element: (
+                  <LazyWrapper>
+                    <LibraryView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "browser",
+                element: (
+                  <LazyWrapper>
+                    <BrowserView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "graphs",
+                element: (
+                  <LazyWrapper>
+                    <GraphListView standalone />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "graphs/:id",
+                element: (
+                  <LazyWrapper>
+                    <GraphEditorView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "automation",
+                element: (
+                  <LazyWrapper>
+                    <AutomationView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "server",
+                element: (
+                  <LazyWrapper>
+                    <ServerConsoleView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "monitor",
+                element: (
+                  <LazyWrapper>
+                    <MonitorView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                path: "automation/task/:id",
+                element: (
+                  <LazyWrapper>
+                    <TaskDetailView />
+                  </LazyWrapper>
+                ),
+              },
+              {
+                // 旧路径兼容重定向（工作流已提为一级入口 /module/ai/graphs）
+                path: "automation/graphs/:id",
+                element: <GraphLegacyRedirect />,
+              },
+            ],
+          },
+          {
+            path: "project",
+            element: (
+              <LazyWrapper>
+                <ProjectHubView />
               </LazyWrapper>
             ),
           },
           {
-            path: "new",
+            path: "project/:projectId",
             element: (
               <LazyWrapper>
-                <NewTaskView />
+                <ProjectWorkspaceView />
               </LazyWrapper>
             ),
-          },
-          {
-            path: "providers",
-            element: (
-              <LazyWrapper>
-                <ProviderSettingsView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "data-sources",
-            element: (
-              <LazyWrapper>
-                <DataSourceSettingsView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "apps",
-            element: (
-              <LazyWrapper>
-                <AppsView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "experts",
-            element: (
-              <LazyWrapper>
-                <ExpertsView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "library",
-            element: (
-              <LazyWrapper>
-                <LibraryView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "browser",
-            element: (
-              <LazyWrapper>
-                <BrowserView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "graphs",
-            element: (
-              <LazyWrapper>
-                <GraphListView standalone />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "graphs/:id",
-            element: (
-              <LazyWrapper>
-                <GraphEditorView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "automation",
-            element: (
-              <LazyWrapper>
-                <AutomationView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "server",
-            element: (
-              <LazyWrapper>
-                <ServerConsoleView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "monitor",
-            element: (
-              <LazyWrapper>
-                <MonitorView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            path: "automation/task/:id",
-            element: (
-              <LazyWrapper>
-                <TaskDetailView />
-              </LazyWrapper>
-            ),
-          },
-          {
-            // 旧路径兼容重定向（工作流已提为一级入口 /module/ai/graphs）
-            path: "automation/graphs/:id",
-            element: <GraphLegacyRedirect />,
           },
         ],
       },
-      {
-        path: "project",
-        element: (
-          <LazyWrapper>
-            <ProjectHubView />
-          </LazyWrapper>
-        ),
-      },
-      {
-        path: "project/:projectId",
-        element: (
-          <LazyWrapper>
-            <ProjectWorkspaceView />
-          </LazyWrapper>
-        ),
-      },
-    ],
-  },
     ],
   },
 ]);

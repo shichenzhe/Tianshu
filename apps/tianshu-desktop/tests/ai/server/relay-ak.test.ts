@@ -290,7 +290,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
     );
     try {
       const registry = newRegistry();
-      await registry.saveConnection(akRelayConfig("conn-ak-1", admin.url, relay.url));
+      await registry.saveConnection(
+        akRelayConfig("conn-ak-1", admin.url, relay.url),
+      );
       await registry.activate("conn-ak-1");
 
       // 换发请求：POST /relay-admin/token + Basic base64(akId:akSecret)
@@ -322,7 +324,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
     const admin = await startFakeAdmin(() => unauthorized());
     try {
       const registry = newRegistry();
-      await registry.saveConnection(akRelayConfig("conn-401", admin.url, relay.url));
+      await registry.saveConnection(
+        akRelayConfig("conn-401", admin.url, relay.url),
+      );
       await registry.activate("conn-401");
 
       await vi.waitFor(() => expect(admin.requests.length).toBe(1));
@@ -334,9 +338,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
       expect(relay.conns.length).toBe(0);
 
       // 请求路径：拒绝且给出可读错误；不重复打 admin（粘滞）
-      await expect(
-        registry.request("conn-401", "GET", "info"),
-      ).rejects.toThrow(/AK 凭证失效/);
+      await expect(registry.request("conn-401", "GET", "info")).rejects.toThrow(
+        /AK 凭证失效/,
+      );
       expect(admin.requests.length).toBe(1);
     } finally {
       await relay.close();
@@ -388,7 +392,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
       await admin.kill();
       await registry.saveConnection(config); // save → 拆 transport，下次使用重建
       await registry.activate("conn-degrade");
-      await vi.waitFor(() => expect(relay.conns.length).toBe(2), { timeout: 6000 });
+      await vi.waitFor(() => expect(relay.conns.length).toBe(2), {
+        timeout: 6000,
+      });
       expect(
         (await relay.conns[1].waitForFrame((f) => f.kind === "auth")).token,
       ).toBe("access-old");
@@ -409,9 +415,7 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
     try {
       const registry = newRegistry();
       const id = "conn-admin-url";
-      await registry.saveConnection(
-        akRelayConfig(id, adminOld.url, relay.url),
-      );
+      await registry.saveConnection(akRelayConfig(id, adminOld.url, relay.url));
       await registry.activate(id);
       await vi.waitFor(() => expect(adminOld.requests.length).toBe(1));
       await vi.waitFor(() => expect(relay.conns.length).toBe(1));
@@ -420,9 +424,7 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
       ).toBe("access-old-admin");
 
       // 改 config 的 adminUrl（akId 不变）→ 旧 admin 签发的 access 不复用
-      await registry.saveConnection(
-        akRelayConfig(id, adminNew.url, relay.url),
-      );
+      await registry.saveConnection(akRelayConfig(id, adminNew.url, relay.url));
       await registry.activate(id);
       await vi.waitFor(() => expect(adminNew.requests.length).toBe(1), {
         timeout: 6000,
@@ -493,7 +495,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
 
       // 新配置正常建连（换绑 akId → 重新换发 access-new）
       await registry.activate(id);
-      await vi.waitFor(() => expect(relay.conns.length).toBe(1), { timeout: 6000 });
+      await vi.waitFor(() => expect(relay.conns.length).toBe(1), {
+        timeout: 6000,
+      });
       const auth = await relay.conns[0].waitForFrame((f) => f.kind === "auth");
       expect(auth.token).toBe("access-new");
       expect(admin.requests.length).toBe(2);
@@ -520,7 +524,9 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
       await registry.activate("conn-del");
       // 存量已清 → 重新换发（第二发），auth 用新 access
       await vi.waitFor(() => expect(admin.requests.length).toBe(2));
-      await vi.waitFor(() => expect(relay.conns.length).toBeGreaterThanOrEqual(1));
+      await vi.waitFor(() =>
+        expect(relay.conns.length).toBeGreaterThanOrEqual(1),
+      );
       const auth = await relay.conns[relay.conns.length - 1].waitForFrame(
         (f) => f.kind === "auth",
       );
@@ -549,7 +555,10 @@ describe("主机页 relay 连接 AK 凭证（Task 17）", () => {
       await expect(registry.saveConnection(partial)).rejects.toThrow(/三要素/);
       // 管理端地址非 http(s)
       await expect(
-        registry.saveConnection({ ...base, adminUrl: "ftp://admin.example.com" }),
+        registry.saveConnection({
+          ...base,
+          adminUrl: "ftp://admin.example.com",
+        }),
       ).rejects.toThrow(/http/);
       // static + AK 并存放行（static 优先）
       await expect(
@@ -604,11 +613,17 @@ describe("resolveRelayAccessToken（短连接收口——T16 移动端语义同�
     );
     try {
       clearRelayAccess("mod-fresh");
-      const first = await resolveRelayAccessToken("mod-fresh", creds(admin.url));
+      const first = await resolveRelayAccessToken(
+        "mod-fresh",
+        creds(admin.url),
+      );
       expect(first).toEqual({ ok: true, accessToken: "m1" });
       const before = admin.requests.length;
 
-      const second = await resolveRelayAccessToken("mod-fresh", creds(admin.url));
+      const second = await resolveRelayAccessToken(
+        "mod-fresh",
+        creds(admin.url),
+      );
       expect(second).toEqual({ ok: true, accessToken: "m1" });
       expect(admin.requests.length).toBe(before); // 零换发请求
     } finally {
@@ -643,7 +658,10 @@ describe("resolveRelayAccessToken（短连接收口——T16 移动端语义同�
     try {
       clearRelayAccess("mod-renew");
       await resolveRelayAccessToken("mod-renew", creds(admin.url));
-      const renewed = await resolveRelayAccessToken("mod-renew", creds(admin.url));
+      const renewed = await resolveRelayAccessToken(
+        "mod-renew",
+        creds(admin.url),
+      );
       expect(renewed).toEqual({ ok: true, accessToken: "m-new" });
       expect(admin.requests.length).toBe(2);
     } finally {
@@ -662,13 +680,22 @@ describe("resolveRelayAccessToken（短连接收口——T16 移动端语义同�
       clearRelayAccess("mod-401-transient");
       // 无 body 与 not-found 的 401 均瞬态（无存量 → unavailable，非
       // invalid-ak 粘滞）——下次请求/激活重建自愈（连接占位可重试语义）
-      const first = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      const first = await resolveRelayAccessToken(
+        "mod-401-transient",
+        creds(admin.url),
+      );
       expect(first.ok).toBe(false);
       expect(first.ok === false && first.reason).toBe("unavailable");
-      const second = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      const second = await resolveRelayAccessToken(
+        "mod-401-transient",
+        creds(admin.url),
+      );
       expect(second.ok === false && second.reason).toBe("unavailable");
       // admin 恢复后重试成功（瞬态不封死重试面）
-      const healed = await resolveRelayAccessToken("mod-401-transient", creds(admin.url));
+      const healed = await resolveRelayAccessToken(
+        "mod-401-transient",
+        creds(admin.url),
+      );
       expect(healed).toEqual({ ok: true, accessToken: "m-heal" });
       expect(admin.requests.length).toBe(3);
       expect(logError).not.toHaveBeenCalled(); // 瞬态路径不发凭证失效告警

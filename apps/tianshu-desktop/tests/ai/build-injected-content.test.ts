@@ -37,9 +37,7 @@ describe("buildInjectedContent", () => {
       buildInjectedContent("正文", [
         { path: "src/main.ts", content: "", kind: "fileRef" },
       ]),
-    ).toBe(
-      "[引用文件 src/main.ts]（请用 read 工具读取该文件后处理）\n\n正文",
-    );
+    ).toBe("[引用文件 src/main.ts]（请用 read 工具读取该文件后处理）\n\n正文");
     // content 忽略（即便误传）——引用式块恒为单行
     expect(
       buildInjectedContent("正文", [

@@ -305,7 +305,9 @@ describe("webhook 同图并发互斥（批1C 改进项 4）", () => {
     // 第一个请求挂起至图完成（同步模式）——占住同图在途位；上一用例
     // afterEach 的 closeAllConnections 会使 undici 连接池中的 keep-alive
     // 连接失效，偶发 ECONNRESET——重试一次兜底（先例 stopWebhookServer 用例）
-    const first = post(url, { word: "a" }).catch(() => post(url, { word: "a" }));
+    const first = post(url, { word: "a" }).catch(() =>
+      post(url, { word: "a" }),
+    );
     await vi.waitFor(() => expect(runGraphCalls.length).toBe(1));
     const second = await post(url, { word: "b" });
     expect(second.status).toBe(500);

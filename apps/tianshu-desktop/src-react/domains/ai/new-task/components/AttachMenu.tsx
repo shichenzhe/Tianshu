@@ -18,7 +18,15 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Check, FilePlus, LayoutGrid, Library, Plug, Plus, Sparkles } from "lucide-react";
+import {
+  Check,
+  FilePlus,
+  LayoutGrid,
+  Library,
+  Plug,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 import IconTooltip from "@/components/common/icon-tooltip";
 
 import { Button } from "@/components/ui/button";
@@ -261,12 +269,22 @@ export default function AttachMenu() {
             for (const file of files) {
               if (remoteHost && file.id !== undefined) {
                 if (isImagePath(file.name)) {
-                  addPending({ label: file.name, ref: file.name, kind: "localFile", id: file.id });
+                  addPending({
+                    label: file.name,
+                    ref: file.name,
+                    kind: "localFile",
+                    id: file.id,
+                  });
                   continue;
                 }
                 try {
                   await remoteLibraryText(file.id, remoteHost.connId);
-                  addPending({ label: file.name, ref: file.name, kind: "localFile", id: file.id });
+                  addPending({
+                    label: file.name,
+                    ref: file.name,
+                    kind: "localFile",
+                    id: file.id,
+                  });
                 } catch {
                   failed.push(file.name);
                 }

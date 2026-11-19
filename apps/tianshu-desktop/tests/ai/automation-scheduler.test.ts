@@ -362,7 +362,9 @@ describe("AutomationScheduler.tick 补跑计数与重放相位(批3A §6-1)", ()
     vi.mocked(executeTask).mockClear();
     vi.mocked(prisma.automationTask.findMany).mockClear();
     const task = missedCatchUpTask();
-    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([task as never]);
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([
+      task as never,
+    ]);
     vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
       catchUpRun(-3_600_000) as never,
     ]);

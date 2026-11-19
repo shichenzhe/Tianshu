@@ -98,15 +98,18 @@ describe("collectToolDefinitions MCP 自适应面接线", () => {
     });
     await manager.connect(server);
     // 单工具 ≈1.5K token：静态线 4000 内直注（registry 面为直接工具）
-    expect(registry.getDefinitions().some((d) => d.name === "mcp__srv__tool_a")).toBe(
-      true,
-    );
+    expect(
+      registry.getDefinitions().some((d) => d.name === "mcp__srv__tool_a"),
+    ).toBe(true);
     // 干扰项：registry 内另挂一个静态注册的伪 mcp 工具——必须被自适应面替换掉
     registerTools([fakeMcpTool("mcp__stale__ghost")]);
 
     installMcpAdaptiveSource(manager);
     const svc = new ChatService(
-      { assertSessionOwned: async () => {}, getSession: async () => null } as never,
+      {
+        assertSessionOwned: async () => {},
+        getSession: async () => null,
+      } as never,
       undefined,
       null as never,
     );
@@ -128,7 +131,10 @@ describe("collectToolDefinitions MCP 自适应面接线", () => {
   it("未安装 manager：registry 静态面原样透出（测试/局部装配零扰动）", () => {
     registerTools([fakeMcpTool("mcp__plain__tool")]);
     const svc = new ChatService(
-      { assertSessionOwned: async () => {}, getSession: async () => null } as never,
+      {
+        assertSessionOwned: async () => {},
+        getSession: async () => null,
+      } as never,
       undefined,
       null as never,
     );

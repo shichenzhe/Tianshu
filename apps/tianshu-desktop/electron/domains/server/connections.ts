@@ -546,7 +546,8 @@ export class ConnectionRegistry {
     if (!credential.ok) {
       return {
         ok: false,
-        reason: credential.reason === "invalid-ak" ? "invalid-token" : "unreachable",
+        reason:
+          credential.reason === "invalid-ak" ? "invalid-token" : "unreachable",
         message: credential.message,
       };
     }
@@ -673,7 +674,11 @@ export class ConnectionRegistry {
     }
     const connections = shape.connections.map((c) =>
       c.id === id
-        ? { ...c, fingerprint: negotiated, confirmedAt: new Date().toISOString() }
+        ? {
+            ...c,
+            fingerprint: negotiated,
+            confirmedAt: new Date().toISOString(),
+          }
         : c,
     );
     await this.persistence.save({

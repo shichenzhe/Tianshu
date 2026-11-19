@@ -514,13 +514,14 @@ describe("get_workflow_run 终点完整输出（demo 切片 2026-10-28）", () =
     const stubs = createStubs();
     const write = makeWorkflowWriteTool(stubs as never);
     await write.execute(CTX, { name: "fo-flow", graphJson: VALID_GRAPH });
-    const longJson = `[{"spent_at":"2026-10-28","category":"餐饮","amount":35,"note":"午饭"},{"spent_at":"2026-10-27","category":"交通","amount":12.5,"note":""}]`;
+    const longJson =
+      '[{"spent_at":"2026-10-28","category":"餐饮","amount":35,"note":"午饭"},{"spent_at":"2026-10-27","category":"交通","amount":12.5,"note":""}]';
     const runs = {
       findFirst: vi.fn(async () =>
         runRow(
           traceOf([
             { id: "select", preview: longJson.slice(0, 200) },
-            { id: "build", preview: `{"title":"支出明细","columns":[]` },
+            { id: "build", preview: '{"title":"支出明细","columns":[]' },
           ]),
         ),
       ),
@@ -528,15 +529,15 @@ describe("get_workflow_run 终点完整输出（demo 切片 2026-10-28）", () =
     const runNodes = {
       findMany: vi.fn(async () => [
         { nodeId: "select", status: "success", output: longJson },
-        { nodeId: "build", status: "success", output: `{"title":"支出明细"}` },
+        { nodeId: "build", status: "success", output: '{"title":"支出明细"}' },
       ]),
     };
     const tool = makeGetWorkflowRunTool({ ...stubs, runs, runNodes } as never);
     const result = await tool.execute(CTX, { id: 1 });
     // 预览段照旧（最后一个 success 节点）
-    expect(result).toContain(`输出: {"title":"支出明细"`);
+    expect(result).toContain('输出: {"title":"支出明细"');
     // 完整输出段：终点 build 节点的全量 output
-    expect(result).toContain(`完整输出: {"title":"支出明细"}`);
+    expect(result).toContain('完整输出: {"title":"支出明细"}');
     // 反查按 runId 查节点行
     expect(runNodes.findMany).toHaveBeenCalledWith({ where: { runId: 21 } });
   });

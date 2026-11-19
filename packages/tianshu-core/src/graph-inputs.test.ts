@@ -10,10 +10,7 @@
  *   String() 的 [object Object]）
  */
 import { describe, expect, it } from "vitest";
-import {
-  normalizeGraphInputs,
-  parseInputSchema,
-} from "./graph-inputs";
+import { normalizeGraphInputs, parseInputSchema } from "./graph-inputs";
 import { validateGraph } from "./graph-schema";
 import { GraphTemplateError, renderNodePrompt } from "./graph-prompt";
 
@@ -68,10 +65,9 @@ describe("normalizeGraphInputs json 归一", () => {
       expect(req.issues[0].code).toBe("required");
     }
     // optional 无 default → 键缺席（模板引用将抛「模板变量未定义」）
-    const opt = normalizeGraphInputs(
-      [{ ...jsonField, required: false }],
-      { payload: null },
-    );
+    const opt = normalizeGraphInputs([{ ...jsonField, required: false }], {
+      payload: null,
+    });
     expect(opt).toEqual({ ok: true, inputs: {} });
     // optional + default → 填充 default
     const def = normalizeGraphInputs(
@@ -167,7 +163,7 @@ describe("renderNodePrompt 容器值 stringify", () => {
     expect(out).toBe('{"a":1,"list":[1,2]}');
   });
 
-  it("标量值替换语义不变（35 → \"35\"）", () => {
+  it('标量值替换语义不变（35 → "35"）', () => {
     const out = renderNodePrompt("n={{input.n}} b={{input.b}}", {
       inputs: { n: 35, b: true },
       nodes: {},
@@ -257,9 +253,7 @@ describe("renderNodePrompt 字段路径引用（{{input.x.fieldx}}）", () => {
       GraphTemplateError,
     );
     // 标量（string 类型值）不可下钻
-    expect(() => render("{{input.plain.fieldx}}")).toThrow(
-      GraphTemplateError,
-    );
+    expect(() => render("{{input.plain.fieldx}}")).toThrow(GraphTemplateError);
   });
 
   it("中途 null（字段值为 null 再下钻）：抛 GraphTemplateError", () => {

@@ -231,7 +231,9 @@ describe("HostSwitcher", () => {
 
     const trigger = await screen.findByTestId("host-switcher");
     openMenu(trigger);
-    fireEvent.click(await screen.findByRole("menuitem", { name: "坏令牌主机" }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "坏令牌主机" }),
+    );
 
     await waitFor(() =>
       expect(serverApi.activateConnection).toHaveBeenCalledWith("c2"),

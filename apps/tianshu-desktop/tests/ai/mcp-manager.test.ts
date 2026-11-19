@@ -518,9 +518,7 @@ describe("McpManager 工具面预算折叠（spec 2026-11-01-mcp-tool-surface-bu
       await manager.connect(server);
       expect(manager.getStatuses()[0].deferred).toBe(true); // 注册层仍静态线
 
-      const names = manager
-        .adaptiveDefinitions(1024 * 1024)
-        .map((d) => d.name);
+      const names = manager.adaptiveDefinitions(1024 * 1024).map((d) => d.name);
       expect(names).toEqual([
         "mcp__srv__mid_a",
         "mcp__srv__mid_b",

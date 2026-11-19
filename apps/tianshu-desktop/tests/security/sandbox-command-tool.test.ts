@@ -24,7 +24,10 @@ import {
   installSandboxRunner,
   resetSandboxRunnerForTest,
 } from "../../electron/domains/security/sandbox/runner";
-import type { SecurityConfig, SecurityEvent } from "../../src-react/domains/security/model/types";
+import type {
+  SecurityConfig,
+  SecurityEvent,
+} from "../../src-react/domains/security/model/types";
 
 const CTX_BASE = { workspacePath: "/tmp/ws", sessionId: 1 };
 

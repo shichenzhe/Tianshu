@@ -19,11 +19,13 @@ function senderOf(event: IpcMainInvokeEvent) {
 
 /** 安全审计出口（安全批 B5）：Application 装配接 auditLogService——
  * 穿构造链成本高，用静态安装（RelayTransport.installDegradedNotifier 同款） */
-let auditSink: ((event: {
-  eventType: string;
-  decision: "allowed";
-  detail: Record<string, unknown>;
-}) => void) | null = null;
+let auditSink:
+  | ((event: {
+      eventType: string;
+      decision: "allowed";
+      detail: Record<string, unknown>;
+    }) => void)
+  | null = null;
 
 export function installTerminalAuditSink(
   fn: (event: {

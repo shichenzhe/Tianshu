@@ -172,7 +172,11 @@ describe("编排页远程主机（适配器映射）", () => {
     remoteGraphApi.graphRun.mockResolvedValue({ runId: 99 });
     await GraphApi.runTest(7, { a: 1 }, 4, '{"nodes":["draft"]}');
     expect(remoteGraphApi.graphSave).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 7, version: 3, graphJson: '{"nodes":["draft"]}' }),
+      expect.objectContaining({
+        id: 7,
+        version: 3,
+        graphJson: '{"nodes":["draft"]}',
+      }),
       "conn-x",
     );
     expect(remoteGraphApi.graphRun).toHaveBeenCalledWith(
@@ -201,7 +205,12 @@ describe("编排页远程主机（适配器映射）", () => {
     });
     remoteGraphApi.graphRunAbort.mockResolvedValue({ aborted: true });
     await GraphApi.cancelTestRun(7);
-    expect(remoteGraphApi.graphRuns).toHaveBeenCalledWith(7, 1, "conn-x", "running");
+    expect(remoteGraphApi.graphRuns).toHaveBeenCalledWith(
+      7,
+      1,
+      "conn-x",
+      "running",
+    );
     expect(remoteGraphApi.graphRunAbort).toHaveBeenCalledWith(55, "conn-x");
 
     remoteGraphApi.graphRuns.mockResolvedValue({ total: 0, items: [] });
@@ -232,12 +241,12 @@ describe("编排页深水功能远程门控", () => {
     await expect(GraphApi.polishPrompt(1, "p")).rejects.toThrowError(
       /远程主机暂不支持/,
     );
-    await expect(
-      GraphApi.testNode({}, {}, {}, 1),
-    ).rejects.toThrowError(/远程主机/);
-    await expect(GraphApi.exportWorkflow({ name: "x", graphJson: "{}" })).rejects.toThrowError(
+    await expect(GraphApi.testNode({}, {}, {}, 1)).rejects.toThrowError(
       /远程主机/,
     );
+    await expect(
+      GraphApi.exportWorkflow({ name: "x", graphJson: "{}" }),
+    ).rejects.toThrowError(/远程主机/);
     await expect(GraphApi.importWorkflow()).rejects.toThrowError(/远程主机/);
     await expect(GraphApi.pickBinaryFile()).rejects.toThrowError(/远程主机/);
     expect(invoke).not.toHaveBeenCalled();

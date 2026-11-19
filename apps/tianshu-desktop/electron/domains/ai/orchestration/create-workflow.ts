@@ -156,7 +156,12 @@ export async function resolveSessionAppScope(
  *  （name/description/graphJson 字段级差量，与原 create/update 参数
  *  超集兼容——老名调用经 tool-alias 别名层路由后参数透明） */
 const workflowWriteSchema = z.object({
-  id: z.number().int().positive().optional().describe("目标工作流 id（修改时必填）"),
+  id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe("目标工作流 id（修改时必填）"),
   version: z
     .number()
     .int()
@@ -178,7 +183,9 @@ const workflowWriteSchema = z.object({
     .object({})
     .passthrough()
     .optional()
-    .describe("图定义对象（新建必填；修改可省略，节点与连线规范见 workflow-creator 技能）"),
+    .describe(
+      "图定义对象（新建必填；修改可省略，节点与连线规范见 workflow-creator 技能）",
+    ),
 });
 
 /** workflow_read：无参=清单；id/name 二选一=单图完整定义 */
@@ -600,8 +607,7 @@ export function makeWorkflowReadTool(deps: {
         const rows = await deps.graphDefinition.findMany({ where: { userId } });
         row =
           (rows.find((item) => item.name === args.name) as
-            | WorkflowGraphRow
-            | undefined) ?? null;
+            WorkflowGraphRow | undefined) ?? null;
         // findMany 轻量行无 version/graphJson，再按 id 取全量
         if (row) {
           row = await deps.graphDefinition.findFirst({
@@ -685,7 +691,7 @@ function normalizeInputsForGraph(
 ):
   | { ok: true; inputs: Record<string, GraphInputValue> }
   | { ok: false; error: string } {
-  let schema: unknown = {};
+  let schema: unknown;
   try {
     schema = (JSON.parse(graphJson) as { inputSchema?: unknown }).inputSchema;
   } catch {

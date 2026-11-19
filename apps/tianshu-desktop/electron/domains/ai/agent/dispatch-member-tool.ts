@@ -144,8 +144,7 @@ export function withMemberReportBlocks(
     const memberId = typeof args.member === "string" ? args.member : "";
     out.push({
       type: "memberReport",
-      memberName:
-        members.find((m) => m.id === memberId)?.name ?? memberId,
+      memberName: members.find((m) => m.id === memberId)?.name ?? memberId,
       task: typeof args.task === "string" ? args.task : "",
       content: block.output,
       round,

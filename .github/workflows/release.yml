@@ -66,6 +66,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # ubuntu-latest 2026-11 切 Ubuntu 26.04 镜像后默认 JDK 17→25（Temurin 25），
+      # Expo 57/RN 0.86 工具链（AGP 8.12 externalNativeBuild 集成）在 JDK 25 上
+      # configureCMakeRelWithDebInfo 崩（JEP 472 restricted method 警告即 JVM 25
+      # 佐证，JDK 17 无此机制）——钉回 RN 官方推荐的 temurin 17
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
       - name: Install
         run: npm install
       - name: Build shared packages

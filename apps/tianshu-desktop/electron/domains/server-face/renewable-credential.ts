@@ -76,9 +76,8 @@ const AK_INVALID_401_REASONS = new Set(["disabled", "expired", "bad-secret"]);
 /** 401 信封 → 粘滞凭证失效判定（data.reason ∈ 粘滞集；无 body/未知
  * reason → false 按瞬态） */
 function isAkInvalid401(payload: unknown): boolean {
-  const reason = (
-    payload as { data?: { reason?: unknown } } | null
-  )?.data?.reason;
+  const reason = (payload as { data?: { reason?: unknown } } | null)?.data
+    ?.reason;
   return typeof reason === "string" && AK_INVALID_401_REASONS.has(reason);
 }
 
@@ -86,7 +85,9 @@ function isAkInvalid401(payload: unknown): boolean {
  * 不进退避重试（启动侧干净失败、续期侧断开不重连） */
 class AkCredentialInvalidError extends Error {
   constructor() {
-    super("AK 凭证失效（disabled/expired/bad-secret），relay 客户端未启动或已断开");
+    super(
+      "AK 凭证失效（disabled/expired/bad-secret），relay 客户端未启动或已断开",
+    );
   }
 }
 
@@ -120,7 +121,9 @@ async function requestAccess(config: RelayAkCredentials): Promise<AkAccess> {
       },
     );
   } catch (e) {
-    throw new Error(`token 端点不可达（${config.adminUrl}）: ${String(e)}`);
+    throw new Error(`token 端点不可达（${config.adminUrl}）: ${String(e)}`, {
+      cause: e,
+    });
   }
   if (response.status === 401) {
     const payload = await response.json().catch(() => null);

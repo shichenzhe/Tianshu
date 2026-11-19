@@ -71,10 +71,12 @@ function sqliteRaw(db: DatabaseSync): RawSqlExecutor {
 
 describe("resolveResetDecision（allowReset=true 开发态）", () => {
   it("版本倒挂（库来自被弃 v2–v14 增量路线）→ 重置，原因 inversion", async () => {
-    expect(await resolveResetDecision(optionStub(), 10, 1, HASH, true)).toEqual({
-      reset: true,
-      reason: "inversion",
-    });
+    expect(await resolveResetDecision(optionStub(), 10, 1, HASH, true)).toEqual(
+      {
+        reset: true,
+        reason: "inversion",
+      },
+    );
   });
 
   it("全新库/待升级（0）→ 不重置无原因，跑完快照自然对齐", async () => {
@@ -110,9 +112,10 @@ describe("resolveResetDecision（allowReset=true 开发态）", () => {
   });
 
   it("option 结构旧到指纹不可读 → 重置，原因 unreadableOption", async () => {
-    expect(
-      await resolveResetDecision(brokenOption, 1, 1, HASH, true),
-    ).toEqual({ reset: true, reason: "unreadableOption" });
+    expect(await resolveResetDecision(brokenOption, 1, 1, HASH, true)).toEqual({
+      reset: true,
+      reason: "unreadableOption",
+    });
   });
 });
 
@@ -134,9 +137,9 @@ describe("resolveResetDecision（allowReset=false 打包态）", () => {
   });
 
   it("option 结构旧到指纹不可读 → 不重置保数据，原因仍上报 unreadableOption", async () => {
-    expect(
-      await resolveResetDecision(brokenOption, 1, 1, HASH, false),
-    ).toEqual({ reset: false, reason: "unreadableOption" });
+    expect(await resolveResetDecision(brokenOption, 1, 1, HASH, false)).toEqual(
+      { reset: false, reason: "unreadableOption" },
+    );
   });
 
   it("同版本且指纹匹配 → 不重置且无原因（不误报）", async () => {

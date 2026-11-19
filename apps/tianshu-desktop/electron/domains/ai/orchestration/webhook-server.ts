@@ -14,7 +14,10 @@
 import http from "node:http";
 import { randomBytes } from "node:crypto";
 import prisma from "../../../commons/prisma-client";
-import { openNamedSecret, sealNamedSecret } from "../../security/option-secrets";
+import {
+  openNamedSecret,
+  sealNamedSecret,
+} from "../../security/option-secrets";
 import Log from "../../../commons/Log";
 import { createBoundedMap } from "../../../commons/bounded-map";
 import { renderNodePrompt } from "./graph-prompt";

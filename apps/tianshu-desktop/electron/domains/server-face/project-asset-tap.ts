@@ -134,10 +134,7 @@ export function createProjectAssetFace(
         throw new FaceProjectError("ASSET_UPLOAD_INVALID", "上传内容为空");
       }
       if (data.length > UPLOAD_MAX_BYTES) {
-        throw new FaceProjectError(
-          "ASSET_UPLOAD_INVALID",
-          "文件超过 3MB 上限",
-        );
+        throw new FaceProjectError("ASSET_UPLOAD_INVALID", "文件超过 3MB 上限");
       }
       return assetRepo
         .uploadBuffer(projectId, parentPath, name, data)

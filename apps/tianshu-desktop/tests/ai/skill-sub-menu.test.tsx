@@ -11,7 +11,13 @@
  * pointerEnter 打开（Radix Menu 子菜单触发语义，同 expert-sub-menu 测试）
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
@@ -62,9 +68,7 @@ async function openSkillPanel(): Promise<void> {
   });
   await waitFor(() => {
     // 搜索框随 SubContent 渲染，作打开锚点（列表内容随用例数据各异）
-    expect(
-      screen.getByPlaceholderText("chat:plus.searchSkills"),
-    ).toBeTruthy();
+    expect(screen.getByPlaceholderText("chat:plus.searchSkills")).toBeTruthy();
   });
 }
 

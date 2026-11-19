@@ -94,9 +94,7 @@ export default class ChatApi {
     return routeInvoke(
       {
         ch: "chat:send",
-        args: [
-          { ...rest, ...(images && images.length > 0 ? { images } : {}) },
-        ],
+        args: [{ ...rest, ...(images && images.length > 0 ? { images } : {}) }],
       },
       async (connId) => {
         // 先全量校验再上传（快速失败——不因序列后半的坏图浪费前半上传）
@@ -241,9 +239,8 @@ export default class ChatApi {
    *  sessionCompact（A9 批：202 受理后台执行，完成后 session.updated
    *  事件驱动 app 级缓存失效刷新——受理即回即可） */
   static async compact(sessionId: number): Promise<void> {
-    return routeInvoke(
-      { ch: "chat:compact", args: [sessionId] },
-      (connId) => ServerApi.sessionCompact(sessionId, connId),
+    return routeInvoke({ ch: "chat:compact", args: [sessionId] }, (connId) =>
+      ServerApi.sessionCompact(sessionId, connId),
     );
   }
 
@@ -299,9 +296,8 @@ export default class ChatApi {
     text: string;
     style: PolishStyle;
   }): Promise<{ text: string }> {
-    return routeInvoke(
-      { ch: "chat:polish", args: [params] },
-      (connId) => ServerApi.sessionPolish(params, connId),
+    return routeInvoke({ ch: "chat:polish", args: [params] }, (connId) =>
+      ServerApi.sessionPolish(params, connId),
     );
   }
 

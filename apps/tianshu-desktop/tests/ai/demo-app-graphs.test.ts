@@ -18,7 +18,9 @@ import {
   parseInputSchema,
 } from "../../../../packages/tianshu-core/src/graph-inputs";
 
-const DEMO_DIR = fileURLToPath(new URL("../../../../docs/demo-app", import.meta.url));
+const DEMO_DIR = fileURLToPath(
+  new URL("../../../../docs/demo-app", import.meta.url),
+);
 
 interface DemoBundle {
   name: string;
@@ -109,7 +111,7 @@ describe("demo-app 工作流定义（docs/demo-app）", () => {
   });
 
   it("typed inputSchema（切片 D5）：amount number 必填、category enum 六值缺省其他、spent_at date 缺省今天", () => {
-    const { bundle, json } = loadGraph("expense-add.json");
+    const { json } = loadGraph("expense-add.json");
     const schema = json!.inputSchema;
     expect(schema.amount).toMatchObject({ type: "number", required: true });
     expect(schema.category).toMatchObject({

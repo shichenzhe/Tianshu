@@ -63,23 +63,20 @@ export class WorkspaceApi {
 
   /** 新建（远程态不支持 directoryPath——face 写面无此字段，类型即收口） */
   static async create(params: WorkspaceCreateParams): Promise<WorkspaceRecord> {
-    return routeInvoke(
-      { ch: "workspace:create", args: [params] },
-      (connId) => remote.remoteWorkspaceCreate(params, connId),
+    return routeInvoke({ ch: "workspace:create", args: [params] }, (connId) =>
+      remote.remoteWorkspaceCreate(params, connId),
     );
   }
 
   static async update(params: WorkspaceUpdateParams): Promise<WorkspaceRecord> {
-    return routeInvoke(
-      { ch: "workspace:update", args: [params] },
-      (connId) => remote.remoteWorkspaceUpdate(params, connId),
+    return routeInvoke({ ch: "workspace:update", args: [params] }, (connId) =>
+      remote.remoteWorkspaceUpdate(params, connId),
     );
   }
 
   static async delete(id: number): Promise<void> {
-    return routeInvoke(
-      { ch: "workspace:delete", args: [id] },
-      (connId) => remote.remoteWorkspaceDelete(id, connId),
+    return routeInvoke({ ch: "workspace:delete", args: [id] }, (connId) =>
+      remote.remoteWorkspaceDelete(id, connId),
     );
   }
 

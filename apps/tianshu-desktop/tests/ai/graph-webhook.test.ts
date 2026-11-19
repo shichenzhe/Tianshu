@@ -169,7 +169,11 @@ beforeAll(async () => {
         }
         // 安全批 D1：security.masterKey 行走内存仓库（解封依赖同一主密钥，
         // 返回 null 会导致每次 getMasterKey 重新生成 → 解封失败）
-        const lookup = (prisma as unknown as { __filterOf: (w: Record<string, unknown>) => unknown[] }).__filterOf;
+        const lookup = (
+          prisma as unknown as {
+            __filterOf: (w: Record<string, unknown>) => unknown[];
+          }
+        ).__filterOf;
         return lookup(where)[0] ?? null;
       },
     ) as never;

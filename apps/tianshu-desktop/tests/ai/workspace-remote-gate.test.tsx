@@ -73,7 +73,10 @@ function renderWithProviders(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
-  useHostStore.setState({ activeHost: { kind: "local" }, caps: useHostStore.getState().caps });
+  useHostStore.setState({
+    activeHost: { kind: "local" },
+    caps: useHostStore.getState().caps,
+  });
   workspaceApi.list.mockResolvedValue([BOUND_WORKSPACE]);
 });
 

@@ -166,9 +166,9 @@ describe("dispatchNewTask", () => {
   it("未选应用不调 setApp（默认即未绑定，省一次 IPC——setAssistant 同口径）", async () => {
     mockInvokeDefault();
     await dispatchNewTask({ navigate, queryClient });
-    expect(
-      invokeMock.mock.calls.some((c) => c[0] === "session:setApp"),
-    ).toBe(false);
+    expect(invokeMock.mock.calls.some((c) => c[0] === "session:setApp")).toBe(
+      false,
+    );
   });
 
   it("草稿选了模型：create 后 setModel 落库（必须先于 send）再 send", async () => {

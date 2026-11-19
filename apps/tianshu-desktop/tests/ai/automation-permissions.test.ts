@@ -10,7 +10,9 @@ vi.mock("electron", () => ({
     decryptString: () => {
       throw new Error("safeStorage unavailable in test");
     },
-  }, ipcMain: { handle: vi.fn() } }));
+  },
+  ipcMain: { handle: vi.fn() },
+}));
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
 }));
@@ -22,9 +24,7 @@ vi.mock("../../electron/commons/Log", () => ({
 const rows = vi.hoisted(() => ({
   current: [] as Array<{ id: number; pattern: string | null }>,
 }));
-const findMany = vi.hoisted(() =>
-  vi.fn(async () => rows.current),
-);
+const findMany = vi.hoisted(() => vi.fn(async () => rows.current));
 const update = vi.hoisted(() => vi.fn(async () => ({})));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: { toolPermission: { findMany, update } },
@@ -86,8 +86,6 @@ describe("rememberedToolOf（查表闭包）", () => {
     expect(await rememberedToolOf(5)("bash", { command: "git push" })).toBe(
       true,
     );
-    expect(await rememberedToolOf(5)("bash", { command: "npm i" })).toBe(
-      false,
-    );
+    expect(await rememberedToolOf(5)("bash", { command: "npm i" })).toBe(false);
   });
 });

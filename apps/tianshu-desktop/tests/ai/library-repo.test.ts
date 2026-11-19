@@ -394,9 +394,11 @@ describe("写侧向量化挂载（批2 P0-1：library 集合写侧 + 孤儿块�
   };
 
   const SRC_MD = "/tmp/tianshu-vectorize-mount.md";
-  const MD_CONTENT = ["# 标题", "第一段内容。".repeat(30), "第二段内容。".repeat(40)].join(
-    "\n\n",
-  );
+  const MD_CONTENT = [
+    "# 标题",
+    "第一段内容。".repeat(30),
+    "第二段内容。".repeat(40),
+  ].join("\n\n");
 
   beforeEach(async () => {
     table.length = 0;
@@ -466,7 +468,7 @@ describe("写侧向量化挂载（批2 P0-1：library 集合写侧 + 孤儿块�
   it("delete 子树文件名清孤儿块；rename file 清旧名块（folder 不触）", async () => {
     const repo = new LibraryRepository(undefined, vectorizeDeps);
     const folder = await repo.createFolder("F", null, UID);
-    const file = await repo.createFile("note.md", folder.id, UID);
+    await repo.createFile("note.md", folder.id, UID);
     await repo.delete([folder.id], UID);
     expect(deleteCalls).toContainEqual([UID, "library", "note.md"]);
 

@@ -64,7 +64,6 @@ import { resolveMemorySources } from "../../electron/domains/ai/personalization/
 import type { MemoryModelContext } from "../../electron/domains/ai/personalization/memory-compiler";
 import MemoryScheduler from "../../electron/domains/ai/personalization/memory-scheduler";
 import {
-  PERSONALIZATION_KEYS,
   memoryLastCompiledAtKeyFor,
   memoryProfileKeyFor,
 } from "../../electron/domains/ai/personalization/personalization.config";

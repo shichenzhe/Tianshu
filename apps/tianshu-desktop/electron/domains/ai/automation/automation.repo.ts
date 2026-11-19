@@ -134,7 +134,9 @@ export function buildTaskData(params: TaskCreateParams, now: Date) {
     endAt: params.endAt ? new Date(params.endAt) : null,
     missedPolicy: params.missedPolicy,
     // 补跑上限(批3A):显式携带才写——移动端/旧载荷不碰既有值(create 缺省列默认 1)
-    ...(params.catchUpLimit !== undefined && { catchUpLimit: params.catchUpLimit }),
+    ...(params.catchUpLimit !== undefined && {
+      catchUpLimit: params.catchUpLimit,
+    }),
     accessMode: params.accessMode ?? "default",
     templateSlug: params.templateSlug ?? null,
     projectId: params.projectId ?? null,
@@ -679,7 +681,11 @@ export default class AutomationRepository {
         const parsed = parseRollupDetail(row.detail);
         const bucket = parsed?.byUser[String(userId)];
         return parsed && bucket
-          ? { date: parsed.date, success: bucket.success, failed: bucket.failed }
+          ? {
+              date: parsed.date,
+              success: bucket.success,
+              failed: bucket.failed,
+            }
           : null;
       })
       .filter((d): d is StatsRollupDay => d !== null);

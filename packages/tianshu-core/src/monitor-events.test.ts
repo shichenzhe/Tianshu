@@ -41,7 +41,11 @@ describe("recordLlmCall meta 透传（专家团可观测性批）", () => {
 
   it("prisma 缺席静默跳过（纯函数测试形态）", async () => {
     await expect(
-      recordLlmCall(undefined, { scene: "chat", inputTokens: 1, outputTokens: 1 }),
+      recordLlmCall(undefined, {
+        scene: "chat",
+        inputTokens: 1,
+        outputTokens: 1,
+      }),
     ).resolves.toBeUndefined();
   });
 });

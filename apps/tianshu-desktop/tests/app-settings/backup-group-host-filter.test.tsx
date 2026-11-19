@@ -88,7 +88,10 @@ describe("BackupGroup 备份主机过滤与失败静默化", () => {
     render(<BackupGroup />);
     // 自动 list 只对无头端发起（face 被过滤，非它莫属）
     await waitFor(() =>
-      expect(vi.mocked(invoke)).toHaveBeenCalledWith("backup:list", HEADLESS_CONN.id),
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "backup:list",
+        HEADLESS_CONN.id,
+      ),
     );
     // face 连接不进下拉选项
     expect(screen.queryByText("桌面 B")).toBeNull();
@@ -97,7 +100,9 @@ describe("BackupGroup 备份主机过滤与失败静默化", () => {
 
   it("全部 direct 都是桌面 face：不发 backup:list，显示无主机提示", async () => {
     setupConnections([FACE_CONN], FACE_CONN.id);
-    setupList(() => Promise.resolve({ backups: [], viewer: { kind: "client" } }));
+    setupList(() =>
+      Promise.resolve({ backups: [], viewer: { kind: "client" } }),
+    );
     render(<BackupGroup />);
     // 连接列表已落定（loading 结束）后仍无 list 调用、无选项、有提示
     await waitFor(() =>
@@ -113,9 +118,7 @@ describe("BackupGroup 备份主机过滤与失败静默化", () => {
     setupConnections([HEADLESS_CONN], HEADLESS_CONN.id);
     setupList(() =>
       Promise.reject(
-        new Error(
-          "backup 请求失败（/backup/list）：HTTP 401 code=4010 未认证",
-        ),
+        new Error("backup 请求失败（/backup/list）：HTTP 401 code=4010 未认证"),
       ),
     );
     render(<BackupGroup />);

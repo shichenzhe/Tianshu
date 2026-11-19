@@ -263,18 +263,23 @@ async function ensureProviderModel(
   const modelRow = second.models?.find(
     (m) => m.providerId === provider.id && m.modelId === model.modelId,
   );
-  const saved = (await call(control.request.bind(control), label, "provider/save", {
-    models: [
-      {
-        ...(modelRow ? { id: modelRow.id } : {}),
-        providerId: provider.id,
-        modelId: model.modelId,
-        name: "e2e-smoke-model",
-        type: "llm",
-        enabled: true,
-      },
-    ],
-  })) as ProviderBundle;
+  const saved = (await call(
+    control.request.bind(control),
+    label,
+    "provider/save",
+    {
+      models: [
+        {
+          ...(modelRow ? { id: modelRow.id } : {}),
+          providerId: provider.id,
+          modelId: model.modelId,
+          name: "e2e-smoke-model",
+          type: "llm",
+          enabled: true,
+        },
+      ],
+    },
+  )) as ProviderBundle;
   const finalRow = saved.models?.find(
     (m) => m.providerId === provider.id && m.modelId === model.modelId,
   );
@@ -516,9 +521,14 @@ async function runSmokeFlow(
   } finally {
     if (sessionId !== null) {
       try {
-        await call(control.request.bind(control), `${label}/session/delete`, "session/delete", {
-          id: sessionId,
-        });
+        await call(
+          control.request.bind(control),
+          `${label}/session/delete`,
+          "session/delete",
+          {
+            id: sessionId,
+          },
+        );
         log(`${label} session#${sessionId} 已清理`);
       } catch (e) {
         log(

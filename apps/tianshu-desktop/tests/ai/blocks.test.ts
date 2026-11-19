@@ -278,7 +278,8 @@ describe("blocksToModelMessages image 块转换（主进程实现，LangChain �
       ],
       "user",
       undefined,
-      async (name) => (name === "boom" ? Promise.reject(new Error("io")) : null),
+      async (name) =>
+        name === "boom" ? Promise.reject(new Error("io")) : null,
     );
     expect(messages[0]?.content).toBe(
       "[引用技能 gone]（内容读取失败）\n[引用技能 boom]（内容读取失败）",
@@ -354,7 +355,13 @@ describe("blocksToModelMessages image 块转换（主进程实现，LangChain �
 
   it("memberReport 块不回喂模型（dispatch tool_call 的 output 已携带同文，防双份）", async () => {
     const messages = await blocksToModelMessages([
-      { type: "memberReport", memberName: "顾大局", task: "t", content: "成员结论", round: 1 },
+      {
+        type: "memberReport",
+        memberName: "顾大局",
+        task: "t",
+        content: "成员结论",
+        round: 1,
+      },
       { type: "text", text: "最终回答" },
     ]);
     expect(messages).toHaveLength(1);

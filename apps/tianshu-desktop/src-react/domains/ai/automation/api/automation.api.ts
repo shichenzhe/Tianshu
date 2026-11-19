@@ -166,9 +166,8 @@ export class AutomationApi {
   }
 
   static async create(params: TaskCreateParams): Promise<TaskRecord> {
-    return routeInvoke(
-      { ch: "automation:create", args: [params] },
-      (connId) => remoteAutomationSave(params, undefined, connId),
+    return routeInvoke({ ch: "automation:create", args: [params] }, (connId) =>
+      remoteAutomationSave(params, undefined, connId),
     );
   }
 

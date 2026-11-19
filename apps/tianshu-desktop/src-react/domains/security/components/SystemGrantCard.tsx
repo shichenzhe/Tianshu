@@ -132,9 +132,7 @@ export default function SystemGrantCard() {
   const staleCutoff = Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000;
   const lastUsedMsOf = (row: RememberedGrantRow) =>
     Date.parse(row.lastUsedAt ?? row.createdAt);
-  const staleRows = remembered.filter(
-    (row) => lastUsedMsOf(row) < staleCutoff,
-  );
+  const staleRows = remembered.filter((row) => lastUsedMsOf(row) < staleCutoff);
   const workspaceCounts = remembered.reduce<Map<string, number>>((acc, row) => {
     acc.set(row.workspaceName, (acc.get(row.workspaceName) ?? 0) + 1);
     return acc;

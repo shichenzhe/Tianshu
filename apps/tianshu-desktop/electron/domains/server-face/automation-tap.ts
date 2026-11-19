@@ -88,7 +88,12 @@ interface AutomationRepositoryLike {
 export function createAutomationFace(deps: {
   automationRepo: AutomationRepositoryLike;
   /** 节点详情单源（执行详情批）；缺席的最小部署 runNodes 返回空集 */
-  graphRepo?: { listRunNodes(runId: number, userId: number): Promise<AutomationRunNodeRecord[]> };
+  graphRepo?: {
+    listRunNodes(
+      runId: number,
+      userId: number,
+    ): Promise<AutomationRunNodeRecord[]>;
+  };
 }): ServerFaceAutomation {
   const repo = deps.automationRepo;
   return {

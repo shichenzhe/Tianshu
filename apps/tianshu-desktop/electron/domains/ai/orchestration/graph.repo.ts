@@ -919,7 +919,7 @@ export default class GraphRepository {
     graph: GraphRow,
     rawInputs: Record<string, unknown>,
   ): Record<string, GraphInputValue> {
-    let schema: unknown = {};
+    let schema: unknown;
     try {
       schema = (JSON.parse(graph.graphJson) as { inputSchema?: unknown })
         .inputSchema;

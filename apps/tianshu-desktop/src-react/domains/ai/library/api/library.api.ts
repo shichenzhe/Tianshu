@@ -70,9 +70,8 @@ function rejectOnRemote(feature: string): void {
 
 const LibraryApi = {
   list: (parentId?: number) =>
-    routeInvoke(
-      { ch: "library:list", args: [parentId ?? null] },
-      (connId) => remoteLibraryList(parentId, connId),
+    routeInvoke({ ch: "library:list", args: [parentId ?? null] }, (connId) =>
+      remoteLibraryList(parentId, connId),
     ),
   search: (keyword: string) =>
     routeInvoke({ ch: "library:search", args: [keyword] }, (connId) =>

@@ -29,9 +29,7 @@ function tokenizeCommandValue(value: string): string[] {
 
 function commandOf(args?: unknown): string | null {
   const command = (args as { command?: unknown } | null)?.command;
-  return typeof command === "string" && command.trim() !== ""
-    ? command
-    : null;
+  return typeof command === "string" && command.trim() !== "" ? command : null;
 }
 
 /** bash 命令前缀 pattern：`git *` / `git push *` / 精确 `git status`。
@@ -88,7 +86,10 @@ function globMatchSegment(pattern: string, value: string): boolean {
   let star = -1;
   let mark = -1;
   while (si < value.length) {
-    if (pi < pattern.length && (pattern[pi] === "?" || pattern[pi] === value[si])) {
+    if (
+      pi < pattern.length &&
+      (pattern[pi] === "?" || pattern[pi] === value[si])
+    ) {
       pi += 1;
       si += 1;
     } else if (pi < pattern.length && pattern[pi] === "*") {
@@ -200,10 +201,7 @@ export interface ToolPermissionDbLike {
 }
 
 /** 命中行 lastUsedAt 回写（fire-and-forget：失败吞错不影响判定主流程） */
-function touchLastUsedAt(
-  db: ToolPermissionDbLike,
-  id: number,
-): void {
+function touchLastUsedAt(db: ToolPermissionDbLike, id: number): void {
   void db.toolPermission
     .update({ where: { id }, data: { lastUsedAt: new Date() } })
     .catch(() => {

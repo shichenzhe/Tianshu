@@ -8,7 +8,13 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 
 vi.mock("@/i18n", () => ({
   default: { t: (key: string) => key },
@@ -57,7 +63,8 @@ function mount(fields: NormalizedInputField[]) {
 }
 
 function runButton(): HTMLButtonElement {
-  return screen.getByText("chat:orchestration.testRun.button")
+  return screen
+    .getByText("chat:orchestration.testRun.button")
     .closest("button") as HTMLButtonElement;
 }
 

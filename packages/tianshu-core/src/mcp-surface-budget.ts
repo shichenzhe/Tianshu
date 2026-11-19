@@ -39,6 +39,9 @@ export function surfaceBudgetFor(
   }
   return Math.min(
     MCP_TOOL_SURFACE_BUDGET_MAX_TOKENS,
-    Math.max(MCP_TOOL_SURFACE_BUDGET_MIN_TOKENS, scaledBudget(modelContextWindow)),
+    Math.max(
+      MCP_TOOL_SURFACE_BUDGET_MIN_TOKENS,
+      scaledBudget(modelContextWindow),
+    ),
   );
 }

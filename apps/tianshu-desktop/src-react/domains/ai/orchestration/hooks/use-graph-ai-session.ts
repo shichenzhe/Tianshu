@@ -5,9 +5,9 @@
  * - ensureSession：防重入；未绑定时取默认工作空间（WorkspaceApi.list 首
  *   个，空列表自动补建「默认工作空间」是既有行为）→ session:create →
  *   GraphApi.bindAiSession 回写绑定。
- * - prepareFirstSend：ChatPane sessionResolver 实现——会话惰建 + 首条
- *   前缀（固定指令 + 当前图快照）。
- * - buildSendPrefix：每次发送注入的最新图快照（无指令）。
+ * - prepareFirstSend：ChatPane sessionResolver 实现——会话惰建。
+ * - buildSystemContext：每轮隐藏注入编排指令 + 最新图快照（不进用户
+ *   消息、不在会话 UI 展示）。
  * - startNewSession / handleSessionGone：清绑定（bindAiSession null）+
  *   上抛面板本地态；gone 附 toast。
  * 空会话回收不做（spec 挂账）。
@@ -98,16 +98,15 @@ export function useGraphAiSession(p: {
         createdAt: "",
         updatedAt: "",
       };
-      return {
-        session: stub,
-        contentPrefix: buildGraphAiInstruction(t, p.models),
-      };
+      return { session: stub };
     }, [ensureSession, p.graphName, p.models, t]);
 
-  /** 每条发送注入的最新图快照（首条之后的常规发送） */
-  const buildSendPrefix = useCallback(
-    (): string => snapshotPrefix(),
-    [snapshotPrefix],
+  /** 每轮隐藏系统上下文：编排指令 + 最新图快照一起注入模型，不写用户
+   *  消息；长会话中规则也不因首条被截断/遗忘而失效 */
+  const buildSystemContext = useCallback(
+    (): string =>
+      buildGraphAiInstruction(t, p.models) + "\n\n" + snapshotPrefix(),
+    [t, p.models, snapshotPrefix],
   );
 
   /** 清绑定（新建会话入口；再发即 ensureSession 重建）。未保存图无绑定
@@ -137,7 +136,7 @@ export function useGraphAiSession(p: {
 
   return {
     prepareFirstSend,
-    buildSendPrefix,
+    buildSystemContext,
     startNewSession,
     handleSessionGone,
     isSessionGoneError: isGraphSessionGoneError,

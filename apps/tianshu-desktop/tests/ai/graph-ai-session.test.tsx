@@ -52,7 +52,7 @@ describe("useGraphAiSession", () => {
     });
   });
 
-  it("首条 contentPrefix 只含指令（无快照），快照由 buildSendPrefix 提供且恰好一份", async () => {
+  it("每轮系统上下文都含指令与最新快照，首条不写可见前缀", async () => {
     const { result } = renderHook(() => useGraphAiSession(baseParams));
     let resolved: Awaited<
       ReturnType<typeof result.current.prepareFirstSend>
@@ -61,20 +61,22 @@ describe("useGraphAiSession", () => {
       resolved = await result.current.prepareFirstSend();
     });
     expect(resolved!.session.id).toBe(5);
-    // 指令在、快照不在
-    expect(resolved!.contentPrefix).toContain("ai.instruction");
-    expect(resolved!.contentPrefix).not.toContain("ai.prefixFull");
+    expect(resolved!.contentPrefix).toBeUndefined();
     // 绑定已回写
     expect(invokeMock).toHaveBeenCalledWith(
       "orchestration:bindAiSession",
       1,
       5,
     );
-    // 快照恰由 buildSendPrefix 出一份
-    const prefix = result.current.buildSendPrefix();
-    expect(prefix).toContain("ai.prefixFull");
-    const prefixOpts = JSON.parse(prefix.slice(prefix.indexOf("{")));
+    // 指令与快照每轮一起进隐藏系统上下文，且快照恰好一份
+    const context = result.current.buildSystemContext();
+    expect(context).toContain("ai.instruction");
+    expect(context.match(/ai\.prefixFull/g)).toHaveLength(1);
+    const prefixOpts = JSON.parse(
+      context.slice(context.indexOf("{", context.indexOf("ai.prefixFull"))),
+    );
     expect(prefixOpts.graph).toBe('{"version":1}');
+    expect(result.current.buildSystemContext()).toContain("ai.instruction");
   });
 
   it("选中节点注入快照（selectedNodeIds 直传边串不得混入由视图层过滤）", async () => {
@@ -88,8 +90,10 @@ describe("useGraphAiSession", () => {
     await act(async () => {
       await result.current.prepareFirstSend();
     });
-    const prefix = result.current.buildSendPrefix();
-    const prefixOpts = JSON.parse(prefix.slice(prefix.indexOf("{")));
+    const prefix = result.current.buildSystemContext();
+    const prefixOpts = JSON.parse(
+      prefix.slice(prefix.indexOf("{", prefix.indexOf("ai.prefixFull"))),
+    );
     expect(prefixOpts.selected).toBe("node-1");
   });
 

@@ -39,6 +39,7 @@ import type { SkillRefBlock } from "@tianshu/protocol";
 import { mergeParams, type ChatModelParams } from "./param-merge";
 import { buildScenarioSystem } from "./scenario-prompt";
 import { withTimeBlock } from "./time-context";
+import { mergeRequestSystem } from "./request-context";
 import {
   estimateMessageTokens,
   estimateReserveTokens,
@@ -1338,6 +1339,7 @@ export default class ChatService {
       abort,
       sender,
       params.overrides,
+      params.systemContext,
     );
   }
 
@@ -1451,7 +1453,7 @@ export default class ChatService {
           estimateTokens(params.content) +
           estimateReserveTokens(
             ctx.merged.maxTokens,
-            ctx.systemWithSummary,
+            mergeRequestSystem(ctx.systemWithSummary, params.systemContext),
             toolDefinitions,
           ),
         contextWindow,
@@ -2084,6 +2086,7 @@ export default class ChatService {
     abort: AbortController,
     sender?: WebContents,
     overrides?: ChatModelParams,
+    requestSystem?: string,
     maxSteps: number = DEFAULT_MAX_STEPS,
   ): Promise<void> {
     const startedAt = Date.now();
@@ -2123,7 +2126,7 @@ export default class ChatService {
             maxTokens: ctx.merged.maxTokens,
           },
         ),
-        system: ctx.systemWithSummary,
+        system: mergeRequestSystem(ctx.systemWithSummary, requestSystem),
         history: ctx.history,
         contextWindow: this.effectiveContextWindow(
           ctx.modelRow,

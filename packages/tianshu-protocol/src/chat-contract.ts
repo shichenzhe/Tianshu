@@ -41,6 +41,9 @@ export interface ChatSendParams {
   /** 内容注入式文件引用（file_ref 批）：path+内容随块落库（组装侧直取
    *  展开，渲染零泄漏）；缺省走旧 text 前缀注入形态（历史兼容） */
   contentRefs?: Array<{ path: string; content: string }>;
+  /** 请求级隐藏系统上下文（图 AI 指令/图快照）：只并入模型系统提示，
+   *  不写入用户消息 blocks、不在会话 UI 展示；每次发送由调用方刷新 */
+  systemContext?: string;
 }
 
 export type ChatStreamChunk =

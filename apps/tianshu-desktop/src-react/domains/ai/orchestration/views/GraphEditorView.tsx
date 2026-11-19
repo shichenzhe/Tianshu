@@ -944,18 +944,20 @@ export default function GraphEditorView() {
       } else {
         resetGraph(parseOrKeep(saved.graphJson).parsed ?? graph);
       }
+      if (isNew && boundAiSessionId !== undefined) {
+        // 先等会话绑定落库，再失效重拉/跳转——否则编辑页读到旧的未绑定
+        // 记录，模型与 AI 历史都会看似丢失（2026-11-19 竞态修复）
+        try {
+          await GraphApi.bindAiSession(saved.id, boundAiSessionId);
+        } catch {
+          toast.error(t("chat:orchestration.editor.ai.bindFailed"));
+        }
+      }
       // 先失效并等列表重拉完成再导航：navigate 切到 graphs/:id 时若缓存
       // 尚无新行，会以「缓存数据 + isLoading=false」命中 notFound 错误态
       // 闪烁；重拉到位后 record 即刻就绪
       await queryClient.invalidateQueries({ queryKey: ["orchestration"] });
       if (isNew) {
-        // 新建期 AI 编排已可用（会话不绑定）；保存落地后把期间产生的
-        // 会话绑定到新图，历史随图走（无会话则无操作）
-        if (boundAiSessionId !== undefined) {
-          GraphApi.bindAiSession(saved.id, boundAiSessionId).catch(() => {
-            toast.error(t("chat:orchestration.editor.ai.bindFailed"));
-          });
-        }
         navigate(`${GRAPHS_BASE}/${saved.id}`, { replace: true });
       }
     } catch (e) {

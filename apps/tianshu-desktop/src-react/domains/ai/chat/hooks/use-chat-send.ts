@@ -139,6 +139,7 @@ export function useChatSend(sessionId: number) {
       images?: ChatSendImage[],
       skillRefs?: string[],
       contentRefs?: Array<{ path: string; content: string }>,
+      systemContext?: string,
     ) => {
       startStream(sessionId);
       // 乐观插入：chat:send 要等整轮流结束才 resolve（后端 send 内
@@ -160,6 +161,7 @@ export function useChatSend(sessionId: number) {
           images,
           ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
           ...(contentRefs && contentRefs.length > 0 ? { contentRefs } : {}),
+          ...(systemContext ? { systemContext } : {}),
         });
       } catch (e) {
         // 早期失败（会话不存在/并发请求/未选模型）时用户消息可能已落库，失效重取

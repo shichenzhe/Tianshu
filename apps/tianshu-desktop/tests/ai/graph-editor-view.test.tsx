@@ -21,14 +21,21 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 afterEach(cleanup);
 
-const { invokeMock, navigateMock, invalidateMock, locationState } = vi.hoisted(
-  () => ({
-    invokeMock: vi.fn(),
-    navigateMock: vi.fn(),
-    invalidateMock: vi.fn(async () => {}),
-    locationState: { current: null as unknown },
-  }),
-);
+const {
+  invokeMock,
+  navigateMock,
+  invalidateMock,
+  locationState,
+  aiPanelProps,
+} = vi.hoisted(() => ({
+  invokeMock: vi.fn(),
+  navigateMock: vi.fn(),
+  invalidateMock: vi.fn(async () => {}),
+  locationState: { current: null as unknown },
+  aiPanelProps: {
+    current: null as { onBindingChange?: (id: number) => void } | null,
+  },
+}));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -53,8 +60,14 @@ vi.mock("@/domains/ai/orchestration/views/GraphListView", () => ({
 vi.mock("@/domains/ai/orchestration/components/GraphAiPanel", async () => {
   const { createElement } = await import("react");
   return {
-    default: () =>
-      createElement("div", { "data-testid": "graph-ai-panel" }, "AI 编排面板"),
+    default: (props: { onBindingChange?: (id: number) => void }) => {
+      aiPanelProps.current = props;
+      return createElement(
+        "div",
+        { "data-testid": "graph-ai-panel" },
+        "AI 编排面板",
+      );
+    },
   };
 });
 vi.mock("react-router-dom", () => ({
@@ -147,6 +160,7 @@ beforeAll(() => {
 
 afterEach(() => {
   locationState.current = null;
+  aiPanelProps.current = null;
   // 模板预填快照跨测试清空（readTemplatePrefill 命中即删，防串场）
   sessionStorage.removeItem("tianshu:graph-template-prefill");
   invokeMock.mockReset();
@@ -403,6 +417,54 @@ describe("GraphEditorView 校验拦截保存", () => {
 });
 
 describe("GraphEditorView 保存时序", () => {
+  it("新建保存：先等待 AI 会话绑定完成，再刷新列表并跳转（模型/历史不丢）", async () => {
+    locationState.current = {
+      graphTemplate: {
+        slug: "tpl",
+        icon: "workflow",
+        titleI18nKey: "tpl.title",
+        descI18nKey: "tpl.desc",
+        graphJson: validTemplateGraph,
+      },
+    };
+    let finishBind: (() => void) | undefined;
+    invokeMock.mockImplementation((channel: string) => {
+      if (channel === "orchestration:create") {
+        return Promise.resolve(savedRecord);
+      }
+      if (channel === "orchestration:bindAiSession") {
+        return new Promise<void>((resolve) => {
+          finishBind = resolve;
+        });
+      }
+      return Promise.resolve(undefined);
+    });
+    render(<GraphEditorView />);
+    await waitFor(() => expect(aiPanelProps.current).toBeTruthy());
+    // 模拟新建期已产生 AI 会话（含已选模型与历史）
+    act(() => aiPanelProps.current!.onBindingChange!(7));
+    fireEvent.click(saveButton());
+    await waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        "orchestration:bindAiSession",
+        42,
+        7,
+      ),
+    );
+    expect(invalidateMock).not.toHaveBeenCalled();
+    expect(navigateMock).not.toHaveBeenCalledWith(
+      "/module/ai/graphs/42",
+      expect.anything(),
+    );
+    act(() => finishBind?.());
+    await waitFor(() => expect(invalidateMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith("/module/ai/graphs/42", {
+        replace: true,
+      }),
+    );
+  });
+
   it("create 保存：缓存失效完成后才 navigate（防错误态闪烁）", async () => {
     locationState.current = {
       graphTemplate: {

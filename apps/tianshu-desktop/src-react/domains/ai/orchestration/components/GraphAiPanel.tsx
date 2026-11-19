@@ -2,7 +2,7 @@
 /**
  * 图 AI 编排面板（spec §2）：右栏「AI 编排」tab 内容，仿 FileChatPanel
  * 精简版——组合通用 ChatPane（消息流 + 输入框 + 流式），图上下文经
- * buildSendPrefix/sessionResolver 注入（lib/graph-ai-context），AI 改动
+ * buildSystemContext/sessionResolver 注入（lib/graph-ai-context），AI 改动
  * 经 GraphEditCard（renderMessageExtra 插槽）自动应用回画布。
  * - 会话：graphDefinition.aiSessionId 绑定（useGraphAiSession），占位
  *   哨兵 id=-1 + 首条惰建；会话已删善后清绑定再发即新建。
@@ -93,7 +93,7 @@ export default function GraphAiPanel(p: {
 
   const {
     prepareFirstSend,
-    buildSendPrefix,
+    buildSystemContext,
     startNewSession,
     handleSessionGone,
     isSessionGoneError,
@@ -281,7 +281,7 @@ export default function GraphAiPanel(p: {
             quickPrompts={quickPrompts}
             sessionResolver={handleResolveSession}
             onSessionResolved={handleSessionResolved}
-            buildSendPrefix={buildSendPrefix}
+            buildSystemContext={buildSystemContext}
             onPickModel={setDraftModelId}
             renderMessageExtra={(message) =>
               message.role === "assistant" ? (

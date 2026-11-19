@@ -93,10 +93,9 @@ interface ChatPaneProps {
    *  （initialDraft 回灌 / onDraftUnmount 卸载上报）；缺省不传零改动 */
   initialDraft?: string;
   onDraftUnmount?: (draft: string) => void;
-  /** 每条发送前调取的前缀构建器（图 AI 面板注入当前图快照）：
-   *  哨兵首条拼在 resolver.contentPrefix 之后，常设消息拼在输入之前；
-   *  缺省不传零行为变化 */
-  buildSendPrefix?: () => string;
+  /** 每轮请求级隐藏系统上下文（图 AI 指令 + 当前图快照）：只进模型
+   *  系统提示，不写用户消息；缺省不传零行为变化 */
+  buildSystemContext?: () => string;
   /** 占位会话的模型草稿选择（图 AI 新建首发）：只下传给哨兵会话，
    *  真会话仍走 ModelPicker 原有 setModel；缺省不传零变化 */
   onPickModel?: (modelId: number) => void;
@@ -123,7 +122,7 @@ export default function ChatPane({
   onSessionResolved,
   initialDraft,
   onDraftUnmount,
-  buildSendPrefix,
+  buildSystemContext,
   onPickModel,
   renderMessageExtra,
 }: ChatPaneProps) {
@@ -203,8 +202,8 @@ export default function ChatPane({
         const injected = buildInjectedContent(content, textFiles);
         const resolved = await sessionResolver();
         const resolvedId = resolved.session.id;
-        const sendPrefix = buildSendPrefix?.() ?? "";
-        const finalContent = [resolved.contentPrefix, sendPrefix, injected]
+        const systemContext = buildSystemContext?.() ?? "";
+        const finalContent = [resolved.contentPrefix, injected]
           .filter((part) => (part?.length ?? 0) > 0)
           .join("\n\n");
         useChatStore.getState().startStream(resolvedId);
@@ -227,6 +226,7 @@ export default function ChatPane({
             images: [...images, ...(resolved.images ?? [])],
             ...(skillRefs && skillRefs.length > 0 ? { skillRefs } : {}),
             ...(contentRefs && contentRefs.length > 0 ? { contentRefs } : {}),
+            ...(systemContext ? { systemContext } : {}),
           });
         } catch (e) {
           useChatStore.getState().finishStream(resolvedId);
@@ -241,10 +241,17 @@ export default function ChatPane({
       }
       const { textFiles, images } = splitImageFiles(files);
       const injected = buildInjectedContent(content, textFiles);
-      const prefix = buildSendPrefix?.() ?? "";
-      const final = prefix.length > 0 ? `${prefix}\n\n${injected}` : injected;
+      const systemContext = buildSystemContext?.() ?? "";
       try {
-        await send(final, undefined, overrides, images, skillRefs, contentRefs);
+        await send(
+          injected,
+          undefined,
+          overrides,
+          images,
+          skillRefs,
+          contentRefs,
+          systemContext || undefined,
+        );
         // 防呆：成功发出新消息后退出编辑态，避免随后的编辑重发静默截断刚发的消息
         setEditing(null);
       } catch (e) {
@@ -260,7 +267,7 @@ export default function ChatPane({
       send,
       setEditing,
       queryClient,
-      buildSendPrefix,
+      buildSystemContext,
     ],
   );
 

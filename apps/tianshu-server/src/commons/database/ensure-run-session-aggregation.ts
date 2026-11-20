@@ -74,8 +74,8 @@ export async function ensureRunSessionAggregation(
     'runGraphId',
   ]);
   await addMissingColumns(db, 'automationRun', runColumns, ['workspaceId']);
-  await db.$executeRawUnsafe(DEDUPE_SQL);
   await db.$executeRawUnsafe(BACKFILL_SQL);
+  await db.$executeRawUnsafe(DEDUPE_SQL);
   for (const sql of INDEX_SQL) {
     await db.$executeRawUnsafe(sql);
   }

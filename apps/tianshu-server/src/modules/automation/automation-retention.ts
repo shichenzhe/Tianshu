@@ -171,18 +171,25 @@ const trimKeepIdsSql = (
   ) WHERE rn > ?
 `;
 
-/** 所有 run 删除共用：同一事务内清分组、删节点、删稳定 id 集合。 */
+const RUN_DELETE_BATCH_SIZE = 500;
+
+/** 所有 run 删除共用：单事务内按 500 个稳定 id 分批清理与删除。 */
 async function deleteRunRows(
   prisma: RetentionDb,
   runIds: number[],
 ): Promise<number> {
   if (runIds.length === 0) return 0;
   return prisma.$transaction(async (tx) => {
-    await clearRunSessionOwners(tx, runIds);
-    await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
-    return (
-      await tx.automationRun.deleteMany({ where: { id: { in: runIds } } })
-    ).count;
+    let deleted = 0;
+    for (let start = 0; start < runIds.length; start += RUN_DELETE_BATCH_SIZE) {
+      const batch = runIds.slice(start, start + RUN_DELETE_BATCH_SIZE);
+      await clearRunSessionOwners(tx, batch);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: batch } } });
+      deleted += (
+        await tx.automationRun.deleteMany({ where: { id: { in: batch } } })
+      ).count;
+    }
+    return deleted;
   });
 }
 

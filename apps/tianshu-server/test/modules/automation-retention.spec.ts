@@ -348,6 +348,76 @@ describe('trimAutomationRuns（真库）', () => {
   });
 });
 
+describe('trimAutomationRuns bounded batches', () => {
+  it('1005 个选定 id：单事务按 500 分批，owner/node/run 集合完全一致', async () => {
+    const selectedIds = Array.from({ length: 1005 }, (_, index) => index + 1);
+    const ownerBatches: number[][] = [];
+    const nodeBatches: number[][] = [];
+    const runBatches: number[][] = [];
+    let transactionCalls = 0;
+    const db = {
+      automationRun: {
+        updateMany: () => Promise.resolve({ count: 0 }),
+        findMany: (args: { where: { id?: { in: number[] } } }) => {
+          const ids = args.where.id?.in ?? [];
+          return Promise.resolve(ids.map((id) => ({ id, sessionId: id })));
+        },
+        deleteMany: (args: { where: { id: { in: number[] } } }) => {
+          const ids = args.where.id.in;
+          if (ids.length > 500)
+            return Promise.reject(new Error('too many ids'));
+          runBatches.push(ids);
+          return Promise.resolve({ count: ids.length });
+        },
+      },
+      sessionRecord: {
+        updateMany: (args: {
+          where: { OR: Array<{ id?: { in: number[] } }> };
+        }) => {
+          const ids = args.where.OR.flatMap((filter) => filter.id?.in ?? []);
+          if (ids.length > 500)
+            return Promise.reject(new Error('too many ids'));
+          ownerBatches.push(ids);
+          return Promise.resolve({ count: ids.length });
+        },
+      },
+      graphRunNode: {
+        deleteMany: (args: { where: { runId: { in: number[] } } }) => {
+          const ids = args.where.runId.in;
+          if (ids.length > 500)
+            return Promise.reject(new Error('too many ids'));
+          nodeBatches.push(ids);
+          return Promise.resolve({ count: ids.length });
+        },
+      },
+      option: { findFirst: () => Promise.resolve(null) },
+      $queryRawUnsafe: (sql: string) =>
+        Promise.resolve(
+          sql.includes('status NOT IN')
+            ? selectedIds.map((id) => ({ id }))
+            : [],
+        ),
+      $transaction: (callback: (tx: unknown) => Promise<unknown>) => {
+        transactionCalls += 1;
+        return callback(db);
+      },
+    };
+
+    const result = await trimAutomationRuns(
+      db as unknown as Parameters<typeof trimAutomationRuns>[0],
+      DEFAULT_RUN_RETENTION,
+      NOW,
+    );
+
+    expect(result.successKeepDeleted).toBe(1005);
+    expect(transactionCalls).toBe(1);
+    for (const batches of [ownerBatches, nodeBatches, runBatches]) {
+      expect(batches.map((batch) => batch.length)).toEqual([500, 500, 5]);
+      expect(batches.flat()).toEqual(selectedIds);
+    }
+  });
+});
+
 describe('maybeTrimAutomationRuns 节流', () => {
   it('6h 内第二次调用不再触达 DB', async () => {
     let touches = 0;

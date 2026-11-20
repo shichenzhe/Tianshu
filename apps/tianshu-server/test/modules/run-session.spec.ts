@@ -525,7 +525,7 @@ describe('run session migration 5 and SQLite upgrade', () => {
       await prisma.$executeRawUnsafe(
         "INSERT INTO automationTask (id,name,prompt,workspaceId,modelId,scheduleJson,scheduleText,updatedAt) VALUES (1,'task','p',1,1,'{}','task',CURRENT_TIMESTAMP)",
       );
-      for (const id of [1, 2, 3]) {
+      for (const id of [1, 2, 3, 4]) {
         await prisma.$executeRawUnsafe(
           `INSERT INTO session (id,workspaceId,title,updatedAt) VALUES (${id},1,'s${id}',CURRENT_TIMESTAMP)`,
         );
@@ -539,6 +539,13 @@ describe('run session migration 5 and SQLite upgrade', () => {
       // 历史脏数据：同一会话被两个 prompt run 关联；最小 id 为 canonical。
       await prisma.$executeRawUnsafe(
         "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (3,1,1,1,'retry','failed')",
+      );
+      // 混合重复：graph run 先占位，prompt run 后链接；回填须先于去重。
+      await prisma.$executeRawUnsafe(
+        "INSERT INTO automationRun (id,taskId,sessionId,graphId,attempt,triggerType,status) VALUES (4,NULL,4,9,1,'manual','success')",
+      );
+      await prisma.$executeRawUnsafe(
+        "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (5,1,4,1,'manual','success')",
       );
       await prisma.$executeRawUnsafe(
         "INSERT INTO message (id,sessionId,role,blocks) VALUES (1,1,'user','[]')",
@@ -560,6 +567,7 @@ describe('run session migration 5 and SQLite upgrade', () => {
         { id: 1, automationTaskId: 1, runGraphId: null },
         { id: 2, automationTaskId: null, runGraphId: null },
         { id: 3, automationTaskId: null, runGraphId: null },
+        { id: 4, automationTaskId: 1, runGraphId: null },
       ]);
       const linkedRuns = await prisma.$queryRawUnsafe<
         Array<{ id: number; sessionId: number | null }>
@@ -568,6 +576,8 @@ describe('run session migration 5 and SQLite upgrade', () => {
         { id: 1, sessionId: 1 },
         { id: 2, sessionId: 3 },
         { id: 3, sessionId: null },
+        { id: 4, sessionId: 4 },
+        { id: 5, sessionId: null },
       ]);
       expect(
         await prisma.$queryRawUnsafe<Array<{ id: number }>>(
@@ -576,7 +586,7 @@ describe('run session migration 5 and SQLite upgrade', () => {
       ).toEqual([{ id: 1 }]);
       await expect(
         prisma.$executeRawUnsafe(
-          "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (4,1,1,1,'manual','success')",
+          "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (6,1,1,1,'manual','success')",
         ),
       ).rejects.toThrow();
     } finally {
@@ -614,6 +624,12 @@ describe('run session migration 5 and SQLite upgrade', () => {
     expect(
       calls.some((sql) => sql.includes('automationRun_sessionId_key')),
     ).toBe(true);
+    const backfillIndex = calls.findIndex((sql) =>
+      sql.includes('SET "automationTaskId"'),
+    );
+    const dedupeIndex = calls.findIndex((sql) => sql.includes('MIN("id")'));
+    expect(backfillIndex).toBeGreaterThanOrEqual(0);
+    expect(dedupeIndex).toBeGreaterThan(backfillIndex);
     await ensureRunSessionAggregation(db, 'postgres');
     expect(db.$queryRawUnsafe).toHaveBeenCalledTimes(2);
   });

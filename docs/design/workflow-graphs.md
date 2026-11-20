@@ -125,7 +125,7 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 `apps/tia
 
 **执行器 `electron/domains/ai/orchestration/graph-executor.ts`**（4843 行）主链（函数名+行号）：
 
-1. `executeGraphRun(params)`（300 行）→ `runGraphToResult(params)`（308 行，子工作流/循环节点复用的执行内核）：`createRunRow()`（336 行）先落 automationRun(status=running, triggerType, attempt, graphId, taskId?)；`onRunId` 回调让 webhook 异步模式在图完成前拿到 runId 即回 202
+1. `executeGraphRun(params)`（300 行）→ `runGraphToResult(params)`（308 行，子工作流/循环节点复用的执行内核）：`createRunRow()`（336 行）先落 automationRun(status=running, triggerType, attempt, graphId, taskId?, workspaceId=实际执行空间)；`onRunId` 回调让 webhook 异步模式在图完成前拿到 runId 即回 202
 2. `parseGraphJson()`（474 行）：JSON.parse + validateGraph 二道校验，失败抛 `GraphRunFailure("graph_invalid", issues 码列表)`
 3. `runGraph()`（364 行）：`buildNodeContext()`（494 行，装配 workspacePath/userId/codeAuthorized/subflowStack/skills/agent 上下文/modelCache）→ `makeNodeHandler(node, ctx)`（567 行）按 kind 大 if 链分流产出 handlers → 外层包装 `notifyNodeStatus(graphId, nodeId, "running"|"success"|"failed")`（3464 行，全窗 `win.webContents.send("orchestration:node-status")`——试运行画布实时高亮）→ `compiled.graph.invoke({inputs, nodes:{}}, {recursionLimit, configurable:{thread_id: "graph-<graphId>-run-<runId>"}})`
 4. 成功路径：`appendSkippedEntries()`（1831 行，未执行节点显式落 skipped trace；start 不补防噪音）→ `finishRun({status:"success"})`；返回 `{status, output: finalOutputOf(), nodeOutputs: nodeOutputsOf(), runId}`——trace 只存 200 字 outputPreview，完整终点 output 从 invoke 返回的终态 state.nodes 取（`finalOutputOf` 464 行：trace 最后一个 success 节点的完整值；nodeOutputsOf 448 行：全节点 output 映射，webhook 响应模板消费）
@@ -215,6 +215,10 @@ server 摘取了 graph CRUD + run 行写入原语（createRun/finishRun 自 mirr
 3. **第三层节点详情**：`orchestration:runNodes` / server `automation/runNodes`——graphRunNode 行的 input/output 全文（64KB 截断）；归属两段校验不符返回空集（不暴露存在性）；老 run 无行时前端回落 trace 预览
 
 老 run 兼容：graphRunNode 建表前（2026-10-28 之前）的 run 无节点行、保留策略置空 graphTrace 的 run 降级为元数据行——GraphRunTraceView 注释「老 run 无 trace」已容错。
+
+**固定运行入口与伴随会话**：有顶层运行的图在会话树「自动化与工作流」中只有一个固定条目，挂在任务上的图运行只归任务条目，子工作流运行不另开条目。右栏经 `/module/ai?graphRun=<graphId>&run=<runId>` 恢复检查点；上方继续展示最终输出/错误摘要及上述真实 trace/节点详情，下方才是该 run 的可选伴随会话。**graphTrace + graphRunNode 始终是图执行结果的权威留痕**，伴随会话只承载用户主动追问，不恢复旧「节点消息对落聊天」模型，也不替代轨迹。追问是普通 ChatService.send：不会自动重跑图、修改图定义或回写执行结果；后续运行仍从原始图输入独立开始。原 GraphRunHistoryDialog 与全局运行历史保留，继续提供跨运行审计和节点下钻。
+
+伴随会话由 `ensureRunSession` 在首次追问时幂等创建并写 `run.sessionId`、`session.runGraphId`。新 run 以 `run.workspaceId` 记住实际执行空间；桌面旧 run 可在图 AI 编排会话存在时借用其空间，否则要求用户显式选择。server 没有 graph AI-session 字段，旧 run 缺 `workspaceId` 时必须显式传 workspaceId，没有 server AI-session fallback。运行保留或删图清除分组列但不删除伴随会话及追问消息，内容转为普通会话保留。
 
 ### 3.9 图变量与「开始/结束」语义约定
 

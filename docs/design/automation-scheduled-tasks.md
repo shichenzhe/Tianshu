@@ -73,7 +73,8 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 PascalCas
 | 字段 | 语义 |
 |---|---|
 | `taskId Int?` | null = 图试运行（taskName 取图名） |
-| `sessionId` | **仅 prompt 型**关联会话——运行记录「查看会话」跳回聊天的依据；graph 型 2026-10-28 去会话化后不再写（列保留） |
+| `sessionId` | 该次运行当前唯一的原始/伴随会话；prompt 运行直接关联执行会话，graph 或早期失败运行在首次追问时幂等补建并回写；有唯一索引（允许多个 NULL） |
+| `workspaceId Int?` | 运行实际执行空间；新 prompt/graph 运行建行时写入，供历史运行在多年后首次追问时仍于原空间补建伴随会话；旧图运行可为空 |
 | `attempt` | 默认 1；retry 递增，上限 3（MAX_ATTEMPT） |
 | `triggerType` | 七值见 §1 |
 | `status` | `running \| success \| failed \| skipped`（skipped 三来源：missedPolicy=skip、事件链深超限 chain_depth_exceeded、事件触发撞在途 event_skipped_running） |
@@ -87,6 +88,12 @@ schema 单源 `apps/tianshu-desktop/prisma/schema.prisma`；server 侧 PascalCas
 仅三列 `event` / `detail` / `createdAt`（+createdAt 索引）。写入方 `automation-stat.ts` 的 `recordAutomationEvent(prisma, "create", detail)`：detail JSON `{mode, kind, hasEndAt, tabSwitchCount}`——PRD《执行频率》§5 三项**创建行为**统计（fire-and-forget、吞错、prisma 缺席静默）。**运行健康度统计是即时聚合不落表**：IPC `automation:stats` 由 `automation-stats.ts` 的 `computeStats()` 现算（§3.5）。索引由 `ensureEventStatMaintenance` 启动幂等补建（不走 v1 快照，保留期裁剪用）。
 
 **每日 rollup 行（批3A §6-6 已落地）**：`event="dailyRollup"` 新 bucket 类型（免 schema 迁移），`detail` = `{date, byUser: {"<userId>": {total, success, failed, skipped}}}` JSON。写方 `automation-stat.ts maybeRollupAutomationStats`（调度器 tick 收尾 1h 节流、吞错）：窗口 7 天重算、`mergeRollupDetail` 逐用户单调合并（保留策略先于出窗裁掉 run 时重算缩水、旧桶保底防历史回退）、窗口外行冻结、零运行日不建行；聚合纯函数单源 `@tianshu/core/automation-rollup`。桌面端 `automation:stats` 读取当前用户桶：过去趋势日单调补全（今日恒用即时聚合）——run 被裁剪后「上周成功率」仍可回溯。行随 automationStat 90 天保留期统一裁剪。
+
+### 2.4 session（固定运行入口归属）
+
+会话不合并：每次 prompt 执行仍创建独立 session，graph 运行只在首次追问时创建独立伴随会话。固定入口依靠 `session.automationTaskId Int?` 与 `session.runGraphId Int?` 两个可空分组列聚合：前者用于 prompt 运行及 graph 任务伴随会话，后者仅用于顶层图运行伴随会话；两者不得同时非空，普通会话两者均为空。`graphDefinition.aiSessionId` 仍只表示 AI 编排会话，不与 `runGraphId` 混用。`SessionRecord.automationRunId` 是从 `automationRun.sessionId` 派生的只读深链字段，不新增物理列。
+
+启动回填只根据仍存在的 `run.sessionId → taskId` 恢复任务归属，不移动消息、不按标题猜测。删除任务/图或运行保留裁剪删除 run 前，先清空关联会话的这两个分组列；session 与 message 均保留，因此追问内容转为普通会话继续可见。
 
 ## 3. 核心技术方案
 
@@ -222,7 +229,7 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 - **保留策略 `automation-retention.ts`**（方案 A，2026-10-22 裁定）：
   - 配置 `RunRetentionConfig`（option 表 `type=app, name=automation.runRetention` 实时读）：enabled/traceDays=3/successDays=7/successKeep=200/failureDays=30/failureKeep=500，逐字段 clamp 防非法值
   - 裁剪五步 `trimAutomationRuns`：graphTrace 超 traceDays **先行降级**（updateMany 置 null 保行清大字段）→ 成功态按天（`status NOT IN (failed,running)`——running 永不裁、expired/skipped 归成功档）→ 失败态按天（保留更久）→ 成功/失败**每任务条数窗**（窗口函数 `ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC)`，SQLite ≥3.25；taskId NULL 图试运行同组自成一组；$executeRawUnsafe 参数化）
-  - **run 行删除前级联删 graphRunNode**：条数窗用同窗子查询 SQL 先行（trimKeepNodesSql）；按天档先 findMany 取 id 集合再 deleteMany
+  - **run 行删除前解除会话归属并级联删 graphRunNode**：`clearRunSessionOwners` 先把关联 session 的 automationTaskId/runGraphId 置空，session/message（包括人工追问）保留并回到普通会话树；条数窗用同窗子查询 SQL 先行，按天档先 findMany 取 id 集合，再在事务内清理归属、节点与 run
   - 调度：启动裁一次 + 每 tick 调 `maybeTrimAutomationRuns`（**TRIM_INTERVAL_MS=6h 节流**，命中时开销仅一次时间比较）；吞错——清理失败不阻塞调度
   - **双份同构文件**：`apps/tianshu-server/src/modules/automation/automation-retention.ts`（唯一授权差异：引号风格 + Log→Nest Logger + 头注释），`npm run check:drift` 基线守护（`packages/tianshu-core/scripts/drift-manifest.json`，serverRoot 指向 apps/tianshu-server）
 - 前端：`RunHistoryPanel/RunHistoryView`（分页/任务/状态过滤）、`run-display.ts` 展示纯函数、`use-automation-tasks.ts`（React Query + AUTOMATION_CHANGED_EVENT 失效重拉）、`AutomationStatsPanel`（健康度）、`automation.store.ts`
@@ -240,11 +247,20 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 | `automation:stat` | 280 | 创建埋点（CreateStatDetail） |
 | `automation:stats` | 283 | 健康度即时聚合 |
 | `automation:runs:page` | 270 | 运行历史分页（page=20，taskId/status 可选过滤） |
+| `automation:runGroups` / `automation:run:get` / `automation:run:ensureSession` | RunSessionService | 固定入口分组 / 任意历史 run 归属校验直读（含 graphTrace/workspaceId）/ 幂等伴随会话创建 |
 
 - 内置模板 7 个（`automation-templates.ts` 纯数据不走远端）：`daily-ai-news`/`weekly-report`/`biweekly-review`/`monthly-billing`/`yearly-reminder`/`workdir-monitor`/`standup-prep`——各带 prompt + scheduleJson + temperature；前端 `TemplateMarketView` 映射 lucide 图标与 i18n 文案
 - 调度编辑：`SchedulePicker`（受控）内嵌 `ScheduleDialog`（频率+有效期实时回写）——结构化选 kind/时间/星期/间隔，**无 cron 表达式高级输入**；`schedule-text.ts` 的 `describeSchedule()` 人读文案（i18n，列表行与摘要栏同一实现）+ 校验 `ScheduleValidation: ok | timeInPast | intervalTooSmall | incomplete`；批3A 起 `describeMissedPolicy()`（catchUpOnce 追加「错过补跑最多 N 次」，skip 不追加防噪音）拼入 `buildTaskParams` 的 scheduleText——错过补跑语义向用户明示；CreateTaskDialog 在 catchUpOnce 选中时透出补跑上限输入（1-10）
 - 事件触发编辑：`lib/task-form.ts`（`toEventJson/parseEventDraft`；taskFinished 允许 targetId 暂缺——目标必选校验在提交层）；`use-task-form.ts` 表单状态
 - 运行时变量：`replaceVariables(prompt, now)`——`{{date}}`（yyyy-MM-dd）/`{{weekday}}`（中文「一」…「日」）/`{{time}}`（HH:mm），**语言不跟随 i18n 固定中文格式**
+
+### 3.7 固定运行入口与按次追问
+
+会话树底部「自动化与工作流」为每个现存任务提供一个固定条目，并为已有顶层运行或伴随会话的工作流提供固定条目；被聚合的运行会话不再在普通空间/项目树中重复出现。任务固定 URL 为 `/module/ai?automation=<taskId>&run=<runId>`，顶层图为 `/module/ai?graphRun=<graphId>&run=<runId>`；缺省 run 跟随最新运行，显式 run 在新运行完成和查询失效后仍保持原检查点。选择器复用现有分页接口，按执行时间展示状态、触发类型、耗时与 attempt。固定条目菜单保留「打开任务/工作流」「立即运行」（任务）和「查看运行历史」；原运行历史页仍承担跨任务筛选、统计、失败排查与审计。
+
+prompt 运行直接复用 `run.sessionId` 对应的原始会话；graph 运行及尚无会话的早期失败运行在首次发送时经 `automation:run:ensureSession` / `automation/ensureRunSession` 懒建伴随会话。服务先校验运行归属与终态（success/failed 可追问，running/skipped 不可），已有 sessionId 直接返回；创建与认领经唯一 sessionId、条件更新和事务收敛，并发/重试不会生成多个会话。任务运行使用 `task.workspaceId`，新图运行使用 `run.workspaceId`。桌面对缺少该列值的旧图运行可尝试图 AI 编排会话的工作空间，仍无法确定才要求显式选择；**server 的 graphDefinition 没有 AI 编排会话字段，因此 server 历史图运行只接受 `run.workspaceId`，为空时必须由调用方显式传 workspaceId，没有 server AI-session fallback**。
+
+追问仍走普通 ChatApi.send / chat 服务，不经 scheduler 或 graph executor。聊天服务只为被 run.sessionId 引用的会话注入有界运行摘要（graph 包含最终输出、失败节点和受限轨迹摘要），完整轨迹仍在结果视图查看；它不会自动重跑任务/图，也不改图定义或运行记录。后续定时、事件、webhook 和手动执行仍调用原 runner，以任务原始 prompt/图输入创建新的独立 session，不读取此前运行输出或人工追问。
 
 ## 4. 三端布局（桌面调度 vs server 调度差异）
 
@@ -259,7 +275,7 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 | userId | token 解出 | 伴生单用户 COMPANION_USER_ID 写死 |
 | 事件链总线 | automation-event-bus.ts（进程内） | createAutomationEventBus 单实例（automation.module 装配） |
 
-**server 六端点**（`src/modules/automation/automation.controller.ts`）：`automation/query`（分页+keyword）、`automation/save`（**全量 upsert，无 toggle 端点**——启停走 save 携翻转后 enabled，Ruling 12；无头端 Ruling 12/14 enabled 显式携带才写）、`automation/delete`（批量，run 级联）、`automation/runNow`（**202 受理**，不消耗调度字段，收尾经 automation.changed）、`automation/runPage`（**载荷剔 graphTrace** 省流量，移动端 CRUD 批）、`automation/runNodes`（节点级执行详情：图 run 专有，归属两段校验不符/prompt run/老 run 一律空集，空集语义不暴露存在性）。
+**server 自动化端点**（`src/modules/automation/automation.controller.ts`）：`automation/query`（分页+keyword）、`automation/save`（**全量 upsert，无 toggle 端点**——启停走 save 携翻转后 enabled，Ruling 12；无头端 Ruling 12/14 enabled 显式携带才写）、`automation/delete`（批量，run 级联）、`automation/runNow`（**202 受理**，不消耗调度字段，收尾经 automation.changed）、`automation/runGroups`、`automation/runById`（完整 graphTrace/workspaceId）、`automation/ensureRunSession`（终态伴随会话幂等补建；历史图运行缺 workspaceId 时必须显式提供）、`automation/runPage`（**载荷剔 graphTrace** 省流量，移动端 CRUD 批）、`automation/runNodes`（节点级执行详情：图 run 专有，归属两段校验不符/prompt run/老 run 一律空集，空集语义不暴露存在性）。远程桌面仅在连接显式上报 `runSessions` capability 时启用固定入口及伴随会话链路，旧主机继续显示普通会话与原运行历史。
 
 **移动端**（纯控制端，2026-10-27 二裁后两类齐备）：
 

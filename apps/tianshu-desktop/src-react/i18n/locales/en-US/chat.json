@@ -812,6 +812,13 @@
       }
     }
   },
+  "runSession": {
+    "selectRun": "Select run",
+    "empty": "No runs yet",
+    "resultSummary": "Final output / error summary",
+    "workspaceRequiredTitle": "Choose a follow-up workspace",
+    "workspaceRequiredDescription": "The original workspace for this historical run cannot be determined. Explicitly choose a workspace to continue the first follow-up there."
+  },
   "orchestration": {
     "empty": "No orchestration graphs yet",
     "emptyAction": "Create now",

@@ -812,6 +812,13 @@
       }
     }
   },
+  "runSession": {
+    "selectRun": "选择运行",
+    "empty": "暂无运行记录",
+    "resultSummary": "最终输出 / 错误摘要",
+    "workspaceRequiredTitle": "选择追问工作空间",
+    "workspaceRequiredDescription": "这条历史运行无法确定原工作空间。请显式选择一个空间，首次追问将在该空间中继续。"
+  },
   "orchestration": {
     "empty": "暂无工作流",
     "emptyAction": "去创建",

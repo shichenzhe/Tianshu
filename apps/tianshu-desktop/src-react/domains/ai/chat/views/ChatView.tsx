@@ -1,19 +1,13 @@
 /**
- * AI 对话主界面：消息区/输入区（标准侧边栏由全局 GlobalSidebar 提供）
- * 当前空间由选中任务派生（侧边栏分组树已展示全部空间），会话数据经共享
- * React Query 缓存派生，setModel/setAssistant/setMode 失效后即为最新值
- * 单会话面板拆至 components/ChatPane（跨模块复用），本视图只做选态派生
- * 布局与项目详情右栏同构：左列（顶行迁入 TopBar 中段）+ 右列 DetailPanel
- * tab 面板全高挤压式旁挂（收起时整体移除，开关在顶行 trailing，会话内
- * 搜索在开关左边——原 TopBar 右侧孤零零的搜索按钮并入）
- * 项目会话（projectId 非空）附「转办」入口（批 12）：顶行搜索与产物
- * 开关之间 → AI 交接摘要弹框（HandoverDialog，实例本视图持有）
+ * AI 对话路由壳：普通会话沿用原面板；固定任务/图入口按 run 查看检查点。
+ * 普通会话的项目面包屑、产物旁栏与转办入口仍由 OrdinaryChatView 持有。
  */
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowRightLeft, Settings2 } from "lucide-react";
+import type { RunOwner } from "@tianshu/core/run-session";
 import IconTooltip from "@/components/common/icon-tooltip";
 
 import {
@@ -26,10 +20,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { usePageHeader } from "@/components/layout/page-header.store";
 import HandoverDialog from "@/domains/project/components/HandoverDialog";
-import { ProviderApi } from "../../api/provider.api";
-import { ModelApi } from "../../api/model.api";
 import SessionApi from "../../api/session.api";
-import { WorkspaceApi, type WorkspaceRecord } from "../../api/workspace.api";
 import MessageList from "../components/MessageList";
 import ChatPane from "../components/ChatPane";
 import WorkspacePathChip from "../components/WorkspacePathChip";
@@ -42,100 +33,67 @@ import DetailPanel from "../components/detail-panel/DetailPanel";
 import { useAiUiStore } from "../../store/ai-ui.store";
 import { useHostStore } from "../../data-source/host.store";
 import { useDetailPanelBridge } from "../hooks/use-detail-panel-bridge";
+import RunSessionView from "../../automation/views/RunSessionView";
+import { canonicalRunSessionPath } from "../../automation/lib/run-session-route";
+import {
+  sessionSettingsPath,
+  useSessionPaneData,
+} from "../hooks/use-session-pane-data";
 
-const WORKSPACES_KEY = ["workspaces"] as const;
-const PROVIDERS_KEY = ["providers"] as const;
-const MODELS_KEY = ["models"] as const;
 const PROVIDERS_ROUTE = "/module/ai/providers";
-const ASSISTANTS_ROUTE = "/module/ai/experts";
-const MCP_ROUTE = "/module/ai/experts?tab=connectors";
 
 export default function ChatView() {
+  const [searchParams] = useSearchParams();
+  const owner = runOwnerFromParams(searchParams);
+  return owner ? <RunSessionView owner={owner} /> : <OrdinaryChatView />;
+}
+
+function OrdinaryChatView() {
   const navigate = useNavigate();
   const { t } = useTranslation(["chat"]);
   const [searchParams] = useSearchParams();
   // 选中任务进 URL（?session=）：刷新可恢复、全局搜索有跳转落点
   const selectedSessionId = Number(searchParams.get("session")) || null;
-  const artifactsOpen = useAiUiStore((s) => s.artifactsOpen);
-  // 产物面板开关为全局内存态（批 6 后仅本视图渲染旁挂；进入时重置收起，
-  // 防止其他视图/入口的展开态残留）；最大化态同理一并归位（R25）
+  const artifactsOpen = useAiUiStore((state) => state.artifactsOpen);
+  // 产物面板与最大化态进入普通会话时归位，避免其他视图残留。
   useEffect(() => {
     useAiUiStore.getState().setArtifactsOpen(false);
     useAiUiStore.getState().setPanelMaximized(false);
   }, []);
 
-  const providersQuery = useQuery({
-    queryKey: PROVIDERS_KEY,
-    queryFn: () => ProviderApi.list(),
-  });
-  const modelsQuery = useQuery({
-    queryKey: MODELS_KEY,
-    queryFn: () => ModelApi.listAll(),
-  });
-  const workspacesQuery = useQuery({
-    queryKey: WORKSPACES_KEY,
-    queryFn: () => WorkspaceApi.list(),
-  });
   const sessionsQuery = useQuery({
     queryKey: ["sessions", "all"],
     queryFn: () => SessionApi.listAll(),
   });
-
-  const providers = providersQuery.data ?? [];
-  const models = modelsQuery.data ?? [];
-  const workspaces = workspacesQuery.data ?? [];
   const sessions = sessionsQuery.data ?? [];
-  // 两个查询都成功返回且为空，才展示服务商引导（避免加载/出错期间误判）
-  const needsSetup =
-    providersQuery.isSuccess &&
-    modelsQuery.isSuccess &&
-    providers.length === 0 &&
-    models.length === 0;
-
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? null;
-  // 远程主机（HD 方案 B）：模型可用性按远端列表判定（详见 ChatPane hasModel）
-  const isRemoteHost = useHostStore((s) => s.activeHost.kind === "remote");
+  const runSessionsEnabled = useHostStore((state) => state.caps.runSessions);
+  const canonicalPath =
+    selectedSession && runSessionsEnabled
+      ? canonicalRunSessionPath(selectedSession)
+      : null;
+  useEffect(() => {
+    if (canonicalPath) navigate(canonicalPath, { replace: true });
+  }, [canonicalPath, navigate]);
 
-  // 项目会话上下文（批 4）：面包屑/任务概览共用项目名与任务事项缓存
+  const {
+    activeWorkspace,
+    workspace: paneWorkspace,
+    hasModel,
+    needsSetup,
+  } = useSessionPaneData(selectedSession);
+  // 项目会话上下文：面包屑/任务概览共用项目名与任务事项缓存。
   const { projectId, projectName, planItem } =
     useProjectSessionData(selectedSession);
-
-  // 当前空间 = 选中任务所属空间（列表解析完整记录，目录 chip/默认模型用）
-  const activeWorkspace =
-    workspaces.find(
-      (workspace) => workspace.id === selectedSession?.workspaceId,
-    ) ?? null;
-  // 面板生效空间：项目会话（资产空间不在全局列表）以会话自身 workspaceId
-  // 兜底传 id，语义同项目动态流（ChatPane spec §3.6——资产空间不经列表
-  // 解析）；普通会话无选中取第一个（侧边栏分组树已展示全部空间）。
-  // 远程主机（HD 方案 B）：恒 null——远程行 workspaceId 是远端概念，
-  // 兜底解析会误拿本地第一空间（跨主机 id 混淆）；null 语义沿组件链
-  // 自然降级（审批横幅照常渲染、「允许并记住」/文件联想/产物面板隐藏
-  // ——工作空间与文件系统面本地专属）
-  const paneWorkspace: Pick<WorkspaceRecord, "id"> | null = isRemoteHost
-    ? null
-    : (activeWorkspace ??
-      (selectedSession?.projectId != null
-        ? { id: selectedSession.workspaceId }
-        : (workspaces[0] ?? null)));
-
-  // 转办弹框开关（批 12）：仅项目会话顶行入口可打开
   const [handoverOpen, setHandoverOpen] = useState(false);
-
-  // 面板联动桥（web 工具 browse）：右栏浏览器 tab 自动开/复用
   useDetailPanelBridge(selectedSession?.id ?? null);
 
-  // 页面顶行（TopBar 中段，原页内 header 迁入）：项目会话面包屑在前 +
-  // 左路径 chip（绑定时）+ 右侧会话内搜索与产物面板开关（搜索在开关左边，
-  // 用户裁定）；无选中会话置空（SessionSearchBox 自身亦有空态隐藏）
   usePageHeader(
     selectedSession
       ? {
           leading: (
             <>
-              {/* 项目会话面包屑（批 4 D4）：项目名未就绪不渲染（projects
-                  缓存侧边栏常驻预热，窗口极短） */}
               {projectId != null && projectName != null && (
                 <ProjectBreadcrumb
                   projectId={projectId}
@@ -151,8 +109,6 @@ export default function ChatView() {
           trailing: (
             <>
               <SessionSearchBox />
-              {/* 转办（批 12）：仅项目会话；位置在搜索与产物开关之间，
-                  按钮口径照 ArtifactsPanelToggle（h-7 w-7 ghost） */}
               {projectId != null && (
                 <IconTooltip label={t("chat:handover.action")}>
                   <Button
@@ -174,9 +130,7 @@ export default function ChatView() {
   );
 
   return (
-    // relative 为产物全屏预览锚点（absolute inset-0 覆盖整个会话视图）
     <div className="relative flex h-full">
-      {/* 左列：消息/输入（或引导态/无会话兜底），顶行已迁入 TopBar */}
       <div className="flex min-w-0 flex-1 flex-col">
         {needsSetup ? (
           <SetupGuide onGoSetup={() => navigate(PROVIDERS_ROUTE)} />
@@ -185,39 +139,14 @@ export default function ChatView() {
             key={selectedSession.id}
             session={selectedSession}
             workspace={paneWorkspace}
-            hasModel={
-              // 远程主机（HD-A2）：workspace 列表经路由化即远端空间——默认
-              // 模型链恢复（currentModelId → 远端空间 defaultModelId →
-              // 远端有可用 llm；sessionSend 缺省走远端回退链兜底）
-              isRemoteHost
-                ? Boolean(
-                    selectedSession.currentModelId ??
-                    activeWorkspace?.defaultModelId,
-                  ) || models.some((m) => m.enabled && m.type === "llm")
-                : Boolean(
-                    selectedSession.currentModelId ??
-                    activeWorkspace?.defaultModelId,
-                  )
-            }
-            // 项目挂载集是预设而非过滤边界（二期 §3.7 修正）：联想/专家
-            // 切换子菜单不做挂载过滤，预设外能力会话中按需可选
-            onOpenSettings={(target) =>
-              navigate(
-                target === "providers"
-                  ? PROVIDERS_ROUTE
-                  : target === "assistants"
-                    ? ASSISTANTS_ROUTE
-                    : MCP_ROUTE,
-              )
-            }
+            hasModel={hasModel}
+            onOpenSettings={(target) => navigate(sessionSettingsPath(target))}
           />
         ) : (
           <MessageList sessionId={null} />
         )}
       </div>
 
-      {/* 右列 tab 面板（原产物面板升级，与项目详情右栏同构）：全高挤压式，
-          收起时整体移除；任务会话顶部挂「任务概览」折叠区（仅 planItemId 非空） */}
       {selectedSession && artifactsOpen && paneWorkspace && (
         <DetailPanel
           sessionId={selectedSession.id}
@@ -231,8 +160,6 @@ export default function ChatView() {
         />
       )}
 
-      {/* 转办弹框（批 12）：仅项目会话挂实例；打开即调 AI 交接摘要，
-          确认后另存为项目待办 */}
       {selectedSession && projectId != null && (
         <HandoverDialog
           open={handoverOpen}
@@ -244,6 +171,20 @@ export default function ChatView() {
       )}
     </div>
   );
+}
+
+function runOwnerFromParams(searchParams: URLSearchParams): RunOwner | null {
+  const automationId = positiveId(searchParams.get("automation"));
+  if (automationId !== undefined) {
+    return { kind: "task", ownerId: automationId };
+  }
+  const graphId = positiveId(searchParams.get("graphRun"));
+  return graphId === undefined ? null : { kind: "graph", ownerId: graphId };
+}
+
+function positiveId(raw: string | null): number | undefined {
+  const id = Number(raw);
+  return Number.isInteger(id) && id > 0 ? id : undefined;
 }
 
 interface SetupGuideProps {

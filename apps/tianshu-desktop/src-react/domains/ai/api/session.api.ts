@@ -34,6 +34,10 @@ export interface SessionRecord {
   planItemId?: number | null;
   /** 绑定应用 id（切片 C）；缺省 = 普通会话（工作流工具面全量） */
   appId?: number;
+  /** 运行会话聚合归属；普通会话为 null，派生 run id 来自 automationRun.sessionId */
+  automationTaskId?: number | null;
+  runGraphId?: number | null;
+  automationRunId?: number;
   /** P1 未读角标批：未读数（远端会话经被控面动态算；本地会话缺省不显示角标） */
   unreadCount?: number;
   /** P1 未读角标批：末条消息摘要（远端会话透出；本地会话缺省） */
@@ -52,6 +56,9 @@ export interface SessionCreateParams {
   planItemId?: number;
   /** 会话标题；缺省落「新会话」（任务会话由推进入口传任务标题） */
   title?: string;
+  /** 运行伴随会话归属，仅运行服务链传入；普通 UI 不设置 */
+  automationTaskId?: number | null;
+  runGraphId?: number | null;
 }
 
 export interface MessageRecord {

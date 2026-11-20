@@ -3058,7 +3058,9 @@ export const SessionScalarFieldEnum = {
   userId: 'userId',
   planItemId: 'planItemId',
   lastReadMessageId: 'lastReadMessageId',
-  appId: 'appId'
+  appId: 'appId',
+  automationTaskId: 'automationTaskId',
+  runGraphId: 'runGraphId'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -3172,6 +3174,7 @@ export const AutomationRunScalarFieldEnum = {
   id: 'id',
   taskId: 'taskId',
   sessionId: 'sessionId',
+  workspaceId: 'workspaceId',
   attempt: 'attempt',
   triggerType: 'triggerType',
   status: 'status',

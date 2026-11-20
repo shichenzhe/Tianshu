@@ -146,7 +146,9 @@ CREATE TABLE IF NOT EXISTS session (
     scenario TEXT NULL,
     userId INTEGER NULL,
     lastReadMessageId INTEGER NULL, -- P1 未读角标批：已读游标（NULL=全计，查询期动态算未读）
-    appId INTEGER NULL -- 应用绑定（切片 C）：null=普通会话，绑定后工作流工具面收窄到 appDefinition.graphIds
+    appId INTEGER NULL, -- 应用绑定（切片 C）：null=普通会话，绑定后工作流工具面收窄到 appDefinition.graphIds
+    automationTaskId INTEGER NULL,
+    runGraphId INTEGER NULL
 );
 
 --/p v12 多用户隔离：会话归属用户（冗余列，创建时随工作空间写入）
@@ -158,6 +160,10 @@ CREATE INDEX IF NOT EXISTS session_projectId_index ON session (projectId);
 --/p v13 性能索引：会话按工作空间过滤（listSessions 与模型继承查询）
 --/ignore
 CREATE INDEX IF NOT EXISTS session_workspaceId_index ON session (workspaceId);
+--/ignore
+CREATE INDEX IF NOT EXISTS session_automationTaskId_idx ON session (automationTaskId);
+--/ignore
+CREATE INDEX IF NOT EXISTS session_runGraphId_idx ON session (runGraphId);
 
 --/p 新建消息表（AI 模块，blocks 为 JSON 数组文本；durationMs 为 assistant 生成耗时）
 CREATE TABLE IF NOT EXISTS message (
@@ -278,6 +284,7 @@ CREATE TABLE IF NOT EXISTS automationRun (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     taskId INTEGER,
     sessionId INTEGER,
+    workspaceId INTEGER,
     attempt INTEGER NOT NULL DEFAULT 1,
     triggerType TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -298,6 +305,8 @@ CREATE INDEX IF NOT EXISTS automationRun_taskId_idx ON automationRun(taskId);
 CREATE INDEX IF NOT EXISTS automationRun_graphId_index ON automationRun(graphId);
 --/ignore
 CREATE INDEX IF NOT EXISTS automationRun_startedAt_idx ON automationRun(startedAt);
+--/ignore
+CREATE UNIQUE INDEX IF NOT EXISTS automationRun_sessionId_key ON automationRun(sessionId);
 
 --/p 自动化模块：埋点事件表（事件流，无唯一约束，同 skillStat）
 CREATE TABLE IF NOT EXISTS automationStat (

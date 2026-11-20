@@ -104,27 +104,49 @@ const GRAPH_RUN_NODE_DDL = `
   )
 `;
 
+const RUN_SESSION_DDL = `
+  CREATE TABLE IF NOT EXISTS session (
+    id INTEGER PRIMARY KEY NOT NULL,
+    automationTaskId INTEGER,
+    runGraphId INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS message (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    sessionId INTEGER NOT NULL
+  )
+`;
+
 /** node:sqlite 版 RetentionDb 替身：每用例独立内存库，用例间零污染 */
 function makeRetentionDb() {
   const db = new DatabaseSync(":memory:");
   db.exec(AUTOMATION_RUN_DDL);
   db.exec(GRAPH_RUN_NODE_DDL);
+  db.exec(RUN_SESSION_DDL);
   const insert = db.prepare(
-    "INSERT INTO automationRun (taskId, triggerType, status, startedAt, graphTrace) VALUES (?, 'test', ?, ?, ?)",
+    "INSERT INTO automationRun (taskId, sessionId, triggerType, status, startedAt, graphTrace) VALUES (?, ?, 'test', ?, ?, ?)",
   );
   const seedRun = (over: {
     taskId?: number | null;
+    sessionId?: number | null;
     status: string;
     startedAt: Date;
     graphTrace?: string | null;
   }) => {
     const r = insert.run(
       over.taskId ?? null,
+      over.sessionId ?? null,
       over.status,
       over.startedAt.toISOString(),
       over.graphTrace ?? null,
     );
     return { id: Number(r.lastInsertRowid) };
+  };
+  const seedSession = (id: number, automationTaskId = 11, runGraphId = 3) => {
+    db.prepare(
+      "INSERT INTO session (id, automationTaskId, runGraphId) VALUES (?, ?, ?)",
+    ).run(id, automationTaskId, runGraphId);
+    db.prepare("INSERT INTO message (sessionId) VALUES (?)").run(id);
+    db.prepare("INSERT INTO message (sessionId) VALUES (?)").run(id);
   };
   const seedNode = (runId: number, nodeId: string) => {
     db.prepare("INSERT INTO graphRunNode (runId, nodeId) VALUES (?, ?)").run(
@@ -134,11 +156,20 @@ function makeRetentionDb() {
   };
   /** status/startedAt where 形状 → SQL 片段（findMany/deleteMany 共用翻译） */
   const translateWhere = (where: {
+    id?: { in: number[] };
+    sessionId?: { not: null };
     status?: string | { notIn: string[] };
     startedAt?: { lt: Date };
   }) => {
     const conds: string[] = [];
     const params: (string | number)[] = [];
+    if (where.id) {
+      conds.push(`id IN (${where.id.in.map(() => "?").join(", ")})`);
+      params.push(...where.id.in);
+    }
+    if (where.sessionId?.not === null) {
+      conds.push("sessionId IS NOT NULL");
+    }
     if (where.startedAt) {
       conds.push("startedAt < ?");
       params.push(where.startedAt.lt.toISOString());
@@ -187,8 +218,8 @@ function makeRetentionDb() {
       async findMany({ where }) {
         const { clause, params } = translateWhere(where);
         const rows = db
-          .prepare(`SELECT id FROM automationRun${clause}`)
-          .all(...params) as Array<{ id: number }>;
+          .prepare(`SELECT * FROM automationRun${clause}`)
+          .all(...params) as Array<{ id: number; sessionId: number | null }>;
         return rows;
       },
       // status 两种形状：notIn 数组（成功档）/ 字符串精确匹配（失败档）
@@ -213,6 +244,33 @@ function makeRetentionDb() {
       },
     },
     option: { findFirst: async () => null },
+    session: {
+      async updateMany({ where, data }) {
+        const r = db
+          .prepare(
+            `UPDATE session SET automationTaskId = ?, runGraphId = ? WHERE id IN (${where.id.in
+              .map(() => "?")
+              .join(", ")})`,
+          )
+          .run(data.automationTaskId, data.runGraphId, ...where.id.in);
+        return { count: Number(r.changes) };
+      },
+    },
+    message: {
+      async count({ where }) {
+        return Number(
+          db
+            .prepare("SELECT COUNT(*) AS c FROM message WHERE sessionId = ?")
+            .get(where.sessionId)!.c,
+        );
+      },
+    },
+    async $transaction(callback) {
+      return callback(prisma);
+    },
+    async $queryRawUnsafe(sql: string, ...values: number[]) {
+      return db.prepare(sql).all(...values);
+    },
     async $executeRawUnsafe(sql: string, ...values: number[]) {
       // 被测 SQL 原样交真 SQLite 引擎执行（窗口函数/NULL 分组/参数绑定）
       return Number(db.prepare(sql).run(...values).changes);
@@ -247,7 +305,26 @@ function makeRetentionDb() {
     db
       .prepare("SELECT runId, nodeId FROM graphRunNode ORDER BY id")
       .all() as Array<{ runId: number; nodeId: string }>;
-  return { prisma, seedRun, seedNode, getRow, countRuns, countNodes, nodesOf };
+  const getSession = (id: number) =>
+    db.prepare("SELECT * FROM session WHERE id = ?").get(id) ?? null;
+  const countMessages = (sessionId: number): number =>
+    Number(
+      db
+        .prepare("SELECT COUNT(*) AS c FROM message WHERE sessionId = ?")
+        .get(sessionId)!.c,
+    );
+  return {
+    prisma,
+    seedRun,
+    seedNode,
+    seedSession,
+    getRow,
+    countRuns,
+    countNodes,
+    nodesOf,
+    getSession,
+    countMessages,
+  };
 }
 
 describe("trimAutomationRuns（SQL 行为）", () => {
@@ -358,6 +435,64 @@ describe("trimAutomationRuns（SQL 行为）", () => {
     );
     // 窗口删 2 run → 其节点行连带删 2，仅最新 run 的节点行保留
     expect(countNodes()).toBe(1);
+  });
+
+  it("按天删 run 只解除会话分组，保留会话与两条追问消息", async () => {
+    const { prisma, seedRun, seedSession, getRow, getSession, countMessages } =
+      makeRetentionDb();
+    const doomed = await seedRun({
+      sessionId: 9,
+      status: "success",
+      startedAt: daysAgo(10),
+    });
+    seedSession(9);
+
+    await trimAutomationRuns(prisma, DEFAULT_RUN_RETENTION, NOW);
+
+    expect(getRow(doomed.id)).toBeNull();
+    const afterClear = getSession(9);
+    expect(afterClear).toMatchObject({
+      automationTaskId: null,
+      runGraphId: null,
+    });
+    expect(await prisma.message.count({ where: { sessionId: 9 } })).toBe(2);
+    expect(countMessages(9)).toBe(2);
+  });
+
+  it("条数窗删 run 同样解除分组且不删追问", async () => {
+    const { prisma, seedRun, seedSession, getSession, countMessages } =
+      makeRetentionDb();
+    const oldRun = await seedRun({
+      taskId: 7,
+      sessionId: 9,
+      status: "success",
+      startedAt: daysAgo(0.01),
+    });
+    await seedRun({
+      taskId: 7,
+      sessionId: 10,
+      status: "success",
+      startedAt: daysAgo(0.01),
+    });
+    seedSession(9);
+    seedSession(10);
+
+    await trimAutomationRuns(
+      prisma,
+      { ...DEFAULT_RUN_RETENTION, successKeep: 1 },
+      NOW,
+    );
+
+    expect(oldRun.id).toBeGreaterThan(0);
+    expect(getSession(9)).toMatchObject({
+      automationTaskId: null,
+      runGraphId: null,
+    });
+    expect(getSession(10)).toMatchObject({
+      automationTaskId: 11,
+      runGraphId: 3,
+    });
+    expect(countMessages(9)).toBe(2);
   });
 
   it("enabled:false 零动作", async () => {

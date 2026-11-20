@@ -38,8 +38,9 @@ vi.mock("../../electron/commons/prisma-client", () => ({
       deleteMany: vi.fn(),
     },
     graphRunNode: { findMany: vi.fn(), deleteMany: vi.fn() },
+    session: { updateMany: vi.fn() },
     workspace: { findFirst: vi.fn() },
-    $transaction: vi.fn(),
+    $transaction: vi.fn(async (callback) => callback(prisma)),
   },
 }));
 vi.mock("../../electron/domains/ai/orchestration/graph-executor", () => ({

@@ -305,6 +305,29 @@ describe("executeTask targetKind=graph 分流", () => {
 });
 
 describe("executeTask 成功路径", () => {
+  it("prompt runner 写运行空间与任务会话分组", async () => {
+    const executeTask = await stubOnceHappyPath();
+    vi.mocked(runChatStream).mockResolvedValue({
+      blocks: [{ type: "text", text: "ok" }],
+    } as never);
+
+    await executeTask({ ...taskRow, id: 11, workspaceId: 23 } as never, {
+      triggerType: "manual",
+      attempt: 1,
+      abort: new AbortController().signal,
+    });
+
+    const session = vi
+      .mocked(prisma.session.create)
+      .mock.calls.at(-1)?.[0].data;
+    const run = vi
+      .mocked(prisma.automationRun.create)
+      .mock.calls.at(-1)?.[0].data;
+    expect(session.automationTaskId).toBe(11);
+    expect(run.workspaceId).toBe(23);
+    vi.mocked(prisma.message.create).mockClear();
+  });
+
   it("run 终态 update 关联 sessionId 且 status=success(spec §4 步骤7/§5 跳转)", async () => {
     const { executeTask } =
       await import("../../electron/domains/ai/automation/automation-runner");

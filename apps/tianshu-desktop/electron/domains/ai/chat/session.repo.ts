@@ -112,11 +112,14 @@ export class SessionRepository {
     };
   }
 
-  private toSession(row: SessionRow): SessionRecord {
+  private toSession(row: SessionRow, automationRunId?: number): SessionRecord {
     return {
       ...row,
       assistantId: row.assistantId ?? undefined,
       currentModelId: row.currentModelId ?? undefined,
+      automationTaskId: row.automationTaskId ?? null,
+      runGraphId: row.runGraphId ?? null,
+      automationRunId,
       // 应用绑定（切片 C）：null 归一 undefined（普通会话）
       appId: row.appId ?? undefined,
       // P3：DB null（agent 缺省不落盘）归一为显式 "agent"
@@ -127,6 +130,29 @@ export class SessionRepository {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+
+  /** 批量预取 session→run 映射，toSession 保持同步且列表无逐行反查。 */
+  private async fetchAutomationRunIds(
+    rows: SessionRow[],
+  ): Promise<Map<number, number>> {
+    if (rows.length === 0) {
+      return new Map();
+    }
+    const runs = await prisma.automationRun.findMany({
+      where: { sessionId: { in: rows.map((row) => row.id) } },
+      select: { id: true, sessionId: true },
+    });
+    return new Map(
+      runs.flatMap((run) =>
+        run.sessionId === null ? [] : [[run.sessionId, run.id] as const],
+      ),
+    );
+  }
+
+  private async toSessions(rows: SessionRow[]): Promise<SessionRecord[]> {
+    const runIds = await this.fetchAutomationRunIds(rows);
+    return rows.map((row) => this.toSession(row, runIds.get(row.id)));
   }
 
   private toMessage(row: MessageRow): MessageRecord {
@@ -430,13 +456,13 @@ export class SessionRepository {
     userId: number,
   ): Promise<SessionRecord[]> {
     await this.assertWorkspaceOwned(workspaceId, userId);
-    return (
+    return this.toSessions(
       await prisma.session.findMany({
         // 项目会话不进 AI 任务树（项目模块一期会话隔离）
         where: { workspaceId, archivedAt: null, projectId: null },
         orderBy: { lastMessageAt: "desc" },
-      })
-    ).map((row) => this.toSession(row));
+      }),
+    );
   }
 
   async getSession(id: number): Promise<SessionRow | null> {
@@ -450,7 +476,7 @@ export class SessionRepository {
     if (!row) {
       throw new Error("SESSION_NOT_FOUND");
     }
-    return this.toSession(row);
+    return (await this.toSessions([row]))[0];
   }
 
   async createSession(
@@ -532,6 +558,8 @@ export class SessionRepository {
         workspaceId,
         projectId: p.projectId ?? null,
         planItemId: p.planItemId ?? null,
+        automationTaskId: p.automationTaskId ?? null,
+        runGraphId: p.runGraphId ?? null,
         assistantId: p.assistantId,
         scenario: p.scenario ?? null,
         currentModelId: latest?.currentModelId ?? undefined,
@@ -549,8 +577,8 @@ export class SessionRepository {
     // 含归档（前端 splitArchived 拆「已归档」分组——归档可查看只读）；
     // 排序对齐 tianshu-server querydecoder 默认序：置顶优先（pinnedAt
     // 倒序，NULL 居尾 SQLite DESC）→ lastMessageAt 倒序 → id 次键保分页确定
-    return (await prisma.session.findMany(this.sessionListArgs(userId))).map(
-      (row) => this.toSession(row),
+    return this.toSessions(
+      await prisma.session.findMany(this.sessionListArgs(userId)),
     );
   }
 
@@ -663,12 +691,13 @@ export class SessionRepository {
     if (rows.length === 0) {
       return [];
     }
-    const [lastById, unreadById] = await Promise.all([
+    const [lastById, unreadById, runIdBySessionId] = await Promise.all([
       this.fetchLastMessages(rows.map((row) => row.id)),
       this.countUnreadBySessions(rows),
+      this.fetchAutomationRunIds(rows),
     ]);
     return rows.map((row) => {
-      const session = this.toSession(row);
+      const session = this.toSession(row, runIdBySessionId.get(row.id));
       return {
         ...session,
         unreadCount: unreadById.get(row.id) ?? 0,
@@ -848,13 +877,13 @@ export class SessionRepository {
     const where = trimmed
       ? { title: { contains: trimmed }, archivedAt: null, userId }
       : { archivedAt: null, userId };
-    return (
+    return this.toSessions(
       await prisma.session.findMany({
         where,
         orderBy: { updatedAt: "desc" },
         take: 20,
-      })
-    ).map((row) => this.toSession(row));
+      }),
+    );
   }
 
   /** v5 打开空间绑定目录（上下文菜单「打开文件夹」） */

@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({
   ipcMain: { handle: vi.fn() },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -29,7 +30,15 @@ vi.mock("../../electron/commons/prisma-client", () => ({
     },
     // deleteTasks 级联（去会话化 2026-10-28：run 行删前连带删 graphRunNode）
     graphRunNode: { deleteMany: vi.fn() },
-    $transaction: vi.fn(),
+    session: {
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+    },
+    $transaction: vi.fn(async (input) =>
+      typeof input === "function" ? input(prisma) : Promise.all(input),
+    ),
     workspace: { findUnique: vi.fn(), findFirst: vi.fn() },
     model: { findUnique: vi.fn() },
     provider: { findFirst: vi.fn() },
@@ -38,8 +47,17 @@ vi.mock("../../electron/commons/prisma-client", () => ({
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       findMany: vi.fn(async () => []),
+      deleteMany: vi.fn(),
     },
   },
+}));
+
+vi.mock("../../electron/domains/ai/orchestration/webhook-server", () => ({
+  unregisterWebhook: vi.fn(),
+  registerWebhook: vi.fn(),
+  getRegistration: vi.fn(),
+  getWebhookRegistration: vi.fn(),
+  stopWebhookServer: vi.fn(),
 }));
 
 import AutomationRepository, {
@@ -48,6 +66,8 @@ import AutomationRepository, {
   assertNoSelfReference,
 } from "../../electron/domains/ai/automation/automation.repo";
 import prisma from "../../electron/commons/prisma-client";
+import GraphRepository from "../../electron/domains/ai/orchestration/graph.repo";
+import { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
 
 /** 测试用户 id（v12 起任务/运行记录按用户隔离，repo 方法末位参数） */
 const UID = 1;
@@ -525,8 +545,8 @@ describe("deleteTasks 级联删除", () => {
     ] as never);
     vi.mocked(prisma.automationRun.findMany).mockClear();
     vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
-      { id: 31 },
-      { id: 32 },
+      { id: 31, sessionId: 41 },
+      { id: 32, sessionId: 42 },
     ] as never);
     vi.mocked(prisma.graphRunNode.deleteMany).mockClear();
     const repo = new AutomationRepository();
@@ -540,6 +560,10 @@ describe("deleteTasks 级联删除", () => {
     expect(prisma.graphRunNode.deleteMany).toHaveBeenCalledWith({
       where: { runId: { in: [31, 32] } },
     });
+    expect(prisma.session.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [41, 42] } },
+      data: { automationTaskId: null, runGraphId: null },
+    });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
   });
 
@@ -551,5 +575,109 @@ describe("deleteTasks 级联删除", () => {
     expect(await repo.deleteTasks([404], UID)).toEqual([]);
     expect(prisma.automationRun.findMany).not.toHaveBeenCalled();
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("run session repository integration", () => {
+  it("删图复用 run 归属清理，解除会话分组后再删 run", async () => {
+    vi.mocked(prisma.graphDefinition.findFirst).mockResolvedValue({
+      id: 5,
+      userId: UID,
+    } as never);
+    vi.mocked(prisma.graphDefinition.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.automationTask.findMany).mockResolvedValue([] as never);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      { id: 51, sessionId: 61 },
+    ] as never);
+    vi.mocked(prisma.session.updateMany).mockClear();
+
+    const repo = new GraphRepository();
+    await repo["deleteGraph"](5, UID);
+
+    expect(prisma.session.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [61] } },
+      data: { automationTaskId: null, runGraphId: null },
+    });
+    expect(prisma.automationRun.deleteMany).toHaveBeenCalledWith({
+      where: { graphId: 5 },
+    });
+  });
+
+  it("会话列表批量透出运行 id，普通会话三个归属字段均为空", async () => {
+    const now = new Date("2026-11-20T00:00:00Z");
+    vi.mocked(prisma.session.findMany).mockResolvedValue([
+      {
+        id: 1,
+        workspaceId: 2,
+        title: "ordinary",
+        mode: null,
+        createdAt: now,
+        updatedAt: now,
+        automationTaskId: null,
+        runGraphId: null,
+      },
+      {
+        id: 2,
+        workspaceId: 2,
+        title: "run",
+        mode: null,
+        createdAt: now,
+        updatedAt: now,
+        automationTaskId: 11,
+        runGraphId: null,
+      },
+    ] as never);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      { id: 71, sessionId: 2 },
+    ] as never);
+    vi.mocked(prisma.automationRun.findMany).mockClear();
+
+    const records = await new SessionRepository().listAllSessions(UID);
+
+    expect(records[0]).toMatchObject({
+      automationTaskId: null,
+      runGraphId: null,
+      automationRunId: undefined,
+    });
+    expect(records[1]).toMatchObject({
+      automationTaskId: 11,
+      runGraphId: null,
+      automationRunId: 71,
+    });
+    expect(prisma.automationRun.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.automationRun.findMany).toHaveBeenCalledWith({
+      where: { sessionId: { in: [1, 2] } },
+      select: { id: true, sessionId: true },
+    });
+  });
+
+  it("createSessionRow 接受并写两个可选运行分组字段", async () => {
+    vi.mocked(prisma.workspace.findFirst).mockResolvedValue({
+      id: 2,
+      userId: UID,
+    } as never);
+    vi.mocked(prisma.session.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.session.create).mockResolvedValue({
+      id: 9,
+      workspaceId: 2,
+      title: "run",
+      mode: null,
+      createdAt: new Date("2026-11-20T00:00:00Z"),
+      updatedAt: new Date("2026-11-20T00:00:00Z"),
+    } as never);
+
+    await new SessionRepository().createSession(
+      { workspaceId: 2, automationTaskId: 11, runGraphId: null } as never,
+      UID,
+    );
+
+    expect(prisma.session.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          automationTaskId: 11,
+          runGraphId: null,
+        }),
+      }),
+    );
   });
 });

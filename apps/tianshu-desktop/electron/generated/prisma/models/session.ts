@@ -37,6 +37,8 @@ export type SessionAvgAggregateOutputType = {
   planItemId: number | null
   lastReadMessageId: number | null
   appId: number | null
+  automationTaskId: number | null
+  runGraphId: number | null
 }
 
 export type SessionSumAggregateOutputType = {
@@ -50,6 +52,8 @@ export type SessionSumAggregateOutputType = {
   planItemId: number | null
   lastReadMessageId: number | null
   appId: number | null
+  automationTaskId: number | null
+  runGraphId: number | null
 }
 
 export type SessionMinAggregateOutputType = {
@@ -72,6 +76,8 @@ export type SessionMinAggregateOutputType = {
   planItemId: number | null
   lastReadMessageId: number | null
   appId: number | null
+  automationTaskId: number | null
+  runGraphId: number | null
 }
 
 export type SessionMaxAggregateOutputType = {
@@ -94,6 +100,8 @@ export type SessionMaxAggregateOutputType = {
   planItemId: number | null
   lastReadMessageId: number | null
   appId: number | null
+  automationTaskId: number | null
+  runGraphId: number | null
 }
 
 export type SessionCountAggregateOutputType = {
@@ -116,6 +124,8 @@ export type SessionCountAggregateOutputType = {
   planItemId: number
   lastReadMessageId: number
   appId: number
+  automationTaskId: number
+  runGraphId: number
   _all: number
 }
 
@@ -131,6 +141,8 @@ export type SessionAvgAggregateInputType = {
   planItemId?: true
   lastReadMessageId?: true
   appId?: true
+  automationTaskId?: true
+  runGraphId?: true
 }
 
 export type SessionSumAggregateInputType = {
@@ -144,6 +156,8 @@ export type SessionSumAggregateInputType = {
   planItemId?: true
   lastReadMessageId?: true
   appId?: true
+  automationTaskId?: true
+  runGraphId?: true
 }
 
 export type SessionMinAggregateInputType = {
@@ -166,6 +180,8 @@ export type SessionMinAggregateInputType = {
   planItemId?: true
   lastReadMessageId?: true
   appId?: true
+  automationTaskId?: true
+  runGraphId?: true
 }
 
 export type SessionMaxAggregateInputType = {
@@ -188,6 +204,8 @@ export type SessionMaxAggregateInputType = {
   planItemId?: true
   lastReadMessageId?: true
   appId?: true
+  automationTaskId?: true
+  runGraphId?: true
 }
 
 export type SessionCountAggregateInputType = {
@@ -210,6 +228,8 @@ export type SessionCountAggregateInputType = {
   planItemId?: true
   lastReadMessageId?: true
   appId?: true
+  automationTaskId?: true
+  runGraphId?: true
   _all?: true
 }
 
@@ -319,6 +339,8 @@ export type SessionGroupByOutputType = {
   planItemId: number | null
   lastReadMessageId: number | null
   appId: number | null
+  automationTaskId: number | null
+  runGraphId: number | null
   _count: SessionCountAggregateOutputType | null
   _avg: SessionAvgAggregateOutputType | null
   _sum: SessionSumAggregateOutputType | null
@@ -364,6 +386,8 @@ export type sessionWhereInput = {
   planItemId?: Prisma.IntNullableFilter<"session"> | number | null
   lastReadMessageId?: Prisma.IntNullableFilter<"session"> | number | null
   appId?: Prisma.IntNullableFilter<"session"> | number | null
+  automationTaskId?: Prisma.IntNullableFilter<"session"> | number | null
+  runGraphId?: Prisma.IntNullableFilter<"session"> | number | null
 }
 
 export type sessionOrderByWithRelationInput = {
@@ -386,6 +410,8 @@ export type sessionOrderByWithRelationInput = {
   planItemId?: Prisma.SortOrderInput | Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrderInput | Prisma.SortOrder
   appId?: Prisma.SortOrderInput | Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrderInput | Prisma.SortOrder
+  runGraphId?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type sessionWhereUniqueInput = Prisma.AtLeast<{
@@ -411,6 +437,8 @@ export type sessionWhereUniqueInput = Prisma.AtLeast<{
   planItemId?: Prisma.IntNullableFilter<"session"> | number | null
   lastReadMessageId?: Prisma.IntNullableFilter<"session"> | number | null
   appId?: Prisma.IntNullableFilter<"session"> | number | null
+  automationTaskId?: Prisma.IntNullableFilter<"session"> | number | null
+  runGraphId?: Prisma.IntNullableFilter<"session"> | number | null
 }, "id">
 
 export type sessionOrderByWithAggregationInput = {
@@ -433,6 +461,8 @@ export type sessionOrderByWithAggregationInput = {
   planItemId?: Prisma.SortOrderInput | Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrderInput | Prisma.SortOrder
   appId?: Prisma.SortOrderInput | Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrderInput | Prisma.SortOrder
+  runGraphId?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.sessionCountOrderByAggregateInput
   _avg?: Prisma.sessionAvgOrderByAggregateInput
   _max?: Prisma.sessionMaxOrderByAggregateInput
@@ -463,6 +493,8 @@ export type sessionScalarWhereWithAggregatesInput = {
   planItemId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
   lastReadMessageId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
   appId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
+  automationTaskId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
+  runGraphId?: Prisma.IntNullableWithAggregatesFilter<"session"> | number | null
 }
 
 export type sessionCreateInput = {
@@ -484,6 +516,8 @@ export type sessionCreateInput = {
   planItemId?: number | null
   lastReadMessageId?: number | null
   appId?: number | null
+  automationTaskId?: number | null
+  runGraphId?: number | null
 }
 
 export type sessionUncheckedCreateInput = {
@@ -506,6 +540,8 @@ export type sessionUncheckedCreateInput = {
   planItemId?: number | null
   lastReadMessageId?: number | null
   appId?: number | null
+  automationTaskId?: number | null
+  runGraphId?: number | null
 }
 
 export type sessionUpdateInput = {
@@ -527,6 +563,8 @@ export type sessionUpdateInput = {
   planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   lastReadMessageId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   appId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  automationTaskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  runGraphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionUncheckedUpdateInput = {
@@ -549,6 +587,8 @@ export type sessionUncheckedUpdateInput = {
   planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   lastReadMessageId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   appId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  automationTaskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  runGraphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionCreateManyInput = {
@@ -571,6 +611,8 @@ export type sessionCreateManyInput = {
   planItemId?: number | null
   lastReadMessageId?: number | null
   appId?: number | null
+  automationTaskId?: number | null
+  runGraphId?: number | null
 }
 
 export type sessionUpdateManyMutationInput = {
@@ -592,6 +634,8 @@ export type sessionUpdateManyMutationInput = {
   planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   lastReadMessageId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   appId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  automationTaskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  runGraphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionUncheckedUpdateManyInput = {
@@ -614,6 +658,8 @@ export type sessionUncheckedUpdateManyInput = {
   planItemId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   lastReadMessageId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   appId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  automationTaskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  runGraphId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type sessionCountOrderByAggregateInput = {
@@ -636,6 +682,8 @@ export type sessionCountOrderByAggregateInput = {
   planItemId?: Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrder
   appId?: Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrder
+  runGraphId?: Prisma.SortOrder
 }
 
 export type sessionAvgOrderByAggregateInput = {
@@ -649,6 +697,8 @@ export type sessionAvgOrderByAggregateInput = {
   planItemId?: Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrder
   appId?: Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrder
+  runGraphId?: Prisma.SortOrder
 }
 
 export type sessionMaxOrderByAggregateInput = {
@@ -671,6 +721,8 @@ export type sessionMaxOrderByAggregateInput = {
   planItemId?: Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrder
   appId?: Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrder
+  runGraphId?: Prisma.SortOrder
 }
 
 export type sessionMinOrderByAggregateInput = {
@@ -693,6 +745,8 @@ export type sessionMinOrderByAggregateInput = {
   planItemId?: Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrder
   appId?: Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrder
+  runGraphId?: Prisma.SortOrder
 }
 
 export type sessionSumOrderByAggregateInput = {
@@ -706,6 +760,8 @@ export type sessionSumOrderByAggregateInput = {
   planItemId?: Prisma.SortOrder
   lastReadMessageId?: Prisma.SortOrder
   appId?: Prisma.SortOrder
+  automationTaskId?: Prisma.SortOrder
+  runGraphId?: Prisma.SortOrder
 }
 
 
@@ -730,6 +786,8 @@ export type sessionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   planItemId?: boolean
   lastReadMessageId?: boolean
   appId?: boolean
+  automationTaskId?: boolean
+  runGraphId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -752,6 +810,8 @@ export type sessionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   planItemId?: boolean
   lastReadMessageId?: boolean
   appId?: boolean
+  automationTaskId?: boolean
+  runGraphId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -774,6 +834,8 @@ export type sessionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   planItemId?: boolean
   lastReadMessageId?: boolean
   appId?: boolean
+  automationTaskId?: boolean
+  runGraphId?: boolean
 }, ExtArgs["result"]["session"]>
 
 export type sessionSelectScalar = {
@@ -796,9 +858,11 @@ export type sessionSelectScalar = {
   planItemId?: boolean
   lastReadMessageId?: boolean
   appId?: boolean
+  automationTaskId?: boolean
+  runGraphId?: boolean
 }
 
-export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "scenario" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt" | "userId" | "planItemId" | "lastReadMessageId" | "appId", ExtArgs["result"]["session"]>
+export type sessionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "workspaceId" | "assistantId" | "currentModelId" | "title" | "mode" | "scenario" | "pinnedAt" | "archivedAt" | "projectId" | "summary" | "compactedUpToId" | "createdAt" | "updatedAt" | "lastMessageAt" | "userId" | "planItemId" | "lastReadMessageId" | "appId" | "automationTaskId" | "runGraphId", ExtArgs["result"]["session"]>
 
 export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "session"
@@ -830,6 +894,11 @@ export type $sessionPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * 收窄到 appDefinition.graphIds（run/list/create 作用域）
      */
     appId: number | null
+    /**
+     * 自动化/顶层图运行会话的稳定聚合归属；普通会话均为空
+     */
+    automationTaskId: number | null
+    runGraphId: number | null
   }, ExtArgs["result"]["session"]>
   composites: {}
 }
@@ -1272,6 +1341,8 @@ export interface sessionFieldRefs {
   readonly planItemId: Prisma.FieldRef<"session", 'Int'>
   readonly lastReadMessageId: Prisma.FieldRef<"session", 'Int'>
   readonly appId: Prisma.FieldRef<"session", 'Int'>
+  readonly automationTaskId: Prisma.FieldRef<"session", 'Int'>
+  readonly runGraphId: Prisma.FieldRef<"session", 'Int'>
 }
     
 

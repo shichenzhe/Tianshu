@@ -48,6 +48,7 @@ import {
   taskFinishedEvent,
 } from "./automation-event-bus";
 import { emitAutomationChanged } from "./automation-change-bus";
+import { clearRunSessionOwners } from "./run-session-owner";
 
 type TaskRow = NonNullable<
   Awaited<ReturnType<typeof prisma.automationTask.findFirst>>
@@ -462,13 +463,14 @@ export default class AutomationRepository {
         select: { id: true },
       })
     ).map((row) => row.id);
-    await prisma.$transaction([
-      prisma.graphRunNode.deleteMany({ where: { runId: { in: runIds } } }),
-      prisma.automationRun.deleteMany({
+    await prisma.$transaction(async (tx) => {
+      await clearRunSessionOwners(tx, runIds);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
+      await tx.automationRun.deleteMany({
         where: { taskId: { in: ownedIds } },
-      }),
-      prisma.automationTask.deleteMany({ where: { id: { in: ownedIds } } }),
-    ]);
+      });
+      await tx.automationTask.deleteMany({ where: { id: { in: ownedIds } } });
+    });
     return ownedIds;
   }
 

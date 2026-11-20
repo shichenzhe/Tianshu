@@ -144,10 +144,15 @@ model session {
   /// 应用绑定（切片 C 2026-10-29）：null=普通会话；绑定后工作流工具面
   /// 收窄到 appDefinition.graphIds（run/list/create 作用域）
   appId Int?
+  /// 自动化/顶层图运行会话的稳定聚合归属；普通会话均为空
+  automationTaskId Int?
+  runGraphId      Int?
 
   @@index([projectId], map: "session_projectId_index")
   @@index([userId], map: "session_userId_index")
   @@index([workspaceId], map: "session_workspaceId_index")
+  @@index([automationTaskId])
+  @@index([runGraphId])
 }
 
 model message {
@@ -258,7 +263,8 @@ model automationTask {
 model automationRun {
   id               Int       @id @default(autoincrement())
   taskId           Int?
-  sessionId        Int?
+  sessionId        Int?      @unique
+  workspaceId      Int?
   attempt          Int       @default(1)
   triggerType      String
   status           String

@@ -35,7 +35,7 @@ const prismaMock = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   message: { deleteMany: vi.fn() },
-  session: { deleteMany: vi.fn() },
+  session: { deleteMany: vi.fn(), findMany: vi.fn() },
 }));
 
 vi.mock("../../electron/generated/prisma/client", () => ({
@@ -55,9 +55,10 @@ describe("cleanupGraphRunSessions", () => {
 
   it("图运行会话连带消息删除、run.sessionId 置 null", async () => {
     prismaMock.automationRun.findMany.mockResolvedValue([
-      { sessionId: 11 },
-      { sessionId: 12 },
+      { id: 1, sessionId: 11 },
+      { id: 2, sessionId: 12 },
     ]);
+    prismaMock.session.findMany.mockResolvedValue([{ id: 11 }, { id: 12 }]);
     await cleanupGraphRunSessions();
     expect(prismaMock.message.deleteMany).toHaveBeenCalledWith({
       where: { sessionId: { in: [11, 12] } },
@@ -66,7 +67,36 @@ describe("cleanupGraphRunSessions", () => {
       where: { id: { in: [11, 12] } },
     });
     expect(prismaMock.automationRun.updateMany).toHaveBeenCalledWith({
-      where: { graphId: { not: null }, sessionId: { not: null } },
+      where: { id: { in: [1, 2] } },
+      data: { sessionId: null },
+    });
+  });
+
+  it("已有运行分组的 graph 伴随会话不属于旧迁移，会话和 run 链接均保留", async () => {
+    prismaMock.automationRun.findMany.mockResolvedValue([
+      { id: 1, sessionId: 11 },
+      { id: 2, sessionId: 12 },
+    ]);
+    prismaMock.session.findMany.mockResolvedValue([{ id: 11 }]);
+
+    await cleanupGraphRunSessions();
+
+    expect(prismaMock.session.findMany).toHaveBeenCalledWith({
+      where: {
+        id: { in: [11, 12] },
+        automationTaskId: null,
+        runGraphId: null,
+      },
+      select: { id: true },
+    });
+    expect(prismaMock.message.deleteMany).toHaveBeenCalledWith({
+      where: { sessionId: { in: [11] } },
+    });
+    expect(prismaMock.session.deleteMany).toHaveBeenCalledWith({
+      where: { id: { in: [11] } },
+    });
+    expect(prismaMock.automationRun.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [1] } },
       data: { sessionId: null },
     });
   });

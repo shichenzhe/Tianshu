@@ -8,6 +8,7 @@ import { ensureTianshuData } from "./tianshu-data";
 // 副作用导入：statement 缓存补丁须在 adapter 创建 Database 实例前生效
 // （Node 24 代运行时 Statement GC finalizer 竞态崩溃，详见补丁文件头注释）
 import "./sqlite-stmt-cache";
+import { backfillRunSessionOwners } from "../domains/ai/automation/run-session-owner";
 
 // 判断当前环境是否是开发环境
 const isDevelopment = !app.isPackaged;
@@ -170,22 +171,41 @@ export async function ensureGraphRunNodeTable(): Promise<void> {
 export async function cleanupGraphRunSessions(): Promise<void> {
   const runs = await prisma.automationRun.findMany({
     where: { graphId: { not: null }, sessionId: { not: null } },
-    select: { sessionId: true },
+    select: { id: true, sessionId: true },
     distinct: ["sessionId"],
   });
   const sessionIds = runs
     .map((r) => r.sessionId)
     .filter((id): id is number => id !== null);
   if (sessionIds.length > 0) {
-    await prisma.message.deleteMany({
-      where: { sessionId: { in: sessionIds } },
+    // 新模型下带分组列的是用户伴随会话，不属于 2026-10-28 旧图会话清理。
+    const legacySessions = await prisma.session.findMany({
+      where: {
+        id: { in: sessionIds },
+        automationTaskId: null,
+        runGraphId: null,
+      },
+      select: { id: true },
     });
-    await prisma.session.deleteMany({ where: { id: { in: sessionIds } } });
-    await prisma.automationRun.updateMany({
-      where: { graphId: { not: null }, sessionId: { not: null } },
-      data: { sessionId: null },
-    });
+    const legacyIds = legacySessions.map((session) => session.id);
+    if (legacyIds.length > 0) {
+      const legacyRunIds = runs
+        .filter(
+          (run) => run.sessionId !== null && legacyIds.includes(run.sessionId),
+        )
+        .map((run) => run.id);
+      await prisma.message.deleteMany({
+        where: { sessionId: { in: legacyIds } },
+      });
+      await prisma.session.deleteMany({ where: { id: { in: legacyIds } } });
+      await prisma.automationRun.updateMany({
+        where: { id: { in: legacyRunIds } },
+        data: { sessionId: null },
+      });
+    }
   }
+  // 同在 initDatabase 后执行的存量数据迁移：只回填仍可反查任务的 prompt 会话。
+  await backfillRunSessionOwners(prisma);
 }
 
 /**

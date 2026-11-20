@@ -353,6 +353,7 @@ async function createRunRow(params: GraphRunParams): Promise<number> {
     data: {
       taskId: params.task?.id ?? null,
       graphId: params.graph.id,
+      workspaceId: params.workspace.id,
       attempt: params.attempt,
       triggerType: params.triggerType,
       status: "running",

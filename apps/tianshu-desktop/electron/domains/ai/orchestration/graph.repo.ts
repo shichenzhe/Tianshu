@@ -49,6 +49,7 @@ import { executeGraphRun, polishNodePrompt } from "./graph-executor";
 import { listGraphTemplates, type GraphTemplate } from "./graph-templates";
 import { graphTestInflight } from "./graph-inflight";
 import { publishAutomationEvent } from "../automation/automation-event-bus";
+import { clearRunSessionOwners } from "../automation/run-session-owner";
 
 type GraphRow = NonNullable<
   Awaited<ReturnType<typeof prisma.graphDefinition.findFirst>>
@@ -799,11 +800,12 @@ export default class GraphRepository {
         select: { id: true },
       })
     ).map((row) => row.id);
-    await prisma.$transaction([
-      prisma.graphRunNode.deleteMany({ where: { runId: { in: runIds } } }),
-      prisma.automationRun.deleteMany({ where: { graphId: id } }),
-      prisma.graphDefinition.deleteMany({ where: { id, userId } }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await clearRunSessionOwners(tx, runIds);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
+      await tx.automationRun.deleteMany({ where: { graphId: id } });
+      await tx.graphDefinition.deleteMany({ where: { id, userId } });
+    });
   }
 
   private async toggleGraph(

@@ -43,7 +43,7 @@ const prismaStub = vi.hoisted(() => ({
     count: vi.fn(),
     findFirst: vi.fn(),
   },
-  automationRun: { updateMany: vi.fn() },
+  automationRun: { updateMany: vi.fn(), findMany: vi.fn(async () => []) },
   // $transaction 数组形态：顺序执行（deleteSession 原子清理用）
   $transaction: vi.fn(async (ops: Array<Promise<unknown>>) => {
     for (const op of ops) {
@@ -239,6 +239,8 @@ describe("SessionRepository v5 扩展", () => {
           workspaceId: 30,
           projectId: 11,
           planItemId: 55,
+          automationTaskId: null,
+          runGraphId: null,
           assistantId: undefined,
           scenario: null,
           currentModelId: undefined,

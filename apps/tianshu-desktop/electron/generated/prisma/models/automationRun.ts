@@ -30,6 +30,7 @@ export type AutomationRunAvgAggregateOutputType = {
   id: number | null
   taskId: number | null
   sessionId: number | null
+  workspaceId: number | null
   attempt: number | null
   durationMs: number | null
   promptTokens: number | null
@@ -41,6 +42,7 @@ export type AutomationRunSumAggregateOutputType = {
   id: number | null
   taskId: number | null
   sessionId: number | null
+  workspaceId: number | null
   attempt: number | null
   durationMs: number | null
   promptTokens: number | null
@@ -52,6 +54,7 @@ export type AutomationRunMinAggregateOutputType = {
   id: number | null
   taskId: number | null
   sessionId: number | null
+  workspaceId: number | null
   attempt: number | null
   triggerType: string | null
   status: string | null
@@ -70,6 +73,7 @@ export type AutomationRunMaxAggregateOutputType = {
   id: number | null
   taskId: number | null
   sessionId: number | null
+  workspaceId: number | null
   attempt: number | null
   triggerType: string | null
   status: string | null
@@ -88,6 +92,7 @@ export type AutomationRunCountAggregateOutputType = {
   id: number
   taskId: number
   sessionId: number
+  workspaceId: number
   attempt: number
   triggerType: number
   status: number
@@ -108,6 +113,7 @@ export type AutomationRunAvgAggregateInputType = {
   id?: true
   taskId?: true
   sessionId?: true
+  workspaceId?: true
   attempt?: true
   durationMs?: true
   promptTokens?: true
@@ -119,6 +125,7 @@ export type AutomationRunSumAggregateInputType = {
   id?: true
   taskId?: true
   sessionId?: true
+  workspaceId?: true
   attempt?: true
   durationMs?: true
   promptTokens?: true
@@ -130,6 +137,7 @@ export type AutomationRunMinAggregateInputType = {
   id?: true
   taskId?: true
   sessionId?: true
+  workspaceId?: true
   attempt?: true
   triggerType?: true
   status?: true
@@ -148,6 +156,7 @@ export type AutomationRunMaxAggregateInputType = {
   id?: true
   taskId?: true
   sessionId?: true
+  workspaceId?: true
   attempt?: true
   triggerType?: true
   status?: true
@@ -166,6 +175,7 @@ export type AutomationRunCountAggregateInputType = {
   id?: true
   taskId?: true
   sessionId?: true
+  workspaceId?: true
   attempt?: true
   triggerType?: true
   status?: true
@@ -271,6 +281,7 @@ export type AutomationRunGroupByOutputType = {
   id: number
   taskId: number | null
   sessionId: number | null
+  workspaceId: number | null
   attempt: number
   triggerType: string
   status: string
@@ -312,6 +323,7 @@ export type automationRunWhereInput = {
   id?: Prisma.IntFilter<"automationRun"> | number
   taskId?: Prisma.IntNullableFilter<"automationRun"> | number | null
   sessionId?: Prisma.IntNullableFilter<"automationRun"> | number | null
+  workspaceId?: Prisma.IntNullableFilter<"automationRun"> | number | null
   attempt?: Prisma.IntFilter<"automationRun"> | number
   triggerType?: Prisma.StringFilter<"automationRun"> | string
   status?: Prisma.StringFilter<"automationRun"> | string
@@ -330,6 +342,7 @@ export type automationRunOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionId?: Prisma.SortOrderInput | Prisma.SortOrder
+  workspaceId?: Prisma.SortOrderInput | Prisma.SortOrder
   attempt?: Prisma.SortOrder
   triggerType?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -346,11 +359,12 @@ export type automationRunOrderByWithRelationInput = {
 
 export type automationRunWhereUniqueInput = Prisma.AtLeast<{
   id?: number
+  sessionId?: number
   AND?: Prisma.automationRunWhereInput | Prisma.automationRunWhereInput[]
   OR?: Prisma.automationRunWhereInput[]
   NOT?: Prisma.automationRunWhereInput | Prisma.automationRunWhereInput[]
   taskId?: Prisma.IntNullableFilter<"automationRun"> | number | null
-  sessionId?: Prisma.IntNullableFilter<"automationRun"> | number | null
+  workspaceId?: Prisma.IntNullableFilter<"automationRun"> | number | null
   attempt?: Prisma.IntFilter<"automationRun"> | number
   triggerType?: Prisma.StringFilter<"automationRun"> | string
   status?: Prisma.StringFilter<"automationRun"> | string
@@ -363,12 +377,13 @@ export type automationRunWhereUniqueInput = Prisma.AtLeast<{
   error?: Prisma.StringNullableFilter<"automationRun"> | string | null
   startedAt?: Prisma.DateTimeFilter<"automationRun"> | Date | string
   finishedAt?: Prisma.DateTimeNullableFilter<"automationRun"> | Date | string | null
-}, "id">
+}, "id" | "sessionId">
 
 export type automationRunOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrderInput | Prisma.SortOrder
   sessionId?: Prisma.SortOrderInput | Prisma.SortOrder
+  workspaceId?: Prisma.SortOrderInput | Prisma.SortOrder
   attempt?: Prisma.SortOrder
   triggerType?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -395,6 +410,7 @@ export type automationRunScalarWhereWithAggregatesInput = {
   id?: Prisma.IntWithAggregatesFilter<"automationRun"> | number
   taskId?: Prisma.IntNullableWithAggregatesFilter<"automationRun"> | number | null
   sessionId?: Prisma.IntNullableWithAggregatesFilter<"automationRun"> | number | null
+  workspaceId?: Prisma.IntNullableWithAggregatesFilter<"automationRun"> | number | null
   attempt?: Prisma.IntWithAggregatesFilter<"automationRun"> | number
   triggerType?: Prisma.StringWithAggregatesFilter<"automationRun"> | string
   status?: Prisma.StringWithAggregatesFilter<"automationRun"> | string
@@ -412,6 +428,7 @@ export type automationRunScalarWhereWithAggregatesInput = {
 export type automationRunCreateInput = {
   taskId?: number | null
   sessionId?: number | null
+  workspaceId?: number | null
   attempt?: number
   triggerType: string
   status: string
@@ -430,6 +447,7 @@ export type automationRunUncheckedCreateInput = {
   id?: number
   taskId?: number | null
   sessionId?: number | null
+  workspaceId?: number | null
   attempt?: number
   triggerType: string
   status: string
@@ -447,6 +465,7 @@ export type automationRunUncheckedCreateInput = {
 export type automationRunUpdateInput = {
   taskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   sessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  workspaceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempt?: Prisma.IntFieldUpdateOperationsInput | number
   triggerType?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -465,6 +484,7 @@ export type automationRunUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   taskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   sessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  workspaceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempt?: Prisma.IntFieldUpdateOperationsInput | number
   triggerType?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -483,6 +503,7 @@ export type automationRunCreateManyInput = {
   id?: number
   taskId?: number | null
   sessionId?: number | null
+  workspaceId?: number | null
   attempt?: number
   triggerType: string
   status: string
@@ -500,6 +521,7 @@ export type automationRunCreateManyInput = {
 export type automationRunUpdateManyMutationInput = {
   taskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   sessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  workspaceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempt?: Prisma.IntFieldUpdateOperationsInput | number
   triggerType?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -518,6 +540,7 @@ export type automationRunUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number
   taskId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   sessionId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  workspaceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   attempt?: Prisma.IntFieldUpdateOperationsInput | number
   triggerType?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.StringFieldUpdateOperationsInput | string
@@ -536,6 +559,7 @@ export type automationRunCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  workspaceId?: Prisma.SortOrder
   attempt?: Prisma.SortOrder
   triggerType?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -554,6 +578,7 @@ export type automationRunAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  workspaceId?: Prisma.SortOrder
   attempt?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
   promptTokens?: Prisma.SortOrder
@@ -565,6 +590,7 @@ export type automationRunMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  workspaceId?: Prisma.SortOrder
   attempt?: Prisma.SortOrder
   triggerType?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -583,6 +609,7 @@ export type automationRunMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  workspaceId?: Prisma.SortOrder
   attempt?: Prisma.SortOrder
   triggerType?: Prisma.SortOrder
   status?: Prisma.SortOrder
@@ -601,6 +628,7 @@ export type automationRunSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   taskId?: Prisma.SortOrder
   sessionId?: Prisma.SortOrder
+  workspaceId?: Prisma.SortOrder
   attempt?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
   promptTokens?: Prisma.SortOrder
@@ -614,6 +642,7 @@ export type automationRunSelect<ExtArgs extends runtime.Types.Extensions.Interna
   id?: boolean
   taskId?: boolean
   sessionId?: boolean
+  workspaceId?: boolean
   attempt?: boolean
   triggerType?: boolean
   status?: boolean
@@ -632,6 +661,7 @@ export type automationRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   id?: boolean
   taskId?: boolean
   sessionId?: boolean
+  workspaceId?: boolean
   attempt?: boolean
   triggerType?: boolean
   status?: boolean
@@ -650,6 +680,7 @@ export type automationRunSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   id?: boolean
   taskId?: boolean
   sessionId?: boolean
+  workspaceId?: boolean
   attempt?: boolean
   triggerType?: boolean
   status?: boolean
@@ -668,6 +699,7 @@ export type automationRunSelectScalar = {
   id?: boolean
   taskId?: boolean
   sessionId?: boolean
+  workspaceId?: boolean
   attempt?: boolean
   triggerType?: boolean
   status?: boolean
@@ -682,7 +714,7 @@ export type automationRunSelectScalar = {
   finishedAt?: boolean
 }
 
-export type automationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "taskId" | "sessionId" | "attempt" | "triggerType" | "status" | "durationMs" | "promptTokens" | "completionTokens" | "graphId" | "graphTrace" | "graphJsonSnapshot" | "error" | "startedAt" | "finishedAt", ExtArgs["result"]["automationRun"]>
+export type automationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "taskId" | "sessionId" | "workspaceId" | "attempt" | "triggerType" | "status" | "durationMs" | "promptTokens" | "completionTokens" | "graphId" | "graphTrace" | "graphJsonSnapshot" | "error" | "startedAt" | "finishedAt", ExtArgs["result"]["automationRun"]>
 
 export type $automationRunPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "automationRun"
@@ -691,6 +723,7 @@ export type $automationRunPayload<ExtArgs extends runtime.Types.Extensions.Inter
     id: number
     taskId: number | null
     sessionId: number | null
+    workspaceId: number | null
     attempt: number
     triggerType: string
     status: string
@@ -1129,6 +1162,7 @@ export interface automationRunFieldRefs {
   readonly id: Prisma.FieldRef<"automationRun", 'Int'>
   readonly taskId: Prisma.FieldRef<"automationRun", 'Int'>
   readonly sessionId: Prisma.FieldRef<"automationRun", 'Int'>
+  readonly workspaceId: Prisma.FieldRef<"automationRun", 'Int'>
   readonly attempt: Prisma.FieldRef<"automationRun", 'Int'>
   readonly triggerType: Prisma.FieldRef<"automationRun", 'String'>
   readonly status: Prisma.FieldRef<"automationRun", 'String'>

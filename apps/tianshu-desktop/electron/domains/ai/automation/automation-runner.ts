@@ -167,6 +167,7 @@ async function createRunningRun(
   return prisma.automationRun.create({
     data: {
       taskId: task.id,
+      workspaceId: task.workspaceId,
       attempt: opts.attempt,
       triggerType: opts.triggerType,
       status: "running",
@@ -322,6 +323,7 @@ async function createSession(task: AutomationTaskRow): Promise<number> {
   const session = await prisma.session.create({
     data: {
       workspaceId: task.workspaceId,
+      automationTaskId: task.id,
       currentModelId: task.modelId,
       title: task.name,
       mode: "agent",

@@ -186,6 +186,7 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
       const runId = await graphs.createRun({
         taskId: null,
         graphId: row.id,
+        workspaceId: fixture.workspaceId,
         attempt: 1,
         triggerType: 'manual',
         graphJsonSnapshot: row.graphJson,
@@ -258,6 +259,7 @@ describe('GraphRepository / AutomationRepository（GA-T3 摘表副本）', () =>
       const runId = await graphs.createRun({
         taskId: null,
         graphId: target.id,
+        workspaceId: fixture.workspaceId,
         attempt: 1,
         triggerType: 'manual',
         graphJsonSnapshot: target.graphJson,

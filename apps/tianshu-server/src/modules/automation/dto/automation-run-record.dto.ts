@@ -26,6 +26,9 @@ export class AutomationRunRecordDto implements AutomationRunRecord {
   })
   graphId?: number;
 
+  @ApiProperty({ description: '实际执行工作空间 id', required: false })
+  workspaceId?: number;
+
   @ApiProperty({ description: '会话标识', required: false })
   sessionId?: number;
 
@@ -34,7 +37,15 @@ export class AutomationRunRecordDto implements AutomationRunRecord {
 
   @ApiProperty({
     description: '触发类型',
-    enum: ['schedule', 'catchUp', 'retry', 'manual', 'event', 'subflow', 'webhook'],
+    enum: [
+      'schedule',
+      'catchUp',
+      'retry',
+      'manual',
+      'event',
+      'subflow',
+      'webhook',
+    ],
   })
   triggerType: AutomationRunRecord['triggerType'];
 
@@ -59,7 +70,10 @@ export class AutomationRunRecordDto implements AutomationRunRecord {
   @ApiProperty({ description: '开始时间（ISO）' })
   startedAt: string;
 
-  @ApiProperty({ description: '结束时间（ISO，运行中为 null）', required: false })
+  @ApiProperty({
+    description: '结束时间（ISO，运行中为 null）',
+    required: false,
+  })
   finishedAt?: string;
 }
 

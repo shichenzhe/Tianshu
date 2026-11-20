@@ -493,6 +493,27 @@ describeSdk('SDK 生成契约 ↔ @tianshu/protocol 手写契约（SK-2）', () 
       );
     });
 
+    it('运行会话端点与 session 新字段保持数值 wire 契约', () => {
+      expect(openapi.paths['/automation/runGroups']?.post).toBeDefined();
+      expect(openapi.paths['/automation/runById']?.post).toBeDefined();
+      const session = openapi.components.schemas['SessionWireDto'];
+      for (const field of [
+        'automationTaskId',
+        'runGraphId',
+        'automationRunId',
+      ]) {
+        expect(session.properties?.[field]).toMatchObject({
+          type: 'number',
+          nullable: true,
+        });
+      }
+      const detail = mergedProperties(
+        openapi,
+        openapi.components.schemas['AutomationRunDetailDto'],
+      );
+      expect(detail.graphTrace).toMatchObject({ type: 'string' });
+    });
+
     it('requiredness：send 必填 sessionId/content；approve 三字段全必填；bridge 仅 ok（output/error 为 ValidateIf 条件字段）', () => {
       const send = openapi.components.schemas['SessionSendDto'];
       expect(send.required).toHaveLength(2);

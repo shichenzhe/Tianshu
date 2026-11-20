@@ -3371,6 +3371,97 @@
         ]
       }
     },
+    "/automation/runGroups": {
+      "post": {
+        "operationId": "AutomationController_runGroups",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunGroupRecordDto"
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "查询固定运行分组（latestRun 不含轨迹/快照）",
+        "tags": [
+          "自动化"
+        ]
+      }
+    },
+    "/automation/runById": {
+      "post": {
+        "operationId": "AutomationController_runById",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunIdDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/AutomationRunDetailDto"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "按 id 查询本人运行详情（保留 graphTrace）",
+        "tags": [
+          "自动化"
+        ]
+      }
+    },
     "/automation/runNodes": {
       "post": {
         "operationId": "AutomationController_runNodes",
@@ -5762,6 +5853,21 @@
             "description": "已读游标（message.id；null=全新未读）",
             "nullable": true
           },
+          "automationTaskId": {
+            "type": "number",
+            "description": "自动化任务分组 id",
+            "nullable": true
+          },
+          "runGraphId": {
+            "type": "number",
+            "description": "顶层工作流分组 id",
+            "nullable": true
+          },
+          "automationRunId": {
+            "type": "number",
+            "description": "关联运行 id（查询期派生）",
+            "nullable": true
+          },
           "unreadCount": {
             "type": "number",
             "description": "未读数（查询期动态算）"
@@ -5791,6 +5897,9 @@
           "userId",
           "planItemId",
           "lastReadMessageId",
+          "automationTaskId",
+          "runGraphId",
+          "automationRunId",
           "unreadCount",
           "lastMessage"
         ]
@@ -5882,6 +5991,21 @@
             "type": "number",
             "description": "已读游标（message.id；null=全新未读）",
             "nullable": true
+          },
+          "automationTaskId": {
+            "type": "number",
+            "description": "自动化任务分组 id",
+            "nullable": true
+          },
+          "runGraphId": {
+            "type": "number",
+            "description": "顶层工作流分组 id",
+            "nullable": true
+          },
+          "automationRunId": {
+            "type": "number",
+            "description": "关联运行 id（查询期派生）",
+            "nullable": true
           }
         },
         "required": [
@@ -5902,7 +6026,10 @@
           "lastMessageAt",
           "userId",
           "planItemId",
-          "lastReadMessageId"
+          "lastReadMessageId",
+          "automationTaskId",
+          "runGraphId",
+          "automationRunId"
         ]
       },
       "MessageBriefDto": {
@@ -7353,6 +7480,10 @@
             "type": "number",
             "description": "关联编排图（图运行；prompt 任务 run 无此字段）"
           },
+          "workspaceId": {
+            "type": "number",
+            "description": "实际执行工作空间 id"
+          },
           "sessionId": {
             "type": "number",
             "description": "会话标识"
@@ -7538,6 +7669,148 @@
           "outputImage",
           "errorOutput",
           "fallbackJson"
+        ]
+      },
+      "AutomationRunDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "运行标识"
+          },
+          "taskId": {
+            "type": "number",
+            "description": "任务标识（图试运行为 null，taskName 取图名）",
+            "nullable": true
+          },
+          "taskName": {
+            "type": "string",
+            "description": "任务名（图试运行取图名）"
+          },
+          "graphId": {
+            "type": "number",
+            "description": "关联编排图（图运行；prompt 任务 run 无此字段）"
+          },
+          "workspaceId": {
+            "type": "number",
+            "description": "实际执行工作空间 id"
+          },
+          "sessionId": {
+            "type": "number",
+            "description": "会话标识"
+          },
+          "attempt": {
+            "type": "number",
+            "description": "尝试序号"
+          },
+          "triggerType": {
+            "type": "string",
+            "description": "触发类型",
+            "enum": [
+              "schedule",
+              "catchUp",
+              "retry",
+              "manual",
+              "event",
+              "subflow",
+              "webhook"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "运行状态",
+            "enum": [
+              "running",
+              "success",
+              "failed",
+              "skipped"
+            ]
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "耗时（ms）"
+          },
+          "promptTokens": {
+            "type": "number",
+            "description": "提示词 tokens"
+          },
+          "completionTokens": {
+            "type": "number",
+            "description": "补全 tokens"
+          },
+          "error": {
+            "type": "string",
+            "description": "错误信息"
+          },
+          "startedAt": {
+            "type": "string",
+            "description": "开始时间（ISO）"
+          },
+          "finishedAt": {
+            "type": "string",
+            "description": "结束时间（ISO，运行中为 null）"
+          },
+          "graphTrace": {
+            "type": "string",
+            "description": "完整图运行轨迹 JSON"
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "taskName",
+          "attempt",
+          "triggerType",
+          "status",
+          "startedAt"
+        ]
+      },
+      "RunGroupRecordDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "分组类型",
+            "enum": [
+              "task",
+              "graph"
+            ]
+          },
+          "ownerId": {
+            "type": "number",
+            "description": "任务或图 id（按 kind 分命名空间）"
+          },
+          "name": {
+            "type": "string",
+            "description": "任务或图当前名称"
+          },
+          "workspaceId": {
+            "type": "number",
+            "description": "工作空间 id"
+          },
+          "projectId": {
+            "type": "number",
+            "description": "项目 id",
+            "nullable": true
+          },
+          "latestRun": {
+            "description": "最近运行摘要（不含轨迹与图快照）",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutomationRunRecordDto"
+              }
+            ]
+          },
+          "hasRuns": {
+            "type": "boolean",
+            "description": "是否存在可见运行"
+          }
+        },
+        "required": [
+          "kind",
+          "ownerId",
+          "name",
+          "hasRuns"
         ]
       },
       "AutomationQueryDto": {

@@ -17,9 +17,13 @@ import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 /** 默认工作空间名（伴生单用户模式，无项目体系） */
 const DEFAULT_WORKSPACE_NAME = 'default';
 
+export type SessionWireRecord = SessionRecord & {
+  automationRunId: number | null;
+};
+
 /** P1 未读角标批：会话行 + 查询期动态计算的未读角标/末条摘要（不落盘，
  *  非 Prisma 行——经 query/getSessionSummary 产出） */
-export type SessionSummaryRecord = SessionRecord & {
+export type SessionSummaryRecord = SessionWireRecord & {
   unreadCount: number;
   lastMessage: SessionLastMessage | null;
 };
@@ -31,6 +35,8 @@ export interface SessionCreateParams {
   title: string;
   assistantId?: number | null;
   currentModelId?: number | null;
+  automationTaskId?: number | null;
+  runGraphId?: number | null;
 }
 
 /**
@@ -130,17 +136,24 @@ export class SessionRepository {
   /**
    * 创建会话
    */
-  async create(params: SessionCreateParams): Promise<SessionRecord> {
-    return await this.prisma.sessionRecord.create({ data: params });
+  async create(params: SessionCreateParams): Promise<SessionWireRecord> {
+    const row = await this.prisma.sessionRecord.create({ data: params });
+    return { ...row, automationRunId: null };
   }
 
   /**
    * 按归属查会话
    */
-  async findById(id: number, userId: number): Promise<SessionRecord | null> {
-    return await this.prisma.sessionRecord.findFirst({
+  async findById(
+    id: number,
+    userId: number,
+  ): Promise<SessionWireRecord | null> {
+    const row = await this.prisma.sessionRecord.findFirst({
       where: { id, userId },
     });
+    if (!row) return null;
+    const [enriched] = await this.withAutomationRunIds([row]);
+    return enriched ?? null;
   }
 
   /** 会话字段更新（重命名/模式切换/归档共用；归属先行校验） */
@@ -265,24 +278,43 @@ export class SessionRepository {
     });
   }
 
-  /** 会话行批量 enrich：恒定两条聚合——①groupBy 各会话末条 message id
-   *  一次性取行 summarizeLastMessage；②单条 groupBy 按会话分组计未读
-   *  （OR 逐会话一分支：NULL 游标 bare {sessionId} 计全量，有游标
-   *  {sessionId, id>cursor}——sessionId 分支内唯一，分组计数精确无交叉） */
+  /** 会话行批量 enrich：恒定三条聚合——运行 id 映射、末条消息与未读数，
+   *  禁逐行反查。末条/未读沿用 groupBy 批量补算（OR 各游标分支）。 */
   private async enrichRecords(
     rows: SessionRecord[],
   ): Promise<SessionSummaryRecord[]> {
     if (rows.length === 0) {
       return [];
     }
-    const [lastById, unreadById] = await Promise.all([
+    const [withRunIds, lastById, unreadById] = await Promise.all([
+      this.withAutomationRunIds(rows),
       this.fetchLastMessages(rows.map((row) => row.id)),
       this.countUnreadBySessions(rows),
     ]);
-    return rows.map((row) => ({
+    return withRunIds.map((row) => ({
       ...row,
       unreadCount: unreadById.get(row.id) ?? 0,
       lastMessage: lastById.get(row.id) ?? null,
+    }));
+  }
+
+  /** 批量补派生 run id；唯一 sessionId 使每个会话至多一条映射。 */
+  private async withAutomationRunIds(
+    rows: SessionRecord[],
+  ): Promise<SessionWireRecord[]> {
+    if (rows.length === 0) return [];
+    const runs = await this.prisma.automationRun.findMany({
+      where: { sessionId: { in: rows.map((row) => row.id) } },
+      select: { id: true, sessionId: true },
+    });
+    const runIds = new Map(
+      runs.flatMap((run) =>
+        run.sessionId === null ? [] : [[run.sessionId, run.id] as const],
+      ),
+    );
+    return rows.map((row) => ({
+      ...row,
+      automationRunId: runIds.get(row.id) ?? null,
     }));
   }
 
@@ -353,6 +385,10 @@ export class SessionRepository {
    */
   async delete(id: number): Promise<void> {
     await this.prisma.$transaction([
+      this.prisma.automationRun.updateMany({
+        where: { sessionId: id },
+        data: { sessionId: null },
+      }),
       this.prisma.messageRecord.deleteMany({ where: { sessionId: id } }),
       this.prisma.sessionRecord.delete({ where: { id } }),
     ]);

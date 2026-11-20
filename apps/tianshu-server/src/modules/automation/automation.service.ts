@@ -7,19 +7,23 @@
  */
 import { Injectable } from '@nestjs/common';
 import type {
+  AutomationRunDetail,
   AutomationRunNodeRecord,
   AutomationRunPage,
+  RunGroupRecord,
 } from '@tianshu/protocol';
 import { QueryResult } from 'src/commons/query/query-result';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
+import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 import { AutomationRepository, type TaskRecord } from './automation.repository';
 import { recordAutomationEvent } from './automation-stat';
 import type { AutomationQueryDto } from './dto/automation-query.dto';
 import type { AutomationSaveDto } from './dto/automation-save.dto';
 import type { AutomationRunQueryDto } from './dto/automation-run-query.dto';
+import type { RunIdDto } from './dto/run-id.dto';
 import type { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
 
 @Injectable()
@@ -106,6 +110,18 @@ export class AutomationService {
     );
   }
 
+  async runGroups(): Promise<RunGroupRecord[]> {
+    return await this.repository.listRunGroups(COMPANION_USER_ID);
+  }
+
+  async runById(dto: RunIdDto): Promise<AutomationRunDetail> {
+    const run = await this.repository.findRunById(dto.runId, COMPANION_USER_ID);
+    if (!run) {
+      throw new BusinessException('RUN_NOT_FOUND', ErrorCodeEnum.NOT_FOUND);
+    }
+    return run;
+  }
+
   /** 运行节点详情（移动端执行详情批）：repo listRunNodes 薄层——图 run
    * 节点级执行详情（全文输入/输出/工具调用摘要），prompt run 恒空集 */
   async runNodes(runId: number): Promise<AutomationRunNodeRecord[]> {
@@ -117,7 +133,10 @@ export class AutomationService {
   async statsRaw(dto: AutomationStatsQueryDto) {
     const since = new Date(dto.since);
     if (Number.isNaN(since.getTime())) {
-      throw new BusinessException('since 必须是合法的 ISO 时间', 'AUTOMATION_BAD_SINCE');
+      throw new BusinessException(
+        'since 必须是合法的 ISO 时间',
+        'AUTOMATION_BAD_SINCE',
+      );
     }
     return await this.repository.statsRaw(since, COMPANION_USER_ID);
   }

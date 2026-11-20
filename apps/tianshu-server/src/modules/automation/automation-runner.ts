@@ -58,10 +58,7 @@ import { createChatModel } from '../../core/provider/model-factory';
 import { buildSystemPrompt } from '../../core/skill-prompt';
 import { commandGate } from '../../core/security/command-gate';
 import { fileGate } from '../../core/security/file-gate';
-import {
-  resolveAttachments,
-  defaultResolveDeps,
-} from './resolve-attachments';
+import { resolveAttachments, defaultResolveDeps } from './resolve-attachments';
 import {
   advanceTask,
   collectTools,
@@ -170,6 +167,7 @@ async function createRunningRun(
   return graphExecutorRuntime().db.automationRun.create({
     data: {
       taskId: task.id,
+      workspaceId: task.workspaceId,
       attempt: opts.attempt,
       triggerType: opts.triggerType,
       status: 'running',
@@ -333,6 +331,7 @@ async function createSession(task: AutomationTaskRow): Promise<number> {
       // 归属用户（listAll 按 userId 过滤，漏写则运行历史「查看会话」
       // 跳转找不到会话落空态）
       userId: task.userId ?? null,
+      automationTaskId: task.id,
     },
   });
   return session.id;

@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { SessionRecord } from '@prisma/client';
 import type { SessionLastMessage } from '@tianshu/protocol';
+import type { SessionWireRecord } from '../session.repository';
 
 /**
  * 会话行 wire 响应DTO（SK-R 批）：prisma SessionRecord 序列化形态——
@@ -99,9 +99,30 @@ export class SessionWireDto {
   })
   lastReadMessageId: number | null;
 
+  @ApiProperty({
+    description: '自动化任务分组 id',
+    type: 'number',
+    nullable: true,
+  })
+  automationTaskId: number | null;
+
+  @ApiProperty({
+    description: '顶层工作流分组 id',
+    type: 'number',
+    nullable: true,
+  })
+  runGraphId: number | null;
+
+  @ApiProperty({
+    description: '关联运行 id（查询期派生）',
+    type: 'number',
+    nullable: true,
+  })
+  automationRunId: number | null;
+
   /** prisma 行 → wire（Date 字段 ISO 化；getById 详情组装消费——
    * SessionDetailDto.session 字段类型为 wire 形，运行时与此同形） */
-  static of(row: SessionRecord): SessionWireDto {
+  static of(row: SessionWireRecord): SessionWireDto {
     return {
       ...row,
       pinnedAt: row.pinnedAt?.toISOString() ?? null,
@@ -109,7 +130,7 @@ export class SessionWireDto {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
       lastMessageAt: row.lastMessageAt?.toISOString() ?? null,
-    } as unknown as SessionWireDto;
+    };
   }
 }
 

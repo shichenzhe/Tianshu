@@ -176,10 +176,15 @@ model SessionRecord {
   // P1 未读角标批：已读游标（message.id，全角色 max）——NULL=全新未读；
   // 未读数查询期动态算（cursor 后 role=assistant 条数），单调推进不回退
   lastReadMessageId Int?
+  /// 自动化/顶层图运行会话的稳定聚合归属；普通会话均为空
+  automationTaskId Int?
+  runGraphId      Int?
 
   @@index([projectId], map: "session_projectId_index")
   @@index([userId], map: "session_userId_index")
   @@index([workspaceId], map: "session_workspaceId_index")
+  @@index([automationTaskId], map: "session_automationTaskId_idx")
+  @@index([runGraphId], map: "session_runGraphId_idx")
   @@map("session")
 }
 
@@ -301,7 +306,8 @@ model AutomationTask {
 model AutomationRun {
   id               Int       @id @default(autoincrement())
   taskId           Int?
-  sessionId        Int?
+  sessionId        Int?      @unique
+  workspaceId      Int?
   attempt          Int       @default(1)
   triggerType      String
   status           String

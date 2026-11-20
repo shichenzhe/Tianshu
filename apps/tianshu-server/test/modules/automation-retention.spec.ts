@@ -316,20 +316,26 @@ describe('trimKeep SQL 双引擎方言', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/main';
     const sqls: string[] = [];
     await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
-    // 4 发：成功档 nodes/run + 失败档 nodes/run
-    expect(sqls).toHaveLength(4);
+    // 6 发：成功/失败档各先清会话分组，再删 nodes/run
+    expect(sqls).toHaveLength(6);
     for (const sql of sqls) {
       expect(sql).not.toContain('?');
       expect(sql).toContain('WHERE rn > $1');
     }
-    // nodes 语句（第 1/3 发）：级联面 graphRunNode."runId" + 同窗 automationRun
-    for (const nodesSql of [sqls[0], sqls[2]]) {
+    // 会话分组清理语句（第 1/4 发）先于节点与 run 删除
+    for (const sessionSql of [sqls[0], sqls[3]]) {
+      expect(sessionSql).toContain('UPDATE "session" SET');
+      expect(sessionSql).toContain('"automationTaskId" = NULL');
+      expect(sessionSql).toContain('FROM "automationRun" WHERE');
+    }
+    // nodes 语句（第 2/5 发）：级联面 graphRunNode."runId" + 同窗 automationRun
+    for (const nodesSql of [sqls[1], sqls[4]]) {
       expect(nodesSql).toContain('DELETE FROM "graphRunNode" WHERE "runId" IN');
       expect(nodesSql).toContain('PARTITION BY "taskId"');
       expect(nodesSql).toContain('FROM "automationRun" WHERE');
     }
-    // run 语句（第 2/4 发）：automationRun 直删 + taskId 分区引号
-    for (const runSql of [sqls[1], sqls[3]]) {
+    // run 语句（第 3/6 发）：automationRun 直删 + taskId 分区引号
+    for (const runSql of [sqls[2], sqls[5]]) {
       expect(runSql).toContain('DELETE FROM "automationRun" WHERE id IN');
       expect(runSql).toContain('PARTITION BY "taskId"');
     }
@@ -339,7 +345,17 @@ describe('trimKeep SQL 双引擎方言', () => {
     delete process.env.TIANSHU_DB_URL;
     const sqls: string[] = [];
     await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
-    expect(sqls).toHaveLength(4);
+    expect(sqls).toHaveLength(6);
+    const sqliteSessions = (statusWhere: string) => `
+  UPDATE session SET automationTaskId = NULL, runGraphId = NULL WHERE id IN (
+    SELECT sessionId FROM automationRun WHERE id IN (
+      SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
+        FROM automationRun WHERE ${statusWhere}
+      ) WHERE rn > ?
+    ) AND sessionId IS NOT NULL
+  )
+`;
     const sqliteNodes = (statusWhere: string) => `
   DELETE FROM graphRunNode WHERE runId IN (
     SELECT id FROM (
@@ -356,9 +372,11 @@ describe('trimKeep SQL 双引擎方言', () => {
     ) WHERE rn > ?
   )
 `;
-    expect(sqls[0]).toBe(sqliteNodes("status NOT IN ('failed', 'running')"));
-    expect(sqls[1]).toBe(sqliteRuns("status NOT IN ('failed', 'running')"));
-    expect(sqls[2]).toBe(sqliteNodes("status = 'failed'"));
-    expect(sqls[3]).toBe(sqliteRuns("status = 'failed'"));
+    expect(sqls[0]).toBe(sqliteSessions("status NOT IN ('failed', 'running')"));
+    expect(sqls[1]).toBe(sqliteNodes("status NOT IN ('failed', 'running')"));
+    expect(sqls[2]).toBe(sqliteRuns("status NOT IN ('failed', 'running')"));
+    expect(sqls[3]).toBe(sqliteSessions("status = 'failed'"));
+    expect(sqls[4]).toBe(sqliteNodes("status = 'failed'"));
+    expect(sqls[5]).toBe(sqliteRuns("status = 'failed'"));
   });
 });

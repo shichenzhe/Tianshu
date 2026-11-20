@@ -25,6 +25,7 @@ import { AutomationRun, AutomationTask, Prisma } from '@prisma/client';
 import {
   computeNextRun,
   eventJsonSchema,
+  runOwnerOf,
   scheduleSchema,
   type EventTriggerConfig,
   type ScheduleConfig,
@@ -37,6 +38,7 @@ import type {
   AutomationRunNodeRecord,
   AutomationRunPage,
   AutomationRunRecord,
+  RunGroupRecord,
 } from '@tianshu/protocol';
 import {
   executeTask,
@@ -45,6 +47,7 @@ import {
   type AutomationSafetyOptions,
 } from './automation-runner';
 import { inflight } from './automation-inflight';
+import { clearRunSessionOwners } from './run-session-owner';
 
 /** 可注入依赖（GA-T5 runNow 接线面；生产走 automation.module 工厂装配
  * T6，测试缺省安全侧） */
@@ -68,7 +71,29 @@ const logger = new Logger('automation-repository');
 
 /** DB 行类型（mirror TaskRow/RunRow 同位） */
 type TaskRow = AutomationTask;
-type RunRow = AutomationRun;
+type RunRow = Omit<AutomationRun, 'graphTrace' | 'graphJsonSnapshot'> & {
+  graphTrace?: string | null;
+  graphJsonSnapshot?: string | null;
+};
+
+type RunSummaryRow = Omit<RunRow, 'graphTrace' | 'graphJsonSnapshot'>;
+
+const RUN_SUMMARY_SELECT = {
+  id: true,
+  taskId: true,
+  graphId: true,
+  sessionId: true,
+  workspaceId: true,
+  attempt: true,
+  triggerType: true,
+  status: true,
+  durationMs: true,
+  promptTokens: true,
+  completionTokens: true,
+  error: true,
+  startedAt: true,
+  finishedAt: true,
+} as const;
 
 // ===== 前端契约类型副本（type-only，逐字段自 mirror automation.api.ts）=====
 
@@ -159,6 +184,7 @@ export interface RunRecord {
   taskName: string;
   /** 图运行关联的编排图（prompt 任务 run 无此字段） */
   graphId?: number;
+  workspaceId?: number;
   /** 节点级轨迹 JSON（graphTrace），仅图运行 */
   graphTrace?: string;
   sessionId?: number;
@@ -302,6 +328,7 @@ export function toRunRecord(row: RunRow, taskName: string): RunRecord {
     taskId: row.taskId,
     taskName,
     graphId: row.graphId ?? undefined,
+    workspaceId: row.workspaceId ?? undefined,
     graphTrace: row.graphTrace ?? undefined,
     sessionId: row.sessionId ?? undefined,
     attempt: row.attempt,
@@ -569,15 +596,16 @@ export class AutomationRepository {
         select: { id: true },
       })
     ).map((row) => row.id);
-    await this.prisma.$transaction([
-      this.prisma.graphRunNode.deleteMany({ where: { runId: { in: runIds } } }),
-      this.prisma.automationRun.deleteMany({
+    await this.prisma.$transaction(async (tx) => {
+      await clearRunSessionOwners(tx, runIds);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
+      await tx.automationRun.deleteMany({
         where: { taskId: { in: ownedIds } },
-      }),
-      this.prisma.automationTask.deleteMany({
+      });
+      await tx.automationTask.deleteMany({
         where: { id: { in: ownedIds } },
-      }),
-    ]);
+      });
+    });
     return ownedIds;
   }
 
@@ -674,6 +702,168 @@ export class AutomationRepository {
     };
   }
 
+  /** 固定运行入口：任务全量成组；图仅顶层 run 或伴随会话成组。 */
+  async listRunGroups(userId: number): Promise<RunGroupRecord[]> {
+    const [tasks, graphs] = await Promise.all([
+      this.prisma.automationTask.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          workspaceId: true,
+          projectId: true,
+        },
+      }),
+      this.prisma.graphDefinition.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const [groupedSessions, taskRuns, graphRuns] = await Promise.all([
+      this.listGraphSessions(
+        userId,
+        graphs.map((graph) => graph.id),
+      ),
+      this.latestTaskRuns(tasks.map((task) => task.id)),
+      this.latestGraphRuns(graphs.map((graph) => graph.id)),
+    ]);
+    const taskGroups = tasks.map((task) => ({
+      kind: 'task' as const,
+      ownerId: task.id,
+      name: task.name,
+      workspaceId: task.workspaceId,
+      projectId: task.projectId,
+      latestRun: taskRuns.has(task.id)
+        ? toRunRecordWire(taskRuns.get(task.id)!, task.name)
+        : undefined,
+      hasRuns: taskRuns.has(task.id),
+    }));
+    const graphGroups = graphs.flatMap((graph) => {
+      const latestRun = graphRuns.get(graph.id);
+      const groupedSession = groupedSessions.get(graph.id);
+      if (!latestRun && !groupedSession) return [];
+      return [
+        {
+          kind: 'graph' as const,
+          ownerId: graph.id,
+          name: graph.name,
+          workspaceId: latestRun?.workspaceId ?? groupedSession?.workspaceId,
+          latestRun: latestRun
+            ? toRunRecordWire(latestRun, graph.name)
+            : undefined,
+          hasRuns: latestRun !== undefined,
+        },
+      ];
+    });
+    return [...taskGroups, ...graphGroups].sort(compareRunGroups);
+  }
+
+  private async listGraphSessions(
+    userId: number,
+    graphIds: number[],
+  ): Promise<Map<number, { workspaceId: number }>> {
+    if (graphIds.length === 0) return new Map();
+    const rows = await this.prisma.sessionRecord.findMany({
+      where: { userId, runGraphId: { in: graphIds } },
+      orderBy: { updatedAt: 'desc' },
+      select: { runGraphId: true, workspaceId: true },
+    });
+    const result = new Map<number, { workspaceId: number }>();
+    for (const row of rows) {
+      if (row.runGraphId !== null && !result.has(row.runGraphId)) {
+        result.set(row.runGraphId, { workspaceId: row.workspaceId });
+      }
+    }
+    return result;
+  }
+
+  private async latestTaskRuns(
+    taskIds: number[],
+  ): Promise<Map<number, RunSummaryRow>> {
+    if (taskIds.length === 0) return new Map();
+    const aggregates = await this.prisma.automationRun.groupBy({
+      by: ['taskId'],
+      where: { taskId: { in: taskIds } },
+      _max: { startedAt: true },
+    });
+    const rows = await this.findLatestRuns(
+      'task',
+      readRunMaxima(aggregates, 'taskId'),
+    );
+    return latestRunMap(rows, 'taskId');
+  }
+
+  private async latestGraphRuns(
+    graphIds: number[],
+  ): Promise<Map<number, RunSummaryRow>> {
+    if (graphIds.length === 0) return new Map();
+    const aggregates = await this.prisma.automationRun.groupBy({
+      by: ['graphId'],
+      where: {
+        taskId: null,
+        graphId: { in: graphIds },
+        triggerType: { not: 'subflow' },
+      },
+      _max: { startedAt: true },
+    });
+    const rows = await this.findLatestRuns(
+      'graph',
+      readRunMaxima(aggregates, 'graphId'),
+    );
+    return latestRunMap(rows, 'graphId');
+  }
+
+  private async findLatestRuns(
+    kind: 'task' | 'graph',
+    maxima: RunMaximum[],
+  ): Promise<RunSummaryRow[]> {
+    if (maxima.length === 0) return [];
+    const ownerFilters: Prisma.AutomationRunWhereInput[] = maxima.map(
+      ({ ownerId, startedAt }) => ({
+        ...(kind === 'task' ? { taskId: ownerId } : { graphId: ownerId }),
+        startedAt,
+      }),
+    );
+    return await this.prisma.automationRun.findMany({
+      where: {
+        ...(kind === 'graph' && {
+          taskId: null,
+          triggerType: { not: 'subflow' },
+        }),
+        OR: ownerFilters,
+      },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: RUN_SUMMARY_SELECT,
+    });
+  }
+
+  /** 单 run 完整详情；任务优先归属，非本人与不存在同返回 null。 */
+  async findRunById(runId: number, userId: number): Promise<RunRecord | null> {
+    const row = await this.prisma.automationRun.findUnique({
+      where: { id: runId },
+    });
+    if (!row) return null;
+    const owner = runOwnerOf({
+      taskId: row.taskId,
+      graphId: row.graphId ?? undefined,
+    });
+    if (!owner) return null;
+    if (owner.kind === 'task') {
+      const task = await this.prisma.automationTask.findFirst({
+        where: { id: owner.ownerId, userId },
+        select: { name: true },
+      });
+      return task ? toRunRecord(row, task.name) : null;
+    }
+    const graph = await this.prisma.graphDefinition.findFirst({
+      where: { id: owner.ownerId, userId },
+      select: { name: true },
+    });
+    return graph ? toRunRecord(row, graph.name) : null;
+  }
+
   /** 运行节点详情（移动端执行详情批，mirror orchestration:runNodes 同
    * 语义移植 + 终审收紧）：graphRunNode 无用户列，归属两段校验——先查
    *  run 的 graphId（prompt 型 run graphId null 直拒空集），再查图
@@ -754,6 +944,60 @@ export class AutomationRepository {
   }
 }
 
+type RunOwnerKey = 'taskId' | 'graphId';
+interface RunMaximum {
+  ownerId: number;
+  startedAt: Date;
+}
+interface RunAggregateRow {
+  taskId?: number | null;
+  graphId?: number | null;
+  _max: { startedAt: Date | null };
+}
+
+function readRunMaxima(
+  rows: RunAggregateRow[],
+  ownerKey: RunOwnerKey,
+): RunMaximum[] {
+  return rows.flatMap((row) => {
+    const ownerId = row[ownerKey];
+    const startedAt = row._max.startedAt;
+    return ownerId == null || !startedAt ? [] : [{ ownerId, startedAt }];
+  });
+}
+
+function latestRunMap(
+  rows: RunSummaryRow[],
+  ownerKey: RunOwnerKey,
+): Map<number, RunSummaryRow> {
+  const result = new Map<number, RunSummaryRow>();
+  for (const row of rows) {
+    const ownerId = row[ownerKey];
+    if (ownerId === null) continue;
+    const current = result.get(ownerId);
+    if (
+      !current ||
+      row.startedAt > current.startedAt ||
+      (row.startedAt.getTime() === current.startedAt.getTime() &&
+        row.id > current.id)
+    ) {
+      result.set(ownerId, row);
+    }
+  }
+  return result;
+}
+
+function compareRunGroups(left: RunGroupRecord, right: RunGroupRecord): number {
+  const leftStartedAt = left.latestRun?.startedAt;
+  const rightStartedAt = right.latestRun?.startedAt;
+  if (leftStartedAt && rightStartedAt) {
+    return rightStartedAt.localeCompare(leftStartedAt);
+  }
+  if (leftStartedAt) return -1;
+  if (rightStartedAt) return 1;
+  return 0;
+}
+
 /** run 行批量补名（mirror listRuns 同款）：taskId 行联查任务名、图试运行
  * 行（taskId=null）联查图名补位 */
 async function hydrateRunNames(
@@ -798,6 +1042,7 @@ function toRunRecordWire(row: RunRow, taskName: string): AutomationRunRecord {
     taskId: row.taskId,
     taskName,
     graphId: row.graphId ?? undefined,
+    workspaceId: row.workspaceId ?? undefined,
     sessionId: row.sessionId ?? undefined,
     attempt: row.attempt,
     triggerType: row.triggerType as TriggerType,

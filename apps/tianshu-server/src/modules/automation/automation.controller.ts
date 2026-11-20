@@ -2,8 +2,10 @@ import { Controller, Post, Body, HttpStatus, HttpCode } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
 import type {
+  AutomationRunDetail,
   AutomationRunNodeRecord,
   AutomationRunPage,
+  RunGroupRecord,
 } from '@tianshu/protocol';
 import { TaskRecordDto } from './dto/task-record.dto';
 import {
@@ -28,6 +30,10 @@ import { TaskIdDto } from './dto/task-id.dto';
 import { RunIdDto } from './dto/run-id.dto';
 import { AutomationRunQueryDto } from './dto/automation-run-query.dto';
 import { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
+import {
+  AutomationRunDetailDto,
+  RunGroupRecordDto,
+} from './dto/run-session.dto';
 
 /**
  * 自动化任务控制器（spec §4.1 四端点 + CRUD 批 runPage + 执行详情批
@@ -40,6 +46,8 @@ import { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
   AutomationRunRecordDto,
   AutomationRunPageResultDto,
   AutomationRunNodeDto,
+  AutomationRunDetailDto,
+  RunGroupRecordDto,
 )
 @Controller('automation')
 export class AutomationController {
@@ -105,13 +113,34 @@ export class AutomationController {
     return await this.automationService.runPage(dto);
   }
 
+  @Post('runGroups')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '查询固定运行分组（latestRun 不含轨迹/快照）' })
+  @ApiWrappedOk({
+    type: 'array',
+    items: { $ref: getSchemaPath(RunGroupRecordDto) },
+  })
+  async runGroups(): Promise<RunGroupRecord[]> {
+    return await this.automationService.runGroups();
+  }
+
+  @Post('runById')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '按 id 查询本人运行详情（保留 graphTrace）' })
+  @ApiWrappedOk(AutomationRunDetailDto)
+  async runById(@Body() dto: RunIdDto): Promise<AutomationRunDetail> {
+    return await this.automationService.runById(dto);
+  }
+
   /**
    * 运行节点级执行详情（移动端执行详情批）：图 run 专有——归属两段校验
    * 不符/prompt run/老 run 无节点行一律空集；行透传（input/output 全文）
    */
   @Post('runNodes')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: '运行节点级执行详情（图 run，空集语义不暴露存在性）' })
+  @ApiOperation({
+    summary: '运行节点级执行详情（图 run，空集语义不暴露存在性）',
+  })
   @ApiWrappedOk({
     type: 'array',
     items: { $ref: getSchemaPath(AutomationRunNodeDto) },

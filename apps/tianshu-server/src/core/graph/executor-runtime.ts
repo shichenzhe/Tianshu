@@ -42,6 +42,7 @@ export interface GraphRunStore {
   createRun: (p: {
     taskId: number | null;
     graphId: number;
+    workspaceId: number;
     attempt: number;
     triggerType: string;
     /** 执行时 graphJson 快照（改进项 3，批1C）：截 64KB 对齐

@@ -33,6 +33,7 @@ import {
   type RunPage,
   type RunRecord,
 } from 'src/modules/automation/automation.repository';
+import { clearRunSessionOwners } from 'src/modules/automation/run-session-owner';
 
 /** DB 行类型（mirror GraphRow/RunRow 同位） */
 type GraphRow = GraphDefinition;
@@ -135,6 +136,7 @@ function parseGraphJson(graphJson: string): string {
 export interface CreateRunParams {
   taskId: number | null;
   graphId: number;
+  workspaceId: number;
   attempt: number;
   triggerType: string;
   /** 执行时 graphJson 快照（改进项 3，批1C；截 64KB） */
@@ -226,7 +228,12 @@ export class GraphRepository {
       }),
       this.prisma.graphDefinition.count({ where }),
     ]);
-    return QueryResult.of(rows.map(toGraphRecord), page, params.pageSize, total);
+    return QueryResult.of(
+      rows.map(toGraphRecord),
+      page,
+      params.pageSize,
+      total,
+    );
   }
 
   /** 按归属查图（GA-T3 新增，改造点 7） */
@@ -375,11 +382,12 @@ export class GraphRepository {
         select: { id: true },
       })
     ).map((row) => row.id);
-    await this.prisma.$transaction([
-      this.prisma.graphRunNode.deleteMany({ where: { runId: { in: runIds } } }),
-      this.prisma.automationRun.deleteMany({ where: { graphId: id } }),
-      this.prisma.graphDefinition.deleteMany({ where: { id, userId } }),
-    ]);
+    await this.prisma.$transaction(async (tx) => {
+      await clearRunSessionOwners(tx, runIds);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
+      await tx.automationRun.deleteMany({ where: { graphId: id } });
+      await tx.graphDefinition.deleteMany({ where: { id, userId } });
+    });
     this.publishGraphChanged({ graphId: id });
   }
 
@@ -433,6 +441,7 @@ export class GraphRepository {
       data: {
         taskId: params.taskId,
         graphId: params.graphId,
+        workspaceId: params.workspaceId,
         attempt: params.attempt,
         triggerType: params.triggerType,
         graphJsonSnapshot: params.graphJsonSnapshot,

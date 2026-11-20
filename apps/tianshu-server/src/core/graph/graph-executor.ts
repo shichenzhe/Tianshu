@@ -449,6 +449,7 @@ async function createRunRow(params: GraphRunParams): Promise<number> {
   const runId = await graphExecutorRuntime().runs.createRun({
     taskId: params.task?.id ?? null,
     graphId: params.graph.id,
+    workspaceId: params.workspace.id,
     attempt: params.attempt,
     triggerType: params.triggerType,
     // 执行时 graphJson 快照（改进项 3）：图改后历史轨迹/节点行仍可
@@ -1207,7 +1208,10 @@ function makeHttpNodeHandler(node: HttpNode, ctx: NodeContext): NodeHandler {
 async function runHttpRequest(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const attempts = (node.retries ?? 0) + 1;
   let lastError: unknown;
@@ -1229,7 +1233,10 @@ async function runHttpRequest(
 async function fetchOnce(
   node: HttpNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const render = (text: string) =>
     renderNodePrompt(text, {
@@ -1435,13 +1442,16 @@ async function runCodeScript(
   node: CodeNode,
   ctx: NodeContext,
   script: string,
-  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   // python 命令节点级可配（pythonCommand，缺省 python）；?? 兜底防
   // 调用方绕过 schema parse 直构节点对象
   const interpreter =
     node.language === 'python'
-      ? node.pythonCommand ?? 'python'
+      ? (node.pythonCommand ?? 'python')
       : INTERPRETERS[node.language];
   const decision = commandGate(interpreter);
   if (decision === 'block' || decision === 'ask') {
@@ -1891,9 +1901,7 @@ function traceSuccess(
     outputPreview: done.output.slice(0, 200),
     ...(done.outputImage ? { outputImage: done.outputImage } : {}),
     ...(done.hitsPreview ? { hitsPreview: done.hitsPreview } : {}),
-    ...(done.hitsTruncated
-      ? { hitsTruncated: done.hitsTruncated }
-      : {}),
+    ...(done.hitsTruncated ? { hitsTruncated: done.hitsTruncated } : {}),
     ...(done.errorOutput ? { errorOutput: done.errorOutput } : {}),
     ...(done.notifySkipped ? { notifySkipped: done.notifySkipped } : {}),
   };
@@ -2104,7 +2112,10 @@ function makeFileReadNodeHandler(
 async function runFileRead(
   node: FileReadNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const raw = renderNodePrompt(node.path, {
     inputs: state.inputs,
@@ -2761,7 +2772,10 @@ function makeJsonParseNodeHandler(
 async function runJsonParse(
   node: JsonParseNode,
   ctx: NodeContext,
-  state: { inputs: Record<string, GraphInputValue>; nodes: Record<string, NodeResult> },
+  state: {
+    inputs: Record<string, GraphInputValue>;
+    nodes: Record<string, NodeResult>;
+  },
 ): Promise<string> {
   const source = renderNodePrompt(node.source, {
     inputs: state.inputs,
@@ -3930,39 +3944,59 @@ export function makeHybridSearchNodeHandler(
       } else {
         // hybrid：embedding 与 FTS 两路同时发起（候选池各自取满再融合）
         const embedPromise = embedTexts(node.modelId!, [query], signal);
-        const ftsPromise = node.mode === 'hybrid'
-          ? searchFts({ userId: ctx.userId, collection, queryTokens, limit: poolSize })
-          : Promise.resolve([] as FusedHit[]);
+        const ftsPromise =
+          node.mode === 'hybrid'
+            ? searchFts({
+                userId: ctx.userId,
+                collection,
+                queryTokens,
+                limit: poolSize,
+              })
+            : Promise.resolve([] as FusedHit[]);
         void ftsPromise.catch(() => {}); // 先败护栏：占位 handler 防 unhandled rejection；错误仍经下方 await 抛出驱动节点失败
         const [queryVector] = await embedPromise; // 任一 reject 即节点失败
         ftsHits = await ftsPromise;
-        vecHits = (await searchChunks({
-          userId: ctx.userId,
-          collection,
-          model: String(node.modelId!),
-          queryVector,
-          topK: node.mode === 'hybrid' ? poolSize : (node.topK ?? 5),
-        })).map((hit) => ({ ...hit, chunkId: hit.chunkId, rank: 0 }));
+        vecHits = (
+          await searchChunks({
+            userId: ctx.userId,
+            collection,
+            model: String(node.modelId!),
+            queryVector,
+            topK: node.mode === 'hybrid' ? poolSize : (node.topK ?? 5),
+          })
+        ).map((hit) => ({ ...hit, chunkId: hit.chunkId, rank: 0 }));
       }
 
-      const fused = node.mode === 'hybrid'
-        ? rrfFuse(vecHits, ftsHits).slice(0, node.topK ?? 5)
-        : (node.mode === 'keyword' ? ftsHits : vecHits)
-            .slice(0, node.topK ?? 5)
-            .map((hit, i) => ({ ...hit, rank: i + 1 }));
+      const fused =
+        node.mode === 'hybrid'
+          ? rrfFuse(vecHits, ftsHits).slice(0, node.topK ?? 5)
+          : (node.mode === 'keyword' ? ftsHits : vecHits)
+              .slice(0, node.topK ?? 5)
+              .map((hit, i) => ({ ...hit, rank: i + 1 }));
       const label = node.mode === 'semantic' ? '相似度' : '相关度';
       const output = fused
-        .map((hit) => `【${hit.sourceName}｜${label} ${hit.score.toFixed(2)}】${hit.text}`)
+        .map(
+          (hit) =>
+            `【${hit.sourceName}｜${label} ${hit.score.toFixed(2)}】${hit.text}`,
+        )
         .join('\n\n');
       await writeNodeRecord(ctx, node, query, output, startedAt);
-      ctx.trace.push(traceSuccess(node, startedAt, {
-        output,
-        hitsPreview: JSON.stringify(fused).slice(0, 2000),
-      }));
+      ctx.trace.push(
+        traceSuccess(node, startedAt, {
+          output,
+          hitsPreview: JSON.stringify(fused).slice(0, 2000),
+        }),
+      );
       return toNodeUpdate(node.id, { output, hits: fused });
     } catch (e) {
       const failure = toNodeFailure(node, e);
-      await writeNodeFailureRecord(ctx, node, node.searchQuery, failure, startedAt);
+      await writeNodeFailureRecord(
+        ctx,
+        node,
+        node.searchQuery,
+        failure,
+        startedAt,
+      );
       ctx.trace.push(traceFailure(node, startedAt, failure));
       throw failure;
     }
@@ -4018,10 +4052,12 @@ export function makeRerankNodeHandler(
       if (source.hits.length === 0) {
         const output = '';
         await writeNodeRecord(ctx, node, query, output, startedAt);
-        ctx.trace.push(traceSuccess(node, startedAt, {
-          output,
-          hitsPreview: JSON.stringify([]).slice(0, 2000),
-        }));
+        ctx.trace.push(
+          traceSuccess(node, startedAt, {
+            output,
+            hitsPreview: JSON.stringify([]).slice(0, 2000),
+          }),
+        );
         return toNodeUpdate(node.id, { output, hits: [] });
       }
       const hitsTruncated =
@@ -4100,15 +4136,18 @@ export function makeRerankNodeHandler(
         }));
       const output = fused
         .map(
-          (hit) => `【${hit.sourceName}｜相关度 ${hit.score.toFixed(2)}】${hit.text}`,
+          (hit) =>
+            `【${hit.sourceName}｜相关度 ${hit.score.toFixed(2)}】${hit.text}`,
         )
         .join('\n\n');
       await writeNodeRecord(ctx, node, query, output, startedAt);
-      ctx.trace.push(traceSuccess(node, startedAt, {
-        output,
-        hitsPreview: JSON.stringify(fused).slice(0, 2000),
-        ...(hitsTruncated ? { hitsTruncated } : {}),
-      }));
+      ctx.trace.push(
+        traceSuccess(node, startedAt, {
+          output,
+          hitsPreview: JSON.stringify(fused).slice(0, 2000),
+          ...(hitsTruncated ? { hitsTruncated } : {}),
+        }),
+      );
       return toNodeUpdate(node.id, { output, hits: fused });
     } catch (e) {
       const failure = toNodeFailure(node, e);

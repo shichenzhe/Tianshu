@@ -991,6 +991,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/graph/toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 启停图（无乐观锁轻量 update） */
+        post: operations["GraphController_toggle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/graph/run": {
         parameters: {
             query?: never;
@@ -1195,6 +1212,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/automation/runGroups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 查询固定运行分组（latestRun 不含轨迹/快照） */
+        post: operations["AutomationController_runGroups"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/runById": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 按 id 查询本人运行详情（保留 graphTrace） */
+        post: operations["AutomationController_runById"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/automation/runNodes": {
         parameters: {
             query?: never;
@@ -1206,6 +1257,23 @@ export interface paths {
         put?: never;
         /** 运行节点级执行详情（图 run，空集语义不暴露存在性） */
         post: operations["AutomationController_runNodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 健康度总览原始行集（客户端聚合） */
+        post: operations["AutomationController_stats"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1603,6 +1671,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/library/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** webview 预览流式读（GET+Range；query token 鉴权） */
+        get: operations["LibraryController_stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/monitor/stats": {
         parameters: {
             query?: never;
@@ -1914,6 +1999,12 @@ export interface components {
             planItemId: number | null;
             /** @description 已读游标（message.id；null=全新未读） */
             lastReadMessageId: number | null;
+            /** @description 自动化任务分组 id */
+            automationTaskId: number | null;
+            /** @description 顶层工作流分组 id */
+            runGraphId: number | null;
+            /** @description 关联运行 id（查询期派生） */
+            automationRunId: number | null;
             /** @description 未读数（查询期动态算） */
             unreadCount: number;
             /** @description 末条消息摘要（无消息 null） */
@@ -1956,6 +2047,12 @@ export interface components {
             planItemId: number | null;
             /** @description 已读游标（message.id；null=全新未读） */
             lastReadMessageId: number | null;
+            /** @description 自动化任务分组 id */
+            automationTaskId: number | null;
+            /** @description 顶层工作流分组 id */
+            runGraphId: number | null;
+            /** @description 关联运行 id（查询期派生） */
+            automationRunId: number | null;
         };
         MessageBriefDto: {
             /** @description 消息标识 */
@@ -2378,10 +2475,18 @@ export interface components {
             description?: string;
             /** @description 图定义 JSON 字符串（全量） */
             graphJson: string;
+            /** @description 启用/停用；缺席不动（创建走默认 true） */
+            enabled?: boolean;
         };
         GraphIdDto: {
             /** @description 图标识 */
             id: number;
+        };
+        GraphToggleDto: {
+            /** @description 图标识 */
+            id: number;
+            /** @description 目标启停态 */
+            enabled: boolean;
         };
         GraphRunDto: {
             /** @description 图标识 */
@@ -2507,6 +2612,8 @@ export interface components {
             taskName: string;
             /** @description 关联编排图（图运行；prompt 任务 run 无此字段） */
             graphId?: number;
+            /** @description 实际执行工作空间 id */
+            workspaceId?: number;
             /** @description 会话标识 */
             sessionId?: number;
             /** @description 尝试序号 */
@@ -2576,6 +2683,65 @@ export interface components {
             errorOutput: string | null;
             /** @description 降级继续标记 JSON 序列：{ code, message } */
             fallbackJson: string | null;
+        };
+        AutomationRunDetailDto: {
+            /** @description 运行标识 */
+            id: number;
+            /** @description 任务标识（图试运行为 null，taskName 取图名） */
+            taskId: number | null;
+            /** @description 任务名（图试运行取图名） */
+            taskName: string;
+            /** @description 关联编排图（图运行；prompt 任务 run 无此字段） */
+            graphId?: number;
+            /** @description 实际执行工作空间 id */
+            workspaceId?: number;
+            /** @description 会话标识 */
+            sessionId?: number;
+            /** @description 尝试序号 */
+            attempt: number;
+            /**
+             * @description 触发类型
+             * @enum {string}
+             */
+            triggerType: "schedule" | "catchUp" | "retry" | "manual" | "event" | "subflow" | "webhook";
+            /**
+             * @description 运行状态
+             * @enum {string}
+             */
+            status: "running" | "success" | "failed" | "skipped";
+            /** @description 耗时（ms） */
+            durationMs?: number;
+            /** @description 提示词 tokens */
+            promptTokens?: number;
+            /** @description 补全 tokens */
+            completionTokens?: number;
+            /** @description 错误信息 */
+            error?: string;
+            /** @description 开始时间（ISO） */
+            startedAt: string;
+            /** @description 结束时间（ISO，运行中为 null） */
+            finishedAt?: string;
+            /** @description 完整图运行轨迹 JSON */
+            graphTrace?: string;
+        };
+        RunGroupRecordDto: {
+            /**
+             * @description 分组类型
+             * @enum {string}
+             */
+            kind: "task" | "graph";
+            /** @description 任务或图 id（按 kind 分命名空间） */
+            ownerId: number;
+            /** @description 任务或图当前名称 */
+            name: string;
+            /** @description 工作空间 id */
+            workspaceId?: number;
+            /** @description 项目 id */
+            projectId?: number | null;
+            /** @description 最近运行摘要（不含轨迹与图快照） */
+            latestRun?: components["schemas"]["AutomationRunRecordDto"];
+            /** @description 是否存在可见运行 */
+            hasRuns: boolean;
         };
         AutomationQueryDto: {
             /**
@@ -2701,6 +2867,8 @@ export interface components {
             page: number;
             /** @description 任务标识（任务口径筛选，归属校验） */
             taskId?: number;
+            /** @description 图标识（图口径筛选，归属校验） */
+            graphId?: number;
             /**
              * @description 运行状态筛选
              * @enum {string}
@@ -2710,6 +2878,10 @@ export interface components {
         RunIdDto: {
             /** @description 运行标识 */
             runId: number;
+        };
+        AutomationStatsQueryDto: {
+            /** @description 统计窗口起点（ISO，客户端 7 天窗口） */
+            since: string;
         };
         PermissionRememberedWireDto: {
             /** @description 记忆行标识 */
@@ -4672,6 +4844,37 @@ export interface operations {
             };
         };
     };
+    GraphController_toggle: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GraphToggleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: components["schemas"]["GraphRecordDto"];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
     GraphController_run: {
         parameters: {
             query?: never;
@@ -5035,6 +5238,64 @@ export interface operations {
             };
         };
     };
+    AutomationController_runGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: components["schemas"]["RunGroupRecordDto"][];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    AutomationController_runById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunIdDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: components["schemas"]["AutomationRunDetailDto"];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
     AutomationController_runNodes: {
         parameters: {
             query?: never;
@@ -5059,6 +5320,44 @@ export interface operations {
                         /** @example true */
                         success?: boolean;
                         data?: components["schemas"]["AutomationRunNodeDto"][];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    AutomationController_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AutomationStatsQueryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: {
+                            runs: components["schemas"]["AutomationRunRecordDto"][];
+                            errorTasks: {
+                                id: number;
+                                name: string;
+                                statusNote?: string | null;
+                            }[];
+                        };
                         /** @example success */
                         message?: string;
                     };
@@ -5765,6 +6064,23 @@ export interface operations {
                         message?: string;
                     };
                 };
+            };
+        };
+    };
+    LibraryController_stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

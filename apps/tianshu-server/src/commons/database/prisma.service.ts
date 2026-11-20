@@ -12,6 +12,7 @@ import { ensureAutomationRunGraphSnapshotColumn } from './ensure-automation-run-
 import { ensureAutomationTaskCatchUpLimitColumn } from './ensure-automation-task-catch-up-limit';
 import { ensureModelCapabilityColumns } from './ensure-model-capability-columns';
 import { ensurePermissionPatternColumns } from './ensure-permission-pattern-columns';
+import { ensureRunSessionAggregation } from './ensure-run-session-aggregation';
 
 type PrismaClientOptions = ConstructorParameters<typeof PrismaClient>[0];
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -97,6 +98,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     // toolPermission 参数级审批两列同款存量路径（批7）：缺列时记忆查表
     // 即失败——探测补列 + 唯一索引替换（新库/PG 走 4_ 增量迁移）
     await ensurePermissionPatternColumns(this, this.dbEngine);
+    // 运行会话聚合列/索引与 prompt 会话回填同款存量路径（migration 5）
+    await ensureRunSessionAggregation(this, this.dbEngine);
   }
 
   async onModuleDestroy() {

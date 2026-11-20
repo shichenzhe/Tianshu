@@ -212,6 +212,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
       triggerType: 'schedule',
       status: 'success',
       attempt: 1,
+      workspaceId: wsId,
       promptTokens: 7,
       completionTokens: 11,
     });
@@ -234,6 +235,7 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     });
     expect(session.title).toBe('定时简报');
     expect(session.mode).toBe('agent');
+    expect(session.automationTaskId).toBe(task.id);
     const messages = await db.prisma.messageRecord.findMany({
       where: { sessionId: session.id },
       orderBy: { id: 'asc' },
@@ -593,12 +595,12 @@ describe('automation runner/scheduler 副本（GA-T5）', () => {
     };
     const now = new Date();
     const boot = new Date(Date.now() - 60_000);
-    expect(decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 2)).toBe(
-      'catchUp',
-    );
-    expect(decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 3)).toBe(
-      'advance',
-    );
+    expect(
+      decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 2),
+    ).toBe('catchUp');
+    expect(
+      decideTick({ ...base, catchUpLimit: 3 } as never, now, boot, 3),
+    ).toBe('advance');
     // 行缺列（旧库/列默认 NULL 不会发生——列 NOT NULL DEFAULT 1,但字面量
     // 任务行缺字段容错回退 1）
     expect(decideTick(base as never, now, boot, 1)).toBe('advance');

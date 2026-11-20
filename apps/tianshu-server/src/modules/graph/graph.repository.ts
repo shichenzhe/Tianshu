@@ -383,7 +383,7 @@ export class GraphRepository {
       })
     ).map((row) => row.id);
     await this.prisma.$transaction(async (tx) => {
-      await clearRunSessionOwners(tx, runIds);
+      await clearRunSessionOwners(tx, runIds, { graphIds: [id] });
       await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
       await tx.automationRun.deleteMany({ where: { graphId: id } });
       await tx.graphDefinition.deleteMany({ where: { id, userId } });

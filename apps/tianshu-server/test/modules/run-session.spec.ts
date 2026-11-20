@@ -322,6 +322,45 @@ describe('run session persistence and queries', () => {
     ).toBe(1);
   });
 
+  it('deleting owners clears companion-only sessions even when no runs exist', async () => {
+    const task = await createTask(db, workspaceId, 'owner-only-task');
+    const taskSession = await createSession(
+      db,
+      workspaceId,
+      'owner-only-task',
+      {
+        automationTaskId: task.id,
+      },
+    );
+    await createMessage(db, taskSession.id);
+    const graph = await db.prisma.graphDefinition.create({
+      data: { name: 'owner-only-graph', graphJson: '{}', userId: UID },
+    });
+    const graphSession = await createSession(
+      db,
+      workspaceId,
+      'owner-only-graph',
+      { runGraphId: graph.id },
+    );
+    await createMessage(db, graphSession.id);
+
+    await automations.deleteTasks([task.id], UID);
+    await graphs.deleteGraph(graph.id, UID);
+
+    for (const session of [taskSession, graphSession]) {
+      expect(
+        await db.prisma.sessionRecord.findUniqueOrThrow({
+          where: { id: session.id },
+        }),
+      ).toMatchObject({ automationTaskId: null, runGraphId: null });
+      expect(
+        await db.prisma.messageRecord.count({
+          where: { sessionId: session.id },
+        }),
+      ).toBe(1);
+    }
+  });
+
   it('retention clears grouping for day and count deletions without deleting messages', async () => {
     const dayTask = await createTask(db, workspaceId, 'retention-day');
     const daySession = await createSession(db, workspaceId, 'retention-day', {
@@ -497,6 +536,13 @@ describe('run session migration 5 and SQLite upgrade', () => {
       await prisma.$executeRawUnsafe(
         "INSERT INTO automationRun (id,taskId,sessionId,graphId,attempt,triggerType,status) VALUES (2,NULL,3,9,1,'manual','success')",
       );
+      // 历史脏数据：同一会话被两个 prompt run 关联；最小 id 为 canonical。
+      await prisma.$executeRawUnsafe(
+        "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (3,1,1,1,'retry','failed')",
+      );
+      await prisma.$executeRawUnsafe(
+        "INSERT INTO message (id,sessionId,role,blocks) VALUES (1,1,'user','[]')",
+      );
       cpSync(
         join(SERVER_ROOT, 'prisma', 'migrations', '5_run_session_aggregation'),
         join(root, 'migrations', '5_run_session_aggregation'),
@@ -515,9 +561,22 @@ describe('run session migration 5 and SQLite upgrade', () => {
         { id: 2, automationTaskId: null, runGraphId: null },
         { id: 3, automationTaskId: null, runGraphId: null },
       ]);
+      const linkedRuns = await prisma.$queryRawUnsafe<
+        Array<{ id: number; sessionId: number | null }>
+      >('SELECT id, sessionId FROM automationRun ORDER BY id');
+      expect(linkedRuns).toEqual([
+        { id: 1, sessionId: 1 },
+        { id: 2, sessionId: 3 },
+        { id: 3, sessionId: null },
+      ]);
+      expect(
+        await prisma.$queryRawUnsafe<Array<{ id: number }>>(
+          'SELECT id FROM message WHERE sessionId = 1',
+        ),
+      ).toEqual([{ id: 1 }]);
       await expect(
         prisma.$executeRawUnsafe(
-          "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (3,1,1,1,'manual','success')",
+          "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (4,1,1,1,'manual','success')",
         ),
       ).rejects.toThrow();
     } finally {

@@ -119,14 +119,18 @@ export class WorkspaceService {
   }
 
   /** 删除：桌面同款硬级联（消息→会话→工作空间行），不删磁盘文件。
-   *  事务化（三 delete 中途失败不留半删态）+ 清 toolPermission 记忆行
-   *  （防 permission/listRemembered 残留 workspaceName 回落 #id 的孤儿行） */
+   *  事务化，先解除 run.sessionId 再删会话，避免历史 run 指向已删会话；
+   *  同步清 toolPermission 记忆行（防孤儿残留） */
   async delete(dto: WorkspaceIdDto): Promise<null> {
     await this.assertOwned(dto.id);
     await this.prisma.$transaction(async (tx) => {
       const sessions = await tx.sessionRecord.findMany({
         where: { workspaceId: dto.id },
         select: { id: true },
+      });
+      await tx.automationRun.updateMany({
+        where: { sessionId: { in: sessions.map((s) => s.id) } },
+        data: { sessionId: null },
       });
       await tx.messageRecord.deleteMany({
         where: { sessionId: { in: sessions.map((s) => s.id) } },

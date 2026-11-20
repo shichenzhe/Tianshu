@@ -17,6 +17,7 @@ import {
   TRIM_INTERVAL_MS,
   maybeTrimAutomationRuns,
 } from 'src/modules/automation/automation-retention';
+import { PrismaService } from 'src/commons/database/prisma.service';
 import { createTestDb, type TestDb } from '../support/test-db';
 
 jest.setTimeout(120_000);
@@ -94,6 +95,7 @@ describe('trimAutomationRuns（真库）', () => {
     status: string;
     startedAt: Date;
     graphTrace?: string | null;
+    sessionId?: number;
   }) =>
     db.prisma.automationRun.create({
       data: {
@@ -102,6 +104,7 @@ describe('trimAutomationRuns（真库）', () => {
         status: over.status,
         startedAt: over.startedAt,
         graphTrace: over.graphTrace ?? null,
+        sessionId: over.sessionId ?? null,
       },
     });
 
@@ -232,6 +235,101 @@ describe('trimAutomationRuns（真库）', () => {
     ).toBe(200);
   });
 
+  it('删除失败回滚分组清理：节点删除异常时 run 与 owner 字段均保留', async () => {
+    const session = await db.prisma.sessionRecord.create({
+      data: {
+        workspaceId: 1,
+        title: 'atomic-retention',
+        userId: 1,
+        automationTaskId: 9902,
+      },
+    });
+    const run = await seedRun({
+      taskId: 9902,
+      sessionId: session.id,
+      status: 'success',
+      startedAt: daysAgo(10),
+    });
+    await seedNode(run.id);
+    await db.prisma.$executeRawUnsafe(`
+      CREATE TRIGGER fail_run_node_delete BEFORE DELETE ON graphRunNode
+      BEGIN SELECT RAISE(FAIL, 'node delete failed'); END
+    `);
+    try {
+      await expect(
+        trimAutomationRuns(db.prisma, DEFAULT_RUN_RETENTION, NOW),
+      ).rejects.toThrow();
+    } finally {
+      await db.prisma.$executeRawUnsafe(
+        'DROP TRIGGER IF EXISTS fail_run_node_delete',
+      );
+    }
+    expect(await getRow(run.id)).not.toBeNull();
+    expect(
+      await db.prisma.sessionRecord.findUniqueOrThrow({
+        where: { id: session.id },
+      }),
+    ).toMatchObject({ automationTaskId: 9902 });
+  });
+
+  it('条数窗只计算一次：选定后并发插入不改变本次删除集合', async () => {
+    const taskId = 9903;
+    await seedRun({ taskId, status: 'success', startedAt: daysAgo(0.02) });
+    await seedRun({ taskId, status: 'success', startedAt: daysAgo(0.01) });
+    const engine = (
+      db.prisma as unknown as {
+        engineClient: PrismaService;
+      }
+    ).engineClient;
+    const engineQuery = engine.$queryRawUnsafe.bind(engine) as unknown as (
+      sql: string,
+      ...values: unknown[]
+    ) => Promise<unknown>;
+    const originalQuery = (
+      sql: string,
+      ...values: unknown[]
+    ): Promise<unknown> =>
+      Promise.resolve(engineQuery(sql, ...values) as unknown);
+    let inserted = false;
+    const query = jest
+      .spyOn(engine, '$queryRawUnsafe')
+      .mockImplementation((sql: string, ...values: unknown[]) => {
+        const result = (async () => {
+          const rows = await originalQuery(sql, ...values);
+          if (!inserted && sql.includes('ROW_NUMBER()')) {
+            inserted = true;
+            await seedRun({
+              taskId,
+              status: 'success',
+              startedAt: daysAgo(0.005),
+            });
+          }
+          return rows;
+        })();
+        return result as unknown as ReturnType<
+          PrismaService['$queryRawUnsafe']
+        >;
+      });
+    let result: Awaited<ReturnType<typeof trimAutomationRuns>>;
+    try {
+      result = await trimAutomationRuns(
+        db.prisma,
+        {
+          ...DEFAULT_RUN_RETENTION,
+          successDays: 3650,
+          successKeep: 1,
+          failureDays: 3650,
+        },
+        NOW,
+      );
+    } finally {
+      query.mockRestore();
+    }
+    expect(inserted).toBe(true);
+    expect(result.successKeepDeleted).toBe(1);
+    expect(await countRuns({ taskId })).toBe(2);
+  });
+
   it('enabled:false 零动作', async () => {
     await seedRun({ status: 'success', startedAt: daysAgo(40) });
     const result = await trimAutomationRuns(
@@ -276,8 +374,8 @@ describe('maybeTrimAutomationRuns 节流', () => {
 });
 
 // —— trimKeep SQL 双引擎方言（主库双引擎批终审追加）——
-// trimKeepSql/trimKeepNodesSql 按引擎分流：PG 引号 camelCase 标识符 +
-// $1 占位符；SQLite 与既有串逐字节一致（零行为变化）。真 PG 执行归
+// trimKeepIdsSql 按引擎分流：PG 引号 camelCase 标识符 + $1 占位符；
+// 每窗仅 SELECT 一次 id，后续事务共用。真 PG 执行归
 // e2e live 段，单测钉 SQL 形状——maybeTrim 吞错下方言错即裁剪静默永败。
 describe('trimKeep SQL 双引擎方言', () => {
   const OLD_MAIN = process.env.TIANSHU_DB_URL;
@@ -291,8 +389,8 @@ describe('trimKeep SQL 双引擎方言', () => {
     }
   });
 
-  /** 最小 RetentionDb 桩：捕获 $executeRawUnsafe 的 SQL（方言断言面）；
-   * 其余面零结果（前置步骤不触真实库） */
+  /** 最小 RetentionDb 桩：捕获 $queryRawUnsafe 的选窗 SQL；
+   * 空 id 集不进入事务，其余面零结果。 */
   const captureDb = (sqls: string[]) =>
     ({
       automationRun: {
@@ -306,9 +404,9 @@ describe('trimKeep SQL 双引擎方言', () => {
       option: {
         findFirst: () => Promise.resolve(null),
       },
-      $executeRawUnsafe: (sql: string) => {
+      $queryRawUnsafe: (sql: string) => {
         sqls.push(sql);
-        return Promise.resolve(0);
+        return Promise.resolve([]);
       },
     }) as unknown as Parameters<typeof trimAutomationRuns>[0];
 
@@ -316,28 +414,14 @@ describe('trimKeep SQL 双引擎方言', () => {
     process.env.TIANSHU_DB_URL = 'postgres://u:p@h:5432/main';
     const sqls: string[] = [];
     await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
-    // 6 发：成功/失败档各先清会话分组，再删 nodes/run
-    expect(sqls).toHaveLength(6);
+    // 2 发：成功/失败条数窗各选一次稳定 id 集合
+    expect(sqls).toHaveLength(2);
     for (const sql of sqls) {
       expect(sql).not.toContain('?');
       expect(sql).toContain('WHERE rn > $1');
-    }
-    // 会话分组清理语句（第 1/4 发）先于节点与 run 删除
-    for (const sessionSql of [sqls[0], sqls[3]]) {
-      expect(sessionSql).toContain('UPDATE "session" SET');
-      expect(sessionSql).toContain('"automationTaskId" = NULL');
-      expect(sessionSql).toContain('FROM "automationRun" WHERE');
-    }
-    // nodes 语句（第 2/5 发）：级联面 graphRunNode."runId" + 同窗 automationRun
-    for (const nodesSql of [sqls[1], sqls[4]]) {
-      expect(nodesSql).toContain('DELETE FROM "graphRunNode" WHERE "runId" IN');
-      expect(nodesSql).toContain('PARTITION BY "taskId"');
-      expect(nodesSql).toContain('FROM "automationRun" WHERE');
-    }
-    // run 语句（第 3/6 发）：automationRun 直删 + taskId 分区引号
-    for (const runSql of [sqls[2], sqls[5]]) {
-      expect(runSql).toContain('DELETE FROM "automationRun" WHERE id IN');
-      expect(runSql).toContain('PARTITION BY "taskId"');
+      expect(sql).toContain('SELECT id FROM');
+      expect(sql).toContain('PARTITION BY "taskId"');
+      expect(sql).toContain('FROM "automationRun" WHERE');
     }
   });
 
@@ -345,38 +429,14 @@ describe('trimKeep SQL 双引擎方言', () => {
     delete process.env.TIANSHU_DB_URL;
     const sqls: string[] = [];
     await trimAutomationRuns(captureDb(sqls), DEFAULT_RUN_RETENTION, NOW);
-    expect(sqls).toHaveLength(6);
-    const sqliteSessions = (statusWhere: string) => `
-  UPDATE session SET automationTaskId = NULL, runGraphId = NULL WHERE id IN (
-    SELECT sessionId FROM automationRun WHERE id IN (
-      SELECT id FROM (
-        SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-        FROM automationRun WHERE ${statusWhere}
-      ) WHERE rn > ?
-    ) AND sessionId IS NOT NULL
-  )
+    expect(sqls).toHaveLength(2);
+    const sqliteIds = (statusWhere: string) => `
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
+    FROM automationRun WHERE ${statusWhere}
+  ) WHERE rn > ?
 `;
-    const sqliteNodes = (statusWhere: string) => `
-  DELETE FROM graphRunNode WHERE runId IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-      FROM automationRun WHERE ${statusWhere}
-    ) WHERE rn > ?
-  )
-`;
-    const sqliteRuns = (statusWhere: string) => `
-  DELETE FROM automationRun WHERE id IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-      FROM automationRun WHERE ${statusWhere}
-    ) WHERE rn > ?
-  )
-`;
-    expect(sqls[0]).toBe(sqliteSessions("status NOT IN ('failed', 'running')"));
-    expect(sqls[1]).toBe(sqliteNodes("status NOT IN ('failed', 'running')"));
-    expect(sqls[2]).toBe(sqliteRuns("status NOT IN ('failed', 'running')"));
-    expect(sqls[3]).toBe(sqliteSessions("status = 'failed'"));
-    expect(sqls[4]).toBe(sqliteNodes("status = 'failed'"));
-    expect(sqls[5]).toBe(sqliteRuns("status = 'failed'"));
+    expect(sqls[0]).toBe(sqliteIds("status NOT IN ('failed', 'running')"));
+    expect(sqls[1]).toBe(sqliteIds("status = 'failed'"));
   });
 });

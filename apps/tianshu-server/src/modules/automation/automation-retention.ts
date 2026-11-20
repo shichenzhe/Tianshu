@@ -8,6 +8,7 @@
  * 照 automation-stat 先例）。其余逐行保持。
  */
 import { Logger } from '@nestjs/common';
+import type { PrismaService } from '../../commons/database/prisma.service';
 import {
   engineOf,
   overriddenDbUrl,
@@ -123,10 +124,7 @@ export interface RetentionDb extends RunSessionOwnerDb {
       select: { id: true; sessionId: true };
     }): Promise<Array<{ id: number; sessionId: number | null }>>;
     deleteMany(args: {
-      where: {
-        status?: string | { notIn: string[] };
-        startedAt?: { lt: Date };
-      };
+      where: { id: { in: number[] } };
     }): Promise<{ count: number }>;
   };
   graphRunNode: {
@@ -139,7 +137,8 @@ export interface RetentionDb extends RunSessionOwnerDb {
       where: { type: string; name: string };
     }): Promise<{ value: string } | null>;
   };
-  $executeRawUnsafe(sql: string, ...values: number[]): Promise<number>;
+  $transaction: PrismaService['$transaction'];
+  $queryRawUnsafe(sql: string, ...values: number[]): Promise<unknown>;
 }
 
 export interface RetentionTrimResult {
@@ -153,105 +152,67 @@ export interface RetentionTrimResult {
 const daysAgo = (now: Date, days: number): Date =>
   new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-/** 每任务条数窗删除（SQLite ≥3.25 / PG 同款窗口函数；taskId NULL 同组=
- * 图试运行自成一组）。双引擎方言（主库双引擎批）：PG 变体须引号 camelCase
- * 标识符（派生 migrations 建表为引号 camelCase，裸写被 PG 折叠小写
- * 即表/列不存在）+ $1 占位符（PG 引擎不认 ?）；SQLite 变体与原串逐字节
- * 不变。引擎取 env（retention 跑在 boot 后，env 稳定——ensureGraphRunNodeTable
- * 同款默认参手法；maybeTrim 吞错下 SQL 方言错=裁剪静默永败，单测钉形状）。 */
-const trimKeepSql = (
-  keep: number,
+/** 每任务条数窗待删 id：只计算一次，后续清理共用稳定集合。 */
+const trimKeepIdsSql = (
   statusWhere: string,
   engine: DbEngine = engineOf(overriddenDbUrl()),
 ): string =>
   engine === 'postgres'
     ? `
-  DELETE FROM "automationRun" WHERE id IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
-      FROM "automationRun" WHERE ${statusWhere}
-    ) WHERE rn > $1
-  )
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
+    FROM "automationRun" WHERE ${statusWhere}
+  ) WHERE rn > $1
 `
     : `
-  DELETE FROM automationRun WHERE id IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-      FROM automationRun WHERE ${statusWhere}
-    ) WHERE rn > ?
-  )
+  SELECT id FROM (
+    SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
+    FROM automationRun WHERE ${statusWhere}
+  ) WHERE rn > ?
 `;
 
-/** 条数窗删除前解除会话分组；与 run 窗共用同一子查询，消息不动。 */
-const trimKeepSessionsSql = (
-  statusWhere: string,
-  engine: DbEngine = engineOf(overriddenDbUrl()),
-): string =>
-  engine === 'postgres'
-    ? `
-  UPDATE "session" SET "automationTaskId" = NULL, "runGraphId" = NULL WHERE id IN (
-    SELECT "sessionId" FROM "automationRun" WHERE id IN (
-      SELECT id FROM (
-        SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
-        FROM "automationRun" WHERE ${statusWhere}
-      ) WHERE rn > $1
-    ) AND "sessionId" IS NOT NULL
-  )
-`
-    : `
-  UPDATE session SET automationTaskId = NULL, runGraphId = NULL WHERE id IN (
-    SELECT sessionId FROM automationRun WHERE id IN (
-      SELECT id FROM (
-        SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-        FROM automationRun WHERE ${statusWhere}
-      ) WHERE rn > ?
-    ) AND sessionId IS NOT NULL
-  )
-`;
+/** 所有 run 删除共用：同一事务内清分组、删节点、删稳定 id 集合。 */
+async function deleteRunRows(
+  prisma: RetentionDb,
+  runIds: number[],
+): Promise<number> {
+  if (runIds.length === 0) return 0;
+  return prisma.$transaction(async (tx) => {
+    await clearRunSessionOwners(tx, runIds);
+    await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
+    return (
+      await tx.automationRun.deleteMany({ where: { id: { in: runIds } } })
+    ).count;
+  });
+}
 
-/** 条数窗的节点行级联（去会话化 2026-10-28，spec §3.1）：与 trimKeepSql
- * 同窗子查询选 id，先于 run 窗删除执行——run 删除后子查询即失效；
- * 双引擎方言同 trimKeepSql（PG 引号标识符 + $1） */
-const trimKeepNodesSql = (
-  statusWhere: string,
-  engine: DbEngine = engineOf(overriddenDbUrl()),
-): string =>
-  engine === 'postgres'
-    ? `
-  DELETE FROM "graphRunNode" WHERE "runId" IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY "taskId" ORDER BY id DESC) AS rn
-      FROM "automationRun" WHERE ${statusWhere}
-    ) WHERE rn > $1
-  )
-`
-    : `
-  DELETE FROM graphRunNode WHERE runId IN (
-    SELECT id FROM (
-      SELECT id, ROW_NUMBER() OVER (PARTITION BY taskId ORDER BY id DESC) AS rn
-      FROM automationRun WHERE ${statusWhere}
-    ) WHERE rn > ?
-  )
-`;
-
-/** 按天档删 run 前级联删其节点行（graphRunNode 无 status/startedAt 列，
- * 以同 where 先取 run id 集合再删；空集合免触库） */
-async function cascadeDeleteRunNodes(
+async function deleteRunsWhere(
   prisma: RetentionDb,
   where: { status: string | { notIn: string[] }; startedAt: { lt: Date } },
-): Promise<void> {
+): Promise<number> {
   const rows = await prisma.automationRun.findMany({
     where,
     select: { id: true, sessionId: true },
   });
-  if (rows.length === 0) {
-    return;
-  }
-  const runIds = rows.map((row) => row.id);
-  await clearRunSessionOwners(prisma, runIds);
-  await prisma.graphRunNode.deleteMany({
-    where: { runId: { in: runIds } },
-  });
+  return deleteRunRows(
+    prisma,
+    rows.map((row) => row.id),
+  );
+}
+
+async function trimRunsByKeep(
+  prisma: RetentionDb,
+  keep: number,
+  statusWhere: string,
+): Promise<number> {
+  const rows = (await prisma.$queryRawUnsafe(
+    trimKeepIdsSql(statusWhere),
+    keep,
+  )) as Array<{ id: number }>;
+  return deleteRunRows(
+    prisma,
+    rows.map((row) => row.id),
+  );
 }
 
 export async function trimAutomationRuns(
@@ -278,58 +239,25 @@ export async function trimAutomationRuns(
       data: { graphTrace: null },
     })
   ).count;
-  // 2. 成功态按天（running 永不裁剪；expired/skipped 归成功档）；run 行
-  // 删除前先级联删节点行
-  await cascadeDeleteRunNodes(prisma, {
+  // 2/3. 按天档先固定现存 id，再事务删除；running 永不裁剪。
+  const successDaysDeleted = await deleteRunsWhere(prisma, {
     status: { notIn: ['failed', 'running'] },
     startedAt: { lt: daysAgo(now, config.successDays) },
   });
-  const successDaysDeleted = (
-    await prisma.automationRun.deleteMany({
-      where: {
-        status: { notIn: ['failed', 'running'] },
-        startedAt: { lt: daysAgo(now, config.successDays) },
-      },
-    })
-  ).count;
-  // 3. 失败态按天（保留更久；精确匹配 failed，与下方 SQL status = 'failed' 对齐）
-  await cascadeDeleteRunNodes(prisma, {
+  const failureDaysDeleted = await deleteRunsWhere(prisma, {
     status: 'failed',
     startedAt: { lt: daysAgo(now, config.failureDays) },
   });
-  const failureDaysDeleted = (
-    await prisma.automationRun.deleteMany({
-      where: {
-        status: 'failed',
-        startedAt: { lt: daysAgo(now, config.failureDays) },
-      },
-    })
-  ).count;
-  // 4/5. 每任务条数窗（参数化防注入；keep 已 clamp 为有限整数）；节点行
-  // 级联先于 run 窗删除执行
-  await prisma.$executeRawUnsafe(
-    trimKeepSessionsSql("status NOT IN ('failed', 'running')"),
+  // 4/5. 条数窗 id 只选一次，避免并发插入导致各删除步骤集合漂移。
+  const successKeepDeleted = await trimRunsByKeep(
+    prisma,
     config.successKeep,
+    "status NOT IN ('failed', 'running')",
   );
-  await prisma.$executeRawUnsafe(
-    trimKeepNodesSql("status NOT IN ('failed', 'running')"),
-    config.successKeep,
-  );
-  const successKeepDeleted = await prisma.$executeRawUnsafe(
-    trimKeepSql(config.successKeep, "status NOT IN ('failed', 'running')"),
-    config.successKeep,
-  );
-  await prisma.$executeRawUnsafe(
-    trimKeepSessionsSql("status = 'failed'"),
+  const failureKeepDeleted = await trimRunsByKeep(
+    prisma,
     config.failureKeep,
-  );
-  await prisma.$executeRawUnsafe(
-    trimKeepNodesSql("status = 'failed'"),
-    config.failureKeep,
-  );
-  const failureKeepDeleted = await prisma.$executeRawUnsafe(
-    trimKeepSql(config.failureKeep, "status = 'failed'"),
-    config.failureKeep,
+    "status = 'failed'",
   );
   return {
     tracedRuns,

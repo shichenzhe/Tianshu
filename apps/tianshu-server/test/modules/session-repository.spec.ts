@@ -11,13 +11,13 @@ describe('SessionRepository.query keyword null 标题防御', () => {
       { id: 1, title: null },
       { id: 2, title: 'alpha test log' },
     ];
-    // P1 未读角标批：enrich 恒定两条 messageRecord 聚合——stub 返空
-    // （groupBy [] → 无末条/无未读），钉住 keyword 过滤语义不受 enrich 干扰
+    // enrich 的 message/run 聚合均返空，钉住 keyword 过滤语义不受干扰
     const prisma = {
-      sessionRecord: { findMany: async () => rows },
+      sessionRecord: { findMany: () => Promise.resolve(rows) },
+      automationRun: { findMany: () => Promise.resolve([]) },
       messageRecord: {
-        groupBy: async () => [],
-        findMany: async () => [],
+        groupBy: () => Promise.resolve([]),
+        findMany: () => Promise.resolve([]),
       },
     } as unknown as PrismaService;
     const repo = new SessionRepository(prisma);
@@ -40,15 +40,16 @@ describe('SessionRepository.query page<=0 收敛', () => {
     const findManyCalls: Array<{ skip?: number; take?: number }> = [];
     const prisma = {
       sessionRecord: {
-        findMany: async (args?: { skip?: number; take?: number }) => {
+        findMany: (args?: { skip?: number; take?: number }) => {
           findManyCalls.push(args ?? {});
-          return [{ id: 2, title: 'ok' }];
+          return Promise.resolve([{ id: 2, title: 'ok' }]);
         },
-        count: async () => 1,
+        count: () => Promise.resolve(1),
       },
+      automationRun: { findMany: () => Promise.resolve([]) },
       messageRecord: {
-        groupBy: async () => [],
-        findMany: async () => [],
+        groupBy: () => Promise.resolve([]),
+        findMany: () => Promise.resolve([]),
       },
     } as unknown as PrismaService;
     const repo = new SessionRepository(prisma);

@@ -5,6 +5,13 @@ interface RawExecutor {
   $queryRawUnsafe(sql: string): Promise<unknown>;
 }
 
+const DEDUPE_SQL = `
+UPDATE "automationRun" SET "sessionId" = NULL
+WHERE "sessionId" IS NOT NULL AND "id" NOT IN (
+  SELECT MIN("id") FROM "automationRun"
+  WHERE "sessionId" IS NOT NULL GROUP BY "sessionId"
+)`;
+
 const BACKFILL_SQL = `
 UPDATE "session"
 SET "automationTaskId" = (
@@ -12,6 +19,7 @@ SET "automationTaskId" = (
   WHERE "automationRun"."sessionId" = "session"."id"
     AND "automationRun"."taskId" IS NOT NULL
     AND "automationRun"."graphId" IS NULL
+  ORDER BY "automationRun"."id" LIMIT 1
 )
 WHERE EXISTS (
   SELECT 1 FROM "automationRun"
@@ -66,6 +74,7 @@ export async function ensureRunSessionAggregation(
     'runGraphId',
   ]);
   await addMissingColumns(db, 'automationRun', runColumns, ['workspaceId']);
+  await db.$executeRawUnsafe(DEDUPE_SQL);
   await db.$executeRawUnsafe(BACKFILL_SQL);
   for (const sql of INDEX_SQL) {
     await db.$executeRawUnsafe(sql);

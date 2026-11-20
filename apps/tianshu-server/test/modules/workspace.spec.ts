@@ -3,6 +3,8 @@ import * as http from 'node:http';
 import { INestApplication } from '@nestjs/common';
 import { WorkspaceModule } from 'src/modules/workspace/workspace.module';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
+import { AutomationRepository } from 'src/modules/automation/automation.repository';
+import { AutomationService } from 'src/modules/automation/automation.service';
 import { createTestDb, TestDb } from '../support/test-db';
 import { createTestApp, WrappedBody } from '../support/test-app';
 
@@ -24,7 +26,7 @@ describe('WorkspaceController (e2e)', () => {
     const created = await createTestApp(db.prisma, [WorkspaceModule]);
     app = created.app;
     server = created.server;
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await app.close();
@@ -212,6 +214,25 @@ describe('WorkspaceController (e2e)', () => {
     await db.prisma.toolPermission.create({
       data: { workspaceId: target.id, toolName: 'write' },
     });
+    const task = await db.prisma.automationTask.create({
+      data: {
+        name: 'workspace-run-task',
+        prompt: 'p',
+        workspaceId: target.id,
+        modelId: 1,
+        scheduleJson: '{}',
+        scheduleText: 'test',
+        userId: 1,
+      },
+    });
+    const run = await db.prisma.automationRun.create({
+      data: {
+        taskId: task.id,
+        sessionId: s1.id,
+        triggerType: 'manual',
+        status: 'success',
+      },
+    });
 
     const deleted = (
       await post('/workspace/delete', { id: target.id }).expect(200)
@@ -237,6 +258,14 @@ describe('WorkspaceController (e2e)', () => {
         where: { workspaceId: target.id },
       }),
     ).toBe(0);
+    const automations = new AutomationService(
+      db.prisma,
+      new AutomationRepository(db.prisma),
+      app.get(EventBusService),
+    );
+    expect(
+      (await automations.runById({ runId: run.id })).sessionId,
+    ).toBeUndefined();
 
     // 他人空间与重复删除同码（命名避开 query 用例已建的同名行）
     const other = await db.prisma.workspace.create({

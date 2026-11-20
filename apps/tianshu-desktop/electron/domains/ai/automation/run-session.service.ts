@@ -2,6 +2,7 @@ import type { AutomationRunDetail, RunGroupRecord } from "@tianshu/protocol";
 import { runOwnerOf } from "@tianshu/core/run-session";
 import prisma from "../../../commons/prisma-client";
 import { handleUser } from "../../../commons/ipc-user";
+import type { Prisma } from "../../../generated/prisma/client";
 import type { SessionRepository } from "../chat/session.repo";
 import { toRunRecord } from "./automation.repo";
 
@@ -32,6 +33,20 @@ interface TaskGroupRow {
 interface GraphGroupRow {
   id: number;
   name: string;
+}
+
+type RunSummaryRow = Parameters<typeof toRunRecord>[0];
+type RunOwnerKey = "taskId" | "graphId";
+
+interface RunMaximum {
+  ownerId: number;
+  startedAt: Date;
+}
+
+interface RunAggregateRow {
+  taskId?: number | null;
+  graphId?: number | null;
+  _max: { startedAt: Date | null };
 }
 
 /** 固定运行入口读面；Task 4 在同一实例扩展伴随会话创建。 */
@@ -67,15 +82,21 @@ export class RunSessionService {
         select: { id: true, name: true },
       }),
     ]);
-    const groupedSessions = await this.listGraphSessions(userId, graphs);
-    const [taskGroups, graphGroups] = await Promise.all([
-      Promise.all(tasks.map((task) => this.taskGroup(task))),
-      Promise.all(
-        graphs.map((graph) =>
-          this.graphGroup(graph, groupedSessions.get(graph.id)),
-        ),
-      ),
+    const [groupedSessions, taskRuns, graphRuns] = await Promise.all([
+      this.listGraphSessions(userId, graphs),
+      this.latestTaskRuns(tasks.map((task) => task.id)),
+      this.latestGraphRuns(graphs.map((graph) => graph.id)),
     ]);
+    const taskGroups = tasks.map((task) =>
+      this.taskGroup(task, taskRuns.get(task.id)),
+    );
+    const graphGroups = graphs.map((graph) =>
+      this.graphGroup(
+        graph,
+        graphRuns.get(graph.id),
+        groupedSessions.get(graph.id),
+      ),
+    );
     return [...taskGroups, ...graphGroups]
       .filter((group): group is RunGroupRecord => group !== null)
       .sort(compareRunGroups);
@@ -100,12 +121,42 @@ export class RunSessionService {
     return result;
   }
 
-  private async taskGroup(task: TaskGroupRow): Promise<RunGroupRecord> {
-    const latestRun = await prisma.automationRun.findFirst({
-      where: { taskId: task.id },
-      orderBy: { startedAt: "desc" },
-      select: RUN_SUMMARY_SELECT,
+  private async latestTaskRuns(
+    taskIds: number[],
+  ): Promise<Map<number, RunSummaryRow>> {
+    if (taskIds.length === 0) return new Map();
+    const aggregates = await prisma.automationRun.groupBy({
+      by: ["taskId"],
+      where: { taskId: { in: taskIds } },
+      _max: { startedAt: true },
     });
+    const maxima = readRunMaxima(aggregates, "taskId");
+    const rows = await findLatestRuns("task", maxima);
+    return latestRunMap(rows, "taskId");
+  }
+
+  private async latestGraphRuns(
+    graphIds: number[],
+  ): Promise<Map<number, RunSummaryRow>> {
+    if (graphIds.length === 0) return new Map();
+    const aggregates = await prisma.automationRun.groupBy({
+      by: ["graphId"],
+      where: {
+        taskId: null,
+        graphId: { in: graphIds },
+        triggerType: { not: "subflow" },
+      },
+      _max: { startedAt: true },
+    });
+    const maxima = readRunMaxima(aggregates, "graphId");
+    const rows = await findLatestRuns("graph", maxima);
+    return latestRunMap(rows, "graphId");
+  }
+
+  private taskGroup(
+    task: TaskGroupRow,
+    latestRun?: RunSummaryRow,
+  ): RunGroupRecord {
     return {
       kind: "task",
       ownerId: task.id,
@@ -115,19 +166,15 @@ export class RunSessionService {
       latestRun: latestRun
         ? toRunRecord(latestRun, task.name, false)
         : undefined,
-      hasRuns: latestRun !== null,
+      hasRuns: latestRun !== undefined,
     };
   }
 
-  private async graphGroup(
+  private graphGroup(
     graph: GraphGroupRow,
+    latestRun?: RunSummaryRow,
     groupedSession?: { workspaceId: number },
-  ): Promise<RunGroupRecord | null> {
-    const latestRun = await prisma.automationRun.findFirst({
-      where: { taskId: null, graphId: graph.id },
-      orderBy: { startedAt: "desc" },
-      select: RUN_SUMMARY_SELECT,
-    });
+  ): RunGroupRecord | null {
     if (!latestRun && !groupedSession) return null;
     return {
       kind: "graph",
@@ -137,7 +184,7 @@ export class RunSessionService {
       latestRun: latestRun
         ? toRunRecord(latestRun, graph.name, false)
         : undefined,
-      hasRuns: latestRun !== null,
+      hasRuns: latestRun !== undefined,
     };
   }
 
@@ -162,6 +209,62 @@ export class RunSessionService {
     if (!ownerRow) throw new Error("RUN_NOT_FOUND");
     return toRunRecord(row, ownerRow.name);
   }
+}
+
+function readRunMaxima(
+  rows: RunAggregateRow[],
+  ownerKey: RunOwnerKey,
+): RunMaximum[] {
+  return rows.flatMap((row) => {
+    const ownerId = row[ownerKey];
+    const startedAt = row._max.startedAt;
+    return ownerId == null || !startedAt ? [] : [{ ownerId, startedAt }];
+  });
+}
+
+async function findLatestRuns(
+  kind: "task" | "graph",
+  maxima: RunMaximum[],
+): Promise<RunSummaryRow[]> {
+  if (maxima.length === 0) return [];
+  const ownerFilters: Prisma.automationRunWhereInput[] = maxima.map(
+    ({ ownerId, startedAt }) => ({
+      ...(kind === "task" ? { taskId: ownerId } : { graphId: ownerId }),
+      startedAt,
+    }),
+  );
+  return prisma.automationRun.findMany({
+    where: {
+      ...(kind === "graph" && {
+        taskId: null,
+        triggerType: { not: "subflow" },
+      }),
+      OR: ownerFilters,
+    },
+    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+    select: RUN_SUMMARY_SELECT,
+  });
+}
+
+function latestRunMap(
+  rows: RunSummaryRow[],
+  ownerKey: RunOwnerKey,
+): Map<number, RunSummaryRow> {
+  const result = new Map<number, RunSummaryRow>();
+  for (const row of rows) {
+    const ownerId = row[ownerKey];
+    if (ownerId === null) continue;
+    const current = result.get(ownerId);
+    if (
+      !current ||
+      row.startedAt > current.startedAt ||
+      (row.startedAt.getTime() === current.startedAt.getTime() &&
+        row.id > current.id)
+    ) {
+      result.set(ownerId, row);
+    }
+  }
+  return result;
 }
 
 function compareRunGroups(left: RunGroupRecord, right: RunGroupRecord): number {

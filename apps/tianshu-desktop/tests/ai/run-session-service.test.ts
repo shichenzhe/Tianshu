@@ -11,7 +11,9 @@ const db = vi.hoisted(() => ({
   },
   automationRun: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     findUnique: vi.fn(),
+    groupBy: vi.fn(),
   },
   session: {
     findMany: vi.fn(),
@@ -76,6 +78,42 @@ interface RunFixture {
   error: string | null;
   startedAt: Date;
   finishedAt: Date | null;
+}
+
+interface RunWhere {
+  taskId?: number | null | { in: number[] };
+  graphId?: number | null | { in: number[] };
+  triggerType?: { not: string };
+  startedAt?: Date;
+  OR?: RunWhere[];
+}
+
+function matchesId(
+  value: number | null,
+  filter?: number | null | { in: number[] },
+): boolean {
+  if (filter === undefined) return true;
+  if (typeof filter === "object" && filter !== null) {
+    return value !== null && filter.in.includes(value);
+  }
+  return value === filter;
+}
+
+function matchesRunWhere(run: RunFixture, where: RunWhere): boolean {
+  if (!matchesId(run.taskId, where.taskId)) return false;
+  if (!matchesId(run.graphId, where.graphId)) return false;
+  if (where.triggerType && run.triggerType === where.triggerType.not) {
+    return false;
+  }
+  if (
+    where.startedAt &&
+    run.startedAt.getTime() !== where.startedAt.getTime()
+  ) {
+    return false;
+  }
+  return (
+    !where.OR || where.OR.some((candidate) => matchesRunWhere(run, candidate))
+  );
 }
 
 function makeRun(id: number, overrides: Partial<RunFixture> = {}): RunFixture {
@@ -149,21 +187,41 @@ function useData(data: {
       ),
   );
   db.automationRun.findFirst.mockImplementation(
-    async ({
-      where,
-    }: {
-      where: { taskId?: number | null; graphId?: number };
-    }) => {
-      const matches = runs.filter(
-        (run) =>
-          (where.taskId === undefined || run.taskId === where.taskId) &&
-          (where.graphId === undefined || run.graphId === where.graphId),
-      );
+    async ({ where }: { where: RunWhere }) => {
+      const matches = runs.filter((run) => matchesRunWhere(run, where));
       return (
         matches.sort(
           (left, right) => right.startedAt.getTime() - left.startedAt.getTime(),
         )[0] ?? null
       );
+    },
+  );
+  db.automationRun.findMany.mockImplementation(
+    async ({ where }: { where: RunWhere }) =>
+      runs.filter((run) => matchesRunWhere(run, where)),
+  );
+  db.automationRun.groupBy.mockImplementation(
+    async ({
+      by,
+      where,
+    }: {
+      by: Array<"taskId" | "graphId">;
+      where: RunWhere;
+    }) => {
+      const ownerKey = by[0];
+      const latest = new Map<number, Date>();
+      for (const run of runs.filter((row) => matchesRunWhere(row, where))) {
+        const ownerId = run[ownerKey];
+        if (ownerId === null) continue;
+        const previous = latest.get(ownerId);
+        if (!previous || run.startedAt > previous) {
+          latest.set(ownerId, run.startedAt);
+        }
+      }
+      return [...latest].map(([ownerId, startedAt]) => ({
+        [ownerKey]: ownerId,
+        _max: { startedAt },
+      }));
     },
   );
   db.automationRun.findUnique.mockImplementation(
@@ -237,6 +295,11 @@ describe("RunSessionService.listRunGroups", () => {
         },
       ],
       runs: [
+        makeRun(790, {
+          taskId: 2,
+          graphId: 20,
+          startedAt: new Date("2026-11-02T00:00:00.000Z"),
+        }),
         makeRun(800, {
           taskId: 2,
           graphId: 20,
@@ -303,11 +366,18 @@ describe("RunSessionService.listRunGroups", () => {
     expect(db.graphDefinition.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { userId: 1 } }),
     );
-    for (const call of db.automationRun.findFirst.mock.calls) {
+    const summaryQueries = [
+      ...db.automationRun.findFirst.mock.calls,
+      ...db.automationRun.findMany.mock.calls,
+    ];
+    expect(summaryQueries).toHaveLength(2);
+    expect(db.automationRun.groupBy).toHaveBeenCalledTimes(2);
+    for (const call of summaryQueries) {
       expect(call[0]).toMatchObject({
-        orderBy: { startedAt: "desc" },
+        orderBy: [{ startedAt: "desc" }, { id: "desc" }],
       });
       expect(call[0].select).not.toHaveProperty("graphTrace");
+      expect(call[0].select).not.toHaveProperty("graphJsonSnapshot");
     }
   });
 
@@ -347,6 +417,58 @@ describe("RunSessionService.listRunGroups", () => {
     expect(db.session.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { userId: 1, runGraphId: { in: [40, 50] } },
+      }),
+    );
+  });
+
+  it("子工作流运行不开图组，也不能取代更新的顶层最近运行", async () => {
+    useData({
+      graphs: [
+        {
+          id: 30,
+          userId: 1,
+          name: "top-level-graph",
+          createdAt: new Date("2026-11-01T00:00:00.000Z"),
+        },
+        {
+          id: 40,
+          userId: 1,
+          name: "subflow-only-graph",
+          createdAt: new Date("2026-11-01T00:00:00.000Z"),
+        },
+      ],
+      runs: [
+        makeRun(100, {
+          graphId: 30,
+          startedAt: new Date("2026-11-02T00:00:00.000Z"),
+        }),
+        makeRun(200, {
+          graphId: 30,
+          triggerType: "subflow",
+          startedAt: new Date("2026-11-05T00:00:00.000Z"),
+        }),
+        makeRun(300, {
+          graphId: 40,
+          triggerType: "subflow",
+          startedAt: new Date("2026-11-06T00:00:00.000Z"),
+        }),
+      ],
+    });
+
+    const groups = await makeService().listRunGroups(1);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      kind: "graph",
+      ownerId: 30,
+      latestRun: { id: 100, triggerType: "manual" },
+    });
+    expect(db.automationRun.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          taskId: null,
+          triggerType: { not: "subflow" },
+        }),
       }),
     );
   });

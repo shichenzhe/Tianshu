@@ -1,6 +1,8 @@
 import type { AutomationRunDetail } from "@tianshu/protocol";
 
 const DEFAULT_RUN_CONTEXT_CHARS = 16000;
+const RUN_NAME_CHARS = 1000;
+const RUN_ERROR_CHARS = 2000;
 
 type TraceEntry = Record<string, unknown>;
 
@@ -25,12 +27,12 @@ function parseTrace(raw: string | undefined): TraceEntry[] {
 function metadata(run: AutomationRunDetail): string {
   return [
     "【运行上下文】",
-    `名称: ${run.taskName || "-"}`,
+    `名称: ${fitMiddle(run.taskName || "-", RUN_NAME_CHARS)}`,
     `运行 ID: ${run.id}`,
     `执行时间: ${run.startedAt}`,
     `触发类型: ${run.triggerType}`,
     `状态: ${run.status}`,
-    run.error ? `错误: ${run.error}` : "",
+    run.error ? `错误: ${fitMiddle(run.error, RUN_ERROR_CHARS)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -93,6 +95,21 @@ function fitMiddle(text: string, maxChars: number): string {
   return `${text.slice(0, headChars)}${marker}${tailChars > 0 ? text.slice(-tailChars) : ""}`;
 }
 
+function boundedEssential(sections: string[], maxChars: number): string {
+  const present = sections.filter(Boolean);
+  if (present.length === 0) return "";
+  const separatorChars = (present.length - 1) * 2;
+  const available = Math.max(0, maxChars - separatorChars);
+  const base = Math.floor(available / present.length);
+  const remainder = available % present.length;
+  const bounded = present
+    .map((section, index) =>
+      fitMiddle(section, base + (index < remainder ? 1 : 0)),
+    )
+    .join("\n\n");
+  return bounded.slice(0, maxChars);
+}
+
 /** 单次运行的固定追问摘要；不读取消息或其他运行，输出始终有界。 */
 export function buildRunFollowupContext(
   run: AutomationRunDetail,
@@ -102,10 +119,8 @@ export function buildRunFollowupContext(
     ? Math.max(0, Math.floor(maxChars))
     : DEFAULT_RUN_CONTEXT_CHARS;
   const trace = parseTrace(run.graphTrace);
-  const essential = [metadata(run), finalOutput(trace), failedNodes(trace)]
-    .filter(Boolean)
-    .join("\n\n");
-  const bounded = fitMiddle(essential, limit);
+  const sections = [metadata(run), finalOutput(trace), failedNodes(trace)];
+  const bounded = boundedEssential(sections, limit);
   if (bounded.length >= limit || trace.length === 0) return bounded;
   const suffix = `\n\n${traceSummary(trace)}`;
   return bounded + suffix.slice(0, limit - bounded.length);

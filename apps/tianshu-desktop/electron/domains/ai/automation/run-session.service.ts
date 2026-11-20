@@ -262,16 +262,46 @@ export class RunSessionService {
       return { runId, sessionId: owned.row.sessionId, created: false };
     }
     const target = await this.resolveSessionTarget(owned, userId, workspaceId);
+    const orphanId = await this.findOrphanSession(owned, userId);
+    if (orphanId !== null) {
+      return this.claimOrRecover(runId, orphanId, false);
+    }
     const session = await this.sessionRepo.createSession(
       sessionCreateParams(owned, target.workspaceId, target.projectId),
       userId,
     );
+    return this.claimOrRecover(runId, session.id, true);
+  }
+
+  private async findOrphanSession(
+    owned: OwnedRun,
+    userId: number,
+  ): Promise<number | null> {
+    const candidates = await prisma.session.findMany({
+      where: orphanSessionWhere(owned, userId),
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    if (candidates.length === 0) return null;
+    const linked = await prisma.automationRun.findMany({
+      where: { sessionId: { in: candidates.map((session) => session.id) } },
+      select: { sessionId: true },
+    });
+    const linkedIds = new Set(linked.map((run) => run.sessionId));
+    return candidates.find((session) => !linkedIds.has(session.id))?.id ?? null;
+  }
+
+  private async claimOrRecover(
+    runId: number,
+    sessionId: number,
+    created: boolean,
+  ): Promise<RunSessionResult> {
     try {
-      const claimed = await this.claimSession(runId, session.id);
-      if (claimed) return { runId, sessionId: session.id, created: true };
-      return await this.recoverClaim(runId, session.id);
+      const claimed = await this.claimSession(runId, sessionId);
+      if (claimed) return { runId, sessionId, created };
+      return await this.recoverClaim(runId, sessionId);
     } catch (error) {
-      return await this.recoverClaim(runId, session.id, error);
+      return await this.recoverClaim(runId, sessionId, error);
     }
   }
 
@@ -340,16 +370,33 @@ export class RunSessionService {
   }
 }
 
+function runSessionTitle(owned: OwnedRun): string {
+  const name = owned.owner === "task" ? owned.task.name : owned.graph.name;
+  return `${name} · ${owned.row.startedAt.toISOString()}`;
+}
+
+function orphanSessionWhere(
+  owned: OwnedRun,
+  userId: number,
+): Prisma.sessionWhereInput {
+  return {
+    userId,
+    title: runSessionTitle(owned),
+    lastMessageAt: null,
+    automationTaskId: owned.owner === "task" ? owned.task.id : null,
+    runGraphId: owned.owner === "graph" ? owned.graph.id : null,
+  };
+}
+
 function sessionCreateParams(
   owned: OwnedRun,
   workspaceId: number,
   projectId?: number,
 ): SessionCreateParams {
-  const name = owned.owner === "task" ? owned.task.name : owned.graph.name;
   return {
     workspaceId,
     projectId,
-    title: `${name} · ${owned.row.startedAt.toISOString()}`,
+    title: runSessionTitle(owned),
     automationTaskId: owned.owner === "task" ? owned.task.id : null,
     runGraphId: owned.owner === "graph" ? owned.graph.id : null,
   };

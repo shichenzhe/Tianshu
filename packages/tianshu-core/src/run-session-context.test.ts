@@ -56,6 +56,40 @@ describe("buildRunFollowupContext", () => {
     expect(context).toContain("run-level-error");
   });
 
+  it("retains bounded metadata, final output, and failure details when essentials overflow", () => {
+    const graphTrace = JSON.stringify([
+      {
+        id: "failed-node",
+        status: "failed",
+        error: {
+          code: "failed-code",
+          message: "failed-message",
+          detail: `failure-detail-${"d".repeat(20000)}`,
+        },
+      },
+      {
+        id: "final-node",
+        status: "success",
+        outputPreview: `final-output-${"o".repeat(12000)}`,
+      },
+    ]);
+
+    const context = buildRunFollowupContext(
+      makeRun({
+        taskName: `essential-name-${"n".repeat(12000)}`,
+        error: `essential-error-${"e".repeat(12000)}`,
+        graphTrace,
+      }),
+    );
+
+    expect(context.length).toBeLessThanOrEqual(16000);
+    expect(context).toContain("essential-name");
+    expect(context).toContain("essential-error");
+    expect(context).toContain("final-output");
+    expect(context).toContain("failed-node");
+    expect(context).toContain("failure-detail");
+  });
+
   it("does not throw for malformed JSON or incomplete trace entries", () => {
     expect(() =>
       buildRunFollowupContext(makeRun({ graphTrace: "not-json" })),

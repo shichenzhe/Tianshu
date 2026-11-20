@@ -5,10 +5,12 @@ const db = vi.hoisted(() => ({
   graphDefinition: { findFirst: vi.fn() },
   automationRun: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     updateMany: vi.fn(),
   },
   session: {
     findFirst: vi.fn(),
+    findMany: vi.fn(),
     delete: vi.fn(),
   },
   $transaction: vi.fn(),
@@ -81,6 +83,7 @@ interface SessionFixture {
   automationTaskId: number | null;
   runGraphId: number | null;
   title: string;
+  lastMessageAt?: Date | null;
 }
 
 function makeRun(overrides: Partial<RunFixture> = {}): RunFixture {
@@ -141,6 +144,33 @@ function useData(data: {
       sessions.find(
         (session) => session.id === where.id && session.userId === where.userId,
       ) ?? null,
+  );
+  db.session.findMany.mockImplementation(
+    async ({
+      where,
+    }: {
+      where: {
+        userId: number;
+        title: string;
+        automationTaskId: number | null;
+        runGraphId: number | null;
+      };
+    }) =>
+      sessions.filter(
+        (session) =>
+          session.userId === where.userId &&
+          session.title === where.title &&
+          session.automationTaskId === where.automationTaskId &&
+          session.runGraphId === where.runGraphId &&
+          session.lastMessageAt == null,
+      ),
+  );
+  db.automationRun.findMany.mockImplementation(
+    async ({ where }: { where: { sessionId: { in: number[] } } }) =>
+      runs.filter(
+        (run) =>
+          run.sessionId !== null && where.sessionId.in.includes(run.sessionId),
+      ),
   );
   db.automationRun.updateMany.mockImplementation(
     async ({
@@ -358,6 +388,35 @@ describe("RunSessionService.ensureRunSession", () => {
       expect.objectContaining({ workspaceId: 31, runGraphId: 8 }),
       1,
     );
+  });
+
+  it("reuses a deterministic orphan after a crash between creation and claim", async () => {
+    const state = useData({
+      graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],
+      runs: [makeRun({ workspaceId: 3 })],
+    });
+    const { service, createSession } = makeService(state.sessions);
+    const crash = new Error("claim-crashed");
+    db.automationRun.updateMany.mockRejectedValueOnce(crash);
+    db.automationRun.findUnique.mockImplementationOnce(
+      async () => state.runs[0],
+    );
+    db.automationRun.findUnique.mockImplementationOnce(async () => {
+      throw crash;
+    });
+
+    await expect(service.ensureRunSession(50, 1)).rejects.toThrow(
+      "claim-crashed",
+    );
+    expect(state.sessions).toHaveLength(1);
+
+    await expect(service.ensureRunSession(50, 1)).resolves.toEqual({
+      runId: 50,
+      sessionId: state.sessions[0].id,
+      created: false,
+    });
+    expect(state.sessions).toHaveLength(1);
+    expect(createSession).toHaveBeenCalledTimes(1);
   });
 
   it("registers the user-scoped lazy-creation IPC channel", () => {

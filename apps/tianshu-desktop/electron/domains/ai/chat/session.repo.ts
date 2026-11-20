@@ -22,6 +22,9 @@ import {
 } from "./artifact-aggregate";
 import { getAppOptionMap, setAppOption } from "../../app-settings/option-store";
 import { summarizeLastMessage } from "@tianshu/core/last-message";
+import { runOwnerOf } from "@tianshu/core/run-session";
+import { buildRunFollowupContext } from "@tianshu/core/run-session-context";
+import { toRunRecord } from "../automation/automation.repo";
 import type { SessionLastMessage, SessionReadResult } from "@tianshu/protocol";
 import { revokeSession } from "../file-window/granted-paths";
 import { emitWorkspaceChanged } from "./workspace-change-bus";
@@ -467,6 +470,40 @@ export class SessionRepository {
 
   async getSession(id: number): Promise<SessionRow | null> {
     return prisma.session.findUnique({ where: { id } });
+  }
+
+  /** 用户聊天发送链专用：仅读取当前会话引用的那一次运行。 */
+  async getRunFollowupContext(sessionId: number): Promise<string | null> {
+    const run = await prisma.automationRun.findUnique({
+      where: { sessionId },
+    });
+    if (!run) return null;
+    const owner = runOwnerOf({
+      taskId: run.taskId,
+      graphId: run.graphId ?? undefined,
+    });
+    if (!owner) return null;
+    const name = await this.runOwnerName(owner.kind, owner.ownerId);
+    return name === null
+      ? null
+      : buildRunFollowupContext(toRunRecord(run, name));
+  }
+
+  private async runOwnerName(
+    kind: "task" | "graph",
+    ownerId: number,
+  ): Promise<string | null> {
+    const row =
+      kind === "task"
+        ? await prisma.automationTask.findFirst({
+            where: { id: ownerId },
+            select: { name: true },
+          })
+        : await prisma.graphDefinition.findFirst({
+            where: { id: ownerId },
+            select: { name: true },
+          });
+    return row?.name ?? null;
   }
 
   /** 文件窗 AI 面板（T22）按 id 拉取单会话：归属校验（findFirst 带

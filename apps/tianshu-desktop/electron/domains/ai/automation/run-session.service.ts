@@ -1,9 +1,14 @@
-import type { AutomationRunDetail, RunGroupRecord } from "@tianshu/protocol";
-import { runOwnerOf } from "@tianshu/core/run-session";
+import type {
+  AutomationRunDetail,
+  RunGroupRecord,
+  RunSessionResult,
+} from "@tianshu/protocol";
+import { canFollowUpRun, runOwnerOf } from "@tianshu/core/run-session";
 import prisma from "../../../commons/prisma-client";
 import { handleUser } from "../../../commons/ipc-user";
 import type { Prisma } from "../../../generated/prisma/client";
 import type { SessionRepository } from "../chat/session.repo";
+import type { SessionCreateParams } from "../../../../src-react/domains/ai/api/session.api";
 import { toRunRecord } from "./automation.repo";
 
 const RUN_SUMMARY_SELECT = {
@@ -35,6 +40,12 @@ interface GraphGroupRow {
   name: string;
 }
 
+type TaskOwnerRow = TaskGroupRow;
+type GraphOwnerRow = GraphGroupRow & { aiSessionId: number | null };
+type OwnedRun =
+  | { row: RunSummaryRow; owner: "task"; task: TaskOwnerRow }
+  | { row: RunSummaryRow; owner: "graph"; graph: GraphOwnerRow };
+
 type RunSummaryRow = Parameters<typeof toRunRecord>[0];
 type RunOwnerKey = "taskId" | "graphId";
 
@@ -61,6 +72,11 @@ export class RunSessionService {
     );
     handleUser("automation:run:get", (_, userId, runId: number) =>
       this.getRun(runId, userId),
+    );
+    handleUser(
+      "automation:run:ensureSession",
+      (_, userId, runId: number, workspaceId?: number) =>
+        this.ensureRunSession(runId, userId, workspaceId),
     );
   }
 
@@ -189,6 +205,12 @@ export class RunSessionService {
   }
 
   async getRun(runId: number, userId: number): Promise<AutomationRunDetail> {
+    const owned = await this.readOwnedRun(runId, userId);
+    const name = owned.owner === "task" ? owned.task.name : owned.graph.name;
+    return toRunRecord(owned.row, name);
+  }
+
+  private async readOwnedRun(runId: number, userId: number): Promise<OwnedRun> {
     const row = await prisma.automationRun.findUnique({ where: { id: runId } });
     if (!row) throw new Error("RUN_NOT_FOUND");
     const owner = runOwnerOf({
@@ -196,19 +218,141 @@ export class RunSessionService {
       graphId: row.graphId ?? undefined,
     });
     if (!owner) throw new Error("RUN_NOT_FOUND");
-    const ownerRow =
-      owner.kind === "task"
-        ? await prisma.automationTask.findFirst({
-            where: { id: owner.ownerId, userId },
-            select: { id: true, name: true },
-          })
-        : await prisma.graphDefinition.findFirst({
-            where: { id: owner.ownerId, userId },
-            select: { id: true, name: true },
-          });
-    if (!ownerRow) throw new Error("RUN_NOT_FOUND");
-    return toRunRecord(row, ownerRow.name);
+    return owner.kind === "task"
+      ? this.readTaskRun(row, owner.ownerId, userId)
+      : this.readGraphRun(row, owner.ownerId, userId);
   }
+
+  private async readTaskRun(
+    row: RunSummaryRow,
+    taskId: number,
+    userId: number,
+  ): Promise<OwnedRun> {
+    const task = await prisma.automationTask.findFirst({
+      where: { id: taskId, userId },
+      select: { id: true, name: true, workspaceId: true, projectId: true },
+    });
+    if (!task) throw new Error("RUN_NOT_FOUND");
+    return { row, owner: "task", task };
+  }
+
+  private async readGraphRun(
+    row: RunSummaryRow,
+    graphId: number,
+    userId: number,
+  ): Promise<OwnedRun> {
+    const graph = await prisma.graphDefinition.findFirst({
+      where: { id: graphId, userId },
+      select: { id: true, name: true, aiSessionId: true },
+    });
+    if (!graph) throw new Error("RUN_NOT_FOUND");
+    return { row, owner: "graph", graph };
+  }
+
+  async ensureRunSession(
+    runId: number,
+    userId: number,
+    workspaceId?: number,
+  ): Promise<RunSessionResult> {
+    const owned = await this.readOwnedRun(runId, userId);
+    if (!canFollowUpRun(owned.row.status as AutomationRunDetail["status"])) {
+      throw new Error("RUN_NOT_FOLLOWABLE");
+    }
+    if (owned.row.sessionId !== null) {
+      return { runId, sessionId: owned.row.sessionId, created: false };
+    }
+    const target = await this.resolveSessionTarget(owned, userId, workspaceId);
+    const session = await this.sessionRepo.createSession(
+      sessionCreateParams(owned, target.workspaceId, target.projectId),
+      userId,
+    );
+    try {
+      const claimed = await this.claimSession(runId, session.id);
+      if (claimed) return { runId, sessionId: session.id, created: true };
+      return await this.recoverClaim(runId, session.id);
+    } catch (error) {
+      return await this.recoverClaim(runId, session.id, error);
+    }
+  }
+
+  private async resolveSessionTarget(
+    owned: OwnedRun,
+    userId: number,
+    explicitWorkspaceId?: number,
+  ): Promise<{ workspaceId: number; projectId?: number }> {
+    if (owned.owner === "task") {
+      return {
+        workspaceId: owned.task.workspaceId,
+        projectId: owned.task.projectId ?? undefined,
+      };
+    }
+    if (owned.row.workspaceId !== null) {
+      return { workspaceId: owned.row.workspaceId };
+    }
+    const editorWorkspaceId = await this.graphEditorWorkspace(owned, userId);
+    const workspaceId = editorWorkspaceId ?? explicitWorkspaceId;
+    if (workspaceId === undefined) throw new Error("RUN_WORKSPACE_REQUIRED");
+    return { workspaceId };
+  }
+
+  private async graphEditorWorkspace(
+    owned: Extract<OwnedRun, { owner: "graph" }>,
+    userId: number,
+  ): Promise<number | undefined> {
+    if (owned.graph.aiSessionId === null) return undefined;
+    const session = await prisma.session.findFirst({
+      where: { id: owned.graph.aiSessionId, userId },
+      select: { workspaceId: true },
+    });
+    return session?.workspaceId;
+  }
+
+  private async claimSession(
+    runId: number,
+    sessionId: number,
+  ): Promise<boolean> {
+    const result = await prisma.$transaction((tx) =>
+      tx.automationRun.updateMany({
+        where: { id: runId, sessionId: null },
+        data: { sessionId },
+      }),
+    );
+    return result.count === 1;
+  }
+
+  private async recoverClaim(
+    runId: number,
+    sessionId: number,
+    originalError?: unknown,
+  ): Promise<RunSessionResult> {
+    const winner = await prisma.automationRun.findUnique({
+      where: { id: runId },
+      select: { sessionId: true },
+    });
+    if (winner?.sessionId != null) {
+      if (winner.sessionId !== sessionId) {
+        await prisma.session.delete({ where: { id: sessionId } });
+      }
+      return { runId, sessionId: winner.sessionId, created: false };
+    }
+    await prisma.session.delete({ where: { id: sessionId } });
+    throw originalError ?? new Error("RUN_NOT_FOUND");
+  }
+}
+
+function sessionCreateParams(
+  owned: OwnedRun,
+  workspaceId: number,
+  projectId?: number,
+): SessionCreateParams {
+  const name = owned.owner === "task" ? owned.task.name : owned.graph.name;
+  return {
+    workspaceId,
+    projectId,
+    title: `${name} · ${owned.row.startedAt.toISOString()}`,
+    automationTaskId: owned.owner === "task" ? owned.task.id : null,
+    runGraphId: owned.owner === "graph" ? owned.graph.id : null,
+  };
 }
 
 function readRunMaxima(

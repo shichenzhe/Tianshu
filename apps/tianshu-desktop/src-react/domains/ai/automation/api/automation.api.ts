@@ -25,7 +25,11 @@ import {
 } from "@/domains/ai/data-source/remote-catalog";
 // 健康度总览 wire 类型（core 单源 re-export——2026-11-10 收编：主进程
 // IPC 聚合与远程态适配器（automation/stats 原始行端点）同源同口径）
-import type { AutomationRunDetail, RunGroupRecord } from "@tianshu/protocol";
+import type {
+  AutomationRunDetail,
+  RunGroupRecord,
+  RunSessionResult,
+} from "@tianshu/protocol";
 import type { AutomationStats } from "@tianshu/core/automation-stats";
 import type { ScheduleConfig } from "./schedule.schema";
 
@@ -228,6 +232,18 @@ export class AutomationApi {
   /** 深链按 id 直读单 run，不受运行历史分页位置限制。 */
   static async runById(runId: number): Promise<AutomationRunDetail> {
     return invoke<AutomationRunDetail>("automation:run:get", runId);
+  }
+
+  /** 首次追问时懒建伴随会话；并发补建由主进程唯一键收敛。 */
+  static async ensureRunSession(
+    runId: number,
+    workspaceId?: number,
+  ): Promise<RunSessionResult> {
+    return invoke<RunSessionResult>(
+      "automation:run:ensureSession",
+      runId,
+      workspaceId,
+    );
   }
 
   /** 创建埋点(PRD《执行频率》§5)——远程态静默丢弃（本地统计表聚合，

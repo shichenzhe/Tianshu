@@ -2478,10 +2478,14 @@ export default class ChatService {
     const baseSystem = workflowNoteOn
       ? `${scenarioSystem ? `${scenarioSystem}\n\n` : ""}${WORKFLOW_MOUNT_NOTE}`
       : scenarioSystem;
+    const runContext = await this.sessions.getRunFollowupContext?.(sessionId);
+    const systemWithRun = runContext
+      ? [baseSystem, runContext].filter(Boolean).join("\n\n")
+      : baseSystem;
     const systemWithSummary =
       compacted && session.summary
-        ? `${baseSystem ? `${baseSystem}\n\n` : ""}【此前对话摘要】\n${session.summary}`
-        : baseSystem;
+        ? `${systemWithRun ? `${systemWithRun}\n\n` : ""}【此前对话摘要】\n${session.summary}`
+        : systemWithRun;
     return {
       session,
       modelId,

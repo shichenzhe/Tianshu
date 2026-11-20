@@ -193,6 +193,7 @@ export const IPC_INVOKE_ALLOWLIST = [
   "automation:runs:page",
   "automation:runGroups",
   "automation:run:get",
+  "automation:run:ensureSession",
   "automation:stat",
   "automation:stats",
   // 监控模块（token/工具监控）

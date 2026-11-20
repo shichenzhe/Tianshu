@@ -49,6 +49,11 @@ import type {
   TaskCreateParams,
   TaskRecord,
 } from "../automation/api/automation.api";
+import type {
+  AutomationRunDetail,
+  RunGroupRecord,
+  RunSessionResult,
+} from "@tianshu/protocol";
 import type { LibraryItem } from "../library/api/library.api";
 import RemoteLibraryApi, {
   type RemoteLibraryItem,
@@ -741,6 +746,27 @@ export async function remoteAutomationRuns(
     total: result.total,
     items: result.items as RunPage["items"],
   };
+}
+
+export async function remoteAutomationRunGroups(
+  connId: string,
+): Promise<RunGroupRecord[]> {
+  return RemoteGraphApi.automationRunGroups(connId);
+}
+
+export async function remoteAutomationRunById(
+  runId: number,
+  connId: string,
+): Promise<AutomationRunDetail> {
+  return RemoteGraphApi.automationRunById(runId, connId);
+}
+
+export async function remoteAutomationEnsureRunSession(
+  runId: number,
+  workspaceId: number | undefined,
+  connId: string,
+): Promise<RunSessionResult> {
+  return RemoteGraphApi.automationEnsureRunSession(runId, workspaceId, connId);
 }
 
 /** 健康度总览（挂账收口 2026-11-10）：拉原始行集（7 天窗口，server 不

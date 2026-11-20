@@ -16,7 +16,10 @@ import { invoke } from "@/lib/ipc";
 import { routeInvoke, remoteConnId } from "@/domains/ai/data-source/host-route";
 import {
   remoteAutomationDelete,
+  remoteAutomationEnsureRunSession,
   remoteAutomationList,
+  remoteAutomationRunById,
+  remoteAutomationRunGroups,
   remoteAutomationRunNow,
   remoteAutomationRuns,
   remoteAutomationSave,
@@ -224,25 +227,28 @@ export class AutomationApi {
     );
   }
 
-  /** 固定入口分组：本任务仅接本地，远程 capability 在后续任务接入。 */
+  /** 固定入口分组：本地走原 IPC；远程由 runSessions capability 门控后调用。 */
   static async runGroups(): Promise<RunGroupRecord[]> {
-    return invoke<RunGroupRecord[]>("automation:runGroups");
+    return routeInvoke({ ch: "automation:runGroups", args: [] }, (connId) =>
+      remoteAutomationRunGroups(connId),
+    );
   }
 
   /** 深链按 id 直读单 run，不受运行历史分页位置限制。 */
   static async runById(runId: number): Promise<AutomationRunDetail> {
-    return invoke<AutomationRunDetail>("automation:run:get", runId);
+    return routeInvoke({ ch: "automation:run:get", args: [runId] }, (connId) =>
+      remoteAutomationRunById(runId, connId),
+    );
   }
 
-  /** 首次追问时懒建伴随会话；并发补建由主进程唯一键收敛。 */
+  /** 首次追问时懒建伴随会话；并发补建由远端/主进程唯一键收敛。 */
   static async ensureRunSession(
     runId: number,
     workspaceId?: number,
   ): Promise<RunSessionResult> {
-    return invoke<RunSessionResult>(
-      "automation:run:ensureSession",
-      runId,
-      workspaceId,
+    return routeInvoke(
+      { ch: "automation:run:ensureSession", args: [runId, workspaceId] },
+      (connId) => remoteAutomationEnsureRunSession(runId, workspaceId, connId),
     );
   }
 

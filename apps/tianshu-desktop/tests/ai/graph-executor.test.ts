@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
 }));
+const emitAutomationChangedMock = vi.hoisted(() => vi.fn());
+vi.mock("../../electron/domains/ai/automation/automation-change-bus", () => ({
+  emitAutomationChanged: emitAutomationChangedMock,
+}));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {
     // 去会话化：session/message 两键已删——executor 不再触碰两表，
@@ -283,6 +287,21 @@ describe("executeGraphRun", () => {
       "基于 go 成文",
     );
   });
+  it("收尾发送 automation.changed：任务运行携任务 id，独立图运行携 0", async () => {
+    emitAutomationChangedMock.mockClear();
+    modelMock.invoke.mockReset().mockResolvedValueOnce({ branch: "stop" });
+    await executeGraphRun(runParams({ topic: "AI" }));
+    expect(emitAutomationChangedMock).toHaveBeenLastCalledWith(0);
+
+    modelMock.invoke.mockReset().mockResolvedValueOnce({ branch: "stop" });
+    await executeGraphRun({
+      ...runParams({ topic: "AI" }),
+      task: { id: 7, userId: 1 } as never,
+    });
+    expect(emitAutomationChangedMock).toHaveBeenLastCalledWith(7);
+    expect(emitAutomationChangedMock).toHaveBeenCalledTimes(2);
+  });
+
   it("节点 LLM 失败：run failed，error 含 node:<id> 与分类码，后续节点 skipped", async () => {
     modelMock.invoke.mockRejectedValueOnce(new Error("network down"));
     const out = await executeGraphRun(runParams({ topic: "AI" }));

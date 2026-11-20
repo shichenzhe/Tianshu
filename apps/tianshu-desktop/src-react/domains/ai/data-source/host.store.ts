@@ -52,7 +52,7 @@ export function capsOfCapabilities(capabilities: string[]): HostCaps {
     // 照旧全关，HD-T4 门控零改动跟随
     files: has("files"),
     graph: has("graph"),
-    runSessions: false,
+    runSessions: has("runSessions"),
   };
 }
 

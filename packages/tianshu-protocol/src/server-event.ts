@@ -207,6 +207,7 @@ export const CAPABILITIES = [
   "chat",
   "provider",
   "graph",
+  "runSessions",
   "files",
   "library",
   // MO 批（2026-10-27）：monitor/stats 只读聚合面——事件两表+三处埋点
@@ -500,6 +501,9 @@ export const ENDPOINTS = {
     save: "automation/save",
     delete: "automation/delete",
     runNow: "automation/runNow",
+    runGroups: "automation/runGroups",
+    runById: "automation/runById",
+    ensureRunSession: "automation/ensureRunSession",
     // 移动端 CRUD+运行历史批：分页运行历史（page/taskId?/status? 下推
     // 筛选；载荷 AutomationRunRecord 剔 graphTrace 精简面）
     runPage: "automation/runPage",

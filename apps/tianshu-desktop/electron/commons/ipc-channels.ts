@@ -432,6 +432,9 @@ export const IPC_INVOKE_ALLOWLIST = [
   "server:automationSave",
   "server:automationDelete",
   "server:automationRunNow",
+  "server:automationRunGroups",
+  "server:automationRunById",
+  "server:automationEnsureRunSession",
   // 自动化任务页路由化（automation/library 批 2026-11-10）：runPage 的
   // taskId+status 任务口径（graphRuns 为 graphId 图口径）+ stats 健康度
   // 原始行集（客户端聚合）

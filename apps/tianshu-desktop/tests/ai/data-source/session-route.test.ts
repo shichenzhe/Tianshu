@@ -79,6 +79,9 @@ describe("SessionApi 远程主机（适配器映射）", () => {
             mode: "ask",
             updatedAt: "2026-10-19T00:00:00.000Z",
             pinnedAt: "2026-10-18T00:00:00.000Z",
+            automationTaskId: 4,
+            runGraphId: null,
+            automationRunId: 9,
           },
           { id: 2, title: "归档", mode: "agent", archivedAt: "x" },
         ],
@@ -98,6 +101,9 @@ describe("SessionApi 远程主机（适配器映射）", () => {
       title: "远端会话",
       mode: "ask",
       pinnedAt: "2026-10-18T00:00:00.000Z",
+      automationTaskId: 4,
+      runGraphId: null,
+      automationRunId: 9,
     });
     expect(result[1]).toMatchObject({ id: 2, archivedAt: "x" });
     expect(invoke).not.toHaveBeenCalled();

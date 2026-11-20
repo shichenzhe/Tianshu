@@ -106,6 +106,7 @@ import {
   type ProviderRuntimeInfo,
 } from "../provider/provider-runtime";
 import { recordGraphMonitorEvents } from "../monitor/monitor-events";
+import { emitAutomationChanged } from "../automation/automation-change-bus";
 
 export interface TraceEntry {
   id: string;
@@ -1902,6 +1903,7 @@ async function finishRun(p: FinishParams): Promise<"success" | "failed"> {
     Log.warn("图运行收尾落库失败（run 行可能已删除）", p.runId, e);
   }
   await advanceTaskAfterRun(p);
+  emitAutomationChanged(p.task?.id ?? 0);
   return p.status;
 }
 

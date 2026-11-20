@@ -20,6 +20,9 @@ const remoteGraphApi = vi.hoisted(() => ({
   automationDelete: vi.fn(),
   automationRunNow: vi.fn(),
   automationRuns: vi.fn(),
+  automationRunGroups: vi.fn(),
+  automationRunById: vi.fn(),
+  automationEnsureRunSession: vi.fn(),
   automationStatsRaw: vi.fn(),
 }));
 vi.mock("../../src-react/domains/ai/server/api/graph.api", () => ({
@@ -49,8 +52,10 @@ vi.mock("../../src-react/domains/ai/server/api/server.api", () => ({
 import {
   useHostStore,
   LOCAL_HOST_CAPS,
+  capsOfCapabilities,
 } from "../../src-react/domains/ai/data-source/host.store";
 import { AutomationApi } from "../../src-react/domains/ai/automation/api/automation.api";
+import { CAPABILITIES } from "@tianshu/protocol";
 
 const REMOTE_ROW = {
   id: 3,
@@ -90,6 +95,15 @@ beforeEach(() => {
   });
 });
 
+describe("运行会话 capability", () => {
+  it("协议公布 runSessions，远程仅在显式上报时开启，本地恒开启", () => {
+    expect(CAPABILITIES).toContain("runSessions");
+    expect(capsOfCapabilities(["graph"]).runSessions).toBe(false);
+    expect(capsOfCapabilities(["graph", "runSessions"]).runSessions).toBe(true);
+    expect(LOCAL_HOST_CAPS.runSessions).toBe(true);
+  });
+});
+
 describe("自动化任务页本地主机（零行为变化）", () => {
   it("list/create/toggle/runs：invoke 原通道参数逐字", async () => {
     invoke.mockResolvedValue([]);
@@ -108,6 +122,19 @@ describe("自动化任务页本地主机（零行为变化）", () => {
       undefined,
     );
     expect(remoteGraphApi.automationList).not.toHaveBeenCalled();
+  });
+
+  it("runGroups/runById/ensureRunSession：invoke 原通道参数逐字", async () => {
+    invoke.mockResolvedValue([]);
+    await AutomationApi.runGroups();
+    expect(invoke).toHaveBeenCalledWith("automation:runGroups");
+    await AutomationApi.runById(9);
+    expect(invoke).toHaveBeenCalledWith("automation:run:get", 9);
+    await AutomationApi.ensureRunSession(9, 8);
+    expect(invoke).toHaveBeenCalledWith("automation:run:ensureSession", 9, 8);
+    expect(remoteGraphApi.automationRunGroups).not.toHaveBeenCalled();
+    expect(remoteGraphApi.automationRunById).not.toHaveBeenCalled();
+    expect(remoteGraphApi.automationEnsureRunSession).not.toHaveBeenCalled();
   });
 
   it("templates/stat/stats 本地可用", async () => {
@@ -223,6 +250,66 @@ describe("自动化任务页远程主机（适配器映射）", () => {
     );
     expect(page.total).toBe(1);
     expect(page.items[0]).toMatchObject({ taskId: 3, status: "success" });
+  });
+
+  it("runGroups/runById/ensureRunSession：远程适配并保留 workspaceId/graphTrace", async () => {
+    remoteGraphApi.automationRunGroups.mockResolvedValue([
+      {
+        kind: "graph",
+        ownerId: 3,
+        name: "report-flow",
+        workspaceId: 8,
+        hasRuns: true,
+        latestRun: {
+          id: 9,
+          taskId: null,
+          graphId: 3,
+          taskName: "report-flow",
+          workspaceId: 8,
+          attempt: 1,
+          triggerType: "manual",
+          status: "success",
+          startedAt: "2026-11-20T09:00:00.000Z",
+        },
+      },
+    ]);
+    remoteGraphApi.automationRunById.mockResolvedValue({
+      id: 9,
+      taskId: null,
+      graphId: 3,
+      taskName: "report-flow",
+      workspaceId: 8,
+      graphTrace: '[{"id":"node-1"}]',
+      attempt: 1,
+      triggerType: "manual",
+      status: "success",
+      startedAt: "2026-11-20T09:00:00.000Z",
+    });
+    remoteGraphApi.automationEnsureRunSession.mockResolvedValue({
+      runId: 9,
+      sessionId: 90,
+      created: true,
+    });
+
+    const groups = await AutomationApi.runGroups();
+    const detail = await AutomationApi.runById(9);
+    const ensured = await AutomationApi.ensureRunSession(9, 8);
+
+    expect(remoteGraphApi.automationRunGroups).toHaveBeenCalledWith("conn-x");
+    expect(remoteGraphApi.automationRunById).toHaveBeenCalledWith(9, "conn-x");
+    expect(remoteGraphApi.automationEnsureRunSession).toHaveBeenCalledWith(
+      9,
+      8,
+      "conn-x",
+    );
+    expect(groups[0].workspaceId).toBe(8);
+    expect(groups[0].latestRun?.workspaceId).toBe(8);
+    expect(detail).toMatchObject({
+      workspaceId: 8,
+      graphTrace: '[{"id":"node-1"}]',
+    });
+    expect(ensured).toEqual({ runId: 9, sessionId: 90, created: true });
+    expect(invoke).not.toHaveBeenCalled();
   });
 
   it("templates 本地静态清单复用；stat 埋点静默丢弃不落通道", async () => {

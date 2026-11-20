@@ -322,6 +322,18 @@ export function registerServerIpc(
     "server:automationRunNow",
     remoteHandler(registry, ENDPOINTS.automation.runNow),
   );
+  ipcMain.handle(
+    "server:automationRunGroups",
+    remoteHandler(registry, ENDPOINTS.automation.runGroups),
+  );
+  ipcMain.handle(
+    "server:automationRunById",
+    remoteHandler(registry, ENDPOINTS.automation.runById),
+  );
+  ipcMain.handle(
+    "server:automationEnsureRunSession",
+    remoteHandler(registry, ENDPOINTS.automation.ensureRunSession),
+  );
   // —— 自动化任务页路由化（automation/library 批 2026-11-10）：运行历史
   //   任务口径（taskId+status 过滤；graphRuns 为图口径同端点） ——
   ipcMain.handle(

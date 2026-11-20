@@ -120,9 +120,9 @@ describe("run group view", () => {
 });
 
 describe("run session host capability", () => {
-  it("is local-only until remote run-session support is enabled", () => {
+  it("is local by default and remote only when explicitly reported", () => {
     expect(LOCAL_HOST_CAPS.runSessions).toBe(true);
     expect(capsOfCapabilities(["chat", "graph"]).runSessions).toBe(false);
-    expect(capsOfCapabilities(["runSessions"]).runSessions).toBe(false);
+    expect(capsOfCapabilities(["graph", "runSessions"]).runSessions).toBe(true);
   });
 });

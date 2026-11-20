@@ -118,6 +118,9 @@ class FakeFace {
   private readonly sseStreams = new Set<http.ServerResponse>();
   /** POST /session/approve 收到的请求体（T17 透传断言用） */
   public readonly approveRequests: unknown[] = [];
+  /** 运行会话三端点收到的路径与请求体（Task 9 透传断言用） */
+  public readonly runSessionRequests: Array<{ path: string; body: unknown }> =
+    [];
   private constructor(
     private readonly server: http.Server,
     public token: string | null,
@@ -191,6 +194,44 @@ class FakeFace {
         if (req.method === "POST" && req.url?.startsWith("/session/approve")) {
           face.approveRequests.push(raw ? JSON.parse(raw) : {});
           reply(res, 200, { responded: true });
+          return;
+        }
+        if (
+          req.method === "POST" &&
+          [
+            "/automation/runGroups",
+            "/automation/runById",
+            "/automation/ensureRunSession",
+          ].includes(req.url ?? "")
+        ) {
+          const body = raw ? JSON.parse(raw) : {};
+          face.runSessionRequests.push({ path: req.url!, body });
+          if (req.url === "/automation/runGroups") {
+            reply(res, 200, [
+              {
+                kind: "graph",
+                ownerId: 3,
+                name: "remote-flow",
+                workspaceId: 8,
+                hasRuns: true,
+              },
+            ]);
+          } else if (req.url === "/automation/runById") {
+            reply(res, 200, {
+              id: 9,
+              taskId: null,
+              graphId: 3,
+              taskName: "remote-flow",
+              workspaceId: 8,
+              graphTrace: '[{"id":"node-1"}]',
+              attempt: 1,
+              triggerType: "manual",
+              status: "success",
+              startedAt: "2026-11-20T09:00:00.000Z",
+            });
+          } else {
+            reply(res, 200, { runId: 9, sessionId: 90, created: true });
+          }
           return;
         }
         reply(res, 404, null, "4040", "接口不存在");
@@ -759,7 +800,7 @@ describe("session 透传与 invalid-token 连接态", () => {
 });
 
 describe("IPC 装配（registerServerIpc）", () => {
-  it("77 通道注册（orchestration 批 +graphToggle/graphRuns/graphRunNodes、切换即连批 +connectionActivate；automation/library 批 +automationRuns+library 十七端点、挂账收口批 +automationStats/libraryAddFiles/libraryImportFolder；P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats；TOFU 仪式批 +connectionConfirmFingerprint）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
+  it("80 通道注册（run-session 批 +automationRunGroups/runById/ensureRunSession；orchestration 批 +graphToggle/graphRuns/graphRunNodes、切换即连批 +connectionActivate；automation/library 批 +automationRuns+library 十七端点、挂账收口批 +automationStats/libraryAddFiles/libraryImportFolder；P1 尾 +sessionRead；T17 +sessionApprove；GA-T8 +graph/automation 九端点；UD-T2 +ui 三端点；TB-T2 +bridgeDecision；模型面 +provider 查存/删/测/拉取五端点；会话 +sessionDelete/update/regenerate；专家 +assistantQuery；CU 批 +editAndResend/accessMode；AL 批 +usage/skills 三端点；PM 批 +skillsSetEnabled；FA-T3 +files 三端点；WH 消费端批 +webhook 配置三端点；A9 会话内工具批 +compact/polish；P0-1 +monitorStats；TOFU 仪式批 +connectionConfirmFingerprint）；sessionList 走活动连接；事件桥推 server:chunk:*/server:event:*", async () => {
     const port = await reservePort();
     const face = await FakeFace.start(port, "face-token");
     const registry = newRegistry();
@@ -776,7 +817,10 @@ describe("IPC 装配（registerServerIpc）", () => {
       expect([...handlers.keys()].sort()).toEqual([
         "server:assistantQuery",
         "server:automationDelete",
+        "server:automationEnsureRunSession",
         "server:automationQuery",
+        "server:automationRunById",
+        "server:automationRunGroups",
         "server:automationRunNow",
         "server:automationRuns",
         "server:automationSave",
@@ -895,6 +939,38 @@ describe("IPC 装配（registerServerIpc）", () => {
         { sessionId: 9, toolCallId: "w-1", approved: true },
       ]);
 
+      const groups = (await handlers.get("server:automationRunGroups")!(
+        {} as never,
+        {},
+        undefined,
+      )) as { body: { data: Array<{ workspaceId: number }> } };
+      const detail = (await handlers.get("server:automationRunById")!(
+        {} as never,
+        { runId: 9 },
+        undefined,
+      )) as {
+        body: { data: { workspaceId: number; graphTrace: string } };
+      };
+      const ensured = (await handlers.get("server:automationEnsureRunSession")!(
+        {} as never,
+        { runId: 9, workspaceId: 8 },
+        undefined,
+      )) as { body: { data: { sessionId: number } } };
+      expect(groups.body.data[0].workspaceId).toBe(8);
+      expect(detail.body.data).toMatchObject({
+        workspaceId: 8,
+        graphTrace: '[{"id":"node-1"}]',
+      });
+      expect(ensured.body.data.sessionId).toBe(90);
+      expect(face.runSessionRequests).toEqual([
+        { path: "/automation/runGroups", body: {} },
+        { path: "/automation/runById", body: { runId: 9 } },
+        {
+          path: "/automation/ensureRunSession",
+          body: { runId: 9, workspaceId: 8 },
+        },
+      ]);
+
       // 事件桥：server.connected（建流首帧，§13 项 2）+ chunk → server:chunk:
       // <connId>:<sessionId>；session.* → server:event:<connId>
       await vi.waitFor(() =>
@@ -1006,7 +1082,7 @@ describe("本地无头端（Supervisor 装配）", () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "ts-empty-"));
     try {
       await expect(startLocalServer(registry, emptyDir)).rejects.toThrow(
-        /dist\/src\/main\.js.*npm run build|npm run build.*dist\/src\/main\.js/s,
+        /dist[\\/]src[\\/]main\.js.*npm run build|npm run build.*dist[\\/]src[\\/]main\.js/s,
       );
     } finally {
       fs.rmSync(emptyDir, { recursive: true, force: true });

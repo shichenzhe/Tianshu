@@ -41,6 +41,13 @@ function toSessionRecord(row: RemoteSessionRow): SessionRecord {
     ...(row.compactedUpToId !== undefined
       ? { compactedUpToId: row.compactedUpToId }
       : {}),
+    ...(row.automationTaskId !== undefined
+      ? { automationTaskId: row.automationTaskId }
+      : {}),
+    ...(row.runGraphId !== undefined ? { runGraphId: row.runGraphId } : {}),
+    ...(row.automationRunId != null
+      ? { automationRunId: row.automationRunId }
+      : {}),
   };
 }
 

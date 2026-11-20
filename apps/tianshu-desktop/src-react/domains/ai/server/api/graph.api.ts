@@ -15,7 +15,10 @@
 import { on } from "@/lib/ipc";
 import type {
   AutomationChangedPayload,
+  AutomationRunDetail,
   GraphRunUpdatedPayload,
+  RunGroupRecord,
+  RunSessionResult,
 } from "@tianshu/protocol";
 import { requestRemote } from "./server.api";
 
@@ -240,6 +243,37 @@ export default class GraphApi {
         ...(taskId !== undefined ? { taskId } : {}),
         ...(status ? { status } : {}),
       },
+      connId,
+    );
+  }
+
+  static async automationRunGroups(connId: string): Promise<RunGroupRecord[]> {
+    return requestRemote<RunGroupRecord[]>(
+      "server:automationRunGroups",
+      {},
+      connId,
+    );
+  }
+
+  static async automationRunById(
+    runId: number,
+    connId: string,
+  ): Promise<AutomationRunDetail> {
+    return requestRemote<AutomationRunDetail>(
+      "server:automationRunById",
+      { runId },
+      connId,
+    );
+  }
+
+  static async automationEnsureRunSession(
+    runId: number,
+    workspaceId: number | undefined,
+    connId: string,
+  ): Promise<RunSessionResult> {
+    return requestRemote<RunSessionResult>(
+      "server:automationEnsureRunSession",
+      { runId, ...(workspaceId !== undefined ? { workspaceId } : {}) },
       connId,
     );
   }

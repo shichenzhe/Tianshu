@@ -121,6 +121,7 @@ import GlobalSearchDialog from "../../src-react/domains/ai/layout/components/Glo
 import type { SessionRecord } from "../../src-react/domains/ai/api/session.api";
 import {
   LOCAL_HOST_CAPS,
+  capsOfCapabilities,
   useHostStore,
 } from "../../src-react/domains/ai/data-source/host.store";
 import { useNewTaskStore } from "../../src-react/domains/ai/new-task/store/new-task-store";
@@ -451,6 +452,31 @@ describe("SessionTreePanel 固定运行入口", () => {
     await clickMenuItem("chat:runSessions.runNow");
     await waitFor(() =>
       expect(automationApiMock.runNow).toHaveBeenCalledWith(4),
+    );
+  });
+
+  it("显式 runSessions capability 的远程主机查询固定组并归组会话", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "new" },
+      caps: capsOfCapabilities(["graph", "runSessions"]),
+    });
+    automationApiMock.runGroups.mockResolvedValue([runGroup({})]);
+    sessionApiMock.listAll.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+      session({ id: 42, title: "ordinary-remote" }),
+    ]);
+    renderPanel();
+
+    expect(await screen.findByText("chat:runSessions.title")).toBeTruthy();
+    expect(await screen.findAllByText("daily-report")).toHaveLength(1);
+    expect(await screen.findByText("ordinary-remote")).toBeTruthy();
+    await waitFor(() =>
+      expect(automationApiMock.runGroups).toHaveBeenCalledTimes(1),
     );
   });
 

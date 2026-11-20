@@ -235,6 +235,10 @@ export interface RemoteSessionRow {
   summary?: string | null;
   /** A9 会话内工具批：压缩覆盖点消息 id（历史过滤点，与 summary 成对） */
   compactedUpToId?: number | null;
+  /** 运行会话归属（旧被控端缺省 undefined；任务与图分组列互斥） */
+  automationTaskId?: number | null;
+  runGraphId?: number | null;
+  automationRunId?: number | null;
 }
 
 export interface RemoteSessionPage {

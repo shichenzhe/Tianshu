@@ -25,12 +25,19 @@ import { PROJECT_CHANGED_EVENT } from "@/domains/project/api/project.api";
 import { useHostStore } from "@/domains/ai/data-source/host.store";
 
 export function registerQueryInvalidation(client: QueryClient): void {
+  const invalidateRunSessions = (): void => {
+    void client.invalidateQueries({ queryKey: ["automation", "runGroups"] });
+    void client.invalidateQueries({ queryKey: ["automation", "run"] });
+    void client.invalidateQueries({ queryKey: ["sessions"] });
+  };
+  const invalidateAutomation = (): void => {
+    void client.invalidateQueries({ queryKey: ["automation"] });
+    void client.invalidateQueries({ queryKey: ["sessions"] });
+  };
   on(GRAPH_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["orchestration"] });
   });
-  on(AUTOMATION_CHANGED_EVENT, () => {
-    void client.invalidateQueries({ queryKey: ["automation"] });
-  });
+  on(AUTOMATION_CHANGED_EVENT, invalidateAutomation);
   // 批③（2026-11-01）：本机被控写入（移动端经 face tap 落本地库）→ 侧栏
   // 分组树缓存失效（前缀失效覆盖 ["projects", user.id] 子 key）
   on(WORKSPACE_CHANGED_EVENT, () => {
@@ -54,7 +61,9 @@ export function registerQueryInvalidation(client: QueryClient): void {
       if (type === "graph.changed") {
         void client.invalidateQueries({ queryKey: ["orchestration"] });
       } else if (type === "automation.changed") {
-        void client.invalidateQueries({ queryKey: ["automation"] });
+        invalidateAutomation();
+      } else if (type === "graph.run.updated" || type === "session.updated") {
+        invalidateRunSessions();
       }
     });
   };

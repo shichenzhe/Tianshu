@@ -6,6 +6,7 @@ import type {
   AutomationRunNodeRecord,
   AutomationRunPage,
   RunGroupRecord,
+  RunSessionResult,
 } from '@tianshu/protocol';
 import { TaskRecordDto } from './dto/task-record.dto';
 import {
@@ -32,7 +33,9 @@ import { AutomationRunQueryDto } from './dto/automation-run-query.dto';
 import { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
 import {
   AutomationRunDetailDto,
+  EnsureRunSessionDto,
   RunGroupRecordDto,
+  RunSessionResultDto,
 } from './dto/run-session.dto';
 
 /**
@@ -48,6 +51,7 @@ import {
   AutomationRunNodeDto,
   AutomationRunDetailDto,
   RunGroupRecordDto,
+  RunSessionResultDto,
 )
 @Controller('automation')
 export class AutomationController {
@@ -130,6 +134,16 @@ export class AutomationController {
   @ApiWrappedOk(AutomationRunDetailDto)
   async runById(@Body() dto: RunIdDto): Promise<AutomationRunDetail> {
     return await this.automationService.runById(dto);
+  }
+
+  @Post('ensureRunSession')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '幂等确保终态运行的伴随会话' })
+  @ApiWrappedOk(RunSessionResultDto)
+  async ensureRunSession(
+    @Body() dto: EnsureRunSessionDto,
+  ): Promise<RunSessionResult> {
+    return await this.automationService.ensureRunSession(dto);
   }
 
   /**

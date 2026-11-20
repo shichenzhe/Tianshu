@@ -3462,6 +3462,55 @@
         ]
       }
     },
+    "/automation/ensureRunSession": {
+      "post": {
+        "operationId": "AutomationController_ensureRunSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnsureRunSessionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "example": "2000"
+                    },
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RunSessionResultDto"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "success"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "summary": "幂等确保终态运行的伴随会话",
+        "tags": [
+          "自动化"
+        ]
+      }
+    },
     "/automation/runNodes": {
       "post": {
         "operationId": "AutomationController_runNodes",
@@ -7813,6 +7862,28 @@
           "hasRuns"
         ]
       },
+      "RunSessionResultDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "number",
+            "description": "运行标识"
+          },
+          "sessionId": {
+            "type": "number",
+            "description": "既有或新建伴随会话标识"
+          },
+          "created": {
+            "type": "boolean",
+            "description": "本次是否创建了新会话"
+          }
+        },
+        "required": [
+          "runId",
+          "sessionId",
+          "created"
+        ]
+      },
       "AutomationQueryDto": {
         "type": "object",
         "properties": {
@@ -8207,6 +8278,22 @@
           "runId": {
             "type": "number",
             "description": "运行标识"
+          }
+        },
+        "required": [
+          "runId"
+        ]
+      },
+      "EnsureRunSessionDto": {
+        "type": "object",
+        "properties": {
+          "runId": {
+            "type": "number",
+            "description": "运行标识"
+          },
+          "workspaceId": {
+            "type": "number",
+            "description": "历史图运行无法推断空间时的显式工作空间"
           }
         },
         "required": [

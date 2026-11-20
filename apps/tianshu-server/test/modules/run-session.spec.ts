@@ -16,6 +16,7 @@ import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { trimAutomationRuns } from 'src/modules/automation/automation-retention';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
 import { GraphRepository } from 'src/modules/graph/graph.repository';
 import { SessionRepository } from 'src/modules/session/session.repository';
 import { SessionQueryDto } from 'src/modules/session/dto/session-query.dto';
@@ -97,6 +98,7 @@ describe('run session persistence and queries', () => {
       db.prisma,
       automations,
       new EventBusService(),
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
     );
     const workspace = await db.prisma.workspace.create({
       data: { name: 'run-session-ws', userId: UID },

@@ -14,6 +14,8 @@ import { GraphService } from 'src/modules/graph/graph.service';
 import { GraphQueryDto } from 'src/modules/graph/dto/graph-query.dto';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
+import { SessionRepository } from 'src/modules/session/session.repository';
 import { AutomationQueryDto } from 'src/modules/automation/dto/automation-query.dto';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { PrismaService } from 'src/commons/database/prisma.service';
@@ -112,6 +114,7 @@ describe('graph/automation 列表查询下推（repo pageGraphs/pageTasks）', (
         db.prisma,
         new AutomationRepository(db.prisma),
         new EventBusService(),
+        new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
       );
       const T0 = Date.now();
       const ws = await db.prisma.workspace.create({

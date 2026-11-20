@@ -17,6 +17,8 @@ import { createChatModel } from 'src/core/provider/model-factory';
 import { GraphRepository } from 'src/modules/graph/graph.repository';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
+import { SessionRepository } from 'src/modules/session/session.repository';
 import { AutomationScheduler } from 'src/modules/automation/automation-scheduler';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import type { ServerEvent } from '@tianshu/protocol';
@@ -115,6 +117,7 @@ describe('automation/save enabled 显式写入（GA-T9/Ruling 14）', () => {
       db.prisma,
       new AutomationRepository(db.prisma),
       bus,
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
     );
     scheduler = new AutomationScheduler(db.prisma, {
       config: () => ({

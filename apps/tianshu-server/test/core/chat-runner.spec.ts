@@ -33,7 +33,7 @@ type RunnerInternals = {
   assembleContext: (
     sessionId: number,
     userId: number,
-  ) => Promise<{ agent: AgentStreamOptions }>;
+  ) => Promise<{ agent: AgentStreamOptions; systemWithSummary?: string }>;
 };
 
 describe('ChatRunnerService run', () => {
@@ -147,6 +147,43 @@ describe('ChatRunnerService run', () => {
     ]);
     expect(messages[1].modelId).toBe(session.currentModelId);
     expect(messages[1].error).toBeNull();
+  });
+
+  it('run 关联会话注入固定追问摘要，普通会话 system 保持不变', async () => {
+    const { session } = await seedSession(db, dirs);
+    const graph = await db.prisma.graphDefinition.create({
+      data: { name: 'followup-graph', graphJson: '{}', userId: 1 },
+    });
+    await db.prisma.automationRun.create({
+      data: {
+        graphId: graph.id,
+        sessionId: session.id,
+        workspaceId: 1,
+        attempt: 1,
+        triggerType: 'manual',
+        status: 'success',
+        startedAt: new Date('2026-11-20T01:02:03.000Z'),
+        graphTrace: JSON.stringify([
+          {
+            id: 'last',
+            name: 'Last',
+            status: 'success',
+            outputPreview: 'final-output',
+          },
+        ]),
+      },
+    });
+    const { runner } = makeRunner(db, dirs, []);
+    const internals = runner as unknown as RunnerInternals;
+
+    const assembled = await internals.assembleContext(session.id, 1);
+    expect(assembled.systemWithSummary).toContain('final-output');
+    expect(assembled.systemWithSummary).toContain('followup-graph');
+
+    const { session: ordinarySession } = await seedSession(db, dirs);
+    const ordinary = await internals.assembleContext(ordinarySession.id, 1);
+    expect(ordinary.systemWithSummary ?? '').not.toContain('final-output');
+    expect(ordinary.systemWithSummary ?? '').not.toContain('【运行上下文】');
   });
 
   it('会话标题 heuristic 兜底（2026-11-02）：默认标题改写为首条 user 消息前 20 字；第二轮不改写（mirror autotitleIfDefault 同构）', async () => {

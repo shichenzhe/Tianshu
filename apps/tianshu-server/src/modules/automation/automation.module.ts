@@ -25,6 +25,7 @@ import {
   type TianshuConfig,
 } from 'src/commons/config/tianshu-config.entity';
 import { GraphModule } from 'src/modules/graph/graph.module';
+import { SessionModule } from 'src/modules/session/session.module';
 import { AutomationScheduler } from './automation-scheduler';
 import {
   AutomationRepository,
@@ -33,6 +34,7 @@ import {
 import { AUTOMATION_SCHEDULER_DEPS } from './automation-scheduler';
 import { AutomationService } from './automation.service';
 import { AutomationController } from './automation.controller';
+import { RunSessionService } from './run-session.service';
 import {
   AUTOMATION_EVENT_BUS,
   createAutomationEventBus,
@@ -54,7 +56,7 @@ function automationSafety(configService: ConfigService) {
 }
 
 @Module({
-  imports: [PrismaModule, GraphModule],
+  imports: [PrismaModule, GraphModule, SessionModule],
   controllers: [AutomationController],
   providers: [
     {
@@ -108,6 +110,7 @@ function automationSafety(configService: ConfigService) {
     AutomationRepository,
     AutomationScheduler,
     AutomationService,
+    RunSessionService,
   ],
 })
 export class AutomationModule {}

@@ -1246,6 +1246,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/automation/ensureRunSession": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 幂等确保终态运行的伴随会话 */
+        post: operations["AutomationController_ensureRunSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/automation/runNodes": {
         parameters: {
             query?: never;
@@ -2743,6 +2760,14 @@ export interface components {
             /** @description 是否存在可见运行 */
             hasRuns: boolean;
         };
+        RunSessionResultDto: {
+            /** @description 运行标识 */
+            runId: number;
+            /** @description 既有或新建伴随会话标识 */
+            sessionId: number;
+            /** @description 本次是否创建了新会话 */
+            created: boolean;
+        };
         AutomationQueryDto: {
             /**
              * @description 页码，从1开始
@@ -2878,6 +2903,12 @@ export interface components {
         RunIdDto: {
             /** @description 运行标识 */
             runId: number;
+        };
+        EnsureRunSessionDto: {
+            /** @description 运行标识 */
+            runId: number;
+            /** @description 历史图运行无法推断空间时的显式工作空间 */
+            workspaceId?: number;
         };
         AutomationStatsQueryDto: {
             /** @description 统计窗口起点（ISO，客户端 7 天窗口） */
@@ -5289,6 +5320,37 @@ export interface operations {
                         /** @example true */
                         success?: boolean;
                         data?: components["schemas"]["AutomationRunDetailDto"];
+                        /** @example success */
+                        message?: string;
+                    };
+                };
+            };
+        };
+    };
+    AutomationController_ensureRunSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnsureRunSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2000 */
+                        code?: string;
+                        /** @example true */
+                        success?: boolean;
+                        data?: components["schemas"]["RunSessionResultDto"];
                         /** @example success */
                         message?: string;
                     };

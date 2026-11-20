@@ -5,6 +5,8 @@ import { WorkspaceModule } from 'src/modules/workspace/workspace.module';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
+import { SessionRepository } from 'src/modules/session/session.repository';
 import { createTestDb, TestDb } from '../support/test-db';
 import { createTestApp, WrappedBody } from '../support/test-app';
 
@@ -262,6 +264,7 @@ describe('WorkspaceController (e2e)', () => {
       db.prisma,
       new AutomationRepository(db.prisma),
       app.get(EventBusService),
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
     );
     expect(
       (await automations.runById({ runId: run.id })).sessionId,

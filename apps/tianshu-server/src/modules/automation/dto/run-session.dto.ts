@@ -1,6 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import type { AutomationRunDetail, RunGroupRecord } from '@tianshu/protocol';
+import { IsInt, IsOptional, Min } from 'class-validator';
+import type {
+  AutomationRunDetail,
+  RunGroupRecord,
+  RunSessionResult,
+} from '@tianshu/protocol';
 import { AutomationRunRecordDto } from './automation-run-record.dto';
+import { RunIdDto } from './run-id.dto';
 
 export class AutomationRunDetailDto
   extends AutomationRunRecordDto
@@ -40,4 +46,26 @@ export class RunGroupRecordDto implements RunGroupRecord {
 
   @ApiProperty({ description: '是否存在可见运行' })
   hasRuns: boolean;
+}
+
+export class EnsureRunSessionDto extends RunIdDto {
+  @ApiProperty({
+    description: '历史图运行无法推断空间时的显式工作空间',
+    required: false,
+  })
+  @IsOptional()
+  @IsInt({ message: '工作空间标识必须是整数' })
+  @Min(1, { message: '工作空间标识最小为 1' })
+  workspaceId?: number;
+}
+
+export class RunSessionResultDto implements RunSessionResult {
+  @ApiProperty({ description: '运行标识' })
+  runId: number;
+
+  @ApiProperty({ description: '既有或新建伴随会话标识' })
+  sessionId: number;
+
+  @ApiProperty({ description: '本次是否创建了新会话' })
+  created: boolean;
 }

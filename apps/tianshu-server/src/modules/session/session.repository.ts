@@ -33,6 +33,7 @@ export interface SessionCreateParams {
   workspaceId: number;
   userId: number;
   title: string;
+  projectId?: number | null;
   assistantId?: number | null;
   currentModelId?: number | null;
   automationTaskId?: number | null;

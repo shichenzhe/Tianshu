@@ -6,6 +6,8 @@
 import type { Prisma } from '@prisma/client';
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
+import { SessionRepository } from 'src/modules/session/session.repository';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { createTestDb, type TestDb } from '../support/test-db';
 
@@ -24,6 +26,7 @@ describe('automation/runNodes 运行节点详情（移动端执行详情批）',
       db.prisma,
       new AutomationRepository(db.prisma),
       new EventBusService(),
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
     );
     const ws = await db.prisma.workspace.create({
       data: { name: 'run-nodes-ws', userId: 1 },

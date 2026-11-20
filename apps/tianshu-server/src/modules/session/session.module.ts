@@ -11,5 +11,6 @@ import { SessionRepository } from './session.repository';
   imports: [PrismaModule, ChatCoreModule],
   controllers: [SessionController],
   providers: [SessionService, SessionRepository],
+  exports: [SessionRepository],
 })
 export class SessionModule {}

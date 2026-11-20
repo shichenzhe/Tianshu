@@ -11,6 +11,7 @@ import type {
   AutomationRunNodeRecord,
   AutomationRunPage,
   RunGroupRecord,
+  RunSessionResult,
 } from '@tianshu/protocol';
 import { QueryResult } from 'src/commons/query/query-result';
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
@@ -19,11 +20,13 @@ import { PrismaService } from 'src/commons/database/prisma.service';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 import { AutomationRepository, type TaskRecord } from './automation.repository';
+import { RunSessionService } from './run-session.service';
 import { recordAutomationEvent } from './automation-stat';
 import type { AutomationQueryDto } from './dto/automation-query.dto';
 import type { AutomationSaveDto } from './dto/automation-save.dto';
 import type { AutomationRunQueryDto } from './dto/automation-run-query.dto';
 import type { RunIdDto } from './dto/run-id.dto';
+import type { EnsureRunSessionDto } from './dto/run-session.dto';
 import type { AutomationStatsQueryDto } from './dto/automation-stats-query.dto';
 
 @Injectable()
@@ -32,6 +35,7 @@ export class AutomationService {
     private readonly prisma: PrismaService,
     private readonly repository: AutomationRepository,
     private readonly bus: EventBusService,
+    private readonly runSessions: RunSessionService,
   ) {}
 
   /** 任务列表（查询下推批：keyword contains + DB 分页下推 repo pageTasks，
@@ -120,6 +124,10 @@ export class AutomationService {
       throw new BusinessException('RUN_NOT_FOUND', ErrorCodeEnum.NOT_FOUND);
     }
     return run;
+  }
+
+  async ensureRunSession(dto: EnsureRunSessionDto): Promise<RunSessionResult> {
+    return await this.runSessions.ensureRunSession(dto);
   }
 
   /** 运行节点详情（移动端执行详情批）：repo listRunNodes 薄层——图 run

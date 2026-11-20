@@ -33,6 +33,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { SystemMessage, HumanMessage } from '@langchain/core/messages';
+import type { AutomationRun } from '@prisma/client';
 // 值导入（非 import type）：Nest DI 按 emitDecoratorMetadata 解析构造参数，
 // type-only 导入会退化为 Function 导致 ChatCoreModule 装配失败
 import { openSecret } from 'src/commons/security/secret-field';
@@ -42,6 +43,7 @@ import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
 // src/core/chat/ 本地副本已删）；块类型契约在 @tianshu/protocol
 import {
   buildPersonalizedSystem,
+  buildRunFollowupContext,
   buildScenarioSystem,
   effectiveContextWindow as effectiveContextWindowOf,
   estimateMessageTokens,
@@ -52,6 +54,7 @@ import {
   trimHistoryToolOutputs,
   mergeParams,
   runChatStream as runChatStreamCore,
+  runOwnerOf,
   serializeBlocks,
   type ChatStreamOptions as ChatStreamOptionsCore,
   type ChatStreamResult,
@@ -60,7 +63,11 @@ import {
   recordToolCall,
   usageFromBlocks,
 } from '@tianshu/core';
-import type { ChatStreamChunk, MessageBlock } from '@tianshu/protocol';
+import type {
+  AutomationRunDetail,
+  ChatStreamChunk,
+  MessageBlock,
+} from '@tianshu/protocol';
 import { BusinessException } from 'src/commons/exception/bussiness-exception';
 import { buildSystemPrompt, type SkillSummary } from './skill-prompt';
 import {
@@ -294,6 +301,31 @@ function aiMessageContentToText(content: unknown): string {
       .join('');
   }
   return String(content ?? '');
+}
+
+/** run 行转共享摘要输入；轨迹解析与裁剪只由 core 构建器负责。 */
+function runFollowupDetail(
+  row: AutomationRun,
+  taskName: string,
+): AutomationRunDetail {
+  return {
+    id: row.id,
+    taskId: row.taskId,
+    taskName,
+    graphId: row.graphId ?? undefined,
+    workspaceId: row.workspaceId ?? undefined,
+    graphTrace: row.graphTrace ?? undefined,
+    sessionId: row.sessionId,
+    attempt: row.attempt,
+    triggerType: row.triggerType as AutomationRunDetail['triggerType'],
+    status: row.status as AutomationRunDetail['status'],
+    durationMs: row.durationMs ?? undefined,
+    promptTokens: row.promptTokens ?? undefined,
+    completionTokens: row.completionTokens ?? undefined,
+    error: row.error ?? undefined,
+    startedAt: row.startedAt.toISOString(),
+    finishedAt: row.finishedAt?.toISOString(),
+  };
 }
 
 /**
@@ -1175,6 +1207,44 @@ export class ChatRunnerService {
 
   /** 采样参数经构造注入（终审 T9c 口径：不随请求下发模型） */
 
+  /** 用户聊天发送链专用：只读取当前会话引用的那一次运行。 */
+  private async runFollowupContext(
+    sessionId: number,
+    userId: number,
+  ): Promise<string | null> {
+    const run = await this.prisma.automationRun.findUnique({
+      where: { sessionId },
+    });
+    if (!run) return null;
+    const owner = runOwnerOf({
+      taskId: run.taskId,
+      graphId: run.graphId ?? undefined,
+    });
+    if (!owner) return null;
+    const name = await this.runOwnerName(owner.kind, owner.ownerId, userId);
+    return name === null
+      ? null
+      : buildRunFollowupContext(runFollowupDetail(run, name));
+  }
+
+  private async runOwnerName(
+    kind: 'task' | 'graph',
+    ownerId: number,
+    userId: number,
+  ): Promise<string | null> {
+    const row =
+      kind === 'task'
+        ? await this.prisma.automationTask.findFirst({
+            where: { id: ownerId, userId },
+            select: { name: true },
+          })
+        : await this.prisma.graphDefinition.findFirst({
+            where: { id: ownerId, userId },
+            select: { name: true },
+          });
+    return row?.name ?? null;
+  }
+
   /**
    * 上下文组装（mirror assembleContext 无头版）：会话/模型/助手 → 参数
    * 合并 → 压缩态过滤历史（+时间行注入）→ agent/模式/技能 → system
@@ -1287,10 +1357,14 @@ export class ChatRunnerService {
     const personalization = await loadPersonalization(this.prisma.option);
     const personalized = buildPersonalizedSystem(personalization, modeSystem);
     const baseSystem = buildScenarioSystem(session.scenario, personalized);
+    const runContext = await this.runFollowupContext(sessionId, userId);
+    const systemWithRun = runContext
+      ? [baseSystem, runContext].filter(Boolean).join('\n\n')
+      : baseSystem;
     const systemWithSummary =
       compacted && session.summary
-        ? `${baseSystem ? `${baseSystem}\n\n` : ''}【此前对话摘要】\n${session.summary}`
-        : baseSystem;
+        ? `${systemWithRun ? `${systemWithRun}\n\n` : ''}【此前对话摘要】\n${session.summary}`
+        : systemWithRun;
 
     const config = this.config();
     return {

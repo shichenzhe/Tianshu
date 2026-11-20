@@ -4,6 +4,8 @@
 // 端点只出精简行集——本测只锁数据面。
 import { AutomationRepository } from 'src/modules/automation/automation.repository';
 import { AutomationService } from 'src/modules/automation/automation.service';
+import { RunSessionService } from 'src/modules/automation/run-session.service';
+import { SessionRepository } from 'src/modules/session/session.repository';
 import { EventBusService } from 'src/commons/event-bus/event-bus.service';
 import { createTestDb, type TestDb } from '../support/test-db';
 
@@ -21,6 +23,7 @@ describe('automation/stats 原始行集（挂账收口批）', () => {
       db.prisma,
       new AutomationRepository(db.prisma),
       new EventBusService(),
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
     );
     const mkTask = (name: string, userId: number) =>
       db.prisma.automationTask

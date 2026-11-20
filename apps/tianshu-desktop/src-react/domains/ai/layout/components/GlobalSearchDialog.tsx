@@ -20,6 +20,8 @@ import ProjectApi from "@/domains/project/api/project.api";
 import { useUserStore } from "@/domains/user/store/user.store";
 import { mapIpcError } from "../../chat/lib/error-message";
 import { useAiUiStore } from "../../store/ai-ui.store";
+import { useHostStore } from "../../data-source/host.store";
+import { canonicalRunSessionPath } from "../../automation/lib/run-session-route";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -58,6 +60,7 @@ export default function GlobalSearchDialog() {
     enabled: searchOpen,
   });
   const results = resultsQuery.data ?? [];
+  const runSessionsEnabled = useHostStore((s) => s.caps.runSessions);
   /** 结果行副标题：普通会话取空间名；项目会话（workspaceId 为资产空间，
    *  不在空间列表）回退项目名，避免副标题空白 */
   const resultOrigin = (session: SessionRecord) =>
@@ -65,10 +68,15 @@ export default function GlobalSearchDialog() {
     projectsQuery.data?.find((p) => p.id === session.projectId)?.name ??
     "";
 
-  const handleSelect = (sessionId: number) => {
+  const handleSelect = (session: SessionRecord) => {
     setSearchOpen(false);
     setKeyword("");
-    navigate(`/module/ai?session=${sessionId}`, { replace: true });
+    const canonical = runSessionsEnabled
+      ? canonicalRunSessionPath(session)
+      : null;
+    navigate(canonical ?? `/module/ai?session=${session.id}`, {
+      replace: true,
+    });
   };
 
   return (
@@ -114,7 +122,7 @@ export default function GlobalSearchDialog() {
                 key={session.id}
                 type="button"
                 className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-primary-subtle/60"
-                onClick={() => handleSelect(session.id)}
+                onClick={() => handleSelect(session)}
               >
                 <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">

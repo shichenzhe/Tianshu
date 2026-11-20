@@ -89,11 +89,20 @@ vi.mock("@/domains/ai/api/workspace.api", () => ({
 }));
 const sessionApiMock = vi.hoisted(() => ({
   listAll: vi.fn(),
+  searchByTitle: vi.fn(),
   archive: vi.fn(),
   create: vi.fn(),
 }));
 vi.mock("@/domains/ai/api/session.api", () => ({
   default: sessionApiMock,
+}));
+const automationApiMock = vi.hoisted(() => ({
+  runGroups: vi.fn(),
+  runNow: vi.fn(),
+}));
+vi.mock("@/domains/ai/automation/api/automation.api", () => ({
+  AutomationApi: automationApiMock,
+  AUTOMATION_CHANGED_EVENT: "automation:tasks-changed",
 }));
 const projectApiMock = vi.hoisted(() => ({
   list: vi.fn(),
@@ -108,9 +117,15 @@ const invokeMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock("@/lib/ipc", () => ({ invoke: invokeMock }));
 
 import SessionTreePanel from "../../src-react/domains/ai/layout/components/SessionTreePanel";
+import GlobalSearchDialog from "../../src-react/domains/ai/layout/components/GlobalSearchDialog";
 import type { SessionRecord } from "../../src-react/domains/ai/api/session.api";
-import { useHostStore } from "../../src-react/domains/ai/data-source/host.store";
+import {
+  LOCAL_HOST_CAPS,
+  useHostStore,
+} from "../../src-react/domains/ai/data-source/host.store";
 import { useNewTaskStore } from "../../src-react/domains/ai/new-task/store/new-task-store";
+import { useAiUiStore } from "../../src-react/domains/ai/store/ai-ui.store";
+import type { RunGroupRecord } from "@tianshu/protocol";
 
 /** 会话夹具（普通/项目主/项目任务/已删项目归属） */
 const session = (overrides: Partial<SessionRecord>): SessionRecord => ({
@@ -174,6 +189,22 @@ function renderPanel() {
   );
 }
 
+function renderGlobalSearch() {
+  useAiUiStore.getState().setSearchOpen(true);
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <MemoryRouter initialEntries={["/module/ai"]}>
+        <LocationProbe />
+        <GlobalSearchDialog />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 beforeEach(() => {
   workspaceApiMock.list.mockReset().mockResolvedValue([
     {
@@ -186,15 +217,22 @@ beforeEach(() => {
     },
   ]);
   sessionApiMock.listAll.mockReset().mockResolvedValue(SESSIONS);
+  sessionApiMock.searchByTitle.mockReset().mockResolvedValue([]);
   sessionApiMock.archive.mockReset().mockResolvedValue(undefined);
   sessionApiMock.create
     .mockReset()
     .mockResolvedValue(session({ id: 77, title: "新会话" }));
+  automationApiMock.runGroups.mockReset().mockResolvedValue([]);
+  automationApiMock.runNow.mockReset().mockResolvedValue(undefined);
   projectApiMock.list.mockReset().mockResolvedValue(PROJECTS);
   projectApiMock.update.mockReset().mockResolvedValue(undefined);
   projectApiMock.remove.mockReset().mockResolvedValue(undefined);
-  useHostStore.setState({ activeHost: { kind: "local" } });
+  useHostStore.setState({
+    activeHost: { kind: "local" },
+    caps: LOCAL_HOST_CAPS,
+  });
   useNewTaskStore.setState({ workspaceId: null });
+  useAiUiStore.getState().setSearchOpen(false);
 });
 
 /** 项目组 ⋯ 悬浮钮（data-testid 精确定位——任务行 ⋯ 同名 aria-label
@@ -230,6 +268,210 @@ describe("SessionTreePanel 空间树流畅度（memo + grid-rows 折叠动画）
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toBe(
         "/module/ai?session=22",
+      ),
+    );
+  });
+});
+
+describe("SessionTreePanel 固定运行入口", () => {
+  const runGroup = (overrides: Partial<RunGroupRecord>): RunGroupRecord => ({
+    kind: "task",
+    ownerId: 4,
+    name: "daily-report",
+    hasRuns: true,
+    latestRun: {
+      id: 9,
+      taskId: 4,
+      taskName: "daily-report",
+      attempt: 1,
+      triggerType: "schedule",
+      status: "success",
+      startedAt: "2026-11-03T00:00:00.000Z",
+    },
+    ...overrides,
+  });
+
+  it("每个任务/图只显示一个固定入口，归组会话不再进入普通树", async () => {
+    automationApiMock.runGroups.mockResolvedValue([
+      runGroup({}),
+      runGroup({
+        kind: "graph",
+        ownerId: 3,
+        name: "report-flow",
+        latestRun: {
+          id: 8,
+          taskId: null,
+          graphId: 3,
+          taskName: "report-flow",
+          attempt: 1,
+          triggerType: "manual",
+          status: "failed",
+          startedAt: "2026-11-02T00:00:00.000Z",
+        },
+      }),
+      runGroup({
+        ownerId: 5,
+        name: "empty-task",
+        hasRuns: false,
+        latestRun: undefined,
+      }),
+    ]);
+    sessionApiMock.listAll.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+      session({
+        id: 42,
+        title: "report-flow",
+        runGraphId: 3,
+        automationRunId: 8,
+      }),
+      ...SESSIONS,
+    ]);
+
+    renderPanel();
+
+    expect(await screen.findByText("chat:runSessions.title")).toBeTruthy();
+    expect(await screen.findByText("daily-report")).toBeTruthy();
+    expect(screen.getAllByText("daily-report")).toHaveLength(1);
+    expect(screen.getAllByText("report-flow")).toHaveLength(1);
+    expect(screen.getByText("empty-task")).toBeTruthy();
+    expect(screen.getByText("chat:runSessions.noRuns")).toBeTruthy();
+    expect(screen.getByText("普通会话")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /chat:runSessions.title/ }),
+    );
+    expect(screen.queryByText("daily-report")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: /chat:runSessions.title/ }),
+    );
+    expect(await screen.findByText("daily-report")).toBeTruthy();
+  });
+
+  it("工作流固定入口只提供打开工作流和历史，不提供立即运行", async () => {
+    automationApiMock.runGroups.mockResolvedValue([
+      runGroup({ kind: "graph", ownerId: 3, name: "report-flow" }),
+    ]);
+    renderPanel();
+
+    const row = await screen.findByTestId("run-session-graph-3");
+    fireEvent.pointerDown(
+      within(row).getByRole("button", { name: "common:more" }),
+      { button: 0, pointerType: "mouse" },
+    );
+    await screen.findByRole("menu");
+    expect(
+      [...document.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(["chat:runSessions.openGraph", "chat:runSessions.viewHistory"]);
+  });
+
+  it("固定行进入规范化 URL，菜单仅有打开/立即运行/历史且可立即运行", async () => {
+    automationApiMock.runGroups.mockResolvedValue([runGroup({})]);
+    renderPanel();
+
+    fireEvent.click(await screen.findByText("daily-report"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?automation=4",
+      ),
+    );
+
+    const row = screen.getByTestId("run-session-task-4");
+    expect(
+      within(row).queryByRole("button", { name: "chat:renameSession" }),
+    ).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: "chat:task.archive" }),
+    ).toBeNull();
+    expect(
+      within(row).queryByRole("button", { name: "chat:task.pin" }),
+    ).toBeNull();
+    fireEvent.pointerDown(
+      within(row).getByRole("button", { name: "common:more" }),
+      { button: 0, pointerType: "mouse" },
+    );
+    await screen.findByRole("menu");
+    expect(
+      [...document.querySelectorAll('[role="menuitem"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual([
+      "chat:runSessions.openTask",
+      "chat:runSessions.runNow",
+      "chat:runSessions.viewHistory",
+    ]);
+    await clickMenuItem("chat:runSessions.runNow");
+    await waitFor(() =>
+      expect(automationApiMock.runNow).toHaveBeenCalledWith(4),
+    );
+  });
+
+  it("旧远程主机不查询固定组，已归组字段也不改变旧会话树", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "old" },
+      caps: { ...LOCAL_HOST_CAPS, runSessions: false },
+    });
+    sessionApiMock.listAll.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+    ]);
+    renderPanel();
+
+    expect(await screen.findByText("daily-report")).toBeTruthy();
+    expect(automationApiMock.runGroups).not.toHaveBeenCalled();
+    expect(screen.queryByText("chat:runSessions.title")).toBeNull();
+  });
+});
+
+describe("GlobalSearchDialog 运行会话深链", () => {
+  it("本地关联运行会话进入固定入口及所选 run", async () => {
+    sessionApiMock.searchByTitle.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+    ]);
+    renderGlobalSearch();
+
+    fireEvent.click(await screen.findByText("daily-report"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?automation=4&run=9",
+      ),
+    );
+  });
+
+  it("旧远程主机保留普通 session 深链", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "old" },
+      caps: { ...LOCAL_HOST_CAPS, runSessions: false },
+    });
+    sessionApiMock.searchByTitle.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+    ]);
+    renderGlobalSearch();
+
+    fireEvent.click(await screen.findByText("daily-report"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?session=41",
       ),
     );
   });

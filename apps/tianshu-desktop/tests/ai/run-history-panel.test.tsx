@@ -29,6 +29,13 @@ vi.mock(
   }),
 );
 vi.mock("react-router-dom", () => ({ useNavigate: () => navigateMock }));
+vi.mock(
+  "../../src-react/domains/ai/orchestration/components/GraphRunTraceView",
+  () => ({
+    default: () => <div data-testid="graph-run-trace" />,
+    parseTrace: (trace: string) => trace,
+  }),
+);
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: "3rdParty", init: () => {} },
@@ -38,6 +45,11 @@ vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock("@/lib/ipc", () => ({ invoke: vi.fn(), on: () => () => {} }));
 
 import RunHistoryPanel from "../../src-react/domains/ai/automation/components/RunHistoryPanel";
+import RunHistoryView from "../../src-react/domains/ai/automation/views/RunHistoryView";
+import {
+  LOCAL_HOST_CAPS,
+  useHostStore,
+} from "../../src-react/domains/ai/data-source/host.store";
 
 /** RunRecord 最小形状（automation.api.ts：taskId/taskName/attempt 必填） */
 function run(over: Record<string, unknown>) {
@@ -65,9 +77,24 @@ function renderPanel() {
   );
 }
 
+function renderView() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <RunHistoryView />
+    </QueryClientProvider>,
+  );
+}
+
 describe("RunHistoryPanel 行点击三分支（graph run 弹运行历史）", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useHostStore.setState({
+      activeHost: { kind: "local" },
+      caps: LOCAL_HOST_CAPS,
+    });
     // graph run（executor 落库：graphId/graphTrace、无 sessionId）+ prompt run
     taskRuns.mockResolvedValue({
       total: 2,
@@ -80,32 +107,104 @@ describe("RunHistoryPanel 行点击三分支（graph run 弹运行历史）", ()
   });
   afterEach(() => cleanup());
 
-  it("graph run 行点击：弹运行历史弹窗（GraphApi.runs(graphId)），不跳路由", async () => {
+  it("本地任务运行（含图任务）统一进入 automation + run 固定深链", async () => {
     renderPanel();
+    const labels = await screen.findAllByText("chat:runSessions.openRun");
+    expect(labels).toHaveLength(2);
+
+    fireEvent.click(labels[0]);
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith(
+        "/module/ai?automation=1&run=11",
+      ),
+    );
+    fireEvent.click(labels[1]);
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith(
+        "/module/ai?automation=1&run=12",
+      ),
+    );
+    expect(graphRuns).not.toHaveBeenCalled();
+  });
+
+  it("旧远程主机保留图历史弹窗和 session 深链", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "old" },
+      caps: { ...LOCAL_HOST_CAPS, runSessions: false },
+    });
+    renderPanel();
+
     fireEvent.click(
       await screen.findByText("chat:automation.history.viewGraphRuns"),
     );
     await waitFor(() => expect(graphRuns).toHaveBeenCalledWith(5, 1));
     expect(navigateMock).not.toHaveBeenCalled();
-  });
 
-  it("prompt run 行点击：照旧跳会话（现状不变）", async () => {
-    renderPanel();
     fireEvent.click(
       await screen.findByText("chat:automation.history.viewSession"),
     );
     await waitFor(() =>
       expect(navigateMock).toHaveBeenCalledWith("/module/ai?session=9"),
     );
-    expect(graphRuns).not.toHaveBeenCalled();
   });
 
-  it("graph run 行尾提示在 prompt run 行不出现（文案按行类型区分）", async () => {
-    renderPanel();
-    await screen.findByText("chat:automation.history.viewGraphRuns");
-    await screen.findByText("chat:automation.history.viewSession");
-    expect(
-      screen.getAllByText("chat:automation.history.viewGraphRuns"),
-    ).toHaveLength(1);
+  it("全局运行历史本地按任务优先/顶层图归属进入固定深链", async () => {
+    taskRuns.mockResolvedValue({
+      total: 2,
+      items: [
+        run({ id: 21, taskId: 7, graphId: 5, sessionId: 9 }),
+        run({
+          id: 22,
+          taskId: null,
+          graphId: 3,
+          taskName: "顶层工作流",
+          graphTrace: "{}",
+        }),
+      ],
+    });
+    renderView();
+
+    const graphTask = await screen.findByText("任务");
+    fireEvent.click(graphTask.closest("tr") as HTMLTableRowElement);
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith(
+        "/module/ai?automation=7&run=21",
+      ),
+    );
+    fireEvent.click(
+      screen.getByText("顶层工作流").closest("tr") as HTMLTableRowElement,
+    );
+    await waitFor(() =>
+      expect(navigateMock).toHaveBeenCalledWith("/module/ai?graphRun=3&run=22"),
+    );
+    expect(screen.queryByTestId("graph-run-trace")).toBeNull();
+  });
+
+  it("旧远程主机的全局图运行仍就地展开轨迹", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "old" },
+      caps: { ...LOCAL_HOST_CAPS, runSessions: false },
+    });
+    taskRuns.mockResolvedValue({
+      total: 1,
+      items: [
+        run({
+          id: 22,
+          taskId: null,
+          graphId: 3,
+          taskName: "顶层工作流",
+          graphTrace: "{}",
+        }),
+      ],
+    });
+    renderView();
+
+    fireEvent.click(
+      (await screen.findByText("顶层工作流")).closest(
+        "tr",
+      ) as HTMLTableRowElement,
+    );
+    expect(await screen.findByTestId("graph-run-trace")).toBeTruthy();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

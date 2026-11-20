@@ -35,6 +35,15 @@
     "showMoreTooltip": "Show 20 more at a time",
     "showLessTooltip": "Collapse to 5 recent"
   },
+  "runSessions": {
+    "title": "Automation & Workflows",
+    "noRuns": "No runs yet",
+    "openTask": "Open task",
+    "openGraph": "Open workflow",
+    "runNow": "Run now",
+    "viewHistory": "View run history",
+    "openRun": "Open run"
+  },
   "monitor": {
     "title": "Monitor",
     "subtitle": "Token usage & tool calls (last 7 days)",

@@ -1,8 +1,7 @@
 // src-react/domains/ai/automation/views/RunHistoryView.tsx
-/** 运行记录:状态筛选 pill(全部/成功/失败/跳过,spec §6)+ 分页 20/页;
- * 行点击:prompt/图任务 run 跳会话(复用 ?session= 选中机制),图试运行
- * run(taskId=null,graphId 非空)就地展开 GraphRunTraceView 节点轨迹
- * (spec §4 三层下钻第二层) */
+/** 运行记录:状态筛选 pill(全部/成功/失败/跳过,spec §6)+ 分页 20/页。
+ * 支持 runSessions 时按任务优先/顶层图归属进入固定深链；旧远程主机仍
+ * 就地展开图运行轨迹或进入普通会话，保持既有远程行为。 */
 import { Fragment, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -20,6 +19,9 @@ import {
   localizeRunError,
   triggerTypeKey,
 } from "../lib/run-display";
+import { runOwnerOf } from "@tianshu/core/run-session";
+import { runSessionPath } from "../lib/run-session-route";
+import { useHostStore } from "../../data-source/host.store";
 
 type StatusFilter = "all" | "success" | "failed" | "skipped";
 const FILTERS: StatusFilter[] = ["all", "success", "failed", "skipped"];
@@ -32,6 +34,7 @@ export default function RunHistoryView() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const runSessionsEnabled = useHostStore((s) => s.caps.runSessions);
   const { data, isLoading } = useQuery({
     queryKey: ["automation", "runs", page, status],
     queryFn: () =>
@@ -106,10 +109,18 @@ export default function RunHistoryView() {
               {(data?.items ?? []).map((run) => {
                 // 图试运行 run(taskId=null)就地展开轨迹;任务 run(含挂图
                 // 任务)保持跳会话——session 里有完整过程可回看
+                const owner = runOwnerOf(run);
+                const openRun =
+                  runSessionsEnabled && owner
+                    ? () => navigate(runSessionPath(owner, run.id))
+                    : undefined;
                 const isGraphRun =
-                  run.taskId === null && run.graphId !== undefined;
+                  !runSessionsEnabled &&
+                  run.taskId === null &&
+                  run.graphId !== undefined;
                 const expanded = isGraphRun && expandedId === run.id;
-                const rowClickable = isGraphRun || Boolean(run.sessionId);
+                const rowClickable =
+                  Boolean(openRun) || isGraphRun || Boolean(run.sessionId);
                 return (
                   <Fragment key={run.id}>
                     <tr
@@ -119,12 +130,13 @@ export default function RunHistoryView() {
                           : ""
                       }`}
                       onClick={
-                        isGraphRun
+                        openRun ??
+                        (isGraphRun
                           ? () => setExpandedId(expanded ? null : run.id)
                           : run.sessionId
                             ? () =>
                                 navigate(`/module/ai?session=${run.sessionId}`)
-                            : undefined
+                            : undefined)
                       }
                     >
                       <td className="px-4 py-2 text-muted-foreground">

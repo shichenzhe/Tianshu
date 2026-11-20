@@ -104,6 +104,9 @@ import UnbindDirectoryDialog from "../../chat/components/UnbindDirectoryDialog";
 import BindAppDialog from "../../apps/components/BindAppDialog";
 import BatchActionBar from "./BatchActionBar";
 import WorkspaceMenu from "./WorkspaceMenu";
+import RunSessionGroup from "./run-session-group";
+import { AutomationApi } from "../../automation/api/automation.api";
+import { excludeRunSessions } from "../../automation/lib/run-group-view";
 
 const WORKSPACES_KEY = ["workspaces"] as const;
 
@@ -171,6 +174,12 @@ export default function SessionTreePanel() {
     queryKey: ["sessions", "all"],
     queryFn: () => SessionApi.listAll(),
   });
+  const runSessionsEnabled = useHostStore((s) => s.caps.runSessions);
+  const runGroupsQuery = useQuery({
+    queryKey: ["automation", "runGroups"],
+    queryFn: () => AutomationApi.runGroups(),
+    enabled: runSessionsEnabled,
+  });
   // 项目组组名来源：与 hub 共用 ["projects", ownerId] 缓存
   // （GlobalSidebar 常驻预热，「我的项目」区移除后由本体兼任，批 7）；失败/加载中不阻塞
   // 空间组——组名兜底「已删除项目」，查询就绪后自然纠正
@@ -183,15 +192,15 @@ export default function SessionTreePanel() {
   const projects = projectsQuery.data ?? [];
   // 渲染列表 = 时间筛选 + 排序 + 归档拆分（归档单独成「已归档」分组；
   // 仅用于渲染，不参与空间派生——派生仍用 sessionsQuery 原始数据）
-  const { active: sessions, archived: archivedSessions } = useMemo(
-    () =>
-      splitArchived(
-        sortSessions(
-          filterSessionsByTime(sessionsQuery.data ?? [], timeFilter),
-        ),
-      ),
-    [sessionsQuery.data, timeFilter],
-  );
+  const { active: sessions, archived: archivedSessions } = useMemo(() => {
+    const records = sessionsQuery.data ?? [];
+    const visibleRecords = runSessionsEnabled
+      ? excludeRunSessions(records)
+      : records;
+    return splitArchived(
+      sortSessions(filterSessionsByTime(visibleRecords, timeFilter)),
+    );
+  }, [sessionsQuery.data, timeFilter, runSessionsEnabled]);
   // 项目分组（D4）：项目/任务会话按项目聚合，渲染在空间组之后
   const projectGroups = useMemo(
     () =>
@@ -637,6 +646,9 @@ export default function SessionTreePanel() {
           布局：「空间」区头在滚动容器外固定（不随会话列表滚动、不被组头
           吸顶占位），组列表独占滚动——组头 sticky 在滚动容器内钉顶 */}
       <div className="flex min-h-0 flex-1 flex-col">
+        {runSessionsEnabled && (
+          <RunSessionGroup groups={runGroupsQuery.data ?? []} />
+        )}
         {/* 「空间」区头（shrink-0 固定；group/spaces 悬浮显隐快捷钮） */}
         <div className="group/spaces shrink-0 border-t border-border/50 px-2 pb-1 pt-2">
           <div className="flex w-full items-center gap-1 rounded-md px-1 py-1">

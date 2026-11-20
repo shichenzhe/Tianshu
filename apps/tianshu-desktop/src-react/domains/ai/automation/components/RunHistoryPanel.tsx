@@ -1,9 +1,7 @@
 // src-react/domains/ai/automation/components/RunHistoryPanel.tsx
-/** 任务运行历史(详情页右栏):状态筛选 + 20/页分页 + 失败展开报错 + 行点击
- * 三分支——graph run(graphId,去会话化后无 sessionId)弹工作流运行历史弹窗
- * (跨域 import 先例 RunHistoryView→GraphRunTraceView)、prompt run 跳会话、
- * 均无(异常落库)不可点；两字段互斥无优先级问题。2026-10-28 去会话化:
- * executor 不再落 sessionId,节点详情走 graphRunNode(弹窗内展开行下钻全文) */
+/** 任务运行历史(详情页右栏):状态筛选 + 20/页分页 + 失败展开报错。
+ * 支持 runSessions 的主机统一跳任务固定入口及所选 run；旧远程主机保留
+ * 图运行历史弹窗与 prompt 会话深链，避免新能力缺端点时破坏旧行为。 */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -37,6 +35,9 @@ import {
   localizeRunError,
 } from "../lib/run-display";
 import GraphRunHistoryDialog from "@/domains/ai/orchestration/components/GraphRunHistoryDialog";
+import { runOwnerOf } from "@tianshu/core/run-session";
+import { runSessionPath } from "../lib/run-session-route";
+import { useHostStore } from "../../data-source/host.store";
 
 type StatusFilter = "all" | RunStatus;
 const PAGE_SIZE = 20;
@@ -63,6 +64,7 @@ export default function RunHistoryPanel({ taskId }: { taskId: number }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   // graph run 运行历史弹窗目标：非空即开（该图全部运行记录 + 节点轨迹）
   const [graphHistoryId, setGraphHistoryId] = useState<number | null>(null);
+  const runSessionsEnabled = useHostStore((s) => s.caps.runSessions);
   const { data, isLoading } = useQuery({
     queryKey: ["automation", "runs", taskId, page, status],
     queryFn: () =>
@@ -124,24 +126,32 @@ export default function RunHistoryPanel({ taskId }: { taskId: number }) {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {(data?.items ?? []).map((run) => (
-            <RunRow
-              key={run.id}
-              run={run}
-              expanded={expandedId === run.id}
-              onToggleExpand={() =>
-                setExpandedId(expandedId === run.id ? null : run.id)
-              }
-              onOpenSession={() =>
-                navigate(`/module/ai?session=${run.sessionId}`)
-              }
-              onOpenGraph={
-                run.graphId !== undefined
-                  ? () => setGraphHistoryId(run.graphId!)
-                  : undefined
-              }
-            />
-          ))}
+          {(data?.items ?? []).map((run) => {
+            const owner = runOwnerOf(run);
+            return (
+              <RunRow
+                key={run.id}
+                run={run}
+                expanded={expandedId === run.id}
+                onToggleExpand={() =>
+                  setExpandedId(expandedId === run.id ? null : run.id)
+                }
+                onOpenRun={
+                  runSessionsEnabled && owner
+                    ? () => navigate(runSessionPath(owner, run.id))
+                    : undefined
+                }
+                onOpenSession={() =>
+                  navigate(`/module/ai?session=${run.sessionId}`)
+                }
+                onOpenGraph={
+                  run.graphId !== undefined
+                    ? () => setGraphHistoryId(run.graphId!)
+                    : undefined
+                }
+              />
+            );
+          })}
         </div>
       )}
 
@@ -198,19 +208,22 @@ function RunRow({
   run,
   expanded,
   onToggleExpand,
+  onOpenRun,
   onOpenSession,
   onOpenGraph,
 }: {
   run: RunRecord;
   expanded: boolean;
   onToggleExpand: () => void;
+  onOpenRun?: () => void;
   onOpenSession: () => void;
   /** graph run 专属（graphId 在场才有）；点击弹工作流运行历史弹窗 */
   onOpenGraph?: () => void;
 }) {
   const { t } = useTranslation(["chat"]);
   // 三分支互斥：graphId（executor 落库）与 sessionId（prompt 落库）不同时在场
-  const rowAction = onOpenGraph ?? (run.sessionId ? onOpenSession : undefined);
+  const rowAction =
+    onOpenRun ?? onOpenGraph ?? (run.sessionId ? onOpenSession : undefined);
   const clickable = rowAction !== undefined;
   return (
     <div
@@ -241,7 +254,11 @@ function RunRow({
           )}
           {t(statusKey(run.status))}
         </span>
-        {onOpenGraph ? (
+        {onOpenRun ? (
+          <span className="text-xs text-muted-foreground">
+            {t("chat:runSessions.openRun")}
+          </span>
+        ) : onOpenGraph ? (
           <span className="text-xs text-muted-foreground">
             {t("chat:automation.history.viewGraphRuns")}
           </span>

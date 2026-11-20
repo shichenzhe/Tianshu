@@ -19,6 +19,8 @@ export interface HostCaps {
   files: boolean;
   /** 远程编排（graph/automation——仅无头主机） */
   graph: boolean;
+  /** 固定运行会话入口；远程端在 Task 9 才按 capability 开启 */
+  runSessions: boolean;
 }
 
 /** 本地主机能力恒全集（spec：本地是真全集——所有域可用） */
@@ -32,6 +34,7 @@ export const LOCAL_HOST_CAPS: HostCaps = {
   usage: true,
   files: true,
   graph: false,
+  runSessions: true,
 };
 
 /** 远程主机 caps 由连接运行时上报 capabilities 推导 */
@@ -49,6 +52,7 @@ export function capsOfCapabilities(capabilities: string[]): HostCaps {
     // 照旧全关，HD-T4 门控零改动跟随
     files: has("files"),
     graph: has("graph"),
+    runSessions: false,
   };
 }
 

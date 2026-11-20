@@ -35,6 +35,15 @@
     "showMoreTooltip": "继续展开（每次 20 条）",
     "showLessTooltip": "收起至最近 5 条"
   },
+  "runSessions": {
+    "title": "自动化与工作流",
+    "noRuns": "暂无运行",
+    "openTask": "打开任务",
+    "openGraph": "打开工作流",
+    "runNow": "立即运行",
+    "viewHistory": "查看运行历史",
+    "openRun": "查看运行"
+  },
   "monitor": {
     "title": "监控",
     "subtitle": "Token 消耗与工具调用（近 7 天）",

@@ -1,4 +1,6 @@
 import { COMPANION_USER_ID } from 'src/commons/config/tianshu-config.entity';
+import { BusinessException } from 'src/commons/exception/bussiness-exception';
+import { ErrorCodeEnum } from 'src/commons/exception/error-code.enum';
 import { RunSessionService } from 'src/modules/automation/run-session.service';
 import { SessionRepository } from 'src/modules/session/session.repository';
 import { createTestDb, type TestDb } from '../support/test-db';
@@ -31,14 +33,13 @@ async function createRun(
 describe('RunSessionService.ensureRunSession', () => {
   let db: TestDb;
   let service: RunSessionService;
+  let sessions: SessionRepository;
   let workspaceId: number;
 
   beforeAll(async () => {
     db = await createTestDb();
-    service = new RunSessionService(
-      db.prisma,
-      new SessionRepository(db.prisma),
-    );
+    sessions = new SessionRepository(db.prisma);
+    service = new RunSessionService(db.prisma, sessions);
     const workspace = await db.prisma.workspace.create({
       data: { name: 'run-followup-ws', userId: UID },
     });
@@ -168,76 +169,39 @@ describe('RunSessionService.ensureRunSession', () => {
     ).toMatchObject({ workspaceId, runGraphId: graph.id });
   });
 
-  it('uses the graph AI session workspace before an explicit fallback', async () => {
-    const editorWorkspace = await db.prisma.workspace.create({
-      data: { name: 'graph-editor-ws', userId: UID },
-    });
-    const editor = await db.prisma.sessionRecord.create({
-      data: {
-        workspaceId: editorWorkspace.id,
-        title: 'editor',
-        userId: UID,
-      },
-    });
-    const graph = await createGraph(db, 'editor-graph');
-    const run = await createRun(db, { graphId: graph.id });
-    const findGraph = jest
-      .spyOn(db.prisma.graphDefinition, 'findFirst')
-      .mockResolvedValue({ ...graph, aiSessionId: editor.id } as typeof graph);
-
-    try {
-      const result = await service.ensureRunSession({
-        runId: run.id,
-        workspaceId,
-      });
-      expect(
-        await db.prisma.sessionRecord.findUniqueOrThrow({
-          where: { id: result.sessionId },
-        }),
-      ).toMatchObject({ workspaceId: editorWorkspace.id });
-    } finally {
-      findGraph.mockRestore();
-    }
-  });
-
-  it('reuses the deterministic orphan left by a crash before claiming', async () => {
-    const graph = await createGraph(db, 'crash-graph');
+  it('rolls back creation atomically when claim fails and retries cleanly', async () => {
+    const graph = await createGraph(db, 'atomic-graph');
     const run = await createRun(db, { graphId: graph.id, workspaceId });
-    const crash = new Error('claim-crashed');
+    const trigger = `fail_run_claim_${run.id}`;
+    await db.prisma.$executeRawUnsafe(
+      `CREATE TRIGGER "${trigger}" BEFORE UPDATE OF sessionId ON automationRun WHEN OLD.id = ${run.id} BEGIN SELECT RAISE(ABORT, 'claim-crashed'); END`,
+    );
+    const recoveryCrash = new Error('recovery-crashed');
     const findRun = db.prisma.automationRun.findUnique.bind(
       db.prisma.automationRun,
     );
     const findSpy = jest
       .spyOn(db.prisma.automationRun, 'findUnique')
       .mockImplementationOnce(findRun)
-      .mockRejectedValueOnce(crash);
-    const claimSpy = jest
-      .spyOn(
-        service as unknown as {
-          claimSession(runId: number, sessionId: number): Promise<boolean>;
-        },
-        'claimSession',
-      )
-      .mockRejectedValueOnce(crash);
+      .mockRejectedValueOnce(recoveryCrash);
 
     try {
       await expect(service.ensureRunSession({ runId: run.id })).rejects.toThrow(
-        'claim-crashed',
+        'recovery-crashed',
       );
     } finally {
       findSpy.mockRestore();
-      claimSpy.mockRestore();
+      await db.prisma.$executeRawUnsafe(`DROP TRIGGER IF EXISTS "${trigger}"`);
     }
-    const orphans = await db.prisma.sessionRecord.findMany({
-      where: { runGraphId: graph.id },
-    });
-    expect(orphans).toHaveLength(1);
+    expect(
+      await db.prisma.sessionRecord.count({
+        where: { runGraphId: graph.id },
+      }),
+    ).toBe(0);
 
-    await expect(service.ensureRunSession({ runId: run.id })).resolves.toEqual({
-      runId: run.id,
-      sessionId: orphans[0].id,
-      created: false,
-    });
+    await expect(
+      service.ensureRunSession({ runId: run.id }),
+    ).resolves.toMatchObject({ runId: run.id, created: true });
     expect(
       await db.prisma.sessionRecord.count({
         where: { runGraphId: graph.id },
@@ -245,7 +209,66 @@ describe('RunSessionService.ensureRunSession', () => {
     ).toBe(1);
   });
 
-  it('re-reads the winner and removes the loser after a unique conflict', async () => {
+  it('never claims a stale orphan for a different resolved target', async () => {
+    const otherWorkspace = await db.prisma.workspace.create({
+      data: { name: 'stale-target-ws', userId: UID },
+    });
+    const graph = await createGraph(db, 'stale-target');
+    const stale = await db.prisma.sessionRecord.create({
+      data: {
+        workspaceId: otherWorkspace.id,
+        projectId: 99,
+        title: 'stale-target · 2026-11-20T01:02:03.000Z',
+        userId: UID,
+        runGraphId: graph.id,
+      },
+    });
+    const run = await createRun(db, { graphId: graph.id, workspaceId });
+
+    const result = await service.ensureRunSession({ runId: run.id });
+
+    expect(result.sessionId).not.toBe(stale.id);
+    expect(result.created).toBe(true);
+    expect(
+      await db.prisma.sessionRecord.findUniqueOrThrow({
+        where: { id: result.sessionId },
+      }),
+    ).toMatchObject({ workspaceId, projectId: null });
+  });
+
+  it('returns RUN_NOT_FOUND once when the run is deleted before claim', async () => {
+    const graph = await createGraph(db, 'deleted-before-claim');
+    const run = await createRun(db, { graphId: graph.id, workspaceId });
+    const getWorkspace: SessionRepository['getWorkspaceById'] =
+      sessions.getWorkspaceById.bind(sessions);
+    const targetSpy = jest
+      .spyOn(sessions, 'getWorkspaceById')
+      .mockImplementationOnce(async (id: number, targetUserId: number) => {
+        const workspace = await getWorkspace(id, targetUserId);
+        await db.prisma.automationRun.delete({ where: { id: run.id } });
+        return workspace;
+      });
+
+    try {
+      const error = await service
+        .ensureRunSession({ runId: run.id })
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(BusinessException);
+      expect(error).toMatchObject({
+        message: 'RUN_NOT_FOUND',
+        code: ErrorCodeEnum.NOT_FOUND,
+      });
+    } finally {
+      targetSpy.mockRestore();
+    }
+    expect(
+      await db.prisma.sessionRecord.count({
+        where: { runGraphId: graph.id },
+      }),
+    ).toBe(0);
+  });
+
+  it('re-reads a competing winner and rolls back the losing creation', async () => {
     const graph = await createGraph(db, 'unique-graph');
     const winner = await db.prisma.sessionRecord.create({
       data: {
@@ -256,19 +279,17 @@ describe('RunSessionService.ensureRunSession', () => {
       },
     });
     const run = await createRun(db, { graphId: graph.id, workspaceId });
-    const claimSpy = jest
-      .spyOn(
-        service as unknown as {
-          claimSession(runId: number, sessionId: number): Promise<boolean>;
-        },
-        'claimSession',
-      )
-      .mockImplementationOnce(async () => {
+    const getWorkspace: SessionRepository['getWorkspaceById'] =
+      sessions.getWorkspaceById.bind(sessions);
+    const targetSpy = jest
+      .spyOn(sessions, 'getWorkspaceById')
+      .mockImplementationOnce(async (id: number, targetUserId: number) => {
+        const workspace = await getWorkspace(id, targetUserId);
         await db.prisma.automationRun.update({
           where: { id: run.id },
           data: { sessionId: winner.id },
         });
-        throw Object.assign(new Error('unique'), { code: 'P2002' });
+        return workspace;
       });
 
     try {
@@ -280,7 +301,7 @@ describe('RunSessionService.ensureRunSession', () => {
         created: false,
       });
     } finally {
-      claimSpy.mockRestore();
+      targetSpy.mockRestore();
     }
     expect(
       await db.prisma.sessionRecord.findMany({

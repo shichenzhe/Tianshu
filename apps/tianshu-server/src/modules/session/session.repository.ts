@@ -137,8 +137,11 @@ export class SessionRepository {
   /**
    * 创建会话
    */
-  async create(params: SessionCreateParams): Promise<SessionWireRecord> {
-    const row = await this.prisma.sessionRecord.create({ data: params });
+  async create(
+    params: SessionCreateParams,
+    db: Prisma.TransactionClient | PrismaService = this.prisma,
+  ): Promise<SessionWireRecord> {
+    const row = await db.sessionRecord.create({ data: params });
     return { ...row, automationRunId: null };
   }
 

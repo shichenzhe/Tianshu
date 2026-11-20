@@ -23,6 +23,7 @@ export * from "./time-context";
 export * from "./scenario-prompt";
 export * from "./agent-chunk-emitter";
 export * from "./run-chat-stream";
+export * from "./run-session";
 // GA-T2：编排纯逻辑 + graph/schedule zod schema 全量入包（controller
 // ruling 3；schedule-schema 为 schedule.ts 的闭包随行件）
 export * from "./graph-schema";

@@ -125,6 +125,8 @@ export interface AutomationRunRecord {
   taskName: string;
   /** 图运行关联的编排图（prompt 任务 run 无此字段） */
   graphId?: number;
+  /** 运行实际使用的工作空间（历史 run 可缺省） */
+  workspaceId?: number;
   /** 图运行去会话化（2026-10-28）后恒 null——face runPage wire 实际可空 */
   sessionId?: number | null;
   attempt: number;
@@ -136,6 +138,29 @@ export interface AutomationRunRecord {
   error?: string;
   startedAt: string;
   finishedAt?: string;
+}
+
+/** 固定运行入口读模型：任务/图各自命名空间内的 ownerId 不跨类型混用 */
+export interface RunGroupRecord {
+  kind: "task" | "graph";
+  ownerId: number;
+  name: string;
+  workspaceId?: number;
+  projectId?: number | null;
+  latestRun?: AutomationRunRecord;
+  hasRuns: boolean;
+}
+
+/** 单 run 详情：完整节点轨迹只在此返回，不进入列表页记录 */
+export interface AutomationRunDetail extends AutomationRunRecord {
+  graphTrace?: string;
+}
+
+/** 首次追问懒建/复用伴随会话的统一结果 */
+export interface RunSessionResult {
+  runId: number;
+  sessionId: number;
+  created: boolean;
 }
 
 /** runPage 分页载荷（total + 当前页 items） */

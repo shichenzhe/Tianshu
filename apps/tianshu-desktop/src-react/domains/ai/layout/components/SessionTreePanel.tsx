@@ -194,13 +194,14 @@ export default function SessionTreePanel() {
   // 仅用于渲染，不参与空间派生——派生仍用 sessionsQuery 原始数据）
   const { active: sessions, archived: archivedSessions } = useMemo(() => {
     const records = sessionsQuery.data ?? [];
-    const visibleRecords = runSessionsEnabled
-      ? excludeRunSessions(records)
-      : records;
+    const visibleRecords =
+      runSessionsEnabled && runGroupsQuery.data !== undefined
+        ? excludeRunSessions(records)
+        : records;
     return splitArchived(
       sortSessions(filterSessionsByTime(visibleRecords, timeFilter)),
     );
-  }, [sessionsQuery.data, timeFilter, runSessionsEnabled]);
+  }, [sessionsQuery.data, timeFilter, runSessionsEnabled, runGroupsQuery.data]);
   // 项目分组（D4）：项目/任务会话按项目聚合，渲染在空间组之后
   const projectGroups = useMemo(
     () =>

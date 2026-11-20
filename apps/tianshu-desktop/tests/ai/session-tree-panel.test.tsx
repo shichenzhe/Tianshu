@@ -352,6 +352,48 @@ describe("SessionTreePanel 固定运行入口", () => {
     expect(await screen.findByText("daily-report")).toBeTruthy();
   });
 
+  it("runGroups 查询失败且无组数据时，运行会话仍可从普通/归档树打开", async () => {
+    automationApiMock.runGroups.mockRejectedValue(
+      new Error("runGroups unavailable"),
+    );
+    sessionApiMock.listAll.mockResolvedValue([
+      session({
+        id: 41,
+        title: "daily-report",
+        automationTaskId: 4,
+        automationRunId: 9,
+      }),
+      session({
+        id: 42,
+        title: "archived-run",
+        runGraphId: 3,
+        automationRunId: 8,
+        archivedAt: "2026-11-04T00:00:00.000Z",
+      }),
+    ]);
+    renderPanel();
+
+    await waitFor(() =>
+      expect(automationApiMock.runGroups).toHaveBeenCalledTimes(1),
+    );
+    fireEvent.click(await screen.findByText("daily-report"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?session=41",
+      ),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /chat:sidebar.archivedGroup/ }),
+    );
+    fireEvent.click(await screen.findByText("archived-run"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?session=42",
+      ),
+    );
+  });
+
   it("工作流固定入口只提供打开工作流和历史，不提供立即运行", async () => {
     automationApiMock.runGroups.mockResolvedValue([
       runGroup({ kind: "graph", ownerId: 3, name: "report-flow" }),

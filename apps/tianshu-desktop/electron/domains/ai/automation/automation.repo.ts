@@ -53,9 +53,14 @@ import { clearRunSessionOwners } from "./run-session-owner";
 type TaskRow = NonNullable<
   Awaited<ReturnType<typeof prisma.automationTask.findFirst>>
 >;
-type RunRow = NonNullable<
-  Awaited<ReturnType<typeof prisma.automationRun.findFirst>>
->;
+type RunRow = Omit<
+  NonNullable<Awaited<ReturnType<typeof prisma.automationRun.findFirst>>>,
+  "graphTrace" | "graphJsonSnapshot"
+> & {
+  /** 分组摘要查询不读这些大字段；单 run 详情与既有分页保留完整轨迹 */
+  graphTrace?: string | null;
+  graphJsonSnapshot?: string | null;
+};
 
 /** 手动执行收口推送:同 scheduler.notifyChanged 机制(不引 scheduler 实例),
  * executeTask 本身不推送,runNow 须自行通知渲染层刷新——CRUD 批起经
@@ -177,13 +182,18 @@ export function assertNoSelfReference(
   }
 }
 
-function toRunRecord(row: RunRow, taskName: string): RunRecord {
+export function toRunRecord(
+  row: RunRow,
+  taskName: string,
+  includeGraphTrace = true,
+): RunRecord {
   return {
     id: row.id,
     taskId: row.taskId,
     taskName,
     graphId: row.graphId ?? undefined,
-    graphTrace: row.graphTrace ?? undefined,
+    ...(includeGraphTrace && { graphTrace: row.graphTrace ?? undefined }),
+    workspaceId: row.workspaceId ?? undefined,
     sessionId: row.sessionId ?? undefined,
     attempt: row.attempt,
     triggerType: row.triggerType as RunRecord["triggerType"],

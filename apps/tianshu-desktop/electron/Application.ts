@@ -27,6 +27,7 @@ import { SkillRepository } from "./domains/ai/skill/skill.repo";
 import LibraryRepository from "./domains/ai/library/library.repo";
 import SettingsService from "./domains/app-settings/settings.service";
 import AutomationRepository from "./domains/ai/automation/automation.repo";
+import { RunSessionService } from "./domains/ai/automation/run-session.service";
 import MonitorRepository from "./domains/ai/monitor/monitor.repo";
 import GraphRepository from "./domains/ai/orchestration/graph.repo";
 import ProjectRepository from "./domains/project/project.repo";
@@ -518,6 +519,8 @@ export default class Application {
       // SP6 裁定 2：runNow 手动触发同样受注入层工具禁用约束
       () => securityService.getConfigValue().disabledTools,
     );
+    // 固定运行入口与按次追问共用单例；构造注册本地 IPC，Task 4 继续扩展。
+    new RunSessionService(sessionRepo);
     const graphRepo = new GraphRepository(
       () => securityService.getConfigValue().disabledTools,
     );

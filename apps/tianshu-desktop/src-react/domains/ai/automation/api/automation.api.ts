@@ -25,6 +25,7 @@ import {
 } from "@/domains/ai/data-source/remote-catalog";
 // 健康度总览 wire 类型（core 单源 re-export——2026-11-10 收编：主进程
 // IPC 聚合与远程态适配器（automation/stats 原始行端点）同源同口径）
+import type { AutomationRunDetail, RunGroupRecord } from "@tianshu/protocol";
 import type { AutomationStats } from "@tianshu/core/automation-stats";
 import type { ScheduleConfig } from "./schedule.schema";
 
@@ -121,6 +122,8 @@ export interface RunRecord {
   taskName: string;
   /** 图运行关联的编排图（prompt 任务 run 无此字段） */
   graphId?: number;
+  /** 运行实际使用的工作空间（历史 run 可缺省） */
+  workspaceId?: number;
   /** 节点级轨迹 JSON(spec §4 graphTrace)，仅图运行 */
   graphTrace?: string;
   sessionId?: number;
@@ -215,6 +218,16 @@ export class AutomationApi {
       { ch: "automation:runs:page", args: [page, taskId, status] },
       (connId) => remoteAutomationRuns(page, taskId, status, connId),
     );
+  }
+
+  /** 固定入口分组：本任务仅接本地，远程 capability 在后续任务接入。 */
+  static async runGroups(): Promise<RunGroupRecord[]> {
+    return invoke<RunGroupRecord[]>("automation:runGroups");
+  }
+
+  /** 深链按 id 直读单 run，不受运行历史分页位置限制。 */
+  static async runById(runId: number): Promise<AutomationRunDetail> {
+    return invoke<AutomationRunDetail>("automation:run:get", runId);
   }
 
   /** 创建埋点(PRD《执行频率》§5)——远程态静默丢弃（本地统计表聚合，

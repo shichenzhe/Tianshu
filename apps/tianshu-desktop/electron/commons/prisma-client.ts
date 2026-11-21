@@ -163,6 +163,8 @@ export async function ensureGraphRunNodeTable(): Promise<void> {
   );
 }
 
+const LEGACY_RUN_LINK_BATCH_SIZE = 500;
+
 /**
  * 存量图运行会话清理（去会话化 2026-10-28 一次性迁移）：图 run 产生的
  * 会话+消息删除、run.sessionId 置 null（prompt 型 run graphId 恒 null
@@ -201,10 +203,20 @@ export async function cleanupGraphRunSessions(): Promise<void> {
         where: { sessionId: { in: legacyIds } },
       });
       await prisma.session.deleteMany({ where: { id: { in: legacyIds } } });
-      await prisma.automationRun.updateMany({
-        where: { id: { in: legacyRunIds } },
-        data: { sessionId: null },
-      });
+      for (
+        let start = 0;
+        start < legacyRunIds.length;
+        start += LEGACY_RUN_LINK_BATCH_SIZE
+      ) {
+        const batch = legacyRunIds.slice(
+          start,
+          start + LEGACY_RUN_LINK_BATCH_SIZE,
+        );
+        await prisma.automationRun.updateMany({
+          where: { id: { in: batch } },
+          data: { sessionId: null },
+        });
+      }
     }
   }
   // 同在 initDatabase 后执行的存量数据迁移：只回填仍可反查任务的 prompt 会话。

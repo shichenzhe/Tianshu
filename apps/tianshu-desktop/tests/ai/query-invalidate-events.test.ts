@@ -30,6 +30,7 @@ import {
 const RUN_SESSION_KEYS = [
   ["automation", "runGroups"],
   ["automation", "run", 9],
+  ["automation", "runSessionRuns", "graph", 3, 1],
   ["sessions", "all"],
 ] as const;
 

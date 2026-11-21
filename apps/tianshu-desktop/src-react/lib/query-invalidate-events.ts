@@ -28,6 +28,9 @@ export function registerQueryInvalidation(client: QueryClient): void {
   const invalidateRunSessions = (): void => {
     void client.invalidateQueries({ queryKey: ["automation", "runGroups"] });
     void client.invalidateQueries({ queryKey: ["automation", "run"] });
+    void client.invalidateQueries({
+      queryKey: ["automation", "runSessionRuns"],
+    });
     void client.invalidateQueries({ queryKey: ["sessions"] });
   };
   const invalidateAutomation = (): void => {

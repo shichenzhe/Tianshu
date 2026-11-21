@@ -538,6 +538,49 @@ describe("RunSessionService.ensureRunSession", () => {
     expect(state.sessions.map((session) => session.id)).toEqual([1]);
   });
 
+  it("preserves a candidate claimed by the same run after a null winner read", async () => {
+    const state = useData({
+      graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],
+      runs: [makeRun({ workspaceId: 3 })],
+    });
+    const { service } = makeService(state.sessions);
+    db.automationRun.updateMany.mockResolvedValue({ count: 0 });
+    let winnerReadCount = 0;
+    db.automationRun.findUnique.mockReset().mockImplementation(
+      async ({ where }: { where: { id?: number; sessionId?: number } }) => {
+        winnerReadCount++;
+        const row = state.runs.find(
+          (run) =>
+            (where.id === undefined || run.id === where.id) &&
+            (where.sessionId === undefined || run.sessionId === where.sessionId),
+        );
+        if (row && winnerReadCount === 2) {
+          return { ...row, sessionId: null };
+        }
+        return row ?? null;
+      },
+    );
+    db.automationRun.findMany.mockImplementation(async () => {
+      state.runs[0].sessionId = 1;
+      return [{ id: 50, sessionId: 1 }];
+    });
+
+    await expect(service.ensureRunSession(50, 1)).resolves.toEqual({
+      runId: 50,
+      sessionId: 1,
+      created: false,
+    });
+    expect(winnerReadCount).toBe(3);
+    expect(state.sessions.map((session) => session.id)).toEqual([1]);
+
+    await expect(service.ensureRunSession(50, 1)).resolves.toEqual({
+      runId: 50,
+      sessionId: 1,
+      created: false,
+    });
+    expect(state.sessions[0].id).toBe(1);
+  });
+
   it("does not claim a same-title orphan into a different resolved target", async () => {
     const state = useData({
       graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],

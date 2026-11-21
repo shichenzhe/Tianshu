@@ -91,6 +91,26 @@ describe("cleanupGraphRunSessions", () => {
     });
   });
 
+  it("超过 500 个旧 run 共享会话时分批清除全部链接", async () => {
+    const runIds = Array.from({ length: 501 }, (_, index) => index + 1);
+    prismaMock.automationRun.findMany.mockResolvedValue(
+      runIds.map((id) => ({ id, sessionId: 11 })),
+    );
+    prismaMock.session.findMany.mockResolvedValue([{ id: 11 }]);
+
+    await cleanupGraphRunSessions();
+
+    const batches = prismaMock.automationRun.updateMany.mock.calls.map(
+      ([args]) => args.where.id.in as number[],
+    );
+    expect(batches.map((batch) => batch.length)).toEqual([500, 1]);
+    expect(batches.every((batch) => batch.length <= 500)).toBe(true);
+    expect(batches.flat()).toEqual(runIds);
+    for (const [args] of prismaMock.automationRun.updateMany.mock.calls) {
+      expect(args.data).toEqual({ sessionId: null });
+    }
+  });
+
   it("已有运行分组的 graph 伴随会话不属于旧迁移，会话和 run 链接均保留", async () => {
     prismaMock.automationRun.findMany.mockResolvedValue([
       { id: 1, sessionId: 11 },

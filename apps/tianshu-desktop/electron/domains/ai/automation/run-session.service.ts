@@ -363,16 +363,15 @@ export class RunSessionService {
     });
     if (winner?.sessionId != null) {
       if (winner.sessionId !== sessionId) {
-        await this.deleteCreatedCandidateIfUnlinked(runId, sessionId, created);
+        await this.deleteCreatedCandidateIfUnlinked(sessionId, created);
       }
       return { runId, sessionId: winner.sessionId, created: false };
     }
-    await this.deleteCreatedCandidateIfUnlinked(runId, sessionId, created);
+    await this.deleteCreatedCandidateIfUnlinked(sessionId, created);
     throw originalError ?? new Error("RUN_NOT_FOUND");
   }
 
   private async deleteCreatedCandidateIfUnlinked(
-    runId: number,
     sessionId: number,
     created: boolean,
   ): Promise<void> {
@@ -382,7 +381,7 @@ export class RunSessionService {
         where: { sessionId: { in: [sessionId] } },
         select: { id: true },
       });
-      if (linked.some((run) => run.id !== runId)) return;
+      if (linked.length > 0) return;
       await tx.session.delete({ where: { id: sessionId } });
     });
   }

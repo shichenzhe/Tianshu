@@ -138,6 +138,76 @@ describe("toGraphRecord 派生", () => {
   });
 });
 
+describe("listGraphRuns 顶层筛选", () => {
+  const runRow = {
+    id: 30,
+    taskId: null,
+    graphId: 5,
+    graphTrace: null,
+    sessionId: null,
+    attempt: 1,
+    triggerType: "manual",
+    status: "success",
+    durationMs: 10,
+    promptTokens: null,
+    completionTokens: null,
+    error: null,
+    startedAt: new Date("2026-11-20T01:00:00.000Z"),
+    finishedAt: new Date("2026-11-20T01:00:01.000Z"),
+  };
+
+  beforeEach(() => {
+    vi.mocked(prisma.graphDefinition.findFirst).mockResolvedValue(
+      graphRow as never,
+    );
+    vi.mocked(prisma.graphDefinition.findUnique).mockResolvedValue(
+      graphRow as never,
+    );
+    vi.mocked(prisma.automationRun.count).mockResolvedValue(21);
+    vi.mocked(prisma.automationRun.findMany).mockResolvedValue([
+      runRow,
+    ] as never);
+  });
+
+  it("topLevelOnly 将同一顶层谓词用于 total 与第二页 items", async () => {
+    const repo = new GraphRepository();
+
+    const page = await repo.listGraphRuns(5, 2, UID, true);
+
+    const where = {
+      graphId: 5,
+      taskId: null,
+      triggerType: { not: "subflow" },
+    };
+    expect(prisma.automationRun.count).toHaveBeenCalledWith({ where });
+    expect(prisma.automationRun.findMany).toHaveBeenCalledWith({
+      where,
+      orderBy: { startedAt: "desc" },
+      skip: 20,
+      take: 20,
+    });
+    expect(page.total).toBe(21);
+    expect(page.items.map((run) => run.id)).toEqual([30]);
+  });
+
+  it("普通图历史不带 topLevelOnly 时保留原图口径", async () => {
+    const repo = new GraphRepository();
+
+    const page = await repo.listGraphRuns(5, 1, UID);
+
+    expect(prisma.automationRun.count).toHaveBeenCalledWith({
+      where: { graphId: 5 },
+    });
+    expect(prisma.automationRun.findMany).toHaveBeenCalledWith({
+      where: { graphId: 5 },
+      orderBy: { startedAt: "desc" },
+      skip: 0,
+      take: 20,
+    });
+    expect(page.total).toBe(21);
+  });
+});
+
 describe("deleteGraph 删除引用检查", () => {
   it("被本人 graph 任务引用 → GRAPH_IN_USE:引用任务名清单，不进事务", async () => {
     vi.mocked(prisma.graphDefinition.findFirst).mockResolvedValue(

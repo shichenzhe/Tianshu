@@ -210,10 +210,16 @@ export default class GraphApi {
     page: number,
     connId: string,
     status?: "running" | "success" | "failed" | "skipped",
+    topLevelOnly?: boolean,
   ): Promise<{ total: number; items: unknown[] }> {
     return requestRemote<{ total: number; items: unknown[] }>(
       "server:graphRuns",
-      { page, graphId, ...(status ? { status } : {}) },
+      {
+        page,
+        graphId,
+        ...(status ? { status } : {}),
+        ...(topLevelOnly ? { topLevelOnly: true } : {}),
+      },
       connId,
     );
   }

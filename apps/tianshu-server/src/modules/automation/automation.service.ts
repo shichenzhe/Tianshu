@@ -111,6 +111,7 @@ export class AutomationService {
       dto.status,
       COMPANION_USER_ID,
       dto.graphId,
+      dto.topLevelOnly,
     );
   }
 

@@ -8,8 +8,15 @@
 // $executeRawUnsafe 原样执行被测模块产出的 SQL——窗口函数、taskId NULL
 // 分组、参数绑定均由真 SQLite 引擎验证；updateMany/deleteMany 按
 // trimAutomationRuns 实际使用的 where 形状做参数化翻译。
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DatabaseSync } from "node:sqlite";
+
+const emitAutomationChanged = vi.hoisted(() => vi.fn());
+
+vi.mock(
+  "../../electron/domains/ai/automation/automation-change-bus",
+  () => ({ emitAutomationChanged }),
+);
 
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -119,6 +126,13 @@ const RUN_SESSION_DDL = `
 /** node:sqlite 版 RetentionDb 替身：每用例独立内存库，用例间零污染 */
 function makeRetentionDb() {
   const db = new DatabaseSync(":memory:");
+  const batches = {
+    ownerLookups: [] as number[][],
+    ownerClears: [] as number[][],
+    nodeDeletes: [] as number[][],
+    runDeletes: [] as number[][],
+  };
+  let transactionCount = 0;
   db.exec(AUTOMATION_RUN_DDL);
   db.exec(GRAPH_RUN_NODE_DDL);
   db.exec(RUN_SESSION_DDL);
@@ -216,6 +230,7 @@ function makeRetentionDb() {
       },
       // 级联取 run id 集合（去会话化 2026-10-28）
       async findMany({ where }) {
+        if (where.id) batches.ownerLookups.push([...where.id.in]);
         const { clause, params } = translateWhere(where);
         const rows = db
           .prepare(`SELECT * FROM automationRun${clause}`)
@@ -224,6 +239,7 @@ function makeRetentionDb() {
       },
       // status 两种形状：notIn 数组（成功档）/ 字符串精确匹配（失败档）
       async deleteMany({ where }) {
+        batches.runDeletes.push([...where.id.in]);
         const { clause, params } = translateWhere(where);
         const r = db
           .prepare(`DELETE FROM automationRun${clause}`)
@@ -233,6 +249,7 @@ function makeRetentionDb() {
     },
     graphRunNode: {
       async deleteMany({ where }) {
+        batches.nodeDeletes.push([...where.runId.in]);
         const r = db
           .prepare(
             `DELETE FROM graphRunNode WHERE runId IN (${where.runId.in
@@ -248,6 +265,7 @@ function makeRetentionDb() {
       async updateMany({ where, data }) {
         const sessionIds =
           where.OR?.find((filter) => filter.id)?.id.in ?? where.id?.in ?? [];
+        batches.ownerClears.push([...sessionIds]);
         const r = db
           .prepare(
             `UPDATE session SET automationTaskId = ?, runGraphId = ? WHERE id IN (${sessionIds
@@ -268,6 +286,7 @@ function makeRetentionDb() {
       },
     },
     async $transaction(callback) {
+      transactionCount++;
       return callback(prisma);
     },
     async $queryRawUnsafe(sql: string, ...values: number[]) {
@@ -326,6 +345,8 @@ function makeRetentionDb() {
     nodesOf,
     getSession,
     countMessages,
+    batches,
+    transactionCount: () => transactionCount,
   };
 }
 
@@ -497,6 +518,48 @@ describe("trimAutomationRuns（SQL 行为）", () => {
     expect(countMessages(9)).toBe(2);
   });
 
+  it("超过 500 个 run 时在同一事务内分批清理并处理全部 id", async () => {
+    const {
+      prisma,
+      seedRun,
+      seedNode,
+      seedSession,
+      countRuns,
+      countNodes,
+      batches,
+      transactionCount,
+    } = makeRetentionDb();
+    const runIds: number[] = [];
+    const sessionIds: number[] = [];
+    for (let i = 0; i < 501; i++) {
+      const sessionId = 10_000 + i;
+      const run = await seedRun({
+        sessionId,
+        status: "success",
+        startedAt: daysAgo(10),
+      });
+      runIds.push(run.id);
+      sessionIds.push(sessionId);
+      seedSession(sessionId);
+      seedNode(run.id, `node-${i}`);
+    }
+
+    const result = await trimAutomationRuns(prisma, DEFAULT_RUN_RETENTION, NOW);
+
+    expect(result.successDaysDeleted).toBe(501);
+    expect(countRuns()).toBe(0);
+    expect(countNodes()).toBe(0);
+    expect(transactionCount()).toBe(1);
+    for (const chunks of Object.values(batches)) {
+      expect(chunks.map((chunk) => chunk.length)).toEqual([500, 1]);
+      expect(chunks.every((chunk) => chunk.length <= 500)).toBe(true);
+    }
+    expect(batches.ownerLookups.flat()).toEqual(runIds);
+    expect(batches.ownerClears.flat()).toEqual(sessionIds);
+    expect(batches.nodeDeletes.flat()).toEqual(runIds);
+    expect(batches.runDeletes.flat()).toEqual(runIds);
+  });
+
   it("enabled:false 零动作", async () => {
     const { prisma, seedRun, countRuns } = makeRetentionDb();
     await seedRun({ status: "success", startedAt: daysAgo(40) });
@@ -538,5 +601,59 @@ describe("maybeTrimAutomationRuns 节流", () => {
     // 恰值已刷新基点，+1 落回新窗口内 → 仍被挡
     await maybeTrimAutomationRuns(countingDb, t0 + TRIM_INTERVAL_MS + 1);
     expect(touches).toBe(2);
+  });
+});
+
+let notificationNowMs = 2_000_000_000_000;
+const nextNotificationTime = () =>
+  (notificationNowMs += TRIM_INTERVAL_MS);
+
+describe("maybeTrimAutomationRuns 变更通知", () => {
+  beforeEach(() => emitAutomationChanged.mockReset());
+
+  it("真实裁剪后保留删除结果并发出恰好一次列表级通知", async () => {
+    const { prisma, seedRun, getRow } = makeRetentionDb();
+    const doomed = await seedRun({
+      status: "success",
+      startedAt: daysAgo(10),
+    });
+
+    await expect(
+      maybeTrimAutomationRuns(prisma, nextNotificationTime()),
+    ).resolves.toBeUndefined();
+
+    expect(getRow(doomed.id)).toBeNull();
+    expect(emitAutomationChanged).toHaveBeenCalledTimes(1);
+    expect(emitAutomationChanged).toHaveBeenCalledWith();
+  });
+
+  it("disabled 与真实 no-op 均不通知", async () => {
+    const disabled = makeRetentionDb();
+    const kept = await disabled.seedRun({
+      status: "success",
+      startedAt: daysAgo(40),
+    });
+    disabled.prisma.option.findFirst = async () => ({
+      value: JSON.stringify({ enabled: false }),
+    });
+    await maybeTrimAutomationRuns(disabled.prisma, nextNotificationTime());
+    const noop = makeRetentionDb();
+    await maybeTrimAutomationRuns(noop.prisma, nextNotificationTime());
+
+    expect(disabled.getRow(kept.id)).not.toBeNull();
+    expect(emitAutomationChanged).not.toHaveBeenCalled();
+  });
+
+  it("读取或裁剪失败维持吞错语义且不通知", async () => {
+    const { prisma } = makeRetentionDb();
+    prisma.option.findFirst = async () => {
+      throw new Error("option-read-failed");
+    };
+
+    await expect(
+      maybeTrimAutomationRuns(prisma, nextNotificationTime()),
+    ).resolves.toBeUndefined();
+
+    expect(emitAutomationChanged).not.toHaveBeenCalled();
   });
 });

@@ -241,10 +241,17 @@ export class GraphApi {
     );
   }
 
-  static async runs(graphId: number, page: number): Promise<GraphRunPage> {
+  static async runs(
+    graphId: number,
+    page: number,
+    topLevelOnly?: boolean,
+  ): Promise<GraphRunPage> {
     return routeInvoke(
-      { ch: "orchestration:runs", args: [graphId, page] },
-      (connId) => remoteGraphRuns(graphId, page, connId),
+      {
+        ch: "orchestration:runs",
+        args: topLevelOnly ? [graphId, page, true] : [graphId, page],
+      },
+      (connId) => remoteGraphRuns(graphId, page, connId, topLevelOnly),
     );
   }
 

@@ -21,6 +21,7 @@ vi.mock("@/lib/ipc", () => ({
 import { registerQueryInvalidation } from "../../src-react/lib/query-invalidate-events";
 import { AUTOMATION_CHANGED_EVENT } from "../../src-react/domains/ai/automation/api/automation.api";
 import { SESSION_CHANGED_EVENT } from "../../src-react/domains/ai/api/session.api";
+import { GRAPH_CHANGED_EVENT } from "../../src-react/domains/ai/orchestration/api/orchestration.api";
 import {
   LOCAL_HOST_CAPS,
   useHostStore,
@@ -84,5 +85,29 @@ describe("registerQueryInvalidation run sessions", () => {
       emit("server:event:conn-1", { type, payload: {} });
       expectRunSessionQueriesInvalidated(client);
     }
+  });
+
+  it("本地 graph.changed 同时失效运行分组、run 详情和会话", () => {
+    const client = new QueryClient();
+    registerQueryInvalidation(client);
+    seedRunSessionQueries(client);
+
+    emit(GRAPH_CHANGED_EVENT);
+
+    expectRunSessionQueriesInvalidated(client);
+  });
+
+  it("远程 graph.changed 同时失效运行分组、run 详情和会话", () => {
+    const client = new QueryClient();
+    registerQueryInvalidation(client);
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "conn-1" },
+      caps: LOCAL_HOST_CAPS,
+    });
+    seedRunSessionQueries(client);
+
+    emit("server:event:conn-1", { type: "graph.changed", payload: {} });
+
+    expectRunSessionQueriesInvalidated(client);
   });
 });

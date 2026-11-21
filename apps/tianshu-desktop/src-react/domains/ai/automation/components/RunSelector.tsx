@@ -26,7 +26,7 @@ export function runPageQueryKey(owner: RunOwner, page: number) {
 export function queryRunPage(owner: RunOwner, page: number) {
   return owner.kind === "task"
     ? AutomationApi.runs(page, owner.ownerId)
-    : GraphApi.runs(owner.ownerId, page);
+    : GraphApi.runs(owner.ownerId, page, true);
 }
 
 interface RunSelectorProps {

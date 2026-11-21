@@ -485,6 +485,59 @@ describe("RunSessionService.ensureRunSession", () => {
     expect(createSession).toHaveBeenCalledTimes(1);
   });
 
+  it("preserves a reused orphan claimed by another run during recovery", async () => {
+    const state = useData({
+      graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],
+      runs: [makeRun({ workspaceId: 3 }), makeRun({ id: 51 })],
+      sessions: [
+        {
+          id: 90,
+          userId: 1,
+          workspaceId: 3,
+          projectId: null,
+          automationTaskId: null,
+          runGraphId: 8,
+          title: "graph · 2026-11-20T01:02:03.000Z",
+          lastMessageAt: null,
+        },
+      ],
+    });
+    const { service } = makeService(state.sessions);
+    db.automationRun.updateMany.mockImplementation(
+      async ({ data }: { data: { sessionId: number } }) => {
+        state.runs[1].sessionId = data.sessionId;
+        return { count: 0 };
+      },
+    );
+
+    await expect(service.ensureRunSession(50, 1)).rejects.toThrow(
+      "RUN_NOT_FOUND",
+    );
+
+    expect(state.runs[1].sessionId).toBe(90);
+    expect(state.sessions.map((session) => session.id)).toEqual([90]);
+  });
+
+  it("preserves a newly created candidate claimed by another run before recovery", async () => {
+    const state = useData({
+      graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],
+      runs: [makeRun({ workspaceId: 3 }), makeRun({ id: 51 })],
+    });
+    const { service } = makeService(state.sessions);
+    const claimRace = new Error("unique-session-race");
+    db.automationRun.updateMany.mockImplementation(
+      async ({ data }: { data: { sessionId: number } }) => {
+        state.runs[1].sessionId = data.sessionId;
+        throw claimRace;
+      },
+    );
+
+    await expect(service.ensureRunSession(50, 1)).rejects.toThrow(claimRace);
+
+    expect(state.runs[1].sessionId).toBe(1);
+    expect(state.sessions.map((session) => session.id)).toEqual([1]);
+  });
+
   it("does not claim a same-title orphan into a different resolved target", async () => {
     const state = useData({
       graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],

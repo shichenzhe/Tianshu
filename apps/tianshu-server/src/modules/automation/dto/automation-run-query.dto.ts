@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 /**
@@ -28,6 +28,15 @@ export class AutomationRunQueryDto {
   @IsOptional()
   @IsInt({ message: '图标识必须是整数' })
   graphId?: number;
+
+  @ApiProperty({
+    description:
+      '固定图入口仅查顶层运行（taskId=null 且 triggerType!=subflow）',
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'topLevelOnly 必须是布尔值' })
+  topLevelOnly?: boolean;
 
   @ApiProperty({
     description: '运行状态筛选',

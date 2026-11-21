@@ -264,8 +264,8 @@ export default class GraphRepository {
     );
     handleUser(
       "orchestration:runs",
-      (_, userId, graphId: number, page: number) =>
-        this.listGraphRuns(graphId, page, userId),
+      (_, userId, graphId: number, page: number, topLevelOnly?: boolean) =>
+        this.listGraphRuns(graphId, page, userId, topLevelOnly),
     );
     // 节点详情行（去会话化 2026-10-28，spec §4 三层下钻第三层）：
     // 归属两段校验与 id asc 排序内聚 listRunNodes（执行详情批起
@@ -825,9 +825,15 @@ export default class GraphRepository {
     graphId: number,
     page: number,
     userId: number,
+    topLevelOnly?: boolean,
   ): Promise<RunPage> {
     await this.assertGraphOwned(graphId, userId);
-    const where = { graphId };
+    const where = {
+      graphId,
+      ...(topLevelOnly
+        ? { taskId: null, triggerType: { not: "subflow" } }
+        : {}),
+    };
     const [total, rows] = await Promise.all([
       prisma.automationRun.count({ where }),
       prisma.automationRun.findMany({

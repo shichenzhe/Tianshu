@@ -508,8 +508,11 @@ export async function remoteGraphRuns(
   graphId: number,
   page: number,
   connId: string,
+  topLevelOnly?: boolean,
 ): Promise<GraphRunPage> {
-  const result = await RemoteGraphApi.graphRuns(graphId, page, connId);
+  const result = topLevelOnly
+    ? await RemoteGraphApi.graphRuns(graphId, page, connId, undefined, true)
+    : await RemoteGraphApi.graphRuns(graphId, page, connId);
   return {
     total: result.total,
     items: result.items as GraphRunPage["items"],

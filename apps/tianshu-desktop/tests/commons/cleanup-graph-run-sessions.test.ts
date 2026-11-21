@@ -72,6 +72,25 @@ describe("cleanupGraphRunSessions", () => {
     });
   });
 
+  it("多个旧图运行共享会话时清除每一个 run 链接", async () => {
+    const linkedRuns = [
+      { id: 1, sessionId: 11 },
+      { id: 2, sessionId: 11 },
+    ];
+    prismaMock.automationRun.findMany.mockImplementation(
+      async (args: { distinct?: string[] }) =>
+        args.distinct?.includes("sessionId") ? [linkedRuns[0]] : linkedRuns,
+    );
+    prismaMock.session.findMany.mockResolvedValue([{ id: 11 }]);
+
+    await cleanupGraphRunSessions();
+
+    expect(prismaMock.automationRun.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [1, 2] } },
+      data: { sessionId: null },
+    });
+  });
+
   it("已有运行分组的 graph 伴随会话不属于旧迁移，会话和 run 链接均保留", async () => {
     prismaMock.automationRun.findMany.mockResolvedValue([
       { id: 1, sessionId: 11 },

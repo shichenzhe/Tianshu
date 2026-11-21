@@ -273,6 +273,22 @@ describe("RunSessionView 运行选择", () => {
     expect(await screen.findByText("session-111")).toBeTruthy();
   });
 
+  it("graph 固定入口的缺省运行与选择器只查询顶层运行", async () => {
+    runs = [
+      makeRun(9, {
+        taskId: null,
+        graphId: 3,
+        sessionId: 90,
+      }),
+    ];
+    sessions = new Map([[90, makeSession(90, runs[0])]]);
+
+    renderOwner(GRAPH_OWNER, "/module/ai?graphRun=3");
+
+    expect(await screen.findByText("session-90")).toBeTruthy();
+    expect(invokeMock).toHaveBeenCalledWith("orchestration:runs", 3, 1, true);
+  });
+
   it("显式 run 在新运行完成后保持原检查点", async () => {
     renderTask("/module/ai?automation=4&run=9");
     expect(await screen.findByText("session-109")).toBeTruthy();

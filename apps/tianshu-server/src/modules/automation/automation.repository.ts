@@ -636,6 +636,7 @@ export class AutomationRepository {
     status: RunStatus | undefined,
     userId: number,
     graphId?: number,
+    topLevelOnly?: boolean,
   ): Promise<Prisma.AutomationRunWhereInput | null> {
     if (taskId !== undefined) {
       const owned = await this.prisma.automationTask.findFirst({
@@ -653,7 +654,13 @@ export class AutomationRepository {
         select: { id: true },
       });
       if (!ownedGraph) return null;
-      return { graphId, ...(status ? { status } : {}) };
+      return {
+        graphId,
+        ...(status ? { status } : {}),
+        ...(topLevelOnly
+          ? { taskId: null, triggerType: { not: 'subflow' } }
+          : {}),
+      };
     }
     const ownedTasks = await this.prisma.automationTask.findMany({
       where: { userId },
@@ -683,8 +690,15 @@ export class AutomationRepository {
     status: RunStatus | undefined,
     userId: number,
     graphId?: number,
+    topLevelOnly?: boolean,
   ): Promise<AutomationRunPage> {
-    const where = await this.buildRunWhere(taskId, status, userId, graphId);
+    const where = await this.buildRunWhere(
+      taskId,
+      status,
+      userId,
+      graphId,
+      topLevelOnly,
+    );
     if (where === null) return { total: 0, items: [] };
     const PAGE_SIZE = 20;
     const [total, rows] = await Promise.all([

@@ -161,3 +161,94 @@ describe('automation/runPage 运行历史分页（移动端 CRUD 批）', () => 
     expect(run?.startedAt).toEqual(new Date(run!.startedAt).toISOString());
   });
 });
+
+describe('automation/runPage topLevelOnly 固定图入口', () => {
+  let db: TestDb;
+  let service: AutomationService;
+  let graphId: number;
+
+  beforeAll(async () => {
+    db = await createTestDb();
+    service = new AutomationService(
+      db.prisma,
+      new AutomationRepository(db.prisma),
+      new EventBusService(),
+      new RunSessionService(db.prisma, new SessionRepository(db.prisma)),
+    );
+    const workspace = await db.prisma.workspace.create({
+      data: { name: 'top-level-runs-ws', userId: 1 },
+    });
+    const task = await db.prisma.automationTask.create({
+      data: {
+        name: '图任务',
+        prompt: 'p',
+        workspaceId: workspace.id,
+        modelId: 0,
+        scheduleJson: '{}',
+        scheduleText: 's',
+        userId: 1,
+      },
+    });
+    graphId = (
+      await db.prisma.graphDefinition.create({
+        data: { name: '顶层筛选图', graphJson: '{}', userId: 1 },
+      })
+    ).id;
+    const base = Date.parse('2026-11-01T00:00:00.000Z');
+    await db.prisma.automationRun.createMany({
+      data: Array.from({ length: 21 }, (_, index) => ({
+        taskId: null,
+        graphId,
+        triggerType: 'manual',
+        status: 'success',
+        startedAt: new Date(base + index * 60_000),
+      })),
+    });
+    await db.prisma.automationRun.create({
+      data: {
+        taskId: task.id,
+        graphId,
+        triggerType: 'schedule',
+        status: 'success',
+        startedAt: new Date(base + 22 * 60_000),
+      },
+    });
+    await db.prisma.automationRun.create({
+      data: {
+        taskId: null,
+        graphId,
+        triggerType: 'subflow',
+        status: 'success',
+        startedAt: new Date(base + 23 * 60_000),
+      },
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await db.cleanup();
+  });
+
+  it('顶层筛选同时约束 items 与 total，并保留真实分页余量', async () => {
+    const topLevelOnly = { topLevelOnly: true };
+    const first = await service.runPage({ page: 1, graphId, ...topLevelOnly });
+    const second = await service.runPage({ page: 2, graphId, ...topLevelOnly });
+
+    expect(first.total).toBe(21);
+    expect(first.items).toHaveLength(20);
+    expect(second.total).toBe(21);
+    expect(second.items).toHaveLength(1);
+    for (const run of [...first.items, ...second.items]) {
+      expect(run.taskId).toBeNull();
+      expect(run.triggerType).not.toBe('subflow');
+      expect(run.graphId).toBe(graphId);
+    }
+  });
+
+  it('普通 graphId 历史仍包含任务运行和 subflow', async () => {
+    const page = await service.runPage({ page: 1, graphId });
+
+    expect(page.total).toBe(23);
+    expect(page.items[0]?.triggerType).toBe('subflow');
+    expect(page.items[1]?.taskId).not.toBeNull();
+  });
+});

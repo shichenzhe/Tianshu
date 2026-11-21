@@ -10,6 +10,7 @@
  * 前端 parseTrace 对空 graphTrace 已容错（GraphRunTraceView「老 run 无 trace」注释）。
  */
 import Log from "../../../commons/Log";
+import { emitAutomationChanged } from "./automation-change-bus";
 import {
   clearRunSessionOwners,
   type RunSessionOwnerDb,
@@ -147,20 +148,25 @@ const trimKeepIdsSql = (statusWhere: string): string => `
   ) WHERE rn > ?
 `;
 
-/** 所有 run 删除共用：先在事务内解除会话分组，再删节点与 run；消息不动。 */
+const RUN_DELETE_BATCH_SIZE = 500;
+
+/** 所有 run 删除共用：单事务内按 500 个稳定 id 分批清理与删除。 */
 async function deleteRunRows(
   prisma: RetentionDb,
   runIds: number[],
 ): Promise<number> {
-  if (runIds.length === 0) {
-    return 0;
-  }
+  if (runIds.length === 0) return 0;
   return prisma.$transaction(async (tx) => {
-    await clearRunSessionOwners(tx, runIds);
-    await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
-    return (
-      await tx.automationRun.deleteMany({ where: { id: { in: runIds } } })
-    ).count;
+    let deleted = 0;
+    for (let start = 0; start < runIds.length; start += RUN_DELETE_BATCH_SIZE) {
+      const batch = runIds.slice(start, start + RUN_DELETE_BATCH_SIZE);
+      await clearRunSessionOwners(tx, batch);
+      await tx.graphRunNode.deleteMany({ where: { runId: { in: batch } } });
+      deleted += (
+        await tx.automationRun.deleteMany({ where: { id: { in: batch } } })
+      ).count;
+    }
+    return deleted;
   });
 }
 
@@ -274,6 +280,7 @@ export async function maybeTrimAutomationRuns(
       result.failureKeepDeleted
     ) {
       Log.info("自动化执行历史裁剪完成", result);
+      emitAutomationChanged();
     }
   } catch (e) {
     Log.warn("自动化执行历史裁剪失败", e);

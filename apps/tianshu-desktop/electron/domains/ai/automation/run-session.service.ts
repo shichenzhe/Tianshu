@@ -300,9 +300,9 @@ export class RunSessionService {
     try {
       const claimed = await this.claimSession(runId, sessionId);
       if (claimed) return { runId, sessionId, created };
-      return await this.recoverClaim(runId, sessionId);
+      return await this.recoverClaim(runId, sessionId, created);
     } catch (error) {
-      return await this.recoverClaim(runId, sessionId, error);
+      return await this.recoverClaim(runId, sessionId, created, error);
     }
   }
 
@@ -354,6 +354,7 @@ export class RunSessionService {
   private async recoverClaim(
     runId: number,
     sessionId: number,
+    created: boolean,
     originalError?: unknown,
   ): Promise<RunSessionResult> {
     const winner = await prisma.automationRun.findUnique({
@@ -362,12 +363,28 @@ export class RunSessionService {
     });
     if (winner?.sessionId != null) {
       if (winner.sessionId !== sessionId) {
-        await prisma.session.delete({ where: { id: sessionId } });
+        await this.deleteCreatedCandidateIfUnlinked(runId, sessionId, created);
       }
       return { runId, sessionId: winner.sessionId, created: false };
     }
-    await prisma.session.delete({ where: { id: sessionId } });
+    await this.deleteCreatedCandidateIfUnlinked(runId, sessionId, created);
     throw originalError ?? new Error("RUN_NOT_FOUND");
+  }
+
+  private async deleteCreatedCandidateIfUnlinked(
+    runId: number,
+    sessionId: number,
+    created: boolean,
+  ): Promise<void> {
+    if (!created) return;
+    await prisma.$transaction(async (tx) => {
+      const linked = await tx.automationRun.findMany({
+        where: { sessionId: { in: [sessionId] } },
+        select: { id: true },
+      });
+      if (linked.some((run) => run.id !== runId)) return;
+      await tx.session.delete({ where: { id: sessionId } });
+    });
   }
 }
 

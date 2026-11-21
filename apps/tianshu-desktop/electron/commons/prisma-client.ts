@@ -172,11 +172,14 @@ export async function cleanupGraphRunSessions(): Promise<void> {
   const runs = await prisma.automationRun.findMany({
     where: { graphId: { not: null }, sessionId: { not: null } },
     select: { id: true, sessionId: true },
-    distinct: ["sessionId"],
   });
-  const sessionIds = runs
-    .map((r) => r.sessionId)
-    .filter((id): id is number => id !== null);
+  const sessionIds = [
+    ...new Set(
+      runs
+        .map((r) => r.sessionId)
+        .filter((id): id is number => id !== null),
+    ),
+  ];
   if (sessionIds.length > 0) {
     // 新模型下带分组列的是用户伴随会话，不属于 2026-10-28 旧图会话清理。
     const legacySessions = await prisma.session.findMany({

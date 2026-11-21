@@ -2894,6 +2894,8 @@ export interface components {
             taskId?: number;
             /** @description 图标识（图口径筛选，归属校验） */
             graphId?: number;
+            /** @description 固定图入口仅查顶层运行（taskId=null 且 triggerType!=subflow） */
+            topLevelOnly?: boolean;
             /**
              * @description 运行状态筛选
              * @enum {string}

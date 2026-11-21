@@ -9,7 +9,7 @@
  * 远程桥（orchestration 路由化批 2026-11-10；automation/library 批补
  * automation.changed）：活动主机为远程时订阅 server:event:<connId>，
  * graph.changed（无头端图定义级变更——端点写面/对话工具建图/启停）→
- * 失效 ["orchestration"]；automation.changed（无头端调度执行/过期/异常/
+ * 失效 ["orchestration"] 与运行会话缓存；automation.changed（无头端调度执行/过期/异常/
  * 远程任务页写面）→ 失效 ["automation"]（本地 AUTOMATION_CHANGED_EVENT
  * 同款键）。主机切换经 zustand subscribe 感知，旧订阅退订；invalidate
  * 前缀匹配跨主机同标脏（非活动主机仅标脏不重取，host-query.ts 头注释
@@ -36,6 +36,7 @@ export function registerQueryInvalidation(client: QueryClient): void {
   };
   on(GRAPH_CHANGED_EVENT, () => {
     void client.invalidateQueries({ queryKey: ["orchestration"] });
+    invalidateRunSessions();
   });
   on(AUTOMATION_CHANGED_EVENT, invalidateAutomation);
   // 批③（2026-11-01）：本机被控写入（移动端经 face tap 落本地库）→ 侧栏
@@ -58,6 +59,7 @@ export function registerQueryInvalidation(client: QueryClient): void {
       const type = (event as { type?: string } | null)?.type;
       if (type === "graph.changed") {
         void client.invalidateQueries({ queryKey: ["orchestration"] });
+        invalidateRunSessions();
       } else if (type === "automation.changed") {
         invalidateAutomation();
       } else if (type === "graph.run.updated" || type === "session.updated") {

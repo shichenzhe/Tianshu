@@ -163,6 +163,26 @@ describe("编排页远程主机（适配器映射）", () => {
     expect(remoteGraphApi.webhookDisable).toHaveBeenCalledWith(7, "conn-x");
   });
 
+  it("runs：固定入口下推顶层筛选，普通历史保持原远程调用", async () => {
+    remoteGraphApi.graphRuns.mockResolvedValue({
+      total: 21,
+      items: [{ id: 30 }],
+    });
+
+    const filtered = await GraphApi.runs(7, 2, true);
+    expect(remoteGraphApi.graphRuns).toHaveBeenCalledWith(
+      7,
+      2,
+      "conn-x",
+      undefined,
+      true,
+    );
+    expect(filtered).toEqual({ total: 21, items: [{ id: 30 }] });
+
+    await GraphApi.runs(7, 1);
+    expect(remoteGraphApi.graphRuns).toHaveBeenLastCalledWith(7, 1, "conn-x");
+  });
+
   it("runTest：draftJson 与库内不一致先 save 再 run（保存后跑语义）", async () => {
     remoteGraphApi.graphList.mockResolvedValue({
       total: 1,

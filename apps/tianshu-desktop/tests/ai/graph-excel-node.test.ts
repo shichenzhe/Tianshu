@@ -10,6 +10,7 @@ import path from "node:path";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {

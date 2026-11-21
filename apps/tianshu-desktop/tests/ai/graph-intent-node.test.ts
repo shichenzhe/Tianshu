@@ -9,6 +9,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => `/tmp/tianshu-test-user-data-${process.pid}`) },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
 }));
 vi.mock("../../electron/commons/prisma-client", () => ({
   default: {

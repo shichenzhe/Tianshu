@@ -54,6 +54,7 @@ describe("@tianshu/protocol 协议包", () => {
       "chat",
       "provider",
       "graph",
+      "runSessions",
       "files",
       "library",
       "monitor",
@@ -250,6 +251,9 @@ describe("@tianshu/protocol 协议包", () => {
         save: "automation/save",
         delete: "automation/delete",
         runNow: "automation/runNow",
+        runGroups: "automation/runGroups",
+        runById: "automation/runById",
+        ensureRunSession: "automation/ensureRunSession",
         // 移动端 CRUD+运行历史批：分页运行历史（载荷剔 graphTrace）
         runPage: "automation/runPage",
         // 移动端执行详情批：节点级执行详情（38f724ce 加端点漏更本钉测试）

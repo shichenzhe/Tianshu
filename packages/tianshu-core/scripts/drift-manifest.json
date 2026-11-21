@@ -327,7 +327,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-scheduler.ts",
       "serverPath": "src/modules/automation/automation-scheduler.ts",
       "baselineDiff": true,
-      "baselineLines": 142,
+      "baselineLines": 162,
       "note": "调度器（GA-T5 副本）：BrowserWindow 推送→publishAutomationChanged 钩子、NestJS 生命周期、tickMs 可配（config tianshu.automation.tickMs）；决策树/重试扫描逐行保持；2026-10-22 基线 +8：server 独有 automationStat 90 天裁剪段（onApplicationBootstrap fire-and-forget，controller 裁定有意分叉；mirror 对应物在 commons ensureEventStatMaintenance 启动链，不属 scheduler） 批3A（2026-11-05）基线 127→142 过账：重试指数退避（pickRetryTaskIds 按 attempt 走 @tianshu/core nextRetryDelay + isRetryableRunError 配置类不重试）+ 补跑上限 catchUpLimit（decideTick 第 4 参 missedCatchUps + loadRunSnapshots 七列快照含补跑计数）+ launch replayAt 重放相位 + tick 收尾 maybeRollupAutomationStats——双端同构落地，增量 15 = import 源差异（mirror ./schedule shim vs server @tianshu/core 直引）+ maybeTrim 挂点 prisma/this.prisma 既有形态在新段的再现，逐段语义同构"
     },
     {
@@ -367,7 +367,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/orchestration/graph.repo.ts",
       "serverPath": "src/modules/graph/graph.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 685,
+      "baselineLines": 713,
       "note": "图仓储（GA-T3 摘取：prisma→PrismaService、Electron IPC 面→公开方法、unregisterWebhook no-op 钩子（T7 接线 webhook 注销））。2026-10-28 去会话化批（Task 5+6）：删图级联删 graphRunNode 节点行双端同构；基线 601→628 增量 = mirror 独有 orchestration:runNodes 通道（spec §5 移动端不透出节点详情，server 无对应端点——有意单侧）；改名批 rebase 616 后，执行详情批（151f7a60/c7188f66）mirror 侧落 listRunNodes 于本文件，server 侧同构实现落 automation.repository（跨对落位，归属两段校验双端同款）——616→622 过账，逐行复核无逻辑漂移。2026-10-29 切片 C：mirror 独有会话应用作用域装配（run/list/create_workflow 注 appDelegate，作用域实现单份在 create-workflow.ts 不入比对）——+3 行基线过账。2026-10-29 切片 D：mirror 独有 runTest 入口归一（normalizeInputsFor + typed launch 签名）——631→652 过账。2026-10-31 查询下推批：server 新增 pageGraphs（keyword contains 引擎感知下推 + skip/take DB 分页，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 622→647 过账（纯 server 侧新增，无既有行改动）。2026-10-31 双线合并（merge-of-two-lines）实测重过账 652→674：分支基线 652 不含 HEAD 线查询下推批的 server 单侧 pageGraphs 增量（两线并行各自过账，合并后叠加）；HEAD 线工具名精简四件注册与分支线 appDelegate 装配同落构造块，逐段语义并立无逻辑漂移。批5 --rebase 全量过账顺带 672→674（预存容差内增量，非本批改动）"
     },
     {
@@ -375,7 +375,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation.repo.ts",
       "serverPath": "src/modules/automation/automation.repository.ts",
       "baselineDiff": true,
-      "baselineLines": 558,
+      "baselineLines": 782,
       "note": "任务仓储（GA-T3 摘取+GA-T5 runNow 接线：deps 钩子替换 IPC/广播）。含 GA-T3 移交（T9 入册）的内联契约类型对：server 本文件内联 TaskCreateParams/TaskRecord/RunRecord 等逐字段自 mirror src-react/domains/ai/automation/api/automation.api.ts（同文件多对不重复登记，合并于此条）。2026-10-28 去会话化批（Task 5+6）：deleteTasks 级联删 graphRunNode 双端同构；基线 388→427 增量 = 级联新行 server 侧 this.prisma 前缀与 mirror 裸 prisma 不成对（既有授权分叉形态在新代码段的再现）；执行详情批（38f724ce/c7188f66）server 侧增 listRunNodes 桥（端点 automation/runNodes 载荷），mirror 侧同构实现落 graph.repo（跨对落位）——437→460 过账，逐行复核无逻辑漂移。2026-10-31 查询下推批：server 新增 pageTasks（keyword contains 引擎感知下推 + skip/take DB 分页 + hydrate 逐行补 workspace，替代 service 全表内存过滤；mirror 侧对应消费面在渲染层内存过滤、仓储无此方法——有意单侧增量），基线 460→486 过账（纯 server 侧新增，无既有行改动） 批3A（2026-11-05）基线 486→509 过账：catchUpLimit 三点（TaskRecord/TaskCreateParams/toTaskRecord/buildTaskData 显式携带才写——对齐 enabled Ruling 14 形态）双端同构；增量 23 = mirror 单侧 getStats 每日 rollup 读段（健康度面板 desktop 独有——computeStats trend 补全被保留策略裁剪的计数，server 无 stats 端点），有意单侧"
     },
     {
@@ -415,7 +415,7 @@
       "mirrorPath": "apps/tianshu-desktop/electron/domains/ai/automation/automation-retention.ts",
       "serverPath": "src/modules/automation/automation-retention.ts",
       "baselineDiff": true,
-      "baselineLines": 36,
+      "baselineLines": 47,
       "note": "执行历史保留裁剪（2026 方案 A：双限分级+graphTrace 先行降级）：照 automation-stat 形态逐行同构——仅引号风格/trailingComma/Log→Nest Logger/头注释差异，期望 diff 趋零；条数窗 SQL 双端 better-sqlite3 同引擎窗口函数。2026-10-28 去会话化批（Task 5+6）：run 删除级联删节点行（按天 findMany+deleteMany 两档、条数窗 trimKeepNodesSql 同窗子查询）双端同构，diff 持平 5；2026-10-31 主库双引擎批：trim SQL 按引擎方言分流（PG 引号标识符+$N）——定向 36，graph/automation-repository 预存告警不动"
     },
     {

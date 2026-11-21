@@ -5,14 +5,14 @@ describe("runOwnerOf", () => {
   it("prioritizes task ownership when both task and graph ids exist", () => {
     expect(runOwnerOf({ taskId: 7, graphId: 3 })).toEqual({
       kind: "task",
-      ownerId: 7
+      ownerId: 7,
     });
   });
 
   it("uses graph ownership for a top-level graph run", () => {
     expect(runOwnerOf({ taskId: null, graphId: 3 })).toEqual({
       kind: "graph",
-      ownerId: 3
+      ownerId: 3,
     });
   });
 
@@ -26,13 +26,13 @@ describe("canFollowUpRun", () => {
     "allows follow-up for %s",
     (status) => {
       expect(canFollowUpRun(status)).toBe(true);
-    }
+    },
   );
 
   it.each(["running", "skipped"] as const)(
     "rejects follow-up for %s",
     (status) => {
       expect(canFollowUpRun(status)).toBe(false);
-    }
+    },
   );
 });

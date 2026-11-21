@@ -608,6 +608,7 @@ describe('session/send + abort + SSE (e2e)', () => {
         'chat',
         'provider',
         'graph',
+        'runSessions',
         'files',
         'library',
         'monitor',

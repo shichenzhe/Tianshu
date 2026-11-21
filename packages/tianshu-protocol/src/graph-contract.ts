@@ -127,7 +127,7 @@ export interface AutomationRunRecord {
   graphId?: number;
   /** 运行实际使用的工作空间（历史 run 可缺省） */
   workspaceId?: number;
-  /** 图运行去会话化（2026-10-28）后恒 null——face runPage wire 实际可空 */
+  /** 图运行初始无会话；首次追问补建伴随会话后回写，face wire 实际可空 */
   sessionId?: number | null;
   attempt: number;
   triggerType: AutomationTriggerType;

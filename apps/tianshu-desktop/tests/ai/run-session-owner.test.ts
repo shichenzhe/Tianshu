@@ -78,18 +78,37 @@ function makeOwnerDb() {
     session: {
       updateMany: vi.fn(
         async (args: {
-          where: { id: { in: number[] } };
+          where: {
+            id?: { in: number[] };
+            OR?: Array<{
+              id?: { in: number[] };
+              automationTaskId?: { in: number[] };
+              runGraphId?: { in: number[] };
+            }>;
+          };
           data: {
             automationTaskId?: number | null;
             runGraphId?: number | null;
           };
         }) => {
+          const filters =
+            args.where.OR ?? (args.where.id ? [{ id: args.where.id }] : []);
           for (const session of sessions) {
-            if (args.where.id.in.includes(session.id)) {
-              Object.assign(session, args.data);
-            }
+            const matched = filters.some(
+              (filter) =>
+                (filter.id && filter.id.in.includes(session.id)) ||
+                (filter.automationTaskId &&
+                  session.automationTaskId !== null &&
+                  filter.automationTaskId.in.includes(
+                    session.automationTaskId,
+                  )) ||
+                (filter.runGraphId &&
+                  session.runGraphId !== null &&
+                  filter.runGraphId.in.includes(session.runGraphId)),
+            );
+            if (matched) Object.assign(session, args.data);
           }
-          return { count: args.where.id.in.length };
+          return { count: args.where.OR?.length ?? 1 };
         },
       ),
     },
@@ -136,6 +155,25 @@ describe("run session owner persistence", () => {
       runGraphId: null,
     });
     expect(sessions.find((session) => session.id === 10)).toBeDefined();
+    expect(await db.message.count({ where: { sessionId: 9 } })).toBe(2);
+  });
+
+  it("删 owner 时也解除未关联 run 的空 crash orphan 分组且保留消息", async () => {
+    const { db, sessions } = makeOwnerDb();
+    sessions[1].automationTaskId = 11;
+    const { clearRunSessionOwners } =
+      await import("../../electron/domains/ai/automation/run-session-owner");
+
+    await clearRunSessionOwners(db, [], { taskIds: [11] });
+
+    expect(sessions[0]).toMatchObject({
+      automationTaskId: null,
+      runGraphId: null,
+    });
+    expect(sessions[1]).toMatchObject({
+      automationTaskId: null,
+      runGraphId: null,
+    });
     expect(await db.message.count({ where: { sessionId: 9 } })).toBe(2);
   });
 });

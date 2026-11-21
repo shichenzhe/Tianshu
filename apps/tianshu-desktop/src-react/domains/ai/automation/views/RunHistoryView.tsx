@@ -108,7 +108,8 @@ export default function RunHistoryView() {
             <tbody>
               {(data?.items ?? []).map((run) => {
                 // 图试运行 run(taskId=null)就地展开轨迹;任务 run(含挂图
-                // 任务)保持跳会话——session 里有完整过程可回看
+                // 任务)保持跳运行入口/会话——执行过程仍以 graphTrace +
+                // graphRunNode 为权威留痕
                 const owner = runOwnerOf(run);
                 const openRun =
                   runSessionsEnabled && owner

@@ -25,7 +25,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import type { RunOwner } from "@tianshu/core/run-session";
 import type { RunRecord } from "../../src-react/domains/ai/automation/api/automation.api";
-import type { SessionRecord } from "../../src-react/domains/ai/api/session.api";
+import { AutomationApi } from "../../src-react/domains/ai/automation/api/automation.api";
+import SessionApi, {
+  type SessionRecord,
+} from "../../src-react/domains/ai/api/session.api";
 
 vi.hoisted(() => {
   const memory = new Map<string, string>();
@@ -118,7 +121,10 @@ vi.mock("../../src-react/domains/ai/chat/components/MessageList", () => ({
 import RunSessionView from "../../src-react/domains/ai/automation/views/RunSessionView";
 import ChatView from "../../src-react/domains/ai/chat/views/ChatView";
 import { usePageHeaderStore } from "../../src-react/components/layout/page-header.store";
-import { useHostStore } from "../../src-react/domains/ai/data-source/host.store";
+import {
+  capsOfCapabilities,
+  useHostStore,
+} from "../../src-react/domains/ai/data-source/host.store";
 
 const TASK_OWNER: RunOwner = { kind: "task", ownerId: 4 };
 const GRAPH_OWNER: RunOwner = { kind: "graph", ownerId: 3 };
@@ -249,6 +255,7 @@ afterEach(() => {
   cleanup();
   queryClient.clear();
   usePageHeaderStore.getState().setPageHeader(null);
+  vi.restoreAllMocks();
 });
 
 describe("RunSessionView 运行选择", () => {
@@ -281,6 +288,48 @@ describe("RunSessionView 运行选择", () => {
     expect(screen.queryByText("session-111")).toBeNull();
   });
 
+  it("已删除的显式 run 回到 owner-only URL 并解析最新运行", async () => {
+    runs = [runs[0]];
+    sessions = new Map([[110, makeSession(110, runs[0])]]);
+    renderTask("/module/ai?automation=4&run=9");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?automation=4",
+      ),
+    );
+    expect(await screen.findByText("session-110")).toBeTruthy();
+  });
+
+  it("owner 不匹配的显式 run 不展示并回到该 owner 最新运行", async () => {
+    runs[1] = makeRun(9, { taskId: 99, taskName: "Other task" });
+    sessions.set(109, makeSession(109, runs[1]));
+    renderTask("/module/ai?automation=4&run=9");
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/module/ai?automation=4",
+      ),
+    );
+    expect(await screen.findByText("session-110")).toBeTruthy();
+    expect(screen.queryByText("session-109")).toBeNull();
+  });
+
+  it("显式 run 的瞬态网络错误保留 URL 且不重定向", async () => {
+    invokeMock.mockImplementation((channel: string, ...args: unknown[]) => {
+      if (channel === "automation:run:get" && args[0] === 9) {
+        return Promise.reject(new Error("NETWORK_DOWN"));
+      }
+      return defaultInvoke(channel, ...args);
+    });
+    renderTask("/module/ai?automation=4&run=9");
+
+    expect(await screen.findByText("NETWORK_DOWN")).toBeTruthy();
+    expect(screen.getByTestId("location").textContent).toBe(
+      "/module/ai?automation=4&run=9",
+    );
+  });
+
   it("时间选择器切换 canonical run URL", async () => {
     renderTask("/module/ai?automation=4&run=10");
     expect(await screen.findByText("session-110")).toBeTruthy();
@@ -288,6 +337,7 @@ describe("RunSessionView 运行选择", () => {
       name: "chat:runSession.selectRun",
     });
     fireEvent.click(trigger);
+    expect(screen.getByRole("dialog").className).toContain("rounded-lg");
     fireEvent.click(await screen.findByTestId("run-option-9"));
 
     await waitFor(() =>
@@ -411,6 +461,38 @@ describe("RunSessionView 结果与追问", () => {
 });
 
 describe("ChatView 旧运行会话深链", () => {
+  it("旧远程主机停留在固定 URL 时走普通空态且零新端点调用", async () => {
+    useHostStore.setState({
+      activeHost: { kind: "remote", connId: "old-host" },
+      caps: capsOfCapabilities(["chat", "graph"]),
+    });
+    const listAll = vi.spyOn(SessionApi, "listAll").mockResolvedValue([]);
+    const runGroups = vi
+      .spyOn(AutomationApi, "runGroups")
+      .mockResolvedValue([]);
+    const runById = vi
+      .spyOn(AutomationApi, "runById")
+      .mockResolvedValue(makeRun(9));
+    const ensure = vi
+      .spyOn(AutomationApi, "ensureRunSession")
+      .mockResolvedValue({ runId: 9, sessionId: 109, created: false });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/module/ai?automation=4&run=9"]}>
+          <LocationProbe />
+          <ChatView />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => expect(listAll).toHaveBeenCalled());
+    expect(runGroups).not.toHaveBeenCalled();
+    expect(runById).not.toHaveBeenCalled();
+    expect(ensure).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("run-chat-pane")).toBeNull();
+  });
+
   it("?session= 规范化为固定任务入口与 run", async () => {
     const run = runs[1];
     sessions = new Map([[109, makeSession(109, run)]]);

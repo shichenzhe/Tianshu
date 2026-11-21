@@ -262,7 +262,7 @@ export class RunSessionService {
       return { runId, sessionId: owned.row.sessionId, created: false };
     }
     const target = await this.resolveSessionTarget(owned, userId, workspaceId);
-    const orphanId = await this.findOrphanSession(owned, userId);
+    const orphanId = await this.findOrphanSession(owned, userId, target);
     if (orphanId !== null) {
       return this.claimOrRecover(runId, orphanId, false);
     }
@@ -276,9 +276,10 @@ export class RunSessionService {
   private async findOrphanSession(
     owned: OwnedRun,
     userId: number,
+    target: { workspaceId: number; projectId?: number },
   ): Promise<number | null> {
     const candidates = await prisma.session.findMany({
-      where: orphanSessionWhere(owned, userId),
+      where: orphanSessionWhere(owned, userId, target),
       orderBy: { id: "asc" },
       select: { id: true },
     });
@@ -378,11 +379,14 @@ function runSessionTitle(owned: OwnedRun): string {
 function orphanSessionWhere(
   owned: OwnedRun,
   userId: number,
+  target: { workspaceId: number; projectId?: number },
 ): Prisma.sessionWhereInput {
   return {
     userId,
     title: runSessionTitle(owned),
     lastMessageAt: null,
+    workspaceId: target.workspaceId,
+    projectId: target.projectId ?? null,
     automationTaskId: owned.owner === "task" ? owned.task.id : null,
     runGraphId: owned.owner === "graph" ? owned.graph.id : null,
   };

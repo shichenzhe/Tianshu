@@ -542,7 +542,7 @@ describe('run session migration 5 and SQLite upgrade', () => {
       await prisma.$executeRawUnsafe(
         "INSERT INTO automationRun (id,taskId,sessionId,attempt,triggerType,status) VALUES (3,1,1,1,'retry','failed')",
       );
-      // 混合重复：graph run 先占位，prompt run 后链接；回填须先于去重。
+      // 混合重复：prompt run 优先成为 canonical，owner 与保留链接同源。
       await prisma.$executeRawUnsafe(
         "INSERT INTO automationRun (id,taskId,sessionId,graphId,attempt,triggerType,status) VALUES (4,NULL,4,9,1,'manual','success')",
       );
@@ -578,8 +578,8 @@ describe('run session migration 5 and SQLite upgrade', () => {
         { id: 1, sessionId: 1 },
         { id: 2, sessionId: 3 },
         { id: 3, sessionId: null },
-        { id: 4, sessionId: 4 },
-        { id: 5, sessionId: null },
+        { id: 4, sessionId: null },
+        { id: 5, sessionId: 4 },
       ]);
       expect(
         await prisma.$queryRawUnsafe<Array<{ id: number }>>(
@@ -596,6 +596,51 @@ describe('run session migration 5 and SQLite upgrade', () => {
       rmSync(root, { recursive: true, force: true });
     }
   }, 120_000);
+
+  it('SQLite startup upgrade keeps the same prompt-preferred canonical link', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'tianshu-run-startup-'));
+    const prisma = new PrismaService({
+      datasources: { db: { url: `file:${join(root, 'legacy.db')}` } },
+    });
+    try {
+      await prisma.$connect();
+      await prisma.$executeRawUnsafe(
+        'CREATE TABLE session (id INTEGER PRIMARY KEY)',
+      );
+      await prisma.$executeRawUnsafe(
+        'CREATE TABLE automationRun (id INTEGER PRIMARY KEY, taskId INTEGER, sessionId INTEGER, graphId INTEGER)',
+      );
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO session (id) VALUES (3), (4)',
+      );
+      await prisma.$executeRawUnsafe(
+        'INSERT INTO automationRun (id,taskId,sessionId,graphId) VALUES (2,NULL,3,9), (4,NULL,4,9), (5,1,4,NULL)',
+      );
+
+      await ensureRunSessionAggregation(prisma, 'sqlite');
+
+      await expect(
+        prisma.$queryRawUnsafe<Array<{ id: number; sessionId: number | null }>>(
+          'SELECT id, sessionId FROM automationRun ORDER BY id',
+        ),
+      ).resolves.toEqual([
+        { id: 2, sessionId: 3 },
+        { id: 4, sessionId: null },
+        { id: 5, sessionId: 4 },
+      ]);
+      await expect(
+        prisma.$queryRawUnsafe<
+          Array<{ id: number; automationTaskId: number | null }>
+        >('SELECT id, automationTaskId FROM session ORDER BY id'),
+      ).resolves.toEqual([
+        { id: 3, automationTaskId: null },
+        { id: 4, automationTaskId: 1 },
+      ]);
+    } finally {
+      await prisma.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 
   it('SQLite startup upgrade adds missing columns and PG leaves migration to deploy', async () => {
     const calls: string[] = [];
@@ -630,8 +675,8 @@ describe('run session migration 5 and SQLite upgrade', () => {
       sql.includes('SET "automationTaskId"'),
     );
     const dedupeIndex = calls.findIndex((sql) => sql.includes('MIN("id")'));
-    expect(backfillIndex).toBeGreaterThanOrEqual(0);
-    expect(dedupeIndex).toBeGreaterThan(backfillIndex);
+    expect(dedupeIndex).toBeGreaterThanOrEqual(0);
+    expect(backfillIndex).toBeGreaterThan(dedupeIndex);
     await ensureRunSessionAggregation(db, 'postgres');
     expect(db.$queryRawUnsafe).toHaveBeenCalledTimes(2);
   });

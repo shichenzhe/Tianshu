@@ -260,7 +260,7 @@ server 副本 `automation-runner.ts` 11 条改造点：runChatStream → `src/co
 
 prompt 运行直接复用 `run.sessionId` 对应的原始会话；graph 运行及尚无会话的早期失败运行在首次发送时经 `automation:run:ensureSession` / `automation/ensureRunSession` 懒建伴随会话。服务先校验运行归属与终态（success/failed 可追问，running/skipped 不可），已有 sessionId 直接返回；创建与认领经唯一 sessionId、条件更新和事务收敛，并发/重试不会生成多个会话。任务运行使用 `task.workspaceId`，新图运行使用 `run.workspaceId`。桌面对缺少该列值的旧图运行可尝试图 AI 编排会话的工作空间，仍无法确定才要求显式选择；**server 的 graphDefinition 没有 AI 编排会话字段，因此 server 历史图运行只接受 `run.workspaceId`，为空时必须由调用方显式传 workspaceId，没有 server AI-session fallback**。
 
-追问仍走普通 ChatApi.send / chat 服务，不经 scheduler 或 graph executor。聊天服务只为被 run.sessionId 引用的会话注入有界运行摘要（graph 包含最终输出、失败节点和受限轨迹摘要），完整轨迹仍在结果视图查看；它不会自动重跑任务/图，也不改图定义或运行记录。后续定时、事件、webhook 和手动执行仍调用原 runner，以任务原始 prompt/图输入创建新的独立 session，不读取此前运行输出或人工追问。
+追问仍走普通 ChatApi.send / chat 服务，不经 scheduler 或 graph executor。聊天服务只为被 run.sessionId 引用的会话注入有界运行摘要（graph 包含最终输出、失败节点和受限轨迹摘要），完整轨迹仍在结果视图查看；首次补建伴随会话会写 `run.sessionId`，此后的追问不修改执行状态、结果或轨迹，也不会自动重跑任务/图或修改图定义。后续定时、事件、webhook 和手动执行仍调用原 runner，以任务原始 prompt/图输入创建新的独立 session，不读取此前运行输出或人工追问。
 
 ## 4. 三端布局（桌面调度 vs server 调度差异）
 
@@ -269,7 +269,7 @@ prompt 运行直接复用 `run.sessionId` 对应的原始会话；graph 运行�
 | 调度器 | AutomationScheduler，Application.start 手动启停 | 同款摘取副本 + **onApplicationBootstrap/onModuleDestroy lifecycle** |
 | tick 间隔 | 写死 30s（TICK_MS） | **config.yml tianshu.automation.tickMs 可配**（缺省 30_000） |
 | 数据库 | `~/.tianshu/<分组>/database/local.db` | 独立库（`~/.tianshu-server` 或 PG 变体 prisma/pg）——**两端各自的库各自的调度器，同一任务天然不会双端双触发** |
-| 控制面 | IPC（handleUser 解 token 多用户隔离） | HTTP 六端点（@Public + TIANSHU_TOKEN 静态 token 守卫） |
+| 控制面 | IPC（handleUser 解 token 多用户隔离） | HTTP 控制端点集（@Public + TIANSHU_TOKEN 静态 token 守卫，任务/运行等通用 POST 接口） |
 | 安全配置 | Application 闭包注入（安全中心 UI：审批模式/数据安全/工具禁用） | config.yml `tianshu.chat` 段（allowDangerousTools/deleteProtection/accessMode） |
 | 变更通知 | BrowserWindow 全窗广播 + face 桥 | EventBusService `automation.changed`（relay 链路推远程端） |
 | userId | token 解出 | 伴生单用户 COMPANION_USER_ID 写死 |

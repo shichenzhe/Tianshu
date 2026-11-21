@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { canFollowUpRun, type RunOwner } from "@tianshu/core/run-session";
+import {
+  canFollowUpRun,
+  runOwnerOf,
+  type RunOwner,
+} from "@tianshu/core/run-session";
 import type { AutomationRunDetail } from "@tianshu/protocol";
 import { toast } from "sonner";
 import { usePageHeader } from "@/components/layout/page-header.store";
@@ -26,6 +30,7 @@ import RunSelector, {
   RunStatusBadge,
 } from "../components/RunSelector";
 import RunWorkspaceDialog from "../components/RunWorkspaceDialog";
+import { useHostStore } from "../../data-source/host.store";
 
 interface RunSessionViewProps {
   owner: RunOwner;
@@ -37,16 +42,33 @@ export default function RunSessionView({ owner }: RunSessionViewProps) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const explicitRunId = positiveId(searchParams.get("run"));
+  const runSessionsEnabled = useHostStore((state) => state.caps.runSessions);
   const latestQuery = useQuery({
     queryKey: runPageQueryKey(owner, 1),
     queryFn: () => queryRunPage(owner, 1),
+    enabled: runSessionsEnabled,
   });
   const selectedRunId = explicitRunId ?? latestQuery.data?.items[0]?.id;
   const runQuery = useQuery({
     queryKey: ["automation", "run", selectedRunId],
     queryFn: () => AutomationApi.runById(selectedRunId!),
-    enabled: selectedRunId !== undefined,
+    enabled: runSessionsEnabled && selectedRunId !== undefined,
   });
+  const ownerMismatch =
+    explicitRunId !== undefined &&
+    runQuery.data != null &&
+    !runMatchesOwner(runQuery.data, owner);
+  const canonicalizeExplicitRun =
+    explicitRunId !== undefined &&
+    (ownerMismatch ||
+      (runQuery.isSuccess && runQuery.data == null) ||
+      (runQuery.isError && isRunNotFound(runQuery.error)));
+  useEffect(() => {
+    if (canonicalizeExplicitRun) {
+      navigate(runSessionPath(owner), { replace: true });
+    }
+  }, [canonicalizeExplicitRun, navigate, owner]);
+  const displayRun = ownerMismatch ? null : runQuery.data;
   const listedRun = latestQuery.data?.items.find(
     (run) => run.id === selectedRunId,
   );
@@ -55,23 +77,31 @@ export default function RunSessionView({ owner }: RunSessionViewProps) {
     [navigate, owner],
   );
 
-  usePageHeader({
-    trailing: (
-      <>
-        <RunSelector
-          owner={owner}
-          currentRun={runQuery.data ?? listedRun}
-          onSelect={selectRun}
-        />
-        <SessionSearchBox />
-      </>
-    ),
-  });
+  usePageHeader(
+    runSessionsEnabled
+      ? {
+          trailing: (
+            <>
+              <RunSelector
+                owner={owner}
+                currentRun={displayRun ?? listedRun}
+                onSelect={selectRun}
+              />
+              <SessionSearchBox />
+            </>
+          ),
+        }
+      : null,
+  );
+
+  if (!runSessionsEnabled) {
+    return <CenteredMessage text={t("chat:runSession.empty")} />;
+  }
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col">
-      {runQuery.data ? (
-        <RunConversation key={runQuery.data.id} run={runQuery.data} />
+      {displayRun ? (
+        <RunConversation key={displayRun.id} run={displayRun} />
       ) : selectedRunId !== undefined && runQuery.isLoading ? (
         <CenteredMessage text={t("common:loading")} />
       ) : runQuery.isError ? (
@@ -299,6 +329,15 @@ function CenteredMessage({ text }: { text: string }) {
 function positiveId(raw: string | null): number | undefined {
   const id = Number(raw);
   return Number.isInteger(id) && id > 0 ? id : undefined;
+}
+
+function runMatchesOwner(run: AutomationRunDetail, owner: RunOwner): boolean {
+  const actual = runOwnerOf(run);
+  return actual?.kind === owner.kind && actual.ownerId === owner.ownerId;
+}
+
+function isRunNotFound(error: unknown): boolean {
+  return error instanceof Error && error.message.includes("RUN_NOT_FOUND");
 }
 
 function isWorkspaceRequired(error: unknown): boolean {

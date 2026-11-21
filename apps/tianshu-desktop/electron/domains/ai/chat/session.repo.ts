@@ -441,11 +441,18 @@ export class SessionRepository {
       where: { workspaceId: id },
       select: { id: true, userId: true },
     });
-    await prisma.message.deleteMany({
-      where: { sessionId: { in: sessions.map((s) => s.id) } },
-    });
-    await prisma.session.deleteMany({ where: { workspaceId: id } });
-    await prisma.workspace.delete({ where: { id } });
+    const sessionIds = sessions.map((session) => session.id);
+    await prisma.$transaction([
+      prisma.automationRun.updateMany({
+        where: { sessionId: { in: sessionIds } },
+        data: { sessionId: null },
+      }),
+      prisma.message.deleteMany({
+        where: { sessionId: { in: sessionIds } },
+      }),
+      prisma.session.deleteMany({ where: { workspaceId: id } }),
+      prisma.workspace.delete({ where: { id } }),
+    ]);
     // 会话级路径授权随删回收（T28 spec §16 项 1）：行删成功后尽力回收
     // （revoke 内部自吞错），桶键取会话行自带 userId（与授权注册口径一致）
     for (const s of sessions) {
@@ -632,7 +639,7 @@ export class SessionRepository {
   }
 
   /** P1 未读角标批：会话列表 enriched 数据源（本地 IPC session:list）。
-   *  恒定两条聚合批量计算末条摘要 + 未读数（enrich 逻辑与 querySessions
+   *  恒定三条聚合批量计算末条摘要 + 未读数（enrich 逻辑与 querySessions
    *  共享 enrichSummaries，全量语义与返回形状逐字节不变） */
   async listAllSessionsSummarized(
     userId: number,
@@ -719,7 +726,7 @@ export class SessionRepository {
     return where;
   }
 
-  /** 批量 enrich 共享步骤：恒定两条聚合（禁 N+1）批量计算末条摘要 + 未读
+  /** 批量 enrich 共享步骤：恒定三条聚合（禁 N+1）批量计算末条摘要 + 未读
    *  数——listAllSessionsSummarized/getSessionSummary/querySessions 同口径，
    *  空行集短路零聚合查询 */
   private async enrichSummaries(

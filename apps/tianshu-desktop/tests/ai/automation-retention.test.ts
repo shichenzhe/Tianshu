@@ -246,13 +246,15 @@ function makeRetentionDb() {
     option: { findFirst: async () => null },
     session: {
       async updateMany({ where, data }) {
+        const sessionIds =
+          where.OR?.find((filter) => filter.id)?.id.in ?? where.id?.in ?? [];
         const r = db
           .prepare(
-            `UPDATE session SET automationTaskId = ?, runGraphId = ? WHERE id IN (${where.id.in
+            `UPDATE session SET automationTaskId = ?, runGraphId = ? WHERE id IN (${sessionIds
               .map(() => "?")
               .join(", ")})`,
           )
-          .run(data.automationTaskId, data.runGraphId, ...where.id.in);
+          .run(data.automationTaskId, data.runGraphId, ...sessionIds);
         return { count: Number(r.changes) };
       },
     },

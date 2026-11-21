@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   automationTask: { findFirst: vi.fn() },
   graphDefinition: { findFirst: vi.fn() },
+  workspace: { findFirst: vi.fn(), delete: vi.fn() },
   automationRun: {
     findUnique: vi.fn(),
     findMany: vi.fn(),
@@ -12,7 +13,9 @@ const db = vi.hoisted(() => ({
     findFirst: vi.fn(),
     findMany: vi.fn(),
     delete: vi.fn(),
+    deleteMany: vi.fn(),
   },
+  message: { deleteMany: vi.fn() },
   $transaction: vi.fn(),
 }));
 
@@ -24,7 +27,12 @@ const ipcHandlers = vi.hoisted(
     >(),
 );
 
-vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
+vi.mock("electron", () => ({
+  ipcMain: { handle: vi.fn() },
+  BrowserWindow: { getAllWindows: vi.fn(() => []) },
+  dialog: {},
+  shell: {},
+}));
 vi.mock("../../electron/commons/prisma-client", () => ({ default: db }));
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -38,8 +46,18 @@ vi.mock("../../electron/commons/ipc-user", () => ({
   ),
 }));
 
+vi.mock("../../electron/domains/ai/chat/workspace-change-bus", () => ({
+  emitWorkspaceChanged: vi.fn(),
+}));
+vi.mock("../../electron/domains/ai/file-window/granted-paths", () => ({
+  revokeSession: vi.fn(async () => undefined),
+}));
+vi.mock("../../electron/domains/ai/chat/session-change-bus", () => ({
+  emitSessionChanged: vi.fn(),
+}));
+
 import { RunSessionService } from "../../electron/domains/ai/automation/run-session.service";
-import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
+import { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
 
 interface TaskFixture {
   id: number;
@@ -150,20 +168,32 @@ function useData(data: {
       where,
     }: {
       where: {
-        userId: number;
-        title: string;
-        automationTaskId: number | null;
-        runGraphId: number | null;
+        userId?: number;
+        title?: string;
+        automationTaskId?: number | null;
+        runGraphId?: number | null;
+        workspaceId?: number;
+        projectId?: number | null;
       };
-    }) =>
-      sessions.filter(
+    }) => {
+      if (where.title === undefined && where.workspaceId !== undefined) {
+        return sessions.filter(
+          (session) => session.workspaceId === where.workspaceId,
+        );
+      }
+      return sessions.filter(
         (session) =>
           session.userId === where.userId &&
           session.title === where.title &&
           session.automationTaskId === where.automationTaskId &&
           session.runGraphId === where.runGraphId &&
+          (where.workspaceId === undefined ||
+            session.workspaceId === where.workspaceId) &&
+          (where.projectId === undefined ||
+            session.projectId === where.projectId) &&
           session.lastMessageAt == null,
-      ),
+      );
+    },
   );
   db.automationRun.findMany.mockImplementation(
     async ({ where }: { where: { sessionId: { in: number[] } } }) =>
@@ -177,9 +207,22 @@ function useData(data: {
       where,
       data,
     }: {
-      where: { id: number; sessionId: null };
-      data: { sessionId: number };
+      where: { id?: number; sessionId: null | number | { in: number[] } };
+      data: { sessionId: number | null };
     }) => {
+      if (where.id === undefined) {
+        const sessionIds =
+          typeof where.sessionId === "object" && where.sessionId !== null
+            ? where.sessionId.in
+            : [where.sessionId];
+        const matched = runs.filter(
+          (run) => run.sessionId !== null && sessionIds.includes(run.sessionId),
+        );
+        matched.forEach((run) => {
+          run.sessionId = data.sessionId;
+        });
+        return { count: matched.length };
+      }
       const run = runs.find((row) => row.id === where.id);
       if (!run || run.sessionId !== null) return { count: 0 };
       run.sessionId = data.sessionId;
@@ -192,8 +235,31 @@ function useData(data: {
       if (index >= 0) sessions.splice(index, 1);
     },
   );
+  db.session.deleteMany.mockImplementation(
+    async ({ where }: { where: { workspaceId: number } }) => {
+      const remaining = sessions.filter(
+        (session) => session.workspaceId !== where.workspaceId,
+      );
+      const count = sessions.length - remaining.length;
+      sessions.splice(0, sessions.length, ...remaining);
+      return { count };
+    },
+  );
+  db.workspace.findFirst.mockImplementation(
+    async ({ where }: { where: { id: number; userId: number } }) => ({
+      id: where.id,
+      userId: where.userId,
+    }),
+  );
+  db.workspace.delete.mockResolvedValue({});
+  db.message.deleteMany.mockResolvedValue({ count: 0 });
   db.$transaction.mockImplementation(
-    async (callback: (tx: typeof db) => unknown) => callback(db),
+    async (input: Array<Promise<unknown>> | ((tx: typeof db) => unknown)) => {
+      if (typeof input === "function") return input(db);
+      const results = [];
+      for (const operation of input) results.push(await operation);
+      return results;
+    },
   );
   return { tasks, graphs, runs, sessions };
 }
@@ -417,6 +483,82 @@ describe("RunSessionService.ensureRunSession", () => {
     });
     expect(state.sessions).toHaveLength(1);
     expect(createSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not claim a same-title orphan into a different resolved target", async () => {
+    const state = useData({
+      graphs: [{ id: 8, userId: 1, name: "graph", aiSessionId: null }],
+      runs: [makeRun({ workspaceId: 4 })],
+      sessions: [
+        {
+          id: 1,
+          userId: 1,
+          workspaceId: 3,
+          projectId: null,
+          automationTaskId: null,
+          runGraphId: 8,
+          title: "graph · 2026-11-20T01:02:03.000Z",
+          lastMessageAt: null,
+        },
+      ],
+    });
+    const { service, createSession } = makeService(state.sessions);
+
+    await expect(service.ensureRunSession(50, 1)).resolves.toEqual({
+      runId: 50,
+      sessionId: 2,
+      created: true,
+    });
+    expect(createSession).toHaveBeenCalledTimes(1);
+    expect(state.sessions.map((session) => session.id)).toEqual([1, 2]);
+    expect(state.sessions[1]).toMatchObject({ workspaceId: 4, runGraphId: 8 });
+  });
+
+  it("workspace deletion unlinks the run so ensure creates a fresh companion", async () => {
+    const state = useData({
+      tasks: [
+        { id: 4, userId: 1, name: "prompt", workspaceId: 12, projectId: null },
+      ],
+      runs: [
+        makeRun({
+          taskId: 4,
+          graphId: null,
+          sessionId: 90,
+          workspaceId: 12,
+        }),
+      ],
+      sessions: [
+        {
+          id: 90,
+          userId: 1,
+          workspaceId: 12,
+          projectId: null,
+          automationTaskId: 4,
+          runGraphId: null,
+          title: "old-companion",
+        },
+      ],
+    });
+    const sessionRepo = Object.create(
+      SessionRepository.prototype,
+    ) as SessionRepository;
+    const { service } = makeService(state.sessions);
+
+    await sessionRepo.deleteWorkspace(12, 1);
+
+    expect(state.sessions).toHaveLength(0);
+    expect(state.runs).toHaveLength(1);
+    expect(state.runs[0].sessionId).toBeNull();
+    await expect(service.ensureRunSession(50, 1)).resolves.toEqual({
+      runId: 50,
+      sessionId: 1,
+      created: true,
+    });
+    expect(state.sessions[0]).toMatchObject({
+      id: 1,
+      workspaceId: 12,
+      automationTaskId: 4,
+    });
   });
 
   it("registers the user-scoped lazy-creation IPC channel", () => {

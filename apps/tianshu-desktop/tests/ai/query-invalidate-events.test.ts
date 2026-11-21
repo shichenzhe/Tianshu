@@ -20,6 +20,7 @@ vi.mock("@/lib/ipc", () => ({
 
 import { registerQueryInvalidation } from "../../src-react/lib/query-invalidate-events";
 import { AUTOMATION_CHANGED_EVENT } from "../../src-react/domains/ai/automation/api/automation.api";
+import { SESSION_CHANGED_EVENT } from "../../src-react/domains/ai/api/session.api";
 import {
   LOCAL_HOST_CAPS,
   useHostStore,
@@ -58,12 +59,16 @@ describe("registerQueryInvalidation run sessions", () => {
     });
   });
 
-  it("本地 automation.changed 与远程三类事件都失效分组、run 详情和会话", () => {
+  it("本地 automation/session 与远程三类事件都失效分组、run 详情和会话", () => {
     const client = new QueryClient();
     registerQueryInvalidation(client);
 
     seedRunSessionQueries(client);
     emit(AUTOMATION_CHANGED_EVENT);
+    expectRunSessionQueriesInvalidated(client);
+
+    seedRunSessionQueries(client);
+    emit(SESSION_CHANGED_EVENT);
     expectRunSessionQueriesInvalidated(client);
 
     useHostStore.setState({

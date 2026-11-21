@@ -45,7 +45,12 @@ const PROVIDERS_ROUTE = "/module/ai/providers";
 export default function ChatView() {
   const [searchParams] = useSearchParams();
   const owner = runOwnerFromParams(searchParams);
-  return owner ? <RunSessionView owner={owner} /> : <OrdinaryChatView />;
+  const runSessionsEnabled = useHostStore((state) => state.caps.runSessions);
+  return owner && runSessionsEnabled ? (
+    <RunSessionView owner={owner} />
+  ) : (
+    <OrdinaryChatView />
+  );
 }
 
 function OrdinaryChatView() {

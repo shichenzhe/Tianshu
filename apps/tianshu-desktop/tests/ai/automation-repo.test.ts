@@ -561,7 +561,9 @@ describe("deleteTasks 级联删除", () => {
       where: { runId: { in: [31, 32] } },
     });
     expect(prisma.session.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [41, 42] } },
+      where: {
+        OR: [{ id: { in: [41, 42] } }, { automationTaskId: { in: [7, 8] } }],
+      },
       data: { automationTaskId: null, runGraphId: null },
     });
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -595,7 +597,9 @@ describe("run session repository integration", () => {
     await repo["deleteGraph"](5, UID);
 
     expect(prisma.session.updateMany).toHaveBeenCalledWith({
-      where: { id: { in: [61] } },
+      where: {
+        OR: [{ id: { in: [61] } }, { runGraphId: { in: [5] } }],
+      },
       data: { automationTaskId: null, runGraphId: null },
     });
     expect(prisma.automationRun.deleteMany).toHaveBeenCalledWith({

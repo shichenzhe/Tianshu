@@ -1,3 +1,13 @@
+export interface RunSessionOwnerIds {
+  taskIds?: number[];
+  graphIds?: number[];
+}
+
+type SessionOwnerFilter =
+  | { id: { in: number[] } }
+  | { automationTaskId: { in: number[] } }
+  | { runGraphId: { in: number[] } };
+
 export interface RunSessionOwnerRow {
   id: number;
   sessionId: number | null;
@@ -27,7 +37,7 @@ export interface RunSessionOwnerDb {
   };
   session: {
     updateMany(args: {
-      where: { id: { in: number[] } };
+      where: { id?: { in: number[] }; OR?: SessionOwnerFilter[] };
       data: {
         automationTaskId: number | null;
         runGraphId: number | null;
@@ -40,14 +50,21 @@ export interface RunSessionOwnerDb {
 export async function clearRunSessionOwners(
   db: RunSessionOwnerDb,
   runIds: number[],
+  owners: RunSessionOwnerIds = {},
 ): Promise<void> {
-  if (runIds.length === 0) {
+  if (
+    runIds.length === 0 &&
+    !owners.taskIds?.length &&
+    !owners.graphIds?.length
+  ) {
     return;
   }
-  const runs = await db.automationRun.findMany({
-    where: { id: { in: runIds } },
-    select: { id: true, sessionId: true, taskId: true, graphId: true },
-  });
+  const runs = runIds.length
+    ? await db.automationRun.findMany({
+        where: { id: { in: runIds } },
+        select: { id: true, sessionId: true, taskId: true, graphId: true },
+      })
+    : [];
   const sessionIds = [
     ...new Set(
       runs
@@ -55,11 +72,18 @@ export async function clearRunSessionOwners(
         .filter((id): id is number => typeof id === "number"),
     ),
   ];
-  if (sessionIds.length === 0) {
-    return;
-  }
+  const filters: SessionOwnerFilter[] = [
+    ...(sessionIds.length ? [{ id: { in: sessionIds } }] : []),
+    ...(owners.taskIds?.length
+      ? [{ automationTaskId: { in: owners.taskIds } }]
+      : []),
+    ...(owners.graphIds?.length
+      ? [{ runGraphId: { in: owners.graphIds } }]
+      : []),
+  ];
+  if (filters.length === 0) return;
   await db.session.updateMany({
-    where: { id: { in: sessionIds } },
+    where: { OR: filters },
     data: { automationTaskId: null, runGraphId: null },
   });
 }

@@ -8,7 +8,11 @@ interface RawExecutor {
 const DEDUPE_SQL = `
 UPDATE "automationRun" SET "sessionId" = NULL
 WHERE "sessionId" IS NOT NULL AND "id" NOT IN (
-  SELECT MIN("id") FROM "automationRun"
+  SELECT COALESCE(
+    MIN(CASE WHEN "taskId" IS NOT NULL AND "graphId" IS NULL THEN "id" END),
+    MIN("id")
+  )
+  FROM "automationRun"
   WHERE "sessionId" IS NOT NULL GROUP BY "sessionId"
 )`;
 
@@ -19,7 +23,6 @@ SET "automationTaskId" = (
   WHERE "automationRun"."sessionId" = "session"."id"
     AND "automationRun"."taskId" IS NOT NULL
     AND "automationRun"."graphId" IS NULL
-  ORDER BY "automationRun"."id" LIMIT 1
 )
 WHERE EXISTS (
   SELECT 1 FROM "automationRun"
@@ -74,8 +77,8 @@ export async function ensureRunSessionAggregation(
     'runGraphId',
   ]);
   await addMissingColumns(db, 'automationRun', runColumns, ['workspaceId']);
-  await db.$executeRawUnsafe(BACKFILL_SQL);
   await db.$executeRawUnsafe(DEDUPE_SQL);
+  await db.$executeRawUnsafe(BACKFILL_SQL);
   for (const sql of INDEX_SQL) {
     await db.$executeRawUnsafe(sql);
   }

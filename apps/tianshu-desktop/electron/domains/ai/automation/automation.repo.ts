@@ -474,7 +474,7 @@ export default class AutomationRepository {
       })
     ).map((row) => row.id);
     await prisma.$transaction(async (tx) => {
-      await clearRunSessionOwners(tx, runIds);
+      await clearRunSessionOwners(tx, runIds, { taskIds: ownedIds });
       await tx.graphRunNode.deleteMany({ where: { runId: { in: runIds } } });
       await tx.automationRun.deleteMany({
         where: { taskId: { in: ownedIds } },

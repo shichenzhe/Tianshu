@@ -73,7 +73,7 @@ export default function RunSelector({
       </PopoverTrigger>
       <PopoverContent
         align="end"
-        className="w-[26rem] border-border/50 p-2 shadow-lg"
+        className="w-[26rem] rounded-lg border-border/50 p-2 shadow-lg"
       >
         <div className="flex max-h-80 flex-col overflow-y-auto">
           {runs.map((run) => (

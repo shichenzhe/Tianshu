@@ -284,6 +284,23 @@ describe('run session persistence and queries', () => {
     ).rejects.toMatchObject({ code: expect.any(String) });
   });
 
+  it('runById 返回 graphJsonSnapshot（执行时图结构快照，仅详情面）', async () => {
+    const graph = await db.prisma.graphDefinition.create({
+      data: { name: 'snapshot-graph', graphJson: '{}', userId: UID },
+    });
+    const snapshot = '{"nodes":[{"id":"n-1"}],"edges":[]}';
+    const target = await createRun(db, {
+      graphId: graph.id,
+      graphTrace: '[{"output":"snap-output"}]',
+      graphJsonSnapshot: snapshot,
+    });
+
+    const detail = await service.runById({ runId: target.id });
+
+    expect(detail.id).toBe(target.id);
+    expect(detail.graphJsonSnapshot).toBe(snapshot);
+  });
+
   it('deleting a task clears grouping before runs and preserves messages', async () => {
     const task = await createTask(db, workspaceId, 'delete-task');
     const session = await createSession(db, workspaceId, 'task-history', {

@@ -154,6 +154,10 @@ export interface RunGroupRecord {
 /** 单 run 详情：完整节点轨迹只在此返回，不进入列表页记录 */
 export interface AutomationRunDetail extends AutomationRunRecord {
   graphTrace?: string;
+  /** 执行时图结构快照（automationRun.graphJsonSnapshot），仅单运行详情
+   *  返回——runGroups/runPage 列表面永不携带；缺省/null = 旧运行无快照，
+   *  消费端按步骤日志降级，不回读当前编辑器图 */
+  graphJsonSnapshot?: string | null;
 }
 
 /** 首次追问懒建/复用伴随会话的统一结果 */

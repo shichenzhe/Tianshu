@@ -187,6 +187,9 @@ export interface RunRecord {
   workspaceId?: number;
   /** 节点级轨迹 JSON（graphTrace），仅图运行 */
   graphTrace?: string;
+  /** 执行时图结构快照（graphJsonSnapshot），仅 findRunById 详情面产出；
+   *  列表/分组路径（RUN_SUMMARY_SELECT 行）永不携带该键 */
+  graphJsonSnapshot?: string | null;
   sessionId?: number;
   attempt: number;
   triggerType: TriggerType;
@@ -322,7 +325,11 @@ export function assertNoSelfReference(
   }
 }
 
-export function toRunRecord(row: RunRow, taskName: string): RunRecord {
+export function toRunRecord(
+  row: RunRow,
+  taskName: string,
+  includeSnapshot = false,
+): RunRecord {
   return {
     id: row.id,
     taskId: row.taskId,
@@ -330,6 +337,11 @@ export function toRunRecord(row: RunRow, taskName: string): RunRecord {
     graphId: row.graphId ?? undefined,
     workspaceId: row.workspaceId ?? undefined,
     graphTrace: row.graphTrace ?? undefined,
+    // 快照仅 findRunById（runById 详情）产出；graph.repo 图侧轻量版与
+    // runner 消费面走缺省参，列表 wire 面（toRunRecordWire）不涉
+    ...(includeSnapshot && {
+      graphJsonSnapshot: row.graphJsonSnapshot ?? null,
+    }),
     sessionId: row.sessionId ?? undefined,
     attempt: row.attempt,
     triggerType: row.triggerType as RunRecord['triggerType'],
@@ -869,13 +881,13 @@ export class AutomationRepository {
         where: { id: owner.ownerId, userId },
         select: { name: true },
       });
-      return task ? toRunRecord(row, task.name) : null;
+      return task ? toRunRecord(row, task.name, true) : null;
     }
     const graph = await this.prisma.graphDefinition.findFirst({
       where: { id: owner.ownerId, userId },
       select: { name: true },
     });
-    return graph ? toRunRecord(row, graph.name) : null;
+    return graph ? toRunRecord(row, graph.name, true) : null;
   }
 
   /** 运行节点详情（移动端执行详情批，mirror orchestration:runNodes 同

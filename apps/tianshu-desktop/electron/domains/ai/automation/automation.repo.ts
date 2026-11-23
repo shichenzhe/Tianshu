@@ -186,6 +186,7 @@ export function toRunRecord(
   row: RunRow,
   taskName: string,
   includeGraphTrace = true,
+  includeSnapshot = false,
 ): RunRecord {
   return {
     id: row.id,
@@ -193,6 +194,10 @@ export function toRunRecord(
     taskName,
     graphId: row.graphId ?? undefined,
     ...(includeGraphTrace && { graphTrace: row.graphTrace ?? undefined }),
+    // 快照仅单运行详情（run:get）产出；runs 分页/分组摘要缺省不带
+    ...(includeSnapshot && {
+      graphJsonSnapshot: row.graphJsonSnapshot ?? undefined,
+    }),
     workspaceId: row.workspaceId ?? undefined,
     sessionId: row.sessionId ?? undefined,
     attempt: row.attempt,

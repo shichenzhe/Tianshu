@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { AutomationRunPage, AutomationRunRecord } from '@tianshu/protocol';
 
 /**
@@ -75,6 +75,14 @@ export class AutomationRunRecordDto implements AutomationRunRecord {
     required: false,
   })
   finishedAt?: string;
+
+  @ApiPropertyOptional({
+    description:
+      '执行时图结构快照 JSON（仅 runById 详情实际返回；列表/分组载荷省略）',
+    type: 'string',
+    nullable: true,
+  })
+  graphJsonSnapshot?: string | null;
 }
 
 /** runPage 分页响应壳（协议包 AutomationRunPage 同形） */

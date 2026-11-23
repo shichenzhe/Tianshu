@@ -224,6 +224,7 @@ class FakeFace {
               taskName: "remote-flow",
               workspaceId: 8,
               graphTrace: '[{"id":"node-1"}]',
+              graphJsonSnapshot: '{"nodes":[{"id":"node-1"}],"edges":[]}',
               attempt: 1,
               triggerType: "manual",
               status: "success",
@@ -949,7 +950,13 @@ describe("IPC 装配（registerServerIpc）", () => {
         { runId: 9 },
         undefined,
       )) as {
-        body: { data: { workspaceId: number; graphTrace: string } };
+        body: {
+          data: {
+            workspaceId: number;
+            graphTrace: string;
+            graphJsonSnapshot?: string;
+          };
+        };
       };
       const ensured = (await handlers.get("server:automationEnsureRunSession")!(
         {} as never,
@@ -961,6 +968,10 @@ describe("IPC 装配（registerServerIpc）", () => {
         workspaceId: 8,
         graphTrace: '[{"id":"node-1"}]',
       });
+      // 图结构快照原样透传（run-detail-experience Task 1：详情面新增字段）
+      expect(detail.body.data.graphJsonSnapshot).toBe(
+        '{"nodes":[{"id":"node-1"}],"edges":[]}',
+      );
       expect(ensured.body.data.sessionId).toBe(90);
       expect(face.runSessionRequests).toEqual([
         { path: "/automation/runGroups", body: {} },

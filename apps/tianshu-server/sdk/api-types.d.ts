@@ -2657,6 +2657,8 @@ export interface components {
             startedAt: string;
             /** @description 结束时间（ISO，运行中为 null） */
             finishedAt?: string;
+            /** @description 执行时图结构快照 JSON（仅 runById 详情实际返回；列表/分组载荷省略） */
+            graphJsonSnapshot?: string | null;
         };
         AutomationRunPageResultDto: {
             /** @description 总数（筛选口径） */
@@ -2738,6 +2740,8 @@ export interface components {
             startedAt: string;
             /** @description 结束时间（ISO，运行中为 null） */
             finishedAt?: string;
+            /** @description 执行时图结构快照 JSON（仅 runById 详情实际返回；列表/分组载荷省略） */
+            graphJsonSnapshot?: string | null;
             /** @description 完整图运行轨迹 JSON */
             graphTrace?: string;
         };

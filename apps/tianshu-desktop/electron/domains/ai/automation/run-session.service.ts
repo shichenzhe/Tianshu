@@ -207,7 +207,7 @@ export class RunSessionService {
   async getRun(runId: number, userId: number): Promise<AutomationRunDetail> {
     const owned = await this.readOwnedRun(runId, userId);
     const name = owned.owner === "task" ? owned.task.name : owned.graph.name;
-    return toRunRecord(owned.row, name);
+    return toRunRecord(owned.row, name, true, true);
   }
 
   private async readOwnedRun(runId: number, userId: number): Promise<OwnedRun> {

@@ -45,6 +45,7 @@ vi.mock("../../electron/commons/ipc-user", () => ({
 }));
 
 import { RunSessionService } from "../../electron/domains/ai/automation/run-session.service";
+import { toRunRecord } from "../../electron/domains/ai/automation/automation.repo";
 
 interface TaskFixture {
   id: number;
@@ -75,6 +76,7 @@ interface RunFixture {
   promptTokens: number | null;
   completionTokens: number | null;
   graphTrace: string | null;
+  graphJsonSnapshot: string | null;
   error: string | null;
   startedAt: Date;
   finishedAt: Date | null;
@@ -130,6 +132,7 @@ function makeRun(id: number, overrides: Partial<RunFixture> = {}): RunFixture {
     promptTokens: 10,
     completionTokens: 20,
     graphTrace: null,
+    graphJsonSnapshot: null,
     error: null,
     startedAt: new Date("2026-11-01T00:00:00.000Z"),
     finishedAt: new Date("2026-11-01T00:00:01.000Z"),
@@ -519,6 +522,30 @@ describe("RunSessionService.getRun", () => {
     });
   });
 
+  it("getRun 返回 graphJsonSnapshot", async () => {
+    useData({
+      graphs: [
+        {
+          id: 30,
+          userId: 1,
+          name: "snapshot-graph",
+          createdAt: new Date("2026-11-01T00:00:00.000Z"),
+        },
+      ],
+      runs: [
+        makeRun(999, {
+          graphId: 30,
+          graphTrace: "trace-json",
+          graphJsonSnapshot: '{"nodes":[]}',
+        }),
+      ],
+    });
+
+    const detail = await makeService().getRun(999, 1);
+
+    expect(detail.graphJsonSnapshot).toBe('{"nodes":[]}');
+  });
+
   it("他人运行与不存在运行都返回 RUN_NOT_FOUND", async () => {
     useData({
       graphs: [
@@ -575,5 +602,23 @@ describe("RunSessionService IPC", () => {
     expect([...ipcHandlers.keys()]).toEqual(
       expect.arrayContaining(["automation:runGroups", "automation:run:get"]),
     );
+  });
+});
+
+describe("runs 分页 toRunRecord 摘要面", () => {
+  it("runs 分页不含快照：缺省参 toRunRecord 不产出 graphJsonSnapshot", () => {
+    const row = makeRun(999, {
+      graphId: 30,
+      graphJsonSnapshot: '{"nodes":[]}',
+    });
+
+    // listRuns（automation:runs:page）按缺省参调用 toRunRecord——快照
+    // 只进单运行详情（automation:run:get），分页记录不得携带该键
+    const pageRecord = toRunRecord(row, "task-name");
+
+    expect(
+      (pageRecord as { graphJsonSnapshot?: string }).graphJsonSnapshot,
+    ).toBeUndefined();
+    expect(pageRecord).not.toHaveProperty("graphJsonSnapshot");
   });
 });

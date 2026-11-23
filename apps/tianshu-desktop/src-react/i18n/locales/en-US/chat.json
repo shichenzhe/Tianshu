@@ -817,7 +817,15 @@
     "empty": "No runs yet",
     "resultSummary": "Final output / error summary",
     "workspaceRequiredTitle": "Choose a follow-up workspace",
-    "workspaceRequiredDescription": "The original workspace for this historical run cannot be determined. Explicitly choose a workspace to continue the first follow-up there."
+    "workspaceRequiredDescription": "The original workspace for this historical run cannot be determined. Explicitly choose a workspace to continue the first follow-up there.",
+    "board": {
+      "title": "Runs",
+      "total": "{{count}} total",
+      "loadMore": "Load earlier runs",
+      "collapse": "Collapse run board",
+      "expand": "Expand run board",
+      "pinned": "Current selection"
+    }
   },
   "orchestration": {
     "empty": "No orchestration graphs yet",

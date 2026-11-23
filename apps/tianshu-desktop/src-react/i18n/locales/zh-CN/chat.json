@@ -817,7 +817,15 @@
     "empty": "暂无运行记录",
     "resultSummary": "最终输出 / 错误摘要",
     "workspaceRequiredTitle": "选择追问工作空间",
-    "workspaceRequiredDescription": "这条历史运行无法确定原工作空间。请显式选择一个空间，首次追问将在该空间中继续。"
+    "workspaceRequiredDescription": "这条历史运行无法确定原工作空间。请显式选择一个空间，首次追问将在该空间中继续。",
+    "board": {
+      "title": "运行看板",
+      "total": "共 {{count}} 条",
+      "loadMore": "加载更早记录",
+      "collapse": "收起运行看板",
+      "expand": "展开运行看板",
+      "pinned": "当前选择"
+    }
   },
   "orchestration": {
     "empty": "暂无工作流",

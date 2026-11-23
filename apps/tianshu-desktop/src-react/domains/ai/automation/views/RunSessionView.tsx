@@ -24,11 +24,12 @@ import GraphRunTraceView, {
 import { AutomationApi } from "../api/automation.api";
 import { localizeRunError } from "../lib/run-display";
 import { runSessionPath } from "../lib/run-session-route";
-import RunSelector, {
+import {
   queryRunPage,
   runPageQueryKey,
   RunStatusBadge,
 } from "../components/RunSelector";
+import RunBoard from "../components/run-board";
 import RunWorkspaceDialog from "../components/RunWorkspaceDialog";
 import { useHostStore } from "../../data-source/host.store";
 
@@ -80,16 +81,7 @@ export default function RunSessionView({ owner }: RunSessionViewProps) {
   usePageHeader(
     runSessionsEnabled
       ? {
-          trailing: (
-            <>
-              <RunSelector
-                owner={owner}
-                currentRun={displayRun ?? listedRun}
-                onSelect={selectRun}
-              />
-              <SessionSearchBox />
-            </>
-          ),
+          trailing: <SessionSearchBox />,
         }
       : null,
   );
@@ -99,19 +91,29 @@ export default function RunSessionView({ owner }: RunSessionViewProps) {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col">
-      {displayRun ? (
-        <RunConversation key={displayRun.id} run={displayRun} />
-      ) : selectedRunId !== undefined && runQuery.isLoading ? (
-        <CenteredMessage text={t("common:loading")} />
-      ) : runQuery.isError ? (
-        <CenteredMessage text={mapIpcError(runQuery.error)} />
-      ) : latestQuery.isLoading ? (
-        <CenteredMessage text={t("common:loading")} />
-      ) : latestQuery.isError ? (
-        <CenteredMessage text={mapIpcError(latestQuery.error)} />
-      ) : (
-        <CenteredMessage text={t("chat:runSession.empty")} />
+    <div className="flex h-full min-h-0 flex-1">
+      <div className="relative flex min-w-0 flex-1 flex-col">
+        {displayRun ? (
+          <RunConversation key={displayRun.id} run={displayRun} />
+        ) : selectedRunId !== undefined && runQuery.isLoading ? (
+          <CenteredMessage text={t("common:loading")} />
+        ) : runQuery.isError ? (
+          <CenteredMessage text={mapIpcError(runQuery.error)} />
+        ) : latestQuery.isLoading ? (
+          <CenteredMessage text={t("common:loading")} />
+        ) : latestQuery.isError ? (
+          <CenteredMessage text={mapIpcError(latestQuery.error)} />
+        ) : (
+          <CenteredMessage text={t("chat:runSession.empty")} />
+        )}
+      </div>
+      {runSessionsEnabled && (
+        <RunBoard
+          owner={owner}
+          selectedRunId={selectedRunId}
+          currentRun={displayRun ?? listedRun}
+          onSelect={selectRun}
+        />
       )}
     </div>
   );

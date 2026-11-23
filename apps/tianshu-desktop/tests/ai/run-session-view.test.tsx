@@ -273,7 +273,7 @@ describe("RunSessionView 运行选择", () => {
     expect(await screen.findByText("session-111")).toBeTruthy();
   });
 
-  it("graph 固定入口的缺省运行与选择器只查询顶层运行", async () => {
+  it("graph 固定入口的缺省运行与看板只查询顶层运行", async () => {
     runs = [
       makeRun(9, {
         taskId: null,
@@ -286,7 +286,39 @@ describe("RunSessionView 运行选择", () => {
     renderOwner(GRAPH_OWNER, "/module/ai?graphRun=3");
 
     expect(await screen.findByText("session-90")).toBeTruthy();
+    expect(await screen.findByTestId("run-board-item-9")).toBeTruthy();
     expect(invokeMock).toHaveBeenCalledWith("orchestration:runs", 3, 1, true);
+  });
+
+  it("页头只保留会话搜索，不再出现运行下拉触发器", async () => {
+    renderTask();
+    expect(await screen.findByTestId("run-board-item-10")).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "chat:runSession.selectRun" }),
+    ).toBeNull();
+  });
+
+  it("任务与图固定入口均渲染右侧运行看板", async () => {
+    renderTask();
+    expect(await screen.findByTestId("run-board-item-10")).toBeTruthy();
+    expect(screen.getByTestId("run-board-list")).toBeTruthy();
+    expect(screen.getByText("chat:runSession.board.title")).toBeTruthy();
+    cleanup();
+
+    runs = [
+      makeRun(9, {
+        taskId: null,
+        graphId: 3,
+        sessionId: 90,
+      }),
+    ];
+    sessions = new Map([[90, makeSession(90, runs[0])]]);
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderOwner(GRAPH_OWNER, "/module/ai?graphRun=3");
+    expect(await screen.findByTestId("run-board-item-9")).toBeTruthy();
+    expect(screen.getByTestId("run-board-list")).toBeTruthy();
   });
 
   it("显式 run 在新运行完成后保持原检查点", async () => {
@@ -346,15 +378,10 @@ describe("RunSessionView 运行选择", () => {
     );
   });
 
-  it("时间选择器切换 canonical run URL", async () => {
+  it("看板条目点击切换 canonical run URL", async () => {
     renderTask("/module/ai?automation=4&run=10");
     expect(await screen.findByText("session-110")).toBeTruthy();
-    const trigger = screen.getByRole("button", {
-      name: "chat:runSession.selectRun",
-    });
-    fireEvent.click(trigger);
-    expect(screen.getByRole("dialog").className).toContain("rounded-lg");
-    fireEvent.click(await screen.findByTestId("run-option-9"));
+    fireEvent.click(await screen.findByTestId("run-board-item-9"));
 
     await waitFor(() =>
       expect(screen.getByTestId("location").textContent).toContain(
@@ -471,7 +498,8 @@ describe("RunSessionView 结果与追问", () => {
     sessions = new Map();
     renderTask("/module/ai?automation=4&run=9");
 
-    expect(await screen.findByText("run-failed-output")).toBeTruthy();
+    // 主区错误段落 + 看板条目失败摘要各一处
+    expect(await screen.findAllByText("run-failed-output")).toHaveLength(2);
     expect(screen.getByRole("textbox")).toBeTruthy();
   });
 });
@@ -506,6 +534,9 @@ describe("ChatView 旧运行会话深链", () => {
     expect(runGroups).not.toHaveBeenCalled();
     expect(runById).not.toHaveBeenCalled();
     expect(ensure).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("run-board-list")).toBeNull();
+    expect(screen.queryByTestId("run-board-pinned")).toBeNull();
+    expect(screen.queryByRole("button", { name: "chat:runSession.selectRun" })).toBeNull();
     expect(screen.queryByTestId("run-chat-pane")).toBeNull();
   });
 

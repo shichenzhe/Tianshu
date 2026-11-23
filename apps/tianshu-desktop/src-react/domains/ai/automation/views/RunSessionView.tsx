@@ -151,10 +151,13 @@ function RunConversation({ run }: { run: AutomationRunDetail }) {
   const [selectedOccurrence, setSelectedOccurrence] = useState<number | null>(
     null,
   );
-  // 按次草稿（spec §2 设计者裁定）：挂载时捕获本 run 既有草稿回灌
-  // ChatPane（initialDraft 仅作 ChatInput 初值）；卸载（切运行）经
-  // onDraftUnmount 回写本 run——绝不携带到另一运行
-  const initialDraft = useMemo(() => getRunDraft(run.id), [run.id]);
+  // 按次草稿（spec §2 设计者裁定）：ChatInput 仅在挂载时读 initialDraft，
+  // 此处每次渲染直读 store——每次重挂（切运行）回灌最新草稿而非旧捕获值。
+  // key 用 run.id 而非 paneSession.id：sessionQuery 迟到时占位（-run.id）→
+  // 真实会话是同一会话上下文，ChatPane 不得因此重挂——React 同一提交内
+  // 新组件初值先于旧组件卸载 flush 计算，重挂即丢输入中的草稿；跨运行
+  // 才重挂，卸载经 onDraftUnmount 回写本 run——绝不携带到另一运行
+  const initialDraft = getRunDraft(run.id);
 
   const resolveSession = useCallback(
     async (workspaceId?: number): Promise<SessionRecord> => {
@@ -213,7 +216,7 @@ function RunConversation({ run }: { run: AutomationRunDetail }) {
   );
   const chatPane = canFollowUp ? (
     <ChatPane
-      key={paneSession.id}
+      key={run.id}
       session={paneSession}
       workspace={workspace}
       hasModel={hasModel}

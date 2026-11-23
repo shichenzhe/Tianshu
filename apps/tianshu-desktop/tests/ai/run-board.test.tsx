@@ -6,6 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -248,6 +249,27 @@ describe("RunBoard 加载更早记录", () => {
     expect((loadMore as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("跨页重复 id 只渲染一次（分页边界漂移）且 total/翻页数学不变", async () => {
+    // 失效重取/新运行插入导致页边界漂移：page 2 重复携带 page 1 的 id 12
+    catalog["task:4"] = {
+      total: 25,
+      pages: [pageRuns(20, 30), [makeRun(12), ...pageRuns(4, 10)]],
+    };
+    renderBoard({ selectedRunId: 30 });
+    expect(await screen.findByTestId("run-board-item-30")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:runSession.board.loadMore" }),
+    );
+
+    expect(await screen.findByTestId("run-board-item-10")).toBeTruthy();
+    expect(screen.getAllByTestId("run-board-item-12")).toHaveLength(1);
+    // total=25 → 2 页用尽即禁用（去重不改变翻页数学）
+    const loadMore = screen.getByRole("button", {
+      name: "chat:runSession.board.loadMore",
+    });
+    expect((loadMore as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("total 已用尽时加载按钮初始禁用", async () => {
     renderBoard();
     await screen.findByTestId("run-board-item-10");
@@ -255,6 +277,29 @@ describe("RunBoard 加载更早记录", () => {
       name: "chat:runSession.board.loadMore",
     });
     expect((loadMore as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("首次加载显示 loading 文案，解析后消失", async () => {
+    // 首页延迟返回：列表区不得空白，给 muted 的 common:loading 行
+    let resolveFirstPage: (value: unknown) => void = () => {};
+    const firstPageDeferred = new Promise((resolve) => {
+      resolveFirstPage = resolve;
+    });
+    invokeMock.mockImplementation((channel: string) =>
+      channel === "automation:runs:page" ? firstPageDeferred : [],
+    );
+    renderBoard();
+
+    expect(screen.getByText("common:loading")).toBeTruthy();
+
+    await act(async () => {
+      resolveFirstPage({
+        total: 2,
+        items: catalog["task:4"].pages[0],
+      });
+    });
+    expect(await screen.findByTestId("run-board-item-10")).toBeTruthy();
+    expect(screen.queryByText("common:loading")).toBeNull();
   });
 });
 

@@ -740,6 +740,34 @@ describe("RunSessionView 图运行详情与按次草稿", () => {
     expect(getRunDraft(10)).toBe("draft-for-run-10");
     expect(getRunDraft(9)).toBe("");
   });
+
+  it("会话迟到重挂不丢运行内草稿（占位 → 真实会话）", async () => {
+    // run 9 带 sessionId=109 但 session:getById 延迟返回：占位会话
+    // （session--9）阶段输入的草稿，在真实会话挂载（ChatPane 按
+    // paneSession.id 重挂）后仍应在输入框——重挂即重新回灌本 run 草稿
+    let resolveSessionById: (value: unknown) => void = () => {};
+    const sessionByIdDeferred = new Promise((resolve) => {
+      resolveSessionById = resolve;
+    });
+    invokeMock.mockImplementation((channel: string, ...args: unknown[]) => {
+      if (channel === "session:getById") return sessionByIdDeferred;
+      return defaultInvoke(channel, ...args);
+    });
+    renderTask("/module/ai?automation=4&run=9");
+
+    expect(await screen.findByText("session--9")).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("follow-up"), {
+      target: { value: "draft-while-session-resolves" },
+    });
+
+    await act(async () => {
+      resolveSessionById(sessions.get(109));
+    });
+    expect(await screen.findByText("session-109")).toBeTruthy();
+    expect(
+      (screen.getByLabelText("follow-up") as HTMLTextAreaElement).value,
+    ).toBe("draft-while-session-resolves");
+  });
 });
 
 describe("ChatView 旧运行会话深链", () => {

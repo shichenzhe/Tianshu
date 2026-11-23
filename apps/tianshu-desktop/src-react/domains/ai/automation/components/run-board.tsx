@@ -44,8 +44,20 @@ export async function queryRunPages(
     fetched.push(await queryRunPage(owner, page));
   }
   const last = fetched[fetched.length - 1];
+  // 页边界漂移（失效重取/新运行插入）可让相邻页重复携带同一 id：
+  // 按首现去重保序，防重复 React key 与重复行
+  const seen = new Set<number>();
+  const items = fetched
+    .flatMap((result) => result.items)
+    .filter((run) => {
+      if (seen.has(run.id)) {
+        return false;
+      }
+      seen.add(run.id);
+      return true;
+    });
   return {
-    items: fetched.flatMap((result) => result.items),
+    items,
     total: last?.total ?? 0,
   };
 }
@@ -110,6 +122,11 @@ export default function RunBoard({
             onSelect={onSelect}
           />
         ))}
+        {runs.length === 0 && !pinnedRun && runsQuery.isLoading && (
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            {t("common:loading")}
+          </p>
+        )}
         {runs.length === 0 && !pinnedRun && !runsQuery.isLoading && (
           <BoardFallback query={runsQuery} />
         )}

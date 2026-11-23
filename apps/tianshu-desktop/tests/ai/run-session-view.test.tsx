@@ -321,6 +321,41 @@ describe("RunSessionView 运行选择", () => {
     expect(screen.getByTestId("run-board-list")).toBeTruthy();
   });
 
+  it("owner 切换即时清空旧看板条目（不闪旧 owner 数据）", async () => {
+    const view = renderTask();
+    expect(await screen.findByTestId("run-board-item-10")).toBeTruthy();
+
+    // 新 owner 首页延迟返回：切换提交的瞬间不得残留旧 owner 条目
+    let resolveGraphRuns: (value: unknown) => void = () => {};
+    const graphRunsDeferred = new Promise((resolve) => {
+      resolveGraphRuns = resolve;
+    });
+    invokeMock.mockImplementation((channel: string, ...args: unknown[]) => {
+      if (channel === "orchestration:runs") return graphRunsDeferred;
+      return defaultInvoke(channel, ...args);
+    });
+    const graphRun = makeRun(9, { taskId: null, graphId: 3, sessionId: 90 });
+    runs = [graphRun];
+    sessions = new Map([[90, makeSession(90, graphRun)]]);
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/module/ai?graphRun=3"]}>
+          <LocationProbe />
+          <HeaderHost />
+          <RunSessionView owner={GRAPH_OWNER} />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByTestId("run-board-item-10")).toBeNull();
+
+    await act(async () => {
+      resolveGraphRuns({ total: 1, items: [graphRun] });
+    });
+    expect(await screen.findByTestId("run-board-item-9")).toBeTruthy();
+  });
+
   it("显式 run 在新运行完成后保持原检查点", async () => {
     renderTask("/module/ai?automation=4&run=9");
     expect(await screen.findByText("session-109")).toBeTruthy();

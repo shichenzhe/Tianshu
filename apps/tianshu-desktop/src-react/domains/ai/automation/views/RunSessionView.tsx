@@ -109,6 +109,7 @@ export default function RunSessionView({ owner }: RunSessionViewProps) {
       </div>
       {runSessionsEnabled && (
         <RunBoard
+          key={`${owner.kind}:${owner.ownerId}`}
           owner={owner}
           selectedRunId={selectedRunId}
           currentRun={displayRun ?? listedRun}

@@ -8,6 +8,7 @@
  * tests/ai/graph-editor-view.test.tsx；Radix Select jsdom 桩同
  * tests/project/create-project-dialog.test.tsx。
  */
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -41,10 +42,29 @@ vi.mock("react-router-dom", () => ({
   }),
   useParams: () => ({ id: "new" }),
 }));
-vi.mock("@tanstack/react-query", () => ({
-  useQuery: () => ({ data: [] }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn(async () => {}) }),
-}));
+vi.mock("@tanstack/react-query", async () => {
+  const { createContext } = await import("react");
+  return {
+    useQuery: () => ({ data: [] }),
+    // ChatPane（c850366c 起）经 useInfiniteQuery 只读订阅消息分页缓存：
+    // 空页且不拉取的最小替身
+    useInfiniteQuery: () => ({
+      data: { pages: [], pageParams: [] },
+      isLoading: false,
+      error: null,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    }),
+    useQueryClient: () => ({ invalidateQueries: vi.fn(async () => {}) }),
+    // ChatInput 子树（ExpertPromptChips/ExpertRecommendCard）宿主无
+    // Provider 时的兜底链：默认 undefined 的 context 触发组件内置自挂
+    // 隔离 client 分支；Provider 透传、QueryClient 惰性形状即可
+    QueryClientContext: createContext(undefined),
+    QueryClientProvider: ({ children }: { children?: ReactNode }) => children,
+    QueryClient: class {},
+  };
+});
 
 // 画布 stub：每条边一个按钮（id 用真实 toCanvas 稳定串），点击即 onSelect
 vi.mock("@/domains/ai/orchestration/components/GraphCanvas", async () => {

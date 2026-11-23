@@ -102,11 +102,13 @@ describe('InfoController (e2e)', () => {
       // GA-T6：无头端能力域增 graph（编排/自动化归并，spec §4.2）；FA-T1
       // 增 files（远程文件三端点，spec 2026-10-20 §3.1）；library 批增
       // library（资料库十七端点管理面，spec 2026-10-26）；MO 批增
-      // monitor（用量统计只读聚合面，spec 2026-10-27）
+      // monitor（用量统计只读聚合面，spec 2026-10-27）；RA 批增
+      // runSessions（运行伴随会话，spec 2026-11-16）
       expect(body.data.capabilities).toEqual([
         'chat',
         'provider',
         'graph',
+        'runSessions',
         'files',
         'library',
         'monitor',

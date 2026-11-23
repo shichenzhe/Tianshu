@@ -162,7 +162,9 @@ describe("RunBoard 条目渲染与选择", () => {
     expect(
       within(item10).getByText("chat:automation.runs.attempt"),
     ).toBeTruthy();
-    expect(within(item9).getByText(formatDateTime(run9.startedAt))).toBeTruthy();
+    expect(
+      within(item9).getByText(formatDateTime(run9.startedAt)),
+    ).toBeTruthy();
     expect(screen.getByText("chat:runSession.board.total")).toBeTruthy();
   });
 

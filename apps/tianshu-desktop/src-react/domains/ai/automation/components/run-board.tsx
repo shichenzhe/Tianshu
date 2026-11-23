@@ -121,7 +121,10 @@ export default function RunBoard({
           className="w-full hover:bg-primary-subtle hover:text-primary hover:border-primary/30"
           disabled={pages >= totalPages || runsQuery.isFetching}
           onClick={() =>
-            setPagesState((state) => ({ key: state.key, pages: state.pages + 1 }))
+            setPagesState((state) => ({
+              key: state.key,
+              pages: state.pages + 1,
+            }))
           }
         >
           {t("chat:runSession.board.loadMore")}

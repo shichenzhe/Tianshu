@@ -827,7 +827,9 @@
       "pinned": "Current selection"
     },
     "detail": {
-      "snapshotMissing": "No graph snapshot was saved for this run; step view only"
+      "snapshotMissing": "No graph snapshot was saved for this run; step view only",
+      "viewTopology": "Topology",
+      "viewSteps": "Steps"
     }
   },
   "orchestration": {

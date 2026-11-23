@@ -12,7 +12,8 @@
  * Task 14：顶栏加「试运行」（inputSchema 变量表单 + workspace 下拉）与
  * 「运行历史」（分页 + 行展开节点轨迹）两弹窗——均仅已保存图可用。
  */
-import "@xyflow/react/dist/style.css";
+// @xyflow/react 样式已由 GraphCanvas 组件自持（运行详情等非编辑器路由
+// 也依赖画布渲染），此处不再重复引入
 import { parseInputSchema } from "../api/graph.schema";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";

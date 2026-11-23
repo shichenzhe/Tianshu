@@ -126,7 +126,7 @@ export default function GraphRunDetail({
   const finalOutput = useMemo(() => finalOutputOf(trace), [trace]);
 
   return (
-    <section className="flex max-h-[55%] min-h-0 shrink-0 flex-col border-b border-border/50">
+    <section className="flex h-[55%] shrink-0 flex-col border-b border-border/50">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border/50 px-4 py-2">
         <RunStatusBadge status={run.status} />
         <span className="text-xs text-muted-foreground">
@@ -176,26 +176,33 @@ export default function GraphRunDetail({
           </pre>
         )}
       </details>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3">
+      {/* 视图区外层不滚动（auto 高度下 flex-1 基础 0 会让画布塌陷、滚动
+       * 容器与 RF 手势/滚轮缩放冲突）：滚动由各视图内层自持——拓扑
+       * overflow-hidden（RF 自管缩放平移）、步骤日志 overflow-y-auto */}
+      <div className="min-h-0 flex-1 px-4 pb-3">
         {!snapshotUsable && (
           <p className="pt-2 text-xs text-muted-foreground">
             {t("chat:runSession.detail.snapshotMissing")}
           </p>
         )}
         {view === "topology" ? (
-          <RunGraphCanvas
-            graphJson={run.graphJsonSnapshot}
-            trace={trace}
-            selectedNodeId={selectedNodeId}
-            focusNodeId={focusNodeId}
-            onSelectNode={handleSelectNode}
-          />
+          <div className="h-full overflow-hidden">
+            <RunGraphCanvas
+              graphJson={run.graphJsonSnapshot}
+              trace={trace}
+              selectedNodeId={selectedNodeId}
+              focusNodeId={focusNodeId}
+              onSelectNode={handleSelectNode}
+            />
+          </div>
         ) : (
-          <RunStepLog
-            trace={trace}
-            selectedOccurrence={selectedOccurrence}
-            onSelectOccurrence={onSelectOccurrence}
-          />
+          <div className="h-full overflow-y-auto">
+            <RunStepLog
+              trace={trace}
+              selectedOccurrence={selectedOccurrence}
+              onSelectOccurrence={onSelectOccurrence}
+            />
+          </div>
         )}
       </div>
     </section>

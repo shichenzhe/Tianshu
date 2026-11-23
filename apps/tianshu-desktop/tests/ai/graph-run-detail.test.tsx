@@ -233,6 +233,37 @@ describe("GraphRunDetail 头部", () => {
   });
 });
 
+describe("GraphRunDetail 布局高度链（真实视口塌陷回归守卫）", () => {
+  // max-h-[55%]（auto 高度容器）下视图区 flex-1（basis 0）分不到高度、
+  // 画布容器塌陷为 0：面板窄、画布无手势区、节点不可点。守卫固定高度
+  // h-[55%] 保证内部 flex-1 有确定分配空间；画布不进 overflow 滚动容器
+  // （RF 反模式——手势与滚轮缩放冲突），步骤日志自带滚动。
+  function viewportOf(container: HTMLElement): HTMLElement {
+    const section = container.querySelector("section");
+    if (!section) throw new Error("section 未渲染");
+    expect(section.className).toContain("h-[55%]");
+    expect(section.className).not.toContain("max-h-[55%]");
+    const viewport = section.querySelector<HTMLElement>(
+      ":scope > div:last-of-type",
+    );
+    if (!viewport) throw new Error("视图区容器未渲染");
+    return viewport;
+  }
+
+  it("固定高度占位，外层视图区不滚动，拓扑画布自持 overflow-hidden", () => {
+    const { container } = renderDetail();
+    const viewport = viewportOf(container);
+    expect(viewport.className).not.toContain("overflow");
+    expect(viewport.querySelector("div.overflow-hidden")).toBeTruthy();
+  });
+
+  it("步骤视图保留 overflow-y-auto 滚动", () => {
+    const { container } = renderSteps();
+    const viewport = viewportOf(container);
+    expect(viewport.querySelector("div.overflow-y-auto")).toBeTruthy();
+  });
+});
+
 describe("GraphRunDetail 结果摘要（GraphRunResult 迁移）", () => {
   it("error 优先并经 localizeRunError 本地化", () => {
     renderDetail({

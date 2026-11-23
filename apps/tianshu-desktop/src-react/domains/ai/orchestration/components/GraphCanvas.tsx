@@ -39,6 +39,11 @@ import {
 } from "@xyflow/react";
 
 import AddNodeMenu from "./AddNodeMenu";
+// RF 基础样式必须由组件自持：曾只在 GraphEditorView 按需加载，运行详情
+// 等非编辑器路由下 .react-flow 的 height:100%/手势 pane 层/节点定位
+// 全部缺失——画布塌陷、无法平移缩放、节点点击无效（jsdom 不渲染 CSS
+// 测不出，守卫见 graph-canvas-readonly.test.tsx）
+import "@xyflow/react/dist/style.css";
 import type { GraphJson } from "../api/graph.schema";
 import type { NodeKind } from "../lib/graph-editor-model";
 import {
@@ -325,6 +330,9 @@ function CanvasFlow({
       connectionRadius={30}
       deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
       nodesConnectable={readOnly ? false : undefined}
+      // 只读运行拓扑初始 fitView（整图适配视口；编辑器保持既有初始定位
+      // 零变化）。失败定位 setCenter 随后覆盖——定位优先语义不变
+      fitView={readOnly}
       // 拖拽节点入画布（AddNodeMenu 卡片 draggable）：drop 转流坐标落点
       onDragOver={(event) => {
         event.preventDefault();

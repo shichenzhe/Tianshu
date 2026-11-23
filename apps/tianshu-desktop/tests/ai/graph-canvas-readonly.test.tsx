@@ -151,6 +151,11 @@ describe("GraphCanvas readOnly", () => {
     expect(screen.queryByTestId("add-node-menu")).toBeNull();
   });
 
+  it("只读运行拓扑初始 fitView（整图适配视口，布局超出不裁切）", () => {
+    renderCanvas(makeSpy(), true);
+    expect(latestFlowProps().fitView).toBe(true);
+  });
+
   it("position change 不收集（防抖到期 onMove 不触发）、删除回调不外抛、点击选择保留", () => {
     const spy = makeSpy();
     renderCanvas(spy, true);
@@ -214,6 +219,8 @@ describe("GraphCanvas 编辑态默认（readOnly 缺省零变化）", () => {
     expect(props.deleteKeyCode).toEqual(["Backspace", "Delete"]);
     expect(props.onConnect).toBeInstanceOf(Function);
     expect(props.nodesConnectable).toBeUndefined();
+    // 编辑器初始定位逻辑保持现状，fitView 仅只读运行拓扑启用
+    expect(props.fitView).toBeUndefined();
     expect(screen.queryByTestId("add-node-menu")).not.toBeNull();
     const endNode = flowNodes().find((n) => n.id === "__end__");
     const card = flowNodes().find((n) => n.id === "llm");
@@ -299,5 +306,25 @@ describe("NodeCard runState 叠加", () => {
     const plain = renderCard(undefined);
     expect(plain.className).toContain("border-border");
     expect(screen.queryByText(/statusFailed/)).toBeNull();
+  });
+});
+
+describe("GraphCanvas 自持样式（真实视口回归守卫）", () => {
+  // RF 基础样式（.react-flow 的 height:100%、手势 pane 层、节点 absolute
+  // 定位）曾只在 GraphEditorView 按需加载——运行详情等非编辑器路由下
+  // 样式缺失：画布容器塌陷、无法平移缩放、节点堆叠点击无效。守卫组件
+  // 自己 import 样式，防止再被挪回单一视图按需加载（jsdom 不渲染 CSS，
+  // 无法行为测试，以源码断言守卫）
+  it("GraphCanvas 源码自带 @xyflow/react 样式 import", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const source = await readFile(
+      resolve(
+        __dirname,
+        "../../src-react/domains/ai/orchestration/components/GraphCanvas.tsx",
+      ),
+      "utf-8",
+    );
+    expect(source).toContain("@xyflow/react/dist/style.css");
   });
 });

@@ -829,7 +829,22 @@
     "detail": {
       "snapshotMissing": "未保存当次图结构快照，仅提供步骤视图",
       "viewTopology": "拓扑",
-      "viewSteps": "步骤"
+      "viewSteps": "步骤",
+      "occurrenceNote": "该节点多次执行，此处为第 {{n}} 次；完整输入/输出仅保留最后一次"
+    },
+    "node": {
+      "tabs": {
+        "summary": "摘要",
+        "input": "输入",
+        "output": "输出",
+        "tools": "工具调用",
+        "error": "错误"
+      },
+      "copy": "复制",
+      "copySuccess": "已复制",
+      "prev": "上一节点",
+      "next": "下一节点",
+      "nextFailed": "下一失败节点"
     }
   },
   "orchestration": {

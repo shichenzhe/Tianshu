@@ -829,7 +829,22 @@
     "detail": {
       "snapshotMissing": "No graph snapshot was saved for this run; step view only",
       "viewTopology": "Topology",
-      "viewSteps": "Steps"
+      "viewSteps": "Steps",
+      "occurrenceNote": "This node ran multiple times; showing run #{{n}}. Full input/output is kept for the last run only."
+    },
+    "node": {
+      "tabs": {
+        "summary": "Summary",
+        "input": "Input",
+        "output": "Output",
+        "tools": "Tools",
+        "error": "Error"
+      },
+      "copy": "Copy",
+      "copySuccess": "Copied",
+      "prev": "Previous node",
+      "next": "Next node",
+      "nextFailed": "Next failure"
     }
   },
   "orchestration": {

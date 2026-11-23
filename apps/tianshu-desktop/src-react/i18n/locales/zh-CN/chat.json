@@ -825,6 +825,9 @@
       "collapse": "收起运行看板",
       "expand": "展开运行看板",
       "pinned": "当前选择"
+    },
+    "detail": {
+      "snapshotMissing": "未保存当次图结构快照，仅提供步骤视图"
     }
   },
   "orchestration": {

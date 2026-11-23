@@ -825,6 +825,9 @@
       "collapse": "Collapse run board",
       "expand": "Expand run board",
       "pinned": "Current selection"
+    },
+    "detail": {
+      "snapshotMissing": "No graph snapshot was saved for this run; step view only"
     }
   },
   "orchestration": {

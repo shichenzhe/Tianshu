@@ -8,6 +8,9 @@
  * 默认删除转发 onRemoveNode/onRemoveEdge（边 id 即 toCanvas 稳定串，
  * 消费方经 edgeIdToRef 反解）；focusNodeId 变化 setCenter 定位 + 选中
  * （错误定位）。深交互（拖拽/连线手势）不做 jsdom 深测（spec §7）。
+ * 只读运行模式（Task 3，readOnly）：禁拖/禁连/禁删/隐藏新增、回调不
+ * 外抛，保留缩放/MiniMap/点击选择/focusNodeId；nodeStates 叠加末次
+ * 运行状态进节点 data.runState。编辑器调用处缺省不传——零行为变化。
  */
 import {
   useCallback,
@@ -38,8 +41,12 @@ import {
 import AddNodeMenu from "./AddNodeMenu";
 import type { GraphJson } from "../api/graph.schema";
 import type { NodeKind } from "../lib/graph-editor-model";
-import { END_NODE_ID, toCanvas } from "../lib/graph-canvas-model";
-import NodeCard, { type CardNode } from "./nodes/NodeCard";
+import {
+  END_NODE_ID,
+  toCanvas,
+  type CanvasNode,
+} from "../lib/graph-canvas-model";
+import NodeCard, { type CardNode, type NodeRunState } from "./nodes/NodeCard";
 import EndMarker, { type EndMarkerNode } from "./nodes/EndMarker";
 
 export interface GraphCanvasProps {
@@ -64,12 +71,28 @@ export interface GraphCanvasProps {
   focusNodeId?: string | null;
   /** 运行中节点（试运行实时高亮，描边脉冲） */
   runningNodeIds?: string[];
+  /** 只读运行模式（Task 3 运行拓扑）：禁拖/禁连/禁删/隐藏新增，回调
+   * 不外抛；保留缩放/MiniMap/点击选择/focusNodeId 定位。编辑器调用处
+   * 缺省不传——零行为变化 */
+  readOnly?: boolean;
+  /** 运行状态叠加（readOnly 拓扑）：nodeId → 末次状态/耗时（映射进
+   * 节点 data.runState，由 NodeCard 渲染描边与徽标） */
+  nodeStates?: Map<string, NodeRunState>;
 }
 
 type FlowNode = CardNode | EndMarkerNode;
 
 /** 模块级常量：RF 要求 nodeTypes 引用稳定（否则 002 报错+节点全量重挂载） */
 const nodeTypes = { card: NodeCard, end: EndMarker } satisfies NodeTypes;
+
+/** 卡片节点 data：canvas 模型 + 可选运行状态叠加（只读运行拓扑） */
+function buildCardData(
+  node: CanvasNode,
+  nodeStates?: Map<string, NodeRunState>,
+): CardNode["data"] {
+  const runState = nodeStates?.get(node.id);
+  return { canvas: node, ...(runState ? { runState } : {}) };
+}
 
 const MOVE_DEBOUNCE_MS = 300;
 const CARD_WIDTH = 220;
@@ -91,6 +114,8 @@ function CanvasFlow({
   onRemoveEdge,
   focusNodeId,
   runningNodeIds,
+  readOnly,
+  nodeStates,
 }: GraphCanvasProps) {
   const { setCenter, getInternalNode, screenToFlowPosition } =
     useReactFlow<FlowNode>();
@@ -107,23 +132,27 @@ function CanvasFlow({
               data: {},
               selected: n.id === selectedId,
               // END 可拖拽调布局（落点持久化 graphJson.endPosition），
-              // 仍不可删（终点语义由边声明，删标记无意义）
-              draggable: true,
+              // 仍不可删（终点语义由边声明，删标记无意义）；只读运行
+              // 模式下一并禁拖
+              draggable: !readOnly,
               deletable: false,
             }
           : {
               id: n.id,
               type: "card",
               position: n.position,
-              data: { canvas: n },
+              data: buildCardData(n, nodeStates),
               selected: n.id === selectedId,
+              // 只读运行模式：节点不可拖不可删（「不可编辑」落地，
+              // @xyflow/react 12.12 无 nodesEditable prop）
+              ...(readOnly ? { draggable: false, deletable: false } : {}),
               // 试运行实时高亮（globals.css 的 node-running 描边脉冲）
               ...(runningNodeIds?.includes(n.id)
                 ? { className: "node-running" }
                 : {}),
             },
       ),
-    [canvas, selectedId, runningNodeIds],
+    [canvas, selectedId, runningNodeIds, readOnly, nodeStates],
   );
 
   const edges: Edge[] = useMemo(
@@ -187,7 +216,8 @@ function CanvasFlow({
     (changes: NodeChange<FlowNode>[]) => {
       let hasMove = false;
       for (const change of changes) {
-        if (change.type === "position" && change.position) {
+        // 只读运行模式不收集落点（节点已禁拖，此处兜底不外抛）
+        if (!readOnly && change.type === "position" && change.position) {
           pendingMoves.current[change.id] = change.position;
           hasMove = true;
         }
@@ -200,7 +230,7 @@ function CanvasFlow({
       // eslint 故意不含 flushMoves/nodes：函数声明每次渲染重建，闭包仅取
       // 稳定 ref；nodes 经 setLiveNodes 函数式更新避免依赖漂移
     },
-    [nodes],
+    [nodes, readOnly],
   );
 
   /** 卸载兜底：模式切换等场景下未到期的落点不丢 */
@@ -215,6 +245,7 @@ function CanvasFlow({
 
   const handleConnect = useCallback(
     (c: Connection) => {
+      if (readOnly) return;
       if (c.source && c.target) {
         onConnect({
           source: c.source,
@@ -223,7 +254,7 @@ function CanvasFlow({
         });
       }
     },
-    [onConnect],
+    [onConnect, readOnly],
   );
 
   const handleNodeClick = useCallback<NodeMouseHandler<FlowNode>>(
@@ -238,17 +269,19 @@ function CanvasFlow({
 
   const handleNodesDelete = useCallback(
     (deleted: FlowNode[]) => {
+      if (readOnly) return;
       for (const node of deleted) {
         if (node.id !== END_NODE_ID) onRemoveNode(node.id);
       }
     },
-    [onRemoveNode],
+    [onRemoveNode, readOnly],
   );
   const handleEdgesDelete = useCallback(
     (deleted: Edge[]) => {
+      if (readOnly) return;
       for (const edge of deleted) onRemoveEdge(edge.id);
     },
-    [onRemoveEdge],
+    [onRemoveEdge, readOnly],
   );
 
   /** focusNodeId 变化：视口居中到节点中心并选中（仅随 focus 变化触发） */
@@ -277,7 +310,10 @@ function CanvasFlow({
       edges={edges}
       nodeTypes={nodeTypes}
       onNodesChange={handleNodesChange}
-      onConnect={handleConnect}
+      // 只读运行模式不透传连线回调（画布禁连的双保险，配合
+      // nodesConnectable=false；@xyflow/react 12.12 无 edgesConnectable
+      // prop，连线能力由 nodesConnectable 一并关断）
+      onConnect={readOnly ? undefined : handleConnect}
       onNodeClick={handleNodeClick}
       onEdgeClick={handleEdgeClick}
       onPaneClick={handlePaneClick}
@@ -287,7 +323,8 @@ function CanvasFlow({
       onNodeDragStop={flushMoves}
       // 连线松手吸附半径（默认 20，卡片较宽，稍放大降低连线难度）
       connectionRadius={30}
-      deleteKeyCode={["Backspace", "Delete"]}
+      deleteKeyCode={readOnly ? null : ["Backspace", "Delete"]}
+      nodesConnectable={readOnly ? false : undefined}
       // 拖拽节点入画布（AddNodeMenu 卡片 draggable）：drop 转流坐标落点
       onDragOver={(event) => {
         event.preventDefault();
@@ -295,6 +332,7 @@ function CanvasFlow({
       }}
       onDrop={(event) => {
         event.preventDefault();
+        if (readOnly) return;
         const kind = event.dataTransfer.getData(
           "application/tianshu-node-kind",
         );
@@ -315,10 +353,12 @@ function CanvasFlow({
         nodeStrokeColor={minimapNodeStrokeColor}
       />
       {/* 添加节点：Coze 式「+」主按钮 + 分类搜索面板（旧三快捷钮+平铺
-       * 下拉在 19 种节点下不可用） */}
-      <Panel position="top-left">
-        <AddNodeMenu onAddNode={onAddNode} />
-      </Panel>
+       * 下拉在 19 种节点下不可用）；只读运行模式隐藏 */}
+      {!readOnly && (
+        <Panel position="top-left">
+          <AddNodeMenu onAddNode={onAddNode} />
+        </Panel>
+      )}
     </ReactFlow>
   );
 }

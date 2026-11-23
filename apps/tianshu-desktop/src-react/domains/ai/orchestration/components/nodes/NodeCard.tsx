@@ -5,6 +5,8 @@
  * 子图号/检索词）与 branch 选项 chips。handles：target 左侧单个；
  * source 右侧——branch 节点按 branchOptions 逐项一个 handle（id
  * `branch:<value>`）沿卡片高度均分并旁标小标签，普通节点单 `plain`。
+ * 只读运行拓扑（Task 3）经 data.runState 叠加：状态描边 + 右上角
+ * 状态/耗时徽标（编辑态不传，结构零变化）。
  */
 import { useQuery } from "@tanstack/react-query";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
@@ -43,13 +45,24 @@ import ModelApi, { modelDisplayName } from "@/domains/ai/api/model.api";
 import ProviderApi, {
   type ProviderRecord,
 } from "@/domains/ai/api/provider.api";
+import { formatDuration } from "@/domains/ai/automation/lib/run-display";
 import type { CanvasNode } from "../../lib/graph-canvas-model";
 
-export type CardNode = Node<{ canvas: CanvasNode }, "card">;
+/** 运行状态叠加（Task 3 只读运行拓扑）：该节点末次 trace occurrence */
+export interface NodeRunState {
+  status: "success" | "failed" | "skipped";
+  durationMs: number;
+}
+
+export type CardNode = Node<
+  { canvas: CanvasNode; runState?: NodeRunState },
+  "card"
+>;
 
 export default function NodeCard({ data, selected }: NodeProps<CardNode>) {
   const { t } = useTranslation(["chat"]);
   const node = data.canvas;
+  const runState = data.runState;
   const { data: models = [] } = useQuery({
     queryKey: ["models", "all"],
     queryFn: () => ModelApi.listAll(),
@@ -63,17 +76,13 @@ export default function NodeCard({ data, selected }: NodeProps<CardNode>) {
 
   return (
     // relative 锚定 handle 定位（Handle/分支包装层均 absolute）；
-    // start 入口视觉：emerald 描边与普通节点区分（选中态优先主题色）
+    // start 入口视觉：emerald 描边与普通节点区分（选中态优先主题色）；
+    // 只读运行拓扑 runState 在场时状态描边优先（选中态保留 ring）
     <div
-      className={`relative w-[220px] rounded-lg border bg-card p-2 shadow-sm ${
-        selected
-          ? "border-primary ring-1 ring-primary/40"
-          : node.kind === "start"
-            ? "border-emerald-300 dark:border-emerald-800"
-            : "border-border"
-      }`}
+      className={`relative w-[220px] rounded-lg border bg-card p-2 shadow-sm ${cardBorderClass(selected, node.kind, runState)}`}
     >
       <Handle type="target" position={Position.Left} id="target" />
+      {runState && <RunStateBadge runState={runState} />}
       <div className="flex items-center gap-1.5">
         <KindIcon kind={node.kind} />
         <span className="truncate text-xs font-medium text-foreground">
@@ -128,6 +137,56 @@ export default function NodeCard({ data, selected }: NodeProps<CardNode>) {
         <Handle type="source" position={Position.Right} id="plain" />
       )}
     </div>
+  );
+}
+
+/** 卡片描边：runState 在场时状态描边优先（success 主题色 / failed 危险
+ * 色 / skipped 边框色，选中态叠加 ring）；否则维持编辑态（选中主题色、
+ * start emerald、普通边框色） */
+function cardBorderClass(
+  selected: boolean,
+  kind: CanvasNode["kind"],
+  runState?: NodeRunState,
+): string {
+  if (runState) {
+    const statusBorder =
+      runState.status === "success"
+        ? "border-primary"
+        : runState.status === "failed"
+          ? "border-destructive"
+          : "border-border";
+    return selected ? `${statusBorder} ring-1 ring-primary/40` : statusBorder;
+  }
+  if (selected) return "border-primary ring-1 ring-primary/40";
+  return kind === "start"
+    ? "border-emerald-300 dark:border-emerald-800"
+    : "border-border";
+}
+
+/** 状态字 i18n key（复用 automation.runs 既有三态文案） */
+const RUN_STATUS_KEY: Record<NodeRunState["status"], string> = {
+  success: "chat:automation.runs.statusSuccess",
+  failed: "chat:automation.runs.statusFailed",
+  skipped: "chat:automation.runs.statusSkipped",
+};
+
+/** 徽标配色（主题变量）：success 主色 / failed 危险色 / skipped 弱化 */
+const RUN_BADGE_CLASS: Record<NodeRunState["status"], string> = {
+  success: "border border-primary/30 bg-primary-subtle text-primary",
+  failed: "border border-destructive/30 bg-destructive/10 text-destructive",
+  skipped: "border border-border bg-muted text-muted-foreground",
+};
+
+/** 右上角运行状态徽标：状态字 + 末次耗时（只读运行拓扑叠加） */
+function RunStateBadge({ runState }: { runState: NodeRunState }) {
+  const { t } = useTranslation(["chat"]);
+  return (
+    <span
+      className={`absolute -top-2 -right-2 z-10 rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-tight ${RUN_BADGE_CLASS[runState.status]}`}
+    >
+      {t(RUN_STATUS_KEY[runState.status])} ·{" "}
+      {formatDuration(runState.durationMs)}
+    </span>
   );
 }
 

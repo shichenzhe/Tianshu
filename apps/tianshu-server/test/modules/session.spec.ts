@@ -14,6 +14,11 @@ import {
   WrappedBody,
 } from '../support/test-app';
 
+// 重 setup e2e（建临时库 + Nest 应用启动），慢 CI runner 上 beforeAll
+// 偶发超 jest 默认 5s（2026-11-23 v0.1.1 轮实测）——对齐 relay 系先例
+// 显式上调 hook/test 预算
+jest.setTimeout(20_000);
+
 /** session 行（响应侧，日期已被 JSON 序列化拦截器转为字符串） */
 interface SessionRow {
   id: number;

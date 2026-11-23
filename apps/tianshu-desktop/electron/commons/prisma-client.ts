@@ -177,9 +177,7 @@ export async function cleanupGraphRunSessions(): Promise<void> {
   });
   const sessionIds = [
     ...new Set(
-      runs
-        .map((r) => r.sessionId)
-        .filter((id): id is number => id !== null),
+      runs.map((r) => r.sessionId).filter((id): id is number => id !== null),
     ),
   ];
   if (sessionIds.length > 0) {

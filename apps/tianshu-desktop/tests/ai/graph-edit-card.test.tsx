@@ -195,9 +195,9 @@ describe("GraphEditCard", () => {
       />,
     );
     expect(onApplyFull).toHaveBeenCalledTimes(1);
-    expect(
-      screen.getByTestId("graph-edit-card").textContent,
-    ).toContain("chat:orchestration.editor.ai.receiptApplied");
+    expect(screen.getByTestId("graph-edit-card").textContent).toContain(
+      "chat:orchestration.editor.ai.receiptApplied",
+    );
   });
 
   it("操作前置失败（节点不存在）显示本地化错误码，不裸抛中文串", () => {

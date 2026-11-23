@@ -13,10 +13,9 @@ import { DatabaseSync } from "node:sqlite";
 
 const emitAutomationChanged = vi.hoisted(() => vi.fn());
 
-vi.mock(
-  "../../electron/domains/ai/automation/automation-change-bus",
-  () => ({ emitAutomationChanged }),
-);
+vi.mock("../../electron/domains/ai/automation/automation-change-bus", () => ({
+  emitAutomationChanged,
+}));
 
 vi.mock("../../electron/commons/Log", () => ({
   default: { warn: vi.fn(), info: vi.fn(), error: vi.fn() },
@@ -605,8 +604,7 @@ describe("maybeTrimAutomationRuns 节流", () => {
 });
 
 let notificationNowMs = 2_000_000_000_000;
-const nextNotificationTime = () =>
-  (notificationNowMs += TRIM_INTERVAL_MS);
+const nextNotificationTime = () => (notificationNowMs += TRIM_INTERVAL_MS);
 
 describe("maybeTrimAutomationRuns 变更通知", () => {
   beforeEach(() => emitAutomationChanged.mockReset());

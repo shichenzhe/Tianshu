@@ -546,20 +546,23 @@ describe("RunSessionService.ensureRunSession", () => {
     const { service } = makeService(state.sessions);
     db.automationRun.updateMany.mockResolvedValue({ count: 0 });
     let winnerReadCount = 0;
-    db.automationRun.findUnique.mockReset().mockImplementation(
-      async ({ where }: { where: { id?: number; sessionId?: number } }) => {
-        winnerReadCount++;
-        const row = state.runs.find(
-          (run) =>
-            (where.id === undefined || run.id === where.id) &&
-            (where.sessionId === undefined || run.sessionId === where.sessionId),
-        );
-        if (row && winnerReadCount === 2) {
-          return { ...row, sessionId: null };
-        }
-        return row ?? null;
-      },
-    );
+    db.automationRun.findUnique
+      .mockReset()
+      .mockImplementation(
+        async ({ where }: { where: { id?: number; sessionId?: number } }) => {
+          winnerReadCount++;
+          const row = state.runs.find(
+            (run) =>
+              (where.id === undefined || run.id === where.id) &&
+              (where.sessionId === undefined ||
+                run.sessionId === where.sessionId),
+          );
+          if (row && winnerReadCount === 2) {
+            return { ...row, sessionId: null };
+          }
+          return row ?? null;
+        },
+      );
     db.automationRun.findMany.mockImplementation(async () => {
       state.runs[0].sessionId = 1;
       return [{ id: 50, sessionId: 1 }];

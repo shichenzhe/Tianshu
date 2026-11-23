@@ -813,7 +813,6 @@
     }
   },
   "runSession": {
-    "selectRun": "Select run",
     "empty": "No runs yet",
     "resultSummary": "Final output / error summary",
     "workspaceRequiredTitle": "Choose a follow-up workspace",

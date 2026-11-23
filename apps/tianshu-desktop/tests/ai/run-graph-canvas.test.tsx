@@ -9,6 +9,8 @@
  *   实际存在的节点级 draggable/deletable=false + RF 级
  *   nodesConnectable=false、deleteKeyCode=null、无 onConnect 透传落地），
  *   trace 末次状态映射进节点 data.runState，点击节点/空白回调透传；
+ *   focusNodeId 透传 GraphCanvas 定位 effect（setCenter 居中），定位
+ *   回声 onSelect 被吸收不冒充用户点击（Task 4 review carry-over i）；
  * - 快照缺失（null/undefined——Task 1 跨端编码差异同判）/损坏/结构非法
  *   → 渲染降级提示且不抛错。
  * 深手势不做 jsdom 深测（GraphCanvas spec §7），断言 props 透传行为。
@@ -24,6 +26,7 @@ vi.mock("react-i18next", async (importOriginal) => {
 
 const flow = vi.hoisted(() => ({
   props: [] as Array<Record<string, unknown>>,
+  setCenter: vi.fn(),
 }));
 vi.mock("@xyflow/react", () => ({
   ReactFlow: (props: Record<string, unknown>) => {
@@ -32,7 +35,7 @@ vi.mock("@xyflow/react", () => ({
   },
   ReactFlowProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useReactFlow: () => ({
-    setCenter: vi.fn(),
+    setCenter: flow.setCenter,
     getInternalNode: vi.fn(),
     screenToFlowPosition: vi.fn(),
   }),
@@ -94,6 +97,7 @@ function flowNodes(): Array<Record<string, unknown>> {
 
 beforeEach(() => {
   flow.props.length = 0;
+  flow.setCenter.mockReset();
 });
 
 afterEach(() => {
@@ -239,6 +243,83 @@ describe("RunGraphCanvas（合法快照 → 只读渲染）", () => {
       (props.onPaneClick as () => void)();
     });
     expect(onSelectNode).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("RunGraphCanvas 视口定位（focusNodeId 透传与回声吸收）", () => {
+  it("focusNodeId 经 GraphCanvas 定位 effect setCenter 居中；定位回声不外抛 onSelectNode", () => {
+    const onSelectNode = vi.fn();
+    render(
+      <RunGraphCanvas
+        graphJson={validSnapshot}
+        trace={[makeTraceEntry("llm", "failed", 10)]}
+        selectedNodeId="llm"
+        focusNodeId="llm"
+        onSelectNode={onSelectNode}
+      />,
+    );
+    // focusNodeId 由 GraphCanvas 内部定位 effect 消费（不透传 ReactFlow）：
+    // setCenter 触发即透传证据；回声 onSelect 被吞——运行态选中语义是
+    // 用户点击 → 弹框，程序定位不得冒充点击
+    expect(flow.setCenter).toHaveBeenCalledTimes(1);
+    expect(onSelectNode).not.toHaveBeenCalled();
+
+    // 用户随后点击同一节点：正常外抛
+    act(() => {
+      (
+        latestFlowProps().onNodeClick as (
+          event: unknown,
+          node: { id: string },
+        ) => void
+      )(null, { id: "llm" });
+    });
+    expect(onSelectNode).toHaveBeenCalledWith("llm");
+  });
+
+  it("focusNodeId 缺省/null：不定位不吸收，点击照常外抛", () => {
+    const onSelectNode = vi.fn();
+    const { rerender } = render(
+      <RunGraphCanvas
+        graphJson={validSnapshot}
+        trace={[]}
+        selectedNodeId={null}
+        onSelectNode={onSelectNode}
+      />,
+    );
+    expect(flow.setCenter).not.toHaveBeenCalled();
+    act(() => {
+      (
+        latestFlowProps().onNodeClick as (
+          event: unknown,
+          node: { id: string },
+        ) => void
+      )(null, { id: "llm" });
+    });
+    expect(onSelectNode).toHaveBeenCalledWith("llm");
+    rerender(
+      <RunGraphCanvas
+        graphJson={validSnapshot}
+        trace={[]}
+        selectedNodeId={null}
+        focusNodeId={null}
+        onSelectNode={onSelectNode}
+      />,
+    );
+    expect(flow.setCenter).not.toHaveBeenCalled();
+  });
+
+  it("快照缺失时不定位（降级分支不触达 GraphCanvas）", () => {
+    render(
+      <RunGraphCanvas
+        graphJson={null}
+        trace={[makeTraceEntry("llm", "failed", 10)]}
+        selectedNodeId={null}
+        focusNodeId="llm"
+        onSelectNode={() => {}}
+      />,
+    );
+    expect(flow.props.length).toBe(0);
+    expect(flow.setCenter).not.toHaveBeenCalled();
   });
 });
 

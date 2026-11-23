@@ -7,10 +7,13 @@
  * RunGraphCanvas 执行时快照只读渲染；steps → RunStepLog）。
  * 选中态为 occurrence 下标、由父层持有：拓扑节点点击取该节点末次
  * occurrence（设计者裁定）；失败运行未选择时以 firstFailedNodeId 作
- * 画布选中。快照缺失/损坏时锁定步骤视图并显示降级提示（摘要不丢）；
- * RunGraphCanvas 的 onSelectNode 可能外抛边 id（GraphCanvas 边点击
- * 透传）——非 trace 节点 id 按无选择处理，不回调、不误选。弹框由
- * Task 5/6 注入渲染，本容器不持有。
+ * 画布选中，并作视口定位目标（RunGraphCanvas focusNodeId 居中；值只随
+ * run/trace 变化——选中与弹框开关不回拉视口，spec §3 关闭后恢复原视
+ * 口）。快照缺失/损坏时锁定步骤视图并显示降级提示（摘要不丢，判据
+ * 单源 run-graph-canvas isSnapshotRenderable）；RunGraphCanvas 的
+ * onSelectNode 可能外抛边 id（GraphCanvas 边点击透传）——非 trace
+ * 节点 id 按无选择处理，不回调、不误选。弹框由 Task 5/6 注入渲染，
+ * 本容器不持有。
  */
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,7 +21,10 @@ import { useTranslation } from "react-i18next";
 import type { AutomationRunDetail } from "@tianshu/protocol";
 import { Button } from "@/components/ui/button";
 import type { TraceEntry } from "@/domains/ai/orchestration/components/GraphRunTraceView";
-import RunGraphCanvas, { firstFailedNodeId } from "./run-graph-canvas";
+import RunGraphCanvas, {
+  firstFailedNodeId,
+  isSnapshotRenderable,
+} from "./run-graph-canvas";
 import { RunStatusBadge } from "./RunSelector";
 import RunStepLog from "./run-step-log";
 import {
@@ -29,23 +35,6 @@ import {
 } from "../lib/run-display";
 
 type DetailView = "topology" | "steps";
-
-/** 快照可渲染判定（与 RunGraphCanvas 降级口径一致：有 nodes/edges
- * 数组才算合法拓扑，损坏 JSON/结构非法均走降级） */
-function isSnapshotRenderable(raw: string | null | undefined): boolean {
-  if (!raw) return false;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    return (
-      !!parsed &&
-      typeof parsed === "object" &&
-      Array.isArray((parsed as { nodes?: unknown }).nodes) &&
-      Array.isArray((parsed as { edges?: unknown }).edges)
-    );
-  } catch {
-    return false;
-  }
-}
 
 /** 画布选中节点 id：显式 occurrence 优先（越界/缺席回 null，不作失败
  * 回退）；未选择且运行失败时定位首个失败节点，其余 null */
@@ -114,6 +103,12 @@ export default function GraphRunDetail({
     [run.id],
   );
   const selectedNodeId = canvasNodeId(trace, selectedOccurrence, run.status);
+  // 视口定位目标：仅随 run 状态/trace 变化（值稳定——选中/弹框开关不
+  // 触发再次居中，关闭弹框后恢复原视口）；失败运行定位首个失败节点
+  const focusNodeId = useMemo(
+    () => (run.status === "failed" ? firstFailedNodeId(trace) : null),
+    [run.status, trace],
+  );
   // 边 id/null 等非 trace 节点 id：按无选择处理（不回调，父层选中态
   // 原样保留——接口无清空语义，避免误发 occurrence）
   const handleSelectNode = useCallback(
@@ -192,6 +187,7 @@ export default function GraphRunDetail({
             graphJson={run.graphJsonSnapshot}
             trace={trace}
             selectedNodeId={selectedNodeId}
+            focusNodeId={focusNodeId}
             onSelectNode={handleSelectNode}
           />
         ) : (

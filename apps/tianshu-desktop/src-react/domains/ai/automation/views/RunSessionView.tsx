@@ -18,11 +18,10 @@ import {
   sessionSettingsPath,
   useSessionPaneData,
 } from "../../chat/hooks/use-session-pane-data";
-import GraphRunTraceView, {
-  parseTrace,
-} from "../../orchestration/components/GraphRunTraceView";
+import { parseTrace } from "../../orchestration/components/GraphRunTraceView";
 import { AutomationApi } from "../api/automation.api";
 import { localizeRunError } from "../lib/run-display";
+import { getRunDraft, setRunDraft } from "../lib/run-draft-store";
 import { runSessionPath } from "../lib/run-session-route";
 import {
   queryRunPage,
@@ -30,6 +29,8 @@ import {
   RunStatusBadge,
 } from "../components/RunSelector";
 import RunBoard from "../components/run-board";
+import GraphRunDetail from "../components/graph-run-detail";
+import NodeRunDialog from "../components/node-run-dialog";
 import RunWorkspaceDialog from "../components/RunWorkspaceDialog";
 import { useHostStore } from "../../data-source/host.store";
 
@@ -144,6 +145,16 @@ function RunConversation({ run }: { run: AutomationRunDetail }) {
     fallBackToFirstWorkspace: false,
   });
   const trace = useMemo(() => parseTrace(run.graphTrace), [run.graphTrace]);
+  // 节点弹框选中态（occurrence = trace 下标）由本容器持有：双视图点击
+  // 与弹框导航共用同一份（spec §2/§3）。RunConversation 按 run.id keyed
+  // 重挂载，切运行自然清空
+  const [selectedOccurrence, setSelectedOccurrence] = useState<number | null>(
+    null,
+  );
+  // 按次草稿（spec §2 设计者裁定）：挂载时捕获本 run 既有草稿回灌
+  // ChatPane（initialDraft 仅作 ChatInput 初值）；卸载（切运行）经
+  // onDraftUnmount 回写本 run——绝不携带到另一运行
+  const initialDraft = useMemo(() => getRunDraft(run.id), [run.id]);
 
   const resolveSession = useCallback(
     async (workspaceId?: number): Promise<SessionRecord> => {
@@ -209,13 +220,22 @@ function RunConversation({ run }: { run: AutomationRunDetail }) {
       onOpenSettings={openSettings}
       sessionResolver={sessionResolver}
       onSessionResolved={handleSessionResolved}
+      initialDraft={initialDraft}
+      onDraftUnmount={(draft) => setRunDraft(run.id, draft)}
     />
   ) : null;
   const isGraph = run.graphId !== undefined;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {isGraph && <GraphRunResult run={run} trace={trace} />}
+      {isGraph && (
+        <GraphRunDetail
+          run={run}
+          trace={trace}
+          selectedOccurrence={selectedOccurrence}
+          onSelectOccurrence={setSelectedOccurrence}
+        />
+      )}
       {!canFollowUp && <TerminalRunStatus run={run} />}
       {canFollowUp && !isGraph && !session && run.error && (
         <p className="border-b border-border/50 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -223,6 +243,15 @@ function RunConversation({ run }: { run: AutomationRunDetail }) {
         </p>
       )}
       {chatPane}
+      {isGraph && (
+        <NodeRunDialog
+          run={run}
+          trace={trace}
+          occurrence={selectedOccurrence}
+          onClose={() => setSelectedOccurrence(null)}
+          onNavigate={setSelectedOccurrence}
+        />
+      )}
       <RunWorkspaceDialog
         open={workspaceDialogOpen}
         workspaces={workspaces}
@@ -276,35 +305,6 @@ async function invalidateRunSessionQueries(
       queryKey: ["automation", "runSessionRuns"],
     }),
   ]);
-}
-
-function GraphRunResult({
-  run,
-  trace,
-}: {
-  run: AutomationRunDetail;
-  trace: ReturnType<typeof parseTrace>;
-}) {
-  const { t } = useTranslation(["chat"]);
-  const finalOutput = trace
-    .slice()
-    .reverse()
-    .find((entry) => entry.outputPreview)?.outputPreview;
-  return (
-    <section className="max-h-[55%] shrink-0 overflow-y-auto border-b border-border/50 px-4 py-3">
-      <details open className="mb-3 rounded-lg border border-border/50 p-3">
-        <summary className="cursor-pointer text-sm font-medium">
-          {t("chat:runSession.resultSummary")}
-        </summary>
-        {(run.error || finalOutput) && (
-          <pre className="mt-2 whitespace-pre-wrap break-all font-mono text-xs text-foreground">
-            {localizeRunError(run.error, t) || finalOutput}
-          </pre>
-        )}
-      </details>
-      <GraphRunTraceView trace={trace} runId={run.id} />
-    </section>
-  );
 }
 
 function TerminalRunStatus({ run }: { run: AutomationRunDetail }) {

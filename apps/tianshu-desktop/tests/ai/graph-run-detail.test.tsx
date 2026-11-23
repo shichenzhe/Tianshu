@@ -9,7 +9,8 @@
  *   （error 优先 + localizeRunError，原 GraphRunResult 迁移）仍可见；
  * - 步骤日志：同节点多次 occurrence 各自成行（失败 error.code 预览），
  *   点击整行回调 occurrence 下标；视图切换不丢 selectedOccurrence；
- * - 失败运行未选择时以 firstFailedNodeId 作画布选中，显式选择优先；
+ * - 失败运行未选择时以 firstFailedNodeId 作画布选中与视口定位目标
+ *   （focusNodeId 值稳定：不随选中/弹框开关变化，Task 4 carry-over i）；
  * - 画布 onSelectNode 可能外抛边 id（Task 3 review note）：非 trace
  *   节点 id 按无选择处理——不回调、不崩溃、不误高亮；拓扑节点点击
  *   取该节点末次 occurrence（设计者裁定 2026-11-23）。
@@ -318,20 +319,22 @@ describe("GraphRunDetail 视图切换", () => {
 });
 
 describe("GraphRunDetail 失败定位", () => {
-  it("failed 且未选择：firstFailedNodeId 作画布选中", () => {
+  it("failed 且未选择：firstFailedNodeId 作画布选中与视口定位目标", () => {
     renderDetail({
       run: makeRun({ status: "failed" }),
       trace: failedTrace,
     });
     expect(latestCanvasProps().selectedNodeId).toBe("llm");
+    expect(latestCanvasProps().focusNodeId).toBe("llm");
   });
 
-  it("非失败或已显式选择：不作失败回退", () => {
+  it("非失败或已显式选择：不作失败回退；定位目标不随选中变化（关弹框不回拉视口）", () => {
     const { rerender, trace, onSelectOccurrence } = renderDetail({
       run: makeRun({ status: "failed" }),
       trace: failedTrace,
     });
     expect(latestCanvasProps().selectedNodeId).toBe("llm");
+    expect(latestCanvasProps().focusNodeId).toBe("llm");
     rerender(
       <GraphRunDetail
         run={makeRun({ status: "failed" })}
@@ -341,6 +344,7 @@ describe("GraphRunDetail 失败定位", () => {
       />,
     );
     expect(latestCanvasProps().selectedNodeId).toBe("start");
+    expect(latestCanvasProps().focusNodeId).toBe("llm");
     rerender(
       <GraphRunDetail
         run={makeRun({ status: "success" })}
@@ -350,6 +354,7 @@ describe("GraphRunDetail 失败定位", () => {
       />,
     );
     expect(latestCanvasProps().selectedNodeId).toBeNull();
+    expect(latestCanvasProps().focusNodeId).toBeNull();
   });
 });
 
@@ -403,16 +408,17 @@ describe("GraphRunDetail 快照降级", () => {
 });
 
 describe("画布非节点 id 容错（Task 3 review note）", () => {
-  it("边形 id/null：不崩溃、不回调、不误选；节点 id 取末次 occurrence", () => {
+  it("真实边形 id（from->to:label）/null：不崩溃、不回调、不误选；节点 id 取末次 occurrence", () => {
     const { onSelectOccurrence } = renderDetail({ trace: multiTrace });
     expect(latestCanvasProps().selectedNodeId).toBeNull();
     const onSelectNode = latestCanvasProps().onSelectNode as (
       id: string | null,
     ) => void;
 
+    // 真实边 id 形如 "start->llm:"（toCanvas `${from}->${to}:${label}`）
     expect(() =>
       act(() => {
-        onSelectNode("edge-start-llm");
+        onSelectNode("start->llm:");
       }),
     ).not.toThrow();
     expect(() =>

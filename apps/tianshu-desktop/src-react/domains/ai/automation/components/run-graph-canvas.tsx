@@ -7,9 +7,12 @@
  * 叠加为状态描边与耗时徽标。快照缺失/损坏渲染轻量降级提示（步骤日志
  * 视图仍可用，视图锁定由 Task 4 容器负责）——跨端缺失编码不同
  * （desktop 省略/null、server 显式 null、键可能缺席），一律按
- * falsy 同判为「无快照」。深交互手势不做 jsdom 深测（spec §7）。
+ * falsy 同判为「无快照」。focusNodeId 透传 GraphCanvas 定位 effect
+ * 居中（失败运行首个失败节点），定位回声 onSelect 被吸收不外抛
+ * （运行态选中语义是「用户点击 → 弹框」，程序定位不得冒充点击）。
+ * 深交互手势不做 jsdom 深测（spec §7）。
  */
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import GraphCanvas from "@/domains/ai/orchestration/components/GraphCanvas";
@@ -70,6 +73,11 @@ function parseSnapshot(raw: string | null | undefined): GraphJson | null {
   }
 }
 
+/** 快照可渲染判定（与降级口径单源）：Task 4 容器的视图锁定复用本判据 */
+export function isSnapshotRenderable(raw: string | null | undefined): boolean {
+  return parseSnapshot(raw) !== null;
+}
+
 /** 编辑回调占位：readOnly 下 GraphCanvas 不外抛，仅满足必填 props */
 const noop = () => {};
 
@@ -79,6 +87,7 @@ export default function RunGraphCanvas({
   graphJson,
   trace,
   selectedNodeId,
+  focusNodeId,
   onSelectNode,
 }: {
   /** 执行时快照（AutomationRunDetail.graphJsonSnapshot）；跨端缺失
@@ -86,12 +95,43 @@ export default function RunGraphCanvas({
   graphJson: string | null | undefined;
   trace: TraceEntry[];
   selectedNodeId: string | null;
+  /** 视口定位目标（失败运行首个失败节点）：GraphCanvas 定位 effect
+   *  setCenter 居中 + 顺带 onSelect(focusNodeId)（编辑器错误定位先例）。
+   *  运行态 onSelectNode 的语义是「用户点击 → 打开节点弹框」，定位
+   *  回声不得冒充点击（失败运行不得自动弹框，spec §2 弹框由点击打开） */
+  focusNodeId?: string | null;
   onSelectNode: (id: string | null) => void;
 }) {
   const { t } = useTranslation(["chat"]);
   const graph = useMemo(() => parseSnapshot(graphJson), [graphJson]);
   const states = useMemo(() => nodeRunStates(trace), [trace]);
   const layouts = useMemo(() => (graph ? layoutOf(graph) : {}), [graph]);
+
+  // 定位回声吸收：focusNodeId 每次变化后的首枚同 id onSelect 视为回声
+  // 吞掉（用户随后点击同节点仍正常外抛）；卸载清理时按当前定位目标
+  // 重新武装——StrictMode 双挂载下第二轮 effect 回声同样被吞
+  const echoRef = useRef<{ id: string | null; live: boolean }>({
+    id: null,
+    live: false,
+  });
+  if (echoRef.current.id !== focusNodeId) {
+    echoRef.current = { id: focusNodeId ?? null, live: focusNodeId != null };
+  }
+  useEffect(() => {
+    return () => {
+      echoRef.current.live = echoRef.current.id != null;
+    };
+  }, []);
+  const handleCanvasSelect = useCallback(
+    (id: string | null) => {
+      if (echoRef.current.live && id === echoRef.current.id) {
+        echoRef.current.live = false;
+        return;
+      }
+      onSelectNode(id);
+    },
+    [onSelectNode],
+  );
 
   if (!graph) {
     return (
@@ -105,7 +145,8 @@ export default function RunGraphCanvas({
       graph={graph}
       layouts={layouts}
       selectedId={selectedNodeId}
-      onSelect={onSelectNode}
+      onSelect={handleCanvasSelect}
+      focusNodeId={focusNodeId}
       readOnly
       nodeStates={states}
       onMove={noop}

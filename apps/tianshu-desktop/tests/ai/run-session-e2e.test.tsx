@@ -31,6 +31,7 @@ const db = vi.hoisted(() => ({
     findUnique: vi.fn(),
     findMany: vi.fn(),
     groupBy: vi.fn(),
+    count: vi.fn(),
     deleteMany: vi.fn(),
   },
   session: {
@@ -88,15 +89,25 @@ vi.mock("react-i18next", async (importOriginal) => {
   };
 });
 vi.mock("@/i18n", () => ({ default: { t: (key: string) => key } }));
+// 渲染面 IPC 假体：看板分页查询路由到真实 AutomationRepository.listRuns
+// （db 内存替身）——运行链仍是真实 runner/service
+const ipcBridge = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/ipc", () => ({
+  invoke: (channel: string, ...args: unknown[]) => ipcBridge(channel, ...args),
+  on: () => () => {},
+  send: () => {},
+}));
 
 import { executeTask } from "../../electron/domains/ai/automation/automation-runner";
 import { RunSessionService } from "../../electron/domains/ai/automation/run-session.service";
+import AutomationRepository from "../../electron/domains/ai/automation/automation.repo";
 import {
   DEFAULT_RUN_RETENTION,
   trimAutomationRuns,
   type RetentionDb,
 } from "../../electron/domains/ai/automation/automation-retention";
 import RunSessionGroup from "../../src-react/domains/ai/layout/components/run-session-group";
+import RunBoard from "../../src-react/domains/ai/automation/components/run-board";
 import { excludeRunSessions } from "../../src-react/domains/ai/automation/lib/run-group-view";
 import type { SessionRecord } from "../../src-react/domains/ai/api/session.api";
 import type { SessionRepository } from "../../electron/domains/ai/chat/session.repo";
@@ -321,8 +332,21 @@ function configureRunDatabase(state: WorldState) {
     async ({ where }) =>
       state.runs.find((run) => matchesRun(run, where)) ?? null,
   );
-  db.automationRun.findMany.mockImplementation(async ({ where }) =>
-    state.runs.filter((run) => matchesRun(run, where)),
+  db.automationRun.findMany.mockImplementation(
+    async ({ where, orderBy, skip, take }) => {
+      const matched = state.runs.filter((run) => matchesRun(run, where));
+      if (
+        (orderBy as { startedAt?: string } | undefined)?.startedAt === "desc"
+      ) {
+        matched.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+      }
+      const start = skip ?? 0;
+      return take !== undefined ? matched.slice(start, start + take) : matched;
+    },
+  );
+  db.automationRun.count.mockImplementation(
+    async ({ where }) =>
+      state.runs.filter((run) => matchesRun(run, where)).length,
   );
   db.automationRun.groupBy.mockImplementation(async ({ by, where }) => {
     const key = by[0] as "taskId" | "graphId";
@@ -518,6 +542,40 @@ describe("run/session acceptance chain", () => {
     expect(JSON.stringify(world.state.runnerInputs[3].history)).not.toContain(
       FOLLOW_UP,
     );
+  });
+
+  it("三次运行后看板出现三条目且当前项高亮（真实分页查询链）", async () => {
+    const world = createWorld();
+    await world.run();
+    await world.run();
+    await world.run();
+
+    const repo = new AutomationRepository();
+    ipcBridge.mockImplementation((channel: string, ...args: unknown[]) => {
+      if (channel === "automation:runs:page") {
+        return repo.listRuns(
+          args[0] as number,
+          args[1] as number | undefined,
+          undefined,
+          USER_ID,
+        );
+      }
+      return [];
+    });
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <RunBoard
+          owner={{ kind: "task", ownerId: task.id }}
+          selectedRunId={3}
+          onSelect={() => {}}
+        />
+      </QueryClientProvider>,
+    );
+
+    const current = await screen.findByTestId("run-board-item-3");
+    expect(current.getAttribute("aria-current")).toBe("true");
+    expect(screen.getByTestId("run-board-item-2")).toBeTruthy();
+    expect(screen.getByTestId("run-board-item-1")).toBeTruthy();
   });
 
   it("retention 删除运行后保留追问消息，并将伴随会话转回普通会话", async () => {

@@ -376,7 +376,10 @@ export default function NodeRunDialog({
     >
       <DialogContent
         aria-describedby={undefined}
-        className="flex max-h-[85vh] max-w-3xl flex-col gap-0 overflow-hidden border border-border/50 rounded-lg p-0 shadow-lg"
+        // 固定高度（检查器主流形态，VS Code/n8n 先例）：高度随 Tab 内容
+        // 伸缩时居中弹框上下跳变；固定外框 + 内容区内部滚动，Tab 栏与
+        // 底部导航位置稳定
+        className="flex h-[75vh] max-w-3xl flex-col gap-0 overflow-hidden border border-border/50 rounded-lg p-0 shadow-lg"
       >
         <DialogHeader className="border-b border-border/50 px-6 py-4">
           <DialogTitle className="truncate pr-8 text-base">

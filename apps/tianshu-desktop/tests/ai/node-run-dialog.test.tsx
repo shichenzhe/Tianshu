@@ -150,6 +150,15 @@ describe("NodeRunDialog 节点详情弹框", () => {
   });
   afterEach(() => cleanup());
 
+  it("弹框外框固定高度（切 Tab 高度跳变回归守卫）：检查器类弹框主流形态——外框稳定、内容区内部滚动", () => {
+    // 曾只有 max-h-[85vh]：高度随当前 Tab 内容伸缩，切换时居中弹框上下
+    // 跳变（"晃"）。守卫固定 h-[75vh]——tab 栏/底部导航位置稳定
+    mount([entry()], 0);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.className).toContain("h-[75vh]");
+    expect(dialog.className).not.toContain("max-h-[85vh]");
+  });
+
   it("failed 节点默认定位错误 Tab；摘要 Tab 含状态/时间/耗时/tokens", async () => {
     mount(
       [

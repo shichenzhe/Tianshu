@@ -5,8 +5,12 @@
  * failed 默认定位错误页）；全文优先 graphRunNode 完整 input/output——行按
  * runId+nodeId 唯一，仅该节点末次 occurrence 有匹配行，较早 occurrence
  * 回落 trace 预览并显示 occurrence 提示，不冒充末次全文（设计者裁定
- * 2026-11-23）；逐区块复制走 W3C 剪贴板 + sonner toast；底部上一节点/
- * 下一节点/下一失败节点按 trace 顺序导航。节点行查询复用
+ * 2026-11-23）；逐区块复制走 W3C 剪贴板 + sonner toast（失败 toast.error
+ * common:copyFailed，不留未处理拒绝）；降级注记（fix round 1）——
+ * fallback/notifySkipped 摘要页标注（fallback 兼开放错误页展示吞错的
+ * code/message），errorOutput 死信块进输出页且并入复制文本，键全复用
+ * orchestration.trace 既有文案；底部上一节点/下一节点/下一失败节点按
+ * trace 顺序导航。节点行查询复用
  * GraphRunTraceView 同款 queryKey（同 run 缓存共享）。受控组件：
  * occurrence === null 不渲染，onClose/onNavigate 回写父层 occurrence 态
  * （Task 6 由 RunSessionView 集成）。
@@ -81,13 +85,17 @@ function nextFailedIndex(trace: TraceEntry[], from: number): number | null {
   return null;
 }
 
-/** 复制按钮（逐区块）：写 W3C 剪贴板 + toast；写失败由浏览器剪贴板
- * 权限兜底，不阻断浏览 */
+/** 复制按钮（逐区块）：写 W3C 剪贴板，成功/失败各自 toast（失败键复用
+ * common:copyFailed，先例 use-copy-text.ts），拒绝被捕获不留未处理承诺 */
 function CopyButton({ text }: { text: string }) {
-  const { t } = useTranslation(["chat"]);
-  const copy = () => {
-    void navigator.clipboard.writeText(text);
-    toast.success(t("chat:runSession.node.copySuccess"));
+  const { t } = useTranslation(["chat", "common"]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(t("chat:runSession.node.copySuccess"));
+    } catch {
+      toast.error(t("common:copyFailed"));
+    }
   };
   return (
     <Button
@@ -102,6 +110,15 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+/** 等宽全文 pre（无复制按钮——复制由所在页/区块统一持有） */
+function PreBlock({ text }: { text: string }) {
+  return (
+    <pre className="whitespace-pre-wrap break-all rounded-md bg-muted/40 p-3 font-mono text-xs text-foreground">
+      {text}
+    </pre>
+  );
+}
+
 /** 全文区块：右上一枚复制按钮 + 等宽全文（弹框内容区独立滚动） */
 function TextBlock({ text }: { text: string }) {
   return (
@@ -109,39 +126,97 @@ function TextBlock({ text }: { text: string }) {
       <div className="flex justify-end">
         <CopyButton text={text} />
       </div>
-      <pre className="whitespace-pre-wrap break-all rounded-md bg-muted/40 p-3 font-mono text-xs text-foreground">
+      <PreBlock text={text} />
+    </div>
+  );
+}
+
+/** 降级继续标注（llm onError=defaultValue 吞错续跑）：摘要页与错误页
+ * 共用（样式/文案对齐 GraphRunTraceView 既有呈现） */
+function FallbackBlock({
+  fallback,
+}: {
+  fallback: NonNullable<TraceEntry["fallback"]>;
+}) {
+  const { t } = useTranslation(["chat"]);
+  return (
+    <div className="flex flex-col gap-0.5 rounded-md bg-muted/60 p-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        {t("chat:orchestration.trace.fallback")}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {fallback.code}: {fallback.message}
+      </p>
+    </div>
+  );
+}
+
+/** notify 未送达标注（no_channel 无通道 / send_failed 发送失败） */
+function NotifySkippedBlock({ reason }: { reason: string }) {
+  const { t } = useTranslation(["chat"]);
+  return (
+    <div className="flex flex-col gap-0.5 rounded-md bg-muted/60 p-1.5">
+      <p className="text-xs font-medium text-muted-foreground">
+        {t("chat:orchestration.trace.notifySkipped")}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {reason === "no_channel"
+          ? t("chat:orchestration.trace.notifySkippedNoChannel")
+          : t("chat:orchestration.trace.notifySkippedSendFailed")}
+      </p>
+    </div>
+  );
+}
+
+/** 循环死信块（onItemError=continue 的失败项清单，破坏色） */
+function DeadLetterBlock({ text }: { text: string }) {
+  const { t } = useTranslation(["chat"]);
+  return (
+    <div className="flex flex-col gap-1 rounded-md bg-destructive/5 p-1.5">
+      <p className="text-xs font-medium text-destructive">
+        {t("chat:orchestration.trace.deadLetter")}
+      </p>
+      <pre className="whitespace-pre-wrap break-all font-mono text-xs text-destructive/80">
         {text}
       </pre>
     </div>
   );
 }
 
-/** 摘要页：状态徽标 + 开始时间 + 耗时 + tokens（有则显示） */
+/** 摘要页：状态徽标 + 开始时间 + 耗时 + tokens（有则显示）；降级注记
+ * （fallback/notifySkipped）追加标注——成功节点也可能带降级信息 */
 function SummaryPanel({ entry }: { entry: TraceEntry }) {
   const { t } = useTranslation(["chat"]);
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <RunStatusBadge status={entry.status} />
-      <span className="text-sm text-muted-foreground">
-        {formatDateTime(entry.startedAt)}
-      </span>
-      <span className="text-sm text-muted-foreground">
-        {formatDuration(entry.durationMs)}
-      </span>
-      {entry.tokens && (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <RunStatusBadge status={entry.status} />
         <span className="text-sm text-muted-foreground">
-          {t("chat:automation.runs.tokens", {
-            in: entry.tokens.promptTokens,
-            out: entry.tokens.completionTokens,
-          })}
+          {formatDateTime(entry.startedAt)}
         </span>
+        <span className="text-sm text-muted-foreground">
+          {formatDuration(entry.durationMs)}
+        </span>
+        {entry.tokens && (
+          <span className="text-sm text-muted-foreground">
+            {t("chat:automation.runs.tokens", {
+              in: entry.tokens.promptTokens,
+              out: entry.tokens.completionTokens,
+            })}
+          </span>
+        )}
+      </div>
+      {entry.fallback && <FallbackBlock fallback={entry.fallback} />}
+      {entry.notifySkipped && (
+        <NotifySkippedBlock reason={entry.notifySkipped} />
       )}
     </div>
   );
 }
 
 /** 输出页：图片产物走 MessageImage（替代路径文本），否则全文优先、
- * 无节点行回落 outputPreview */
+ * 无节点行回落 outputPreview；循环死信（errorOutput）破坏色追加块，
+ * 并入本页复制文本（fix round 1） */
 function OutputPanel({
   entry,
   fullOutput,
@@ -149,11 +224,23 @@ function OutputPanel({
   entry: TraceEntry;
   fullOutput?: string | null;
 }) {
-  if (entry.outputImage) {
-    return <MessageImage imagePath={entry.outputImage} />;
-  }
   const text = fullOutput ?? entry.outputPreview;
-  return text ? <TextBlock text={text} /> : null;
+  const copyText = [text, entry.errorOutput].filter(Boolean).join("\n\n");
+  return (
+    <div className="flex flex-col gap-3">
+      {copyText && (
+        <div className="flex justify-end">
+          <CopyButton text={copyText} />
+        </div>
+      )}
+      {entry.outputImage ? (
+        <MessageImage imagePath={entry.outputImage} />
+      ) : (
+        text && <PreBlock text={text} />
+      )}
+      {entry.errorOutput && <DeadLetterBlock text={entry.errorOutput} />}
+    </div>
+  );
 }
 
 /** 工具页：name + 耗时，ok=false 标红 */
@@ -174,24 +261,48 @@ function ToolsPanel({ toolCalls }: { toolCalls: TraceEntry["toolCalls"] }) {
   );
 }
 
-/** 错误页：code（+toolName）/message/detail（完整失败全貌）+ 复制 */
-function ErrorPanel({ error }: { error: NonNullable<TraceEntry["error"]> }) {
-  const heading = `${error.code}${error.toolName ? ` · ${error.toolName}` : ""}`;
-  const copyText = [heading, error.message, error.detail]
-    .filter(Boolean)
-    .join("\n");
+/** 错误页：failed 错误全貌（code+toolName/message/detail）；llm 节点
+ * fallback 吞错续跑的降级错误也在此可见（success+fallback 时开放本页，
+ * fix round 1）；复制文本合并所展示的全部错误来源 */
+function ErrorPanel({
+  error,
+  fallback,
+}: {
+  error?: TraceEntry["error"];
+  fallback?: TraceEntry["fallback"];
+}) {
+  const heading = error
+    ? `${error.code}${error.toolName ? ` · ${error.toolName}` : ""}`
+    : "";
+  const copyParts: string[] = [];
+  if (error) {
+    copyParts.push(
+      [heading, error.message, error.detail].filter(Boolean).join("\n"),
+    );
+  }
+  if (fallback) {
+    copyParts.push(`${fallback.code}: ${fallback.message}`);
+  }
+  const copyText = copyParts.join("\n\n");
   return (
-    <div className="flex flex-col gap-2 rounded-md bg-destructive/5 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-medium text-destructive">{heading}</p>
-        <CopyButton text={copyText} />
-      </div>
-      <p className="text-sm text-destructive/80">{error.message}</p>
-      {error.detail && (
-        <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-background/60 p-2 font-mono text-xs text-foreground/80">
-          {error.detail}
-        </pre>
+    <div className="flex flex-col gap-3">
+      {copyText && (
+        <div className="flex justify-end">
+          <CopyButton text={copyText} />
+        </div>
       )}
+      {error && (
+        <div className="flex flex-col gap-2 rounded-md bg-destructive/5 p-3">
+          <p className="text-sm font-medium text-destructive">{heading}</p>
+          <p className="text-sm text-destructive/80">{error.message}</p>
+          {error.detail && (
+            <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-background/60 p-2 font-mono text-xs text-foreground/80">
+              {error.detail}
+            </pre>
+          )}
+        </div>
+      )}
+      {fallback && <FallbackBlock fallback={fallback} />}
     </div>
   );
 }
@@ -232,9 +343,13 @@ export default function NodeRunDialog({
     input: !!full?.input,
     output:
       !!entry &&
-      (!!entry.outputImage || !!full?.output || !!entry.outputPreview),
+      (!!entry.outputImage ||
+        !!full?.output ||
+        !!entry.outputPreview ||
+        !!entry.errorOutput),
     tools: !!entry?.toolCalls?.length,
-    error: hasError,
+    // fallback 吞错也开放错误页（降级错误可查，默认页仍只随 failed 定位）
+    error: hasError || !!entry?.fallback,
   };
   const defaultTab: NodeTab = hasError ? "error" : "summary";
   // Tab 态按 occurrence 分组（渲染期重置，graph-run-detail viewState 先例）：
@@ -313,8 +428,8 @@ export default function NodeRunDialog({
           {tabState.tab === "tools" && (
             <ToolsPanel toolCalls={entry.toolCalls} />
           )}
-          {tabState.tab === "error" && entry.error && (
-            <ErrorPanel error={entry.error} />
+          {tabState.tab === "error" && (entry.error || entry.fallback) && (
+            <ErrorPanel error={entry.error} fallback={entry.fallback} />
           )}
         </div>
         <DialogFooter className="items-center border-t border-border/50 px-6 py-3 sm:justify-between">

@@ -7,6 +7,9 @@
  * - 非末次 occurrence 回落 outputPreview + occurrence 提示，不冒充全文
  * - outputImage → MessageImage；工具 Tab 列 toolCalls（ok=false 标红）
  * - 底部上一/下一/下一失败节点导航与边界禁用；occurrence=null 不渲染
+ * - 降级注记（fix round 1）：fallback/notifySkipped 摘要页标注（fallback
+ *   兼开放错误页）、errorOutput 死信块进输出页且并入复制文本、字段缺省
+ *   不渲染；复制失败走 toast.error(common:copyFailed) 无成功 toast
  * mock 骨架先例 tests/ai/run-history-panel.test.tsx（@/lib/ipc、@/i18n、
  * react-i18next）；GraphApi.runNodes 与 MessageImage 模块边界 mock。
  */
@@ -134,8 +137,10 @@ describe("NodeRunDialog 节点详情弹框", () => {
     runNodesMock.mockResolvedValue([]);
     navigateMock.mockClear();
     closeMock.mockClear();
-    writeTextMock.mockClear();
+    writeTextMock.mockReset();
+    writeTextMock.mockResolvedValue(undefined);
     vi.mocked(toast.success).mockClear();
+    vi.mocked(toast.error).mockClear();
     // W3C 剪贴板假体（jsdom 无 navigator.clipboard，先例
     // tests/app-settings/memory-dialogs.test.tsx）
     Object.defineProperty(navigator, "clipboard", {
@@ -293,6 +298,84 @@ describe("NodeRunDialog 节点详情弹框", () => {
     mount([entry()], null);
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(runNodesMock).not.toHaveBeenCalled();
+  });
+
+  it("降级注记：fallback 在摘要页标注并开放错误页展示 code/message", () => {
+    mount(
+      [
+        entry({
+          fallback: { code: "E_LLM", message: "swallowed, using default" },
+        }),
+      ],
+      0,
+    );
+    // success 默认摘要页：降级标注可见
+    expect(screen.getByText("chat:orchestration.trace.fallback")).toBeTruthy();
+    expect(screen.getByText("E_LLM: swallowed, using default")).toBeTruthy();
+    // fallback 同时开放错误页（吞错的降级错误在此可查）
+    const errorTab = tab("chat:runSession.node.tabs.error");
+    expect(errorTab.disabled).toBe(false);
+    fireEvent.click(errorTab);
+    expect(screen.getByText("E_LLM: swallowed, using default")).toBeTruthy();
+  });
+
+  it("降级注记：errorOutput 死信块进输出页且并入复制文本", async () => {
+    mount(
+      [
+        entry({
+          outputPreview: "preview-text",
+          errorOutput: "item-2 failed: boom",
+        }),
+      ],
+      0,
+    );
+    fireEvent.click(tab("chat:runSession.node.tabs.output"));
+    expect(
+      screen.getByText("chat:orchestration.trace.deadLetter"),
+    ).toBeTruthy();
+    expect(screen.getByText("item-2 failed: boom")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:runSession.node.copy" }),
+    );
+    await waitFor(() =>
+      expect(writeTextMock).toHaveBeenCalledWith(
+        "preview-text\n\nitem-2 failed: boom",
+      ),
+    );
+  });
+
+  it("降级注记：notifySkipped no_channel 显示未送达标注", () => {
+    mount([entry({ notifySkipped: "no_channel" })], 0);
+    expect(
+      screen.getByText("chat:orchestration.trace.notifySkipped"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText("chat:orchestration.trace.notifySkippedNoChannel"),
+    ).toBeTruthy();
+  });
+
+  it("降级注记：字段缺省不渲染任何标注", () => {
+    mount([entry()], 0);
+    expect(screen.queryByText("chat:orchestration.trace.fallback")).toBeNull();
+    expect(
+      screen.queryByText("chat:orchestration.trace.deadLetter"),
+    ).toBeNull();
+    expect(
+      screen.queryByText("chat:orchestration.trace.notifySkipped"),
+    ).toBeNull();
+  });
+
+  it("复制失败：writeText 拒绝 → 错误 toast、无成功 toast", async () => {
+    writeTextMock.mockRejectedValueOnce(new Error("denied"));
+    mount([entry({ outputPreview: "preview-text" })], 0);
+    fireEvent.click(tab("chat:runSession.node.tabs.output"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "chat:runSession.node.copy" }),
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("common:copyFailed"),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });
 

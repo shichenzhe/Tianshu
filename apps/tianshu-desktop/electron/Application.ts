@@ -350,7 +350,7 @@ export default class Application {
         return {
           exemptDomains: buildExemptDomains(
             providerDomains,
-            Constants.UPGRADE_URL,
+            Constants.UPGRADE_HOSTS,
           ),
           domainAllow: config.domainAllow,
           domainDeny: config.domainDeny,

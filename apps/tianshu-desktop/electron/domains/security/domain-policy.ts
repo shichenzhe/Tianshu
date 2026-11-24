@@ -89,13 +89,13 @@ export function judgeDomain(
   return { ok: true };
 }
 
-/** 豁免域集合：loopback + provider baseUrl 域 + 升级域（空串忽略） */
+/** 豁免域集合：loopback + provider baseUrl 域 + 升级域列表（元素可为主机名或 URL，空项忽略） */
 export function buildExemptDomains(
   providerBaseUrls: string[],
-  upgradeUrl: string,
+  upgradeHosts: string[],
 ): string[] {
   const out = new Set<string>(LOOPBACK_DOMAINS);
-  for (const raw of [...providerBaseUrls, upgradeUrl]) {
+  for (const raw of [...providerBaseUrls, ...upgradeHosts]) {
     const host = hostFromUrl(raw);
     const norm = host ? normalizeDomain(host) : normalizeDomain(raw);
     if (norm) out.add(norm);

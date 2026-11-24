@@ -121,14 +121,15 @@ describe("judgeDomain 判定序", () => {
 });
 
 describe("buildExemptDomains", () => {
-  it("provider 域归一化 + loopback + 升级域；空升级域忽略", () => {
+  it("provider 域归一化 + loopback + 升级域主机名列表；空列表忽略", () => {
     const out = buildExemptDomains(
       ["https://Api.OpenAI.com/v1", "http://localhost:11434"],
-      "https://update.example.com/feed",
+      ["update.example.com", "https://gh-proxy.example.com/prefix"],
     );
     expect(out).toContain("api.openai.com");
     expect(out).toContain(LOOPBACK_DOMAINS[0]);
     expect(out).toContain("update.example.com");
-    expect(buildExemptDomains([], "")).toEqual(LOOPBACK_DOMAINS);
+    expect(out).toContain("gh-proxy.example.com");
+    expect(buildExemptDomains([], [])).toEqual(LOOPBACK_DOMAINS);
   });
 });

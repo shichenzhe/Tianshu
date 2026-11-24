@@ -27,9 +27,12 @@
   （需另行引入 token 方案）。
 - 匿名 GitHub API 限流 60 次/时/IP：频繁手动检查更新可能触发限流，
   走"更新错误"路径，属预期降级。
-- 网络安全门豁免域已含更新流量三域（`Constants.UPGRADE_HOSTS`：
-  `api.github.com` / `github.com` / `objects.githubusercontent.com`），
-  沙箱开启时不影响更新下载。
+- 网络安全门豁免域已含更新流量域（`Constants.UPGRADE_HOSTS`：清单 API
+  `api.github.com`、下载页 `github.com`、资产 CDN
+  `release-assets.githubusercontent.com` 与旧域
+  `objects.githubusercontent.com`——测试
+  `tests/security/domain-policy.test.ts` 钉住清单），沙箱开启时不影响
+  更新下载。注意豁免域对全部沙箱流量生效（不止更新请求）。
 
 ## 附注：generic 自建服务器（原模板用法，当前未启用）
 

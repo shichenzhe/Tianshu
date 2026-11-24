@@ -8,6 +8,22 @@ import {
   normalizeDomain,
   type NetworkPolicyState,
 } from "../../electron/domains/security/domain-policy";
+import { Constants } from "../../electron/Constants";
+
+describe("Constants.UPGRADE_HOSTS", () => {
+  it("更新流量域覆盖 GitHub Releases 实际链路：清单 API + 下载 + 302 资产 CDN", () => {
+    // 资产下载实测 302 到 release-assets.githubusercontent.com（2026-11-24）；
+    // objects.githubusercontent.com 为旧 CDN 域，保留作 electron-updater
+    // 版本差异余量
+    expect(Constants.UPGRADE_HOSTS).toEqual(
+      expect.arrayContaining([
+        "api.github.com",
+        "github.com",
+        "release-assets.githubusercontent.com",
+      ]),
+    );
+  });
+});
 
 const basePolicy: NetworkPolicyState = {
   exemptDomains: ["api.openai.com", ...LOOPBACK_DOMAINS],

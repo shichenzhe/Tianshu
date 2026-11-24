@@ -145,13 +145,18 @@ function createWindow() {
   // 关闭窗口最小化到托盘
   // closeForMinize(win);
 
-  //自动更新检查
+  //自动更新检查（dev 也初始化：initUpdater 按 app.isPackaged 分支——
+  // dev 只注册 check-for-updates IPC 使"检查更新"菜单有响应，不碰更新器；
+  // packaged 态延时启动真实检查）
   win.on("ready-to-show", () => {
     win?.show();
-    if (!isDevelopment) {
-      setTimeout(() => {
-        if (win) initUpdater(win);
-      }, 5000);
+    const startUpdater = () => {
+      if (win) initUpdater(win);
+    };
+    if (isDevelopment) {
+      startUpdater();
+    } else {
+      setTimeout(startUpdater, 5000);
     }
   });
 }

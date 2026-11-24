@@ -2,11 +2,14 @@ export class Constants {
   // 日志保留天数
   static readonly LOG_KEEP_DAYS: string = "7d";
   static readonly LOG_MAX_SIZE: string = "20m";
-  // 更新流量域（GitHub Releases：清单 API + 下载重定向 + 资产 CDN），
-  // 网络安全门豁免域用；仓库转私有则更新不可用
+  // 更新流量域（GitHub Releases：清单 API + 下载 + 302 资产 CDN——
+  // 实测 2026-11-24 资产重定向至 release-assets.githubusercontent.com，
+  // objects 域保留作 electron-updater 版本差异余量），网络安全门豁免域
+  // 用；仓库转私有则更新不可用
   static readonly UPGRADE_HOSTS: string[] = [
     "api.github.com",
     "github.com",
+    "release-assets.githubusercontent.com",
     "objects.githubusercontent.com",
   ];
   // SkillHub 市场 API Key（env 覆盖优先；默认占位符 = 不发送，真实值由 npm run init 写入）

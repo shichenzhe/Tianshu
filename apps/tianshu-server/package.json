@@ -1,6 +1,6 @@
 {
   "name": "tianshu-server",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "tianshu-server - 基于 shu-nestjs-starter 的服务端应用",
   "author": "shichenzhe",
   "private": true,

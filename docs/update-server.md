@@ -1,24 +1,46 @@
-# 自建更新服务器
+# 自动更新（GitHub Releases）
 
-模板使用 electron-updater 的 **generic provider**：任何能托管静态文件的 HTTP 服务都可以
-当更新服务器（Nginx、对象存储、GitHub Releases 反代均可）。
+客户端自动更新源为 GitHub Releases（electron-updater 的 github provider），
+真源配置在 `apps/tianshu-desktop/electron-builder.json5` 的 `publish`
+（provider/owner/repo），打包时固化进 `resources/app-update.yml`，运行时
+由 `electron/init-updater.ts` 原生读取——公开仓库无需任何 token。
 
-## 1. 配置地址
+## 1. 发版
 
-运行 `npm run init` 时填入更新服务器 URL（或直接改 `electron-builder.json5` 的
-`publish.url` 与 `electron/Constants.ts` 的 `UPGRADE_URL`）。留空则自动更新禁用。
+打 `v*` tag 推送即可，CI（`.github/workflows/release.yml`）自动三平台
+打安装包并把安装包 + `latest*.yml` 附到 GitHub Release。
 
-## 2. 发布流程
+- 版本号取自 `apps/tianshu-desktop/package.json`；electron-updater 按
+  tag `v{version}` 匹配 Release（如 `0.2.0` → `v0.2.0`）。
+- Release 必须为**正式发布态**：draft 会被 electron-updater 忽略，
+  客户端检查结果为"无更新"。
 
-每次 `npm run build` 后，electron-builder 会在 `release/<version>/` 产出：
+## 2. 更新流程
 
-- 安装包（dmg / exe / AppImage）
-- `latest.yml`（+ `latest-mac.yml` / `latest-linux.yml`）——版本清单
+客户端打包态启动即检查更新 → 检测到新版本自动下载 → 下载完成后提示
+安装（渲染端"检查更新"菜单可手动触发）。开发态（`npm run dev`）不检查
+更新，"检查更新"直接回发"无新版本"。
 
-把**整个目录内容**上传到更新服务器根路径，保持文件名不变。客户端启动 5 秒后自动
-检查更新，下载完成后提示安装。
+## 3. 注意事项
 
-## 3. Nginx 示例
+- 前提：仓库保持**公开**。转私有后匿名拉取 Release 失败，更新不可用
+  （需另行引入 token 方案）。
+- 匿名 GitHub API 限流 60 次/时/IP：频繁手动检查更新可能触发限流，
+  走"更新错误"路径，属预期降级。
+- 网络安全门豁免域已含更新流量三域（`Constants.UPGRADE_HOSTS`：
+  `api.github.com` / `github.com` / `objects.githubusercontent.com`），
+  沙箱开启时不影响更新下载。
+
+## 附注：generic 自建服务器（原模板用法，当前未启用）
+
+任何静态文件托管（Nginx、对象存储、GitHub Releases 反代）均可作
+generic 更新源：`electron-builder.json5` 的 `publish` 改回
+`{ provider: "generic", url: "<地址>" }`，并在 `electron/init-updater.ts`
+恢复 `autoUpdater.setFeedURL({ provider: "generic", url })` 与地址常量
+（原 `Constants.UPGRADE_URL` 式写法）。每次 `npm run build` 后把
+`release/<version>/` 整目录上传到服务器根路径，保持文件名不变。
+
+Nginx 示例：
 
 ```nginx
 server {
@@ -29,5 +51,3 @@ server {
   add_header Cache-Control "no-cache";
 }
 ```
-
-上传新版本即完成发布；版本号取自 `package.json`。

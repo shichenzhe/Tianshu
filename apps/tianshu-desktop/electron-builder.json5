@@ -17,10 +17,14 @@
     output: "release/${version}"
   },
   files: ["dist", "dist-electron"],
-  // 留空则禁用自动更新；配置方法见 docs/update-server.md
+  // 自动更新真源：GitHub Releases（electron-updater github provider，
+  // 公开仓库免 token；打包时固化进 resources/app-update.yml，运行时
+  // 原生读取）。发版流水线 release.yml 已把安装包 + latest*.yml 附到
+  // Release。仓库转私有则更新不可用。
   publish: {
-    provider: "generic",
-    url: ""
+    provider: "github",
+    owner: "shichenzhe",
+    repo: "Tianshu"
   },
   mac: {
     target: ["dmg"],

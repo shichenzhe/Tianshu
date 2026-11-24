@@ -1,5 +1,9 @@
 # 发版流水线：tag（v*）触发——三平台打安装包，Artifacts + GitHub Releases 双通道
 # （与 ci.yml 的 push main 质量门解耦；日常 push 不出制品，打 tag 才出包）
+# 发布面单点化（2026-11-24 根治并发 attach 竞态）：构建 job 只 upload-artifact，
+# 串行 publish 尾 job 单点建 Release + 写 body + 挂全部资产——此前 6 个 attach
+# （3 桌面 matrix + android）并发创建同一 Release，v0.1.2 发版 windows job 在
+# attach 步骤撞竞态标红（资产实传成功，但 run 结论失败且不可复现）
 name: Release
 
 on:
@@ -43,21 +47,13 @@ jobs:
       - name: Package (electron-builder)
         run: npx electron-builder --publish never
         working-directory: apps/tianshu-desktop
+      # latest*.yml（electron-updater 更新通道描述）必须随包进 artifact：
+      # 发布面收敛到 publish 尾 job 后，Release 资产只能来自 artifact
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Tianshu-${{ runner.os }}
           path: |
-            apps/tianshu-desktop/release/**/*.dmg
-            apps/tianshu-desktop/release/**/*.exe
-            apps/tianshu-desktop/release/**/*.AppImage
-      - name: Attach to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          # 无签名分发说明（macOS「已损坏」/ Windows SmartScreen 绕行）；
-          # 仅 release 创建时写入，版本要点直接维护在模板文件里
-          body_path: .github/RELEASE_NOTES.md
-          files: |
             apps/tianshu-desktop/release/**/*.dmg
             apps/tianshu-desktop/release/**/*.exe
             apps/tianshu-desktop/release/**/*.AppImage
@@ -97,7 +93,26 @@ jobs:
         with:
           name: Tianshu-Android
           path: apps/tianshu-mobile/android/app/build/outputs/apk/release/*.apk
-      - name: Attach to GitHub Release
+
+  # 发布面单点：全构建成功后串行收口——单次创建 Release、单处写 body、
+  # 一次性挂全部资产；softprops 幂等（已存在则补传），重跑安全
+  publish:
+    needs: [release, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: Tianshu-*
+          merge-multiple: true
+          path: release-assets
+      - name: Create release and attach assets
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/tianshu-mobile/android/app/build/outputs/apk/release/*.apk
+          # 无签名分发说明（macOS「已损坏」/ Windows SmartScreen 绕行）；
+          # 仅 release 创建时写入，版本要点直接维护在模板文件里
+          body_path: .github/RELEASE_NOTES.md
+          files: release-assets/**
+          # glob 空匹配（构建产物意外缺席）时显式失败，防发空 Release
+          fail_on_unmatched_files: true

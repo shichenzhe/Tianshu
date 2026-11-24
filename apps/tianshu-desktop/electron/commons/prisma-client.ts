@@ -180,9 +180,7 @@ export async function ensureRunSessionColumns(): Promise<void> {
   const tableColumns = async (
     table: string,
   ): Promise<Array<{ name: string }>> =>
-    prisma.$queryRawUnsafe(
-      `SELECT name FROM pragma_table_info('${table}')`,
-    );
+    prisma.$queryRawUnsafe(`SELECT name FROM pragma_table_info('${table}')`);
   const ensureColumn = async (
     table: string,
     column: string,
@@ -190,17 +188,11 @@ export async function ensureRunSessionColumns(): Promise<void> {
   ): Promise<void> => {
     const columns = await tableColumns(table);
     if (!columns.some((col) => col.name === column)) {
-      await prisma.$executeRawUnsafe(
-        `ALTER TABLE ${table} ADD COLUMN ${ddl}`,
-      );
+      await prisma.$executeRawUnsafe(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
     }
   };
 
-  await ensureColumn(
-    "session",
-    "automationTaskId",
-    "automationTaskId INTEGER",
-  );
+  await ensureColumn("session", "automationTaskId", "automationTaskId INTEGER");
   await ensureColumn("session", "runGraphId", "runGraphId INTEGER");
   await ensureColumn("graphDefinition", "aiSessionId", "aiSessionId INTEGER");
   await ensureColumn("automationRun", "workspaceId", "workspaceId INTEGER");

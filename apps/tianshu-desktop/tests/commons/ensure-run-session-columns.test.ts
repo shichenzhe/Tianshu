@@ -53,7 +53,9 @@ try {
 }
 
 // 真库连接：mock PrismaClient 的 raw 面绑定于此（vi.hoisted 先于工厂创建）
-const realDb = vi.hoisted(() => ({ current: null as unknown as import("better-sqlite3").Database }));
+const realDb = vi.hoisted(() => ({
+  current: null as unknown as import("better-sqlite3").Database,
+}));
 
 vi.mock("../../electron/generated/prisma/client", () => ({
   PrismaClient: class MockPrismaClient {
@@ -69,9 +71,8 @@ vi.mock("../../electron/generated/prisma/client", () => ({
 }));
 
 // 动态 import（静态会被提升到 env 赋值前触发 prisma-client 顶层连库副作用）
-const { ensureRunSessionColumns } = await import(
-  "../../electron/commons/prisma-client"
-);
+const { ensureRunSessionColumns } =
+  await import("../../electron/commons/prisma-client");
 
 const dbFile = path.join(dataRoot, "app", "database", "local.db");
 const fixtureSqlPath = path.join(
@@ -127,7 +128,9 @@ describe.skipIf(!Database)("ensureRunSessionColumns（v0.1.0 旧库升级）", (
         "session_runGraphId_idx",
       ]),
     );
-    expect(indexNames("automationRun")).toContain("automationRun_sessionId_key");
+    expect(indexNames("automationRun")).toContain(
+      "automationRun_sessionId_key",
+    );
 
     // 用户症状终验：Prisma 风格 SELECT 显式列清单不再抛 no such column
     expect(() =>
@@ -185,6 +188,8 @@ describe.skipIf(!Database)("ensureRunSessionColumns（v0.1.0 旧库升级）", (
       { id: 1, sessionId: null },
       { id: 2, sessionId: 101 },
     ]);
-    expect(indexNames("automationRun")).toContain("automationRun_sessionId_key");
+    expect(indexNames("automationRun")).toContain(
+      "automationRun_sessionId_key",
+    );
   });
 });

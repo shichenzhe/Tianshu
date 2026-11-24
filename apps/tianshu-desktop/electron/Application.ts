@@ -67,6 +67,7 @@ import prisma, {
   ensureGraphRunNodeTable,
   ensureMonitorTables,
   ensureProviderColumns,
+  ensureRunSessionColumns,
 } from "./commons/prisma-client";
 import { Constants } from "./Constants";
 import { setPolicyHook } from "./domains/app-settings/proxy-dispatcher";
@@ -128,6 +129,13 @@ export default class Application {
    */
   async execute() {
     await this.initDatabase();
+    // v0.1.1 缺列事故修复（2026-11-24）：0.1.1 误走 v1 快照加列，打包态
+    // 旧库不补列致会话/工作流列表全空。阻塞式补列（毫秒级）：必须先于
+    // cleanupGraphRunSessions（where 引用新列）与 registerServices 后的
+    // 业务查询；失败仅记日志不阻断启动（与下方各 ensure 同语义）
+    await ensureRunSessionColumns().catch((e) =>
+      console.error("运行会话归属列补建失败:", e),
+    );
     // 埋点表索引补建与保留期裁剪（M12）+ 产物表建表（H7a）+ 监控事件表
     // 建表 + 图运行节点详情表建表与存量图运行会话清理（去会话化
     // 2026-10-28）：均失败仅记日志不阻塞启动；

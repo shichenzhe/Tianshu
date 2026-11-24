@@ -166,6 +166,78 @@ export async function ensureGraphRunNodeTable(): Promise<void> {
 const LEGACY_RUN_LINK_BATCH_SIZE = 500;
 
 /**
+ * v0.1.1 缺列事故修复（2026-11-24）：0.1.1 的 dd059b5c/4c85a37c 两提交
+ * 误走 v1 快照加列（应走本 ensure 惯例），打包态旧库 CREATE TABLE IF NOT
+ * EXISTS 不补列 + 快照守卫永不重置 → Prisma 按新 schema SELECT 显式列清
+ * 单报 no such column，会话/工作流列表全空。此处对 v0.1.0 旧库幂等补齐：
+ * session.automationTaskId/runGraphId、graphDefinition.aiSessionId、
+ * automationRun.workspaceId 四列，两条 session 索引，及
+ * automationRun.sessionId 唯一索引（建前查重——旧模型多 run 可共享同一
+ * 会话，保留每组 startedAt 最新 run 的链接、其余置 null）。
+ * 须在 cleanupGraphRunSessions 与业务查询之前执行。
+ */
+export async function ensureRunSessionColumns(): Promise<void> {
+  const tableColumns = async (
+    table: string,
+  ): Promise<Array<{ name: string }>> =>
+    prisma.$queryRawUnsafe(
+      `SELECT name FROM pragma_table_info('${table}')`,
+    );
+  const ensureColumn = async (
+    table: string,
+    column: string,
+    ddl: string,
+  ): Promise<void> => {
+    const columns = await tableColumns(table);
+    if (!columns.some((col) => col.name === column)) {
+      await prisma.$executeRawUnsafe(
+        `ALTER TABLE ${table} ADD COLUMN ${ddl}`,
+      );
+    }
+  };
+
+  await ensureColumn(
+    "session",
+    "automationTaskId",
+    "automationTaskId INTEGER",
+  );
+  await ensureColumn("session", "runGraphId", "runGraphId INTEGER");
+  await ensureColumn("graphDefinition", "aiSessionId", "aiSessionId INTEGER");
+  await ensureColumn("automationRun", "workspaceId", "workspaceId INTEGER");
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS session_automationTaskId_idx ON session (automationTaskId)",
+  );
+  await prisma.$executeRawUnsafe(
+    "CREATE INDEX IF NOT EXISTS session_runGraphId_idx ON session (runGraphId)",
+  );
+
+  // 唯一索引（缺建时）：先清多 run 共享会话的重复链接再上约束
+  const runIndexes = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
+    "SELECT name FROM pragma_index_list('automationRun')",
+  );
+  if (!runIndexes.some((idx) => idx.name === "automationRun_sessionId_key")) {
+    await prisma.$executeRawUnsafe(`
+      UPDATE automationRun
+      SET sessionId = NULL
+      WHERE sessionId IS NOT NULL
+        AND id NOT IN (
+          SELECT r.id FROM automationRun r
+          WHERE r.sessionId IS NOT NULL
+            AND r.id = (
+              SELECT r2.id FROM automationRun r2
+              WHERE r2.sessionId = r.sessionId
+              ORDER BY r2.startedAt DESC, r2.id DESC
+              LIMIT 1
+            )
+        )
+    `);
+    await prisma.$executeRawUnsafe(
+      "CREATE UNIQUE INDEX IF NOT EXISTS automationRun_sessionId_key ON automationRun(sessionId)",
+    );
+  }
+}
+
+/**
  * 存量图运行会话清理（去会话化 2026-10-28 一次性迁移）：图 run 产生的
  * 会话+消息删除、run.sessionId 置 null（prompt 型 run graphId 恒 null
  * 不受影响）。幂等：清后判据不再命中。须在 initDatabase 之后调用。
